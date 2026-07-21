@@ -1,8 +1,12 @@
 name: 신규 작업(Task) 생성
 description: 신규 테스크 생성
-labels: ["TASK"]
+title: "[TASK] "
+labels:
+  - TASK
+  - NEED_TRIAGE
+projects:
+  - Gimhae-Yay/1
 assignees: []
-projects: ["Astro-Luminoso/2"]
 
 body:
   - type: textarea
