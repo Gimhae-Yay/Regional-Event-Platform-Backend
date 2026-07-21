@@ -1,8 +1,8 @@
 name: 버그 리포트
 description: 테스트 중 버그 발견시에 상세히 기록을 남기고 수정하기 위한 이슈
 title: "[BUG ISSUE] "
+Type: Bug
 labels:
-  - BUG_ISSUE
   - NEED_TRIAGE
 projects:
   - Gimhae-Yay/1
