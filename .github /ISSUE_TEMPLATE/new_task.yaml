@@ -1,0 +1,51 @@
+name: 신규 작업(Task) 생성
+description: 신규 테스크 생성
+labels: ["TASK"]
+assignees: []
+projects: ["Astro-Luminoso/2"]
+
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: 신규 task에 대한 요약 입니다.
+    validations:
+      required: true
+
+  - type: textarea
+    id: api-documentation
+    attributes:
+      label: API Documentation
+      description: 연관된 API 명세서 링크를 카피 페이스트 해주세요.
+      placeholder: https://...
+    validations:
+      required: false
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: 신규 task에 대한 상세 설명을 작성해주세요.
+    validations:
+      required: true
+
+
+  - type: textarea
+    id: todo
+    attributes:
+      label: TODO
+      description: 작업 TODO 리스트를 반드시 체크 박스 형식으로 작성해 주세요.
+      placeholder: |
+        - [ ] TODO 1
+        - [ ] TODO 2
+    validations:
+      required: true
+
+  - type: textarea
+    id: other
+    attributes:
+      label: Other
+      description: 기타 특이사항 작성 해주세요.
+    validations:
+      required: false
