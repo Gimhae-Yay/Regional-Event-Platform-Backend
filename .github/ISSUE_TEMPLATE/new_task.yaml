@@ -1,8 +1,8 @@
 name: 신규 작업(Task) 생성
 description: 신규 테스크 생성
 title: "[TASK] "
+type: Task
 labels:
-  - TASK
   - NEED_TRIAGE
 projects:
   - Gimhae-Yay/1
