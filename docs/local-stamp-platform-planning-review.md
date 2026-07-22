@@ -1,7 +1,6 @@
 # 로컬스탬프 기획 검토 및 보완 제안
 
-> 검토 대상: `local-stamp-platform-proposal.md`, `local-engagement-stamp-reward-platform-personas.md`  
-> 참고 대상: `reference-document.md` (기능·기술 검토용이며 현재 MVP 요구사항으로 자동 편입하지 않음)
+> 검토 대상: [상세 기획서 (제안서)](local-stamp-platform-proposal.md), [페르소나](local-engagement-stamp-reward-platform-personas.md)
 
 ## 1. 검토 요약
 
