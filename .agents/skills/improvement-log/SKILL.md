@@ -1,6 +1,6 @@
 ---
 name: improvement-log
-description: 이미 정상 동작하는 기능의 정합성, 안정성, 성능 또는 유지보수성 개선을 동일 조건의 재현 가능한 Before/After 근거로 기록한다. 
+description: 이미 정상 동작하는 기능의 정합성, 안정성, 성능 또는 유지보수성 개선을 동일 조건의 재현 가능한 Before/After 근거로 기록한다.
   사용자가 "개선 내역 기록", "Before/After 남겨줘", "성능 개선 수치", "리팩터링 근거", "안정화 기록", "캐시 효과", "동시성 개선 증명", "improvement-log"를 요청할 때 사용한다.
 ---
 
