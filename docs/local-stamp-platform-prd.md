@@ -313,7 +313,7 @@ MVP의 최우선 고객은 **주말 나들이 방문자**, 최우선 공급자�
 |--------|------|
 | CON-01 | 콘텐츠 기본 상태는 `DRAFT → PENDING → APPROVED → PUBLISHED → ENDED`로 전이한다. 반려 시 `PENDING → REJECTED → DRAFT`로 전이하며 반려 사유를 기록하고 운영자가 보완 후 다시 제출한다. |
 | CON-02 | 운영자는 대표 이미지, 소개, 위치, 운영 시간, 연락처, 유의사항, 날짜·회차별 정원, 연령·준비물, 취소 기준과 공개 예정 시각의 필수 검증을 통과해야 승인 요청할 수 있다. |
-| CON-03 | 운영자가 지정한 공개 예정 시각과 콘텐츠를 지역 관리자가 함께 승인한다. `APPROVED`는 일반 사용자에게 노출하지 않으며 시스템은 승인된 `publish_at`에 콘텐츠를 한 번만 `PUBLISHED`로 전환한다. |
+| CON-03 | 운영자가 지정한 공개 예정 시각과 콘텐츠를 지역 관리자가 함께 승인한다. `APPROVED`는 일반 사용자에게 노출하지 않으며 시스템은 승인된 `publish_at`에 콘텐츠를 한 번만 `PUBLISHED`로 전환다. |
 | CON-04 | 승인된 공개 예정 시각을 변경하려면 운영자가 변경 요청을 제출하고 지역 관리자의 승인을 다시 받아야 한다. 종료일이 지나거나 정상 종료 처리되면 `ENDED`로 전환하고 예약 접수와 노출을 종료한다. |
 | CON-05 | `PUBLISHED` 콘텐츠는 직접 수정하지 않는다. 수정본은 `EDIT_DRAFT → EDIT_REQUESTED → EDIT_APPROVED`로 전이하고, 반려 시 `EDIT_REQUESTED → EDIT_REJECTED`로 전이한다. 심사 중에는 원본의 `PUBLISHED` 상태와 기존 내용을 유지하고 승인된 수정본만 원본에 반영한다. 반려되거나 철회된 수정본만 폐기하며 원본에는 영향을 주지 않는다. |
 | CON-06 | 지역 관리자는 공개 콘텐츠를 `PUBLISHED → SUSPENDED`로 전환할 수 있다. 중단 시각, 처리자와 사유를 기록하고 방문자에게 운영 중단 안내와 사유를 표시한다. |
@@ -381,21 +381,7 @@ MVP의 최우선 고객은 **주말 나들이 방문자**, 최우선 공급자�
 
 ### 10.1 확정 구성
 
-| 영역       | 기술                                             | 적용 목적                                |
-|----------|------------------------------------------------|--------------------------------------|
-| Backend  | Java 21, Spring Boot 4.1, Gradle               | REST API와 도메인 중심 백엔드                 |
-| API·검증   | Spring MVC, Bean Validation                    | 요청 처리와 입력 검증                         |
-| Database | MySQL 8, Spring Data JPA/Hibernate, Flyway     | 홀드·예약·방문·후기 트랜잭션과 스키마 이력             |
-| 복합 조회    | QueryDSL, Pageable                             | 지역·유형·공개 상태·예약 가능 여부 검색·페이징          |
-| 인증·인가    | Spring Security, JWT Access/Refresh Token      | 역할과 지역 경계 강제                         |
-| 동시성      | MySQL 조건부 업데이트                                 | 회차 정원 초과 방지와 10분 홀드 처리               |
-| 캐시·요청 제한 | Redis                                          | 지역 홈·공개 콘텐츠 캐시, 로그인·예약·QR API 제한     |
-| QR       | ZXing, HMAC-SHA256 서명 토큰                       | 사용자별 일회성 QR과 위·변조·중복 방지              |
-| 이미지      | Amazon S3                                      | 콘텐츠 대표 이미지 저장                        |
-| 비동기      | Transactional Outbox, Spring Scheduler         | 알림·분석 이벤트를 핵심 거래와 분리; MVP에서 Kafka 제외 |
-| 테스트      | JUnit 5, Mockito, Testcontainers, k6           | 홀드·동시성·중복 예약·중복 QR·권한·부하 검증          |
-| 관측       | Spring Boot Actuator, Grafana, 구조화 JSON 로그     | 홀드 만료, QR 실패, 상태 전이, 오류율 관찰          |
-| 배포       | Docker Compose, GitHub Actions, AWS EC2/RDS/S3 | 테스트·이미지 빌드·배포 자동화와 외부 테스트 환경         |
+확정 구성 및 기술 스택은 [기술 스택 문서](local-stamp-platform-tech-stack.md)를 참조한다.
 
 ### 10.2 현재 릴리스에서 확정하지 않는 구성
 
