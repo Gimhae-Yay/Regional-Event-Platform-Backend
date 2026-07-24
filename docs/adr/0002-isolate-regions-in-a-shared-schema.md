@@ -4,7 +4,7 @@
 - 기록 유형: 신규
 - 기록일: 2026-07-23
 - 결정일: 2026-07-23
-- 관련 요구사항: [PRD의 FR-01, FR-09, US-02, US-05](../local-stamp-platform-prd.md#8-기능-요구사항), [파일럿 콘텐츠 모델](../local-stamp-pilot-scope-and-content-model-memo.md#2-콘텐츠-모델-원칙)
+- 관련 요구사항: [PRD의 FR-01, FR-09, US-02, US-05](../local-stamp-platform-prd.md#8-기능-요구사항), [파일럿 콘텐츠 모델](../../docs-ref/local-stamp-pilot-scope-and-content-model-memo.md#2-콘텐츠-모델-원칙)
 - 관련 단계: 단계 1. MVP 구현·검증
 - 관련 이슈: 없음
 - 대체 대상: 없음

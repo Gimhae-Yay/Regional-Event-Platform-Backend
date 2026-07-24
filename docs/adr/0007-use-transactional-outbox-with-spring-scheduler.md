@@ -4,7 +4,7 @@
 - 기록 유형: 소급
 - 기록일: 2026-07-24
 - 결정일: 2026-07-22
-- 관련 요구사항: [PRD의 FR-11, FR-12](../local-stamp-platform-prd.md#7-기능-요구사항), [기술 구성과 설계 원칙](../local-stamp-platform-prd.md#10-기술-구성과-설계-원칙), [M3 무료 예약·정원 정합성](../local-stamp-platform-milestones.md#m3-무료-예약정원-정합성), [M6 통합 기술 검증·파일럿 준비](../local-stamp-platform-milestones.md#m6-통합-기술-검증파일럿-준비)
+- 관련 요구사항: [PRD의 FR-11, FR-12](../local-stamp-platform-prd.md#7-기능-요구사항), [기술 구성과 설계 원칙](../local-stamp-platform-prd.md#10-기술-구성과-설계-원칙), [M3 무료 예약·정원 정합성](../../docs-ref/local-stamp-platform-milestones.md#m3-무료-예약정원-정합성), [M6 통합 기술 검증·파일럿 준비](../../docs-ref/local-stamp-platform-milestones.md#m6-통합-기술-검증파일럿-준비)
 - 관련 단계: 단계 1. MVP 구현·검증
 - 관련 이슈: 없음
 - 대체 대상: 없음
