@@ -1,6 +1,6 @@
 # ADR-0007: Transactional Outbox와 Spring Scheduler로 비동기 이벤트 전달
 
-- 상태: 제안됨
+- 상태: 채택됨
 - 기록 유형: 소급
 - 기록일: 2026-07-24
 - 결정일: 2026-07-22
