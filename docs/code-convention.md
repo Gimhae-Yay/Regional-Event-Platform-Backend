@@ -5,50 +5,34 @@
 이 문서는 로컬스탬프 백엔드의 Java 코드 작성 기준을 정의한다. 신규 코드와 수정 코드에 적용하며,
 리뷰·리팩터링·테스트 작성 시 같은 기준을 사용한다.
 
-- 기준: 네이버 코드 컨벤션
+- 기본 규칙: [NAVER 캠퍼스 핵데이 Java 코딩 컨벤션 v1.2.0](https://naver.github.io/hackday-conventions-java/)
 - 프로젝트: Java 21, Spring Boot 4.1, Gradle
 - 기본 패키지: `io.regionevent.regioneventbackend`
 - 적용 대상: `src/main/java`, `src/test/java`의 Java 소스
 
-원문의 규칙을 기본으로 삼되, 현재 코드와 Spring Boot 4.1 생태계에 맞춰 다음 항목을 재정의했다.
+NAVER 컨벤션을 기본으로 적용한다. 이 문서에는 NAVER 컨벤션에 없는 프로젝트 고유 규칙과 재정의만 기록하며,
+동일한 규칙은 중복해서 적지 않는다.
 
 | 항목 | 프로젝트 규칙 |
 | --- | --- |
 | 들여쓰기 | 하드 탭 대신 **스페이스 4칸**을 사용한다. |
-| Jakarta API | Spring Boot 4.1에 맞춰 `javax.*`보다 `jakarta.*`를 우선한다. |
+| import | Spring Boot 4.1의 `jakarta.*`와 프로젝트 기본 패키지에 맞게 그룹을 재정의한다. |
 | 패키지 구성 | 계층만으로 나누지 않고 도메인 우선 구조를 사용한다. |
 | 약어 표기 | 약어도 하나의 단어처럼 카멜 표기한다. |
 | Spring/JPA | 생성자 주입, 트랜잭션 경계, 엔티티 캡슐화 규칙을 추가한다. |
 | 테스트 | JUnit 5, Mockito, Testcontainers 기준을 추가한다. |
 
-이 문서와 자동 포매터의 결과가 충돌하면 이 문서를 우선하고, 반복되는 충돌은 포매터 설정에 반영한다.
+NAVER 컨벤션과 이 문서가 충돌하면 이 문서의 재정의를 우선한다. 이 문서와 자동 포매터의 결과가 충돌하면
+이 문서를 우선하고, 반복되는 충돌은 포매터 설정에 반영한다.
 
-## 2. 파일 공통 규칙
+## 2. NAVER 규칙 재정의
 
-### 2.1 인코딩과 줄 끝
+### 2.1 들여쓰기
 
-- 모든 소스와 텍스트 파일은 UTF-8로 저장한다.
-- 줄 끝은 LF를 사용한다. 단, Windows 실행 파일인 `*.bat`는 CRLF를 허용한다.
-- 파일 마지막에는 빈 줄이 아닌 하나의 줄바꿈을 둔다.
-- 줄 끝에 공백을 남기지 않는다.
+- NAVER 컨벤션의 하드 탭 규칙 대신 스페이스 4칸을 사용한다.
+- 탭 문자는 사용하지 않는다.
 
-### 2.2 들여쓰기와 줄 길이
-
-- 들여쓰기는 스페이스 4칸을 사용하고 탭 문자를 사용하지 않는다.
-- 블록이 한 단계 깊어질 때마다 스페이스 4칸을 추가한다.
-- 한 줄은 최대 120자로 작성한다.
-- `package`와 `import` 선언은 120자를 넘더라도 중간에서 줄바꿈하지 않는다.
-- 줄을 나눌 때 이어지는 줄은 원래 줄보다 최소 한 단계 더 들여쓴다.
-- 줄바꿈은 콤마 뒤, 점(`.`) 앞, 연산자 앞을 우선한다.
-
-```java
-Reservation reservation = reservationRepository.findById(reservationId)
-    .orElseThrow(() -> new ReservationNotFoundException(reservationId));
-
-boolean canCheckIn = reservation.isConfirmed()
-    && reservation.isWithinCheckInWindow(now)
-    && reservation.belongsTo(operatorId);
-```
+### 2.2 여러 줄 인수
 
 메서드 인수가 길면 인수마다 한 줄을 사용한다.
 
@@ -66,35 +50,15 @@ Reservation createReservation(
 
 ### 3.1 공통 원칙
 
-- 식별자는 영문, 숫자, 언더스코어만 사용한다.
-- 한국어 단어를 소리 나는 대로 옮긴 이름은 사용하지 않는다.
 - 이름만으로 역할과 의미를 알 수 있게 작성한다.
-- 반복문 인덱스나 매우 짧은 람다 인수를 제외하면 한 글자 이름을 사용하지 않는다.
 - 같은 개념에는 프로젝트 전체에서 같은 용어를 사용한다.
-
-```java
-// Bad
-int cnt;
-Member m;
-LocalDateTime useYmd;
-
-// Good
-int reservationCount;
-Member member;
-LocalDateTime usedAt;
-```
 
 ### 3.2 카멜 표기와 약어
 
-| 대상 | 표기 | 예시 |
-| --- | --- | --- |
-| 패키지 | 소문자 | `domain.reservation` |
-| 클래스·인터페이스·열거형·레코드 | UpperCamelCase | `ReservationService` |
-| 메서드·필드·지역 변수·매개변수 | lowerCamelCase | `findAvailableSchedules` |
-| 상수 | UPPER_SNAKE_CASE | `MAX_RESERVATION_QUANTITY` |
-| 테스트 메서드 | lowerCamelCase, 언더스코어 허용 | `confirm_whenCapacityExists_succeeds` |
+열거형과 레코드 이름은 NAVER의 클래스 명명 규칙과 동일하게 표기한다.
 
-약어는 일반 단어처럼 표기한다. 외부 API가 요구하는 이름이나 라이브러리 타입은 예외다.
+NAVER 컨벤션이 허용하는 대문자 약어 목록을 별도로 두지 않고 모든 약어를 일반 단어처럼 표기한다.
+외부 API가 요구하는 이름이나 라이브러리 타입은 예외다.
 
 | 사용 | 사용하지 않음 |
 | --- | --- |
@@ -106,8 +70,6 @@ LocalDateTime usedAt;
 
 ### 3.3 클래스와 인터페이스
 
-- 클래스 이름은 명사 또는 명사구로 작성한다.
-- 인터페이스 이름은 명사, 명사구, 형용사로 작성한다.
 - 구현체라는 이유만으로 `Impl`을 붙이지 않는다. 역할이나 기술이 드러나는 이름을 사용한다.
 
 ```java
@@ -134,7 +96,7 @@ JPA 엔티티에는 불필요하게 `Entity` 접미사를 붙이지 않는다. �
 
 ### 3.4 메서드
 
-- 메서드 이름은 동사로 시작하고 수행하는 동작을 구체적으로 표현한다.
+- 메서드 이름은 수행하는 동작을 구체적으로 표현한다.
 - 조회는 `find`, 존재 여부는 `exists`, 검증은 `validate`, 변환은 `to` 또는 `from`을 사용한다.
 - `get`은 값 반환이 보장될 때 사용한다. 없을 수 있는 조회는 `find`를 사용한다.
 - 불리언 반환 메서드는 `is`, `has`, `can`, `should` 등으로 시작한다.
@@ -200,7 +162,6 @@ io.regionevent.regioneventbackend
 
 ### 4.2 파일과 멤버 순서
 
-- 소스 파일 하나에는 최상위 타입 하나만 선언한다.
 - 파일 이름은 최상위 타입 이름과 같아야 한다.
 - 관련성이 높은 작은 타입만 내부 타입으로 선언한다.
 - 클래스 멤버는 다음 순서를 기본으로 한다.
@@ -217,11 +178,9 @@ io.regionevent.regioneventbackend
 
 ### 4.3 import
 
-- 일반 import에는 와일드카드(`*`)를 사용하지 않는다.
-- 정적 import의 와일드카드도 사용하지 않는 것을 기본으로 한다.
+- NAVER 컨벤션과 달리 정적 import에도 와일드카드(`*`)를 사용하지 않는다.
 - 사용하지 않는 import는 제거한다.
-- 각 그룹 안에서는 알파벳순으로 정렬한다.
-- 그룹은 빈 줄 하나로 구분하고 다음 순서를 사용한다.
+- NAVER 컨벤션의 import 그룹 순서를 다음 순서로 대체한다.
 
 1. `static import`
 2. `java.*`
@@ -243,55 +202,24 @@ import org.springframework.web.bind.annotation.PostMapping;
 import io.regionevent.regioneventbackend.domain.reservation.dto.CreateReservationRequest;
 ```
 
-## 5. 선언과 서식
+## 5. 선언과 서식 추가 규칙
 
-### 5.1 선언
+### 5.1 상수와 값 객체
 
-- 제한자는 다음 순서로 작성한다.
-  `public protected private abstract static final transient volatile synchronized native strictfp`
-- 한 줄에는 한 문장만 작성한다.
-- 한 선언문에는 변수 하나만 선언한다.
-- 배열 대괄호는 타입 뒤에 붙인다.
-- `long` 리터럴에는 대문자 `L`을 붙인다.
 - 매직 넘버와 반복되는 문자열은 의미 있는 상수나 값 객체로 추출한다.
 
 ```java
 private static final int MAX_RESERVATION_QUANTITY = 10;
-
-String[] contentTypes;
-long expirationSeconds = 300L;
 ```
 
-### 5.2 중괄호
+### 5.2 공백과 빈 줄 재정의
 
-- 여는 중괄호는 선언과 같은 줄에 두는 K&R 스타일을 사용한다.
-- `else`, `catch`, `finally`, `do-while`의 `while`은 닫는 중괄호와 같은 줄에 둔다.
-- 본문이 한 줄이어도 조건문과 반복문에 중괄호를 사용한다.
-- 비어 있는 메서드나 블록은 한 줄의 `{}`를 허용한다.
-
-```java
-if (reservation.canCheckIn(now)) {
-    reservation.checkIn(now);
-} else {
-    throw new InvalidCheckInException(reservation.getId());
-}
-```
-
-### 5.3 공백과 빈 줄
-
-- 제어문 키워드와 여는 괄호 사이에 공백을 둔다: `if (condition)`.
-- 메서드 이름과 여는 괄호 사이에는 공백을 두지 않는다: `findById(id)`.
-- 콤마와 세미콜론 뒤에는 공백을 두고 앞에는 두지 않는다.
-- 이항·삼항 연산자 양쪽에 공백을 둔다.
-- 단항 연산자와 피연산자 사이에는 공백을 두지 않는다.
 - 타입 캐스팅 뒤에는 공백을 둔다: `(String) value`.
-- 메서드 사이에는 빈 줄 하나를 둔다.
-- 논리적으로 다른 코드 묶음은 빈 줄 하나로 구분한다.
 - 빈 줄을 연속 두 줄 이상 사용하지 않는다.
 
-### 5.4 애너테이션
+### 5.3 애너테이션
 
-- 클래스, 생성자, 메서드 애너테이션은 원칙적으로 한 줄에 하나씩 작성한다.
+- 클래스, 생성자, 메서드 애너테이션은 파라미터 유무와 관계없이 선언과 별도 줄에 하나씩 작성한다.
 - 필드나 매개변수 애너테이션은 짧고 가독성이 좋을 때 같은 줄을 허용한다.
 - 여러 Spring 애너테이션을 한 줄에 나열하지 않는다.
 
@@ -489,8 +417,7 @@ if (payment.isCompleted()) {
 
 ### 13.1 이름과 구조
 
-- 테스트 클래스 이름은 대상 타입 이름과 `Test`로 끝낸다.
-- 통합 테스트도 `ReservationConcurrencyIntegrationTest`처럼 마지막은 `Test`로 끝낸다.
+- 단위 테스트 클래스 이름은 대상 타입 이름을 접두부로 사용한다.
 - 테스트 메서드는 `대상메서드_조건_기대결과` 구조의 영문 이름을 권장한다.
 - `@DisplayName`에는 실패 시 바로 이해할 수 있는 한글 설명을 사용할 수 있다.
 - 테스트 하나는 하나의 행위나 규칙을 검증한다.
@@ -526,7 +453,7 @@ void confirm_whenCapacityIsAvailable_changesStatusToConfirmed() {
 코드 리뷰 전에 다음을 확인한다.
 
 - [ ] 패키지와 클래스 이름만으로 책임을 파악할 수 있는가?
-- [ ] 스페이스 4칸, 최대 120자, import 순서를 지켰는가?
+- [ ] 스페이스 4칸, 정적 import 와일드카드 금지, 프로젝트 import 그룹을 지켰는가?
 - [ ] 컨트롤러·서비스·도메인·인프라의 책임이 섞이지 않았는가?
 - [ ] JPA 엔티티를 API에 직접 노출하거나 공개 setter를 추가하지 않았는가?
 - [ ] 트랜잭션 범위와 외부 API 호출의 실패 방식을 검토했는가?
