@@ -13,6 +13,10 @@
 NAVER 컨벤션을 기본으로 적용한다. 이 문서에는 NAVER 컨벤션에 없는 프로젝트 고유 규칙과 재정의만 기록하며,
 동일한 규칙은 중복해서 적지 않는다.
 
+아키텍처 경계의 도입·전환·롤백은
+[ADR-0008](adr/0008-evolve-clean-architecture-by-use-case.md)을 기준으로 한다. 이 문서에는 구현 중 상시 적용할
+규칙만 두며, 전환 신호·절차·검증·대체 조건은 ADR을 단일 출처로 삼아 중복해서 적지 않는다.
+
 | 항목 | 프로젝트 규칙 |
 | --- | --- |
 | 들여쓰기 | 하드 탭 대신 **스페이스 4칸**을 사용한다. |
@@ -20,6 +24,8 @@ NAVER 컨벤션을 기본으로 적용한다. 이 문서에는 NAVER 컨벤션�
 | 패키지 구성 | 계층만으로 나누지 않고 도메인 우선 구조를 사용한다. |
 | 약어 표기 | 약어도 하나의 단어처럼 카멜 표기한다. |
 | Spring/JPA | 생성자 주입, 트랜잭션 경계, 엔티티 캡슐화 규칙을 추가한다. |
+| 공통 응답 | JSON 응답 래퍼와 페이지 응답의 생성·변환·계층 경계 규칙을 추가한다. |
+| 예외 처리 | 오류 코드, 업무 예외와 전역 HTTP·보안 경계의 일관된 변환 규칙을 추가한다. |
 | 테스트 | JUnit 5, Mockito, Testcontainers 기준을 추가한다. |
 
 NAVER 컨벤션과 이 문서가 충돌하면 이 문서의 재정의를 우선한다. 이 문서와 자동 포매터의 결과가 충돌하면
@@ -71,6 +77,8 @@ NAVER 컨벤션이 허용하는 대문자 약어 목록을 별도로 두지 않�
 ### 3.3 클래스와 인터페이스
 
 - 구현체라는 이유만으로 `Impl`을 붙이지 않는다. 역할이나 기술이 드러나는 이름을 사용한다.
+- 내부 Service·도메인 객체의 인터페이스 생성과 명백한 외부 기술 경계의 판단은
+  [ADR-0008의 결정](adr/0008-evolve-clean-architecture-by-use-case.md#결정)을 따른다.
 
 ```java
 PaymentGateway paymentGateway;
@@ -147,6 +155,7 @@ io.regionevent.regioneventbackend
 ├── global
 │   ├── config
 │   ├── error
+│   ├── response
 │   └── security
 └── infra
     ├── payment
@@ -159,6 +168,8 @@ io.regionevent.regioneventbackend
 - 결제사, Redis, S3 등 외부 시스템 구현은 `infra`에 둔다.
 - 특정 도메인에서만 쓰는 코드를 편의를 이유로 `global`에 올리지 않는다.
 - 순환 패키지 의존성을 만들지 않는다.
+- 유스케이스별 경계를 도입해 위 패키지 예시와 달라질 때는 코드 변경 전에 이 절을 먼저 갱신하고
+  [ADR-0008의 전환과 롤백](adr/0008-evolve-clean-architecture-by-use-case.md#전환과-롤백)을 따른다.
 
 ### 4.2 파일과 멤버 순서
 
@@ -282,17 +293,22 @@ public class ReservationService {
 
 ### 7.3 Application Service와 Facade
 
+유스케이스 경계의 구체적인 전환 신호와 후보 판단은
+[ADR-0008의 결정](adr/0008-evolve-clean-architecture-by-use-case.md#결정)을 따른다.
+
 - 단순한 유스케이스는 기존 Service에서 처리한다. 복잡도가 실제로 증가했을 때만 별도 패턴을 도입한다.
-- 여러 도메인 객체, Service, Repository 또는 외부 Port를 하나의 유스케이스로 조정해야 하면
-  Application Service를 사용할 수 있다.
+- 협력자 수나 클래스 수 하나만으로 Application Service를 추가하지 않는다.
 - Application Service는 실행 순서와 트랜잭션 경계를 책임진다. 도메인 정책은 직접 구현하지 않고 도메인 객체나
   해당 책임을 가진 Service에 위임한다.
+- Application Service, 도메인 객체·서비스, 출력 Port와 입력·출력 Adapter의 세부 책임 및 의존 방향은
+  [ADR-0008의 책임 구분](adr/0008-evolve-clean-architecture-by-use-case.md#결정)을 따른다.
 - 여러 하위 Service나 기능을 호출자에게 단순한 하나의 진입점으로 제공해야 하면 Facade를 사용할 수 있다.
-- Facade는 호출 인터페이스를 단순화하는 역할에 집중한다. 새로운 도메인 규칙을 숨기거나 트랜잭션 경계를
-  암묵적으로 바꾸지 않는다.
+- Facade는 호출 인터페이스를 단순화하는 역할에 집중하며, 도입 기준과 Application Service와의 구분은
+  [ADR-0008의 결정](adr/0008-evolve-clean-architecture-by-use-case.md#결정)을 따른다.
 - 같은 유스케이스를 위해 여러 협력자를 조정하는 것은 그 자체로 SRP 위반이 아니다. 서로 다른 변경 이유가
   한 클래스에 섞이기 시작할 때 책임을 분리한다.
-- 전달만 하는 `Facade → ApplicationService → Service` 계층을 관성적으로 만들지 않는다.
+- 기존 Service가 유스케이스 진입점과 트랜잭션 경계를 이미 소유하면 별도 `ApplicationService` 래퍼를
+  추가하지 않으며, 전달만 하는 `Facade → ApplicationService → Service` 계층을 만들지 않는다.
 - 실질적인 조정, 경계 단순화, 의존성 격리 중 하나가 있을 때만 계층을 추가한다.
 
 클래스 이름은 역할과 유스케이스를 드러내도록 작성한다.
@@ -310,6 +326,9 @@ ReservationFacade reservationFacade;
 - 컨트롤러에서 트랜잭션을 시작하지 않는다.
 - 외부 API 호출을 DB 트랜잭션 안에서 수행해야 한다면 타임아웃, 재시도, 멱등성과 락 점유 시간을 검토한다.
 - 예약·결제·체크인은 중복 요청에서도 같은 결과가 되도록 멱등하게 구현한다.
+- 아키텍처 경계 변경 시 유지해야 하는 권한·정합성·원자성 기준은
+  [ADR-0008의 결정 동인과 불변 조건](adr/0008-evolve-clean-architecture-by-use-case.md#결정-동인과-불변-조건)을
+  따른다.
 
 ### 7.5 요청과 응답
 
@@ -318,6 +337,45 @@ ReservationFacade reservationFacade;
 - 요청 DTO는 가능한 한 불변으로 작성한다.
 - 응답 DTO에는 클라이언트에 필요한 정보만 명시적으로 매핑한다.
 - API 경계에서는 `null`의 의미를 명확히 하고, 컬렉션은 가능한 한 빈 컬렉션으로 반환한다.
+
+### 7.6 공통 API 응답
+
+공개 응답의 최상위 필드와 의미, 성공·오류 형식, HTTP 상태, 본문 생략 규칙과 페이지 메타데이터는
+[API 명세서](api-specification.md)를 단일 출처로 삼는다. 이 절은 응답 타입의 생성 방식과 계층 의존 규칙만
+정의하며, API 명세의 필드와 값을 중복하지 않는다.
+
+#### 7.6.1 공통 응답 래퍼
+
+- 본문이 있는 JSON API의 성공과 실패 응답은 `global.response.ApiResponse<T>`로 통일한다.
+- Controller 또는 HTTP 입력 Adapter가 유스케이스 결과를 응답 DTO로 변환한 뒤 `ApiResponse<T>`를 한 번만
+  조립한다. `T`에는 명시적으로 매핑한 응답 DTO만 담고 JPA 엔티티나 도메인 객체를 직접 노출하지 않는다.
+- 도메인 객체, Service, Application Service, Repository와 Port는 `ApiResponse`, `ResponseEntity`,
+  `HttpStatus`에 의존하거나 이를 반환하지 않는다.
+- 호출자는 `success`, `emptySuccess`, `failure`처럼 의미가 드러나는 공통 정적 팩터리로 응답을 생성하고,
+  생성자를 직접 호출하거나 Controller마다 코드·메시지·필드를 조립하지 않는다.
+- 공통 응답 타입은 성공 응답에 오류 상세가 들어가거나 실패 응답에 성공 데이터가 들어가는 모순된 조합을
+  생성할 수 없도록 불변식을 검증한다.
+- 성공 응답은 Controller 또는 HTTP 입력 Adapter에서 만들고, 실패 응답은
+  [예외 변환 경계](#1112-예외-변환-경계)에서 만든다. 명시적 래핑과 자동 응답 래핑을 함께 사용해 이중으로
+  감싸지 않는다.
+- HTTP 상태와 본문의 성공 여부·코드는 API 명세의 하나의 매핑에서 함께 결정해 서로 모순되지 않게 한다.
+  성공 코드와 공개 메시지를 Controller마다 상수나 문자열로 중복하지 않는다.
+- 본문이 필요한 데이터 없는 성공은 `ApiResponse<Void>`용 팩터리를 사용한다. API 명세가 `204 No Content`를
+  정의하면 본문을 작성하지 않으며, 파일·스트림 등 비 JSON 응답은 명세에 정의된 경우에만 공통 래퍼에서 제외한다.
+- `null` 필드의 포함·생략, 오류 상세의 구조와 공통 메타데이터 포함 여부는 API 명세를 따른다. 구조가 정의되지
+  않은 오류를 `List<String>`이나 내부 예외 메시지로 임의 구성하지 않는다.
+
+#### 7.6.2 페이지 응답
+
+- 페이지 기반 목록은 `global.response.PageResponse<T>`로 변환하고
+  `ApiResponse<PageResponse<응답 DTO>>` 형태로 한 번만 감싼다.
+- Spring Data의 `Page`, `Slice`, `Pageable`과 JPA 엔티티·영속성 Projection을 JSON으로 직접 노출하지 않는다.
+- `PageResponse<T>` 변환은 Controller 또는 전용 API Mapper에서 중앙화한다. Service와 도메인 계층은
+  `global.response.PageResponse`에 의존하지 않는다.
+- `content`는 `null` 대신 빈 불변 컬렉션을 사용한다. 내용과 전체 건수·페이지 수·다음 페이지 여부 같은
+  메타데이터는 같은 조회 결과를 기준으로 만들어 서로 일치해야 한다.
+- 페이지 번호 기준, 크기 상한, 정렬, 메타데이터의 필드명과 포함 여부는 API 명세에서 정한다. 페이지 기반이
+  아닌 단순 목록이나 커서·Slice 방식의 API에 `PageResponse`를 강제하지 않는다.
 
 ## 8. JPA와 도메인 모델
 
@@ -379,17 +437,60 @@ return reservationRepository.findById(reservationId)
 
 ### 11.1 예외
 
-- 예외를 잡고 무시하지 않는다.
-- 복구할 수 없는 예외를 단순 로그 출력 후 정상 흐름으로 바꾸지 않는다.
-- `Exception`이나 `RuntimeException`을 포괄적으로 잡는 코드는 애플리케이션 경계 외에는 피한다.
-- 도메인 실패는 의미 있는 예외 타입과 오류 코드로 표현한다.
-- 예외 메시지에는 원인 파악에 필요한 식별자와 상태를 포함하되 개인정보와 비밀값은 포함하지 않는다.
+오류 응답 필드, HTTP 상태, 외부 공개 코드와 메시지는 [API 명세서](api-specification.md)를 단일 출처로 삼는다.
+어떤 상황을 실패로 판정하는지는
+[PRD 정책 카탈로그](local-stamp-platform-prd.md#8-정책-카탈로그)를 따르며 이 문서에 중복하지 않는다. 계약이
+정의되지 않은 공개 오류는 구현 전에 API 명세를 먼저 갱신한다.
+
+#### 11.1.1 오류 타입과 발생
+
+- 예상 가능한 정책 위반은 공통 `BusinessException` 또는 의미 있는 도메인 예외와 `ErrorCode`의 조합으로
+  표현한다. 구분할 책임이나 추가 정보가 없는 예외 하위 타입을 오류 코드마다 만들지 않는다.
+- 오류 코드 계약은 안정적인 기계 판독용 코드를 제공한다. 외부 공개 메시지와 HTTP 상태 매핑은 API 명세에
+  정의하고 `global.error` 경계에서 응답으로 조립한다.
+- 도메인 객체와 Service는 `ResponseEntity`, `HttpStatus` 또는 오류 응답 DTO를 직접 생성하지 않는다.
+- 공통 오류 코드 계약·공통 오류와 HTTP 변환은 `global.error`에 두고, 도메인별 오류 코드와 의미 있는 예외는
+  필요할 때 `domain.<도메인>.exception`에 둔다. 모든 도메인 오류를 하나의 거대한 중앙 열거형에 모으지 않는다.
+- 같은 정책 실패는 Controller, Scheduler, 이벤트 리스너 등 진입 경로가 달라도 같은 오류 코드로 식별한다.
+  메시지 문자열로 오류 종류를 판별하지 않는다.
+- 실행 시점에 만든 메시지는 API 명세가 허용하고 외부 공개 안전성이 확인된 경우에만 응답에 사용한다. 예외의
+  내부 메시지를 클라이언트 응답으로 그대로 전달하지 않는다.
+- 프로그래밍 오류, 알 수 없는 데이터 무결성 위반과 인프라 장애를 `BusinessException`으로 바꾸어 정상적인
+  비즈니스 거절처럼 처리하지 않는다.
+- 쓰기 트랜잭션을 중단해야 하는 정책 실패는 Spring의 기본 롤백 대상인 unchecked 예외로 전파한다. checked
+  예외를 도입하면 `rollbackFor` 등 타입 기반 롤백 규칙을 명시하고 회귀 테스트로 검증한다.
+- 예외를 잡고 무시하거나, 복구할 수 없는 예외를 로그만 남긴 뒤 정상 흐름으로 바꾸지 않는다.
 - 원인을 변환해 던질 때 원본 예외를 `cause`로 보존한다.
+
+#### 11.1.2 예외 변환 경계
+
+- HTTP 예외 응답은 하나의 `@RestControllerAdvice`에서 공통 형식으로 변환한다. Controller마다
+  `@ExceptionHandler`를 두거나 `try-catch`로 오류 응답을 조립하지 않는다.
+- 전역 예외 처리기는 예외를 응답 계약으로 변환하는 책임만 가진다. 도메인 정책을 다시 판단하거나 상태를
+  변경하지 않는다.
+- 업무 예외, Bean Validation, 바인딩·타입 변환·역직렬화 실패, 존재하지 않는 경로, 지원하지 않는 HTTP
+  메서드와 예상하지 못한 예외를 구분해 처리한다. 각 HTTP 상태와 오류 코드는 API 명세를 따른다.
+- 검증 오류의 필드, 메시지, 정렬과 다건 응답 방식은 API 명세를 따른다. 거부된 실제 값과 역직렬화 원문은
+  기본적으로 외부에 노출하지 않는다.
+- DB 제약 위반은 이름과 도메인 의미가 명시된 제약만 해당 오류 코드로 변환한다. 알 수 없는
+  `DataIntegrityViolationException`을 사용자 입력 오류로 축소하지 않는다.
+- 인증·인가처럼 Spring Security 필터 단계에서 발생하는 실패는 `AuthenticationEntryPoint`와
+  `AccessDeniedHandler`가 공통 오류 직렬화 도구를 사용해 같은 API 오류 계약으로 응답한다.
+- 보안 오류 작성기는 API 명세의 HTTP 상태·미디어 타입·문자 인코딩을 적용하고, 애플리케이션에 구성된
+  `ObjectMapper`와 공통 직렬화 도구를 사용한다. 응답을 작성한 뒤에는 필터 체인을 계속 진행하지 않는다.
+- `Exception`이나 `RuntimeException`의 포괄 처리는 전역 HTTP 처리기, Scheduler, 메시지 소비자 같은
+  애플리케이션 경계에서 마지막 안전망으로만 허용한다.
+- 처리되지 않은 예외는 내부 원인과 스택을 서버 로그에 남기고, 클라이언트에는 API 명세의 일반화된 서버 오류만
+  반환한다. SQL, 스택 트레이스, 외부 연동 원문과 비밀값을 응답에 포함하지 않는다.
 
 ### 11.2 로깅
 
 - 문자열 연결 대신 자리표시자를 사용한다.
 - 로그 레벨을 목적에 맞게 사용하고 정상 비즈니스 거절을 무조건 오류로 기록하지 않는다.
+- 예상 가능한 업무·검증 실패를 기록해야 하면 `requestId`, 오류 코드와 필요한 식별자를 구조화해 남기고
+  스택 트레이스는 기본적으로 기록하지 않는다.
+- 처리되지 않은 시스템 예외는 애플리케이션 경계에서 `error`로 한 번만 기록하고 스택 트레이스를 포함한다.
+  하위 계층에서 로그를 남긴 뒤 같은 예외를 다시 던져 중복 기록하지 않는다.
 - 모든 요청을 `requestId`로 추적할 수 있게 한다.
 - 예약·결제·방문 식별자와 상태 전이는 구조화된 필드로 남긴다.
 - 비밀번호, JWT, 결제 비밀키, QR 원문, 개인정보를 로그에 남기지 않는다.
@@ -447,6 +548,20 @@ void confirm_whenCapacityIsAvailable_changesStatusToConfirmed() {
 - 예약 정원, 결제 웹훅, QR 체크인에는 동시성·중복 요청·실패 재시도 테스트를 포함한다.
 - 테스트 간 실행 순서와 공유 상태에 의존하지 않는다.
 - 시간에 의존하는 코드는 고정 가능한 `Clock`을 주입해 검증한다.
+- 유스케이스별 경계 전환 시 선행 회귀 테스트와 Port·Adapter 검증 기준은
+  [ADR-0008의 전환과 롤백](adr/0008-evolve-clean-architecture-by-use-case.md#전환과-롤백) 및
+  [검증 방법](adr/0008-evolve-clean-architecture-by-use-case.md#검증-방법)을 따른다.
+- 예외 처리 테스트는 업무 예외, 검증·바인딩 실패, 인증 실패, 인가 거부와 처리되지 않은 예외를 구분하고
+  API 명세의 HTTP 상태·오류 코드·응답 형식을 검증한다.
+- 이름이 알려진 DB 제약 위반의 변환과 알 수 없는 데이터 무결성 위반의 서버 오류 처리를 각각 검증한다.
+- 오류 응답과 로그에 내부 예외 메시지, SQL, 스택 트레이스, 토큰, QR 원문과 개인정보가 노출되지 않고
+  `requestId`로 추적 가능한지 검증한다.
+- Spring Security 오류 경로에서도 `requestId`가 인증·인가 처리보다 먼저 부여되어 응답과 로그를 추적할 수
+  있는지 검증한다.
+- 애플리케이션에 구성된 `ObjectMapper`와 HTTP 테스트 도구로 공통 응답의 성공·데이터 없는 성공·실패
+  직렬화, 필드 포함·생략, HTTP 상태와 본문 일관성이 API 명세를 따르는지 검증한다.
+- 페이지 응답은 빈 결과와 첫·중간·마지막 페이지에서 내용과 메타데이터가 일치하고, 엔티티나 Spring Data
+  타입이 외부에 노출되지 않는지 검증한다.
 
 ## 14. 리뷰 체크리스트
 
@@ -455,9 +570,17 @@ void confirm_whenCapacityIsAvailable_changesStatusToConfirmed() {
 - [ ] 패키지와 클래스 이름만으로 책임을 파악할 수 있는가?
 - [ ] 스페이스 4칸, 정적 import 와일드카드 금지, 프로젝트 import 그룹을 지켰는가?
 - [ ] 컨트롤러·서비스·도메인·인프라의 책임이 섞이지 않았는가?
+- [ ] Application Service, Port 또는 Adapter를 추가했다면
+  [ADR-0008의 전환 신호와 책임 구분](adr/0008-evolve-clean-architecture-by-use-case.md#결정)에 근거하고
+  [검증 방법](adr/0008-evolve-clean-architecture-by-use-case.md#검증-방법)을 충족하며 전달 전용 계층이 없는가?
 - [ ] JPA 엔티티를 API에 직접 노출하거나 공개 setter를 추가하지 않았는가?
 - [ ] 트랜잭션 범위와 외부 API 호출의 실패 방식을 검토했는가?
 - [ ] 예약·결제·체크인의 동시성과 멱등성을 검증했는가?
+- [ ] 공통 응답과 페이지 메타데이터가 API 명세에 정의되고 HTTP 경계에서 한 번만 조립되며, 도메인·Service·
+  Repository·Port가 응답 타입에 의존하지 않는가?
+- [ ] 새 오류 코드·HTTP 상태·공개 메시지가 API 명세에 먼저 정의되고 하나의 전역 경계에서 일관되게 변환되는가?
+- [ ] MVC와 Spring Security의 오류 응답이 같은 계약을 사용하며, 예상하지 못한 예외를 업무 오류로
+  축소하지 않았는가?
 - [ ] 로그와 예외에 개인정보·토큰·비밀값이 포함되지 않는가?
 - [ ] 정상·경계·실패 조건을 테스트했는가?
 - [ ] `./gradlew test`와 `./gradlew build`가 통과하는가?
