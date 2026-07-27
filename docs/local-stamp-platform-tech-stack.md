@@ -13,7 +13,7 @@
 | 결제      | PortOne 연동 어댑터                                 | 결제 승인·웹훅·취소 처리를 결제사와 분리하고 멱등 처리                  |
 | QR 인증   | ZXing, HMAC-SHA256 서명 토큰                       | 사용자별 1회성 예약 QR 발급 및 위·변조/중복 체크인 방지               |
 | 이미지     | Amazon S3                                      | 콘텐츠 대표 이미지 저장                                    |
-| 비동기     | Transactional Outbox + Spring Scheduler        | 결제 확정 후 알림·분석 이벤트를 거래 트랜잭션과 분리. MVP에서는 Kafka 미도입 |
+| 비동기     | 후속 단계: Transactional Outbox + Spring Scheduler | 알림·분석 외부 전달 도입 시 거래와 분리. 현재 P0에서는 구현하지 않음 |
 | 테스트     | JUnit 5, Mockito, Testcontainers, k6           | 예약 동시성·웹훅·중복 QR·권한·부하 검증                         |
 | 관측      | Actuator, Grafana, 구조화 JSON 로그                 | QR 실패율, 결제 웹훅 지연, 상태 전이, 오류율 관찰                  |
 | 배포      | Docker Compose, GitHub Actions, AWS EC2/RDS/S3 | 테스트 → 이미지 빌드 → 배포 자동화 및 외부 테스트 환경                |
