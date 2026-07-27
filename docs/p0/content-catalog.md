@@ -162,7 +162,7 @@
 #### `CON-05`
 
 `PUBLISHED` 콘텐츠는 직접 수정하지 않는다.
-소유 운영자는 수정본을 `EDIT_DRAFT → EDIT_REQUESTED`로 제출하고,
+소유 운영자는 수정본을 `EDIT_REQUESTED`로 제출하고,
 담당 지역 관리자는 `EDIT_REQUESTED → EDIT_APPROVED` 또는 `EDIT_REQUESTED → EDIT_REJECTED`로 심사한다.
 소유 운영자는 심사 결정 전에 `EDIT_REQUESTED → EDIT_WITHDRAWN`으로 철회할 수 있고,
 철회 시각·처리자·사유를 기록하며 반복 철회 요청은 기존 결과를 반환한다.
