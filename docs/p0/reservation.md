@@ -35,6 +35,16 @@
 
 ## FR-05. 정원 홀드와 동시성 제어
 
+### 참고 문서
+
+| 문서 | 적용 범위 |
+| --- | --- |
+| [P0 명세](../p0-spec.md#82-설계-원칙) | MySQL을 최종 정합성 기준으로 하고 예약 경로에 Redis 분산 락을 제외하는 범위 |
+| [제품 PRD](../local-stamp-platform-prd.md#83-정원-홀드예약-정책) | 최대 10분 홀드와 정원 확보·복구 원문 정책 |
+| [지역·콘텐츠 카탈로그](content-catalog.md#ses-02) | 콘텐츠 상태에 따른 신규 홀드 차단과 활성 홀드 무효화 |
+| [인증·프로필](auth-profile.md#prv-02) | 회원 탈퇴 시 활성 홀드 무효화와 정원 한 번 복구 |
+| [ADR-0001](../adr/0001-use-mysql-conditional-update-for-capacity-consistency.md#결정) | MySQL 조건부 갱신과 트랜잭션을 통한 정원 정합성 |
+
 ### 기능 범위
 
 - 회차의 잔여 정원을 조건부로 차감하고 `ACTIVE` 상태의 최대 10분 정원 홀드를 하나의 트랜잭션에서 생성한다.
@@ -72,6 +82,18 @@
 - [AC-02 홀드 만료와 정원 복구](../p0-spec.md#9-테스트-및-출시-수용-기준)
 
 ## FR-06. 무료 예약 상태 관리
+
+### 참고 문서
+
+| 문서 | 적용 범위 |
+| --- | --- |
+| [제품 PRD](../local-stamp-platform-prd.md#83-정원-홀드예약-정책) | 예약 확정, 취소, 만료, 노쇼와 회차 취소 원문 정책 |
+| [지역·콘텐츠 카탈로그](content-catalog.md#ses-01) | 회차 완료·취소 상태와 예약 처리 경계 |
+| [예약 QR·체크인](check-in.md#qr-01) | 예약 확정 후 QR 발급 자격과 체크인 창 연계 |
+| [인증·프로필](auth-profile.md#prv-02) | 탈퇴 시 미체크인 예약 종결과 사용자 연결 제거 |
+| [ADR-0001](../adr/0001-use-mysql-conditional-update-for-capacity-consistency.md#결정) | 홀드 소비·만료와 정원 복구의 원자성 |
+| [ADR-0003](../adr/0003-use-persisted-idempotency-for-reservation-and-checkin.md#결정) | 예약 확정 요청의 영속 멱등성 |
+| [ADR-0012](../adr/0012-retain-author-unlinked-reviews-and-visits-after-withdrawal.md#결정) | 탈퇴와 예약 확정·체크인·회차 취소 경합 처리 |
 
 ### 기능 범위
 

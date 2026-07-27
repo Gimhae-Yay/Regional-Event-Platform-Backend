@@ -10,6 +10,21 @@
 
 ## FR-07. 단기 예약 QR·일회 체크인
 
+### 참고 문서
+
+| 문서 | 적용 범위 |
+| --- | --- |
+| [P0 명세](../p0-spec.md#7-기능-요구사항과-소유-문서) | `FR-07` 범위와 QR·체크인 수용 기준 |
+| [제품 PRD](../local-stamp-platform-prd.md#84-qr체크인-정책) | QR·체크인 원문 정책과 현장 흐름 |
+| [정원 홀드·무료 예약](reservation.md#rsv-04) | 체크인에 따른 예약 상태 전이 |
+| [인증·프로필](auth-profile.md#권한개인정보-정책-라우팅) | 운영자 권한, 예약자 마스킹과 탈퇴 후 QR 무효화 |
+| [ADR-0003](../adr/0003-use-persisted-idempotency-for-reservation-and-checkin.md#결정) | 체크인 요청의 영속 멱등성 기록 |
+| [ADR-0004](../adr/0004-use-hmac-signed-reservation-qr.md#결정) | HMAC 서명, 키 관리와 예약당 방문 한 건 제약 |
+| [ADR-0010](../adr/0010-issue-short-lived-qr-on-demand-and-separate-retry-idempotency.md#결정) | 체크인 창 온디맨드 QR 발급·갱신과 재시도·재스캔 구분 |
+| [ADR-0012](../adr/0012-retain-author-unlinked-reviews-and-visits-after-withdrawal.md#결정) | 탈퇴 회원의 미사용 QR·미체크인 예약 종결 |
+
+> QR 발급 시점과 재스캔 판정은 ADR-0010을 우선 적용하고, ADR-0004는 HMAC·키 관리·방문 고유 제약에 적용한다.
+
 ### 기능 범위
 
 - 예약 확정 시 QR 발급 자격을 만들고, 체크인 창 안에서 `CONFIRMED` 예약에 연결된 단기 서명 QR을 발급·갱신한다.

@@ -17,6 +17,19 @@
 
 ## FR-01. 인증·역할·지역 권한
 
+### 참고 문서
+
+| 문서 | 적용 범위 |
+| --- | --- |
+| [P0 명세](../p0-spec.md#7-기능-요구사항과-소유-문서) | `FR-01` 완료 조건과 현재 P0 범위 |
+| [제품 PRD](../local-stamp-platform-prd.md#81-권한개인정보-정책) | 역할·지역 권한과 개인정보 원문 정책 |
+| [ADR-0002](../adr/0002-isolate-regions-in-a-shared-schema.md#결정) | `region_id`와 소유 관계를 함께 검증하는 지역 격리 |
+| [ADR-0005](../adr/0005-use-jwt-access-and-rotating-refresh-tokens.md#결정) | JWT Access Token과 회전형 Refresh Token 인증 수명주기 |
+| [ADR-0009](../adr/0009-exclude-platform-admin-from-initial-mvp.md#결정) | 전체 관리자 제외와 최초 지역 관리자 배포 초기화 |
+| [ADR-0012](../adr/0012-retain-author-unlinked-reviews-and-visits-after-withdrawal.md#결정) | 방문자 탈퇴, 연결 제거와 보존 데이터 불변 조건 |
+
+> ADR-0002와 ADR-0005의 전체 관리자 관련 결정 부분은 ADR-0009로 대체한다.
+
 ### 기능 범위
 
 - 회원 가입과 로그인을 제공한다.
@@ -114,6 +127,17 @@ P0 셀프 탈퇴는 운영자·지역 관리자 역할과 콘텐츠 소유 관�
 <a id="fr-09"></a>
 
 ## FR-09. 운영자 승인·정보 마스킹
+
+### 참고 문서
+
+| 문서 | 적용 범위 |
+| --- | --- |
+| [P0 명세](../p0-spec.md#7-기능-요구사항과-소유-문서) | `FR-09` 완료 조건과 최소 운영 도구 범위 |
+| [제품 PRD](../local-stamp-platform-prd.md#81-권한개인정보-정책) | 운영자 승인과 예약자 정보 마스킹 원문 정책 |
+| [ADR-0002](../adr/0002-isolate-regions-in-a-shared-schema.md#결정) | 담당 지역·콘텐츠 소유 관계 기반의 접근 제한 |
+| [ADR-0009](../adr/0009-exclude-platform-admin-from-initial-mvp.md#결정) | 전체 관리자·전역 관리 API 제외와 초기 운영 데이터 준비 |
+| [ADR-0011](../adr/0011-bootstrap-operator-ownership-on-content-creation.md#결정) | 승인 후 최초 콘텐츠 생성 시 서버가 소유자·지역을 설정하는 방식 |
+| [ADR-0012](../adr/0012-retain-author-unlinked-reviews-and-visits-after-withdrawal.md#결정) | 운영자 승인과 회원 탈퇴의 경합 처리 |
 
 ### 기능 범위
 
