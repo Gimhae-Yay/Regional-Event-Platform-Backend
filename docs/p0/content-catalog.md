@@ -82,7 +82,7 @@
 | 문서 | 적용 범위 |
 | --- | --- |
 | [제품 PRD](../local-stamp-platform-prd.md#82-콘텐츠-정책) | 콘텐츠·회차 등록과 승인 요청 원문 정책 |
-| [인증·프로필](auth-profile.md#fr-09) | 운영자 승인 상태, 담당 지역과 최초 소유자 설정 |
+| [인증·프로필](auth-profile.md#fr-09-운영자-승인정보-마스킹) | 운영자 승인 상태, 담당 지역과 최초 소유자 설정 |
 | [ADR-0002](../adr/0002-isolate-regions-in-a-shared-schema.md#결정) | 지역 범위와 저장된 소유 관계의 검증 |
 | [ADR-0006](../adr/0006-use-shared-content-root-with-type-specific-details.md#결정) | 공통 콘텐츠와 행사·체험 상세·회차의 모델 경계 |
 | [ADR-0011](../adr/0011-bootstrap-operator-ownership-on-content-creation.md#결정) | 서버가 인증 운영자와 승인된 담당 지역으로 최초 소유 관계를 생성하는 방식 |
@@ -111,7 +111,7 @@
 | 문서 | 적용 범위 |
 | --- | --- |
 | [제품 PRD](../local-stamp-platform-prd.md#82-콘텐츠-정책) | 승인, 공개 예정 시각, 종료 원문 정책 |
-| [인증·프로필](auth-profile.md#fr-01) | 담당 지역 관리자와 소유 운영자의 권한 경계 |
+| [인증·프로필](auth-profile.md#fr-01-인증역할지역-권한) | 담당 지역 관리자와 소유 운영자의 권한 경계 |
 | [정원 홀드·무료 예약](reservation.md#rsv-06) | 회차 취소 시 활성 홀드·확정 예약 처리 |
 | [P0 명세](../p0-spec.md#88-감사-및-운영-로그) | 승인·자동 공개·종료 처리자와 상태 이력 감사 |
 
@@ -144,12 +144,12 @@
 
 ### 참고 문서
 
-| 문서 | 적용 범위 |
-| --- | --- |
-| [제품 PRD](../local-stamp-platform-prd.md#82-콘텐츠-정책) | 수정 심사, 중단, 철회와 삭제 원문 정책 |
-| [인증·프로필](auth-profile.md#fr-01) | 담당 지역·소유 관계 기반의 변경 권한 |
+| 문서                                                                             | 적용 범위                       |
+|--------------------------------------------------------------------------------|-----------------------------|
+| [제품 PRD](../local-stamp-platform-prd.md#82-콘텐츠-정책)                             | 수정 심사, 중단, 철회와 삭제 원문 정책     |
+| [인증·프로필](auth-profile.md#fr-01-인증역할지역-권한)                                      | 담당 지역·소유 관계 기반의 변경 권한       |
 | [ADR-0011](../adr/0011-bootstrap-operator-ownership-on-content-creation.md#결정) | 저장된 최초 소유 관계를 기준으로 한 운영자 권한 |
-| [P0 명세](../p0-spec.md#88-감사-및-운영-로그) | 수정본 철회·중단·철회·삭제 상태 전이 감사 |
+| [P0 명세](../p0-spec.md#88-감사-및-운영-로그)                                           | 수정본 철회·중단·철회·삭제 상태 전이 감사    |
 
 ### 기능 범위
 
@@ -230,7 +230,7 @@
 
 ## 전체 콘텐츠 기능 공통 연계 기준
 
-권한 정책은 [인증·프로필](auth-profile.md#auth-privacy-policies)의
+권한 정책은 [인증·프로필](auth-profile.md#권한-및-개인정보-정책)의
 `AUTH-01`~`AUTH-03`, `AUTH-05`를 적용한다.
 최초 소유 관계는 [ADR-0011](../adr/0011-bootstrap-operator-ownership-on-content-creation.md)을 따른다.
 
