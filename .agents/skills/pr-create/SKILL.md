@@ -58,8 +58,8 @@ description: 현재 브랜치의 커밋과 `dev` 기준 diff를 검증하고, PR
 10. 필수 검증이 실패하면 기본적으로 중단한다. 사용자가 실패 상태로도 생성을 명시하면 결과와 위험을 적고 체크박스를 완료 처리하지 않는다.
 11. `gh pr list --head <branch> --state all`로 중복을 확인한다. 열린 PR이 있으면 새로 만들지 않고 기존 PR을 검증해 보고한다. 닫힌 PR만 있으면 새 PR 필요 여부를 확인한다.
 12. 제목과 본문을 자체 점검한 뒤 `git push -u origin <branch>`를 실행한다. 실패하면 재시도 전에 원격 브랜치와 PR을 다시 조회한다.
-13. 저장소 밖의 임시 파일에 본문을 저장하고 `gh pr create --base <base> --head <branch> --title <제목> --body-file <파일>`을 실행한다. 라벨별 `--label`과 요청된 경우에만 `--draft`를 추가한다.
-14. `gh pr view --json number,title,url,state,isDraft,baseRefName,headRefName,body,labels`로 결과를 확인하고 임시 파일을 제거한다.
+13. 저장소 밖의 임시 파일에 본문을 저장하고 `gh pr create --base <base> --head <branch> --title <제목> --body-file <파일> --assignee @me`을 실행한다. `@me`는 현재 로그인한 GitHub 사용자를 담당자로 지정한다. 라벨별 `--label`과 요청된 경우에만 `--draft`를 추가한다.
+14. `gh pr view --json number,title,url,state,isDraft,baseRefName,headRefName,body,labels,assignees`로 결과를 확인하고, 현재 로그인한 사용자가 담당자로 지정되었는지 확인한 뒤 임시 파일을 제거한다.
 15. base, head, 제목, 템플릿 섹션, 이슈 관계, draft 상태, 라벨이 다르면 숨기지 말고 차이를 보고한다.
 
 ## PR 본문 작성
