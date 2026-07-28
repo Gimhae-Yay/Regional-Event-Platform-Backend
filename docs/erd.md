@@ -758,28 +758,28 @@ MySQL 복합 FK를 사용하려면 상위 테이블에 대응하는 `UNIQUE` 후
 
 ### 상태별 필수값
 
-| 대상 상태 | 필수값·null 조건 |
-| --- | --- |
-| `operator_application`의 `APPROVED`, `REJECTED` | `reviewed_by_user_id`, `reviewed_at`, `review_reason` 존재 |
-| `content_log` | `content_id`, `status`, `date` 존재; 상태는 생성·허용된 콘텐츠 상태 전이 뒤의 값 또는 `DELETED` |
-| 시스템 처리 `content_log` | `actor_id IS NULL` |
-| `content_log`의 `REJECTED`, `SUSPENDED`, `WITHDRAWN`, `DELETED` | `reason` 존재 |
-| 소프트 삭제된 `content` | `deleted_at` 존재하고 상태는 `PENDING` 또는 `APPROVED`; 사유를 가진 `DELETED` 로그가 정확히 한 건 존재 |
-| `content_revision`의 `EDIT_APPROVED`, `EDIT_REJECTED` | `reviewed_at`, `reviewed_by_user_id`, `review_reason` 존재 |
-| `content_revision.EDIT_WITHDRAWN` | `withdrawn_at`, `withdrawn_by_user_id`, `withdrawal_reason` 존재 |
-| 소프트 삭제 전 모든 `content` | P0 필수 콘텐츠 필드 존재, 현재 대표 이미지 정확히 한 개, `content_session` 한 개 이상 존재 |
-| `content_session.CANCELLED` | `cancelled_at`, `cancelled_by_user_id`, `cancellation_reason` 존재 |
-| `content_session.COMPLETED` | `completed_at` 존재 |
-| 모든 `capacity_hold` | `quantity > 0` |
-| 종결 `capacity_hold` | `terminal_at` 존재; `EXPIRED` 또는 `INVALIDATED`이면 `capacity_released_at`도 존재 |
+| 대상 상태 | 필수값·null 조건                                                                         |
+| --- |-------------------------------------------------------------------------------------|
+| `operator_application`의 `APPROVED`, `REJECTED` | `inspected_user_id`, `rejected_reason` 존재                             |
+| `content_log` | `content_id`, `status`, `date` 존재; 상태는 생성·허용된 콘텐츠 상태 전이 뒤의 값 또는 `DELETED`           |
+| 시스템 처리 `content_log` | `actor_id IS NULL`                                                                  |
+| `content_log`의 `REJECTED`, `SUSPENDED`, `WITHDRAWN`, `DELETED` | `reason` 존재                                                                         |
+| 소프트 삭제된 `content` | `deleted_at` 존재하고 상태는 `PENDING` 또는 `APPROVED`; 사유를 가진 `DELETED` 로그가 정확히 한 건 존재      |
+| `content_revision`의 `EDIT_APPROVED`, `EDIT_REJECTED` | `reviewed_at`, `reviewed_by_user_id`, `review_reason` 존재                            |
+| `content_revision.EDIT_WITHDRAWN` | `withdrawn_at`, `withdrawn_by_user_id`, `withdrawal_reason` 존재                      |
+| 소프트 삭제 전 모든 `content` | P0 필수 콘텐츠 필드 존재, 현재 대표 이미지 정확히 한 개, `content_session` 한 개 이상 존재                     |
+| `content_session.CANCELLED` | `cancelled_at`, `cancelled_by_user_id`, `cancellation_reason` 존재                    |
+| `content_session.COMPLETED` | `completed_at` 존재                                                                   |
+| 모든 `capacity_hold` | `quantity > 0`                                                                      |
+| 종결 `capacity_hold` | `terminal_at` 존재; `EXPIRED` 또는 `INVALIDATED`이면 `capacity_released_at`도 존재           |
 | `reservation.CANCELLED` | `cancelled_at`, `cancellation_reason` 존재; 회차 시작 전 복구한 경우에만 `capacity_released_at` 존재 |
-| `reservation.EXPIRED` | `expired_at` 존재, `capacity_released_at IS NULL` |
+| `reservation.EXPIRED` | `expired_at` 존재, `capacity_released_at IS NULL`                                     |
 | `idempotency_record.SUCCEEDED` | `RESERVATION_CONFIRM`이면 `result_reservation_id`만, `CHECK_IN`이면 `result_visit_id`만 존재 |
-| `idempotency_record.PROCESSING`, `FAILED` | `result_reservation_id IS NULL`, `result_visit_id IS NULL` |
-| `review.PUBLISHED` | `rating`, `review_text` 존재, `deleted_at IS NULL`, `purged_at IS NULL` |
-| `review.DELETED` | `deleted_at` 존재; 파기 전에는 원문 존재, 파기 후에는 원문이 모두 `NULL`이고 `purged_at` 존재 |
-| `image_object.ACTIVE` | 대표 이미지 연결이 정확히 하나 존재 |
-| `image_object.DELETE_PENDING` | 대표 이미지 연결이 없고 삭제 재시도에서만 조회 |
+| `idempotency_record.PROCESSING`, `FAILED` | `result_reservation_id IS NULL`, `result_visit_id IS NULL`                          |
+| `review.PUBLISHED` | `rating`, `review_text` 존재, `deleted_at IS NULL`, `purged_at IS NULL`               |
+| `review.DELETED` | `deleted_at` 존재; 파기 전에는 원문 존재, 파기 후에는 원문이 모두 `NULL`이고 `purged_at` 존재                |
+| `image_object.ACTIVE` | 대표 이미지 연결이 정확히 하나 존재                                                                |
+| `image_object.DELETE_PENDING` | 대표 이미지 연결이 없고 삭제 재시도에서만 조회                                                          |
 
 ### 조회 인덱스 후보
 
