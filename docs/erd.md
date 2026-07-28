@@ -761,7 +761,8 @@ MySQL 복합 FK를 사용하려면 상위 테이블에 대응하는 `UNIQUE` 후
 
 | 대상 상태 | 필수값·null 조건                                                                      |
 | --- |----------------------------------------------------------------------------------|
-| `operator_application`의 `APPROVED`, `REJECTED` | `inspected_user_id`, `rejected_reason` 존재                          |
+| `operator_application.APPROVED` | `inspected_user_id` 존재, `rejected_reason IS NULL`                          |
+| `operator_application.REJECTED` | `inspected_user_id`, `rejected_reason` 존재                          |
 | `content_log` | `content_id`, `status`, `date` 존재; 상태는 생성·허용된 콘텐츠 상태 전이 뒤의 값 또는 `DELETED`        |
 | 시스템 처리 `content_log` | `actor_id IS NULL`                                                               |
 | `content_log`의 `REJECTED`, `SUSPENDED`, `WITHDRAWN`, `DELETED` | `reason` 존재                                                                      |
