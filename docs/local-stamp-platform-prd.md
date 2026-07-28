@@ -303,8 +303,8 @@ MVP의 최우선 고객은 **주말 나들이 방문자**, 최우선 공급자�
 | CON-05 | `PUBLISHED` 콘텐츠는 직접 수정하지 않는다. 수정본은 `EDIT_REQUESTED → EDIT_APPROVED`로 전이하고, 반려 시 `EDIT_REQUESTED → EDIT_REJECTED`로 전이한다. 심사 중에는 원본의 `PUBLISHED` 상태와 기존 내용을 유지하고 승인된 수정본만 원본에 반영한다. 반려되거나 철회된 수정본만 폐기하며 원본에는 영향을 주지 않는다. |
 | CON-06 | 지역 관리자는 공개 콘텐츠를 `PUBLISHED → SUSPENDED`로 전환할 수 있다. 중단 시각, 처리자와 사유를 기록하고 방문자에게 운영 중단 안내와 사유를 표시한다.                                                                                                                                |
 | CON-07 | 운영자는 자신이 소유한 공개 콘텐츠만 철회 요청할 수 있다. 지역 관리자가 승인하면 `PUBLISHED → WITHDRAWN`으로 전환하고 철회 시각과 사유를 보존한다.                                                                                                                                   |
-| CON-08 | 공개 전 `PENDING`·`APPROVED`는 `deleted_at`, `deleted_by`, `deletion_reason`을 기록해 소프트 삭제한다. `PUBLISHED`·`SUSPENDED`·`WITHDRAWN`·`ENDED`는 삭제하지 않고 상태와 사유 이력을 보존한다.                                                  |
-| CON-09 | 승인·반려·자동 공개·수정 심사·운영 중단·철회·종료·삭제에는 처리자, 처리 시각과 사유를 기록한다. 자동 공개처럼 시스템이 처리한 작업도 처리 주체를 구분할 수 있어야 한다.                                                                                                                               |
+| CON-08 | 공개 전 `PENDING`·`APPROVED`는 콘텐츠의 `deleted_at`과 처리자·사유를 가진 `DELETED` 로그를 기록해 소프트 삭제한다. `PUBLISHED`·`SUSPENDED`·`WITHDRAWN`·`ENDED`는 삭제하지 않고 상태와 사유 이력을 보존한다.                                |
+| CON-09 | 콘텐츠 상태 전이에는 처리자와 처리 시각을 기록한다. `content_log`의 `REJECTED`·`SUSPENDED`·`WITHDRAWN`·`DELETED`에는 사유를 필수로 기록하고, 생성·`APPROVED`·자동 `PUBLISHED`·`ENDED`는 사유 없이 기록할 수 있다. 수정본 심사·철회의 사유는 수정본 수명주기에 별도로 기록한다. 자동 공개처럼 시스템이 처리한 작업도 처리 주체를 구분할 수 있어야 한다. |
 
 ### 8.3 정원 홀드·예약 정책
 
@@ -342,10 +342,10 @@ MVP의 최우선 고객은 **주말 나들이 방문자**, 최우선 공급자�
 |-----------|---------------------------------------------------------------------------------|-------------------|
 | 지역        | `region_id`, 공개 상태                                                              | 초기 지역 분리와 확장      |
 | 사용자·역할    | `user_id`, role, 담당 `region_id`                                                 | 인증·인가·지역 경계       |
-| 콘텐츠       | `content_id`, `region_id`, type, status, operator_id, publish_at, published_at  | 탐색·승인·자동 공개·소유 관계 |
+| 콘텐츠       | `content_id`, `region_id`, type, status, operator_id, publish_at                | 탐색·승인·자동 공개 예정·소유 관계 |
 | 콘텐츠 수정본   | `content_revision_id`, content_id, editor_id, status, submitted_at, reviewed_at | 공개본을 유지한 수정 심사    |
-| 콘텐츠 운영 이력 | suspended_at, suspended_by, suspension_reason, withdrawn_at, withdrawal_reason  | 운영 중단·철회와 방문자 안내  |
-| 콘텐츠 삭제 정보 | deleted_at, deleted_by, deletion_reason                                         | 공개 전 소프트 삭제       |
+| 콘텐츠 운영 이력 | content_id, actor_id, status, reason, date                                    | 상태 변경·중단·철회·삭제와 방문자 안내. 실제 공개 시각은 `status = PUBLISHED`인 행의 `date` |
+| 콘텐츠 삭제 정보 | deleted_at                                                                      | 공개 전 소프트 삭제       |
 | 행사·체험 회차  | `session_id`, `content_id`, 일정, 정원                                              | 무료 예약 가능 단위       |
 | 정원 홀드     | `hold_id`, `session_id`, user_id, 인원, 만료 시각, status                             | 예약 중 초과 예약 방지     |
 | 예약        | `reservation_id`, user_id, session_id, status                                   | 사용자 예약·체크인 기준     |
@@ -371,7 +371,7 @@ MVP의 최우선 고객은 **주말 나들이 방문자**, 최우선 공급자�
 
 ### 10.3 설계 원칙
 
-- Redis는 지역 홈·공개 콘텐츠 목록·상세 캐시와 로그인·예약 확정·QR 스캔 요청 제한에만 사용한다.
+- Redis는 지역 홈·공개 콘텐츠 목록·상세 캐시, 로그인·예약 확정·QR 스캔 요청 제한과 Refresh Token 회전·폐기 TTL 키 공간에 사용한다.
 - 잔여 정원과 예약 가능 여부는 캐시하지 않으며 예약 정합성과 동시성 제어의 최종 책임은 MySQL이 가진다.
 - 초기 MVP 예약 경로에는 Redis 분산 락을 사용하지 않는다.
 - 예약 확정과 체크인은 재시도를 전제로 멱등하게 설계한다.
@@ -422,7 +422,7 @@ MVP 출시 전 다음 자동화 테스트와 운영 검증을 모두 통과해�
 | AC-09 | `CON-05` | 공개 콘텐츠 수정 심사 중 기존 공개본이 유지되고 승인된 수정본만 반영되며 반려·철회된 수정본은 원본에 영향을 주지 않는다. |
 | AC-10 | `CON-08` | `PENDING`·`APPROVED`는 삭제 정보와 함께 소프트 삭제되며 공개 이후 상태의 콘텐츠는 삭제되지 않는다. |
 | AC-11 | `CON-06` | 콘텐츠 운영 중단 시 중단 시각·처리자·사유가 기록되고 방문자에게 중단 안내와 사유가 표시된다. |
-| AC-12 | `CON-09` | 승인·반려·자동 공개·수정 심사·운영 중단·철회·종료·삭제의 처리자, 처리 시각과 사유를 재현할 수 있다. |
+| AC-12 | `CON-09` | 승인·반려·자동 공개·수정 심사·운영 중단·철회·종료·삭제의 처리자와 처리 시각을 재현할 수 있고, 상태별 사유 필수 규칙을 검증한다. |
 | AC-13 | `REV-01`, `REV-03` | 체크인 완료 방문당 후기 한 건만 작성할 수 있고 체크인 없는 사용자의 작성과 등록 후 30일이 지난 후기의 수정은 거부된다. |
 | AC-14 | `REV-04` | 후기 삭제 즉시 공개 조회에서 제외되고 복구되지 않으며 삭제 시점 30일 후 별점·텍스트 원문이 영구 삭제된다. |
 | AC-15 | `PRV-01`, `PRV-02` | 회원 탈퇴 시 회원정보와 후기·방문 데이터의 개인 연결이 제거되고 법정 거래기록만 별도 저장소에 남으며 비식별 집계만 유지된다. |
