@@ -48,7 +48,7 @@
 | 확정된 기술 결정·설계 근거                               | `docs/adr/`                                                   |
 | 기술 스택·설계 원칙                                   | `docs/local-stamp-platform-tech-stack.md`                     |
 | 제품 범위, 보안·동시성·정합성·Redis 정책                    | `docs/local-stamp-platform-prd.md`                            |
-| API 요청·응답, validation, status, 에러 코드          | `docs/api-specification.md`                                   |
+| API 요청·응답, validation, status, 에러 코드          | `docs/api/common/README.md`, `docs/api/<도메인>.md`              |
 | 엔티티, 테이블, 관계, 컬럼, DB 제약·인덱스                   | `docs/erd.md`                                                 |
 | 도메인 규칙, 패키지 구조, 구현, 코드 스타일, 트랜잭션, 테스트, Git·PR | `docs/code-convention.md`                                     |
 | 실제 버전·의존성·설정                                  | `build.gradle`, `settings.gradle`, `src/**/application*.yaml` |
