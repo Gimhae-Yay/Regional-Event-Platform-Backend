@@ -130,6 +130,7 @@
 운영자가 지정한 공개 예정 시각과 콘텐츠를 지역 관리자가 함께 승인한다.
 `APPROVED`는 일반 사용자에게 노출하지 않으며
 시스템은 승인된 `publish_at`에 콘텐츠를 한 번만 `PUBLISHED`로 전환한다.
+실제 공개 시각은 `status = PUBLISHED`인 `content_log` 행의 `date`이며, `content`에 별도 `published_at`을 저장하지 않는다.
 
 #### `CON-04`
 

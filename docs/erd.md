@@ -410,6 +410,8 @@ erDiagram
   `content.status`를 전제 상태로 조건부 갱신하고 같은 MySQL 트랜잭션에서 변경 뒤 상태·사유·시각을 로그에 추가한다.
 - `content_log.status`는 콘텐츠 상태 카탈로그 값과 소프트 삭제 이벤트 코드 `DELETED`를 기록한다. `DELETED`는
   `content.status` 값이 아니며, 자동 공개·종료 같은 시스템 처리는 `actor_id = NULL`로 기록한다.
+- 실제 공개 시각은 `status = PUBLISHED`인 `content_log` 행의 `date`다. `content.publish_at`은 공개 예정 시각이며,
+  별도 `content.published_at` 현재 상태 컬럼은 두지 않는다.
 - `REJECTED`, `SUSPENDED`, `WITHDRAWN`, `DELETED` 로그는 `reason`이 필수다. 방문자에게 보이는 중단·철회 안내는
   해당 콘텐츠의 최신 `SUSPENDED` 또는 `WITHDRAWN` 로그의 `reason`에서 파생한다.
 - 소프트 삭제는 콘텐츠 상태가 아니지만 `PENDING` 또는 `APPROVED`에서 `content.deleted_at`을 설정하고,

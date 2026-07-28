@@ -342,9 +342,9 @@ MVP의 최우선 고객은 **주말 나들이 방문자**, 최우선 공급자�
 |-----------|---------------------------------------------------------------------------------|-------------------|
 | 지역        | `region_id`, 공개 상태                                                              | 초기 지역 분리와 확장      |
 | 사용자·역할    | `user_id`, role, 담당 `region_id`                                                 | 인증·인가·지역 경계       |
-| 콘텐츠       | `content_id`, `region_id`, type, status, operator_id, publish_at, published_at  | 탐색·승인·자동 공개·소유 관계 |
+| 콘텐츠       | `content_id`, `region_id`, type, status, operator_id, publish_at                | 탐색·승인·자동 공개 예정·소유 관계 |
 | 콘텐츠 수정본   | `content_revision_id`, content_id, editor_id, status, submitted_at, reviewed_at | 공개본을 유지한 수정 심사    |
-| 콘텐츠 운영 이력 | content_id, actor_id, status, reason, date                                    | 상태 변경·중단·철회·삭제와 방문자 안내 |
+| 콘텐츠 운영 이력 | content_id, actor_id, status, reason, date                                    | 상태 변경·중단·철회·삭제와 방문자 안내. 실제 공개 시각은 `status = PUBLISHED`인 행의 `date` |
 | 콘텐츠 삭제 정보 | deleted_at                                                                      | 공개 전 소프트 삭제       |
 | 행사·체험 회차  | `session_id`, `content_id`, 일정, 정원                                              | 무료 예약 가능 단위       |
 | 정원 홀드     | `hold_id`, `session_id`, user_id, 인원, 만료 시각, status                             | 예약 중 초과 예약 방지     |
