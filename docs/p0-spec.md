@@ -143,7 +143,7 @@ MVP의 최우선 고객은 **주말 나들이 방문자**, 최우선 공급자�
 
 ### 8.2 설계 원칙
 
-- Redis는 지역 홈·공개 콘텐츠 목록·상세 캐시에만 사용한다.
+- Redis는 지역 홈·공개 콘텐츠 목록·상세 캐시와 [ADR-0023](adr/0023-manage-refresh-token-revocation-in-redis.md)의 Refresh Token 회전·폐기 TTL 키 공간에 사용한다.
 - 로그인·예약 확정·QR 스캔의 애플리케이션 요청 제한과 `429` 계약은 5.2절에 따라 P0에서 제외한다.
 - [ADR-0001](adr/0001-use-mysql-conditional-update-for-capacity-consistency.md)의 정원 정합성 결정은 유지하되,
   그 문서의 요청 제한 용도 문구는 현재 P0 범위를 확장하지 않는다.

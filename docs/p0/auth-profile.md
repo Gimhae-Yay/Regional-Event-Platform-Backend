@@ -28,6 +28,7 @@
 | [ADR-0009](../adr/0009-exclude-platform-admin-from-initial-mvp.md#결정) | 전체 관리자 제외와 최초 지역 관리자 배포 초기화 |
 | [ADR-0012](../adr/0012-retain-author-unlinked-reviews-and-visits-after-withdrawal.md#결정) | 방문자 탈퇴, 연결 제거와 보존 데이터 불변 조건 |
 | [ADR-0017](../adr/0017-serialize-withdrawal-with-conditional-user-state.md#결정) | 회원 행 조건부 전환, 단일 트랜잭션 직렬화와 사용자 재시도 방식 |
+| [ADR-0023](../adr/0023-manage-refresh-token-revocation-in-redis.md#결정) | Redis TTL 블랙리스트 기반 Refresh Token 회전·폐기와 탈퇴 선행 폐기 |
 
 > ADR-0002와 ADR-0005의 전체 관리자 관련 결정 부분은 ADR-0009로 대체한다.
 
@@ -87,7 +88,9 @@ P0 셀프 탈퇴는 운영자·지역 관리자 역할과 콘텐츠 소유 관�
 #### `PRV-02`
 
 탈퇴 유스케이스의 첫 변경은 회원 행에 대한 `ACTIVE → WITHDRAWING` 조건부 갱신이다. 영향 행이 한 건인
-트랜잭션만 탈퇴 처리권을 얻으며, 이 갱신과 모든 연결 제거·계정 파기는 하나의 MySQL 트랜잭션에서 처리한다.
+트랜잭션만 탈퇴 처리권을 얻으며, 이 갱신과 모든 MySQL 연결 제거·계정 파기는 하나의 MySQL 트랜잭션에서 처리한다.
+MySQL 커밋 전에 Redis 원자 스크립트로 활성 Refresh Token 계열 전체를 폐기하고 사용자→활성 계열 인덱스를
+제거한다. Redis 폐기가 실패하면 MySQL 트랜잭션을 롤백하고 사용자에게 재시도를 요청한다.
 홀드·예약 확정·QR·후기처럼 회원이 시작하는 변경 명령도 도메인 상태를 바꾸기 전에 같은 회원 행을
 `FOR UPDATE`로 읽거나 동등한 조건부 갱신으로 잠근 뒤 현재 상태를 확인한다.
 탈퇴 트랜잭션이 먼저 회원 행을 갱신하면 이후 명령은 해당 행의 잠금 해제 뒤
@@ -107,14 +110,17 @@ P0 셀프 탈퇴는 운영자·지역 관리자 역할과 콘텐츠 소유 관�
 재가입 계정에 과거 후기의 관리 권한을 복구하지 않는다. 이미 `DELETED`인 후기는 복구하지 않고
 기존 삭제 시점부터 30일 후 원문을 파기한다.
 
-탈퇴 트랜잭션에서 예외가 발생하면 `WITHDRAWING` 전환을 포함해 전체를 롤백하고 사용자에게 재시도 가능한
-실패를 반환한다. 처리 중 재시도 키·별도 회원 매핑·영구 탈퇴 작업 레코드는 저장하지 않는다. 모든 종결·연결
-제거가 성공하면 계정 행을 파기하며 사용자별 `WITHDRAWN` 레코드는 남기지 않는다. 커밋 성공 뒤 응답만
-유실된 경우에는 개인별 완료 결과를 보관하지 않으므로 계정 부재와 세션 무효 상태를 최종 상태로 취급한다.
+Redis 폐기 전에 발생한 탈퇴 트랜잭션 예외는 `WITHDRAWING` 전환을 포함해 전체를 롤백하고 사용자에게 재시도
+가능한 실패를 반환한다. Redis 폐기 성공 뒤 MySQL 종결이 실패하면 MySQL 변경만 롤백하고 기존 Refresh Token은
+복구하지 않는다. 계정은 `ACTIVE`로 남지만 사용자는 다시 로그인해 새 계열을 발급받은 뒤 탈퇴를 재시도한다.
+처리 중 재시도 키·별도 회원 매핑·영구 탈퇴 작업 레코드는 저장하지 않는다. 모든 종결·연결 제거가 성공하면
+계정 행을 파기하며 사용자별 `WITHDRAWN` 레코드는 남기지 않는다. 커밋 성공 뒤 응답만 유실된 경우에는 개인별
+완료 결과를 보관하지 않으므로 계정 부재와 세션 무효 상태를 최종 상태로 취급한다.
 
 탈퇴 후 작성자 연결 제거와 보존 데이터의 불변 조건은
 [ADR-0012](../adr/0012-retain-author-unlinked-reviews-and-visits-after-withdrawal.md)와
-[ADR-0017](../adr/0017-serialize-withdrawal-with-conditional-user-state.md)를 따른다.
+[ADR-0017](../adr/0017-serialize-withdrawal-with-conditional-user-state.md),
+[ADR-0023](../adr/0023-manage-refresh-token-revocation-in-redis.md)를 따른다.
 
 ##### 탈퇴 후 관계 변환
 
