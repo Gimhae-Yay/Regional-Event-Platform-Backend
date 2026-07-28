@@ -16,7 +16,7 @@
 | --- | --- |
 | [P0 명세](../p0-spec.md#7-기능-요구사항과-소유-문서) | `FR-02` 범위와 공개 콘텐츠 탐색 기준 |
 | [제품 PRD](../local-stamp-platform-prd.md#82-콘텐츠-정책) | 지역 선택·콘텐츠 탐색 원문 정책 |
-| [ADR-0006](../adr/0006-use-shared-content-root-with-type-specific-details.md#결정) | 공통 콘텐츠 루트와 행사·체험 상세 모델 |
+| [ADR-0020](../adr/0020-merge-event-experience-details-into-content-and-revision.md#결정) | 행사·체험 필드를 콘텐츠와 수정본에 통합하는 P0 모델 |
 | [정원 홀드·무료 예약](reservation.md#rsv-04) | 상세 화면에 표시할 P0 무료 예약 취소 정책 |
 | [인증·프로필](auth-profile.md#prv-02) | 탈퇴 회원 후기를 공통 표시로 노출하는 기준 |
 
@@ -84,7 +84,7 @@
 | [제품 PRD](../local-stamp-platform-prd.md#82-콘텐츠-정책) | 콘텐츠·회차 등록과 승인 요청 원문 정책 |
 | [인증·프로필](auth-profile.md#fr-09-운영자-승인정보-마스킹) | 운영자 승인 상태, 담당 지역과 최초 소유자 설정 |
 | [ADR-0002](../adr/0002-isolate-regions-in-a-shared-schema.md#결정) | 지역 범위와 저장된 소유 관계의 검증 |
-| [ADR-0006](../adr/0006-use-shared-content-root-with-type-specific-details.md#결정) | 공통 콘텐츠와 행사·체험 상세·회차의 모델 경계 |
+| [ADR-0020](../adr/0020-merge-event-experience-details-into-content-and-revision.md#결정) | 행사·체험 필드를 통합한 콘텐츠·수정본·회차의 모델 경계 |
 | [ADR-0011](../adr/0011-bootstrap-operator-ownership-on-content-creation.md#결정) | 서버가 인증 운영자와 승인된 담당 지역으로 최초 소유 관계를 생성하는 방식 |
 | [P0 명세](../p0-spec.md#88-감사-및-운영-로그) | 최초 소유자 설정과 상태 전이 감사 요건 |
 
@@ -114,6 +114,7 @@
 | [인증·프로필](auth-profile.md#fr-01-인증역할지역-권한) | 담당 지역 관리자와 소유 운영자의 권한 경계 |
 | [정원 홀드·무료 예약](reservation.md#rsv-06) | 회차 취소 시 활성 홀드·확정 예약 처리 |
 | [P0 명세](../p0-spec.md#88-감사-및-운영-로그) | 승인·자동 공개·종료 처리자와 상태 이력 감사 |
+| [ADR-0021](../adr/0021-record-content-reasons-in-content-log.md#결정) | 콘텐츠 사유를 상태 로그에 기록하고 현재 상태와 분리하는 모델 |
 
 ### 기능 범위
 
@@ -149,7 +150,9 @@
 | [제품 PRD](../local-stamp-platform-prd.md#82-콘텐츠-정책)                             | 수정 심사, 중단, 철회와 삭제 원문 정책     |
 | [인증·프로필](auth-profile.md#fr-01-인증역할지역-권한)                                      | 담당 지역·소유 관계 기반의 변경 권한       |
 | [ADR-0011](../adr/0011-bootstrap-operator-ownership-on-content-creation.md#결정) | 저장된 최초 소유 관계를 기준으로 한 운영자 권한 |
+| [ADR-0020](../adr/0020-merge-event-experience-details-into-content-and-revision.md#결정) | 행사·체험 후보 필드를 수정본에 통합하는 모델 |
 | [P0 명세](../p0-spec.md#88-감사-및-운영-로그)                                           | 수정본 철회·중단·철회·삭제 상태 전이 감사    |
+| [ADR-0021](../adr/0021-record-content-reasons-in-content-log.md#결정)              | 콘텐츠 사유를 상태 로그에 기록하고 현재 상태와 분리하는 모델 |
 
 ### 기능 범위
 
@@ -172,19 +175,21 @@
 `EDIT_REJECTED`와 `EDIT_WITHDRAWN` 수정본은 원본에 반영하지 않고 상태와 사유 이력을 보존한다.
 `EDIT_APPROVED` 반영 후에는 기존 수정본을 철회하지 않고 새 수정본 또는 전체 콘텐츠 철회 절차를 사용한다.
 수정본의 관계형 리비전 영속 모델과 승인 시 원자 반영은
-[ADR-0014](../adr/0014-store-published-content-edits-in-relational-revision-tables.md)를 따른다.
+[ADR-0014](../adr/0014-store-published-content-edits-in-relational-revision-tables.md)를 따르며,
+행사·체험 후보 필드를 수정본에 함께 저장하는 방식은
+[ADR-0020](../adr/0020-merge-event-experience-details-into-content-and-revision.md)를 따른다.
 
 #### `CON-06`
 
 지역 관리자는 공개 콘텐츠를 `PUBLISHED → SUSPENDED`로 전환할 수 있다.
-중단 시각, 처리자와 사유를 기록하고 방문자에게 운영 중단 안내와 사유를 표시한다.
+`SUSPENDED` 상태의 `content_log`에 중단 시각, 처리자와 사유를 기록하고 방문자에게 최신 사유를 표시한다.
 신규 홀드를 차단하고 `ACTIVE` 홀드를 무효화해 정원을 한 번 복구하지만,
 기존 `CONFIRMED` 예약은 명시적인 회차 취소가 없으면 유지한다.
 
 #### `CON-07`
 
 운영자는 자신이 소유한 공개 콘텐츠만 전체 콘텐츠 철회를 요청할 수 있다.
-지역 관리자가 승인하면 `PUBLISHED → WITHDRAWN`으로 전환하고 철회 시각과 사유를 보존한다.
+지역 관리자가 승인하면 `PUBLISHED → WITHDRAWN`으로 전환하고 `WITHDRAWN` `content_log`에 철회 시각·처리자·사유를 보존한다.
 신규 홀드를 차단하고 `ACTIVE` 홀드를 무효화해 정원을 한 번 복구하지만,
 기존 `CONFIRMED` 예약은 명시적인 회차 취소가 없으면 유지한다.
 전체 콘텐츠 `WITHDRAWN`은 수정본 `EDIT_WITHDRAWN`과 다른 상태다.
@@ -192,7 +197,7 @@
 #### `CON-08`
 
 담당 지역 관리자만 공개 전 콘텐츠를 상태별로 삭제한다.
-`PENDING`·`APPROVED`는 `deleted_at`, `deleted_by`, `deletion_reason`을 기록해 소프트 삭제한다.
+`PENDING`·`APPROVED`는 `content.deleted_at`을 기록하고 `content_log`에 `status = DELETED`, 처리자와 사유를 추가해 소프트 삭제한다.
 소프트 삭제는 허용 상태와 `deleted_at IS NULL`을 조건으로 한 최초 처리만 성공하며 삭제 뒤에는
 승인·자동 게시·복구와 다른 상태 전이를 허용하지 않는다.
 자동 게시와 삭제가 경합하면 `deleted_at IS NULL` 및 현재 상태 조건을 먼저 충족해 커밋한 처리만 성공한다.
@@ -239,10 +244,9 @@
 | 데이터 | 핵심 식별·연결 정보 | 용도 |
 | --- | --- | --- |
 | 지역 | `region_id`, 공개 상태 | 지역 선택과 공개 범위 |
-| 콘텐츠 | `content_id`, `region_id`, type, status, operator_id, publish_at, published_at | 탐색·승인·자동 공개와 서버가 설정한 소유 관계 |
-| 콘텐츠 수정본 | `content_revision_id`, content_id, editor_id, status, submitted_at, reviewed_at, withdrawn_at, withdrawn_by, withdrawal_reason | 공개본을 유지한 수정 심사·철회 |
-| 콘텐츠 운영 이력 | suspended_at, suspended_by, suspension_reason, withdrawn_at, withdrawal_reason | 운영 중단·철회와 방문자 안내 |
-| 콘텐츠 삭제 정보 | deleted_at, deleted_by, deletion_reason | 공개 전 소프트 삭제 |
+| 콘텐츠 | `content_id`, `region_id`, type, status, operator_id, 행사·체험 표시 필드(연령 조건·준비물·취소 안내), publish_at, deleted_at | 탐색·승인·자동 공개, 서버가 설정한 소유 관계와 공개 전 소프트 삭제 현재 상태 |
+| 콘텐츠 수정본 | `content_revision_id`, content_id, editor_id, status, 행사·체험 후보 표시 필드, submitted_at, reviewed_at, withdrawn_at, withdrawn_by, withdrawal_reason | 공개본을 유지한 수정 심사·철회 |
+| 콘텐츠 상태 로그 | id, `content_id`, `actor_id`, status, reason, date | 생성·승인·자동 공개·중단·철회·종료·삭제의 처리자, 사유와 상태 변경 시각 |
 | 행사·체험 회차 | `session_id`, `content_id`, 시작·종료 시각, 정원, status, 체크인 시작·종료 시각 | 무료 예약 마감·QR 가능 단위 |
 
-상세 엔티티, 컬럼, 관계와 DB 제약은 [ERD](../erd.md)를 기준으로 한다.
+세부 컬럼, 관계와 DB 제약은 [ERD](../erd.md)를 기준으로 한다.
