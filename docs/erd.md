@@ -248,7 +248,7 @@ erDiagram
         bigint inspected_user_id FK "심사 전 nullable"
         text rejected_reason "거절 전 nullable"
         timestamp created_at
-        timestamp updated_at
+        timestamp updated_at "심사 종결 시각으로 사용"
     }
 
     region o|--o{ user_role_assignment : scopes
@@ -267,6 +267,8 @@ erDiagram
 - 지역 관리자 연결은 승인된 배포 초기화로만 생성한다. 일반 API로 `region` 또는
   `REGION_ADMIN` 배정을 생성·변경하지 않는다.
 - 운영자 신청은 반려 뒤 재신청할 때 새 행을 생성한다.
+- `operator_application`이 `PENDING → APPROVED` 또는 `PENDING → REJECTED`로 종결될 때의
+  `updated_at`을 심사 시각으로 사용하며, 별도 `inspected_at` 컬럼은 두지 않는다.
 - 신청자 탈퇴 시 `PENDING` 신청은 먼저 `CANCELLED`로 전환하고 모든 신청 상태에서
   `applicant_user_id`와 `business_information`을 제거한다.
 
