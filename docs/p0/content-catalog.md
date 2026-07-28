@@ -73,8 +73,8 @@
 ## 3. 콘텐츠 정책
 
 - `CON-01`:
-  콘텐츠 기본 상태는 `DRAFT → PENDING → APPROVED → PUBLISHED → ENDED`로 전이한다.
-  반려 시 `PENDING → REJECTED → DRAFT`로 전이하며 반려 사유를 기록하고 운영자가 보완 후 다시 제출한다.
+  콘텐츠 기본 상태는 `PENDING → APPROVED → PUBLISHED → ENDED`로 전이한다.
+  반려 시 `PENDING → REJECTED → PENDING`으로 전이하며 반려 사유를 기록하고 운영자가 보완 후 다시 제출한다.
 - `CON-02`:
   승인된 운영자는 자신이 소유한 콘텐츠의 대표 이미지, 소개, 위치, 운영 시간, 연락처, 유의사항, 날짜·회차별 정원,
   연령·준비물, P0 취소 정책을 안내하는 문구와 공개 예정 시각의 필수 검증을 통과해야 승인 요청할 수 있다.
@@ -99,6 +99,8 @@
   심사 중에는 원본의 `PUBLISHED` 상태와 기존 내용을 유지하고 승인된 수정본만 원본에 반영한다.
   `EDIT_REJECTED`와 `EDIT_WITHDRAWN` 수정본은 원본에 반영하지 않고 상태와 사유 이력을 보존한다.
   `EDIT_APPROVED` 반영 후에는 기존 수정본을 철회하지 않고 새 수정본 또는 전체 콘텐츠 철회 절차를 사용한다.
+  수정본의 관계형 리비전 영속 모델과 승인 시 원자 반영은
+  [ADR-0014](../adr/0014-store-published-content-edits-in-relational-revision-tables.md)를 따른다.
 - `CON-06`:
   지역 관리자는 공개 콘텐츠를 `PUBLISHED → SUSPENDED`로 전환할 수 있다.
   중단 시각, 처리자와 사유를 기록하고 방문자에게 운영 중단 안내와 사유를 표시한다.
@@ -112,8 +114,7 @@
   전체 콘텐츠 `WITHDRAWN`은 수정본 `EDIT_WITHDRAWN`과 다른 상태다.
 - `CON-08`:
   담당 지역 관리자만 공개 전 콘텐츠를 상태별로 삭제한다.
-  `DRAFT`는 하드 삭제하고 `PENDING`·`APPROVED`는
-  `deleted_at`, `deleted_by`, `deletion_reason`을 기록해 소프트 삭제한다.
+  `PENDING`·`APPROVED`는 `deleted_at`, `deleted_by`, `deletion_reason`을 기록해 소프트 삭제한다.
   소프트 삭제는 허용 상태와 `deleted_at IS NULL`을 조건으로 한 최초 처리만 성공하며 삭제 뒤에는
   승인·자동 게시·복구와 다른 상태 전이를 허용하지 않는다.
   자동 게시와 삭제가 경합하면 `deleted_at IS NULL` 및 현재 상태 조건을 먼저 충족해 커밋한 처리만 성공한다.
