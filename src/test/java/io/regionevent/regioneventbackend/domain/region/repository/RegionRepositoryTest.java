@@ -13,11 +13,15 @@ import org.springframework.test.context.TestPropertySource;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 
 @DataJpaTest
-@TestPropertySource(properties = "spring.jpa.hibernate.ddl-auto=create-drop")
+@TestPropertySource(properties = "spring.jpa.hibernate.ddl-auto=validate")
 class RegionRepositoryTest {
 
+    private final RegionRepository regionRepository;
+
     @Autowired
-    private RegionRepository regionRepository;
+    RegionRepositoryTest(RegionRepository regionRepository) {
+        this.regionRepository = regionRepository;
+    }
 
     @Test
     void 지역을_저장하고_식별자로_조회한다() {
