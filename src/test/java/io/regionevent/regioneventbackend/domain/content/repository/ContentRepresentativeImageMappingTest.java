@@ -16,7 +16,6 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.TestPropertySource;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
-import io.regionevent.regioneventbackend.domain.content.entity.ContentRepresentativeImage;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.image.entity.ImageLifecycleStatus;
@@ -30,9 +29,8 @@ import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepositor
 
 @DataJpaTest
 @TestPropertySource(properties = "spring.jpa.hibernate.ddl-auto=validate")
-class ContentRepresentativeImageRepositoryTest {
+class ContentRepresentativeImageMappingTest {
 
-    private final ContentRepresentativeImageRepository contentRepresentativeImageRepository;
     private final ContentRepository contentRepository;
     private final ImageObjectRepository imageObjectRepository;
     private final RegionRepository regionRepository;
@@ -40,15 +38,13 @@ class ContentRepresentativeImageRepositoryTest {
     private final EntityManager entityManager;
 
     @Autowired
-    ContentRepresentativeImageRepositoryTest(
-        ContentRepresentativeImageRepository contentRepresentativeImageRepository,
+    ContentRepresentativeImageMappingTest(
         ContentRepository contentRepository,
         ImageObjectRepository imageObjectRepository,
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
         EntityManager entityManager
     ) {
-        this.contentRepresentativeImageRepository = contentRepresentativeImageRepository;
         this.contentRepository = contentRepository;
         this.imageObjectRepository = imageObjectRepository;
         this.regionRepository = regionRepository;
@@ -57,27 +53,21 @@ class ContentRepresentativeImageRepositoryTest {
     }
 
     @Test
-    void 콘텐츠와_이미지_객체를_공유_PK_기반_대표_이미지로_연결한다() {
+    void 콘텐츠가_대표_이미지_객체를_직접_참조한다() {
         Content content = saveContent("김해 가야 문화 체험");
         ImageObject imageObject = saveImageObject("content/representative.webp");
         Instant assignedAt = Instant.parse("2026-08-01T00:00:00Z");
 
-        ContentRepresentativeImage representativeImage = contentRepresentativeImageRepository.saveAndFlush(
-            new ContentRepresentativeImage(content, imageObject, assignedAt)
-        );
+        content.assignRepresentativeImage(imageObject, assignedAt);
+        contentRepository.flush();
         entityManager.clear();
 
-        ContentRepresentativeImage foundRepresentativeImage = contentRepresentativeImageRepository
-            .findById(content.getContentId())
-            .orElseThrow();
+        Content foundContent = contentRepository.findById(content.getContentId()).orElseThrow();
         PersistenceUnitUtil persistenceUnitUtil = entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
 
-        assertThat(representativeImage.getContentId()).isEqualTo(content.getContentId());
-        assertThat(foundRepresentativeImage.getAssignedAt()).isEqualTo(assignedAt);
-        assertThat(persistenceUnitUtil.isLoaded(foundRepresentativeImage, "content")).isFalse();
-        assertThat(persistenceUnitUtil.isLoaded(foundRepresentativeImage, "imageObject")).isFalse();
-        assertThat(foundRepresentativeImage.getContent().getContentId()).isEqualTo(content.getContentId());
-        assertThat(foundRepresentativeImage.getImageObject().getImageObjectId()).isEqualTo(imageObject.getImageObjectId());
+        assertThat(foundContent.getRepresentativeImageAssignedAt()).isEqualTo(assignedAt);
+        assertThat(persistenceUnitUtil.isLoaded(foundContent, "representativeImageObject")).isFalse();
+        assertThat(foundContent.getRepresentativeImageObject().getImageObjectId()).isEqualTo(imageObject.getImageObjectId());
     }
 
     @Test
@@ -86,13 +76,12 @@ class ContentRepresentativeImageRepositoryTest {
         Content firstContent = saveContent("첫 번째 콘텐츠");
         Content secondContent = saveContent("두 번째 콘텐츠");
 
-        contentRepresentativeImageRepository.saveAndFlush(
-            new ContentRepresentativeImage(firstContent, imageObject, Instant.parse("2026-08-01T00:00:00Z"))
-        );
+        firstContent.assignRepresentativeImage(imageObject, Instant.parse("2026-08-01T00:00:00Z"));
+        contentRepository.flush();
 
-        assertThatThrownBy(() -> contentRepresentativeImageRepository.saveAndFlush(
-            new ContentRepresentativeImage(secondContent, imageObject, Instant.parse("2026-08-02T00:00:00Z"))
-        )).isInstanceOf(DataIntegrityViolationException.class);
+        secondContent.assignRepresentativeImage(imageObject, Instant.parse("2026-08-02T00:00:00Z"));
+
+        assertThatThrownBy(contentRepository::flush).isInstanceOf(DataIntegrityViolationException.class);
     }
 
     private Content saveContent(String title) {

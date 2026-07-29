@@ -19,6 +19,7 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 
+import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 
@@ -98,8 +99,15 @@ public class Content {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    @OneToOne(mappedBy = "content", fetch = FetchType.LAZY)
-    private ContentRepresentativeImage representativeImage;
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+        name = "representative_image_object_id",
+        foreignKey = @ForeignKey(name = "fk_content_representative_image_object")
+    )
+    private ImageObject representativeImageObject;
+
+    @Column(name = "representative_image_assigned_at")
+    private Instant representativeImageAssignedAt;
 
     protected Content() {
     }
@@ -156,6 +164,11 @@ public class Content {
             throw new IllegalStateException("content is already soft deleted");
         }
         deletedAt = Instant.now();
+    }
+
+    public void assignRepresentativeImage(ImageObject imageObject, Instant assignedAt) {
+        representativeImageObject = requireNotNull(imageObject, "imageObject");
+        representativeImageAssignedAt = requireNotNull(assignedAt, "assignedAt");
     }
 
     public Long getContentId() {
@@ -234,8 +247,12 @@ public class Content {
         return updatedAt;
     }
 
-    public ContentRepresentativeImage getRepresentativeImage() {
-        return representativeImage;
+    public ImageObject getRepresentativeImageObject() {
+        return representativeImageObject;
+    }
+
+    public Instant getRepresentativeImageAssignedAt() {
+        return representativeImageAssignedAt;
     }
 
     private static <T> T requireNotNull(T value, String fieldName) {
