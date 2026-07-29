@@ -2,7 +2,6 @@ package io.regionevent.regioneventbackend.domain.content.entity;
 
 import java.time.Instant;
 
-import jakarta.persistence.CheckConstraint;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -23,33 +22,7 @@ import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 
 @Entity
-@Table(
-    name = "content",
-    check = {
-        @CheckConstraint(
-            name = "ck_content_type",
-            constraint = "content_type = 'EVENT_EXPERIENCE'"
-        ),
-        @CheckConstraint(
-            name = "ck_content_status",
-            constraint = """
-                status IN (
-                    'PENDING',
-                    'REJECTED',
-                    'APPROVED',
-                    'PUBLISHED',
-                    'SUSPENDED',
-                    'WITHDRAWN',
-                    'ENDED'
-                )
-                """
-        ),
-        @CheckConstraint(
-            name = "ck_content_soft_delete_status",
-            constraint = "deleted_at IS NULL OR status IN ('PENDING', 'APPROVED')"
-        )
-    }
-)
+@Table(name = "content")
 public class Content {
 
     @Id

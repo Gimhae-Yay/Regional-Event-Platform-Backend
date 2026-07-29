@@ -22,23 +22,7 @@ CREATE TABLE content (
     CONSTRAINT fk_content_region
         FOREIGN KEY (region_id) REFERENCES region (region_id),
     CONSTRAINT fk_content_operator
-        FOREIGN KEY (operator_id) REFERENCES app_user (user_id),
-    CONSTRAINT ck_content_type
-        CHECK (content_type = 'EVENT_EXPERIENCE'),
-    CONSTRAINT ck_content_status
-        CHECK (
-            status IN (
-                'PENDING',
-                'REJECTED',
-                'APPROVED',
-                'PUBLISHED',
-                'SUSPENDED',
-                'WITHDRAWN',
-                'ENDED'
-            )
-        ),
-    CONSTRAINT ck_content_soft_delete_status
-        CHECK (deleted_at IS NULL OR status IN ('PENDING', 'APPROVED'))
+        FOREIGN KEY (operator_id) REFERENCES app_user (user_id)
 );
 
 CREATE INDEX idx_content_region_status_type_publish_deleted
