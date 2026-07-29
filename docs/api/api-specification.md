@@ -24,7 +24,7 @@
 | 도메인 | 도메인 API 명세서                                                           | 기능·정책 기준 문서 | 주요 범위 |
 | --- |-----------------------------------------------------------------------| --- | --- |
 | 인증·프로필 | [인증·프로필 API](p0/auth-profile/auth-profile.md) — 권한·운영자 승인 API는 작성 전 | [인증·프로필](../p0/auth-profile.md) | 회원가입·로그인·로그아웃·회원탈퇴, 역할·지역 권한, 운영자 승인, 개인정보 |
-| 지역·콘텐츠 카탈로그 | 작성 전 — `p0/content-catalog/`에 생성                                      | [지역·콘텐츠 카탈로그](../p0/content-catalog.md) | 지역 선택, 콘텐츠·회차, 공개·승인·운영 상태 |
+| 지역·콘텐츠 카탈로그 | [콘텐츠 반려](p0/content-catalog/content-rejection.md), [콘텐츠 승인](p0/content-catalog/content-approval.md), [콘텐츠 이력 조회](p0/content-catalog/content-history.md), [승인 검토 콘텐츠 상세 조회](p0/content-catalog/review-content-detail.md) | [지역·콘텐츠 카탈로그](../p0/content-catalog.md) | 지역 선택, 콘텐츠·회차, 공개·승인·운영 상태 |
 | 정원 홀드·무료 예약 | 작성 전 — `p0/reservation/`에 생성                                          | [정원 홀드·무료 예약](../p0/reservation.md) | 정원 홀드, 예약 확정·취소·만료, 동시성·멱등성 |
 | 예약 QR·체크인 | 작성 전 — `p0/check-in/`에 생성                                             | [예약 QR·체크인](../p0/check-in.md) | QR 발급·검증, 체크인, 방문 기록 |
 | 인증 후기 | 작성 전 — `p0/review/`에 생성                                               | [인증 후기](../p0/review.md) | 후기 작성·수정·삭제와 원문 파기 |

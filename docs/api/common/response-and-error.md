@@ -87,6 +87,7 @@ API별 오류는 다음 표로 정의한다. 오류 조건에는 상태 변경·
 | 405 | `METHOD_NOT_ALLOWED` | 허용되지 않은 HTTP 메서드입니다. | 지원하지 않는 HTTP 메서드 |
 | 409 | `DUPLICATE_LOGIN_IDENTIFIER` | 이미 사용 중인 이메일입니다. | 정규화한 로그인 식별자가 이미 존재함 |
 | 409 | `REFRESH_TOKEN_CONFLICT` | Refresh Token 갱신 요청이 충돌했습니다. | 같은 Refresh Token의 진행 중인 동시 갱신 요청 |
+| 409 | `CONTENT_STATE_CONFLICT` | 콘텐츠 상태가 요청을 처리할 수 없습니다. | 콘텐츠의 현재 상태 또는 삭제 여부가 요청한 상태 전이 조건과 다름 |
 | 503 | `AUTH_SERVICE_UNAVAILABLE` | 인증 서비스를 일시적으로 사용할 수 없습니다. | Refresh Token 계열을 안전하게 발급·갱신·폐기할 수 없는 Redis 장애 |
 | 500 | `INTERNAL_SERVER_ERROR` | 서버 오류가 발생했습니다. | 예상하지 못한 예외 |
 
