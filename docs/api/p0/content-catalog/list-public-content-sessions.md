@@ -23,7 +23,7 @@
 
 | 대상 | 기준 문서 | 이 API에서 명시할 내용 |
 | --- | --- | --- |
-| Base URL·미디어 타입·시간 형식 | [API 공통 규칙](../../common/api-conventions.md) | Base URL은 `/api/v1`이며 응답은 `application/json; charset=UTF-8`이다. |
+| Base URL·미디어 타입·시각·식별자 표현 | [API 공통 규칙](../../common/api-conventions.md) | Base URL은 `/api/v1`이며 응답은 `application/json; charset=UTF-8`이다. 일정 시각과 식별자는 공통 규칙을 따른다. |
 | 인증·인가 | [인증·인가](../../common/authentication.md) | 공개 API다. `Authorization` 헤더, 역할·지역·소유 관계 검증을 요구하지 않는다. |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | `200 OK`와 회차 배열을 반환한다. |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | P0에서 콘텐츠별 회차 목록은 페이지네이션을 적용하지 않는다. |
@@ -58,7 +58,7 @@ Accept: application/json
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `contentId` | Long | Y | 공개 콘텐츠 식별자. 양의 정수다. |
+| `contentId` | String | Y | API 공통 규칙을 따르는 공개 콘텐츠 식별자다. |
 
 #### Query Parameter
 
@@ -88,10 +88,10 @@ Accept: application/json
   "code": "SUCCESS",
   "message": "콘텐츠 회차 목록 조회에 성공했습니다.",
   "data": {
-    "contentId": 10,
+    "contentId": "10",
     "sessions": [
       {
-        "sessionId": 21,
+        "sessionId": "21",
         "startsAt": "2026-08-15T10:00:00+09:00",
         "endsAt": "2026-08-15T12:00:00+09:00"
       }
@@ -107,11 +107,11 @@ Accept: application/json
 | `statusCode` | Integer | HTTP 상태와 같은 `200`이다. |
 | `code` | String | 성공 코드 `SUCCESS`다. |
 | `message` | String | 성공 메시지 `콘텐츠 회차 목록 조회에 성공했습니다.`다. |
-| `data.contentId` | Long | 조회한 공개 콘텐츠 식별자다. |
+| `data.contentId` | String | API 공통 규칙에 따른 공개 콘텐츠 식별자다. |
 | `data.sessions` | Array | 시작 시각 오름차순의 공개 `SCHEDULED` 회차 배열이다. 없으면 빈 배열이다. |
-| `data.sessions[].sessionId` | Long | 회차 식별자다. |
-| `data.sessions[].startsAt` | String | 회차 시작 시각. ISO 8601 오프셋 일시다. |
-| `data.sessions[].endsAt` | String | 회차 종료 시각. ISO 8601 오프셋 일시다. |
+| `data.sessions[].sessionId` | String | API 공통 규칙에 따른 회차 식별자다. |
+| `data.sessions[].startsAt` | String | 회차 시작 일정 시각. API 공통 규칙에 따른 `Asia/Seoul` ISO 8601 오프셋 일시다. |
+| `data.sessions[].endsAt` | String | 회차 종료 일정 시각. API 공통 규칙에 따른 `Asia/Seoul` ISO 8601 오프셋 일시다. |
 
 ### Error Code
 

@@ -22,7 +22,7 @@
 
 | 대상 | 기준 문서 | 이 API에서 명시할 내용 |
 | --- | --- | --- |
-| Base URL·미디어 타입·시간 형식 | [API 공통 규칙](../../common/api-conventions.md) | Base URL은 `/api/v1`이며 요청·응답은 `application/json; charset=UTF-8`이다. |
+| Base URL·미디어 타입·시각·식별자 표현 | [API 공통 규칙](../../common/api-conventions.md) | Base URL은 `/api/v1`이며 요청·응답은 `application/json; charset=UTF-8`이다. 일정 시각과 식별자는 공통 규칙을 따른다. |
 | 인증·인가 | [인증·인가](../../common/authentication.md) | `OPERATOR` 역할, 담당 지역과 콘텐츠 지역의 일치, 콘텐츠 소유 관계가 필요하다. |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | `201 Created`와 생성된 회차를 반환한다. |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | 단건 생성이므로 적용하지 않는다. |
@@ -67,7 +67,7 @@ Accept: application/json
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `contentId` | Long | Y | 콘텐츠 식별자. 양의 정수다. |
+| `contentId` | String | Y | API 공통 규칙을 따르는 콘텐츠 식별자다. |
 
 #### Query Parameter
 
@@ -89,10 +89,10 @@ Accept: application/json
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `startsAt` | String | Y | ISO 8601 오프셋 일시다. `endsAt`보다 앞서야 한다. |
-| `endsAt` | String | Y | ISO 8601 오프셋 일시다. `startsAt`보다 뒤고 `checkinCloseAt`보다 늦지 않아야 한다. |
-| `checkinOpenAt` | String | Y | ISO 8601 오프셋 일시다. `checkinCloseAt`보다 앞서야 한다. |
-| `checkinCloseAt` | String | Y | ISO 8601 오프셋 일시다. `endsAt`보다 이르면 안 된다. |
+| `startsAt` | String | Y | API 공통 규칙에 따른 `Asia/Seoul` 일정 시각이다. `endsAt`보다 앞서야 한다. |
+| `endsAt` | String | Y | API 공통 규칙에 따른 `Asia/Seoul` 일정 시각이다. `startsAt`보다 뒤고 `checkinCloseAt`보다 늦지 않아야 한다. |
+| `checkinOpenAt` | String | Y | API 공통 규칙에 따른 `Asia/Seoul` 일정 시각이다. `checkinCloseAt`보다 앞서야 한다. |
+| `checkinCloseAt` | String | Y | API 공통 규칙에 따른 `Asia/Seoul` 일정 시각이다. `endsAt`보다 이르면 안 된다. |
 | `capacity` | Integer | Y | 1 이상의 정수다. |
 
 ### Response
@@ -111,8 +111,8 @@ Accept: application/json
   "code": "SUCCESS",
   "message": "콘텐츠 회차 생성에 성공했습니다.",
   "data": {
-    "sessionId": 21,
-    "contentId": 10,
+    "sessionId": "21",
+    "contentId": "10",
     "status": "SCHEDULED",
     "startsAt": "2026-08-15T10:00:00+09:00",
     "endsAt": "2026-08-15T12:00:00+09:00",
@@ -131,13 +131,13 @@ Accept: application/json
 | `statusCode` | Integer | HTTP 상태와 같은 `201` |
 | `code` | String | 성공 코드 `SUCCESS` |
 | `message` | String | 성공 메시지 `콘텐츠 회차 생성에 성공했습니다.` |
-| `data.sessionId` | Long | 새 회차 식별자 |
-| `data.contentId` | Long | 회차가 속한 콘텐츠 식별자 |
+| `data.sessionId` | String | API 공통 규칙에 따른 새 회차 식별자 |
+| `data.contentId` | String | API 공통 규칙에 따른 회차의 콘텐츠 식별자 |
 | `data.status` | String | 생성 직후 상태인 `SCHEDULED` |
-| `data.startsAt` | String | 생성된 회차 시작 시각. ISO 8601 오프셋 일시다. |
-| `data.endsAt` | String | 생성된 회차 종료 시각. ISO 8601 오프셋 일시다. |
-| `data.checkinOpenAt` | String | 생성된 체크인 시작 시각. ISO 8601 오프셋 일시다. |
-| `data.checkinCloseAt` | String | 생성된 체크인 종료 시각. ISO 8601 오프셋 일시다. |
+| `data.startsAt` | String | 생성된 회차 시작 일정 시각. API 공통 규칙에 따른 `Asia/Seoul` ISO 8601 오프셋 일시다. |
+| `data.endsAt` | String | 생성된 회차 종료 일정 시각. API 공통 규칙에 따른 `Asia/Seoul` ISO 8601 오프셋 일시다. |
+| `data.checkinOpenAt` | String | 생성된 체크인 시작 일정 시각. API 공통 규칙에 따른 `Asia/Seoul` ISO 8601 오프셋 일시다. |
+| `data.checkinCloseAt` | String | 생성된 체크인 종료 일정 시각. API 공통 규칙에 따른 `Asia/Seoul` ISO 8601 오프셋 일시다. |
 | `data.capacity` | Integer | 총 정원 |
 | `data.remainingCapacity` | Integer | 생성 직후 `capacity`와 같은 잔여 정원 |
 

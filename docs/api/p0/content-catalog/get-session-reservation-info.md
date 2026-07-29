@@ -23,7 +23,7 @@ P0 예약은 무료이므로 가격은 원 단위 정수 `0`으로 반환한다.
 
 | 대상 | 기준 문서 | 이 API에서 명시할 내용 |
 | --- | --- | --- |
-| Base URL·미디어 타입·시간 형식 | [API 공통 규칙](../../common/api-conventions.md) | Base URL은 `/api/v1`이며 응답은 `application/json; charset=UTF-8`이다. |
+| Base URL·미디어 타입·시각·식별자 표현 | [API 공통 규칙](../../common/api-conventions.md) | Base URL은 `/api/v1`이며 응답은 `application/json; charset=UTF-8`이고 시각과 식별자는 공통 규칙을 따른다. |
 | 인증·인가 | [인증·인가](../../common/authentication.md) | 공개 API다. `Authorization` 헤더, 역할·지역·소유 관계 검증을 요구하지 않는다. |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | `200 OK`와 회차 예약 정보를 반환한다. |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | 단건 조회이므로 적용하지 않는다. |
@@ -59,7 +59,7 @@ Accept: application/json
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `sessionId` | Long | Y | 공개 회차 식별자. 양의 정수다. |
+| `sessionId` | String | Y | API 공통 규칙을 따르는 공개 회차 식별자다. |
 
 #### Query Parameter
 
@@ -89,8 +89,8 @@ Accept: application/json
   "code": "SUCCESS",
   "message": "회차 예약 정보 조회에 성공했습니다.",
   "data": {
-    "sessionId": 21,
-    "contentId": 10,
+    "sessionId": "21",
+    "contentId": "10",
     "startsAt": "2026-08-15T10:00:00+09:00",
     "endsAt": "2026-08-15T12:00:00+09:00",
     "price": 0,
@@ -107,10 +107,10 @@ Accept: application/json
 | `statusCode` | Integer | HTTP 상태와 같은 `200`이다. |
 | `code` | String | 성공 코드 `SUCCESS`다. |
 | `message` | String | 성공 메시지 `회차 예약 정보 조회에 성공했습니다.`다. |
-| `data.sessionId` | Long | 조회한 공개 회차 식별자다. |
-| `data.contentId` | Long | 회차가 속한 공개 콘텐츠 식별자다. |
-| `data.startsAt` | String | 회차 시작 시각. ISO 8601 오프셋 일시다. |
-| `data.endsAt` | String | 회차 종료 시각. ISO 8601 오프셋 일시다. |
+| `data.sessionId` | String | API 공통 규칙에 따른 공개 회차 식별자다. |
+| `data.contentId` | String | API 공통 규칙에 따른 공개 콘텐츠 식별자다. |
+| `data.startsAt` | String | 회차 시작 일정 시각. API 공통 규칙에 따른 `Asia/Seoul` ISO 8601 오프셋 일시다. |
+| `data.endsAt` | String | 회차 종료 일정 시각. API 공통 규칙에 따른 `Asia/Seoul` ISO 8601 오프셋 일시다. |
 | `data.price` | Integer | P0 무료 예약 가격. 원 단위 정수 `0`이다. |
 | `data.remainingCapacity` | Integer | MySQL 조회 시점의 잔여 정원. 0 이상의 정수다. |
 | `data.reservable` | Boolean | 조회 시점에 홀드 생성 조건을 만족하면 `true`다. `true`여도 동시 요청으로 실제 홀드 생성은 실패할 수 있다. |

@@ -16,7 +16,7 @@
 
 | 요구사항 | HTTP 계약 | 주요 데이터 |
 | --- | --- | --- |
-| FR-06, AUTH-01, RSV-06 | `POST /api/v1/operator/sessions/{sessionId}/cancel` | `content`, `content_session`, `capacity_hold`, `reservation` |
+| FR-06, AUTH-01, RSV-06 | `POST /api/v1/operator/sessions/{sessionId}/cancel` | `content`, `content_session`, `capacity_hold`, `reservation`, `audit_event`, `audit_event_actor_link` |
 
 ## 2. 공통 계약 참조
 
@@ -29,9 +29,11 @@
 
 ## 3. 소유 운영자의 회차 취소
 
-`SCHEDULED → CANCELLED` 전이와 활성 홀드 무효화, `CONFIRMED → CANCELLED` 예약 전이를 하나의 트랜잭션으로
-처리한다. 회차 시작 전의 예약 취소만 정원을 한 번 복구하며, `CHECKED_IN` 예약·방문·후기와 이미 종결된 예약은
-변경하지 않는다. 별도 전달 알림은 P0 범위에 포함하지 않는다.
+`SCHEDULED → CANCELLED` 전이와 활성 홀드 무효화, `CONFIRMED → CANCELLED` 예약 전이, 성공 감사 기록을 하나의
+트랜잭션으로 처리한다. 성공 감사 기록에는 처리자 역할과 활성 처리자 연결, 취소 사유, 회차의 `SCHEDULED → CANCELLED`
+전이, 처리 시각을 남긴다. 회차 시작 전의 예약 취소만 정원을 한 번 복구하고, `CHECKED_IN` 예약·방문·후기와 이미
+종결된 예약은 변경하지 않는다. 트랜잭션의 어느 변경이나 감사 기록이 실패하면 모두 롤백한다. 별도 전달 알림은 P0 범위에
+포함하지 않는다.
 
 ### Request
 
@@ -64,7 +66,7 @@ Accept: application/json
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `sessionId` | Long | Y | 취소할 회차 식별자. 양의 정수다. |
+| `sessionId` | String | Y | API 공통 규칙을 따르는 취소할 회차 식별자다. |
 
 #### Query Parameter
 
@@ -100,10 +102,10 @@ Accept: application/json
   "code": "SUCCESS",
   "message": "회차 취소에 성공했습니다.",
   "data": {
-    "sessionId": 21,
+    "sessionId": "21",
     "status": "CANCELLED",
     "cancellationReason": "기상 악화로 회차를 진행할 수 없습니다.",
-    "cancelledAt": "2026-08-14T15:00:00+09:00"
+    "cancelledAt": "2026-08-14T06:00:00Z"
   }
 }
 ```
@@ -115,10 +117,10 @@ Accept: application/json
 | `statusCode` | Integer | HTTP 상태와 같은 `200` |
 | `code` | String | 성공 코드 `SUCCESS` |
 | `message` | String | 성공 메시지 `회차 취소에 성공했습니다.` |
-| `data.sessionId` | Long | 취소한 회차 식별자 |
+| `data.sessionId` | String | API 공통 규칙에 따른 취소한 회차 식별자 |
 | `data.status` | String | 취소 후 상태인 `CANCELLED` |
 | `data.cancellationReason` | String | 회차와 미체크인 예약에 기록한 취소 사유 |
-| `data.cancelledAt` | String | 회차 취소 시각. ISO 8601 오프셋 일시다. |
+| `data.cancelledAt` | String | 회차 취소 사건 시각. API 공통 규칙에 따른 UTC ISO 8601 일시다. |
 
 ### Error Code
 
