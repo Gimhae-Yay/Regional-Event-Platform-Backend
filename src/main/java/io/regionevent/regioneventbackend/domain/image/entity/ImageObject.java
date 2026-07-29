@@ -39,7 +39,7 @@ public class ImageObject {
     @Column(name = "image_object_id")
     private Long imageObjectId;
 
-    @Column(name = "object_key", nullable = false, length = 1024)
+    @Column(name = "object_key", nullable = false, length = 768)
     private String objectKey;
 
     @Column(name = "media_type", nullable = false, length = 100)
@@ -76,12 +76,12 @@ public class ImageObject {
         int deleteAttemptCount,
         Instant lastDeleteAttemptedAt
     ) {
-        this.objectKey = objectKey;
-        this.mediaType = mediaType;
-        this.byteSize = byteSize;
-        this.checksum = checksum;
-        this.lifecycleStatus = lifecycleStatus;
-        this.deleteAttemptCount = deleteAttemptCount;
+        this.objectKey = requireNotBlank(objectKey, "objectKey");
+        this.mediaType = requireNotBlank(mediaType, "mediaType");
+        this.byteSize = requireNotNegative(byteSize, "byteSize");
+        this.checksum = requireNotBlank(checksum, "checksum");
+        this.lifecycleStatus = requireNotNull(lifecycleStatus, "lifecycleStatus");
+        this.deleteAttemptCount = requireNotNegative(deleteAttemptCount, "deleteAttemptCount");
         this.lastDeleteAttemptedAt = lastDeleteAttemptedAt;
     }
 
@@ -124,5 +124,33 @@ public class ImageObject {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    private static String requireNotBlank(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(fieldName + " must not be null or blank");
+        }
+        return value;
+    }
+
+    private static <T> T requireNotNull(T value, String fieldName) {
+        if (value == null) {
+            throw new IllegalArgumentException(fieldName + " must not be null");
+        }
+        return value;
+    }
+
+    private static long requireNotNegative(long value, String fieldName) {
+        if (value < 0) {
+            throw new IllegalArgumentException(fieldName + " must not be negative");
+        }
+        return value;
+    }
+
+    private static int requireNotNegative(int value, String fieldName) {
+        if (value < 0) {
+            throw new IllegalArgumentException(fieldName + " must not be negative");
+        }
+        return value;
     }
 }
