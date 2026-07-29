@@ -29,8 +29,9 @@
 
 ## 3. 승인 검토할 콘텐츠 상세 조회
 
-서버는 소프트 삭제되지 않은 `PENDING` 콘텐츠를 조회하고 콘텐츠의 대표 이미지 객체 식별자와 모든 회차를 함께 반환한다.
-대표 이미지의 접근 URL 발급은 이미지 도메인 API에서 별도로 정의한다.
+서버는 소프트 삭제되지 않은 `PENDING` 콘텐츠를 조회하고 모든 회차를 함께 반환한다. 콘텐츠가 인증 지역 관리자의 담당 지역에
+속하고 여전히 `PENDING`인지 확인한 뒤에만 비공개 대표 이미지 객체의 단기 presigned GET URL과 만료 시각을 발급한다.
+응답에는 내부 이미지 객체 식별자, S3 객체 키 또는 원본 파일명을 포함하지 않는다.
 
 ### Request
 
@@ -95,7 +96,8 @@ Accept: application/json
     "status": "PENDING",
     "title": "가야 문화 체험",
     "description": "가야 문화를 체험하는 행사입니다.",
-    "representativeImageObjectId": 501,
+    "representativeImageUrl": "https://s3.ap-northeast-2.amazonaws.com/example-bucket/contents/123/image?X-Amz-Signature=...",
+    "representativeImageUrlExpiresAt": "{ISO 8601 형식과 기준 시간대}",
     "locationText": "김해문화의전당",
     "operatingHoursText": "매주 토요일 10:00~16:00",
     "contactText": "055-000-0000",
@@ -134,7 +136,8 @@ Accept: application/json
 | `data.status` | String | 승인 검토 대상 상태 `PENDING`이다. |
 | `data.title` | String | 콘텐츠 제목이다. |
 | `data.description` | String | 콘텐츠 소개다. |
-| `data.representativeImageObjectId` | Long | 현재 대표 이미지 객체 식별자다. 이미지 접근 URL은 별도 이미지 API 계약을 따른다. |
+| `data.representativeImageUrl` | String | 담당 지역 권한과 `PENDING` 상태를 다시 확인한 뒤 발급한 현재 대표 이미지의 단기 presigned GET URL이다. |
+| `data.representativeImageUrlExpiresAt` | String | `representativeImageUrl`의 만료 시각이다. 만료 뒤에는 기존 URL을 재사용하지 않고 상세 API를 다시 조회한다. |
 | `data.locationText` | String | 운영자가 등록한 위치 표시 문자열이다. |
 | `data.operatingHoursText` | String | 운영자가 등록한 운영 시간 표시 문자열이다. |
 | `data.contactText` | String | 운영자가 등록한 연락처 표시 문자열이다. |
