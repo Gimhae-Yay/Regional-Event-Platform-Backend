@@ -61,7 +61,7 @@ Accept: application/json
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `revisionId` | Long | Y | 철회할 수정본 식별자다. 양수여야 한다. |
+| `revisionId` | String | Y | 양의 10진 문자열인 철회할 수정본 식별자다. |
 
 #### Query Parameter
 
@@ -97,11 +97,11 @@ Accept: application/json
   "code": "SUCCESS",
   "message": "콘텐츠 수정본 철회에 성공했습니다.",
   "data": {
-    "revisionId": 501,
-    "contentId": 101,
+    "revisionId": "501",
+    "contentId": "101",
     "status": "EDIT_WITHDRAWN",
     "withdrawalReason": "공개 예정 시각을 다시 조정해야 합니다.",
-    "withdrawnAt": "2026-07-30T11:20:00+09:00"
+    "withdrawnAt": "2026-07-30T02:20:00Z"
   }
 }
 ```
@@ -113,8 +113,8 @@ Accept: application/json
 | `statusCode` | Number | HTTP 상태와 같은 `200` |
 | `code` | String | 성공 코드 `SUCCESS` |
 | `message` | String | 성공 메시지 |
-| `data.revisionId` | Number | 철회한 수정본 식별자 |
-| `data.contentId` | Number | 원본 콘텐츠 식별자 |
+| `data.revisionId` | String | 양의 10진 문자열인 철회한 수정본 식별자 |
+| `data.contentId` | String | 양의 10진 문자열인 원본 콘텐츠 식별자 |
 | `data.status` | String | 철회 후 상태 `EDIT_WITHDRAWN` |
 | `data.withdrawalReason` | String | 저장된 철회 사유 |
 | `data.withdrawnAt` | String | 철회 처리 시각 |
@@ -125,7 +125,6 @@ Accept: application/json
 | --- | --- | --- |
 | `400` | `INVALID_INPUT` | 식별자가 양수가 아니거나 `reason`이 누락·공백이다. 수정본을 변경하지 않는다. |
 | `400` | `INVALID_JSON` | 요청 본문을 역직렬화할 수 없다. 수정본을 변경하지 않는다. |
-| `400` | `INVALID_TYPE` | `revisionId`를 정수로 변환할 수 없다. 수정본을 변경하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 수정본을 변경하지 않는다. |
 | `403` | `FORBIDDEN` | 운영자 역할, 담당 지역 또는 원본 콘텐츠 소유 관계가 없다. 수정본을 변경하지 않는다. |
 | `404` | `NOT_FOUND` | 수정본이 없다. 수정본을 변경하지 않는다. |

@@ -63,7 +63,7 @@ Accept: application/json
 
 | Name | Type | Required | Description |
 | --- | --- | --- |
-| `regionId` | Long | Y | 공개 콘텐츠를 조회할 지역 식별자다. 양수여야 한다. |
+| `regionId` | String | Y | 양의 10진 문자열인 공개 콘텐츠를 조회할 지역 식별자다. |
 | `contentType` | String | N | 콘텐츠 유형 필터다. P0에서는 지정하면 `EVENT_EXPERIENCE`만 허용한다. |
 | `reservationAvailable` | Boolean | N | `true`이면 예약 가능한 향후 회차가 있는 콘텐츠만, `false`이면 없는 콘텐츠만 반환한다. |
 
@@ -93,12 +93,12 @@ Accept: application/json
   "data": {
     "contents": [
       {
-        "contentId": 101,
+        "contentId": "101",
         "contentType": "EVENT_EXPERIENCE",
         "title": "김해 가야문화 체험",
         "locationText": "김해시 가야의길 190",
         "representativeImageUrl": "https://s3.ap-northeast-2.amazonaws.com/example-bucket/contents/101/image?X-Amz-Signature=...",
-        "representativeImageUrlExpiresAt": "2026-07-30T12:05:00+09:00",
+        "representativeImageUrlExpiresAt": "2026-07-30T03:05:00Z",
         "reservationAvailable": true
       }
     ]
@@ -114,7 +114,7 @@ Accept: application/json
 | `code` | String | 성공 코드 `SUCCESS` |
 | `message` | String | 성공 메시지 |
 | `data.contents` | Array | 조건에 맞는 공개 콘텐츠 배열이다. 결과가 없으면 `[]`다. |
-| `data.contents[].contentId` | Number | 콘텐츠 식별자 |
+| `data.contents[].contentId` | String | 양의 10진 문자열인 콘텐츠 식별자 |
 | `data.contents[].contentType` | String | P0에서는 `EVENT_EXPERIENCE` |
 | `data.contents[].title` | String | 콘텐츠 제목 |
 | `data.contents[].locationText` | String | 위치 안내 |

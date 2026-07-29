@@ -56,7 +56,7 @@ Accept: application/json
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `contentId` | Long | Y | 조회할 공개 콘텐츠 식별자다. 양수여야 한다. |
+| `contentId` | String | Y | 양의 10진 문자열인 조회할 공개 콘텐츠 식별자다. |
 
 #### Query Parameter
 
@@ -86,12 +86,12 @@ Accept: application/json
   "code": "SUCCESS",
   "message": "공개 콘텐츠 상세 조회에 성공했습니다.",
   "data": {
-    "contentId": 101,
+    "contentId": "101",
     "contentType": "EVENT_EXPERIENCE",
     "title": "김해 가야문화 체험",
     "description": "가야 문화를 체험하는 행사입니다.",
     "representativeImageUrl": "https://s3.ap-northeast-2.amazonaws.com/example-bucket/contents/101/image?X-Amz-Signature=...",
-    "representativeImageUrlExpiresAt": "2026-07-30T12:05:00+09:00",
+    "representativeImageUrlExpiresAt": "2026-07-30T03:05:00Z",
     "locationText": "김해시 가야의길 190",
     "operatingHoursText": "매주 토요일 10:00~16:00",
     "contactText": "055-000-0000",
@@ -110,7 +110,7 @@ Accept: application/json
 | `statusCode` | Number | HTTP 상태와 같은 `200` |
 | `code` | String | 성공 코드 `SUCCESS` |
 | `message` | String | 성공 메시지 |
-| `data.contentId` | Number | 콘텐츠 식별자 |
+| `data.contentId` | String | 양의 10진 문자열인 콘텐츠 식별자 |
 | `data.contentType` | String | P0 콘텐츠 유형 `EVENT_EXPERIENCE` |
 | `data.title` | String | 콘텐츠 제목 |
 | `data.description` | String | 콘텐츠 소개 |
@@ -128,8 +128,7 @@ Accept: application/json
 
 | HTTP Status | Code | Description |
 | --- | --- | --- |
-| `400` | `INVALID_INPUT` | `contentId`가 양수가 아니다. 상태를 변경하지 않는다. |
-| `400` | `INVALID_TYPE` | `contentId`를 정수로 변환할 수 없다. 상태를 변경하지 않는다. |
+| `400` | `INVALID_INPUT` | `contentId`가 양의 10진 문자열 형식이 아니다. 상태를 변경하지 않는다. |
 | `404` | `NOT_FOUND` | 콘텐츠가 없거나 현재 공개 대상이 아니다. 상태별 존재 여부는 구분하지 않는다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 콘텐츠와 대표 이미지 연결 정합성 오류 또는 예상하지 못한 서버 오류가 발생했다. |
 

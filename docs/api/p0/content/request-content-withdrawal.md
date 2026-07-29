@@ -62,7 +62,7 @@ Accept: application/json
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `contentId` | Long | Y | 철회를 요청할 콘텐츠 식별자다. 양수여야 한다. |
+| `contentId` | String | Y | 양의 10진 문자열인 철회를 요청할 콘텐츠 식별자다. |
 
 #### Query Parameter
 
@@ -98,10 +98,10 @@ Accept: application/json
   "code": "SUCCESS",
   "message": "콘텐츠 철회 요청에 성공했습니다.",
   "data": {
-    "contentId": 101,
+    "contentId": "101",
     "status": "PUBLISHED",
     "reason": "운영 일정 변경으로 콘텐츠 철회를 요청합니다.",
-    "requestedAt": "2026-07-30T14:30:00+09:00"
+    "requestedAt": "2026-07-30T05:30:00Z"
   }
 }
 ```
@@ -113,7 +113,7 @@ Accept: application/json
 | `statusCode` | Number | HTTP 상태와 같은 `200` |
 | `code` | String | 성공 코드 `SUCCESS` |
 | `message` | String | 성공 메시지 |
-| `data.contentId` | Number | 철회를 요청한 콘텐츠 식별자 |
+| `data.contentId` | String | 양의 10진 문자열인 철회를 요청한 콘텐츠 식별자 |
 | `data.status` | String | 요청 뒤에도 유지되는 `PUBLISHED` |
 | `data.reason` | String | 최초 요청에 저장된 철회 요청 사유 |
 | `data.requestedAt` | String | 최초 철회 요청 시각 |
@@ -124,7 +124,6 @@ Accept: application/json
 | --- | --- | --- |
 | `400` | `INVALID_INPUT` | 식별자가 양수가 아니거나 `reason`이 누락·공백이다. 콘텐츠와 로그를 변경하지 않는다. |
 | `400` | `INVALID_JSON` | 요청 본문을 역직렬화할 수 없다. 콘텐츠와 로그를 변경하지 않는다. |
-| `400` | `INVALID_TYPE` | `contentId`를 정수로 변환할 수 없다. 콘텐츠와 로그를 변경하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 콘텐츠와 로그를 변경하지 않는다. |
 | `403` | `FORBIDDEN` | 운영자 역할, 담당 지역 또는 콘텐츠 소유 관계가 없다. 콘텐츠와 로그를 변경하지 않는다. |
 | `404` | `NOT_FOUND` | 콘텐츠가 없거나 소프트 삭제됐다. 콘텐츠와 로그를 변경하지 않는다. |

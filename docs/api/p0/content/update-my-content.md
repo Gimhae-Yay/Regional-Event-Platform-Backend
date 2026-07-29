@@ -55,7 +55,7 @@ Accept: application/json
   "materials": "필기도구",
   "cancellationPolicyText": "회차 시작 전까지 예약 전체 취소가 가능합니다.",
   "publishAt": "2026-08-15T09:00:00+09:00",
-  "representativeImageObjectId": 301
+  "representativeImageObjectId": "301"
 }
 ```
 
@@ -71,7 +71,7 @@ Accept: application/json
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `contentId` | Long | Y | 편집할 콘텐츠 식별자다. 양수여야 한다. |
+| `contentId` | String | Y | 양의 10진 문자열인 편집할 콘텐츠 식별자다. |
 
 #### Query Parameter
 
@@ -91,7 +91,7 @@ Accept: application/json
   "materials": "필기도구",
   "cancellationPolicyText": "회차 시작 전까지 예약 전체 취소가 가능합니다.",
   "publishAt": "2026-08-15T09:00:00+09:00",
-  "representativeImageObjectId": 301
+  "representativeImageObjectId": "301"
 }
 ```
 
@@ -109,7 +109,7 @@ Accept: application/json
 | `materials` | String | Y | 비어 있지 않은 준비물 |
 | `cancellationPolicyText` | String | Y | P0 무료 예약 취소 정책을 안내하는 비어 있지 않은 문구 |
 | `publishAt` | String | Y | API 공통 규칙의 ISO 8601 `+09:00` 오프셋 일시인 공개 예정 시각 |
-| `representativeImageObjectId` | Long | N | 교체할 경우에만 제공하는 본인 소유의 만료되지 않은 `TEMPORARY` 이미지 객체 식별자 |
+| `representativeImageObjectId` | String | N | 교체할 경우에만 제공하는 양의 10진 문자열인 본인 소유의 만료되지 않은 `TEMPORARY` 이미지 객체 식별자 |
 
 ### Response
 
@@ -127,7 +127,7 @@ Accept: application/json
   "code": "SUCCESS",
   "message": "내 콘텐츠 수정에 성공했습니다.",
   "data": {
-    "contentId": 101,
+    "contentId": "101",
     "status": "REJECTED"
   }
 }
@@ -140,7 +140,7 @@ Accept: application/json
 | `statusCode` | Number | HTTP 상태와 같은 `200` |
 | `code` | String | 성공 코드 `SUCCESS` |
 | `message` | String | 성공 메시지 |
-| `data.contentId` | Number | 편집한 콘텐츠 식별자 |
+| `data.contentId` | String | 양의 10진 문자열인 편집한 콘텐츠 식별자 |
 | `data.status` | String | 편집 후에도 유지되는 `REJECTED` |
 
 ### Error Code
@@ -149,7 +149,7 @@ Accept: application/json
 | --- | --- | --- |
 | `400` | `INVALID_INPUT` | 식별자 또는 요청 필드가 누락·공백이거나 시각 형식이 올바르지 않다. 콘텐츠를 변경하지 않는다. |
 | `400` | `INVALID_JSON` | 요청 본문을 역직렬화할 수 없다. 콘텐츠를 변경하지 않는다. |
-| `400` | `INVALID_TYPE` | `contentId`를 정수로 변환할 수 없다. 콘텐츠를 변경하지 않는다. |
+| `400` | `INVALID_TYPE` | `representativeImageObjectId`가 JSON 문자열이 아니다. 콘텐츠를 변경하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 콘텐츠를 변경하지 않는다. |
 | `403` | `FORBIDDEN` | 운영자 역할, 담당 지역 또는 콘텐츠 소유 관계가 없다. 콘텐츠를 변경하지 않는다. |
 | `404` | `NOT_FOUND` | 콘텐츠가 없거나 소프트 삭제됐다. 콘텐츠를 변경하지 않는다. |
@@ -170,6 +170,6 @@ Accept: application/json
 
 1. `REJECTED` 상태에서만 편집할 수 있다. `PENDING`, `APPROVED`, `PUBLISHED`를 포함한 다른 상태는 직접 편집할 수 없다.
 2. `contentId`, 소유자, 지역과 콘텐츠 유형은 이 API로 변경하지 않는다.
-3. `representativeImageObjectId`를 제공하면 서버는 인증된 운영자 소유의 만료되지 않은 `TEMPORARY` 객체인지 확인한 뒤 현재 대표 이미지로 연결한다. 제공하지 않으면 기존 대표 이미지를 유지한다.
+3. `representativeImageObjectId`를 제공하면 서버는 S3 `HEAD` 결과의 SHA-256 Base64 체크섬이 임시 객체에 저장된 값과 같은지, 인증된 운영자 소유의 만료되지 않은 `TEMPORARY` 객체인지 확인한 뒤 현재 대표 이미지로 연결한다. 제공하지 않으면 기존 대표 이미지를 유지한다.
 4. 회차·정원·체크인 창은 이 API의 수정 범위가 아니다.
 5. 같은 유효 요청을 반복하면 같은 콘텐츠 필드와 이미지 연결이 유지된다.

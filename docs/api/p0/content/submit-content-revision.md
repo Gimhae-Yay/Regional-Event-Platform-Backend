@@ -56,7 +56,7 @@ Accept: application/json
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `revisionId` | Long | Y | 제출할 수정본 식별자다. 양수여야 한다. |
+| `revisionId` | String | Y | 양의 10진 문자열인 제출할 수정본 식별자다. |
 
 #### Query Parameter
 
@@ -86,10 +86,10 @@ Accept: application/json
   "code": "SUCCESS",
   "message": "콘텐츠 수정본 승인 재요청에 성공했습니다.",
   "data": {
-    "revisionId": 501,
-    "contentId": 101,
+    "revisionId": "501",
+    "contentId": "101",
     "status": "EDIT_REQUESTED",
-    "submittedAt": "2026-07-30T11:10:00+09:00"
+    "submittedAt": "2026-07-30T02:10:00Z"
   }
 }
 ```
@@ -101,8 +101,8 @@ Accept: application/json
 | `statusCode` | Number | HTTP 상태와 같은 `200` |
 | `code` | String | 성공 코드 `SUCCESS` |
 | `message` | String | 성공 메시지 |
-| `data.revisionId` | Number | 제출한 수정본 식별자 |
-| `data.contentId` | Number | 원본 콘텐츠 식별자 |
+| `data.revisionId` | String | 양의 10진 문자열인 제출한 수정본 식별자 |
+| `data.contentId` | String | 양의 10진 문자열인 원본 콘텐츠 식별자 |
 | `data.status` | String | 제출 후 상태 `EDIT_REQUESTED` |
 | `data.submittedAt` | String | 심사 요청 시각 |
 
@@ -111,7 +111,6 @@ Accept: application/json
 | HTTP Status | Code | Description |
 | --- | --- | --- |
 | `400` | `INVALID_INPUT` | `revisionId`가 양수가 아니거나 기존 후보 필드·기존 후보 대표 이미지가 제출 조건을 만족하지 않는다. 수정본을 전이하지 않는다. |
-| `400` | `INVALID_TYPE` | `revisionId`를 정수로 변환할 수 없다. 수정본을 전이하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 수정본을 전이하지 않는다. |
 | `403` | `FORBIDDEN` | 운영자 역할, 담당 지역 또는 원본 콘텐츠 소유 관계가 없다. 수정본을 전이하지 않는다. |
 | `404` | `NOT_FOUND` | 수정본이 없다. 수정본을 전이하지 않는다. |

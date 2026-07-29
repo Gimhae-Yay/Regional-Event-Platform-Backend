@@ -86,18 +86,18 @@ Accept: application/json
   "data": {
     "contents": [
       {
-        "contentId": 101,
+        "contentId": "101",
         "contentType": "EVENT_EXPERIENCE",
         "title": "김해 가야문화 체험",
         "status": "PENDING",
-        "createdAt": "2026-07-30T14:00:00+09:00"
+        "createdAt": "2026-07-30T05:00:00Z"
       },
       {
-        "contentId": 102,
+        "contentId": "102",
         "contentType": "EVENT_EXPERIENCE",
         "title": "동해 바다 공예 체험",
         "status": "REJECTED",
-        "createdAt": "2026-07-30T13:00:00+09:00"
+        "createdAt": "2026-07-30T04:00:00Z"
       }
     ]
   }
@@ -112,7 +112,7 @@ Accept: application/json
 | `code` | String | 성공 코드 `SUCCESS` |
 | `message` | String | 성공 메시지 |
 | `data.contents` | Array | 소유 콘텐츠 배열. 결과가 없으면 `[]`다. |
-| `data.contents[].contentId` | Number | 콘텐츠 식별자 |
+| `data.contents[].contentId` | String | 양의 10진 문자열인 콘텐츠 식별자 |
 | `data.contents[].contentType` | String | P0에서 고정된 `EVENT_EXPERIENCE` |
 | `data.contents[].title` | String | 콘텐츠 제목 |
 | `data.contents[].status` | String | 현재 콘텐츠 상태 |
