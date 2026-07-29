@@ -13,6 +13,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -96,6 +97,9 @@ public class Content {
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    @OneToOne(mappedBy = "content", fetch = FetchType.LAZY)
+    private ContentRepresentativeImage representativeImage;
 
     protected Content() {
     }
@@ -228,6 +232,10 @@ public class Content {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public ContentRepresentativeImage getRepresentativeImage() {
+        return representativeImage;
     }
 
     private static <T> T requireNotNull(T value, String fieldName) {
