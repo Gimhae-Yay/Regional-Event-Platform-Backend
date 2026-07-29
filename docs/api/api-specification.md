@@ -23,7 +23,7 @@
 
 | 도메인 | 도메인 API 명세서 | 기능·정책 기준 문서 | 주요 범위 |
 | --- | --- | --- | --- |
-| 인증·프로필 | [회원가입](p0/auth-profile/signup.md), [로그인](p0/auth-profile/login.md), [Access Token 재발급](p0/auth-profile/refresh.md), [로그아웃](p0/auth-profile/logout.md), [회원탈퇴](p0/auth-profile/withdrawal.md), [내 역할·담당 지역 조회](p0/auth-profile/me.md), [운영자 권한 신청](p0/auth-profile/operator-request.md), [운영자 승인 요청 대기 목록 조회](p0/auth-profile/pending-operator-requests.md) | [인증·프로필](../p0/auth-profile.md) | 회원가입·로그인·로그아웃·회원탈퇴, 역할·지역 권한, 운영자 승인, 개인정보 |
+| 인증·프로필 | [회원가입](p0/auth-profile/signup.md), [로그인](p0/auth-profile/login.md), [Access Token 재발급](p0/auth-profile/refresh.md), [로그아웃](p0/auth-profile/logout.md), [회원탈퇴](p0/auth-profile/withdrawal.md), [내 역할·담당 지역 조회](p0/auth-profile/me.md), [운영자 권한 신청](p0/auth-profile/operator-request.md), [운영자 승인 요청 대기 목록 조회](p0/auth-profile/pending-operator-requests.md), [운영자 승인 요청 상세 조회](p0/auth-profile/operator-request-detail.md), [운영자 승인](p0/auth-profile/operator-request-approve.md), [운영자 신청 반려](p0/auth-profile/operator-request-reject.md) | [인증·프로필](../p0/auth-profile.md) | 회원가입·로그인·로그아웃·회원탈퇴, 역할·지역 권한, 운영자 승인, 개인정보 |
 | 지역·콘텐츠 카탈로그 | 작성 전 — `p0/content-catalog/`에 생성 | [지역·콘텐츠 카탈로그](../p0/content-catalog.md) | 지역 선택, 콘텐츠·회차, 공개·승인·운영 상태 |
 | 정원 홀드·무료 예약 | 작성 전 — `p0/reservation/`에 생성 | [정원 홀드·무료 예약](../p0/reservation.md) | 정원 홀드, 예약 확정·취소·만료, 동시성·멱등성 |
 | 예약 QR·체크인 | 작성 전 — `p0/check-in/`에 생성 | [예약 QR·체크인](../p0/check-in.md) | QR 발급·검증, 체크인, 방문 기록 |
