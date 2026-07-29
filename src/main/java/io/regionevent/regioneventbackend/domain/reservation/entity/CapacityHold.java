@@ -48,16 +48,21 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
                 CASE
                     WHEN status = 'ACTIVE'
                         AND terminal_at IS NULL
-                        AND capacity_released_at IS NULL THEN 1
+                        AND capacity_released_at IS NULL
+                        AND invalidation_reason IS NULL THEN 1
                     WHEN status = 'CONSUMED'
                         AND terminal_at IS NOT NULL
-                        AND capacity_released_at IS NULL THEN 1
+                        AND capacity_released_at IS NULL
+                        AND invalidation_reason IS NULL THEN 1
                     WHEN status = 'EXPIRED'
                         AND terminal_at IS NOT NULL
-                        AND capacity_released_at IS NOT NULL THEN 1
+                        AND capacity_released_at IS NOT NULL
+                        AND invalidation_reason IS NULL THEN 1
                     WHEN status = 'INVALIDATED'
                         AND terminal_at IS NOT NULL
-                        AND capacity_released_at IS NOT NULL THEN 1
+                        AND capacity_released_at IS NOT NULL
+                        AND invalidation_reason IS NOT NULL
+                        AND TRIM(invalidation_reason) <> '' THEN 1
                     ELSE 0
                 END = 1
                 """
@@ -227,11 +232,18 @@ public class CapacityHold {
         boolean isActive = status == CapacityHoldStatus.ACTIVE;
         boolean isConsumed = status == CapacityHoldStatus.CONSUMED;
         boolean isReleased = status == CapacityHoldStatus.EXPIRED || status == CapacityHoldStatus.INVALIDATED;
+        boolean isInvalidated = status == CapacityHoldStatus.INVALIDATED;
 
         if ((isActive && (terminalAt != null || capacityReleasedAt != null))
             || (isConsumed && (terminalAt == null || capacityReleasedAt != null))
             || (isReleased && (terminalAt == null || capacityReleasedAt == null))) {
             throw new IllegalArgumentException("terminal fields do not match capacity hold status");
+        }
+        if (isInvalidated && (invalidationReason == null || invalidationReason.isBlank())) {
+            throw new IllegalArgumentException("invalidationReason must not be null or blank when invalidated");
+        }
+        if (!isInvalidated && invalidationReason != null) {
+            throw new IllegalArgumentException("invalidationReason must be null when not invalidated");
         }
     }
 }

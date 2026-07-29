@@ -7,16 +7,21 @@ ALTER TABLE capacity_hold
             CASE
                 WHEN status = 'ACTIVE'
                     AND terminal_at IS NULL
-                    AND capacity_released_at IS NULL THEN 1
+                    AND capacity_released_at IS NULL
+                    AND invalidation_reason IS NULL THEN 1
                 WHEN status = 'CONSUMED'
                     AND terminal_at IS NOT NULL
-                    AND capacity_released_at IS NULL THEN 1
+                    AND capacity_released_at IS NULL
+                    AND invalidation_reason IS NULL THEN 1
                 WHEN status = 'EXPIRED'
                     AND terminal_at IS NOT NULL
-                    AND capacity_released_at IS NOT NULL THEN 1
+                    AND capacity_released_at IS NOT NULL
+                    AND invalidation_reason IS NULL THEN 1
                 WHEN status = 'INVALIDATED'
                     AND terminal_at IS NOT NULL
-                    AND capacity_released_at IS NOT NULL THEN 1
+                    AND capacity_released_at IS NOT NULL
+                    AND invalidation_reason IS NOT NULL
+                    AND TRIM(invalidation_reason) <> '' THEN 1
                 ELSE 0
             END = 1
         );

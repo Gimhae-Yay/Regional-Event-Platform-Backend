@@ -110,7 +110,7 @@ class CapacityHoldRepositoryTest {
     }
 
     @Test
-    void 홀드는_양수_수량과_상태에_맞는_종결_필드가_필요하다() {
+    void 홀드는_양수_수량과_상태에_맞는_종결_필드_및_무효화_사유가_필요하다() {
         Region region = saveRegion("GIMHAE");
         ContentSession contentSession = saveContentSession(region);
 
@@ -123,6 +123,36 @@ class CapacityHoldRepositoryTest {
             null,
             null,
             null
+        )).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> newHold(
+            region,
+            contentSession,
+            null,
+            1,
+            CapacityHoldStatus.INVALIDATED,
+            TERMINAL_AT,
+            CAPACITY_RELEASED_AT,
+            null
+        )).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> newHold(
+            region,
+            contentSession,
+            null,
+            1,
+            CapacityHoldStatus.INVALIDATED,
+            TERMINAL_AT,
+            CAPACITY_RELEASED_AT,
+            " "
+        )).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> newHold(
+            region,
+            contentSession,
+            null,
+            1,
+            CapacityHoldStatus.EXPIRED,
+            TERMINAL_AT,
+            CAPACITY_RELEASED_AT,
+            "회차가 취소되었습니다."
         )).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> newHold(
             region,
