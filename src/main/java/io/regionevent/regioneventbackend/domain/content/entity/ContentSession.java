@@ -6,13 +6,21 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.ForeignKey;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinColumns;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
+
+import io.regionevent.regioneventbackend.domain.region.entity.Region;
+import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 
 @Entity
 @Table(name = "content_session")
@@ -23,11 +31,29 @@ public class ContentSession {
     @Column(name = "session_id")
     private Long sessionId;
 
-    @Column(name = "content_id", nullable = false)
-    private Long contentId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumns(
+        foreignKey = @ForeignKey(name = "fk_content_session_content_region"),
+        value = {
+            @JoinColumn(name = "content_id", referencedColumnName = "content_id", nullable = false),
+            @JoinColumn(
+                name = "region_id",
+                referencedColumnName = "region_id",
+                nullable = false,
+                insertable = false,
+                updatable = false
+            )
+        }
+    )
+    private Content content;
 
-    @Column(name = "region_id", nullable = false)
-    private Long regionId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(
+        name = "region_id",
+        nullable = false,
+        foreignKey = @ForeignKey(name = "fk_content_session_region")
+    )
+    private Region region;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)
@@ -54,8 +80,12 @@ public class ContentSession {
     @Column(name = "cancelled_at")
     private Instant cancelledAt;
 
-    @Column(name = "cancelled_by_user_id")
-    private Long cancelledByUserId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+        name = "cancelled_by_user_id",
+        foreignKey = @ForeignKey(name = "fk_content_session_cancelled_by_user")
+    )
+    private AppUser cancelledByUser;
 
     @Column(name = "cancellation_reason", columnDefinition = "TEXT")
     private String cancellationReason;
@@ -76,6 +106,26 @@ public class ContentSession {
     protected ContentSession() {
     }
 
+    public ContentSession(
+        Content content,
+        Region region,
+        Instant startsAt,
+        Instant endsAt,
+        Instant checkinOpenAt,
+        Instant checkinCloseAt,
+        int capacity
+    ) {
+        this.content = requireNotNull(content, "content");
+        this.region = requireNotNull(region, "region");
+        this.status = ContentSessionStatus.SCHEDULED;
+        this.startsAt = requireNotNull(startsAt, "startsAt");
+        this.endsAt = requireNotNull(endsAt, "endsAt");
+        this.checkinOpenAt = requireNotNull(checkinOpenAt, "checkinOpenAt");
+        this.checkinCloseAt = requireNotNull(checkinCloseAt, "checkinCloseAt");
+        this.capacity = capacity;
+        this.remainingCapacity = capacity;
+    }
+
     @PrePersist
     protected void onCreate() {
         Instant now = Instant.now();
@@ -92,12 +142,12 @@ public class ContentSession {
         return sessionId;
     }
 
-    public Long getContentId() {
-        return contentId;
+    public Content getContent() {
+        return content;
     }
 
-    public Long getRegionId() {
-        return regionId;
+    public Region getRegion() {
+        return region;
     }
 
     public ContentSessionStatus getStatus() {
@@ -132,8 +182,8 @@ public class ContentSession {
         return cancelledAt;
     }
 
-    public Long getCancelledByUserId() {
-        return cancelledByUserId;
+    public AppUser getCancelledByUser() {
+        return cancelledByUser;
     }
 
     public String getCancellationReason() {
@@ -154,5 +204,12 @@ public class ContentSession {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    private static <T> T requireNotNull(T value, String fieldName) {
+        if (value == null) {
+            throw new IllegalArgumentException(fieldName + " must not be null");
+        }
+        return value;
     }
 }
