@@ -7,12 +7,16 @@
 - 관련 요구사항: [PRD](../local-stamp-platform-prd.md)의 `FR-03`, `FR-14`, `CON-02`, `CON-05`
 - 관련 단계: 단계 0. 정책·설계 확정, 단계 1. MVP 구현·검증
 - 관련 이슈: [#50](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/50), [#76](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/pull/76)
-- 대체 대상: 없음
+- 대체 대상: [ADR-0026](0026-rebuild-initial-p0-flyway-schema.md)의 `V1__initial_p0_schema.sql` 내 대표 이미지 연결 테이블 구성과 이후 이관 범위
 
 ## 맥락
 
 대표 이미지 모델은 현재 콘텐츠와 수정본의 이미지 객체 연결을 각각 별도 테이블에 저장한다. 그러나 연결 자체에는
 `assigned_at` 외 별도 상태·행위·이력이 없고, 대표 이미지는 `Content` 또는 `ContentRevision`의 속성이다.
+
+[ADR-0026](0026-rebuild-initial-p0-flyway-schema.md)는 P0 전체 스키마를 단일 V1으로 재구성하면서 당시 ERD의
+두 대표 이미지 연결 테이블을 포함했다. 이 ADR은 단일 V1을 기준으로 삼는 결정은 유지하고, 대표 이미지 연결의
+물리 모델과 그 이후 증분 이관 범위만 대체한다.
 
 PR #76의 검토에서 하나의 `image_object`가 두 연결 테이블에 동시에 연결될 수 있고, 한쪽 연결 제거 뒤 즉시 S3
 원본을 삭제하면 다른 쪽 조회 경로가 깨질 수 있음이 확인됐다. 이는
