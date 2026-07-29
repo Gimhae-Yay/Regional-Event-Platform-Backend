@@ -184,7 +184,9 @@
 `EDIT_WITHDRAWN` 수정본은 원본에 반영하지 않는다.
 `EDIT_APPROVED` 반영 후에는 기존 수정본을 철회하지 않고 새 수정본 또는 전체 콘텐츠 철회 절차를 사용한다.
 수정본의 관계형 리비전 영속 모델과 승인 시 원자 반영은
-[ADR-0014](../adr/0014-store-published-content-edits-in-relational-revision-tables.md)를 따르며,
+[ADR-0014](../adr/0014-store-published-content-edits-in-relational-revision-tables.md)를 따르되,
+반려 수정본을 기존 행에서 보완·재요청하는 상태 이력 보존 규칙은
+[ADR-0033](../adr/0033-create-review-requests-with-user-owned-temporary-images.md)를 따른다.
 행사·체험 후보 필드를 수정본에 함께 저장하는 방식은
 [ADR-0020](../adr/0020-merge-event-experience-details-into-content-and-revision.md)를 따른다.
 
