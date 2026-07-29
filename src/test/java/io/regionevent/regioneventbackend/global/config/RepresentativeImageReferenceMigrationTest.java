@@ -1,14 +1,12 @@
 package io.regionevent.regioneventbackend.global.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
 
 import org.flywaydb.core.Flyway;
-import org.flywaydb.core.api.FlywayException;
 import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.Test;
 
@@ -58,7 +56,7 @@ class RepresentativeImageReferenceMigrationTest {
     }
 
     @Test
-    void V1_두_연결_테이블의_동일_이미지_객체는_이관을_중단한다() {
+    void V1_두_연결_테이블의_동일_이미지_객체를_각_스냅샷_참조로_이관한다() {
         DriverManagerDataSource dataSource = createDataSource();
         JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
         Instant assignedAt = Instant.parse("2026-08-01T00:00:00Z");
@@ -66,13 +64,18 @@ class RepresentativeImageReferenceMigrationTest {
         migrateToV1(dataSource);
         insertV1RepresentativeImageData(jdbcTemplate, assignedAt, 1L);
 
-        assertThatThrownBy(() -> migrateToLatest(dataSource))
-            .isInstanceOf(FlywayException.class);
+        migrateToLatest(dataSource);
 
-        assertThat(tableExists(jdbcTemplate, "CONTENT_REPRESENTATIVE_IMAGE")).isTrue();
-        assertThat(tableExists(jdbcTemplate, "CONTENT_REVISION_REPRESENTATIVE_IMAGE")).isTrue();
-        assertThat(columnExists(jdbcTemplate, "CONTENT", "REPRESENTATIVE_IMAGE_OBJECT_ID")).isFalse();
-        assertThat(columnExists(jdbcTemplate, "CONTENT_REVISION", "CANDIDATE_IMAGE_OBJECT_ID")).isFalse();
+        assertThat(jdbcTemplate.queryForObject(
+            "SELECT representative_image_object_id FROM content WHERE content_id = 1",
+            Long.class
+        )).isEqualTo(1L);
+        assertThat(jdbcTemplate.queryForObject(
+            "SELECT candidate_image_object_id FROM content_revision WHERE content_revision_id = 1",
+            Long.class
+        )).isEqualTo(1L);
+        assertThat(tableExists(jdbcTemplate, "CONTENT_REPRESENTATIVE_IMAGE")).isFalse();
+        assertThat(tableExists(jdbcTemplate, "CONTENT_REVISION_REPRESENTATIVE_IMAGE")).isFalse();
     }
 
     private DriverManagerDataSource createDataSource() {
@@ -108,23 +111,6 @@ class RepresentativeImageReferenceMigrationTest {
         );
 
         return tableCount != null && tableCount > 0;
-    }
-
-    private boolean columnExists(JdbcTemplate jdbcTemplate, String tableName, String columnName) {
-        Integer columnCount = jdbcTemplate.queryForObject(
-            """
-                SELECT COUNT(*)
-                FROM information_schema.columns
-                WHERE table_schema = 'PUBLIC'
-                  AND table_name = ?
-                  AND column_name = ?
-                """,
-            Integer.class,
-            tableName,
-            columnName
-        );
-
-        return columnCount != null && columnCount > 0;
     }
 
     private void insertV1RepresentativeImageData(

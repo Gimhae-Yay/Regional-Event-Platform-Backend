@@ -1,7 +1,6 @@
 package io.regionevent.regioneventbackend.domain.content.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
 
@@ -12,7 +11,6 @@ import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.TestPropertySource;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
@@ -71,7 +69,7 @@ class ContentRepresentativeImageMappingTest {
     }
 
     @Test
-    void 같은_이미지_객체를_두_콘텐츠의_대표_이미지로_연결할_수_없다() {
+    void 같은_이미지_객체를_두_콘텐츠의_대표_이미지로_연결할_수_있다() {
         ImageObject imageObject = saveImageObject("content/unique.webp");
         Content firstContent = saveContent("첫 번째 콘텐츠");
         Content secondContent = saveContent("두 번째 콘텐츠");
@@ -80,8 +78,16 @@ class ContentRepresentativeImageMappingTest {
         contentRepository.flush();
 
         secondContent.assignRepresentativeImage(imageObject, Instant.parse("2026-08-02T00:00:00Z"));
+        contentRepository.flush();
+        entityManager.clear();
 
-        assertThatThrownBy(contentRepository::flush).isInstanceOf(DataIntegrityViolationException.class);
+        Content foundFirstContent = contentRepository.findById(firstContent.getContentId()).orElseThrow();
+        Content foundSecondContent = contentRepository.findById(secondContent.getContentId()).orElseThrow();
+
+        assertThat(foundFirstContent.getRepresentativeImageObject().getImageObjectId())
+            .isEqualTo(imageObject.getImageObjectId());
+        assertThat(foundSecondContent.getRepresentativeImageObject().getImageObjectId())
+            .isEqualTo(imageObject.getImageObjectId());
     }
 
     private Content saveContent(String title) {
