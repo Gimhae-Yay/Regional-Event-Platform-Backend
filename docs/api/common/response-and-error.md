@@ -86,6 +86,7 @@ API별 오류는 다음 표로 정의한다. 오류 조건에는 상태 변경·
 | 404 | `NOT_FOUND` | 요청한 리소스를 찾을 수 없습니다. | 존재하지 않는 요청 경로 또는 공개가 허용된 대상 부재 |
 | 405 | `METHOD_NOT_ALLOWED` | 허용되지 않은 HTTP 메서드입니다. | 지원하지 않는 HTTP 메서드 |
 | 409 | `OPERATOR_APPLICATION_PENDING` | 처리 중인 운영자 권한 신청이 있습니다. | 동일 회원의 `PENDING` 운영자 신청이 이미 존재함 |
+| 409 | `OPERATOR_APPLICATION_STATE_CONFLICT` | 운영자 신청 상태가 요청과 일치하지 않습니다. | `PENDING`이 아닌 운영자 신청에 반대 심사 결정 또는 새 심사 결정을 요청함 |
 | 409 | `REFRESH_TOKEN_CONFLICT` | Refresh Token 갱신 요청이 충돌했습니다. | 같은 Refresh Token의 진행 중인 동시 갱신 요청 |
 | 503 | `AUTH_SERVICE_UNAVAILABLE` | 인증 서비스를 일시적으로 사용할 수 없습니다. | Refresh Token 계열을 안전하게 발급·갱신·폐기할 수 없는 Redis 장애 |
 | 500 | `INTERNAL_SERVER_ERROR` | 서버 오류가 발생했습니다. | 예상하지 못한 예외 |
