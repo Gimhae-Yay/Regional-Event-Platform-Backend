@@ -62,11 +62,11 @@ public class AppUser {
         String phone,
         AppUserStatus status
     ) {
-        this.loginIdentifier = loginIdentifier;
-        this.passwordHash = passwordHash;
-        this.name = name;
-        this.phone = phone;
-        this.status = status;
+        this.loginIdentifier = validateRequiredText(loginIdentifier, "loginIdentifier");
+        this.passwordHash = validateRequiredText(passwordHash, "passwordHash");
+        this.name = validateRequiredText(name, "name");
+        this.phone = validateRequiredText(phone, "phone");
+        this.status = validateStatus(status);
     }
 
     @PrePersist
@@ -111,5 +111,19 @@ public class AppUser {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    private static String validateRequiredText(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(fieldName + " must not be null or blank");
+        }
+        return value;
+    }
+
+    private static AppUserStatus validateStatus(AppUserStatus status) {
+        if (status == null) {
+            throw new IllegalArgumentException("status must not be null");
+        }
+        return status;
     }
 }

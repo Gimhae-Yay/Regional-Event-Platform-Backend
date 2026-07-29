@@ -14,11 +14,15 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 
 @DataJpaTest
-@TestPropertySource(properties = "spring.jpa.hibernate.ddl-auto=create-drop")
+@TestPropertySource(properties = "spring.jpa.hibernate.ddl-auto=validate")
 class AppUserRepositoryTest {
 
+    private final AppUserRepository appUserRepository;
+
     @Autowired
-    private AppUserRepository appUserRepository;
+    AppUserRepositoryTest(AppUserRepository appUserRepository) {
+        this.appUserRepository = appUserRepository;
+    }
 
     @Test
     void 사용자를_저장하고_식별자로_조회한다() {
@@ -58,5 +62,50 @@ class AppUserRepositoryTest {
 
         assertThat(appUserRepository.findById(appUser.getUserId()).orElseThrow().getStatus())
             .isEqualTo(AppUserStatus.WITHDRAWING);
+    }
+
+    @Test
+    void 필수_문자열이_null이면_생성할_수_없다() {
+        assertThatThrownBy(
+            () -> new AppUser(null, "hashed-password", "홍길동", "010-1234-5678", AppUserStatus.ACTIVE)
+        ).isInstanceOf(IllegalArgumentException.class);
+
+        assertThatThrownBy(
+            () -> new AppUser("visitor@example.com", null, "홍길동", "010-1234-5678", AppUserStatus.ACTIVE)
+        ).isInstanceOf(IllegalArgumentException.class);
+
+        assertThatThrownBy(
+            () -> new AppUser("visitor@example.com", "hashed-password", null, "010-1234-5678", AppUserStatus.ACTIVE)
+        ).isInstanceOf(IllegalArgumentException.class);
+
+        assertThatThrownBy(
+            () -> new AppUser("visitor@example.com", "hashed-password", "홍길동", null, AppUserStatus.ACTIVE)
+        ).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void 필수_문자열이_blank이면_생성할_수_없다() {
+        assertThatThrownBy(
+            () -> new AppUser(" ", "hashed-password", "홍길동", "010-1234-5678", AppUserStatus.ACTIVE)
+        ).isInstanceOf(IllegalArgumentException.class);
+
+        assertThatThrownBy(
+            () -> new AppUser("visitor@example.com", "\t", "홍길동", "010-1234-5678", AppUserStatus.ACTIVE)
+        ).isInstanceOf(IllegalArgumentException.class);
+
+        assertThatThrownBy(
+            () -> new AppUser("visitor@example.com", "hashed-password", "\n", "010-1234-5678", AppUserStatus.ACTIVE)
+        ).isInstanceOf(IllegalArgumentException.class);
+
+        assertThatThrownBy(
+            () -> new AppUser("visitor@example.com", "hashed-password", "홍길동", "  ", AppUserStatus.ACTIVE)
+        ).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void 상태가_null이면_생성할_수_없다() {
+        assertThatThrownBy(
+            () -> new AppUser("visitor@example.com", "hashed-password", "홍길동", "010-1234-5678", null)
+        ).isInstanceOf(IllegalArgumentException.class);
     }
 }
