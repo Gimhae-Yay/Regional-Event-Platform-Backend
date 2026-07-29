@@ -29,8 +29,9 @@
 
 ## 3. 내 역할·담당 지역 조회
 
-현재 회원이 실제로 부여받은 역할과 담당 지역을 조회한다. `VISITOR` 역할의 `regionId`는 항상 `null`이며,
-`OPERATOR`와 `REGION_ADMIN` 역할의 `regionId`는 항상 양의 정수이다.
+현재 회원이 실제로 부여받은 역할과 담당 지역을 조회한다. `roleAssignments`의 각 원소는 `role`, `regionId`, `regionName`만
+반환한다. `VISITOR` 역할의 `regionId`와 `regionName`은 항상 `null`이며, `OPERATOR`와 `REGION_ADMIN` 역할의
+`regionId`와 `regionName`은 각각 담당 지역의 식별자와 이름이다.
 
 ### Request
 
@@ -86,11 +87,11 @@ Accept: application/json
   "code": "SUCCESS",
   "message": "내 역할과 담당 지역 조회에 성공했습니다.",
   "data": {
-    "userId": 1,
     "roleAssignments": [
       {
         "role": "REGION_ADMIN",
-        "regionId": 1
+        "regionId": 1,
+        "regionName": "김해시"
       }
     ]
   }
@@ -106,10 +107,10 @@ Accept: application/json
 | `statusCode` | Integer | HTTP 상태와 같은 `200` |
 | `code` | String | 성공 코드 `SUCCESS` |
 | `message` | String | 성공 메시지 `내 역할과 담당 지역 조회에 성공했습니다.` |
-| `data.userId` | Long | 인증된 회원의 식별자. 양의 정수이다. |
 | `data.roleAssignments` | Array | 현재 부여된 역할·담당 지역 연결. 역할이 없으면 빈 배열이다. |
 | `data.roleAssignments[].role` | String | `VISITOR`, `OPERATOR`, `REGION_ADMIN` 중 하나 |
 | `data.roleAssignments[].regionId` | Long 또는 null | `VISITOR`이면 `null`, `OPERATOR` 또는 `REGION_ADMIN`이면 담당 지역 식별자 |
+| `data.roleAssignments[].regionName` | String 또는 null | `VISITOR`이면 `null`, `OPERATOR` 또는 `REGION_ADMIN`이면 담당 지역 이름 |
 
 ### Error Code
 
