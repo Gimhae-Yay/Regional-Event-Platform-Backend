@@ -26,7 +26,7 @@ Content-Type: application/json
 Accept: application/json
 
 {
-  "sessionId": 456,
+  "sessionId": "456",
   "quantity": 2
 }
 ```
@@ -51,7 +51,7 @@ Accept: application/json
 
 ```json
 {
-  "sessionId": 456,
+  "sessionId": "456",
   "quantity": 2
 }
 ```
@@ -60,7 +60,7 @@ Accept: application/json
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `sessionId` | Long | Y | 정원을 홀드할 회차 식별자. 양수여야 한다. |
+| `sessionId` | String | Y | 정원을 홀드할 회차 식별자. 양수여야 한다. |
 | `quantity` | Integer | Y | 홀드할 인원 수. 1 이상이어야 하며 회차의 남은 정원을 초과할 수 없다. |
 
 ### Response
@@ -79,12 +79,12 @@ Accept: application/json
   "code": "SUCCESS",
   "message": "예약 대기 및 정원 홀드 생성에 성공했습니다.",
   "data": {
-    "holdId": 789,
-    "sessionId": 456,
+    "holdId": "789",
+    "sessionId": "456",
     "quantity": 2,
     "status": "ACTIVE",
-    "expiresAt": "2026-07-29T12:10:00+09:00",
-    "createdAt": "2026-07-29T12:00:00+09:00"
+    "expiresAt": "2026-07-29T03:10:00Z",
+    "createdAt": "2026-07-29T03:00:00Z"
   }
 }
 ```
@@ -96,12 +96,12 @@ Accept: application/json
 | `statusCode` | Number | HTTP 상태 코드. 항상 `201` |
 | `code` | String | 성공 코드. 항상 `SUCCESS` |
 | `message` | String | 공개 성공 메시지 |
-| `data.holdId` | Long | 생성된 정원 홀드 식별자 |
-| `data.sessionId` | Long | 홀드 대상 회차 식별자 |
+| `data.holdId` | String | 생성된 정원 홀드 식별자 |
+| `data.sessionId` | String | 홀드 대상 회차 식별자 |
 | `data.quantity` | Integer | 홀드한 인원 수 |
 | `data.status` | String | 홀드 상태. 항상 `ACTIVE` |
-| `data.expiresAt` | String | 홀드 만료 시각. `createdAt + 10분`과 회차 시작 시각 중 더 이른 시각 |
-| `data.createdAt` | String | 홀드 생성 시각 |
+| `data.expiresAt` | String | 홀드 만료 시각. `createdAt + 10분`과 회차 시작 시각 중 더 이른 시각. API 공통 규칙에 따른 UTC ISO 8601 일시다. |
+| `data.createdAt` | String | 홀드 생성 시각. API 공통 규칙에 따른 UTC ISO 8601 일시다. |
 
 ### Error Code
 

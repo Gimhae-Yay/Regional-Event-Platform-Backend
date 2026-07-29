@@ -112,7 +112,7 @@ Refresh Token은 JSON 본문, `Authorization` 헤더 또는 다른 일반 응답
   "code": "SUCCESS",
   "message": "로그인에 성공했습니다.",
   "data": {
-    "userId": 1,
+    "userId": "1",
     "roles": [
       "VISITOR"
     ]
@@ -127,7 +127,7 @@ Refresh Token은 JSON 본문, `Authorization` 헤더 또는 다른 일반 응답
 | `statusCode` | Integer | HTTP 상태와 같은 `200`이다. |
 | `code` | String | 성공 코드 `SUCCESS`다. |
 | `message` | String | 성공 메시지 `로그인에 성공했습니다.`다. |
-| `data.userId` | Long | 로그인한 활성 회원의 식별자다. |
+| `data.userId` | String | 로그인한 활성 회원의 식별자다. |
 | `data.roles` | Array&lt;String&gt; | 현재 부여된 역할 목록이다. 역할이 아직 부여되지 않은 `PENDING` 운영자 신청 계정은 빈 배열을 반환한다. |
 
 ### Error Code
