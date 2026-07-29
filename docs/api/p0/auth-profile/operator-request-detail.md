@@ -10,7 +10,8 @@
 ## 1. 개요
 
 지역 관리자가 담당 지역의 운영자 신청 상세를 조회한다. 서버는 신청의 요청 지역과 인증된 지역 관리자의
-`REGION_ADMIN` 담당 지역이 같은 경우에만 응답한다. 사업자 정보 원문은 응답에 포함하지 않는다.
+`REGION_ADMIN` 담당 지역이 같은 경우에만 응답한다. 사업자 정보 원문은 이 심사용 상세 응답에만 포함하며,
+로그와 그 밖의 응답에는 포함하지 않는다.
 
 ### 요구사항 추적
 
@@ -91,6 +92,7 @@ Accept: application/json
     "operatorApplicationId": 21,
     "applicantUserId": 7,
     "requestedRegionId": 1,
+    "businessInformation": "상호명 지역행사 주식회사, 사업자등록번호 123-45-67890",
     "status": "PENDING",
     "inspectedUserId": null,
     "rejectedReason": null,
@@ -104,6 +106,7 @@ Accept: application/json
 
 | Name | Type | Description |
 | --- | --- | --- |
+| `data.businessInformation` | String 또는 null | 담당 지역의 `REGION_ADMIN`이 수동 심사하는 사업자 정보 원문. `CANCELLED` 신청이면 `null`이다. 응답 로그에 기록하지 않는다. |
 | `statusCode` | Integer | HTTP 상태와 같은 `200` |
 | `code` | String | 성공 코드 `SUCCESS` |
 | `message` | String | 성공 메시지 `운영자 승인 요청 상세 조회에 성공했습니다.` |
