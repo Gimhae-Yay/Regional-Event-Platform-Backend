@@ -120,6 +120,51 @@ class VisitRepositoryTest {
     }
 
     @Test
+    void 방문은_예약_참여자와_다른_사용자로_생성할_수_없다() {
+        VisitFixtures fixtures = createFixtures();
+        AppUser anotherUser = saveUser("another-visitor@example.com");
+
+        assertThatThrownBy(() -> new Visit(
+            fixtures.region(),
+            fixtures.reservation(),
+            anotherUser,
+            fixtures.content(),
+            fixtures.contentSession(),
+            fixtures.checkinOperator(),
+            CheckinMethod.QR,
+            CHECKED_AT
+        )).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void 방문은_작성자_없이_생성할_수_없다() {
+        VisitFixtures fixtures = createFixtures();
+
+        assertThatThrownBy(() -> new Visit(
+            fixtures.region(),
+            fixtures.reservation(),
+            null,
+            fixtures.content(),
+            fixtures.contentSession(),
+            fixtures.checkinOperator(),
+            CheckinMethod.QR,
+            CHECKED_AT
+        )).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void 작성자_연결_해제_시각이_없으면_방문_작성자_연결을_유지한다() {
+        VisitFixtures fixtures = createFixtures();
+        Visit visit = newVisit(fixtures, CheckinMethod.QR);
+
+        assertThatThrownBy(() -> visit.unlinkAuthor(null))
+            .isInstanceOf(IllegalArgumentException.class);
+
+        assertThat(visit.getUser()).isSameAs(fixtures.user());
+        assertThat(visit.getAuthorUnlinkedAt()).isNull();
+    }
+
+    @Test
     void 방문은_예약당_한_건만_저장한다() {
         VisitFixtures fixtures = createFixtures();
         visitRepository.saveAndFlush(newVisit(fixtures, CheckinMethod.QR));

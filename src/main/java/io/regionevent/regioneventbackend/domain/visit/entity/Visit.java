@@ -127,7 +127,7 @@ public class Visit {
     ) {
         this.region = requireNotNull(region, "region");
         this.reservation = requireNotNull(reservation, "reservation");
-        this.user = user;
+        this.user = requireNotNull(user, "user");
         this.content = requireNotNull(content, "content");
         this.contentSession = requireNotNull(contentSession, "contentSession");
         this.checkedInByUser = requireNotNull(checkedInByUser, "checkedInByUser");
@@ -140,8 +140,9 @@ public class Visit {
         if (user == null || authorUnlinkedAt != null) {
             throw new IllegalStateException("visit author is already unlinked");
         }
+        Instant validatedUnlinkedAt = requireNotNull(unlinkedAt, "unlinkedAt");
         user = null;
-        authorUnlinkedAt = requireNotNull(unlinkedAt, "unlinkedAt");
+        authorUnlinkedAt = validatedUnlinkedAt;
     }
 
     public Long getVisitId() {
@@ -187,6 +188,7 @@ public class Visit {
     private void validateRelations() {
         validateSameEntity(reservation.getRegion(), region, "region");
         validateSameEntity(reservation.getContentSession(), contentSession, "contentSession");
+        validateSameEntity(reservation.getUser(), user, "user");
         validateSameEntity(contentSession.getRegion(), region, "region");
         validateSameEntity(contentSession.getContent(), content, "content");
     }
@@ -240,6 +242,21 @@ public class Visit {
         Long actualId = actual.getContentId();
         if (expectedId == null || !expectedId.equals(actualId)) {
             throw new IllegalArgumentException(fieldName + " must match contentSession");
+        }
+    }
+
+    private static void validateSameEntity(
+        AppUser expected,
+        AppUser actual,
+        String fieldName
+    ) {
+        if (expected == actual) {
+            return;
+        }
+        Long expectedId = expected.getUserId();
+        Long actualId = actual.getUserId();
+        if (expectedId == null || !expectedId.equals(actualId)) {
+            throw new IllegalArgumentException(fieldName + " must match reservation");
         }
     }
 }
