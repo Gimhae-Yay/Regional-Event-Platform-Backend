@@ -135,8 +135,50 @@ class ContentRepositoryTest {
         Region region = saveRegion();
         AppUser operator = saveOperator();
 
-        assertThatThrownBy(() -> insertRawContent(region, operator, "OTHER"))
-            .isInstanceOf(DataIntegrityViolationException.class);
+        Instant now = Instant.parse("2026-08-01T00:00:00Z");
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+            """
+                INSERT INTO content (
+                    region_id,
+                    operator_id,
+                    content_type,
+                    status,
+                    version_no,
+                    title,
+                    description,
+                    location_text,
+                    operating_hours_text,
+                    contact_text,
+                    precautions,
+                    age_requirement,
+                    materials,
+                    cancellation_policy_text,
+                    publish_at,
+                    deleted_at,
+                    created_at,
+                    updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+            region.getRegionId(),
+            operator.getUserId(),
+            "OTHER",
+            "PENDING",
+            0,
+            "김해 가야 문화 체험",
+            "김해 가야 문화를 체험하는 행사입니다.",
+            "김해문화의전당",
+            "매일 10:00~18:00",
+            "055-123-4567",
+            "안전요원의 안내를 따라주세요.",
+            "만 7세 이상",
+            "편한 복장",
+            "시작 하루 전까지 취소할 수 있습니다.",
+            Timestamp.from(now),
+            null,
+            Timestamp.from(now),
+            Timestamp.from(now)
+        )).isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
@@ -220,53 +262,6 @@ class ContentRepositoryTest {
             "편한 복장",
             "시작 하루 전까지 취소할 수 있습니다.",
             publishAt
-        );
-    }
-
-    private void insertRawContent(Region region, AppUser operator, String contentType) {
-        Instant now = Instant.parse("2026-08-01T00:00:00Z");
-
-        jdbcTemplate.update(
-            """
-                INSERT INTO content (
-                    region_id,
-                    operator_id,
-                    content_type,
-                    status,
-                    version_no,
-                    title,
-                    description,
-                    location_text,
-                    operating_hours_text,
-                    contact_text,
-                    precautions,
-                    age_requirement,
-                    materials,
-                    cancellation_policy_text,
-                    publish_at,
-                    deleted_at,
-                    created_at,
-                    updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-            region.getRegionId(),
-            operator.getUserId(),
-            contentType,
-            "PENDING",
-            0,
-            "김해 가야 문화 체험",
-            "김해 가야 문화를 체험하는 행사입니다.",
-            "김해문화의전당",
-            "매일 10:00~18:00",
-            "055-123-4567",
-            "안전요원의 안내를 따라주세요.",
-            "만 7세 이상",
-            "편한 복장",
-            "시작 하루 전까지 취소할 수 있습니다.",
-            Timestamp.from(now),
-            null,
-            Timestamp.from(now),
-            Timestamp.from(now)
         );
     }
 
