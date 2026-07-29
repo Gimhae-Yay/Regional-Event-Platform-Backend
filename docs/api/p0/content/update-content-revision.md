@@ -109,7 +109,7 @@ Accept: application/json
 | `materials` | String | Y | 비어 있지 않은 준비물 |
 | `cancellationPolicyText` | String | Y | P0 무료 예약 취소 정책을 안내하는 비어 있지 않은 문구 |
 | `publishAt` | String | Y | API 공통 규칙의 ISO 8601 `+09:00` 오프셋 일시인 후보 공개 예정 시각. 수정본의 `candidate_publish_at`을 전체 교체한다. |
-| `representativeImageObjectId` | String | N | 교체할 경우에만 제공하는 양의 10진 문자열인 본인 소유의 만료되지 않은 `TEMPORARY` 이미지 객체 식별자 |
+| `representativeImageObjectId` | String | N | 교체할 경우에만 제공하는 양의 10진 문자열인 본인 소유의 만료되지 않고 업로드가 검증된 `TEMPORARY` 이미지 객체 식별자 |
 
 ### Response
 
@@ -149,13 +149,13 @@ Accept: application/json
 
 | HTTP Status | Code | Description |
 | --- | --- | --- |
-| `400` | `INVALID_INPUT` | 식별자 또는 요청 필드가 누락·공백이거나 시각 형식이 올바르지 않다. 수정본을 변경하지 않는다. |
+| `400` | `INVALID_INPUT` | 식별자 또는 요청 필드가 누락·공백이거나 시각 형식이 올바르지 않거나, 지정한 임시 이미지 객체가 `TEMPORARY`·업로드 검증·만료 조건을 만족하지 않는다. 수정본을 변경하지 않는다. |
 | `400` | `INVALID_JSON` | 요청 본문을 역직렬화할 수 없다. 수정본을 변경하지 않는다. |
 | `400` | `INVALID_TYPE` | `representativeImageObjectId`가 JSON 문자열이 아니다. 수정본을 변경하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 수정본을 변경하지 않는다. |
-| `403` | `FORBIDDEN` | 운영자 역할, 담당 지역 또는 원본 콘텐츠 소유 관계가 없다. 수정본을 변경하지 않는다. |
+| `403` | `FORBIDDEN` | 운영자 역할, 담당 지역 또는 원본 콘텐츠 소유 관계가 없거나 지정한 임시 이미지 객체의 소유자가 아니다. 수정본을 변경하지 않는다. |
 | `404` | `NOT_FOUND` | 수정본이 없다. 수정본을 변경하지 않는다. |
-| `409` | `CONTENT_STATE_CONFLICT` | 수정본이 `EDIT_REJECTED`가 아니거나 지정한 임시 이미지 객체를 연결할 수 없다. 공개본과 수정본을 변경하지 않는다. |
+| `409` | `CONTENT_STATE_CONFLICT` | 수정본이 `EDIT_REJECTED`가 아니다. 공개본과 수정본을 변경하지 않는다. |
 
 #### Error Response Body
 
@@ -171,7 +171,7 @@ Accept: application/json
 ### 처리 규칙
 
 1. `contentId`, 지역, 소유자와 콘텐츠 유형은 수정본 편집으로 바꾸지 않는다. `publishAt`은 수정본의 `candidate_publish_at`을 전체 교체한다.
-2. `representativeImageObjectId`를 제공하면 서버는 S3 `HEAD` 결과의 SHA-256 Base64 체크섬이 임시 객체에 저장된 값과 같은지, 인증된 운영자 소유의 만료되지 않은 `TEMPORARY` 객체인지 확인한 뒤 후보 대표 이미지로 연결한다. 제공하지 않으면 기존 후보 대표 이미지 스냅샷을 유지하며, 이후 재요청도 새 임시 객체를 요구하지 않는다.
+2. `representativeImageObjectId`를 제공하면 서버는 S3 `HEAD` 결과의 SHA-256 Base64 체크섬이 임시 객체에 저장된 값과 같은지 확인해 업로드를 검증하고, 인증된 운영자 소유의 만료되지 않은 `TEMPORARY` 객체일 때만 후보 대표 이미지로 연결한다. 제공하지 않으면 기존 후보 대표 이미지 스냅샷을 유지한다.
 3. 공개 회차의 수정 가능 필드는 P0에서 확정되지 않았으므로 이 API는 회차·정원·체크인 창을 수정하지 않는다.
-4. `EDIT_REQUESTED`에서는 후보 필드가 동결된다. 심사에서 반려되면 이 API로 보완한 뒤 재요청하고, 승인되면 새 수정본을 생성해야 한다.
+4. `EDIT_REQUESTED`에서는 후보 필드가 동결된다. 심사에서 반려된 수정본은 이 API로 보완할 수 있지만 `EDIT_REJECTED` 상태는 종결 상태로 유지한다. 새 심사를 요청하려면 [콘텐츠 수정본 생성](create-content-revision.md)으로 새 수정본을 생성해야 한다.
 5. 편집은 원본 `content`와 공개 캐시의 버전을 변경하지 않는다.
