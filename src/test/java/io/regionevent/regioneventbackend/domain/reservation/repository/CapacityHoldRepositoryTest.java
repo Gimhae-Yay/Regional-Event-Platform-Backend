@@ -8,10 +8,14 @@ import java.time.Instant;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceUnitUtil;
 
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
@@ -42,6 +46,7 @@ class CapacityHoldRepositoryTest {
     private final ContentSessionRepository contentSessionRepository;
     private final AppUserRepository appUserRepository;
     private final EntityManager entityManager;
+    private final JdbcTemplate jdbcTemplate;
 
     @Autowired
     CapacityHoldRepositoryTest(
@@ -50,7 +55,8 @@ class CapacityHoldRepositoryTest {
         ContentRepository contentRepository,
         ContentSessionRepository contentSessionRepository,
         AppUserRepository appUserRepository,
-        EntityManager entityManager
+        EntityManager entityManager,
+        JdbcTemplate jdbcTemplate
     ) {
         this.capacityHoldRepository = capacityHoldRepository;
         this.regionRepository = regionRepository;
@@ -58,6 +64,7 @@ class CapacityHoldRepositoryTest {
         this.contentSessionRepository = contentSessionRepository;
         this.appUserRepository = appUserRepository;
         this.entityManager = entityManager;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Test
@@ -213,6 +220,38 @@ class CapacityHoldRepositoryTest {
         assertThat(foundCapacityHold.getRegion().getRegionId()).isEqualTo(region.getRegionId());
         assertThat(foundCapacityHold.getContentSession().getSessionId()).isEqualTo(contentSession.getSessionId());
         assertThat(foundCapacityHold.getUser().getUserId()).isEqualTo(user.getUserId());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {" ", "\t", "\n", "\r\n"})
+    void 무효화_홀드는_네이티브_SQL의_공백_전용_사유를_거부한다(String invalidationReason) {
+        Region region = saveRegion("GIMHAE");
+        ContentSession contentSession = saveContentSession(region);
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+            """
+            INSERT INTO capacity_hold (
+                region_id,
+                session_id,
+                quantity,
+                status,
+                expires_at,
+                terminal_at,
+                invalidation_reason,
+                capacity_released_at,
+                created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            region.getRegionId(),
+            contentSession.getSessionId(),
+            1,
+            CapacityHoldStatus.INVALIDATED.name(),
+            EXPIRES_AT,
+            TERMINAL_AT,
+            invalidationReason,
+            CAPACITY_RELEASED_AT,
+            TERMINAL_AT
+        )).isInstanceOf(DataIntegrityViolationException.class);
     }
 
     private CapacityHold newHold(
