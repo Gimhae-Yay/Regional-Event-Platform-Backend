@@ -493,7 +493,7 @@ erDiagram
 
     reservation {
         bigint reservation_id PK
-        string reservation_no "고유 범위 미확정"
+        string reservation_no UK
         string qr_reference UK
         bigint region_id FK
         bigint hold_id FK, UK
@@ -599,8 +599,9 @@ erDiagram
   명시적 회차 취소가 없으면 유지한다.
 - 회차가 `CANCELLED`로 전환되면 신규 홀드·예약 확정·QR 발급·새 스캔을 차단하고,
   `ACTIVE` 홀드와 미체크인 `CONFIRMED` 예약만 정책에 따라 종결한다.
-- `reservation_no`는 예약 번호 보조 조회에 필요하지만 P0 문서가 고유 범위를 확정하지 않았다.
-  범위를 확정하기 전에는 전역 `UNIQUE`를 가정하지 않는다.
+- `reservation_no`는 시스템 전체에서 유일한 예약 번호다. QR 실패 시 운영자가 예약 번호만으로
+  정확히 한 예약을 보조 조회할 수 있도록 `UNIQUE` 제약을 둔다. 번호 형식은 서버가 생성하며
+  이름·연락처·`user_id`를 포함하지 않는다.
 - `qr_reference`는 QR에 넣는 불투명 예약 참조다. 이름·연락처·`user_id`를 QR에 넣지 않는다.
 - QR은 체크인 창에서 온디맨드로 서명하므로 `qr_token` 테이블을 만들지 않는다.
 
@@ -734,6 +735,7 @@ erDiagram
 | 원본 대표 이미지 | `content_representative_image(content_id)`, `content_representative_image(image_object_id)` | 콘텐츠별 대표 이미지 최대 한 개, 객체 중복 연결 방지 |
 | 수정본 대표 이미지 | `content_revision_representative_image(content_revision_id)`, `content_revision_representative_image(image_object_id)` | 수정본별 대표 이미지 최대 한 개, 객체 중복 연결 방지 |
 | 예약 변환 | `reservation(hold_id)` | 한 홀드당 예약 최대 한 건 |
+| 예약 번호 | `reservation(reservation_no)` | QR 실패 보조 조회에서 예약 한 건 식별 |
 | QR 참조 | `reservation(qr_reference)` | 불투명 QR 참조로 예약 한 건 식별 |
 | 방문 | `visit(reservation_id)` | 예약당 방문 최대 한 건 |
 | 후기 | `review(visit_id)` | 방문당 후기 최대 한 건 |
@@ -808,7 +810,7 @@ MySQL 복합 FK를 사용하려면 상위 테이블에 대응하는 `UNIQUE` 후
 | 탈퇴 대상 활성 홀드 | `capacity_hold(user_id, status)` |
 | 사용자 예약 목록 | `reservation(user_id, status, confirmed_at)` |
 | 회차 예약자 목록·노쇼 | `reservation(session_id, status)` |
-| 예약 번호 보조 조회 | 예약 번호의 고유 범위가 확정된 뒤 `reservation_no` 선두 인덱스 정의 |
+| 예약 번호 보조 조회 | `reservation(reservation_no)` |
 | 멱등 기록 정리 | `idempotency_record(status, expires_at)` |
 | 방문 운영 조회 | `visit(region_id, content_id, session_id, checked_at)` |
 | 공개 후기 목록 | `review(content_id, status, created_at)` |
@@ -901,7 +903,6 @@ SQL의 단순 cascade가 아래 업무 순서를 대신해서는 안 된다.
 | `SUSPENDED` 후속 전이 | 재개·종료·철회 가능 여부 | 후속 전이를 추가하지 않음 |
 | 콘텐츠 종료 판정 기준 | 별도 종료 예정일, 마지막 회차 종료 또는 정상 종료의 구체 조건 | `content_log.status = ENDED`의 `date`만 기록하고 별도 `ended_at` 컬럼은 두지 않음 |
 | 공개 회차 수정 | 수정 가능한 일정·정원 필드 | 회차 리비전 테이블 제외 |
-| 예약 번호 | 형식과 전역·지역·콘텐츠·회차별 고유 범위 | 컬럼만 두고 유일 제약 보류 |
 | 별점·후기 validation | 별점 범위, 텍스트 길이·빈 값 허용 | 논리 타입만 표현 |
 | QR 운영 설정 | 토큰 TTL, 키 회전 유예 | 비영속 설정으로 유지 |
 | 멱등 운영 설정 | 보관 기간, 저장할 실패 종류·결과 코드 | 논리 필드만 표현 |
