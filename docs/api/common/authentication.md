@@ -12,6 +12,7 @@
 
 Refresh Token은 `Path=/api/v1/auth` 범위의 인증 API에서만 수신하며 보호 업무 API의 인증 수단으로 사용할 수 없다.
 교차 사이트 요구로 `SameSite=Strict`를 변경하려면 CSRF 방어와 함께 후속 ADR과 인증 API 명세를 먼저 갱신한다.
+인증 제외 API를 추가하거나 제거할 때는 이 표와 해당 도메인 API 명세를 같은 변경에서 갱신한다.
 
 ## 인가 표기 규칙
 
