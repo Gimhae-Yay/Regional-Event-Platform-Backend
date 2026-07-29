@@ -66,18 +66,18 @@ Accept: application/json
   "data": {
     "contents": [
       {
-        "contentId": 101,
+        "contentId": "101",
         "contentType": "EVENT_EXPERIENCE",
         "title": "김해 가야문화 체험",
         "status": "PENDING",
         "publishAt": "2026-08-05T09:00:00+09:00",
-        "submittedAt": "2026-07-29T14:30:00+09:00",
+        "submittedAt": "2026-07-29T05:30:00Z",
         "operator": {
-          "operatorId": 20,
+          "operatorId": "20",
           "name": "김운영"
         },
         "representativeImageUrl": "https://s3.ap-northeast-2.amazonaws.com/example-bucket/contents/101/image?X-Amz-Signature=...",
-        "representativeImageUrlExpiresAt": "2026-07-29T15:00:00+09:00"
+        "representativeImageUrlExpiresAt": "2026-07-29T06:00:00Z"
       }
     ]
   }
@@ -92,16 +92,16 @@ Accept: application/json
 | `code` | String | 성공 코드. 항상 `SUCCESS` |
 | `message` | String | 공개 성공 메시지 |
 | `data.contents` | Array | 담당 지역의 승인 대기 콘텐츠 목록. 결과가 없으면 빈 배열 `[]` |
-| `data.contents[].contentId` | Long | 콘텐츠 식별자 |
+| `data.contents[].contentId` | String | 콘텐츠 식별자 |
 | `data.contents[].contentType` | String | 콘텐츠 유형. P0에서는 항상 `EVENT_EXPERIENCE` |
 | `data.contents[].title` | String | 콘텐츠 제목 |
 | `data.contents[].status` | String | 콘텐츠 상태. 항상 `PENDING` |
 | `data.contents[].publishAt` | String | 운영자가 제출한 공개 예정 시각 |
-| `data.contents[].submittedAt` | String | 가장 최근 `PENDING` 상태 로그의 시각 |
-| `data.contents[].operator.operatorId` | Long | 콘텐츠 소유 운영자 식별자 |
+| `data.contents[].submittedAt` | String | 가장 최근 `PENDING` 상태 로그의 시각. API 공통 규칙에 따른 UTC ISO 8601 일시다. |
+| `data.contents[].operator.operatorId` | String | 콘텐츠 소유 운영자 식별자 |
 | `data.contents[].operator.name` | String | 콘텐츠 소유 운영자 이름 |
 | `data.contents[].representativeImageUrl` | String | 담당 지역 권한 확인 후 발급한 대표 이미지의 단기 presigned GET URL |
-| `data.contents[].representativeImageUrlExpiresAt` | String | 대표 이미지 조회 URL 만료 시각 |
+| `data.contents[].representativeImageUrlExpiresAt` | String | 대표 이미지 조회 URL 만료 시각. API 공통 규칙에 따른 UTC ISO 8601 일시다. |
 
 ### Error Code
 

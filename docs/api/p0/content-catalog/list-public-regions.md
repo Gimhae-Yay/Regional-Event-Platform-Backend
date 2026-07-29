@@ -63,12 +63,12 @@ Accept: application/json
   "data": {
     "regions": [
       {
-        "regionId": 1,
+        "regionId": "1",
         "regionCode": "GIMHAE",
         "name": "김해시"
       },
       {
-        "regionId": 2,
+        "regionId": "2",
         "regionCode": "DONGHAE",
         "name": "동해시"
       }
@@ -85,7 +85,7 @@ Accept: application/json
 | `code` | String | 성공 코드. 항상 `SUCCESS` |
 | `message` | String | 공개 성공 메시지 |
 | `data.regions` | Array | 공개 지역 목록. 결과가 없으면 빈 배열 `[]` |
-| `data.regions[].regionId` | Long | 지역 식별자 |
+| `data.regions[].regionId` | String | 지역 식별자 |
 | `data.regions[].regionCode` | String | 시스템에서 사용하는 지역 코드 |
 | `data.regions[].name` | String | 사용자에게 표시할 지역명 |
 

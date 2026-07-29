@@ -35,7 +35,7 @@ Accept: application/json
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `contentId` | Long | Y | 종료할 콘텐츠 식별자. 양수여야 한다. |
+| `contentId` | String | Y | 종료할 콘텐츠 식별자. 양수여야 한다. |
 
 #### Query Parameter
 
@@ -65,9 +65,9 @@ Accept: application/json
   "code": "SUCCESS",
   "message": "콘텐츠 예약·노출 종료에 성공했습니다.",
   "data": {
-    "contentId": 123,
+    "contentId": "123",
     "status": "ENDED",
-    "endedAt": "2026-07-29T12:00:00+09:00"
+    "endedAt": "2026-07-29T03:00:00Z"
   }
 }
 ```
@@ -79,9 +79,9 @@ Accept: application/json
 | `statusCode` | Number | HTTP 상태 코드. 항상 `200` |
 | `code` | String | 성공 코드. 항상 `SUCCESS` |
 | `message` | String | 공개 성공 메시지 |
-| `data.contentId` | Long | 종료된 콘텐츠 식별자 |
+| `data.contentId` | String | 종료된 콘텐츠 식별자 |
 | `data.status` | String | 콘텐츠 상태. 항상 `ENDED` |
-| `data.endedAt` | String | `content_log.status = ENDED`인 로그의 `date`를 공통 시각 형식으로 표현한 종료 시각 |
+| `data.endedAt` | String | `content_log.status = ENDED`인 로그의 `date`를 공통 시각 형식으로 표현한 종료 시각. API 공통 규칙에 따른 UTC ISO 8601 일시다. |
 
 ### Error Code
 
