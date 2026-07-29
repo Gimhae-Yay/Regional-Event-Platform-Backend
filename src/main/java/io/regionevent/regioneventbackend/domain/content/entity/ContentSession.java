@@ -122,7 +122,8 @@ public class ContentSession {
         this.endsAt = requireNotNull(endsAt, "endsAt");
         this.checkinOpenAt = requireNotNull(checkinOpenAt, "checkinOpenAt");
         this.checkinCloseAt = requireNotNull(checkinCloseAt, "checkinCloseAt");
-        this.capacity = capacity;
+        validateTimeRange(startsAt, endsAt, checkinOpenAt, checkinCloseAt);
+        this.capacity = validateCapacity(capacity);
         this.remainingCapacity = capacity;
     }
 
@@ -211,5 +212,29 @@ public class ContentSession {
             throw new IllegalArgumentException(fieldName + " must not be null");
         }
         return value;
+    }
+
+    private static void validateTimeRange(
+        Instant startsAt,
+        Instant endsAt,
+        Instant checkinOpenAt,
+        Instant checkinCloseAt
+    ) {
+        if (!startsAt.isBefore(endsAt)) {
+            throw new IllegalArgumentException("startsAt must be before endsAt");
+        }
+        if (!checkinOpenAt.isBefore(checkinCloseAt)) {
+            throw new IllegalArgumentException("checkinOpenAt must be before checkinCloseAt");
+        }
+        if (endsAt.isAfter(checkinCloseAt)) {
+            throw new IllegalArgumentException("endsAt must be before or equal to checkinCloseAt");
+        }
+    }
+
+    private static int validateCapacity(int capacity) {
+        if (capacity <= 0) {
+            throw new IllegalArgumentException("capacity must be positive");
+        }
+        return capacity;
     }
 }
