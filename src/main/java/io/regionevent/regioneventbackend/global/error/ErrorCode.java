@@ -6,7 +6,6 @@ import org.springframework.http.HttpStatus;
 
 public enum ErrorCode {
 
-    SESSION_NOT_CANCELLABLE(HttpStatus.CONFLICT, "SESSION_NOT_CANCELLABLE", "취소할 수 없는 회차 상태입니다."),
     INVALID_INPUT(HttpStatus.BAD_REQUEST, "INVALID_INPUT", "요청 값이 올바르지 않습니다."),
     INVALID_JSON(HttpStatus.BAD_REQUEST, "INVALID_JSON", "요청 본문 형식이 올바르지 않습니다."),
     INVALID_TYPE(HttpStatus.BAD_REQUEST, "INVALID_TYPE", "요청 값의 형식이 올바르지 않습니다."),
