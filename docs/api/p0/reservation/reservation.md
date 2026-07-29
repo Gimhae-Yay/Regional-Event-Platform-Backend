@@ -40,6 +40,7 @@
 | `AUTH-01` | `GET /operator/reservations/search?reservationNo={reservationNo}`, `GET /region-admin/reservations/search?reservationNo={reservationNo}` | `content.operator_id`, `content.region_id`, `reservation.region_id` |
 | `AUTH-03` | `GET /operator/reservations/search?reservationNo={reservationNo}`, `GET /region-admin/reservations/search?reservationNo={reservationNo}` | `app_user.name`, `app_user.phone` |
 | `QR-05` | `GET /operator/reservations/search?reservationNo={reservationNo}`, `GET /region-admin/reservations/search?reservationNo={reservationNo}` | `reservation`, `content_session`, `visit`, `audit_event` |
+| `QR-05` | `POST /operator/check-ins/manual` | `reservation`, `content_session`, `visit`, `idempotency_record`, `audit_event` |
 | `FR-10` | `GET /operator/contents/{contentId}/reservations?sessionId={sessionId}` | `reservation`, `capacity_hold`, `content_session`, `visit` |
 | `AUTH-01` | `GET /operator/contents/{contentId}/reservations?sessionId={sessionId}` | `content.operator_id`, `content.region_id`, `reservation.region_id` |
 | `AUTH-03` | `GET /operator/contents/{contentId}/reservations?sessionId={sessionId}` | `app_user.name`, `app_user.phone` |
@@ -72,3 +73,9 @@
 | 내 예약 목록 조회 | `GET /me/reservations` | [list-my-reservations.md](list-my-reservations.md) |
 | QR 실패 시 예약번호 보조 조회 | `GET /operator/reservations/search?reservationNo={reservationNo}`, `GET /region-admin/reservations/search?reservationNo={reservationNo}` | [search-reservation-by-number.md](search-reservation-by-number.md) |
 | 회차별 예약자 목록 및 개인정보 마스킹 조회 | `GET /operator/contents/{contentId}/reservations?sessionId={sessionId}` | [list-session-reservations.md](list-session-reservations.md) |
+
+### 연결 API
+
+| 기능 | API 경로 | 소유 도메인 명세 |
+| --- | --- | --- |
+| 예약번호 보조 조회 후 체크인 | `POST /operator/check-ins/manual` | [예약번호 보조 조회 후 체크인](../check-in/manual-check-in-by-reservation-number.md) |

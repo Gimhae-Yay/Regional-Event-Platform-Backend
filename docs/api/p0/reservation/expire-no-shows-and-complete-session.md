@@ -23,7 +23,7 @@
 | 구분 | 대상 조건 | 상태 전이 | 정원 처리 |
 | --- | --- | --- |
 | 노쇼 전환 | 회차가 `SCHEDULED`, `ends_at <= MySQL 현재 시각`, `checkin_close_at <= MySQL 현재 시각`이고 예약이 `CONFIRMED` | `CONFIRMED → EXPIRED` | 정원을 복구하지 않는다. `capacity_released_at`은 `null`로 유지한다. |
-| 회차 완료 | 노쇼 처리 후 회차가 `SCHEDULED`이고 남은 `CONFIRMED` 예약이 없음 | `SCHEDULED → COMPLETED` | 정원을 변경하지 않는다. |
+| 회차 완료 | 노쇼 처리 후 회차가 `SCHEDULED`, `ends_at <= MySQL 현재 시각`, `checkin_close_at <= MySQL 현재 시각`이고 남은 `CONFIRMED` 예약이 없음 | `SCHEDULED → COMPLETED` | 정원을 변경하지 않는다. |
 
 ### 처리 규칙
 
@@ -31,13 +31,13 @@
 2. `checkin_close_at`은 `ends_at`보다 이르지 않으므로, 두 조건을 모두 명시적으로 검사해 회차 종료 전 또는 체크인 창 종료 전 노쇼 전환을 막는다.
 3. 대상 예약은 `status = CONFIRMED`를 조건으로 `CONFIRMED → EXPIRED`로 전이한다. 이미 `CHECKED_IN`, `CANCELLED`, `EXPIRED`인 예약은 변경하지 않는다.
 4. 노쇼 전환에 성공하면 `reservation.expired_at`을 MySQL 기준 처리 시각으로 기록한다. `capacity_released_at`은 기록하지 않으며 회차의 `remaining_capacity`도 변경하지 않는다.
-5. 회차의 모든 노쇼 대상 처리가 끝난 뒤, 남아 있는 `CONFIRMED` 예약이 없는 경우에만 `SCHEDULED → COMPLETED`를 조건부로 전이하고 `content_session.completed_at`을 기록한다.
+5. 회차의 모든 노쇼 대상 처리가 끝난 뒤, `status = SCHEDULED`, `ends_at <= MySQL 현재 시각`, `checkin_close_at <= MySQL 현재 시각`이고 남아 있는 `CONFIRMED` 예약이 없는 경우에만 `SCHEDULED → COMPLETED`를 조건부로 전이하고 `content_session.completed_at`을 기록한다. 예약이 없는 회차도 두 시각 조건을 만족하기 전에는 `SCHEDULED`로 유지한다.
 6. 회차 완료는 `CHECKED_IN`, `CANCELLED`, `EXPIRED` 예약과 방문 기록을 변경하지 않는다.
 7. 체크인과 노쇼 처리는 MySQL 현재 시각과 예약 상태를 조건으로 수행한다. 체크인 창 종료 경계에서 하나만 먼저 성공하며, 노쇼가 먼저 성공한 예약은 새 체크인을 허용하지 않는다.
 8. 회차 취소와 노쇼·완료 처리가 경합하면 `content_session.status = SCHEDULED`와 예약 상태의 조건부 전이에 먼저 성공한 처리만 반영한다. 회차 취소가 먼저 성공하면 스케줄러는 해당 회차를 처리하지 않는다.
 9. 노쇼 또는 회차 완료가 먼저 성공하면 회차 취소는 이미 종결된 상태를 다시 전이하지 않는다.
 10. 회차 단위로 예약 노쇼 전환과 `COMPLETED` 전이가 중간에 분리되어 커밋되지 않도록 처리한다. 오류가 발생하면 해당 회차의 변경을 롤백하고 다음 스케줄러 실행에서 재시도할 수 있다.
-11. 스케줄러가 중복 실행되거나 다중 인스턴스에서 동시에 실행돼도 `CONFIRMED`와 `SCHEDULED` 조건부 전이로 각 예약의 노쇼 처리와 회차 완료는 최대 한 번만 발생한다.
+11. 스케줄러가 중복 실행되거나 다중 인스턴스에서 동시에 실행돼도 예약의 `CONFIRMED` 조건과 회차의 `SCHEDULED`·종료 시각·체크인 마감 시각 조건부 전이로 각 예약의 노쇼 처리와 회차 완료는 최대 한 번만 발생한다.
 12. 스케줄러는 외부 API 응답을 만들지 않는다. 노쇼·완료 처리 건수와 실패 사유는 구조화 로그와 감사 기록으로 관찰한다.
 
 ### 감사 및 정합성
@@ -46,4 +46,4 @@
 - 성공한 회차 완료는 회차 식별자, `SCHEDULED → COMPLETED` 전이와 처리 시각을 감사 기록에 남긴다.
 - 시스템이 수행한 노쇼·회차 완료 처리의 감사 이벤트에는 사용자 처리자를 연결하지 않는다.
 - 노쇼 처리로 `reservation.status = EXPIRED`가 되면 `expired_at`은 존재하고 `capacity_released_at`은 `null`이어야 한다.
-- 회차 완료 시 `completed_at`은 존재해야 하며, 같은 회차에 `CONFIRMED` 예약이 남아 있으면 `COMPLETED` 전이를 허용하지 않는다.
+- 회차 완료 시 `completed_at`은 존재해야 하며, `ends_at` 또는 `checkin_close_at`이 MySQL 현재 시각보다 미래이거나 같은 회차에 `CONFIRMED` 예약이 남아 있으면 `COMPLETED` 전이를 허용하지 않는다.

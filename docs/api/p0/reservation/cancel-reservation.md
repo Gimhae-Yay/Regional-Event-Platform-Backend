@@ -97,13 +97,13 @@ Accept: application/json
 
 | HTTP Status | Code | Description |
 | --- | --- | --- |
-| `400` | `INVALID_INPUT` | `reservationId`가 양수가 아니다. 예약과 회차 정원은 변경하지 않는다. |
-| `400` | `INVALID_TYPE` | `reservationId`의 형식이 올바르지 않다. 예약과 회차 정원은 변경하지 않는다. |
+| `400` | `INVALID_INPUT` | `reservationId`가 양수가 아니다. 예약과 회차 정원은 변경하지 않으며 요청 값을 수정한 뒤 재시도할 수 있다. |
+| `400` | `INVALID_TYPE` | `reservationId`의 형식이 올바르지 않다. 예약과 회차 정원은 변경하지 않으며 값 형식을 수정한 뒤 재시도할 수 있다. |
 | `401` | `UNAUTHENTICATED` | 인증 정보가 없거나 유효하지 않다. 예약과 회차 정원은 변경하지 않으며 유효한 인증 정보로 재시도할 수 있다. |
-| `403` | `FORBIDDEN` | 인증 주체가 활성 회원이 아니거나 예약의 소유자가 아니다. 예약과 회차 정원은 변경하지 않는다. |
-| `404` | `NOT_FOUND` | 대상 예약을 찾을 수 없다. 예약과 회차 정원은 변경하지 않는다. |
-| `409` | `RESERVATION_CANCEL_CONFLICT` | 예약이 `CONFIRMED` 또는 `CANCELLED`이 아니거나, `CONFIRMED` 예약에 대해 회차 시작 시각이 도래했거나, 체크인·노쇼가 먼저 성공했다. 이미 `CANCELLED`인 예약은 저장된 최초 취소 결과를 반환한다. |
-| `500` | `INTERNAL_SERVER_ERROR` | 예약 취소 중 예상하지 못한 서버 오류가 발생했다. 트랜잭션이 커밋되지 않은 경우 예약과 회차 정원은 변경하지 않는다. |
+| `403` | `FORBIDDEN` | 인증 주체가 활성 회원이 아니거나 예약의 소유자가 아니다. 예약과 회차 정원은 변경하지 않으며 동일한 권한 상태로 재시도해도 성공하지 않는다. |
+| `404` | `NOT_FOUND` | 대상 예약을 찾을 수 없다. 예약과 회차 정원은 변경하지 않으며 예약 식별자를 확인한 뒤 재시도할 수 있다. |
+| `409` | `RESERVATION_CANCEL_CONFLICT` | 예약이 `CONFIRMED` 또는 `CANCELLED`이 아니거나, `CONFIRMED` 예약에 대해 회차 시작 시각이 도래했거나, 체크인·노쇼가 먼저 성공했다. 이미 `CANCELLED`인 예약은 재시도해도 저장된 최초 취소 결과를 반환하며, 그 외 충돌은 동일 상태에서 재시도해도 성공하지 않는다. |
+| `500` | `INTERNAL_SERVER_ERROR` | 예약 취소 중 예상하지 못한 서버 오류가 발생했다. 트랜잭션이 커밋되지 않은 경우 예약과 회차 정원은 변경하지 않으며 일시적 장애라면 동일 요청으로 재시도할 수 있다. |
 
 #### Error Response Body
 
