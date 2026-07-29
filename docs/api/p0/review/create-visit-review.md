@@ -70,7 +70,7 @@ Accept: application/json
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
 | `rating` | Integer | Y | `1~5` 정수만 허용하며 `null`은 허용하지 않는다. |
-| `reviewText` | String | Y | 앞뒤 공백을 제거한 값이 `1~1,000`자여야 한다. `null`, 빈 문자열, 공백만으로 된 값은 허용하지 않는다. |
+| `reviewText` | String | Y | 앞뒤 공백을 제거한 값이 `1~2,000`자여야 한다. `null`, 빈 문자열, 공백만으로 된 값은 허용하지 않는다. |
 
 ### Response
 

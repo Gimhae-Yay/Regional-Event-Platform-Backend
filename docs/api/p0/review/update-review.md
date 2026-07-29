@@ -70,7 +70,7 @@ Accept: application/json
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
 | `rating` | Integer | N | 포함한 경우에만 검증하며 `1~5` 정수만 허용한다. `null`은 허용하지 않는다. |
-| `reviewText` | String | N | 포함한 경우에만 검증하며, 앞뒤 공백을 제거한 값이 `1~1,000`자여야 한다. `null`, 빈 문자열, 공백만으로 된 값은 허용하지 않는다. |
+| `reviewText` | String | N | 포함한 경우에만 검증하며, 앞뒤 공백을 제거한 값이 `1~2,000`자여야 한다. `null`, 빈 문자열, 공백만으로 된 값은 허용하지 않는다. |
 
 `rating`, `reviewText` 중 하나 이상을 포함해야 한다. 둘 다 포함하면 각 필드에 위 검증을 각각 적용하며, 포함하지 않은 필드는 변경하지 않는다.
 
