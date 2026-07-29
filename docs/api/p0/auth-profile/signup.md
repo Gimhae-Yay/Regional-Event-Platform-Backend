@@ -56,7 +56,7 @@ Accept: application/json
   "name": "홍길동",
   "phone": "01012345678",
   "requestedRole": "OPERATOR",
-  "requestedRegionId": 1,
+  "requestedRegionId": "1",
   "businessInformation": "상호명: 지역행사 주식회사, 사업자등록번호: 123-45-67890"
 }
 ```
@@ -86,7 +86,7 @@ Accept: application/json
   "name": "홍길동",
   "phone": "01012345678",
   "requestedRole": "OPERATOR",
-  "requestedRegionId": 1,
+  "requestedRegionId": "1",
   "businessInformation": "상호명: 지역행사 주식회사, 사업자등록번호: 123-45-67890"
 }
 ```
@@ -100,7 +100,7 @@ Accept: application/json
 | `name` | String | Y | 앞뒤 공백을 제거한 뒤 1~50자여야 한다. `null`·빈 문자열·공백만으로 된 값은 허용하지 않는다. |
 | `phone` | String | Y | 숫자 10~11자리다. 하이픈은 입력 시 제거하고 숫자만 저장한다. `null`·빈 문자열은 허용하지 않는다. |
 | `requestedRole` | String | Y | `VISITOR` 또는 `OPERATOR`만 허용한다. `REGION_ADMIN`은 가입 요청에서 선택할 수 없다. |
-| `requestedRegionId` | Long | 조건부 | `requestedRole`이 `OPERATOR`이면 양의 정수이며 공개 지역 식별자여야 한다. `VISITOR`이면 생략해야 한다. |
+| `requestedRegionId` | String | 조건부 | `requestedRole`이 `OPERATOR`이면 양의 정수이며 공개 지역 식별자여야 한다. `VISITOR`이면 생략해야 한다. |
 | `businessInformation` | String | 조건부 | `requestedRole`이 `OPERATOR`이면 앞뒤 공백을 제거한 1~2,000자여야 한다. 수동 사업자 검증에 사용하며 `VISITOR`이면 생략해야 한다. 응답·로그에 포함하지 않는다. |
 
 ### Response
@@ -119,7 +119,7 @@ Accept: application/json
   "code": "SUCCESS",
   "message": "회원가입에 성공했습니다.",
   "data": {
-    "userId": 1,
+    "userId": "1",
     "requestedRole": "OPERATOR",
     "assignedRole": null,
     "operatorApplicationStatus": "PENDING"
@@ -138,7 +138,7 @@ Accept: application/json
 | `statusCode` | Integer | HTTP 상태와 같은 `201`이다. |
 | `code` | String | 성공 코드 `SUCCESS`다. |
 | `message` | String | 성공 메시지 `회원가입에 성공했습니다.`다. |
-| `data.userId` | Long | 새로 생성된 회원 식별자다. 양의 정수다. |
+| `data.userId` | String | 새로 생성된 회원 식별자다. 양의 정수다. |
 | `data.requestedRole` | String | 클라이언트가 선택한 `VISITOR` 또는 `OPERATOR`다. |
 | `data.assignedRole` | String 또는 null | `VISITOR` 선택 시 즉시 부여된 `VISITOR`다. `OPERATOR` 선택 시 승인 전이므로 `null`이다. |
 | `data.operatorApplicationStatus` | String 또는 null | `OPERATOR` 선택 시 생성된 운영자 신청 상태 `PENDING`이다. `VISITOR` 선택 시 `null`이다. |

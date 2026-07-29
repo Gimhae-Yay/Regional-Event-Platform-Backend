@@ -34,7 +34,7 @@ Accept: application/json
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `reservationId` | Long | Y | 조회할 예약 식별자. 양수여야 한다. |
+| `reservationId` | String | Y | 조회할 예약 식별자. 양수여야 한다. |
 
 #### Query Parameter
 
@@ -65,17 +65,17 @@ Accept: application/json
   "message": "예약 상세 조회에 성공했습니다.",
   "data": {
     "reservation": {
-      "reservationId": 123,
+      "reservationId": "123",
       "reservationNo": "R202607290001",
       "status": "CONFIRMED",
-      "confirmedAt": "2026-07-29T12:00:00+09:00",
+      "confirmedAt": "2026-07-29T03:00:00Z",
       "cancelledAt": null,
       "cancellationReason": null,
       "expiredAt": null
     },
     "session": {
-      "sessionId": 456,
-      "contentId": 789,
+      "sessionId": "456",
+      "contentId": "789",
       "status": "SCHEDULED",
       "startsAt": "2026-08-03T14:00:00+09:00",
       "endsAt": "2026-08-03T16:00:00+09:00",
@@ -97,22 +97,22 @@ Accept: application/json
 | `statusCode` | Number | HTTP 상태 코드. 항상 `200` |
 | `code` | String | 성공 코드. 항상 `SUCCESS` |
 | `message` | String | 공개 성공 메시지 |
-| `data.reservation.reservationId` | Long | 예약 식별자 |
+| `data.reservation.reservationId` | String | 예약 식별자 |
 | `data.reservation.reservationNo` | String | 시스템 전체에서 유일한 예약 번호. 형식은 서버가 생성한다. |
 | `data.reservation.status` | String | 예약 상태. `CONFIRMED`, `CHECKED_IN`, `CANCELLED`, `EXPIRED` 중 하나 |
-| `data.reservation.confirmedAt` | String | 예약 확정 시각 |
-| `data.reservation.cancelledAt` | String or null | `CANCELLED` 상태의 취소 시각. 그 외 상태에서는 `null` |
+| `data.reservation.confirmedAt` | String | 예약 확정 시각. API 공통 규칙에 따른 UTC ISO 8601 일시다. |
+| `data.reservation.cancelledAt` | String or null | `CANCELLED` 상태의 취소 시각. 그 외 상태에서는 `null` API 공통 규칙에 따른 UTC ISO 8601 일시다. |
 | `data.reservation.cancellationReason` | String or null | `CANCELLED` 상태의 취소 사유. 그 외 상태에서는 `null` |
-| `data.reservation.expiredAt` | String or null | `EXPIRED` 상태의 노쇼 처리 시각. 그 외 상태에서는 `null` |
-| `data.session.sessionId` | Long | 예약이 속한 회차 식별자 |
-| `data.session.contentId` | Long | 회차가 속한 콘텐츠 식별자 |
+| `data.reservation.expiredAt` | String or null | `EXPIRED` 상태의 노쇼 처리 시각. 그 외 상태에서는 `null` API 공통 규칙에 따른 UTC ISO 8601 일시다. |
+| `data.session.sessionId` | String | 예약이 속한 회차 식별자 |
+| `data.session.contentId` | String | 회차가 속한 콘텐츠 식별자 |
 | `data.session.status` | String | 회차 상태. `SCHEDULED`, `COMPLETED`, `CANCELLED` 중 하나 |
 | `data.session.startsAt` | String | 회차 시작 시각 |
 | `data.session.endsAt` | String | 회차 종료 시각 |
 | `data.session.checkinOpenAt` | String | 체크인 창 시작 시각 |
 | `data.session.checkinCloseAt` | String | 체크인 창 종료 시각 |
 | `data.checkIn.checkedIn` | Boolean | 예약 상태가 `CHECKED_IN`이면 `true`, 그 외에는 `false` |
-| `data.checkIn.checkedAt` | String or null | `checkedIn = true`인 경우 방문 기록의 체크인 시각. 그 외에는 `null` |
+| `data.checkIn.checkedAt` | String or null | `checkedIn = true`인 경우 방문 기록의 체크인 시각. 그 외에는 `null` API 공통 규칙에 따른 UTC ISO 8601 일시다. |
 
 예약 QR 토큰, `qr_reference`, 사용자 식별자와 다른 예약자의 정보는 응답에 포함하지 않는다.
 
