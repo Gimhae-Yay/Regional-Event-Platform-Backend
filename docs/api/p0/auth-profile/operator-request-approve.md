@@ -10,13 +10,13 @@
 ## 1. 개요
 
 담당 지역 관리자가 `PENDING` 운영자 신청을 승인한다. 승인 시 신청 상태를 `APPROVED`로 종결하고, 신청자가 여전히
-활성 상태인 것을 조건으로 `OPERATOR` 역할과 요청 지역을 하나의 트랜잭션에서 함께 부여한다.
+활성 상태인 것을 조건으로 `OPERATOR` 역할, 요청 지역과 성공 감사 이벤트를 하나의 트랜잭션에서 함께 기록한다.
 
 ### 요구사항 추적
 
 | 요구사항 | HTTP 계약 | 주요 데이터 |
 | --- | --- | --- |
-| FR-09, AUTH-02 | `POST /api/v1/region-admin/operator-requests/{requestId}/approve` | `app_user`, `user_role_assignment`, `operator_application` |
+| FR-09, AUTH-02 | `POST /api/v1/region-admin/operator-requests/{requestId}/approve` | `app_user`, `user_role_assignment`, `operator_application`, `audit_event`, `audit_event_actor_link` |
 
 ## 2. 공통 계약 참조
 
@@ -29,8 +29,11 @@
 
 ## 3. 운영자 승인·역할/담당 지역 원자적 부여
 
-`PENDING` 신청을 승인하고 신청자에게 `OPERATOR` 역할과 요청 지역을 원자적으로 부여한다. 두 변경 중 하나라도
-실패하면 신청 상태, 처리자, 역할과 담당 지역을 모두 변경하지 않는다. 콘텐츠 소유 관계는 만들지 않는다.
+`PENDING` 신청을 승인하고 신청자에게 `OPERATOR` 역할과 요청 지역을 원자적으로 부여한다. 같은 트랜잭션에서
+`operator_application`을 대상으로 요청 지역, `PENDING → APPROVED` 전이, `reason_code = OPERATOR_APPLICATION_APPROVED`,
+`REGION_ADMIN` 처리자 역할과 활성 처리자 연결을 포함한 성공 감사 이벤트를 기록한다. 상태 전이, 역할·담당 지역 부여
+또는 감사 기록 중 하나라도 실패하면 모두 롤백한다. 이미 `APPROVED`인 신청을 다시 승인하면 저장된 결과를 반환하며 감사
+이벤트를 추가하지 않는다. 콘텐츠 소유 관계는 만들지 않는다.
 
 ### Request
 

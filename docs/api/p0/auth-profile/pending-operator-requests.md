@@ -10,7 +10,8 @@
 ## 1. 개요
 
 지역 관리자가 자신의 담당 지역에 접수된 `PENDING` 운영자 신청 목록을 조회한다. 요청 지역 식별자는 클라이언트가
-전달하지 않으며, 서버가 인증된 지역 관리자의 `REGION_ADMIN` 담당 지역으로 범위를 제한한다.
+전달하지 않으며, 서버가 인증된 지역 관리자의 `REGION_ADMIN` 담당 지역으로 범위를 제한한다. 사업자 정보 원문은
+응답에 포함하지 않는다.
 
 ### 요구사항 추적
 
@@ -93,7 +94,6 @@ Accept: application/json
         "operatorApplicationId": 21,
         "applicantUserId": 7,
         "requestedRegionId": 1,
-        "businessInformation": "상호명 지역행사 주식회사, 사업자등록번호 123-45-67890",
         "requestedAt": "2026-07-29T10:15:30+09:00"
       }
     ]
@@ -115,7 +115,6 @@ Accept: application/json
 | `data.operatorRequests[].operatorApplicationId` | Long | 운영자 신청 식별자. 양의 정수이다. |
 | `data.operatorRequests[].applicantUserId` | Long | 심사 대상 회원 식별자. 양의 정수이다. |
 | `data.operatorRequests[].requestedRegionId` | Long | 인증된 지역 관리자의 담당 지역과 같은 요청 지역 식별자 |
-| `data.operatorRequests[].businessInformation` | String | 수동 사업자 검증에 필요한 신청 정보. 이 목록을 조회할 권한이 있는 지역 관리자에게만 반환한다. |
 | `data.operatorRequests[].requestedAt` | String | 신청 생성 시각. ISO 8601 오프셋 일시다. |
 
 ### Error Code

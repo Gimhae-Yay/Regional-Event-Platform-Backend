@@ -10,13 +10,13 @@
 ## 1. 개요
 
 담당 지역 관리자가 `PENDING` 운영자 신청을 반려하고 사유를 남긴다. 반려된 신청은 `REJECTED`로 종결하며,
-신청자는 새 신청 행을 만들어 다시 신청할 수 있다.
+신청자는 새 신청 행을 만들어 다시 신청할 수 있다. 반려 결과와 감사 이벤트는 같은 트랜잭션에서 기록한다.
 
 ### 요구사항 추적
 
 | 요구사항 | HTTP 계약 | 주요 데이터 |
 | --- | --- | --- |
-| FR-09, AUTH-02 | `POST /api/v1/region-admin/operator-requests/{requestId}/reject` | `operator_application`, `user_role_assignment` |
+| FR-09, AUTH-02 | `POST /api/v1/region-admin/operator-requests/{requestId}/reject` | `operator_application`, `user_role_assignment`, `audit_event`, `audit_event_actor_link` |
 
 ## 2. 공통 계약 참조
 
@@ -29,8 +29,11 @@
 
 ## 3. 운영자 신청 사유 포함 반려
 
-`PENDING` 신청을 반려하고 반려 사유와 처리자·시각을 기록한다. 반려 시 `OPERATOR` 역할과 담당 지역을 생성하거나
-변경하지 않는다.
+`PENDING` 신청을 반려하고 반려 사유와 처리자·시각을 기록한다. 같은 트랜잭션에서 `operator_application`을 대상으로
+요청 지역, `PENDING → REJECTED` 전이, `reason_code = OPERATOR_APPLICATION_REJECTED`, `REGION_ADMIN` 처리자 역할과 활성
+처리자 연결을 포함한 성공 감사 이벤트를 기록한다. 반려 사유 원문은 `operator_application.rejected_reason`에만 기록하고
+감사 이벤트에는 넣지 않는다. 상태 전이 또는 감사 기록이 실패하면 모두 롤백한다. 이미 `REJECTED`인 신청을 다시 반려하면
+저장된 결과를 반환하며 감사 이벤트를 추가하지 않는다. 반려 시 `OPERATOR` 역할과 담당 지역을 생성하거나 변경하지 않는다.
 
 ### Request
 
@@ -81,7 +84,7 @@ Accept: application/json
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `rejectedReason` | String | Y | 앞뒤 공백을 제거한 비어 있지 않은 텍스트여야 한다. `null`, 빈 문자열, 공백만으로 된 값은 허용하지 않는다. 최대 길이는 별도로 제한하지 않는다. |
+| `rejectedReason` | String | Y | 앞뒤 공백을 제거한 1~2,000자 텍스트여야 한다. `null`, 빈 문자열, 공백만으로 된 값은 허용하지 않는다. 최대 길이 초과는 `INVALID_INPUT`이다. |
 
 ### Response
 
@@ -125,7 +128,7 @@ Accept: application/json
 
 | HTTP Status | Code | Description |
 | --- | --- | --- |
-| 400 | `INVALID_INPUT` | `requestId`가 양의 정수가 아니거나 `rejectedReason`이 누락·공백이다. 신청 상태는 변경되지 않으며 값을 수정해 다시 요청할 수 있다. |
+| 400 | `INVALID_INPUT` | `requestId`가 양의 정수가 아니거나 `rejectedReason`이 누락·공백·2,000자 초과다. 신청 상태와 감사 기록은 변경되지 않으며 값을 수정해 다시 요청할 수 있다. |
 | 400 | `INVALID_JSON` | 요청 본문이 JSON 형식이 아니거나 역직렬화할 수 없다. 신청 상태는 변경되지 않으며 본문을 수정해 다시 요청할 수 있다. |
 | 400 | `INVALID_TYPE` | `requestId`를 정수로 변환할 수 없다. 신청 상태는 변경되지 않는다. |
 | 401 | `UNAUTHENTICATED` | Access Token이 없거나 만료·변조되었다. 신청 상태는 변경되지 않으며 유효한 Token으로 다시 요청할 수 있다. |

@@ -9,8 +9,8 @@
 
 ## 1. 개요
 
-지역 관리자가 담당 지역의 운영자 신청 상세와 수동 검증에 필요한 사업자 정보를 조회한다. 서버는 신청의 요청 지역과
-인증된 지역 관리자의 `REGION_ADMIN` 담당 지역이 같은 경우에만 응답한다.
+지역 관리자가 담당 지역의 운영자 신청 상세를 조회한다. 서버는 신청의 요청 지역과 인증된 지역 관리자의
+`REGION_ADMIN` 담당 지역이 같은 경우에만 응답한다. 사업자 정보 원문은 응답에 포함하지 않는다.
 
 ### 요구사항 추적
 
@@ -27,10 +27,10 @@
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | `200 OK`와 심사에 필요한 신청 상세를 반환한다. |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | 단건 조회이므로 적용하지 않는다. |
 
-## 3. 운영자 승인 요청 상세·사업자 정보 확인
+## 3. 운영자 승인 요청 상세 조회
 
-신청의 현재 상태와 사업자 정보를 조회한다. 탈퇴 처리로 신청자 연결과 사업자 정보가 제거된 `CANCELLED` 신청은
-각 필드를 `null`로 반환하며, 다른 지역의 신청은 존재 여부를 노출하지 않는다.
+신청의 현재 상태를 조회한다. 탈퇴 처리로 신청자 연결이 제거된 `CANCELLED` 신청은 해당 필드를 `null`로 반환하며,
+다른 지역의 신청은 존재 여부를 노출하지 않는다.
 
 ### Request
 
@@ -91,7 +91,6 @@ Accept: application/json
     "operatorApplicationId": 21,
     "applicantUserId": 7,
     "requestedRegionId": 1,
-    "businessInformation": "상호명 지역행사 주식회사, 사업자등록번호 123-45-67890",
     "status": "PENDING",
     "inspectedUserId": null,
     "rejectedReason": null,
@@ -111,7 +110,6 @@ Accept: application/json
 | `data.operatorApplicationId` | Long | 운영자 신청 식별자. 양의 정수다. |
 | `data.applicantUserId` | Long 또는 null | 신청자 회원 식별자. 탈퇴 처리된 `CANCELLED` 신청이면 `null`이다. |
 | `data.requestedRegionId` | Long | 요청 지역 식별자. 인증된 지역 관리자의 담당 지역과 같다. |
-| `data.businessInformation` | String 또는 null | 수동 사업자 검증 정보. 탈퇴 처리된 `CANCELLED` 신청이면 `null`이다. |
 | `data.status` | String | `PENDING`, `APPROVED`, `REJECTED`, `CANCELLED` 중 하나 |
 | `data.inspectedUserId` | Long 또는 null | 승인·반려 처리자 식별자. `PENDING` 또는 `CANCELLED`이면 `null`이다. |
 | `data.rejectedReason` | String 또는 null | `REJECTED`일 때의 반려 사유. 다른 상태면 `null`이다. |
