@@ -22,6 +22,7 @@
 | 요구사항 | HTTP 계약 | 주요 데이터 |
 | --- | --- | --- |
 | FR-02, SES-01, SES-02 | `GET /api/v1/contents/{contentId}/sessions` | `content`, `content_session` |
+| FR-02, RSV-02, SES-01, SES-02 | `GET /api/v1/sessions/{sessionId}` | `content`, `content_session` |
 | FR-03, AUTH-01, SES-01 | `POST /api/v1/operator/contents/{contentId}/sessions` | `content`, `content_session`, `user_role_assignment` |
 | FR-03, AUTH-01, SES-01 | `PUT /api/v1/operator/contents/{contentId}/sessions/{sessionId}` | `content`, `content_session`, `user_role_assignment` |
 | FR-06, AUTH-01, RSV-06 | `POST /api/v1/operator/sessions/{sessionId}/cancel` | `content`, `content_session`, `capacity_hold`, `reservation` |
@@ -40,6 +41,7 @@
 | 기능 | API 경로 | 명세 |
 | --- | --- | --- |
 | 공개 콘텐츠 회차 목록 조회 | `GET /api/v1/contents/{contentId}/sessions` | [list-public-content-sessions.md](list-public-content-sessions.md) |
+| 가격·실시간 잔여 정원·예약 가능 여부 조회 | `GET /api/v1/sessions/{sessionId}` | [get-session-reservation-info.md](get-session-reservation-info.md) |
 | 내 콘텐츠 회차 생성 | `POST /api/v1/operator/contents/{contentId}/sessions` | [session-create.md](session-create.md) |
 | 내 콘텐츠 회차 수정 | `PUT /api/v1/operator/contents/{contentId}/sessions/{sessionId}` | [session-update.md](session-update.md) |
 | 소유 운영자의 회차 취소 | `POST /api/v1/operator/sessions/{sessionId}/cancel` | [session-cancel.md](session-cancel.md) |
