@@ -159,7 +159,7 @@ Accept: application/json
 ### Error Code
 
 | HTTP Status | Code | Description |
-| --- | --- |
+| --- | --- | --- |
 | 400 | `INVALID_INPUT` | `contentId`가 양수가 아니다. 데이터를 반환하지 않는다. |
 | 400 | `INVALID_TYPE` | `contentId`를 Long으로 변환할 수 없다. 데이터를 반환하지 않는다. |
 | 401 | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 데이터를 반환하지 않는다. |
