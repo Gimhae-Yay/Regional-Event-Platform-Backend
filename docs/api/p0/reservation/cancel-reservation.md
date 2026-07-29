@@ -37,7 +37,7 @@ Accept: application/json
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `reservationId` | Long | Y | 취소할 예약 식별자. 양수여야 한다. |
+| `reservationId` | String | Y | 취소할 예약 식별자. 양수여야 한다. |
 
 #### Query Parameter
 
@@ -69,12 +69,12 @@ Accept: application/json
   "code": "SUCCESS",
   "message": "예약 취소에 성공했습니다.",
   "data": {
-    "reservationId": 123,
-    "sessionId": 456,
+    "reservationId": "123",
+    "sessionId": "456",
     "status": "CANCELLED",
     "cancellationReason": "USER_REQUEST",
-    "cancelledAt": "2026-07-29T12:00:00+09:00",
-    "capacityReleasedAt": "2026-07-29T12:00:00+09:00"
+    "cancelledAt": "2026-07-29T03:00:00Z",
+    "capacityReleasedAt": "2026-07-29T03:00:00Z"
   }
 }
 ```
@@ -86,12 +86,12 @@ Accept: application/json
 | `statusCode` | Number | HTTP 상태 코드. 항상 `200` |
 | `code` | String | 성공 코드. 항상 `SUCCESS` |
 | `message` | String | 공개 성공 메시지 |
-| `data.reservationId` | Long | 취소된 예약 식별자 |
-| `data.sessionId` | Long | 예약이 속한 회차 식별자 |
+| `data.reservationId` | String | 취소된 예약 식별자 |
+| `data.sessionId` | String | 예약이 속한 회차 식별자 |
 | `data.status` | String | 예약 상태. 항상 `CANCELLED` |
 | `data.cancellationReason` | String | 최초 취소 사유. 이 API로 최초 취소한 경우 `USER_REQUEST` |
-| `data.cancelledAt` | String | 최초 취소 시각 |
-| `data.capacityReleasedAt` | String or null | 최초 정원 복구 시각. 회차 시작 이후의 회차 취소 등 정원을 복구하지 않은 취소는 `null` |
+| `data.cancelledAt` | String | 최초 취소 시각. API 공통 규칙에 따른 UTC ISO 8601 일시다. |
+| `data.capacityReleasedAt` | String or null | 최초 정원 복구 시각. 회차 시작 이후의 회차 취소 등 정원을 복구하지 않은 취소는 `null` API 공통 규칙에 따른 UTC ISO 8601 일시다. |
 
 ### Error Code
 
