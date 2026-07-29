@@ -614,12 +614,16 @@ erDiagram
 - 예약 번호 보조 조회의 확인 사유·처리자·처리 시각은 `audit_event`에 남긴다.
 - `review.visit_id`는 유일하며 방문당 후기를 최대 한 건으로 제한한다.
 - 후기 작성 시 활성 사용자 연결이 `visit.user_id`와 같아야 한다.
+- `review.rating`은 `1` 이상 `5` 이하의 정수여야 한다.
+- `review.review_text`는 `null` 또는 공백만으로 구성할 수 없고 `1`자 이상 `1000`자 이하여야 한다.
 - `PUBLISHED` 후기의 수정 가능 조건은 `DB 현재 시각 < created_at + 30일`이다.
 - 후기 삭제 시 행과 `visit_id` 유일 연결은 보존하고 상태를 `DELETED`로 바꾼다.
   `deleted_at + 30일` 이후 `rating`과 `review_text`만 영구 파기한다.
   이 방식은 삭제 후 복구와 같은 방문의 재작성을 동시에 차단한다.
 - 회원 탈퇴는 후기 삭제가 아니다. `PUBLISHED` 상태와 원문을 유지하고 `user_id`를 제거하며
   `author_unlinked_at`을 기록한다. 작성자 표시 문자열은 저장하지 않고 공통 `탈퇴한 사용자`로 파생한다.
+- 공개 작성자 표시는 저장하지 않는다. `user_id` 연결이 유지되면 공통 `인증 방문자`,
+  탈퇴로 연결이 제거되면 공통 `탈퇴한 사용자`로 파생하며 이름·연락처를 공개 후기 응답에 사용하지 않는다.
 - `visit.user_id`, `review.user_id`가 제거돼도 콘텐츠·회차·방문 연결과 집계는 유지한다.
 
 ### 멱등 기록 정규화 규칙
@@ -785,7 +789,7 @@ MySQL 복합 FK를 사용하려면 상위 테이블에 대응하는 `UNIQUE` 후
 | `reservation.EXPIRED` | `expired_at` 존재, `capacity_released_at IS NULL`                                  |
 | `idempotency_record.SUCCEEDED` | `RESERVATION_CONFIRM`이면 `result_reservation_id`만, `CHECK_IN`이면 `result_visit_id`만 존재 |
 | `idempotency_record.PROCESSING`, `FAILED` | `result_reservation_id IS NULL`, `result_visit_id IS NULL`                       |
-| `review.PUBLISHED` | `rating`, `review_text` 존재, `deleted_at IS NULL`               |
+| `review.PUBLISHED` | `rating IS NOT NULL`, `1 <= rating <= 5`, `review_text IS NOT NULL`이고 공백이 아닌 `1`자 이상 `1000`자 이하, `deleted_at IS NULL` |
 | `review.DELETED` | `deleted_at` 존재; 파기 전에는 원문 존재, 파기 후에는 원문이 모두 `NULL`            |
 | `image_object.ACTIVE` | 대표 이미지 연결이 정확히 하나 존재                                                             |
 | `image_object.DELETE_PENDING` | 대표 이미지 연결이 없고 삭제 재시도에서만 조회                                                       |
@@ -903,7 +907,6 @@ SQL의 단순 cascade가 아래 업무 순서를 대신해서는 안 된다.
 | `SUSPENDED` 후속 전이 | 재개·종료·철회 가능 여부 | 후속 전이를 추가하지 않음 |
 | 콘텐츠 종료 판정 기준 | 별도 종료 예정일, 마지막 회차 종료 또는 정상 종료의 구체 조건 | `content_log.status = ENDED`의 `date`만 기록하고 별도 `ended_at` 컬럼은 두지 않음 |
 | 공개 회차 수정 | 수정 가능한 일정·정원 필드 | 회차 리비전 테이블 제외 |
-| 별점·후기 validation | 별점 범위, 텍스트 길이·빈 값 허용 | 논리 타입만 표현 |
 | QR 운영 설정 | 토큰 TTL, 키 회전 유예 | 비영속 설정으로 유지 |
 | 멱등 운영 설정 | 보관 기간, 저장할 실패 종류·결과 코드 | 논리 필드만 표현 |
 | 물리 스키마 | SQL 타입·길이·기본값·인덱스명·FK 삭제 절 | Flyway 작성 전 확정 |
