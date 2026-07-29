@@ -28,10 +28,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 
 @DataJpaTest
-@TestPropertySource(properties = {
-    "spring.flyway.enabled=false",
-    "spring.jpa.hibernate.ddl-auto=create-drop"
-})
+@TestPropertySource(properties = "spring.jpa.hibernate.ddl-auto=validate")
 class ContentSessionRepositoryTest {
 
     private final ContentSessionRepository contentSessionRepository;

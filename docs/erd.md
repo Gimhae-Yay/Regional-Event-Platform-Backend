@@ -85,7 +85,7 @@ erDiagram
 | `region` | 서비스 지역의 코드·이름·공개 여부를 관리하는 기준 테이블이다. 콘텐츠, 회차, 예약 운영과 지역 권한의 범위를 정한다. |
 | `app_user` | 로그인 식별자, 비밀번호 해시, 프로필과 회원 처리 상태를 보관하는 계정의 기준 테이블이다. 탈퇴가 완료되면 행을 남기지 않는다. |
 | `user_role_assignment` | 회원에게 부여된 `VISITOR`, `OPERATOR`, `REGION_ADMIN` 역할과 담당 지역을 분리해 관리한다. 한 역할당 담당 지역은 최대 한 곳이다. |
-| `operator_application` | 방문자가 운영자 역할과 담당 지역을 신청한 사실, 심사 결과와 사유를 보관한다. 탈퇴 후에는 신청자 연결과 사업자 개인정보를 제거한다. |
+| `operator_application` | 회원가입에서 `OPERATOR`를 선택한 활성 회원이 요청 지역과 사업자 정보를 제출한 사실, 심사 결과와 사유를 보관한다. 승인 전에는 운영자 역할을 부여하지 않으며, 탈퇴 후에는 신청자 연결과 사업자 개인정보를 제거한다. |
 
 #### 콘텐츠·회차·이미지
 
@@ -260,6 +260,7 @@ erDiagram
 - `role = VISITOR`이면 `region_id IS NULL`, `role IN (OPERATOR, REGION_ADMIN)`이면
   `region_id IS NOT NULL`이어야 한다.
 - 운영자 승인 성공 시 `OPERATOR` 역할과 요청 지역 배정을 한 트랜잭션에서 생성한다.
+- 회원가입에서 `OPERATOR`를 선택하면 새 활성 회원과 요청 지역·사업자 정보를 가진 `PENDING` 운영자 신청을 한 트랜잭션에서 생성한다. 이때 `VISITOR`, `OPERATOR` 역할을 생성하지 않는다.
 - 지역 관리자 연결은 승인된 배포 초기화로만 생성한다. 일반 API로 `region` 또는
   `REGION_ADMIN` 배정을 생성·변경하지 않는다.
 - 운영자 신청은 반려 뒤 재신청할 때 새 행을 생성한다.
@@ -480,7 +481,7 @@ erDiagram
 
     reservation {
         bigint reservation_id PK
-        string reservation_no "고유 범위 미확정"
+        string reservation_no UK
         string qr_reference UK
         bigint region_id FK
         bigint hold_id FK, UK
@@ -586,8 +587,9 @@ erDiagram
   명시적 회차 취소가 없으면 유지한다.
 - 회차가 `CANCELLED`로 전환되면 신규 홀드·예약 확정·QR 발급·새 스캔을 차단하고,
   `ACTIVE` 홀드와 미체크인 `CONFIRMED` 예약만 정책에 따라 종결한다.
-- `reservation_no`는 예약 번호 보조 조회에 필요하지만 P0 문서가 고유 범위를 확정하지 않았다.
-  범위를 확정하기 전에는 전역 `UNIQUE`를 가정하지 않는다.
+- `reservation_no`는 시스템 전체에서 유일한 예약 번호다. QR 실패 시 운영자가 예약 번호만으로
+  정확히 한 예약을 보조 조회할 수 있도록 `UNIQUE` 제약을 둔다. 번호 형식은 서버가 생성하며
+  이름·연락처·`user_id`를 포함하지 않는다.
 - `qr_reference`는 QR에 넣는 불투명 예약 참조다. 이름·연락처·`user_id`를 QR에 넣지 않는다.
 - QR은 체크인 창에서 온디맨드로 서명하므로 `qr_token` 테이블을 만들지 않는다.
 
@@ -721,6 +723,7 @@ erDiagram
 | 원본 대표 이미지 | `content(representative_image_object_id)` | 콘텐츠별 현재 대표 이미지 객체 최대 한 개 |
 | 수정본 대표 이미지 | `content_revision(candidate_image_object_id)` | 수정본별 후보 대표 이미지 객체 최대 한 개 |
 | 예약 변환 | `reservation(hold_id)` | 한 홀드당 예약 최대 한 건 |
+| 예약 번호 | `reservation(reservation_no)` | QR 실패 보조 조회에서 예약 한 건 식별 |
 | QR 참조 | `reservation(qr_reference)` | 불투명 QR 참조로 예약 한 건 식별 |
 | 방문 | `visit(reservation_id)` | 예약당 방문 최대 한 건 |
 | 후기 | `review(visit_id)` | 방문당 후기 최대 한 건 |
@@ -795,7 +798,7 @@ MySQL 복합 FK를 사용하려면 상위 테이블에 대응하는 `UNIQUE` 후
 | 탈퇴 대상 활성 홀드 | `capacity_hold(user_id, status)` |
 | 사용자 예약 목록 | `reservation(user_id, status, confirmed_at)` |
 | 회차 예약자 목록·노쇼 | `reservation(session_id, status)` |
-| 예약 번호 보조 조회 | 예약 번호의 고유 범위가 확정된 뒤 `reservation_no` 선두 인덱스 정의 |
+| 예약 번호 보조 조회 | `reservation(reservation_no)` |
 | 멱등 기록 정리 | `idempotency_record(status, expires_at)` |
 | 방문 운영 조회 | `visit(region_id, content_id, session_id, checked_at)` |
 | 공개 후기 목록 | `review(content_id, status, created_at)` |
@@ -879,7 +882,7 @@ SQL의 단순 cascade가 아래 업무 순서를 대신해서는 안 된다.
 | 미확정 항목 | 필요한 결정 | 현재 ERD 처리 |
 | --- | --- | --- |
 | 가입·프로필 필드 | 로그인 식별자 형식, 이름·연락처 validation과 길이 | 논리 필드만 표현 |
-| 사업자 정보 | 세부 필드, 암호화·마스킹·보관 방식 | `business_information` 논리 값으로 표현 |
+| 사업자 정보 | 세부 필드, 암호화·마스킹·보관 방식 | 회원가입 API는 비어 있지 않은 `business_information` 텍스트를 받으며, ERD는 논리 값으로 표현 |
 | 역할 중첩 | 한 사용자의 복수 역할 허용·금지 | 역할별 한 행은 허용하되 상호 배타 제약 없음 |
 | 콘텐츠 임시 저장 | 별도 `DRAFT` 저장 여부 | 확정 상태에 없는 `DRAFT`를 추가하지 않음 |
 | 승인된 `publish_at` 변경 요청 | 요청·심사 상태와 저장 모델 | 별도 엔티티를 추정하지 않음 |
@@ -888,7 +891,6 @@ SQL의 단순 cascade가 아래 업무 순서를 대신해서는 안 된다.
 | `SUSPENDED` 후속 전이 | 재개·종료·철회 가능 여부 | 후속 전이를 추가하지 않음 |
 | 콘텐츠 종료 판정 기준 | 별도 종료 예정일, 마지막 회차 종료 또는 정상 종료의 구체 조건 | `content_log.status = ENDED`의 `date`만 기록하고 별도 `ended_at` 컬럼은 두지 않음 |
 | 공개 회차 수정 | 수정 가능한 일정·정원 필드 | 회차 리비전 테이블 제외 |
-| 예약 번호 | 형식과 전역·지역·콘텐츠·회차별 고유 범위 | 컬럼만 두고 유일 제약 보류 |
 | 별점·후기 validation | 별점 범위, 텍스트 길이·빈 값 허용 | 논리 타입만 표현 |
 | QR 운영 설정 | 토큰 TTL, 키 회전 유예 | 비영속 설정으로 유지 |
 | 멱등 운영 설정 | 보관 기간, 저장할 실패 종류·결과 코드 | 논리 필드만 표현 |
