@@ -15,6 +15,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
@@ -122,6 +123,9 @@ public class CapacityHold {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    @OneToOne(mappedBy = "capacityHold", fetch = FetchType.LAZY)
+    private Reservation reservation;
+
     protected CapacityHold() {
     }
 
@@ -196,6 +200,17 @@ public class CapacityHold {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public Reservation getReservation() {
+        return reservation;
+    }
+
+    void assignReservation(Reservation reservation) {
+        if (this.reservation != null && this.reservation != reservation) {
+            throw new IllegalStateException("capacity hold already has a reservation");
+        }
+        this.reservation = reservation;
     }
 
     private static <T> T requireNotNull(T value, String fieldName) {
