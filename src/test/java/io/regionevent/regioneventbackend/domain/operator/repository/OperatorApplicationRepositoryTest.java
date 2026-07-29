@@ -199,6 +199,29 @@ class OperatorApplicationRepositoryTest {
     }
 
     @Test
+    void 상태_카탈로그_밖의_값을_데이터베이스_제약으로_거부한다() {
+        AppUser applicant = saveUser("unknown-status-applicant@example.com");
+        Region region = saveRegion();
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+            """
+                INSERT INTO operator_application (
+                    applicant_user_id,
+                    requested_region_id,
+                    business_information,
+                    status,
+                    created_at,
+                    updated_at
+                ) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """,
+            applicant.getUserId(),
+            region.getRegionId(),
+            "사업자 정보",
+            "UNKNOWN"
+        )).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
     void 신청자와_심사자와_요청_지역을_지연_로딩으로_매핑한다() {
         AppUser applicant = saveUser("lazy-applicant@example.com");
         AppUser inspector = saveUser("lazy-inspector@example.com");

@@ -26,6 +26,10 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
     name = "operator_application",
     check = {
         @CheckConstraint(
+            name = "ck_operator_application_status",
+            constraint = "status REGEXP '^(PENDING|APPROVED|REJECTED|CANCELLED)$'"
+        ),
+        @CheckConstraint(
             name = "ck_operator_application_approved_review_result",
             constraint = """
                 status <> 'APPROVED'

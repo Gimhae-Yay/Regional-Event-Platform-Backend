@@ -9,6 +9,8 @@ CREATE TABLE operator_application (
     created_at TIMESTAMP(6) NOT NULL,
     updated_at TIMESTAMP(6) NOT NULL,
     CONSTRAINT pk_operator_application PRIMARY KEY (operator_application_id),
+    CONSTRAINT ck_operator_application_status
+        CHECK (status REGEXP '^(PENDING|APPROVED|REJECTED|CANCELLED)$'),
     CONSTRAINT fk_operator_application_applicant_user
         FOREIGN KEY (applicant_user_id) REFERENCES app_user (user_id),
     CONSTRAINT fk_operator_application_requested_region
