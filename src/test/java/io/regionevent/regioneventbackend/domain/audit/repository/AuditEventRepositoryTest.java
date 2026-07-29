@@ -21,6 +21,7 @@ import org.springframework.test.context.TestPropertySource;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEvent;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventActorLink;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -115,6 +116,38 @@ class AuditEventRepositoryTest {
     }
 
     @Test
+    void 감사_대상_유형은_비개인_도메인으로만_제한한다() {
+        assertThat(AuditEventTargetType.values()).containsExactly(
+            AuditEventTargetType.REGION,
+            AuditEventTargetType.OPERATOR_APPLICATION,
+            AuditEventTargetType.CONTENT,
+            AuditEventTargetType.CONTENT_SESSION,
+            AuditEventTargetType.RESERVATION,
+            AuditEventTargetType.VISIT,
+            AuditEventTargetType.REVIEW
+        );
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+            """
+                INSERT INTO audit_event (
+                    request_id,
+                    target_type,
+                    target_id,
+                    result,
+                    actor_kind,
+                    occurred_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+            "00000000-0000-0000-0000-000000000004",
+            "APP_USER",
+            1L,
+            "SUCCESS",
+            "SYSTEM",
+            Timestamp.from(Instant.parse("2026-07-29T00:00:00Z"))
+        )).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
     void 사용자_actor는_감사_이벤트와_분리된_연결_테이블에_저장한다() {
         AppUser actor = appUserRepository.saveAndFlush(new AppUser(
             "actor@example.com",
@@ -155,7 +188,7 @@ class AuditEventRepositoryTest {
         return new AuditEvent(
             "00000000-0000-0000-0000-000000000001",
             region,
-            "CONTENT",
+            AuditEventTargetType.CONTENT,
             101L,
             "PENDING",
             "PUBLISHED",

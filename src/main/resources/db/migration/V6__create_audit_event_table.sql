@@ -20,6 +20,18 @@ CREATE TABLE audit_event (
             WHEN 'FAILURE' THEN TRUE
             ELSE FALSE
         END
+    ),
+    CONSTRAINT ck_audit_event_target_type CHECK (
+        CASE target_type
+            WHEN 'REGION' THEN TRUE
+            WHEN 'OPERATOR_APPLICATION' THEN TRUE
+            WHEN 'CONTENT' THEN TRUE
+            WHEN 'CONTENT_SESSION' THEN TRUE
+            WHEN 'RESERVATION' THEN TRUE
+            WHEN 'VISIT' THEN TRUE
+            WHEN 'REVIEW' THEN TRUE
+            ELSE FALSE
+        END
     )
 );
 

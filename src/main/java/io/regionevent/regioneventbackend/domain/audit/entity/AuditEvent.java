@@ -37,7 +37,8 @@ public class AuditEvent {
     private Region region;
 
     @Column(name = "target_type", nullable = false, length = 50)
-    private String targetType;
+    @Enumerated(EnumType.STRING)
+    private AuditEventTargetType targetType;
 
     @Column(name = "target_id")
     private Long targetId;
@@ -70,7 +71,7 @@ public class AuditEvent {
     public AuditEvent(
         String requestId,
         Region region,
-        String targetType,
+        AuditEventTargetType targetType,
         Long targetId,
         String previousState,
         String nextState,
@@ -82,7 +83,7 @@ public class AuditEvent {
     ) {
         this.requestId = requireNotBlank(requestId, "requestId");
         this.region = region;
-        this.targetType = requireNotBlank(targetType, "targetType");
+        this.targetType = requireNotNull(targetType, "targetType");
         this.targetId = targetId;
         this.previousState = previousState;
         this.nextState = nextState;
@@ -105,7 +106,7 @@ public class AuditEvent {
         return region;
     }
 
-    public String getTargetType() {
+    public AuditEventTargetType getTargetType() {
         return targetType;
     }
 
