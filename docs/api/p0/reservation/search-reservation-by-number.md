@@ -65,15 +65,15 @@ Accept: application/json
   "code": "SUCCESS",
   "message": "예약번호 보조 조회에 성공했습니다.",
   "data": {
-    "reservationId": 123,
+    "reservationId": "123",
     "reservationNo": "R202607290001",
     "status": "CONFIRMED",
     "content": {
-      "contentId": 789,
+      "contentId": "789",
       "title": "김해 가야문화 체험"
     },
     "session": {
-      "sessionId": 456,
+      "sessionId": "456",
       "status": "SCHEDULED",
       "startsAt": "2026-08-01T10:00:00+09:00",
       "endsAt": "2026-08-01T12:00:00+09:00",
@@ -100,12 +100,12 @@ Accept: application/json
 | `statusCode` | Number | HTTP 상태 코드. 항상 `200` |
 | `code` | String | 성공 코드. 항상 `SUCCESS` |
 | `message` | String | 공개 성공 메시지 |
-| `data.reservationId` | Long | 예약 식별자 |
+| `data.reservationId` | String | 예약 식별자 |
 | `data.reservationNo` | String | 시스템 전체에서 유일한 예약 번호 |
 | `data.status` | String | 예약 상태. `CONFIRMED`, `CHECKED_IN`, `CANCELLED`, `EXPIRED` 중 하나 |
-| `data.content.contentId` | Long | 예약 콘텐츠 식별자 |
+| `data.content.contentId` | String | 예약 콘텐츠 식별자 |
 | `data.content.title` | String | 예약 콘텐츠 제목 |
-| `data.session.sessionId` | Long | 예약 회차 식별자 |
+| `data.session.sessionId` | String | 예약 회차 식별자 |
 | `data.session.status` | String | 회차 상태. `SCHEDULED`, `COMPLETED`, `CANCELLED` 중 하나 |
 | `data.session.startsAt` | String | 회차 시작 시각 |
 | `data.session.endsAt` | String | 회차 종료 시각 |
@@ -115,7 +115,7 @@ Accept: application/json
 | `data.participant.phone` | String or null | 예약자 연락처. `010-****-1234` 형식으로 마스킹하며, 작성자 연결이 해제된 경우 `null` |
 | `data.checkIn.checkedIn` | Boolean | 예약 상태가 `CHECKED_IN`이면 `true`, 그 외에는 `false` |
 | `data.checkIn.canCheckIn` | Boolean | 운영자 조회에서 현재 소유권·회차 상태·예약 상태·체크인 창을 모두 만족해 체크인을 시작할 수 있으면 `true`. 지역 관리자 조회에서는 항상 `false` |
-| `data.checkIn.checkedAt` | String or null | `checkedIn = true`인 경우 방문 기록의 체크인 시각. 그 외에는 `null` |
+| `data.checkIn.checkedAt` | String or null | `checkedIn = true`인 경우 방문 기록의 체크인 시각. 그 외에는 `null` API 공통 규칙에 따른 UTC ISO 8601 일시다. |
 
 `qr_reference`, QR 토큰, 사용자 식별자, 원문 이름·연락처와 다른 예약자의 정보는 응답에 포함하지 않는다.
 

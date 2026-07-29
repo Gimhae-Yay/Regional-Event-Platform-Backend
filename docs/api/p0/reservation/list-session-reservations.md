@@ -37,13 +37,13 @@ Accept: application/json
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `contentId` | Long | Y | 예약자 목록을 조회할 콘텐츠 식별자. 양수여야 한다. |
+| `contentId` | String | Y | 예약자 목록을 조회할 콘텐츠 식별자. 양수여야 한다. |
 
 #### Query Parameter
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `sessionId` | Long | Y | `contentId`에 속한 회차 식별자. 양수여야 한다. |
+| `sessionId` | String | Y | `contentId`에 속한 회차 식별자. 양수여야 한다. |
 
 #### Request Body
 
@@ -65,9 +65,9 @@ Accept: application/json
   "code": "SUCCESS",
   "message": "회차별 예약자 목록 조회에 성공했습니다.",
   "data": {
-    "contentId": 789,
+    "contentId": "789",
     "session": {
-      "sessionId": 456,
+      "sessionId": "456",
       "status": "SCHEDULED",
       "startsAt": "2026-08-01T10:00:00+09:00",
       "endsAt": "2026-08-01T12:00:00+09:00",
@@ -76,11 +76,11 @@ Accept: application/json
     },
     "reservations": [
       {
-        "reservationId": 123,
+        "reservationId": "123",
         "reservationNo": "R202607290001",
         "status": "CONFIRMED",
         "quantity": 2,
-        "confirmedAt": "2026-07-29T12:00:00+09:00",
+        "confirmedAt": "2026-07-29T03:00:00Z",
         "participant": {
           "name": "김*수",
           "phone": "010-****-1234"
@@ -102,23 +102,23 @@ Accept: application/json
 | `statusCode` | Number | HTTP 상태 코드. 항상 `200` |
 | `code` | String | 성공 코드. 항상 `SUCCESS` |
 | `message` | String | 공개 성공 메시지 |
-| `data.contentId` | Long | 조회한 콘텐츠 식별자 |
-| `data.session.sessionId` | Long | 조회한 회차 식별자 |
+| `data.contentId` | String | 조회한 콘텐츠 식별자 |
+| `data.session.sessionId` | String | 조회한 회차 식별자 |
 | `data.session.status` | String | 회차 상태. `SCHEDULED`, `COMPLETED`, `CANCELLED` 중 하나 |
 | `data.session.startsAt` | String | 회차 시작 시각 |
 | `data.session.endsAt` | String | 회차 종료 시각 |
 | `data.session.checkinOpenAt` | String | 체크인 가능 시작 시각 |
 | `data.session.checkinCloseAt` | String | 체크인 가능 종료 시각 |
 | `data.reservations` | Array | 회차 예약 목록. 예약이 없으면 빈 배열 `[]` |
-| `data.reservations[].reservationId` | Long | 예약 식별자 |
+| `data.reservations[].reservationId` | String | 예약 식별자 |
 | `data.reservations[].reservationNo` | String | 시스템 전체에서 유일한 예약 번호 |
 | `data.reservations[].status` | String | 예약 상태. `CONFIRMED`, `CHECKED_IN`, `CANCELLED`, `EXPIRED` 중 하나 |
 | `data.reservations[].quantity` | Integer | 예약 확정에 사용한 홀드 인원. 항상 양수 |
-| `data.reservations[].confirmedAt` | String | 예약 확정 시각 |
+| `data.reservations[].confirmedAt` | String | 예약 확정 시각. API 공통 규칙에 따른 UTC ISO 8601 일시다. |
 | `data.reservations[].participant.name` | String | 예약자 이름. `김*수` 형식으로 마스킹하며, 사용자 연결이 해제된 경우 `탈퇴한 사용자` |
 | `data.reservations[].participant.phone` | String or null | 예약자 연락처. `010-****-1234` 형식으로 마스킹하며, 사용자 연결이 해제된 경우 `null` |
 | `data.reservations[].checkIn.checkedIn` | Boolean | 예약 상태가 `CHECKED_IN`이면 `true`, 그 외에는 `false` |
-| `data.reservations[].checkIn.checkedAt` | String or null | `checkedIn = true`인 경우 방문 기록의 체크인 시각. 그 외에는 `null` |
+| `data.reservations[].checkIn.checkedAt` | String or null | `checkedIn = true`인 경우 방문 기록의 체크인 시각. 그 외에는 `null` API 공통 규칙에 따른 UTC ISO 8601 일시다. |
 
 `qr_reference`, QR 토큰, 사용자 식별자와 이름·연락처 원문은 응답에 포함하지 않는다.
 

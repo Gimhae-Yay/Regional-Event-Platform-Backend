@@ -33,7 +33,7 @@ Accept: application/json
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `regionId` | Long | Y | 홈을 조회할 공개 지역 식별자. 양수여야 한다. |
+| `regionId` | String | Y | 홈을 조회할 공개 지역 식별자. 양수여야 한다. |
 
 #### Query Parameter
 
@@ -64,21 +64,21 @@ Accept: application/json
   "message": "지역 홈 조회에 성공했습니다.",
   "data": {
     "region": {
-      "regionId": 1,
+      "regionId": "1",
       "regionCode": "GIMHAE",
       "name": "김해시"
     },
     "ongoingContents": [
       {
-        "contentId": 101,
+        "contentId": "101",
         "contentType": "EVENT_EXPERIENCE",
         "title": "김해 가야문화 체험",
         "locationText": "김해시 가야의길 190",
         "representativeImageUrl": "https://s3.ap-northeast-2.amazonaws.com/example-bucket/contents/101/image?X-Amz-Signature=...",
-        "representativeImageUrlExpiresAt": "2026-07-29T12:05:00+09:00",
+        "representativeImageUrlExpiresAt": "2026-07-29T03:05:00Z",
         "reservationAvailable": true,
         "displaySession": {
-          "sessionId": 1001,
+          "sessionId": "1001",
           "startsAt": "2026-07-29T10:00:00+09:00",
           "endsAt": "2026-07-29T12:00:00+09:00",
           "remainingCapacity": 4
@@ -87,15 +87,15 @@ Accept: application/json
     ],
     "upcomingContents": [
       {
-        "contentId": 102,
+        "contentId": "102",
         "contentType": "EVENT_EXPERIENCE",
         "title": "낙동강 생태 체험",
         "locationText": "김해시 생림면 일대",
         "representativeImageUrl": "https://s3.ap-northeast-2.amazonaws.com/example-bucket/contents/102/image?X-Amz-Signature=...",
-        "representativeImageUrlExpiresAt": "2026-07-29T12:05:00+09:00",
+        "representativeImageUrlExpiresAt": "2026-07-29T03:05:00Z",
         "reservationAvailable": true,
         "displaySession": {
-          "sessionId": 1002,
+          "sessionId": "1002",
           "startsAt": "2026-08-02T14:00:00+09:00",
           "endsAt": "2026-08-02T16:00:00+09:00",
           "remainingCapacity": 12
@@ -113,30 +113,30 @@ Accept: application/json
 | `statusCode` | Number | HTTP 상태 코드. 항상 `200` |
 | `code` | String | 성공 코드. 항상 `SUCCESS` |
 | `message` | String | 공개 성공 메시지 |
-| `data.region.regionId` | Long | 조회한 공개 지역 식별자 |
+| `data.region.regionId` | String | 조회한 공개 지역 식별자 |
 | `data.region.regionCode` | String | 시스템에서 사용하는 지역 코드 |
 | `data.region.name` | String | 사용자에게 표시할 지역명 |
 | `data.ongoingContents` | Array | 현재 진행 중인 회차가 있는 공개 콘텐츠 목록. 결과가 없으면 빈 배열 `[]` |
 | `data.upcomingContents` | Array | 진행 중인 회차가 없고 향후 회차가 있는 공개 콘텐츠 목록. 결과가 없으면 빈 배열 `[]` |
-| `data.ongoingContents[].contentId` | Long | 콘텐츠 식별자 |
+| `data.ongoingContents[].contentId` | String | 콘텐츠 식별자 |
 | `data.ongoingContents[].contentType` | String | 콘텐츠 유형. P0에서는 항상 `EVENT_EXPERIENCE` |
 | `data.ongoingContents[].title` | String | 콘텐츠 제목 |
 | `data.ongoingContents[].locationText` | String | 콘텐츠 위치 안내 |
 | `data.ongoingContents[].representativeImageUrl` | String | 권한·공개 상태 확인 후 발급한 현재 대표 이미지의 단기 presigned GET URL |
-| `data.ongoingContents[].representativeImageUrlExpiresAt` | String | 대표 이미지 조회 URL 만료 시각 |
+| `data.ongoingContents[].representativeImageUrlExpiresAt` | String | 대표 이미지 조회 URL 만료 시각. API 공통 규칙에 따른 UTC ISO 8601 일시다. |
 | `data.ongoingContents[].reservationAvailable` | Boolean | 예약 가능한 향후 회차가 하나 이상 존재하는지 여부 |
-| `data.ongoingContents[].displaySession.sessionId` | Long | 홈에 표시할 진행 중인 회차 식별자 |
+| `data.ongoingContents[].displaySession.sessionId` | String | 홈에 표시할 진행 중인 회차 식별자 |
 | `data.ongoingContents[].displaySession.startsAt` | String | 표시 회차 시작 시각 |
 | `data.ongoingContents[].displaySession.endsAt` | String | 표시 회차 종료 시각 |
 | `data.ongoingContents[].displaySession.remainingCapacity` | Integer | 표시 회차 잔여 정원. 0 이상 |
-| `data.upcomingContents[].contentId` | Long | 콘텐츠 식별자 |
+| `data.upcomingContents[].contentId` | String | 콘텐츠 식별자 |
 | `data.upcomingContents[].contentType` | String | 콘텐츠 유형. P0에서는 항상 `EVENT_EXPERIENCE` |
 | `data.upcomingContents[].title` | String | 콘텐츠 제목 |
 | `data.upcomingContents[].locationText` | String | 콘텐츠 위치 안내 |
 | `data.upcomingContents[].representativeImageUrl` | String | 권한·공개 상태 확인 후 발급한 현재 대표 이미지의 단기 presigned GET URL |
-| `data.upcomingContents[].representativeImageUrlExpiresAt` | String | 대표 이미지 조회 URL 만료 시각 |
+| `data.upcomingContents[].representativeImageUrlExpiresAt` | String | 대표 이미지 조회 URL 만료 시각. API 공통 규칙에 따른 UTC ISO 8601 일시다. |
 | `data.upcomingContents[].reservationAvailable` | Boolean | 예약 가능한 향후 회차가 하나 이상 존재하는지 여부 |
-| `data.upcomingContents[].displaySession.sessionId` | Long | 홈에 표시할 가장 가까운 향후 회차 식별자 |
+| `data.upcomingContents[].displaySession.sessionId` | String | 홈에 표시할 가장 가까운 향후 회차 식별자 |
 | `data.upcomingContents[].displaySession.startsAt` | String | 표시 회차 시작 시각 |
 | `data.upcomingContents[].displaySession.endsAt` | String | 표시 회차 종료 시각 |
 | `data.upcomingContents[].displaySession.remainingCapacity` | Integer | 표시 회차 잔여 정원. 0 이상 |
