@@ -3,7 +3,7 @@
 | 항목 | 내용 |
 | --- | --- |
 | 대상 릴리스 | P0 |
-| 관련 요구사항 | [FR-01 인증·역할·지역 권한](../../../p0/auth-profile.md#fr-01-인증역할지역-권한), [PRV-01](../../../p0/auth-profile.md#prv-01), [PRV-02](../../../p0/auth-profile.md#prv-02) |
+| 관련 요구사항 | [FR-01 인증·역할·지역 권한](../../../p0/auth-profile.md#fr-01-인증역할지역-권한), [FR-09 운영자 승인·정보 마스킹](../../../p0/auth-profile.md#fr-09-운영자-승인정보-마스킹), [PRV-01](../../../p0/auth-profile.md#prv-01), [PRV-02](../../../p0/auth-profile.md#prv-02) |
 | 소유 도메인 | 인증·프로필 |
 | 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [API 공통 계약](../../common/README.md) |
 
@@ -26,6 +26,12 @@
 | FR-01 | `POST /api/v1/auth/refresh` | Redis Refresh Token 계열 |
 | FR-01 | `POST /api/v1/auth/logout` | Redis Refresh Token 계열 폐기 키 |
 | FR-01, PRV-01, PRV-02 | `DELETE /api/v1/auth/delete` | `app_user`, 역할·소유 관계, `operator_application`, Redis Refresh Token 계열 |
+| FR-01, AUTH-01 | `GET /api/v1/me` | `app_user`, `user_role_assignment`, `region` |
+| FR-09, AUTH-02 | `POST /api/v1/operator/operator-requests` | `operator_application`, `region` |
+| FR-09, AUTH-02 | `GET /api/v1/region-admin/operator-requests?status=PENDING` | `operator_application`, `user_role_assignment`, `region` |
+| FR-09, AUTH-02 | `GET /api/v1/region-admin/operator-requests/{requestId}` | `operator_application`, `user_role_assignment`, `region` |
+| FR-09, AUTH-02 | `POST /api/v1/region-admin/operator-requests/{requestId}/approve` | `app_user`, `user_role_assignment`, `operator_application` |
+| FR-09, AUTH-02 | `POST /api/v1/region-admin/operator-requests/{requestId}/reject` | `operator_application`, `user_role_assignment` |
 
 ## 2. 공통 계약 참조
 
@@ -45,3 +51,9 @@
 | Access Token 재발급 | `POST /api/v1/auth/refresh` | [refresh.md](refresh.md) |
 | Refresh Token 계열 폐기 로그아웃 | `POST /api/v1/auth/logout` | [logout.md](logout.md) |
 | 본인 회원탈퇴 | `DELETE /api/v1/auth/delete` | [withdrawal.md](withdrawal.md) |
+| 내 역할·담당 지역 조회 | `GET /api/v1/me` | [me.md](me.md) |
+| 운영자 권한 신청 | `POST /api/v1/operator/operator-requests` | [operator-request.md](operator-request.md) |
+| 운영자 신청 대기 목록 조회 | `GET /api/v1/region-admin/operator-requests?status=PENDING` | [pending-operator-requests.md](pending-operator-requests.md) |
+| 운영자 신청 상세 조회 | `GET /api/v1/region-admin/operator-requests/{requestId}` | [operator-request-detail.md](operator-request-detail.md) |
+| 운영자 신청 승인 | `POST /api/v1/region-admin/operator-requests/{requestId}/approve` | [operator-request-approve.md](operator-request-approve.md) |
+| 운영자 신청 반려 | `POST /api/v1/region-admin/operator-requests/{requestId}/reject` | [operator-request-reject.md](operator-request-reject.md) |
