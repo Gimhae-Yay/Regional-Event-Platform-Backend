@@ -33,6 +33,10 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
     name = "reservation",
     uniqueConstraints = {
         @UniqueConstraint(
+            name = "uk_reservation_reservation_no",
+            columnNames = "reservation_no"
+        ),
+        @UniqueConstraint(
             name = "uk_reservation_qr_reference",
             columnNames = "qr_reference"
         ),

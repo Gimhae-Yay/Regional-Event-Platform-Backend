@@ -252,6 +252,45 @@ class ReservationRepositoryTest {
         )).isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    @Test
+    void 예약번호는_지역과_회차와_홀드가_달라도_전역에서_유일하다() {
+        ReservationFixtures firstFixtures = createFixtures();
+        CapacityHold firstHold = saveConsumedHold(firstFixtures);
+        reservationRepository.saveAndFlush(newReservation(
+            "R-20260802-001",
+            "qr-reference-001",
+            firstFixtures.region(),
+            firstHold,
+            firstFixtures.contentSession(),
+            firstFixtures.user(),
+            ReservationStatus.CONFIRMED,
+            null,
+            null,
+            null
+        ));
+
+        Region anotherRegion = saveRegion("BUSAN");
+        ContentSession anotherContentSession = saveContentSession(anotherRegion);
+        CapacityHold anotherHold = capacityHoldRepository.saveAndFlush(new CapacityHold(
+            anotherRegion,
+            anotherContentSession,
+            firstFixtures.user(),
+            1,
+            CapacityHoldStatus.CONSUMED,
+            CONFIRMED_AT,
+            TERMINAL_AT,
+            null,
+            null
+        ));
+
+        assertThatThrownBy(() -> insertReservation(
+            "R-20260802-001",
+            "qr-reference-002",
+            anotherHold,
+            new ReservationFixtures(anotherRegion, anotherContentSession, firstFixtures.user())
+        )).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
     private Reservation newReservation(
         String reservationNo,
         String qrReference,
