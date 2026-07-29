@@ -1,4 +1,4 @@
-## 3. 예약번호 보조 조회 후 체크인
+## 7. 예약번호 보조 조회 후 체크인
 
 QR을 표시할 수 없거나 검증에 실패한 현장에서 소유 운영자가 예약번호 보조 조회 결과를 이용해 체크인을 완료한다.
 성공하면 예약을 `CHECKED_IN`으로 전환하고 `RESERVATION_NUMBER` 방식의 방문 기록을 한 건 생성한다.
@@ -71,17 +71,17 @@ Accept: application/json
 #### Status
 
 ```http
-201 Created
+200 OK
 ```
 
 같은 `Idempotency-Key`, 운영자, 예약번호와 사유로 완료된 요청을 재시도하면 방문과 예약 상태를 다시 변경하지 않고
-최초 성공과 동일한 `201 Created`와 저장된 결과를 반환한다.
+최초 성공과 동일한 `200 OK`와 저장된 결과를 반환한다.
 
 #### Response Body
 
 ```json
 {
-  "statusCode": 201,
+  "statusCode": 200,
   "code": "SUCCESS",
   "message": "예약번호 보조 체크인에 성공했습니다.",
   "data": {
@@ -99,7 +99,7 @@ Accept: application/json
 
 | Name | Type | Description |
 | --- | --- | --- |
-| `statusCode` | Number | HTTP 상태 코드. 항상 `201` |
+| `statusCode` | Number | HTTP 상태 코드. 항상 `200` |
 | `code` | String | 성공 코드. 항상 `SUCCESS` |
 | `message` | String | 공개 성공 메시지 |
 | `data.visitId` | Long | 생성되었거나 멱등 재사용한 방문 식별자 |
@@ -139,7 +139,7 @@ Accept: application/json
 1. 인증 주체는 `ACTIVE` 상태이며 승인된 `OPERATOR` 역할과 담당 `region_id`를 가진 회원이어야 한다. `REGION_ADMIN`은 이 명령을 호출할 수 없다.
 2. `reservation_no`로 예약을 조회한 뒤 예약·회차·콘텐츠의 지역이 인증 운영자의 담당 지역과 일치하고, 콘텐츠의 `operator_id`가 인증 운영자와 일치하는지 검증한다.
 3. 보조 조회의 `canCheckIn` 값이나 이전 조회 시각을 체크인 승인 근거로 사용하지 않는다. 이 명령의 MySQL 트랜잭션에서 현재 상태를 다시 검증한다.
-4. `reason`은 `QR_NOT_AVAILABLE` 또는 `QR_SCAN_FAILED`여야 하며 감사 기록에는 선택한 사유를 그대로 기록한다.
+4. `reason`은 `QR_NOT_AVAILABLE` 또는 `QR_SCAN_FAILED`여야 하며 감사 기록의 복합 사유 코드에 선택한 현장 사유를 포함한다.
 5. `Idempotency-Key` 헤더 값을 `checkInRequestId`로 사용하며 논리 유일 범위는 `(actor_user_id, operation = CHECK_IN, idempotency_key_hash)`다.
 6. 같은 키와 같은 운영자·예약·방식·사유의 `SUCCEEDED` 기록이 있으면 `result_visit_id`로 최초 성공 응답을 재구성한다. 예약 상태 전이와 방문 생성을 다시 실행하지 않는다.
 7. 같은 키를 다른 예약·체크인 방식·사유에 재사용하면 `409 IDEMPOTENCY_KEY_CONFLICT`로 거부한다.
@@ -155,8 +155,34 @@ Accept: application/json
 
 ### 감사 및 정합성
 
+#### 감사 사유 코드
+
+`audit_event.reason_code`는 `MANUAL_CHECK_IN_{handlingReason}_{outcome}` 형식을 사용해 현장 확인 사유와 최종
+처리 결과를 한 값에 함께 보존한다.
+
+| 구성 요소 | 허용 값 | 의미 |
+| --- | --- | --- |
+| `handlingReason` | `QR_NOT_AVAILABLE`, `QR_SCAN_FAILED` | 운영자가 요청에서 선택한 현장 확인 사유 |
+| `outcome` | `SUCCESS` | 보조 체크인 성공 |
+| `outcome` | `NOT_FOUND` | 예약번호에 해당하는 예약 부재 |
+| `outcome` | `REGION_FORBIDDEN`, `OWNER_FORBIDDEN` | 운영자 담당 지역 또는 콘텐츠 소유권 불일치 |
+| `outcome` | `MEMBER_UNLINKED` | 예약의 활성 회원 연결 부재 |
+| `outcome` | `RESERVATION_ALREADY_CHECKED_IN`, `RESERVATION_CANCELLED`, `RESERVATION_EXPIRED` | 예약 상태 충돌 |
+| `outcome` | `SESSION_CANCELLED`, `SESSION_COMPLETED` | 회차 상태 충돌 |
+| `outcome` | `WINDOW_NOT_OPEN`, `WINDOW_CLOSED` | 체크인 창 밖 |
+| `outcome` | `STATE_TRANSITION_CONFLICT` | 조건부 상태 전이 경합 패배 |
+| `outcome` | `RELATION_INCONSISTENT`, `VISIT_INCONSISTENT` | 예약·회차·콘텐츠·지역 또는 예약·방문 연결 불일치 |
+
+예를 들어 QR 스캔 실패 후 보조 체크인을 시도했지만 체크인 창이 종료됐다면
+`MANUAL_CHECK_IN_QR_SCAN_FAILED_WINDOW_CLOSED`를 기록한다.
+`outcome = SUCCESS`이면 `audit_event.result = SUCCESS`, 그 외 outcome이면 `audit_event.result = FAILURE`로 기록한다.
+
 - 멱등 키 점유, `reservation`의 `CONFIRMED → CHECKED_IN` 전이, `visit` 생성, 성공 멱등 결과와 성공 감사 이벤트는 하나의 MySQL 트랜잭션에서 커밋한다.
 - 성공 멱등 기록의 `operation`은 `CHECK_IN`, `status`는 `SUCCEEDED`, `result_visit_id`는 방문 식별자로 기록한다. `result_reservation_id`는 `null`이다.
 - `request_hash`는 예약 식별자, `RESERVATION_NUMBER` 방식과 사유를 포함한 정규화된 명령 의미로 계산하며 예약번호·이름·연락처 원문을 저장하지 않는다.
-- 성공 감사 이벤트는 처리자, 처리자 역할, 예약·회차·콘텐츠·지역·방문 식별자, 보조 체크인 사유, `CONFIRMED → CHECKED_IN`, 처리 시각을 재현할 수 있어야 한다.
+- 인증된 사용자 이벤트는 `actor_kind = USER`, `actor_role = OPERATOR`로 기록하고 `audit_event_actor_link`로 처리 운영자를 연결한다. 성공 이벤트의 actor 연결은 체크인 트랜잭션에서 함께 커밋하고, 실패 이벤트의 actor 연결은 롤백 완료 뒤 실패 감사 이벤트와 같은 독립 트랜잭션에서 커밋한다.
+- 성공 감사 이벤트는 `target_type = VISIT`, 생성한 방문 식별자, `region_id = reservation.region_id`, `MANUAL_CHECK_IN_{handlingReason}_SUCCESS` 사유, `CONFIRMED → CHECKED_IN`과 처리 시각을 기록한다. 예약·회차·콘텐츠는 방문의 검증된 관계에서 재현한다.
+- 예약을 확인한 권한·상태 실패는 `target_type = RESERVATION`, `target_id = reservation_id`, `region_id = reservation.region_id`와 `MANUAL_CHECK_IN_{handlingReason}_{outcome}` 사유로 기록한다.
+- 예약을 찾지 못한 실패는 `target_type = RESERVATION`, `target_id = null`, `region_id = 인증 운영자의 담당 지역`, `reason_code = MANUAL_CHECK_IN_{handlingReason}_NOT_FOUND`로 기록한다.
 - 감사 이벤트와 구조화 로그에는 `reservationNo`, 사용자 식별자, 이름·연락처 원문을 저장하지 않는다.
+- 공통 재시도·키 충돌·결과 재사용 판정은 [체크인 요청 멱등성](check-in-idempotency.md)을 따른다.
