@@ -3,7 +3,7 @@
 | 항목 | 내용 |
 | --- | --- |
 | 대상 릴리스 | P0 |
-| 관련 요구사항 | `FR-02`, `FR-04`, `FR-06`, `AUTH-01`, `CON-01`, `CON-02`, `CON-03`, `CON-04`, `SES-01`, `SES-02`, `RSV-02`, `RSV-06` |
+| 관련 요구사항 | `FR-02`, `FR-04`, `FR-06`, `AUTH-01`, `CON-01`, `CON-02`, `CON-03`, `CON-04`, `CON-09`, `SES-01`, `SES-02`, `RSV-02`, `RSV-06` |
 | 소유 도메인 | 지역·콘텐츠 카탈로그 |
 | 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [정원 홀드·무료 예약](../../../p0/reservation.md), [인증·프로필](../../../p0/auth-profile.md), [ERD](../../../erd.md), [기술 스택](../../../local-stamp-platform-tech-stack.md), [ADR-0016](../../../adr/0016-use-private-s3-presigned-urls-and-immediate-image-deletion.md), [ADR-0029](../../../adr/0029-use-version-validated-cache-aside-for-public-content.md), [API 공통 계약](../../common/README.md) |
 
@@ -33,6 +33,10 @@
 | `FR-04` | `GET /region-admin/contents?status=PENDING` | `content`, `content_log`, `app_user` |
 | `AUTH-01` | `GET /region-admin/contents?status=PENDING` | `content.region_id`, `user_role_assignment.region_id` |
 | `CON-01` | `GET /region-admin/contents?status=PENDING` | `content.status`, `content.deleted_at` |
+| `CON-01`, `CON-09` | `POST /region-admin/contents/{contentId}/reject` | `content`, `content_log`, `audit_event` |
+| `CON-03`, `CON-09` | `POST /region-admin/contents/{contentId}/approve` | `content`, `content_log`, `audit_event` |
+| `CON-09` | `GET /region-admin/contents/{contentId}/history` | `content`, `content_log` |
+| `CON-02`, `CON-03` | `GET /region-admin/contents/{contentId}` | `content`, `content_session`, `content_representative_image` |
 | `FR-02`, `SES-01`, `SES-02` | `GET /contents/{contentId}/sessions` | `content`, `content_session` |
 | `FR-02`, `RSV-02`, `SES-01`, `SES-02` | `GET /sessions/{sessionId}` | `content`, `content_session` |
 | `FR-06`, `AUTH-01`, `RSV-06` | `POST /operator/sessions/{sessionId}/cancel` | `content`, `content_session`, `capacity_hold`, `reservation`, `audit_event`, `audit_event_actor_link` |
@@ -53,6 +57,10 @@
 | 공개 지역 목록 조회 | `GET /regions` | [list-public-regions.md](list-public-regions.md) |
 | 지역 홈·진행/임박 콘텐츠 조회 | `GET /regions/{regionId}/home` | [get-region-home.md](get-region-home.md) |
 | 담당 지역 승인 대기 목록 조회 | `GET /region-admin/contents?status=PENDING` | [list-pending-contents.md](list-pending-contents.md) |
+| 승인 검토 콘텐츠 상세 조회 | `GET /region-admin/contents/{contentId}` | [review-content-detail.md](review-content-detail.md) |
+| 콘텐츠 승인 | `POST /region-admin/contents/{contentId}/approve` | [content-approval.md](content-approval.md) |
+| 사유를 포함한 콘텐츠 반려 | `POST /region-admin/contents/{contentId}/reject` | [content-rejection.md](content-rejection.md) |
+| 콘텐츠 반려·승인·종료 이력 조회 | `GET /region-admin/contents/{contentId}/history` | [content-history.md](content-history.md) |
 | 공개 콘텐츠 회차 목록 조회 | `GET /contents/{contentId}/sessions` | [list-public-content-sessions.md](list-public-content-sessions.md) |
 | 가격·실시간 잔여 정원·예약 가능 여부 조회 | `GET /sessions/{sessionId}` | [get-session-reservation-info.md](get-session-reservation-info.md) |
 | 소유 운영자의 회차 취소 | `POST /operator/sessions/{sessionId}/cancel` | [session-cancel.md](session-cancel.md) |
