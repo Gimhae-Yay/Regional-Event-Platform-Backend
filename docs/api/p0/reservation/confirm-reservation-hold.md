@@ -39,7 +39,7 @@ Accept: application/json
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `holdId` | Long | Y | 확정할 정원 홀드 식별자. 양수여야 한다. |
+| `holdId` | String | Y | 확정할 정원 홀드 식별자. 양수여야 한다. |
 
 #### Query Parameter
 
@@ -71,12 +71,12 @@ Accept: application/json
   "code": "SUCCESS",
   "message": "무료 예약 확정에 성공했습니다.",
   "data": {
-    "reservationId": 123,
+    "reservationId": "123",
     "reservationNo": "R202607290001",
-    "holdId": 789,
-    "sessionId": 456,
+    "holdId": "789",
+    "sessionId": "456",
     "status": "CONFIRMED",
-    "confirmedAt": "2026-07-29T12:00:00+09:00"
+    "confirmedAt": "2026-07-29T03:00:00Z"
   }
 }
 ```
@@ -88,12 +88,12 @@ Accept: application/json
 | `statusCode` | Number | HTTP 상태 코드. 항상 `201` |
 | `code` | String | 성공 코드. 항상 `SUCCESS` |
 | `message` | String | 공개 성공 메시지 |
-| `data.reservationId` | Long | 생성된 예약 식별자 |
+| `data.reservationId` | String | 생성된 예약 식별자 |
 | `data.reservationNo` | String | 시스템 전체에서 유일한 예약 번호. 형식은 서버가 생성한다. |
-| `data.holdId` | Long | 소비된 정원 홀드 식별자 |
-| `data.sessionId` | Long | 예약한 회차 식별자 |
+| `data.holdId` | String | 소비된 정원 홀드 식별자 |
+| `data.sessionId` | String | 예약한 회차 식별자 |
 | `data.status` | String | 예약 상태. 항상 `CONFIRMED` |
-| `data.confirmedAt` | String | 예약 확정 시각 |
+| `data.confirmedAt` | String | 예약 확정 시각. API 공통 규칙에 따른 UTC ISO 8601 일시다. |
 
 예약 QR은 이 API에서 발급하지 않는다. `CONFIRMED` 예약은 체크인 창에서 별도 QR 발급 API를 사용할 수 있다.
 

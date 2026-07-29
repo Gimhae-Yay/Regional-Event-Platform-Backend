@@ -65,16 +65,16 @@ Accept: application/json
   "data": {
     "reservations": [
       {
-        "reservationId": 123,
+        "reservationId": "123",
         "reservationNo": "R202607290001",
         "status": "CONFIRMED",
-        "confirmedAt": "2026-07-29T12:00:00+09:00",
+        "confirmedAt": "2026-07-29T03:00:00Z",
         "content": {
-          "contentId": 789,
+          "contentId": "789",
           "title": "김해 가야문화 체험"
         },
         "session": {
-          "sessionId": 456,
+          "sessionId": "456",
           "status": "SCHEDULED",
           "startsAt": "2026-08-03T14:00:00+09:00",
           "endsAt": "2026-08-03T16:00:00+09:00"
@@ -97,18 +97,18 @@ Accept: application/json
 | `code` | String | 성공 코드. 항상 `SUCCESS` |
 | `message` | String | 공개 성공 메시지 |
 | `data.reservations` | Array | 내 예약 목록. 결과가 없으면 빈 배열 `[]` |
-| `data.reservations[].reservationId` | Long | 예약 식별자 |
+| `data.reservations[].reservationId` | String | 예약 식별자 |
 | `data.reservations[].reservationNo` | String | 시스템 전체에서 유일한 예약 번호. 형식은 서버가 생성한다. |
 | `data.reservations[].status` | String | 예약 상태. `CONFIRMED`, `CHECKED_IN`, `CANCELLED`, `EXPIRED` 중 하나 |
-| `data.reservations[].confirmedAt` | String | 예약 확정 시각 |
-| `data.reservations[].content.contentId` | Long | 예약 콘텐츠 식별자 |
+| `data.reservations[].confirmedAt` | String | 예약 확정 시각. API 공통 규칙에 따른 UTC ISO 8601 일시다. |
+| `data.reservations[].content.contentId` | String | 예약 콘텐츠 식별자 |
 | `data.reservations[].content.title` | String | 예약 콘텐츠 제목 |
-| `data.reservations[].session.sessionId` | Long | 예약 회차 식별자 |
+| `data.reservations[].session.sessionId` | String | 예약 회차 식별자 |
 | `data.reservations[].session.status` | String | 회차 상태. `SCHEDULED`, `COMPLETED`, `CANCELLED` 중 하나 |
 | `data.reservations[].session.startsAt` | String | 회차 시작 시각 |
 | `data.reservations[].session.endsAt` | String | 회차 종료 시각 |
 | `data.reservations[].checkIn.checkedIn` | Boolean | 예약 상태가 `CHECKED_IN`이면 `true`, 그 외에는 `false` |
-| `data.reservations[].checkIn.checkedAt` | String or null | `checkedIn = true`인 경우 방문 기록의 체크인 시각. 그 외에는 `null` |
+| `data.reservations[].checkIn.checkedAt` | String or null | `checkedIn = true`인 경우 방문 기록의 체크인 시각. 그 외에는 `null` API 공통 규칙에 따른 UTC ISO 8601 일시다. |
 
 예약 QR 토큰, `qr_reference`, 사용자 식별자와 다른 예약자의 정보는 응답에 포함하지 않는다.
 
