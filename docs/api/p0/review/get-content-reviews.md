@@ -5,7 +5,7 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | [FR-08](../../../p0/review.md#fr-08-인증-후기), `REV-02`, `PRV-02` |
 | 소유 도메인 | 인증 후기 |
-| 기준 문서 | [인증 후기 API](review.md), [인증 후기](../../../p0/review.md), [ADR-0012](../../../adr/0012-retain-author-unlinked-reviews-and-visits-after-withdrawal.md), [ADR-0028](../../../adr/0028-use-page-number-pagination-for-review-list.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [인증 후기 API](review.md), [인증 후기](../../../p0/review.md), [ADR-0012](../../../adr/0012-retain-author-unlinked-reviews-and-visits-after-withdrawal.md), [ADR-0030](../../../adr/0030-use-page-number-pagination-for-review-list.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
@@ -118,6 +118,7 @@ Accept: application/json
 
 | HTTP Status | Code | Description |
 | --- | --- | --- |
+| 400 | `INVALID_TYPE` | `contentId`, `page` 또는 `size`를 정수로 변환할 수 없다. 조회하지 않으며 값을 수정해 재시도할 수 있다. |
 | 400 | `INVALID_INPUT` | `contentId`, `page` 또는 `size`가 허용 형식·범위를 만족하지 않는다. 조회하지 않으며 값을 수정해 재시도할 수 있다. |
 | 404 | `NOT_FOUND` | 콘텐츠가 없거나 공개 후기 조회를 허용하는 공개 상태가 아니다. 존재 여부나 비공개 상태를 추가로 공개하지 않는다. |
 

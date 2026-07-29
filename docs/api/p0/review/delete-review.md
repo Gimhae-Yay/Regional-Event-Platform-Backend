@@ -73,6 +73,7 @@ Accept: application/json
 
 | HTTP Status | Code | Description |
 | --- | --- | --- |
+| 400 | `INVALID_TYPE` | `reviewId`를 정수로 변환할 수 없다. 상태를 변경하지 않는다. |
 | 400 | `INVALID_INPUT` | `reviewId`가 양의 정수 형식을 만족하지 않는다. 상태를 변경하지 않는다. |
 | 401 | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 상태를 변경하지 않는다. |
 | 403 | `FORBIDDEN` | 인증 주체가 작성자가 아니거나 활성 작성자 연결이 없다. 상태를 변경하지 않는다. |

@@ -5,7 +5,7 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | [FR-08](review.md#fr-08-인증-후기), `REV-04`, [AC-14](../p0-spec.md#9-테스트-및-출시-수용-기준) |
 | 소유 도메인 | 인증 후기 |
-| 기준 문서 | [인증 후기](review.md), [ADR-0012](../adr/0012-retain-author-unlinked-reviews-and-visits-after-withdrawal.md), [ADR-0029](../adr/0029-purge-deleted-review-text-daily-at-midnight.md) |
+| 기준 문서 | [인증 후기](review.md), [ADR-0012](../adr/0012-retain-author-unlinked-reviews-and-visits-after-withdrawal.md), [ADR-0031](../adr/0031-purge-deleted-review-text-daily-at-midnight.md) |
 
 ## 1. 목적과 범위
 

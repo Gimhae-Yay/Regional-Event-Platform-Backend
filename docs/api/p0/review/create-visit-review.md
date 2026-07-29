@@ -116,6 +116,7 @@ Accept: application/json
 
 | HTTP Status | Code | Description |
 | --- | --- | --- |
+| 400 | `INVALID_TYPE` | `visitId`를 정수로 변환할 수 없다. 상태를 변경하지 않는다. |
 | 400 | `INVALID_INPUT` | 경로 식별자 또는 별점·본문이 형식·범위를 만족하지 않거나, 같은 방문에 이미 후기가 있다. 상태를 변경하지 않으며 기존 후기는 수정 API로만 변경할 수 있다. |
 | 400 | `INVALID_JSON` | 본문을 JSON으로 역직렬화할 수 없다. 상태를 변경하지 않는다. |
 | 401 | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 상태를 변경하지 않는다. |

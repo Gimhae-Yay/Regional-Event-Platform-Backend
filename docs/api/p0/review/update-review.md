@@ -114,6 +114,7 @@ Accept: application/json
 
 | HTTP Status | Code | Description |
 | --- | --- | --- |
+| 400 | `INVALID_TYPE` | `reviewId`를 정수로 변환할 수 없다. 상태를 변경하지 않는다. |
 | 400 | `INVALID_INPUT` | 경로 식별자 또는 별점·본문이 형식·범위를 만족하지 않는다. 상태를 변경하지 않는다. |
 | 400 | `INVALID_JSON` | 요청 본문이 JSON 형식이 아니다. 상태를 변경하지 않는다. |
 | 401 | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 상태를 변경하지 않는다. |

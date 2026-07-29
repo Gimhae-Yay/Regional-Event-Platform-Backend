@@ -5,7 +5,7 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | [FR-08](../../../p0/review.md#fr-08-인증-후기), `REV-01`~`REV-04`, `PRV-02` |
 | 소유 도메인 | 인증 후기 |
-| 기준 문서 | [인증 후기](../../../p0/review.md), [ADR-0012](../../../adr/0012-retain-author-unlinked-reviews-and-visits-after-withdrawal.md), [ADR-0028](../../../adr/0028-use-page-number-pagination-for-review-list.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [인증 후기](../../../p0/review.md), [ADR-0012](../../../adr/0012-retain-author-unlinked-reviews-and-visits-after-withdrawal.md), [ADR-0030](../../../adr/0030-use-page-number-pagination-for-review-list.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
