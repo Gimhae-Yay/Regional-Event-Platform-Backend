@@ -7,7 +7,7 @@
 | 인증 헤더     | `Authorization: Bearer <accessToken>` |
 | Access Token 응답 헤더 | 로그인·토큰 갱신 성공 응답은 `Authorization: Bearer <accessToken>` 헤더를 포함한다. |
 | Refresh Token 전달 | 로그인·토큰 갱신 성공 응답은 `Set-Cookie: refreshToken=<refreshToken>; Max-Age=<refresh-token-ttl>; Path=/api/v1/auth; HttpOnly; Secure; SameSite=Strict`를 포함한다. `Domain`은 생략해 호스트 전용 쿠키로 유지하며 Refresh Token은 JSON·`Authorization` 헤더에 넣지 않는다. |
-| 인증 제외 API | `POST /api/v1/auth/signup`, `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `GET /api/v1/contents/{contentId}/reviews` |
+| 인증 제외 API | `POST /api/v1/auth/signup`, `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `GET /api/v1/regions`, `GET /api/v1/regions/{regionId}/home`, `GET /api/v1/contents/{contentId}/reviews` |
 | 토큰 만료·무효  | `401 Unauthorized`, `UNAUTHENTICATED`                         |
 
 Refresh Token은 `Path=/api/v1/auth` 범위의 인증 API에서만 수신하며 보호 업무 API의 인증 수단으로 사용할 수 없다.
