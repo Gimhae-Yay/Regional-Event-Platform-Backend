@@ -20,6 +20,9 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentRevision;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentRevisionStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
+import io.regionevent.regioneventbackend.domain.image.entity.ImageLifecycleStatus;
+import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
+import io.regionevent.regioneventbackend.domain.image.repository.ImageObjectRepository;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -38,6 +41,7 @@ class ContentRevisionRepositoryTest {
     private final ContentRepository contentRepository;
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
+    private final ImageObjectRepository imageObjectRepository;
     private final EntityManager entityManager;
 
     @Autowired
@@ -46,12 +50,14 @@ class ContentRevisionRepositoryTest {
         ContentRepository contentRepository,
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
+        ImageObjectRepository imageObjectRepository,
         EntityManager entityManager
     ) {
         this.contentRevisionRepository = contentRevisionRepository;
         this.contentRepository = contentRepository;
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
+        this.imageObjectRepository = imageObjectRepository;
         this.entityManager = entityManager;
     }
 
@@ -80,6 +86,8 @@ class ContentRevisionRepositoryTest {
         assertThat(foundContentRevision.getAgeRequirement()).isEqualTo("만 8세 이상");
         assertThat(foundContentRevision.getMaterials()).isEqualTo("운동화");
         assertThat(foundContentRevision.getCancellationPolicyText()).isEqualTo("시작 이틀 전까지 취소할 수 있습니다.");
+        assertThat(foundContentRevision.getCandidateImageObject()).isNull();
+        assertThat(foundContentRevision.getCandidateImageAssignedAt()).isNull();
         assertThat(foundContentRevision.getSubmittedAt()).isEqualTo(SUBMITTED_AT);
         assertThat(foundContentRevision.getReviewedAt()).isNull();
         assertThat(foundContentRevision.getReviewedBy()).isNull();
@@ -227,6 +235,67 @@ class ContentRevisionRepositoryTest {
         assertThat(foundReviewedContentRevision.getReviewedBy().getUserId()).isEqualTo(reviewer.getUserId());
     }
 
+    @Test
+    void 후보_대표_이미지는_콘텐츠와_여러_수정본에서_공유_참조할_수_있다() {
+        Content content = saveContent();
+        AppUser editor = saveUser("editor@example.com");
+        AppUser reviewer = saveUser("reviewer@example.com");
+        ImageObject imageObject = saveImageObject("content/revision-candidate.webp");
+        Instant contentAssignedAt = Instant.parse("2026-08-01T03:00:00Z");
+        Instant firstRevisionAssignedAt = Instant.parse("2026-08-01T04:00:00Z");
+        Instant secondRevisionAssignedAt = Instant.parse("2026-08-01T05:00:00Z");
+
+        content.assignRepresentativeImage(imageObject, contentAssignedAt);
+        ContentRevision firstRevision = contentRevisionRepository.saveAndFlush(
+            newRevision(
+                content,
+                1,
+                editor,
+                ContentRevisionStatus.EDIT_APPROVED,
+                REVIEWED_AT,
+                reviewer,
+                "승인합니다.",
+                null,
+                null,
+                null
+            )
+        );
+        ContentRevision secondRevision = contentRevisionRepository.saveAndFlush(
+            newRevision(
+                content,
+                2,
+                editor,
+                ContentRevisionStatus.EDIT_REQUESTED,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+            )
+        );
+        firstRevision.assignCandidateImage(imageObject, firstRevisionAssignedAt);
+        secondRevision.assignCandidateImage(imageObject, secondRevisionAssignedAt);
+        contentRevisionRepository.flush();
+        entityManager.clear();
+
+        Content foundContent = contentRepository.findById(content.getContentId()).orElseThrow();
+        ContentRevision foundFirstRevision = contentRevisionRepository.findById(
+            firstRevision.getContentRevisionId()
+        ).orElseThrow();
+        ContentRevision foundSecondRevision = contentRevisionRepository.findById(
+            secondRevision.getContentRevisionId()
+        ).orElseThrow();
+        PersistenceUnitUtil persistenceUnitUtil = entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
+
+        assertThat(persistenceUnitUtil.isLoaded(foundFirstRevision, "candidateImageObject")).isFalse();
+        assertThat(foundContent.getRepresentativeImageObject().getImageObjectId()).isEqualTo(imageObject.getImageObjectId());
+        assertThat(foundFirstRevision.getCandidateImageObject().getImageObjectId()).isEqualTo(imageObject.getImageObjectId());
+        assertThat(foundSecondRevision.getCandidateImageObject().getImageObjectId()).isEqualTo(imageObject.getImageObjectId());
+        assertThat(foundFirstRevision.getCandidateImageAssignedAt()).isEqualTo(firstRevisionAssignedAt);
+        assertThat(foundSecondRevision.getCandidateImageAssignedAt()).isEqualTo(secondRevisionAssignedAt);
+    }
+
     private ContentRevision newRevision(
         Content content,
         int revisionNo,
@@ -298,5 +367,17 @@ class ContentRevisionRepositoryTest {
                 AppUserStatus.ACTIVE
             )
         );
+    }
+
+    private ImageObject saveImageObject(String objectKey) {
+        return imageObjectRepository.saveAndFlush(new ImageObject(
+            objectKey,
+            "image/webp",
+            1L,
+            "sha256:" + objectKey,
+            ImageLifecycleStatus.ACTIVE,
+            0,
+            null
+        ));
     }
 }

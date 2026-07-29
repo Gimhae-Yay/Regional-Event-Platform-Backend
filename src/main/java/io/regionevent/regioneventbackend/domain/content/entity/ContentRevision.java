@@ -18,6 +18,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
+import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 
 @Entity
@@ -69,6 +70,13 @@ public class ContentRevision {
     )
     private Content content;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+        name = "candidate_image_object_id",
+        foreignKey = @ForeignKey(name = "fk_content_revision_candidate_image_object")
+    )
+    private ImageObject candidateImageObject;
+
     @Column(name = "revision_no", nullable = false)
     private int revisionNo;
 
@@ -113,6 +121,9 @@ public class ContentRevision {
 
     @Column(name = "cancellation_policy_text", nullable = false, columnDefinition = "TEXT")
     private String cancellationPolicyText;
+
+    @Column(name = "candidate_image_assigned_at")
+    private Instant candidateImageAssignedAt;
 
     @Column(name = "submitted_at", nullable = false)
     private Instant submittedAt;
@@ -204,12 +215,21 @@ public class ContentRevision {
         createdAt = Instant.now();
     }
 
+    public void assignCandidateImage(ImageObject imageObject, Instant assignedAt) {
+        candidateImageObject = requireNotNull(imageObject, "imageObject");
+        candidateImageAssignedAt = requireNotNull(assignedAt, "assignedAt");
+    }
+
     public Long getContentRevisionId() {
         return contentRevisionId;
     }
 
     public Content getContent() {
         return content;
+    }
+
+    public ImageObject getCandidateImageObject() {
+        return candidateImageObject;
     }
 
     public int getRevisionNo() {
@@ -262,6 +282,10 @@ public class ContentRevision {
 
     public String getCancellationPolicyText() {
         return cancellationPolicyText;
+    }
+
+    public Instant getCandidateImageAssignedAt() {
+        return candidateImageAssignedAt;
     }
 
     public Instant getSubmittedAt() {
