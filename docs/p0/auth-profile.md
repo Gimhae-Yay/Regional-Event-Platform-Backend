@@ -37,14 +37,15 @@
 ### 기능 범위
 
 - 회원 가입 시 클라이언트가 `VISITOR` 또는 `OPERATOR`를 선택하게 한다. `VISITOR`는 즉시 역할을 부여하고, `OPERATOR`는 사업자 정보와 요청 지역을 가진 `PENDING` 운영자 신청을 생성한다.
-- 회원 가입과 로그인을 제공한다.
+- 회원 가입, 로그인과 로그아웃을 제공한다.
 - 로그인 성공 시 Access Token은 응답 `Authorization` 헤더로, Refresh Token은 `HttpOnly`·`Secure`·`SameSite=Strict` 쿠키로 발급한다.
+- 로그아웃은 현재 Refresh Token 계열만 폐기하고 같은 이름·경로의 Refresh Token 쿠키를 만료시킨다. Access Token은 짧은 만료 전까지 유효할 수 있다.
 - 방문자, 운영자, 지역 관리자 역할을 구분한다.
 - 서버는 신규 콘텐츠 생성에는 승인된 운영자 역할과 담당 `region_id`를 검증하고,
   기존 자원 접근에는 역할, 담당 `region_id`, 운영자-콘텐츠 소유 관계를 함께 검증한다.
 - 지역 관리자는 담당 지역만, 운영자는 자신에게 연결된 콘텐츠·회차·예약만 조회·처리한다.
 
-가입·로그인의 요청·응답, validation, status와 오류 코드는
+가입·로그인·로그아웃의 요청·응답, validation, status와 오류 코드는
 [API 명세서](../api-specification.md)에서 별도 계약한다.
 가입 시 역할 선택과 운영자 신청 생성의 경계는
 [ADR-0026](../adr/0026-select-signup-role-and-create-operator-application.md)를 따른다.
