@@ -73,14 +73,54 @@ class ImageObjectRepositoryTest {
 
     @Test
     void save_whenByteSizeIsNegative_violatesDatabaseCheckConstraint() {
-        assertThatThrownBy(() -> insertRawImageObject("content/negative.webp", -1L, 0))
-            .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbcTemplate.update(
+            """
+                INSERT INTO image_object (
+                    object_key,
+                    media_type,
+                    byte_size,
+                    checksum,
+                    lifecycle_status,
+                    delete_attempt_count,
+                    last_delete_attempted_at,
+                    created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+            "content/negative.webp",
+            "image/webp",
+            -1L,
+            "sha256:test",
+            "ACTIVE",
+            0,
+            null,
+            Timestamp.from(Instant.parse("2026-07-29T00:00:00Z"))
+        )).isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
     void save_whenDeleteAttemptCountIsNegative_violatesDatabaseCheckConstraint() {
-        assertThatThrownBy(() -> insertRawImageObject("content/negative-attempt.webp", 1L, -1))
-            .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbcTemplate.update(
+            """
+                INSERT INTO image_object (
+                    object_key,
+                    media_type,
+                    byte_size,
+                    checksum,
+                    lifecycle_status,
+                    delete_attempt_count,
+                    last_delete_attempted_at,
+                    created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+            "content/negative-attempt.webp",
+            "image/webp",
+            1L,
+            "sha256:test",
+            "ACTIVE",
+            -1,
+            null,
+            Timestamp.from(Instant.parse("2026-07-29T00:00:00Z"))
+        )).isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
@@ -199,28 +239,4 @@ class ImageObjectRepositoryTest {
         );
     }
 
-    private void insertRawImageObject(String objectKey, long byteSize, int deleteAttemptCount) {
-        jdbcTemplate.update(
-            """
-                INSERT INTO image_object (
-                    object_key,
-                    media_type,
-                    byte_size,
-                    checksum,
-                    lifecycle_status,
-                    delete_attempt_count,
-                    last_delete_attempted_at,
-                    created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-            objectKey,
-            "image/webp",
-            byteSize,
-            "sha256:test",
-            "ACTIVE",
-            deleteAttemptCount,
-            null,
-            Timestamp.from(Instant.parse("2026-07-29T00:00:00Z"))
-        );
-    }
 }

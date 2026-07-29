@@ -107,19 +107,25 @@ Accept: application/json
 
 ```json
 {
-  "{공통 성공 코드 필드}": "{성공 코드}",
-  "{공통 데이터 필드}": {
+  "statusCode": {성공 HTTP 상태},
+  "code": "SUCCESS",
+  "message": "{성공 메시지}",
+  "data": {
     "{field}": "{value}"
   }
 }
 ```
 
+`204 No Content` 응답이면 본문과 `Response Field`를 작성하지 않는다.
+
 #### Response Field
 
 | Name                  | Type     | Description |
 |-----------------------|----------|-------------|
-| `{공통 성공 코드 필드}`       | String   | `{성공 코드}`   |
-| `{공통 데이터 필드}.{field}` | `{Type}` | `{설명}`      |
+| `statusCode`          | Number   | `{성공 HTTP 상태와 같은 값}` |
+| `code`                | String   | `SUCCESS` |
+| `message`             | String   | `{성공 메시지}` |
+| `data.{field}`        | `{Type}` | `{설명}` |
 
 목록 응답이면 빈 결과의 HTTP 상태와 빈 컬렉션 반환 규칙을 함께 명시한다.
 
@@ -133,7 +139,9 @@ Accept: application/json
 
 ```json
 {
-  "{공통 오류 코드 필드}": "{ERROR_CODE}",
-  "{공통 오류 메시지 필드}": "{공개 오류 메시지}"
+  "statusCode": {오류 HTTP 상태},
+  "code": "{ERROR_CODE}",
+  "message": "{공개 오류 메시지}",
+  "data": null
 }
 ```
