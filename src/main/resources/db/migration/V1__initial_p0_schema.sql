@@ -20,7 +20,7 @@ CREATE TABLE app_user (
     updated_at TIMESTAMP(6) NOT NULL,
     CONSTRAINT pk_app_user PRIMARY KEY (user_id),
     CONSTRAINT uk_app_user_login_identifier UNIQUE (login_identifier),
-    CONSTRAINT ck_app_user_status CHECK (status IN ('ACTIVE', 'WITHDRAWING'))
+    CONSTRAINT ck_app_user_status CHECK (status REGEXP '^(ACTIVE|WITHDRAWING)$')
 );
 
 CREATE TABLE user_role_assignment (
@@ -34,7 +34,7 @@ CREATE TABLE user_role_assignment (
     CONSTRAINT fk_user_role_assignment_region
         FOREIGN KEY (region_id) REFERENCES region (region_id),
     CONSTRAINT ck_user_role_assignment_role
-        CHECK (role IN ('VISITOR', 'OPERATOR', 'REGION_ADMIN')),
+        CHECK (role REGEXP '^(VISITOR|OPERATOR|REGION_ADMIN)$'),
     CONSTRAINT ck_user_role_assignment_visitor_without_region
         CHECK (role <> 'VISITOR' OR region_id IS NULL),
     CONSTRAINT ck_user_role_assignment_scoped_role_with_region
@@ -59,7 +59,7 @@ CREATE TABLE operator_application (
     CONSTRAINT fk_operator_application_inspected_user
         FOREIGN KEY (inspected_user_id) REFERENCES app_user (user_id),
     CONSTRAINT ck_operator_application_status
-        CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED', 'CANCELLED')),
+        CHECK (status REGEXP '^(PENDING|APPROVED|REJECTED|CANCELLED)$'),
     CONSTRAINT ck_operator_application_approved_review_result
         CHECK (status <> 'APPROVED' OR (inspected_user_id IS NOT NULL AND rejected_reason IS NULL)),
     CONSTRAINT ck_operator_application_rejected_review_result
@@ -79,7 +79,7 @@ CREATE TABLE image_object (
     CONSTRAINT pk_image_object PRIMARY KEY (image_object_id),
     CONSTRAINT uk_image_object_object_key UNIQUE (object_key),
     CONSTRAINT ck_image_object_lifecycle_status
-        CHECK (lifecycle_status IN ('ACTIVE', 'DELETE_PENDING')),
+        CHECK (lifecycle_status REGEXP '^(ACTIVE|DELETE_PENDING)$'),
     CONSTRAINT ck_image_object_byte_size CHECK (byte_size >= 0),
     CONSTRAINT ck_image_object_delete_attempt_count CHECK (delete_attempt_count >= 0)
 );
@@ -113,9 +113,16 @@ CREATE TABLE content (
     CONSTRAINT fk_content_operator FOREIGN KEY (operator_id) REFERENCES app_user (user_id),
     CONSTRAINT ck_content_type CHECK (content_type = 'EVENT_EXPERIENCE'),
     CONSTRAINT ck_content_status
-        CHECK (status IN ('PENDING', 'REJECTED', 'APPROVED', 'PUBLISHED', 'SUSPENDED', 'WITHDRAWN', 'ENDED')),
+        CHECK (status REGEXP '^(PENDING|REJECTED|APPROVED|PUBLISHED|SUSPENDED|WITHDRAWN|ENDED)$'),
     CONSTRAINT ck_content_soft_delete_status
-        CHECK (deleted_at IS NULL OR status IN ('PENDING', 'APPROVED'))
+        CHECK (
+            CASE
+                WHEN deleted_at IS NULL THEN TRUE
+                WHEN status = 'PENDING' THEN TRUE
+                WHEN status = 'APPROVED' THEN TRUE
+                ELSE FALSE
+            END
+        )
 );
 
 CREATE INDEX idx_content_region_status_type_publish_deleted
@@ -151,7 +158,7 @@ CREATE TABLE content_session (
     CONSTRAINT fk_content_session_cancelled_by_user
         FOREIGN KEY (cancelled_by_user_id) REFERENCES app_user (user_id),
     CONSTRAINT ck_content_session_status
-        CHECK (status IN ('SCHEDULED', 'COMPLETED', 'CANCELLED')),
+        CHECK (status REGEXP '^(SCHEDULED|COMPLETED|CANCELLED)$'),
     CONSTRAINT ck_content_session_time_range
         CHECK (starts_at < ends_at AND checkin_open_at < checkin_close_at AND ends_at <= checkin_close_at),
     CONSTRAINT ck_content_session_capacity
@@ -188,9 +195,12 @@ CREATE TABLE content_log (
     CONSTRAINT fk_content_log_content FOREIGN KEY (content_id) REFERENCES content (content_id),
     CONSTRAINT fk_content_log_actor FOREIGN KEY (actor_id) REFERENCES app_user (user_id),
     CONSTRAINT ck_content_log_status
-        CHECK (status IN ('PENDING', 'REJECTED', 'APPROVED', 'PUBLISHED', 'SUSPENDED', 'WITHDRAWN', 'ENDED', 'DELETED')),
+        CHECK (status REGEXP '^(PENDING|REJECTED|APPROVED|PUBLISHED|SUSPENDED|WITHDRAWN|ENDED|DELETED)$'),
     CONSTRAINT ck_content_log_reason
-        CHECK (status NOT IN ('REJECTED', 'SUSPENDED', 'WITHDRAWN', 'DELETED') OR reason IS NOT NULL)
+        CHECK (
+            (status <> 'REJECTED' AND status <> 'SUSPENDED' AND status <> 'WITHDRAWN' AND status <> 'DELETED')
+            OR reason IS NOT NULL
+        )
 );
 
 CREATE TABLE content_revision (
@@ -228,10 +238,10 @@ CREATE TABLE content_revision (
     CONSTRAINT fk_content_revision_reviewer FOREIGN KEY (reviewed_by_user_id) REFERENCES app_user (user_id),
     CONSTRAINT fk_content_revision_withdrawer FOREIGN KEY (withdrawn_by_user_id) REFERENCES app_user (user_id),
     CONSTRAINT ck_content_revision_status
-        CHECK (status IN ('EDIT_REQUESTED', 'EDIT_APPROVED', 'EDIT_REJECTED', 'EDIT_WITHDRAWN')),
+        CHECK (status REGEXP '^(EDIT_REQUESTED|EDIT_APPROVED|EDIT_REJECTED|EDIT_WITHDRAWN)$'),
     CONSTRAINT ck_content_revision_reviewed
         CHECK (
-            status NOT IN ('EDIT_APPROVED', 'EDIT_REJECTED')
+            (status <> 'EDIT_APPROVED' AND status <> 'EDIT_REJECTED')
             OR (reviewed_at IS NOT NULL AND reviewed_by_user_id IS NOT NULL AND review_reason IS NOT NULL)
         ),
     CONSTRAINT ck_content_revision_withdrawn
@@ -283,13 +293,13 @@ CREATE TABLE capacity_hold (
         FOREIGN KEY (session_id, region_id) REFERENCES content_session (session_id, region_id),
     CONSTRAINT fk_capacity_hold_user FOREIGN KEY (user_id) REFERENCES app_user (user_id),
     CONSTRAINT ck_capacity_hold_status
-        CHECK (status IN ('ACTIVE', 'CONSUMED', 'EXPIRED', 'INVALIDATED')),
+        CHECK (status REGEXP '^(ACTIVE|CONSUMED|EXPIRED|INVALIDATED)$'),
     CONSTRAINT ck_capacity_hold_quantity CHECK (quantity > 0),
     CONSTRAINT ck_capacity_hold_terminal
         CHECK (
             (status = 'ACTIVE' AND terminal_at IS NULL AND capacity_released_at IS NULL)
             OR (status = 'CONSUMED' AND terminal_at IS NOT NULL AND capacity_released_at IS NULL)
-            OR (status IN ('EXPIRED', 'INVALIDATED') AND terminal_at IS NOT NULL AND capacity_released_at IS NOT NULL)
+            OR ((status = 'EXPIRED' OR status = 'INVALIDATED') AND terminal_at IS NOT NULL AND capacity_released_at IS NOT NULL)
         )
 );
 
@@ -317,7 +327,7 @@ CREATE TABLE reservation (
         REFERENCES capacity_hold (hold_id, session_id, region_id),
     CONSTRAINT fk_reservation_user FOREIGN KEY (user_id) REFERENCES app_user (user_id),
     CONSTRAINT ck_reservation_status
-        CHECK (status IN ('CONFIRMED', 'CHECKED_IN', 'CANCELLED', 'EXPIRED')),
+        CHECK (status REGEXP '^(CONFIRMED|CHECKED_IN|CANCELLED|EXPIRED)$'),
     CONSTRAINT ck_reservation_cancelled
         CHECK (
             (status = 'CANCELLED' AND cancelled_at IS NOT NULL AND cancellation_reason IS NOT NULL)
@@ -353,7 +363,7 @@ CREATE TABLE visit (
     CONSTRAINT fk_visit_user FOREIGN KEY (user_id) REFERENCES app_user (user_id),
     CONSTRAINT fk_visit_checked_in_by_user
         FOREIGN KEY (checked_in_by_user_id) REFERENCES app_user (user_id),
-    CONSTRAINT ck_visit_checkin_method CHECK (checkin_method IN ('QR', 'RESERVATION_NUMBER'))
+    CONSTRAINT ck_visit_checkin_method CHECK (checkin_method REGEXP '^(QR|RESERVATION_NUMBER)$')
 );
 
 CREATE TABLE idempotency_record (
@@ -377,12 +387,12 @@ CREATE TABLE idempotency_record (
         FOREIGN KEY (result_reservation_id) REFERENCES reservation (reservation_id),
     CONSTRAINT fk_idempotency_record_visit FOREIGN KEY (result_visit_id) REFERENCES visit (visit_id),
     CONSTRAINT ck_idempotency_record_operation
-        CHECK (operation IN ('RESERVATION_CONFIRM', 'CHECK_IN')),
+        CHECK (operation REGEXP '^(RESERVATION_CONFIRM|CHECK_IN)$'),
     CONSTRAINT ck_idempotency_record_status
-        CHECK (status IN ('PROCESSING', 'SUCCEEDED', 'FAILED')),
+        CHECK (status REGEXP '^(PROCESSING|SUCCEEDED|FAILED)$'),
     CONSTRAINT ck_idempotency_record_result
         CHECK (
-            (status IN ('PROCESSING', 'FAILED')
+            ((status = 'PROCESSING' OR status = 'FAILED')
                 AND result_reservation_id IS NULL
                 AND result_visit_id IS NULL)
             OR (status = 'SUCCEEDED'
@@ -414,7 +424,7 @@ CREATE TABLE review (
     CONSTRAINT fk_review_visit_content_region
         FOREIGN KEY (visit_id, content_id, region_id) REFERENCES visit (visit_id, content_id, region_id),
     CONSTRAINT fk_review_user FOREIGN KEY (user_id) REFERENCES app_user (user_id),
-    CONSTRAINT ck_review_status CHECK (status IN ('PUBLISHED', 'DELETED')),
+    CONSTRAINT ck_review_status CHECK (status REGEXP '^(PUBLISHED|DELETED)$'),
     CONSTRAINT ck_review_published
         CHECK (status <> 'PUBLISHED' OR (rating IS NOT NULL AND review_text IS NOT NULL AND deleted_at IS NULL)),
     CONSTRAINT ck_review_deleted
@@ -436,9 +446,9 @@ CREATE TABLE audit_event (
     occurred_at TIMESTAMP(6) NOT NULL,
     CONSTRAINT pk_audit_event PRIMARY KEY (audit_event_id),
     CONSTRAINT fk_audit_event_region FOREIGN KEY (region_id) REFERENCES region (region_id),
-    CONSTRAINT ck_audit_event_result CHECK (result IN ('SUCCESS', 'FAILURE')),
+    CONSTRAINT ck_audit_event_result CHECK (result REGEXP '^(SUCCESS|FAILURE)$'),
     CONSTRAINT ck_audit_event_target_type
-        CHECK (target_type IN ('REGION', 'OPERATOR_APPLICATION', 'CONTENT', 'CONTENT_SESSION', 'RESERVATION', 'VISIT', 'REVIEW'))
+        CHECK (target_type REGEXP '^(REGION|OPERATOR_APPLICATION|CONTENT|CONTENT_SESSION|RESERVATION|VISIT|REVIEW)$')
 );
 
 CREATE TABLE audit_event_actor_link (
