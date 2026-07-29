@@ -12,7 +12,6 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.JoinColumns;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
@@ -32,18 +31,10 @@ public class ContentSession {
     private Long sessionId;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumns(
-        foreignKey = @ForeignKey(name = "fk_content_session_content_region"),
-        value = {
-            @JoinColumn(name = "content_id", referencedColumnName = "content_id", nullable = false),
-            @JoinColumn(
-                name = "region_id",
-                referencedColumnName = "region_id",
-                nullable = false,
-                insertable = false,
-                updatable = false
-            )
-        }
+    @JoinColumn(
+        name = "content_id",
+        nullable = false,
+        foreignKey = @ForeignKey(name = "fk_content_session_content_region")
     )
     private Content content;
 
