@@ -84,6 +84,8 @@ API별 오류는 다음 표로 정의한다. 오류 조건에는 상태 변경·
 | 403 | `FORBIDDEN` | 접근 권한이 없습니다. | 역할·지역·소유권 검증 실패 |
 | 404 | `NOT_FOUND` | 요청한 리소스를 찾을 수 없습니다. | 존재하지 않는 요청 경로 또는 공개가 허용된 대상 부재 |
 | 405 | `METHOD_NOT_ALLOWED` | 허용되지 않은 HTTP 메서드입니다. | 지원하지 않는 HTTP 메서드 |
+| 409 | `CONTENT_NOT_EDITABLE` | 회차를 변경할 수 없는 콘텐츠 상태입니다. | `PENDING`이 아니거나 삭제된 콘텐츠의 회차 생성·수정 요청 |
+| 409 | `SESSION_NOT_EDITABLE` | 수정할 수 없는 회차 상태입니다. | `SCHEDULED`가 아닌 회차의 수정 요청 |
 | 500 | `INTERNAL_SERVER_ERROR` | 서버 오류가 발생했습니다. | 예상하지 못한 예외 |
 
 | HTTP Status | Code           | Description                        |
