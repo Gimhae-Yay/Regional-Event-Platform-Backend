@@ -662,7 +662,7 @@ erDiagram
         string request_id
         bigint region_id FK "지역 없는 인증 사건은 nullable"
         string target_type
-        bigint target_id "회원만 대상인 사건은 nullable"
+        bigint target_id "안전한 도메인 대상을 식별할 수 없으면 nullable"
         string previous_state "nullable"
         string next_state "nullable"
         string result
@@ -687,8 +687,9 @@ erDiagram
 - `audit_event`는 MySQL의 상태 전이 기준 기록이다. 구조화 로그와 외부 전달 이벤트의 대체물이 아니다.
 - 이벤트 본문에는 이름·연락처·QR 원문·토큰·`user_id`·사용자별 가명을 저장하지 않는다.
 - `target_id`에 `app_user.user_id`를 저장하지 않으며 회원을 직접 식별하는 `target_type`도 허용하지 않는다.
-  사용자 관련 사건은 운영자 신청·예약 같은 비개인 도메인 대상을 사용하고, 안전한 대상이 없는 회원 전용
-  사건은 `target_id`를 비운다.
+  사용자 관련 사건은 운영자 신청·예약 같은 비개인 도메인 대상을 사용한다. 변조 QR이나 존재하지 않는 예약번호처럼
+  안전한 대상 행을 식별할 수 없는 사건은 가장 가까운 비개인 도메인 `target_type`을 기록하고 `target_id`를 비운다.
+  예약 QR·체크인의 미식별 실패는 `target_type = RESERVATION`, `target_id = NULL`을 사용한다.
 - 활성 사용자 식별이 필요할 때만 `audit_event_actor_link`를 둔다.
 - 방문자 탈퇴 완료 전에 해당 사용자의 `audit_event_actor_link`를 파기한다.
   연결이 없는 방문자 actor는 모든 탈퇴 회원에 공통인 `WITHDRAWN_MEMBER`로 표시한다.

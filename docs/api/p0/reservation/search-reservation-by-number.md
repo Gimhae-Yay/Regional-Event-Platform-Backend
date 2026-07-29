@@ -165,7 +165,7 @@ Accept: application/json
 
 ### 감사 및 정합성
 
-- 성공한 보조 조회는 하나의 트랜잭션에서 `QR_VERIFICATION_FAILED` 사유, 처리자, 처리자 역할, 예약·회차·콘텐츠·지역 식별자와 MySQL 기준 처리 시각을 `audit_event`에 기록한다.
+- 성공한 보조 조회는 하나의 트랜잭션에서 `target_type = RESERVATION`, `target_id = reservation_id`, `region_id = reservation.region_id`, `reason_code = QR_VERIFICATION_FAILED`, `actor_kind = USER`, 인증 주체의 현재 역할과 MySQL 기준 처리 시각을 `audit_event`에 기록하고 `audit_event_actor_link`로 처리자를 연결한다. 회차·콘텐츠는 예약의 검증된 관계에서 재현한다.
 - 감사 이벤트에는 `reservationNo`, `qr_reference`, 사용자 식별자, 이름·연락처 원문을 저장하지 않는다.
 - 보조 조회와 성공 감사 이벤트는 함께 커밋한다. 감사 이벤트 기록에 실패하면 성공 응답을 반환하지 않는다.
 - 권한 없음, 대상 없음과 정합성 오류는 예약·방문·체크인·정원 상태를 변경하지 않는다. 구조화 로그에는 `requestId`, 결과 코드와 비개인 식별자만 남긴다.
