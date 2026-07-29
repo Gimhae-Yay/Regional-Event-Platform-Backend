@@ -26,13 +26,11 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 
 @DataJpaTest
-@TestPropertySource(properties = {
-    "spring.flyway.enabled=false",
-    "spring.jpa.hibernate.ddl-auto=create-drop"
-})
+@TestPropertySource(properties = "spring.jpa.hibernate.ddl-auto=validate")
 class AuditEventRepositoryTest {
 
     private final AuditEventRepository auditEventRepository;
+    private final AuditEventActorLinkRepository auditEventActorLinkRepository;
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
     private final EntityManager entityManager;
@@ -41,12 +39,14 @@ class AuditEventRepositoryTest {
     @Autowired
     AuditEventRepositoryTest(
         AuditEventRepository auditEventRepository,
+        AuditEventActorLinkRepository auditEventActorLinkRepository,
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
         EntityManager entityManager,
         JdbcTemplate jdbcTemplate
     ) {
         this.auditEventRepository = auditEventRepository;
+        this.auditEventActorLinkRepository = auditEventActorLinkRepository;
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
         this.entityManager = entityManager;
@@ -125,14 +125,14 @@ class AuditEventRepositoryTest {
             createAuditEvent(null, AuditEventResult.SUCCESS)
         );
 
-        entityManager.persist(new AuditEventActorLink(auditEvent, actor));
-        entityManager.flush();
+        AuditEventActorLink savedActorLink = auditEventActorLinkRepository.saveAndFlush(
+            new AuditEventActorLink(auditEvent, actor)
+        );
         entityManager.clear();
 
-        AuditEventActorLink actorLink = entityManager.find(
-            AuditEventActorLink.class,
+        AuditEventActorLink actorLink = auditEventActorLinkRepository.findById(
             auditEvent.getAuditEventId()
-        );
+        ).orElseThrow();
         List<String> auditEventColumns = jdbcTemplate.query(
             """
                 SELECT COLUMN_NAME
@@ -142,6 +142,7 @@ class AuditEventRepositoryTest {
             (resultSet, rowNumber) -> resultSet.getString("COLUMN_NAME")
         );
 
+        assertThat(savedActorLink.getAuditEventId()).isEqualTo(auditEvent.getAuditEventId());
         assertThat(actorLink.getActor().getUserId()).isEqualTo(actor.getUserId());
         assertThat(auditEventColumns).doesNotContain("USER_ID");
     }
