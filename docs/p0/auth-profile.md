@@ -29,19 +29,34 @@
 | [ADR-0012](../adr/0012-retain-author-unlinked-reviews-and-visits-after-withdrawal.md#결정) | 방문자 탈퇴, 연결 제거와 보존 데이터 불변 조건 |
 | [ADR-0017](../adr/0017-serialize-withdrawal-with-conditional-user-state.md#결정) | 회원 행 조건부 전환, 단일 트랜잭션 직렬화와 사용자 재시도 방식 |
 | [ADR-0023](../adr/0023-manage-refresh-token-revocation-in-redis.md#결정) | Redis TTL 블랙리스트 기반 Refresh Token 회전·폐기와 탈퇴 선행 폐기 |
+| [ADR-0026](../adr/0026-select-signup-role-and-create-operator-application.md#결정) | 가입 시 역할 선택, 방문자 즉시 부여와 운영자 `PENDING` 신청 생성 |
+| [ADR-0027](../adr/0027-deliver-refresh-token-in-http-only-cookie.md#결정) | Access Token 응답 헤더와 Refresh Token HttpOnly 쿠키 전달 |
 
 > ADR-0002와 ADR-0005의 전체 관리자 관련 결정 부분은 ADR-0009로 대체한다.
 
 ### 기능 범위
 
-- 회원 가입과 로그인을 제공한다.
+- 회원 가입 시 클라이언트가 `VISITOR` 또는 `OPERATOR`를 선택하게 한다. `VISITOR`는 즉시 역할을 부여하고, `OPERATOR`는 사업자 정보와 요청 지역을 가진 `PENDING` 운영자 신청을 생성한다.
+- 회원 가입, 로그인과 로그아웃을 제공한다.
+- 로그인 성공 시 Access Token은 응답 `Authorization` 헤더로, Refresh Token은 `HttpOnly`·`Secure`·`SameSite=Strict` 쿠키로 발급한다.
+- 로그아웃은 현재 Refresh Token 계열만 폐기하고 같은 이름·경로의 Refresh Token 쿠키를 만료시킨다. Access Token은 짧은 만료 전까지 유효할 수 있다.
 - 방문자, 운영자, 지역 관리자 역할을 구분한다.
 - 서버는 신규 콘텐츠 생성에는 승인된 운영자 역할과 담당 `region_id`를 검증하고,
   기존 자원 접근에는 역할, 담당 `region_id`, 운영자-콘텐츠 소유 관계를 함께 검증한다.
 - 지역 관리자는 담당 지역만, 운영자는 자신에게 연결된 콘텐츠·회차·예약만 조회·처리한다.
 
-가입·로그인의 요청·응답, validation, status와 오류 코드는
+가입·로그인·로그아웃의 요청·응답, validation, status와 오류 코드는
 [API 명세서](../api-specification.md)에서 별도 계약한다.
+가입 시 역할 선택과 운영자 신청 생성의 경계는
+[ADR-0026](../adr/0026-select-signup-role-and-create-operator-application.md)를 따른다.
+
+### 회원가입 역할 처리
+
+- 가입 요청은 `VISITOR` 또는 `OPERATOR`만 선택할 수 있다. `REGION_ADMIN`은 일반 API에서 신청·생성·변경할 수 없다.
+- `VISITOR` 선택 시 서버는 새 활성 회원과 `VISITOR` 역할을 하나의 트랜잭션에서 생성한다.
+- `OPERATOR` 선택 시 서버는 새 활성 회원과 요청 지역·사업자 정보를 가진 `operator_application(PENDING)`을 하나의 트랜잭션에서 생성한다. 승인 전에는 `VISITOR`, `OPERATOR` 역할과 담당 지역을 부여하지 않는다.
+- 운영자 신청은 담당 지역 관리자의 수동 사업자 검증을 거쳐야 하며, 승인 시에만 `OPERATOR` 역할과 담당 지역을 함께 부여한다.
+- 계정·역할 또는 계정·운영자 신청 생성 중 하나라도 실패하면 전체를 롤백한다.
 
 ### 역할과 권한
 
@@ -78,7 +93,8 @@
 
 #### `PRV-01`
 
-P0 셀프 탈퇴는 운영자·지역 관리자 역할과 콘텐츠 소유 관계가 없는 방문자 회원에게만 허용한다.
+P0 셀프 탈퇴는 부여된 운영자·지역 관리자 역할과 콘텐츠 소유 관계가 없는 활성 회원에게만 허용한다.
+`PENDING` 운영자 신청은 운영자 역할이 아니므로 탈퇴 흐름에서 취소·개인정보 제거 대상이 된다.
 운영 역할 또는 소유 관계가 남은 계정의 셀프 탈퇴는 거부하며 역할 해제·담당 지역 변경·소유권 이전을 포함한
 별도 오프보딩은 P0 범위에 포함하지 않는다.
 방문자 회원 탈퇴 시 자격 증명, 프로필, 이름·연락처와 직접 사용자 식별자를 파기한다.
@@ -152,6 +168,7 @@ Redis 폐기 전에 발생한 탈퇴 트랜잭션 예외는 `WITHDRAWING` 전환
 | [ADR-0009](../adr/0009-exclude-platform-admin-from-initial-mvp.md#결정) | 전체 관리자·전역 관리 API 제외와 초기 운영 데이터 준비 |
 | [ADR-0011](../adr/0011-bootstrap-operator-ownership-on-content-creation.md#결정) | 승인 후 최초 콘텐츠 생성 시 서버가 소유자·지역을 설정하는 방식 |
 | [ADR-0012](../adr/0012-retain-author-unlinked-reviews-and-visits-after-withdrawal.md#결정) | 운영자 승인과 회원 탈퇴의 경합 처리 |
+| [ADR-0026](../adr/0026-select-signup-role-and-create-operator-application.md#결정) | 가입 시 운영자 `PENDING` 신청 생성과 승인 전 권한 차단 |
 
 ### 기능 범위
 
@@ -167,7 +184,7 @@ Redis 폐기 전에 발생한 탈퇴 트랜잭션 예외는 `WITHDRAWING` 전환
 - **주체:** 지역 관리자
 - **선행 조건:** 담당 `region_id`가 지역 관리자 계정에 부여돼 있다.
 
-1. 인증된 신청자가 사업자 정보와 운영을 요청할 지역을 제출한다.
+1. 클라이언트가 회원가입에서 `OPERATOR`를 선택하면 사업자 정보와 운영을 요청할 지역을 함께 제출하고, 서버는 활성 회원과 `PENDING` 신청을 생성한다.
 2. 담당 지역 관리자는 자기 지역의 요청만 검토해 승인하거나 사유와 함께 반려한다.
 3. 승인 시 운영자 역할과 담당 `region_id`를 부여하며 아직 존재하지 않는 콘텐츠 소유 관계는 만들지 않는다.
 4. 승인된 운영자가 첫 `PENDING` 콘텐츠를 생성하면 서버가 담당 지역을 검증하고 현재 인증 운영자를 소유자로 설정한다.
@@ -182,7 +199,8 @@ Redis 폐기 전에 발생한 탈퇴 트랜잭션 예외는 `WITHDRAWING` 전환
 반려 시에는 반려 사유를 기록한다.
 심사 시각은 `operator_application`이 `APPROVED` 또는 `REJECTED`로 종결될 때의 `updated_at`으로 기록하고,
 별도 심사 시각 컬럼은 두지 않는다.
-활성 회원만 신청할 수 있고, 담당 지역 관리자만 `PENDING → APPROVED` 또는 `PENDING → REJECTED`로
+회원가입에서 `OPERATOR`를 선택한 경우 새 활성 회원과 요청 지역·사업자 정보를 가진 `PENDING` 신청을 하나의
+트랜잭션에서 생성한다. 이때 운영자 역할과 담당 지역은 부여하지 않는다. 활성 회원만 신청할 수 있고, 담당 지역 관리자만 `PENDING → APPROVED` 또는 `PENDING → REJECTED`로
 심사 종결할 수 있다. 승인 시 신청자가 여전히 활성 상태인지 조건으로 확인하고 운영자 역할과 담당 지역을
 하나의 트랜잭션에서 함께 부여하되 콘텐츠 소유 관계는 만들지 않는다.
 회원 탈퇴가 먼저 시작되면 시스템이 `PENDING → CANCELLED`로 종결해 이후 심사를 거부한다.

@@ -80,11 +80,22 @@ API별 오류는 다음 표로 정의한다. 오류 조건에는 상태 변경·
 | 400 | `INVALID_INPUT` | 요청 값이 올바르지 않습니다. | Bean Validation, 누락된 필수 요청 값, 범위를 벗어난 값 |
 | 400 | `INVALID_JSON` | 요청 본문 형식이 올바르지 않습니다. | JSON 역직렬화 실패 |
 | 400 | `INVALID_TYPE` | 요청 값의 형식이 올바르지 않습니다. | 경로·쿼리 파라미터 타입 변환 실패 |
+| 401 | `INVALID_CREDENTIALS` | 이메일 또는 비밀번호가 올바르지 않습니다. | 로그인 자격 증명 불일치 또는 로그인할 수 없는 계정 상태 |
 | 401 | `UNAUTHENTICATED` | 인증 정보가 없거나 유효하지 않습니다. | 미인증, 만료·변조된 Access Token |
 | 403 | `FORBIDDEN` | 접근 권한이 없습니다. | 역할·지역·소유권 검증 실패 |
 | 404 | `NOT_FOUND` | 요청한 리소스를 찾을 수 없습니다. | 존재하지 않는 요청 경로 또는 공개가 허용된 대상 부재 |
 | 405 | `METHOD_NOT_ALLOWED` | 허용되지 않은 HTTP 메서드입니다. | 지원하지 않는 HTTP 메서드 |
+| 409 | `DUPLICATE_LOGIN_IDENTIFIER` | 이미 사용 중인 이메일입니다. | 정규화한 로그인 식별자가 이미 존재함 |
+| 409 | `REFRESH_TOKEN_CONFLICT` | Refresh Token 갱신 요청이 충돌했습니다. | 같은 Refresh Token의 진행 중인 동시 갱신 요청 |
+| 409 | `IDEMPOTENCY_KEY_CONFLICT` | 멱등 키가 다른 요청에 이미 사용되었습니다. | 같은 처리 주체·명령에서 이미 다른 요청에 사용한 멱등 키 |
+| 409 | `IDEMPOTENCY_REQUEST_IN_PROGRESS` | 동일한 요청을 처리 중입니다. | 같은 멱등 키의 최초 요청이 아직 처리 중인 상태 |
+| 409 | `RESERVATION_HOLD_CONFLICT` | 예약 대기를 생성할 수 없는 상태입니다. | 콘텐츠·회차 상태, 시작 시각, 잔여 정원 또는 동시 상태 전이로 홀드를 생성할 수 없는 상태 |
+| 409 | `RESERVATION_CONFIRM_CONFLICT` | 예약을 확정할 수 없는 상태입니다. | 홀드·콘텐츠·회차 상태 또는 동시 상태 전이로 예약을 확정할 수 없는 상태 |
+| 409 | `RESERVATION_CANCEL_CONFLICT` | 예약을 취소할 수 없는 상태입니다. | 예약 상태, 회차 시작 시각 또는 체크인·노쇼 전이로 예약을 취소할 수 없는 상태 |
+| 409 | `CHECK_IN_CONFLICT` | 체크인할 수 없는 상태입니다. | 예약·회차·체크인 창·사용자 연결 또는 동시 상태 전이로 새 체크인을 완료할 수 없는 상태 |
+| 409 | `CONTENT_END_CONFLICT` | 콘텐츠를 종료할 수 없는 상태입니다. | 콘텐츠·회차 상태 또는 동시 상태 전이로 콘텐츠를 종료할 수 없는 상태 |
 | 500 | `INTERNAL_SERVER_ERROR` | 서버 오류가 발생했습니다. | 예상하지 못한 예외 |
+| 503 | `AUTH_SERVICE_UNAVAILABLE` | 인증 서비스를 일시적으로 사용할 수 없습니다. | Refresh Token 계열을 안전하게 발급·갱신·폐기할 수 없는 Redis 장애 |
 
 | HTTP Status | Code           | Description                        |
 |-------------|----------------|------------------------------------|

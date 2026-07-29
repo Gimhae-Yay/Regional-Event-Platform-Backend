@@ -43,10 +43,8 @@ erDiagram
     app_user o|--o{ content_log : acts
     content ||--o{ content_revision : revises
     app_user ||--o{ content_revision : edits
-    content ||--o| content_representative_image : has_current_image
-    image_object ||--o| content_representative_image : assigned_as
-    content_revision ||--o| content_revision_representative_image : has_candidate_image
-    image_object ||--o| content_revision_representative_image : assigned_as
+    image_object o|--o{ content : is_current_image_of
+    image_object o|--o{ content_revision : is_snapshot_of
 
     region ||--o{ capacity_hold : scopes
     content_session ||--o{ capacity_hold : holds
@@ -87,19 +85,17 @@ erDiagram
 | `region` | 서비스 지역의 코드·이름·공개 여부를 관리하는 기준 테이블이다. 콘텐츠, 회차, 예약 운영과 지역 권한의 범위를 정한다. |
 | `app_user` | 로그인 식별자, 비밀번호 해시, 프로필과 회원 처리 상태를 보관하는 계정의 기준 테이블이다. 탈퇴가 완료되면 행을 남기지 않는다. |
 | `user_role_assignment` | 회원에게 부여된 `VISITOR`, `OPERATOR`, `REGION_ADMIN` 역할과 담당 지역을 분리해 관리한다. 한 역할당 담당 지역은 최대 한 곳이다. |
-| `operator_application` | 방문자가 운영자 역할과 담당 지역을 신청한 사실, 심사 결과와 사유를 보관한다. 탈퇴 후에는 신청자 연결과 사업자 개인정보를 제거한다. |
+| `operator_application` | 회원가입에서 `OPERATOR`를 선택한 활성 회원이 요청 지역과 사업자 정보를 제출한 사실, 심사 결과와 사유를 보관한다. 승인 전에는 운영자 역할을 부여하지 않으며, 탈퇴 후에는 신청자 연결과 사업자 개인정보를 제거한다. |
 
 #### 콘텐츠·회차·이미지
 
 | 테이블 | 역할 |
 | --- | --- |
-| `content` | 행사·체험 콘텐츠의 현재 정보, 소유 운영자, 지역, 현재 상태와 공개 전 소프트 삭제 시각을 관리하는 현재 상태 스냅샷이다. P0에서 필요한 연령 조건·준비물·취소 안내도 이 행에 함께 보관한다. |
+| `content` | 행사·체험 콘텐츠의 현재 정보, 소유 운영자, 지역, 현재 상태, 현재 대표 이미지 객체와 공개 전 소프트 삭제 시각을 관리하는 현재 상태 스냅샷이다. P0에서 필요한 연령 조건·준비물·취소 안내도 이 행에 함께 보관한다. |
 | `content_session` | 콘텐츠별 예약 가능한 회차의 시간, 체크인 창, 정원과 잔여 정원을 관리한다. 홀드·예약·방문의 기준 단위다. |
 | `content_log` | 콘텐츠 생성·상태 변경과 소프트 삭제의 콘텐츠, 처리자, 결과 상태·삭제 코드, 사유와 시각을 보관하는 추가 전용 로그다. 탈퇴 때만 `actor_id`를 제거한다. |
-| `content_revision` | 이미 공개된 콘텐츠를 수정하기 위한 모든 후보 필드와 심사 상태를 보관한다. 원본 버전을 기준으로 충돌을 판정하고 승인 시에만 `content`에 반영한다. |
+| `content_revision` | 이미 공개된 콘텐츠를 수정하기 위한 모든 후보 필드, 후보 대표 이미지 객체와 심사 상태를 보관한다. 원본 버전을 기준으로 충돌을 판정하고 승인 시에만 `content`에 반영한다. |
 | `image_object` | S3 객체 키, 콘텐츠 타입, 크기, 체크섬과 삭제 재시도 상태를 보관한다. 공개 URL·원본 파일명·사용자 식별자는 저장하지 않는다. |
-| `content_representative_image` | 현재 콘텐츠와 대표 이미지 객체를 1:1로 연결한다. 콘텐츠의 현재 노출 이미지를 결정한다. |
-| `content_revision_representative_image` | 콘텐츠 수정본과 심사 대상 대표 이미지 객체를 1:1로 연결한다. 승인 전 이미지 후보를 현재 콘텐츠 이미지와 분리한다. |
 
 #### 정원·예약·체크인·후기
 
@@ -264,6 +260,7 @@ erDiagram
 - `role = VISITOR`이면 `region_id IS NULL`, `role IN (OPERATOR, REGION_ADMIN)`이면
   `region_id IS NOT NULL`이어야 한다.
 - 운영자 승인 성공 시 `OPERATOR` 역할과 요청 지역 배정을 한 트랜잭션에서 생성한다.
+- 회원가입에서 `OPERATOR`를 선택하면 새 활성 회원과 요청 지역·사업자 정보를 가진 `PENDING` 운영자 신청을 한 트랜잭션에서 생성한다. 이때 `VISITOR`, `OPERATOR` 역할을 생성하지 않는다.
 - 지역 관리자 연결은 승인된 배포 초기화로만 생성한다. 일반 API로 `region` 또는
   `REGION_ADMIN` 배정을 생성·변경하지 않는다.
 - 운영자 신청은 반려 뒤 재신청할 때 새 행을 생성한다.
@@ -288,6 +285,7 @@ erDiagram
         bigint content_id PK
         bigint region_id FK
         bigint operator_id FK
+        bigint representative_image_object_id FK "nullable"
         string content_type
         string status
         int version_no
@@ -301,6 +299,7 @@ erDiagram
         text materials
         text cancellation_policy_text
         timestamp publish_at
+        timestamp representative_image_assigned_at "nullable"
         timestamp deleted_at "nullable"
         timestamp created_at
         timestamp updated_at
@@ -338,6 +337,7 @@ erDiagram
     content_revision {
         bigint content_revision_id PK
         bigint content_id FK
+        bigint candidate_image_object_id FK "nullable"
         int revision_no "content_id와 복합 UK"
         int base_content_version
         bigint editor_user_id FK
@@ -351,6 +351,7 @@ erDiagram
         string age_requirement
         text materials
         text cancellation_policy_text
+        timestamp candidate_image_assigned_at "nullable"
         timestamp submitted_at
         timestamp reviewed_at "nullable"
         bigint reviewed_by_user_id FK "nullable"
@@ -373,18 +374,6 @@ erDiagram
         timestamp created_at
     }
 
-    content_representative_image {
-        bigint content_id PK, FK
-        bigint image_object_id FK, UK
-        timestamp assigned_at
-    }
-
-    content_revision_representative_image {
-        bigint content_revision_id PK, FK
-        bigint image_object_id FK, UK
-        timestamp assigned_at
-    }
-
     region ||--o{ content : scopes
     app_user ||--o{ content : owns
     content ||--|{ content_session : schedules
@@ -392,10 +381,8 @@ erDiagram
     app_user o|--o{ content_log : acts
     content ||--o{ content_revision : revises
     app_user ||--o{ content_revision : edits
-    content ||--o| content_representative_image : has_current_image
-    image_object ||--o| content_representative_image : assigned_as
-    content_revision ||--o| content_revision_representative_image : has_candidate_image
-    image_object ||--o| content_revision_representative_image : assigned_as
+    image_object o|--o{ content : is_current_image_of
+    image_object o|--o{ content_revision : is_snapshot_of
 ```
 
 `content_revision.reviewed_by_user_id` 등 반복 처리자 FK 간선은 관계도를 읽기 어렵게 만들므로 Mermaid에서는
@@ -425,8 +412,8 @@ erDiagram
   동등한 조건부 쓰기 제약으로 강제한다.
 - 수정본 승인 조건은 원본 `PUBLISHED`, 수정본 `EDIT_REQUESTED`,
   `content.version_no = content_revision.base_content_version`다.
-- 수정본 승인 시 `content_revision`의 모든 후보 필드를 `content`에 반영하고, 원본 버전 증가, 수정본 종결과
-  성공 감사 이벤트를 한 트랜잭션에서 처리한다.
+- 수정본 승인 시 `content_revision`의 모든 후보 필드를 `content`에 반영한다. 후보 대표 이미지 객체 FK는
+  `content`에 반영하되 수정본의 심사 당시 스냅샷으로 보존한다. 원본 버전 증가, 수정본 종결과 성공 감사 이벤트를 한 트랜잭션에서 처리한다.
 - `EDIT_REJECTED`와 `EDIT_WITHDRAWN` 수정본은 원본에 반영하지 않고 보존한다.
 - P0 문서가 공개 회차의 수정 가능 필드를 확정하지 않았으므로 `content_session_revision`은 만들지 않는다.
   공개 회차는 `RSV-06`의 명시적 취소 외에 수정본 승인으로 삭제·재배정·정원 변경하지 않는다.
@@ -440,12 +427,14 @@ erDiagram
   - `ends_at <= checkin_close_at`
   - `capacity > 0`
   - `0 <= remaining_capacity <= capacity`
-- 대표 이미지 관계와 객체 메타데이터를 분리한다. 콘텐츠 또는 수정본은 각각 대표 이미지를 최대 한 개만 가지며,
-  하나의 `image_object`는 두 연결 테이블을 통틀어 최대 한 번만 나타난다.
-- `image_object.lifecycle_status = ACTIVE`이면 두 대표 이미지 연결 테이블 중 정확히 한 곳에 연결돼야 한다.
-  `DELETE_PENDING`이면 모든 연결이 제거돼야 하며 어떤 조회 경로에도 노출하지 않는다.
-- 이미지 교체·공개 전 콘텐츠 삭제·수정본 반려 또는 철회로 참조가 사라지면 DB 연결 제거를 먼저 커밋하고
-  S3 삭제를 시도한다. 실패하면 같은 `image_object`를 `DELETE_PENDING`으로 유지해 멱등 재시도한다.
+- 대표 이미지 객체 FK와 연결 시각은 콘텐츠·수정본 루트에 직접 둔다. 콘텐츠 또는 수정본은 대표 이미지 객체를 최대 한 개만 가지며,
+  하나의 불변 이미지 객체는 현재 콘텐츠와 여러 수정본 스냅샷에서 함께 참조할 수 있다.
+- 이미지 교체·제거·삭제 명령은 대상 객체 행을 잠근 뒤 `content`와 모든 `content_revision`의 직접 FK 참조를 같은 MySQL
+  트랜잭션에서 검사한다. 두 이미지 객체를 함께 잠글 때는 ID 오름차순을 사용한다.
+- `image_object.lifecycle_status = ACTIVE`이면 대표 이미지 직접 FK가 하나 이상 존재할 수 있다. `DELETE_PENDING`이면
+  모든 직접 FK 참조가 제거돼야 하며 어떤 조회 경로에도 노출하지 않는다.
+- 이미지 교체·공개 전 콘텐츠 삭제·수정본 파기로 모든 참조가 사라지면 DB 참조 제거를 먼저 커밋하고 S3 삭제를 시도한다.
+  실패하면 같은 `image_object`를 `DELETE_PENDING`으로 유지해 멱등 재시도한다.
 - 공개 URL, 원본 파일명과 사용자 식별자는 `image_object`에 저장하지 않는다.
 
 ## 5. 홀드·예약·체크인·후기 ERD
@@ -492,7 +481,7 @@ erDiagram
 
     reservation {
         bigint reservation_id PK
-        string reservation_no "고유 범위 미확정"
+        string reservation_no UK
         string qr_reference UK
         bigint region_id FK
         bigint hold_id FK, UK
@@ -598,8 +587,9 @@ erDiagram
   명시적 회차 취소가 없으면 유지한다.
 - 회차가 `CANCELLED`로 전환되면 신규 홀드·예약 확정·QR 발급·새 스캔을 차단하고,
   `ACTIVE` 홀드와 미체크인 `CONFIRMED` 예약만 정책에 따라 종결한다.
-- `reservation_no`는 예약 번호 보조 조회에 필요하지만 P0 문서가 고유 범위를 확정하지 않았다.
-  범위를 확정하기 전에는 전역 `UNIQUE`를 가정하지 않는다.
+- `reservation_no`는 시스템 전체에서 유일한 예약 번호다. QR 실패 시 운영자가 예약 번호만으로
+  정확히 한 예약을 보조 조회할 수 있도록 `UNIQUE` 제약을 둔다. 번호 형식은 서버가 생성하며
+  이름·연락처·`user_id`를 포함하지 않는다.
 - `qr_reference`는 QR에 넣는 불투명 예약 참조다. 이름·연락처·`user_id`를 QR에 넣지 않는다.
 - QR은 체크인 창에서 온디맨드로 서명하므로 `qr_token` 테이블을 만들지 않는다.
 
@@ -730,9 +720,8 @@ erDiagram
 | 사용자 역할 | `user_role_assignment(user_id, role)` | 역할별 담당 지역 최대 한 곳 |
 | 콘텐츠 수정본 | `content_revision(content_id, revision_no)` | 콘텐츠별 순차 수정본 식별 |
 | 활성 콘텐츠 수정본 | 콘텐츠별 `EDIT_REQUESTED` 최대 한 건 | 병렬 심사 방지 |
-| 원본 대표 이미지 | `content_representative_image(content_id)`, `content_representative_image(image_object_id)` | 콘텐츠별 대표 이미지 최대 한 개, 객체 중복 연결 방지 |
-| 수정본 대표 이미지 | `content_revision_representative_image(content_revision_id)`, `content_revision_representative_image(image_object_id)` | 수정본별 대표 이미지 최대 한 개, 객체 중복 연결 방지 |
 | 예약 변환 | `reservation(hold_id)` | 한 홀드당 예약 최대 한 건 |
+| 예약 번호 | `reservation(reservation_no)` | QR 실패 보조 조회에서 예약 한 건 식별 |
 | QR 참조 | `reservation(qr_reference)` | 불투명 QR 참조로 예약 한 건 식별 |
 | 방문 | `visit(reservation_id)` | 예약당 방문 최대 한 건 |
 | 후기 | `review(visit_id)` | 방문당 후기 최대 한 건 |
@@ -758,7 +747,7 @@ MySQL 복합 FK를 사용하려면 상위 테이블에 대응하는 `UNIQUE` 후
 - 홀드·예약의 활성 `user_id`가 같은지
 - 방문 생성 시 `reservation.user_id = visit.user_id`인지
 - 후기 작성 시 `visit.user_id = review.user_id`인지
-- 같은 이미지 객체가 원본·수정본 대표 이미지 연결 테이블에 동시에 존재하지 않는지
+- 이미지 삭제 또는 `DELETE_PENDING` 전환 시 `content`와 모든 `content_revision`에서 해당 이미지 객체 참조가 0건인지
 - 멱등 기록의 `operation`, `status`와 작업별 결과 FK 조합이 일치하는지
 
 ### 상태별 필수값
@@ -784,8 +773,8 @@ MySQL 복합 FK를 사용하려면 상위 테이블에 대응하는 `UNIQUE` 후
 | `idempotency_record.PROCESSING`, `FAILED` | `result_reservation_id IS NULL`, `result_visit_id IS NULL`                       |
 | `review.PUBLISHED` | `rating`, `review_text` 존재, `deleted_at IS NULL`               |
 | `review.DELETED` | `deleted_at` 존재; 파기 전에는 원문 존재, 파기 후에는 원문이 모두 `NULL`            |
-| `image_object.ACTIVE` | 대표 이미지 연결이 정확히 하나 존재                                                             |
-| `image_object.DELETE_PENDING` | 대표 이미지 연결이 없고 삭제 재시도에서만 조회                                                       |
+| `image_object.ACTIVE` | 대표 이미지 직접 FK 참조가 하나 이상 존재                                                               |
+| `image_object.DELETE_PENDING` | 모든 직접 FK 참조가 없고 삭제 재시도에서만 조회                                                       |
 
 ### 조회 인덱스 후보
 
@@ -807,7 +796,7 @@ MySQL 복합 FK를 사용하려면 상위 테이블에 대응하는 `UNIQUE` 후
 | 탈퇴 대상 활성 홀드 | `capacity_hold(user_id, status)` |
 | 사용자 예약 목록 | `reservation(user_id, status, confirmed_at)` |
 | 회차 예약자 목록·노쇼 | `reservation(session_id, status)` |
-| 예약 번호 보조 조회 | 예약 번호의 고유 범위가 확정된 뒤 `reservation_no` 선두 인덱스 정의 |
+| 예약 번호 보조 조회 | `reservation(reservation_no)` |
 | 멱등 기록 정리 | `idempotency_record(status, expires_at)` |
 | 방문 운영 조회 | `visit(region_id, content_id, session_id, checked_at)` |
 | 공개 후기 목록 | `review(content_id, status, created_at)` |
@@ -891,7 +880,7 @@ SQL의 단순 cascade가 아래 업무 순서를 대신해서는 안 된다.
 | 미확정 항목 | 필요한 결정 | 현재 ERD 처리 |
 | --- | --- | --- |
 | 가입·프로필 필드 | 로그인 식별자 형식, 이름·연락처 validation과 길이 | 논리 필드만 표현 |
-| 사업자 정보 | 세부 필드, 암호화·마스킹·보관 방식 | `business_information` 논리 값으로 표현 |
+| 사업자 정보 | 세부 필드, 암호화·마스킹·보관 방식 | 회원가입 API는 비어 있지 않은 `business_information` 텍스트를 받으며, ERD는 논리 값으로 표현 |
 | 역할 중첩 | 한 사용자의 복수 역할 허용·금지 | 역할별 한 행은 허용하되 상호 배타 제약 없음 |
 | 콘텐츠 임시 저장 | 별도 `DRAFT` 저장 여부 | 확정 상태에 없는 `DRAFT`를 추가하지 않음 |
 | 승인된 `publish_at` 변경 요청 | 요청·심사 상태와 저장 모델 | 별도 엔티티를 추정하지 않음 |
@@ -900,7 +889,6 @@ SQL의 단순 cascade가 아래 업무 순서를 대신해서는 안 된다.
 | `SUSPENDED` 후속 전이 | 재개·종료·철회 가능 여부 | 후속 전이를 추가하지 않음 |
 | 콘텐츠 종료 판정 기준 | 별도 종료 예정일, 마지막 회차 종료 또는 정상 종료의 구체 조건 | `content_log.status = ENDED`의 `date`만 기록하고 별도 `ended_at` 컬럼은 두지 않음 |
 | 공개 회차 수정 | 수정 가능한 일정·정원 필드 | 회차 리비전 테이블 제외 |
-| 예약 번호 | 형식과 전역·지역·콘텐츠·회차별 고유 범위 | 컬럼만 두고 유일 제약 보류 |
 | 별점·후기 validation | 별점 범위, 텍스트 길이·빈 값 허용 | 논리 타입만 표현 |
 | QR 운영 설정 | 토큰 TTL, 키 회전 유예 | 비영속 설정으로 유지 |
 | 멱등 운영 설정 | 보관 기간, 저장할 실패 종류·결과 코드 | 논리 필드만 표현 |
