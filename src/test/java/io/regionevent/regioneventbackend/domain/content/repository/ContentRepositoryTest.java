@@ -3,6 +3,7 @@ package io.regionevent.regioneventbackend.domain.content.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.sql.Timestamp;
 import java.time.Instant;
 
 import jakarta.persistence.EntityManager;
@@ -14,6 +15,8 @@ import org.junit.jupiter.params.provider.EnumSource;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
@@ -33,18 +36,21 @@ class ContentRepositoryTest {
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
     private final EntityManager entityManager;
+    private final JdbcTemplate jdbcTemplate;
 
     @Autowired
     ContentRepositoryTest(
         ContentRepository contentRepository,
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
-        EntityManager entityManager
+        EntityManager entityManager,
+        JdbcTemplate jdbcTemplate
     ) {
         this.contentRepository = contentRepository;
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
         this.entityManager = entityManager;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Test
@@ -125,6 +131,41 @@ class ContentRepositoryTest {
     }
 
     @Test
+    void JDBC로_행사_체험_외_콘텐츠_유형을_저장할_수_없다() {
+        Region region = saveRegion();
+        AppUser operator = saveOperator();
+
+        assertThatThrownBy(() -> insertRawContent(region, operator, "OTHER"))
+            .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void JDBC로_상태_카탈로그_외_상태로_변경할_수_없다() {
+        Content content = contentRepository.saveAndFlush(
+            newContent(saveRegion(), saveOperator(), ContentStatus.PENDING, Instant.parse("2026-08-01T00:00:00Z"))
+        );
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+            "UPDATE content SET status = ? WHERE content_id = ?",
+            "DRAFT",
+            content.getContentId()
+        )).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void JDBC로_공개된_콘텐츠에_소프트_삭제_시각을_설정할_수_없다() {
+        Content content = contentRepository.saveAndFlush(
+            newContent(saveRegion(), saveOperator(), ContentStatus.PUBLISHED, Instant.parse("2026-08-01T00:00:00Z"))
+        );
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+            "UPDATE content SET deleted_at = ? WHERE content_id = ?",
+            Timestamp.from(Instant.parse("2026-08-02T00:00:00Z")),
+            content.getContentId()
+        )).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
     void 지역과_운영자를_지연_로딩으로_매핑한다() {
         Region region = saveRegion();
         AppUser operator = saveOperator();
@@ -179,6 +220,53 @@ class ContentRepositoryTest {
             "편한 복장",
             "시작 하루 전까지 취소할 수 있습니다.",
             publishAt
+        );
+    }
+
+    private void insertRawContent(Region region, AppUser operator, String contentType) {
+        Instant now = Instant.parse("2026-08-01T00:00:00Z");
+
+        jdbcTemplate.update(
+            """
+                INSERT INTO content (
+                    region_id,
+                    operator_id,
+                    content_type,
+                    status,
+                    version_no,
+                    title,
+                    description,
+                    location_text,
+                    operating_hours_text,
+                    contact_text,
+                    precautions,
+                    age_requirement,
+                    materials,
+                    cancellation_policy_text,
+                    publish_at,
+                    deleted_at,
+                    created_at,
+                    updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+            region.getRegionId(),
+            operator.getUserId(),
+            contentType,
+            "PENDING",
+            0,
+            "김해 가야 문화 체험",
+            "김해 가야 문화를 체험하는 행사입니다.",
+            "김해문화의전당",
+            "매일 10:00~18:00",
+            "055-123-4567",
+            "안전요원의 안내를 따라주세요.",
+            "만 7세 이상",
+            "편한 복장",
+            "시작 하루 전까지 취소할 수 있습니다.",
+            Timestamp.from(now),
+            null,
+            Timestamp.from(now),
+            Timestamp.from(now)
         );
     }
 

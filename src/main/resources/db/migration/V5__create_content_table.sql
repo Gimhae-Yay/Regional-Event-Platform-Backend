@@ -19,6 +19,30 @@ CREATE TABLE content (
     created_at TIMESTAMP(6) NOT NULL,
     updated_at TIMESTAMP(6) NOT NULL,
     CONSTRAINT pk_content PRIMARY KEY (content_id),
+    CONSTRAINT ck_content_type
+        CHECK (content_type = 'EVENT_EXPERIENCE'),
+    CONSTRAINT ck_content_status
+        CHECK (
+            CASE status
+                WHEN 'PENDING' THEN TRUE
+                WHEN 'REJECTED' THEN TRUE
+                WHEN 'APPROVED' THEN TRUE
+                WHEN 'PUBLISHED' THEN TRUE
+                WHEN 'SUSPENDED' THEN TRUE
+                WHEN 'WITHDRAWN' THEN TRUE
+                WHEN 'ENDED' THEN TRUE
+                ELSE FALSE
+            END
+        ),
+    CONSTRAINT ck_content_soft_delete_status
+        CHECK (
+            CASE
+                WHEN deleted_at IS NULL THEN TRUE
+                WHEN status = 'PENDING' THEN TRUE
+                WHEN status = 'APPROVED' THEN TRUE
+                ELSE FALSE
+            END
+        ),
     CONSTRAINT fk_content_region
         FOREIGN KEY (region_id) REFERENCES region (region_id),
     CONSTRAINT fk_content_operator
