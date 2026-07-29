@@ -178,8 +178,8 @@ Accept: application/json
 11. 임박 목록은 별도 날짜 임계값 대신 현재 시각 이후 가장 가까운 `displaySession.startsAt` 순으로 정렬하며, 같은 시각이면 `contentId` 오름차순으로 정렬하고 최대 10건을 반환한다.
 12. P0에서는 페이지네이션, 유형 필터와 사용자 지정 정렬을 적용하지 않는다.
 13. Redis에는 지역과 콘텐츠의 정적 표시 정보만 캐시한다. 목록 구분과 `displaySession`, `remainingCapacity`, `reservationAvailable`은 요청마다 MySQL의 현재 회차·정원 상태로 계산하며 전체 API 응답을 캐시하지 않는다.
-14. 정적 콘텐츠 캐시 키 또는 값에는 `region_id`, `content_id`, `content.version_no`를 포함한다. 서버는 매 요청에서 MySQL의 현재 `PUBLISHED` 상태와 `version_no`를 확인하고, 캐시 버전이 다르면 해당 값을 응답에 사용하지 않고 현재 원본으로 다시 적재한다.
-15. 수정본 `EDIT_APPROVED` 반영이 커밋되면 해당 콘텐츠의 이전 버전 캐시를 제거한다. 캐시 제거 실패 시에도 14번의 버전 검증으로 이전 공개본을 반환하지 않으며, 모든 정적 캐시에는 무제한이 아닌 유한 TTL을 적용한다.
+14. 서버는 캐시 사용 여부와 관계없이 MySQL의 현재 `PUBLISHED` 상태와 `version_no`를 확인하며, 이전 버전의 공개본을 정상 응답으로 반환하지 않는다.
+15. 캐시 키·버전 검증·무효화 실패 처리·TTL과 Redis 장애 시 MySQL 우회 정책은 [ADR-0029](../../../adr/0029-use-version-validated-cache-aside-for-public-content.md)를 따른다.
 16. 공개 콘텐츠는 `ACTIVE` 상태의 대표 이미지 객체와 현재 대표 이미지 연결이 있어야 한다. 연결이 없거나 삭제 대기 객체가 연결돼 있으면 정상 콘텐츠로 대체하지 않고 정합성 오류로 처리한다.
 17. 서버는 콘텐츠가 여전히 `PUBLISHED`이고 현재 대표 이미지가 유효한지 확인한 뒤 비공개 S3 객체의 단기 presigned GET URL과 정확한 만료 시각을 함께 발급한다.
 18. presigned URL과 만료 시각은 DB나 Redis에 저장하지 않고 응답을 조립할 때마다 새로 생성한다. `representativeImageUrlExpiresAt` 이후에는 기존 URL을 재사용하지 않고 API를 다시 조회한다.
@@ -191,4 +191,4 @@ Accept: application/json
 - 이 API는 상태 전이나 감사 이벤트를 생성하지 않는다.
 - 조회 성공과 실패는 `requestId`, 지역 식별자, 진행·임박 결과 건수와 결과 코드만 구조화 로그로 남긴다.
 - 대표 이미지 객체 키, 사용자 식별정보와 개인정보를 로그에 남기지 않는다.
-- 정적 표시 정보 캐시가 없거나 만료돼도 MySQL 조회로 같은 공개 범위와 정렬 결과를 만들 수 있어야 한다.
+- 정적 표시 정보 캐시가 없거나 만료되거나 Redis를 사용할 수 없어도 MySQL 조회로 같은 공개 범위와 정렬 결과를 만들 수 있어야 한다.

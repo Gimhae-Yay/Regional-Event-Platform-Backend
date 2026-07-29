@@ -5,7 +5,7 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | `FR-02`, `FR-04`, `AUTH-01`, `CON-01`, `CON-02`, `CON-03`, `CON-04`, `SES-01`, `SES-02` |
 | 소유 도메인 | 지역·콘텐츠 카탈로그 |
-| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [인증·프로필](../../../p0/auth-profile.md), [기술 스택](../../../local-stamp-platform-tech-stack.md), [ADR-0016](../../../adr/0016-use-private-s3-presigned-urls-and-immediate-image-deletion.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [인증·프로필](../../../p0/auth-profile.md), [기술 스택](../../../local-stamp-platform-tech-stack.md), [ADR-0016](../../../adr/0016-use-private-s3-presigned-urls-and-immediate-image-deletion.md), [ADR-0029](../../../adr/0029-use-version-validated-cache-aside-for-public-content.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
