@@ -10,7 +10,7 @@
 ## 1. 개요
 
 소유 운영자가 `REJECTED` 콘텐츠의 후보 정보를 전체 교체 방식으로 편집한다. 새 대표 이미지를 사용할 때는
-소유한 `TEMPORARY` 이미지 객체를 지정해 연결한다. 회차·정원·체크인 창은 세션 도메인 API에서 관리한다.
+이미 존재하는 `ACTIVE` 이미지 객체를 지정해 연결한다. 회차·정원·체크인 창은 세션 도메인 API에서 관리한다.
 
 ### 요구사항 추적
 
@@ -109,7 +109,7 @@ Accept: application/json
 | `materials` | String | Y | 비어 있지 않은 준비물 |
 | `cancellationPolicyText` | String | Y | P0 무료 예약 취소 정책을 안내하는 비어 있지 않은 문구 |
 | `publishAt` | String | Y | API 공통 규칙의 ISO 8601 `+09:00` 오프셋 일시인 공개 예정 시각 |
-| `representativeImageObjectId` | String | N | 교체할 경우에만 제공하는 양의 10진 문자열인 본인 소유의 만료되지 않고 업로드가 검증된 `TEMPORARY` 이미지 객체 식별자 |
+| `representativeImageObjectId` | String | N | 교체할 경우에만 제공하는 양의 10진 문자열인 이미 존재하는 `ACTIVE` 이미지 객체 식별자. 연결 전 S3 객체 체크섬을 검증한다. |
 
 ### Response
 
@@ -147,11 +147,11 @@ Accept: application/json
 
 | HTTP Status | Code | Description |
 | --- | --- | --- |
-| `400` | `INVALID_INPUT` | 식별자 또는 요청 필드가 누락·공백이거나 시각 형식이 올바르지 않거나, 지정한 임시 이미지 객체가 `TEMPORARY`·업로드 검증·만료 조건을 만족하지 않는다. 콘텐츠를 변경하지 않는다. |
+| `400` | `INVALID_INPUT` | 식별자 또는 요청 필드가 누락·공백이거나 시각 형식이 올바르지 않거나, 지정한 이미지 객체가 존재하지 않거나 `ACTIVE` 상태가 아니거나 S3 객체 체크섬 검증에 실패한다. 콘텐츠를 변경하지 않는다. |
 | `400` | `INVALID_JSON` | 요청 본문을 역직렬화할 수 없다. 콘텐츠를 변경하지 않는다. |
 | `400` | `INVALID_TYPE` | `representativeImageObjectId`가 JSON 문자열이 아니다. 콘텐츠를 변경하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 콘텐츠를 변경하지 않는다. |
-| `403` | `FORBIDDEN` | 운영자 역할, 담당 지역 또는 콘텐츠 소유 관계가 없거나 지정한 임시 이미지 객체의 소유자가 아니다. 콘텐츠를 변경하지 않는다. |
+| `403` | `FORBIDDEN` | 운영자 역할, 담당 지역 또는 콘텐츠 소유 관계가 없다. 콘텐츠를 변경하지 않는다. |
 | `404` | `NOT_FOUND` | 콘텐츠가 없거나 소프트 삭제됐다. 콘텐츠를 변경하지 않는다. |
 | `409` | `CONTENT_STATE_CONFLICT` | 콘텐츠가 `REJECTED`가 아니다. 콘텐츠를 변경하지 않는다. |
 
@@ -170,6 +170,6 @@ Accept: application/json
 
 1. `REJECTED` 상태에서만 편집할 수 있다. `PENDING`, `APPROVED`, `PUBLISHED`를 포함한 다른 상태는 직접 편집할 수 없다.
 2. `contentId`, 소유자, 지역과 콘텐츠 유형은 이 API로 변경하지 않는다.
-3. `representativeImageObjectId`를 제공하면 서버는 S3 `HEAD` 결과의 SHA-256 Base64 체크섬이 임시 객체에 저장된 값과 같은지 확인해 업로드를 검증하고, 인증된 운영자 소유의 만료되지 않은 `TEMPORARY` 객체일 때만 현재 대표 이미지로 연결한다. 제공하지 않으면 기존 대표 이미지를 유지한다.
+3. `representativeImageObjectId`를 제공하면 서버는 현재 `ACTIVE`이고 S3 `HEAD` 결과의 SHA-256 Base64 체크섬이 이미지 객체에 저장된 값과 같은 이미지 객체일 때만 현재 대표 이미지로 연결한다. 제공하지 않으면 기존 대표 이미지를 유지한다.
 4. 회차·정원·체크인 창은 이 API의 수정 범위가 아니다.
 5. 같은 유효 요청을 반복하면 같은 콘텐츠 필드와 이미지 연결이 유지된다.
