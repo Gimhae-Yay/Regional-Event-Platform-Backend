@@ -36,10 +36,10 @@
 | `QR-03` | `GET /me/reservations/{reservationId}` | `reservation.status`, `visit.checked_at` |
 | `FR-06` | `GET /me/reservations` | `reservation`, `content_session`, `content` |
 | `FR-07` | `GET /me/reservations` | `reservation.status`, `visit.checked_at` |
-| `FR-10` | `GET /operator/reservations/search?reservationNo={reservationNo}` | `reservation`, `content_session`, `content`, `audit_event` |
-| `AUTH-01` | `GET /operator/reservations/search?reservationNo={reservationNo}` | `content.operator_id`, `content.region_id`, `reservation.region_id` |
-| `AUTH-03` | `GET /operator/reservations/search?reservationNo={reservationNo}` | `app_user.name`, `app_user.phone` |
-| `QR-05` | `GET /operator/reservations/search?reservationNo={reservationNo}` | `reservation`, `content_session`, `visit`, `audit_event` |
+| `FR-10` | `GET /operator/reservations/search?reservationNo={reservationNo}`, `GET /region-admin/reservations/search?reservationNo={reservationNo}` | `reservation`, `content_session`, `content`, `audit_event` |
+| `AUTH-01` | `GET /operator/reservations/search?reservationNo={reservationNo}`, `GET /region-admin/reservations/search?reservationNo={reservationNo}` | `content.operator_id`, `content.region_id`, `reservation.region_id` |
+| `AUTH-03` | `GET /operator/reservations/search?reservationNo={reservationNo}`, `GET /region-admin/reservations/search?reservationNo={reservationNo}` | `app_user.name`, `app_user.phone` |
+| `QR-05` | `GET /operator/reservations/search?reservationNo={reservationNo}`, `GET /region-admin/reservations/search?reservationNo={reservationNo}` | `reservation`, `content_session`, `visit`, `audit_event` |
 | `FR-10` | `GET /operator/contents/{contentId}/reservations?sessionId={sessionId}` | `reservation`, `capacity_hold`, `content_session`, `visit` |
 | `AUTH-01` | `GET /operator/contents/{contentId}/reservations?sessionId={sessionId}` | `content.operator_id`, `content.region_id`, `reservation.region_id` |
 | `AUTH-03` | `GET /operator/contents/{contentId}/reservations?sessionId={sessionId}` | `app_user.name`, `app_user.phone` |
@@ -70,5 +70,5 @@
 | 예약 취소 | `POST /me/reservations/{reservationId}/cancel` | [cancel-reservation.md](cancel-reservation.md) |
 | 예약 상세 조회(예약·회차·체크인 상태) | `GET /me/reservations/{reservationId}` | [get-my-reservation.md](get-my-reservation.md) |
 | 내 예약 목록 조회 | `GET /me/reservations` | [list-my-reservations.md](list-my-reservations.md) |
-| QR 실패 시 예약번호 보조 조회 | `GET /operator/reservations/search?reservationNo={reservationNo}` | [search-reservation-by-number.md](search-reservation-by-number.md) |
+| QR 실패 시 예약번호 보조 조회 | `GET /operator/reservations/search?reservationNo={reservationNo}`, `GET /region-admin/reservations/search?reservationNo={reservationNo}` | [search-reservation-by-number.md](search-reservation-by-number.md) |
 | 회차별 예약자 목록 및 개인정보 마스킹 조회 | `GET /operator/contents/{contentId}/reservations?sessionId={sessionId}` | [list-session-reservations.md](list-session-reservations.md) |
