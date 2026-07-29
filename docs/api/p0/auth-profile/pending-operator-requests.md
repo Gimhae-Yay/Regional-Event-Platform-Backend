@@ -11,7 +11,7 @@
 
 지역 관리자가 자신의 담당 지역에 접수된 `PENDING` 운영자 신청 목록을 조회한다. 요청 지역 식별자는 클라이언트가
 전달하지 않으며, 서버가 인증된 지역 관리자의 `REGION_ADMIN` 담당 지역으로 범위를 제한한다. 사업자 정보 원문은
-응답에 포함하지 않는다.
+목록 데이터, 오류 응답, 애플리케이션·접근 로그, 감사 이벤트와 지표에 포함하지 않는다.
 
 ### 요구사항 추적
 
@@ -26,7 +26,7 @@
 | Base URL·미디어 타입·시간 형식 | [API 공통 규칙](../../common/api-conventions.md) | Base URL은 `/api/v1`이고 응답은 `application/json; charset=UTF-8`이다. |
 | 인증·인가 | [인증·인가](../../common/authentication.md) | `REGION_ADMIN` 역할과 담당 지역 배정이 필요하며, 서버가 지역 경계를 강제한다. |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | `200 OK`와 빈 배열을 포함한 목록을 반환한다. |
-| 페이지네이션 | [페이지네이션](../../common/pagination.md) | P0에서는 심사 대기 목록 전체를 생성 시각 오름차순으로 반환하므로 페이지네이션을 적용하지 않는다. |
+| 페이지네이션 | [페이지네이션](../../common/pagination.md) | P0에서는 심사 대기 목록 전체를 `createdAt` 오름차순, `requestId` 오름차순으로 반환하므로 페이지네이션을 적용하지 않는다. |
 
 ## 3. 운영자 승인 요청 대기 목록 조회
 
@@ -101,8 +101,8 @@ Accept: application/json
 }
 ```
 
-대기 신청이 없으면 `200 OK`와 `data.operatorRequests: []`를 반환한다. 목록은 `created_at` 오름차순,
-같은 시각이면 `operatorApplicationId` 오름차순으로 정렬한다.
+대기 신청이 없으면 `200 OK`와 `data.operatorRequests: []`를 반환한다. 목록은 `createdAt` 오름차순,
+같은 시각이면 `requestId`(`operatorApplicationId`) 오름차순으로 정렬한다.
 
 #### Response Field
 

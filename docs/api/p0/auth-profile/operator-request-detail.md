@@ -5,13 +5,13 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | FR-09, AUTH-02 |
 | 소유 도메인 | 인증·프로필 |
-| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ERD](../../../erd.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ADR-0031](../../../adr/0031-expose-business-information-only-in-protected-review-detail.md), [ERD](../../../erd.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
 지역 관리자가 담당 지역의 운영자 신청 상세를 조회한다. 서버는 신청의 요청 지역과 인증된 지역 관리자의
 `REGION_ADMIN` 담당 지역이 같은 경우에만 응답한다. 사업자 정보 원문은 이 심사용 상세 응답에만 포함하며,
-로그와 그 밖의 응답에는 포함하지 않는다.
+그 밖의 HTTP 응답, 애플리케이션·접근 로그, 감사 이벤트, 오류 응답과 지표에는 포함하지 않는다.
 
 ### 요구사항 추적
 
@@ -81,6 +81,12 @@ Accept: application/json
 200 OK
 ```
 
+#### Response Headers
+
+| Name | Required | Description |
+| --- | --- | --- |
+| `Cache-Control` | Y | `no-store`. 사업자 정보 원문을 브라우저와 공유 프록시를 포함한 캐시에 저장하지 않는다. |
+
 #### Response Body
 
 ```json
@@ -106,7 +112,7 @@ Accept: application/json
 
 | Name | Type | Description |
 | --- | --- | --- |
-| `data.businessInformation` | String 또는 null | 담당 지역의 `REGION_ADMIN`이 수동 심사하는 사업자 정보 원문. `CANCELLED` 신청이면 `null`이다. 응답 로그에 기록하지 않는다. |
+| `data.businessInformation` | String 또는 null | 담당 지역의 `REGION_ADMIN`이 수동 심사하는 사업자 정보 원문. `CANCELLED` 신청이면 `null`이다. 로그, 감사 이벤트, 오류 응답과 지표에 기록하거나 포함하지 않는다. |
 | `statusCode` | Integer | HTTP 상태와 같은 `200` |
 | `code` | String | 성공 코드 `SUCCESS` |
 | `message` | String | 성공 메시지 `운영자 승인 요청 상세 조회에 성공했습니다.` |
@@ -139,3 +145,9 @@ Accept: application/json
   "data": null
 }
 ```
+
+### 보안 및 검증
+
+1. 서버는 인증된 주체가 `REGION_ADMIN` 역할과 담당 지역 배정을 모두 가졌는지 확인하고, 신청의 요청 지역과 담당 지역이 같은 경우에만 상세를 반환한다. 다른 지역 신청은 존재 여부를 숨기기 위해 `NOT_FOUND`로 처리한다.
+2. `businessInformation` 원문은 이 성공 응답의 `data.businessInformation`에서만 제공한다. 일반 사용자·운영자·다른 지역 관리자에게는 응답하지 않으며, 애플리케이션·접근 로그, 감사 이벤트, 오류 응답과 지표에도 남기지 않는다.
+3. 성공 응답에는 `Cache-Control: no-store`를 설정해 브라우저와 공유 프록시를 포함한 캐시에 사업자 정보 원문을 저장하지 않는다.
