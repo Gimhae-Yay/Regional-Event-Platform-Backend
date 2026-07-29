@@ -43,10 +43,8 @@ erDiagram
     app_user o|--o{ content_log : acts
     content ||--o{ content_revision : revises
     app_user ||--o{ content_revision : edits
-    content ||--o| content_representative_image : has_current_image
-    image_object ||--o| content_representative_image : assigned_as
-    content_revision ||--o| content_revision_representative_image : has_candidate_image
-    image_object ||--o| content_revision_representative_image : assigned_as
+    content o|--o| image_object : has_current_image
+    content_revision o|--o| image_object : has_candidate_image
 
     region ||--o{ capacity_hold : scopes
     content_session ||--o{ capacity_hold : holds
@@ -93,13 +91,11 @@ erDiagram
 
 | 테이블 | 역할 |
 | --- | --- |
-| `content` | 행사·체험 콘텐츠의 현재 정보, 소유 운영자, 지역, 현재 상태와 공개 전 소프트 삭제 시각을 관리하는 현재 상태 스냅샷이다. P0에서 필요한 연령 조건·준비물·취소 안내도 이 행에 함께 보관한다. |
+| `content` | 행사·체험 콘텐츠의 현재 정보, 소유 운영자, 지역, 현재 상태, 현재 대표 이미지 객체와 공개 전 소프트 삭제 시각을 관리하는 현재 상태 스냅샷이다. P0에서 필요한 연령 조건·준비물·취소 안내도 이 행에 함께 보관한다. |
 | `content_session` | 콘텐츠별 예약 가능한 회차의 시간, 체크인 창, 정원과 잔여 정원을 관리한다. 홀드·예약·방문의 기준 단위다. |
 | `content_log` | 콘텐츠 생성·상태 변경과 소프트 삭제의 콘텐츠, 처리자, 결과 상태·삭제 코드, 사유와 시각을 보관하는 추가 전용 로그다. 탈퇴 때만 `actor_id`를 제거한다. |
-| `content_revision` | 이미 공개된 콘텐츠를 수정하기 위한 모든 후보 필드와 심사 상태를 보관한다. 원본 버전을 기준으로 충돌을 판정하고 승인 시에만 `content`에 반영한다. |
+| `content_revision` | 이미 공개된 콘텐츠를 수정하기 위한 모든 후보 필드, 후보 대표 이미지 객체와 심사 상태를 보관한다. 원본 버전을 기준으로 충돌을 판정하고 승인 시에만 `content`에 반영한다. |
 | `image_object` | S3 객체 키, 콘텐츠 타입, 크기, 체크섬과 삭제 재시도 상태를 보관한다. 공개 URL·원본 파일명·사용자 식별자는 저장하지 않는다. |
-| `content_representative_image` | 현재 콘텐츠와 대표 이미지 객체를 1:1로 연결한다. 콘텐츠의 현재 노출 이미지를 결정한다. |
-| `content_revision_representative_image` | 콘텐츠 수정본과 심사 대상 대표 이미지 객체를 1:1로 연결한다. 승인 전 이미지 후보를 현재 콘텐츠 이미지와 분리한다. |
 
 #### 정원·예약·체크인·후기
 
@@ -288,6 +284,7 @@ erDiagram
         bigint content_id PK
         bigint region_id FK
         bigint operator_id FK
+        bigint representative_image_object_id FK, UK "nullable"
         string content_type
         string status
         int version_no
@@ -301,6 +298,7 @@ erDiagram
         text materials
         text cancellation_policy_text
         timestamp publish_at
+        timestamp representative_image_assigned_at "nullable"
         timestamp deleted_at "nullable"
         timestamp created_at
         timestamp updated_at
@@ -338,6 +336,7 @@ erDiagram
     content_revision {
         bigint content_revision_id PK
         bigint content_id FK
+        bigint candidate_image_object_id FK, UK "nullable"
         int revision_no "content_id와 복합 UK"
         int base_content_version
         bigint editor_user_id FK
@@ -351,6 +350,7 @@ erDiagram
         string age_requirement
         text materials
         text cancellation_policy_text
+        timestamp candidate_image_assigned_at "nullable"
         timestamp submitted_at
         timestamp reviewed_at "nullable"
         bigint reviewed_by_user_id FK "nullable"
@@ -373,18 +373,6 @@ erDiagram
         timestamp created_at
     }
 
-    content_representative_image {
-        bigint content_id PK, FK
-        bigint image_object_id FK, UK
-        timestamp assigned_at
-    }
-
-    content_revision_representative_image {
-        bigint content_revision_id PK, FK
-        bigint image_object_id FK, UK
-        timestamp assigned_at
-    }
-
     region ||--o{ content : scopes
     app_user ||--o{ content : owns
     content ||--|{ content_session : schedules
@@ -392,10 +380,8 @@ erDiagram
     app_user o|--o{ content_log : acts
     content ||--o{ content_revision : revises
     app_user ||--o{ content_revision : edits
-    content ||--o| content_representative_image : has_current_image
-    image_object ||--o| content_representative_image : assigned_as
-    content_revision ||--o| content_revision_representative_image : has_candidate_image
-    image_object ||--o| content_revision_representative_image : assigned_as
+    content o|--o| image_object : has_current_image
+    content_revision o|--o| image_object : has_candidate_image
 ```
 
 `content_revision.reviewed_by_user_id` 등 반복 처리자 FK 간선은 관계도를 읽기 어렵게 만들므로 Mermaid에서는
@@ -425,8 +411,8 @@ erDiagram
   동등한 조건부 쓰기 제약으로 강제한다.
 - 수정본 승인 조건은 원본 `PUBLISHED`, 수정본 `EDIT_REQUESTED`,
   `content.version_no = content_revision.base_content_version`다.
-- 수정본 승인 시 `content_revision`의 모든 후보 필드를 `content`에 반영하고, 원본 버전 증가, 수정본 종결과
-  성공 감사 이벤트를 한 트랜잭션에서 처리한다.
+- 수정본 승인 시 `content_revision`의 모든 후보 필드를 `content`에 반영하고, 후보 대표 이미지 객체 FK는
+  `content`로 이동한 뒤 수정본에서 제거한다. 원본 버전 증가, 수정본 종결과 성공 감사 이벤트를 한 트랜잭션에서 처리한다.
 - `EDIT_REJECTED`와 `EDIT_WITHDRAWN` 수정본은 원본에 반영하지 않고 보존한다.
 - P0 문서가 공개 회차의 수정 가능 필드를 확정하지 않았으므로 `content_session_revision`은 만들지 않는다.
   공개 회차는 `RSV-06`의 명시적 취소 외에 수정본 승인으로 삭제·재배정·정원 변경하지 않는다.
@@ -440,11 +426,13 @@ erDiagram
   - `ends_at <= checkin_close_at`
   - `capacity > 0`
   - `0 <= remaining_capacity <= capacity`
-- 대표 이미지 관계와 객체 메타데이터를 분리한다. 콘텐츠 또는 수정본은 각각 대표 이미지를 최대 한 개만 가지며,
-  하나의 `image_object`는 두 연결 테이블을 통틀어 최대 한 번만 나타난다.
-- `image_object.lifecycle_status = ACTIVE`이면 두 대표 이미지 연결 테이블 중 정확히 한 곳에 연결돼야 한다.
-  `DELETE_PENDING`이면 모든 연결이 제거돼야 하며 어떤 조회 경로에도 노출하지 않는다.
-- 이미지 교체·공개 전 콘텐츠 삭제·수정본 반려 또는 철회로 참조가 사라지면 DB 연결 제거를 먼저 커밋하고
+- 대표 이미지 객체 FK와 연결 시각은 콘텐츠·수정본 루트에 직접 둔다. `content.representative_image_object_id`와
+  `content_revision.candidate_image_object_id`는 각각 유일하며, 콘텐츠 또는 수정본은 대표 이미지 객체를 최대 한 개만 가진다.
+- 한 `image_object`가 두 직접 FK에 동시에 나타나지 않도록 이미지 연결·교체·제거 명령은 대상 객체 행을 잠그고
+  두 FK를 같은 트랜잭션에서 검사한다. 두 객체를 함께 잠글 때는 ID 오름차순을 사용한다.
+- `image_object.lifecycle_status = ACTIVE`이면 두 직접 FK 중 정확히 한 곳에 연결돼야 한다. `DELETE_PENDING`이면
+  모든 직접 FK가 제거돼야 하며 어떤 조회 경로에도 노출하지 않는다.
+- 이미지 교체·공개 전 콘텐츠 삭제·수정본 반려 또는 철회로 참조가 사라지면 두 직접 FK를 검사한 뒤 DB 참조 제거를 먼저 커밋하고
   S3 삭제를 시도한다. 실패하면 같은 `image_object`를 `DELETE_PENDING`으로 유지해 멱등 재시도한다.
 - 공개 URL, 원본 파일명과 사용자 식별자는 `image_object`에 저장하지 않는다.
 
@@ -730,8 +718,8 @@ erDiagram
 | 사용자 역할 | `user_role_assignment(user_id, role)` | 역할별 담당 지역 최대 한 곳 |
 | 콘텐츠 수정본 | `content_revision(content_id, revision_no)` | 콘텐츠별 순차 수정본 식별 |
 | 활성 콘텐츠 수정본 | 콘텐츠별 `EDIT_REQUESTED` 최대 한 건 | 병렬 심사 방지 |
-| 원본 대표 이미지 | `content_representative_image(content_id)`, `content_representative_image(image_object_id)` | 콘텐츠별 대표 이미지 최대 한 개, 객체 중복 연결 방지 |
-| 수정본 대표 이미지 | `content_revision_representative_image(content_revision_id)`, `content_revision_representative_image(image_object_id)` | 수정본별 대표 이미지 최대 한 개, 객체 중복 연결 방지 |
+| 원본 대표 이미지 | `content(representative_image_object_id)` | 콘텐츠별 현재 대표 이미지 객체 최대 한 개 |
+| 수정본 대표 이미지 | `content_revision(candidate_image_object_id)` | 수정본별 후보 대표 이미지 객체 최대 한 개 |
 | 예약 변환 | `reservation(hold_id)` | 한 홀드당 예약 최대 한 건 |
 | QR 참조 | `reservation(qr_reference)` | 불투명 QR 참조로 예약 한 건 식별 |
 | 방문 | `visit(reservation_id)` | 예약당 방문 최대 한 건 |
@@ -758,7 +746,7 @@ MySQL 복합 FK를 사용하려면 상위 테이블에 대응하는 `UNIQUE` 후
 - 홀드·예약의 활성 `user_id`가 같은지
 - 방문 생성 시 `reservation.user_id = visit.user_id`인지
 - 후기 작성 시 `visit.user_id = review.user_id`인지
-- 같은 이미지 객체가 원본·수정본 대표 이미지 연결 테이블에 동시에 존재하지 않는지
+- 같은 이미지 객체가 `content.representative_image_object_id`와 `content_revision.candidate_image_object_id`에 동시에 존재하지 않는지
 - 멱등 기록의 `operation`, `status`와 작업별 결과 FK 조합이 일치하는지
 
 ### 상태별 필수값
@@ -784,8 +772,8 @@ MySQL 복합 FK를 사용하려면 상위 테이블에 대응하는 `UNIQUE` 후
 | `idempotency_record.PROCESSING`, `FAILED` | `result_reservation_id IS NULL`, `result_visit_id IS NULL`                       |
 | `review.PUBLISHED` | `rating`, `review_text` 존재, `deleted_at IS NULL`               |
 | `review.DELETED` | `deleted_at` 존재; 파기 전에는 원문 존재, 파기 후에는 원문이 모두 `NULL`            |
-| `image_object.ACTIVE` | 대표 이미지 연결이 정확히 하나 존재                                                             |
-| `image_object.DELETE_PENDING` | 대표 이미지 연결이 없고 삭제 재시도에서만 조회                                                       |
+| `image_object.ACTIVE` | 두 직접 FK 중 대표 이미지 참조가 정확히 하나 존재                                                     |
+| `image_object.DELETE_PENDING` | 두 직접 FK의 참조가 없고 삭제 재시도에서만 조회                                                       |
 
 ### 조회 인덱스 후보
 
