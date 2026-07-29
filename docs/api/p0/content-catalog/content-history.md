@@ -10,8 +10,8 @@
 ## 1. 개요
 
 담당 지역 관리자가 콘텐츠의 상태 이력을 조회하는 API다. 이력은 `content_log`의 추가 전용 기록을 `date`, `id` 오름차순으로
-반환하며, 반려(`REJECTED`), 승인(`APPROVED`), 종료(`ENDED`)뿐 아니라 생성·자동 공개 등 기존 콘텐츠 상태 이력을 함께 반환한다.
-탈퇴한 처리자는 식별자 대신 공통 표시값으로 반환한다.
+반환하며, 반려(`REJECTED`), 승인(`APPROVED`), 종료(`ENDED`)뿐 아니라 생성·자동 공개와 소프트 삭제(`DELETED`)를 포함한
+모든 콘텐츠 상태 이력을 함께 반환한다. 탈퇴한 처리자는 식별자 대신 공통 표시값으로 반환한다.
 
 ### 요구사항 추적
 
@@ -30,8 +30,9 @@
 
 ## 3. 콘텐츠 상태 이력 조회
 
-이력 행은 수정·개별 삭제하지 않는다. `REJECTED`의 `reason`은 필수이고, `APPROVED`와 `ENDED`의 `reason`은 `null`일 수 있다.
-자동 공개와 종료는 시스템 처리이므로 `actor`를 `null`로 반환한다.
+이력 행은 수정·개별 삭제하지 않는다. 소프트 삭제된 콘텐츠도 담당 지역 관리자에게 이력 조회를 허용하며 `DELETED` 로그를
+반환한다. `REJECTED`, `SUSPENDED`, `WITHDRAWN`, `DELETED`의 `reason`은 필수이고, 생성·승인·자동 공개·종료 로그의
+`reason`은 `null`일 수 있다. 자동 공개와 종료는 시스템 처리이므로 `actor`를 `null`로 반환한다.
 
 ### Request
 
@@ -114,6 +115,15 @@ Accept: application/json
         "reason": null,
         "processedAt": "{ISO 8601 형식과 기준 시간대}",
         "actor": null
+      },
+      {
+        "status": "DELETED",
+        "reason": "등록 요청을 철회했습니다.",
+        "processedAt": "{ISO 8601 형식과 기준 시간대}",
+        "actor": {
+          "userId": 8,
+          "displayName": "김해 지역 관리자"
+        }
       }
     ]
   }
@@ -129,8 +139,8 @@ Accept: application/json
 | `message` | String | 성공 메시지 `콘텐츠 이력 조회에 성공했습니다.`다. |
 | `data.contentId` | Long | 이력을 조회한 콘텐츠 식별자다. |
 | `data.histories` | Array&lt;Object&gt; | `processedAt`, 내부 로그 식별자 오름차순의 전체 콘텐츠 상태 이력이다. 빈 이력은 빈 배열로 반환한다. |
-| `data.histories[].status` | String | 변경 뒤 콘텐츠 상태다. `PENDING`, `REJECTED`, `APPROVED`, `PUBLISHED`, `SUSPENDED`, `WITHDRAWN`, `ENDED` 중 하나다. |
-| `data.histories[].reason` | String \| null | 상태 전이 사유다. `REJECTED`에서는 null이 아니며, 사유가 없는 상태 전이에서는 `null`이다. |
+| `data.histories[].status` | String | 변경 뒤 콘텐츠 상태 또는 로그 전용 삭제 이벤트다. `PENDING`, `REJECTED`, `APPROVED`, `PUBLISHED`, `SUSPENDED`, `WITHDRAWN`, `ENDED`, `DELETED` 중 하나다. `DELETED`는 현재 `content.status`가 아닌 소프트 삭제 로그 전용 코드다. |
+| `data.histories[].reason` | String \| null | 상태 전이 또는 삭제 사유다. `REJECTED`, `SUSPENDED`, `WITHDRAWN`, `DELETED`에서는 null이 아니고, `PENDING`, `APPROVED`, `PUBLISHED`, `ENDED`에서는 `null`일 수 있다. |
 | `data.histories[].processedAt` | String | 콘텐츠 로그의 처리 시각이다. 시간 형식은 API 공통 규칙의 확정 값을 따른다. |
 | `data.histories[].actor` | Object \| null | 사용자 처리자다. 자동 공개·종료 같은 시스템 처리에는 `null`이다. |
 | `data.histories[].actor.userId` | Long \| null | 활성 처리자의 식별자다. 처리자가 탈퇴한 경우 `null`이다. |
@@ -144,7 +154,7 @@ Accept: application/json
 | 400 | `INVALID_TYPE` | `contentId`를 Long으로 변환할 수 없다. 이력은 변경하지 않는다. |
 | 401 | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 이력은 변경하지 않는다. |
 | 403 | `FORBIDDEN` | 지역 관리자 역할이 없거나 콘텐츠의 담당 지역이 다르다. 이력은 변경하지 않는다. |
-| 404 | `NOT_FOUND` | 콘텐츠가 존재하지 않거나 이미 소프트 삭제됐다. 이력은 반환하지 않는다. |
+| 404 | `NOT_FOUND` | 콘텐츠가 존재하지 않는다. 소프트 삭제된 콘텐츠는 담당 지역 관리자에게 `DELETED` 이력을 포함해 반환한다. |
 
 #### Error Response Body
 
