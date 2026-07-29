@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.global.response;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
@@ -48,5 +49,35 @@ class ApiResponseTest {
         assertThat(responseEntity.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(responseEntity.getHeaders().getFirst(HttpHeaders.AUTHORIZATION)).isEqualTo("Bearer access-token");
         assertThat(responseEntity.getBody()).isEqualTo(response);
+    }
+
+    @Test
+    void constructor_whenSuccessResponseUsesErrorCode_throwsException() {
+        assertThatThrownBy(() -> new ApiResponse<>(
+            HttpStatus.OK.value(),
+            ErrorCode.FORBIDDEN.code(),
+            ErrorCode.FORBIDDEN.message(),
+            "result"
+        )).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void constructor_whenErrorResponseContainsData_throwsException() {
+        assertThatThrownBy(() -> new ApiResponse<>(
+            ErrorCode.FORBIDDEN.httpStatus().value(),
+            ErrorCode.FORBIDDEN.code(),
+            ErrorCode.FORBIDDEN.message(),
+            "result"
+        )).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void constructor_whenErrorResponseDoesNotMatchErrorCode_throwsException() {
+        assertThatThrownBy(() -> new ApiResponse<>(
+            ErrorCode.FORBIDDEN.httpStatus().value(),
+            ErrorCode.FORBIDDEN.code(),
+            "다른 메시지",
+            null
+        )).isInstanceOf(IllegalArgumentException.class);
     }
 }

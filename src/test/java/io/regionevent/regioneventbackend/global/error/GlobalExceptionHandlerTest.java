@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 class GlobalExceptionHandlerTest {
@@ -76,6 +78,25 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void handleHandlerMethodValidationException_returnsInvalidInputResponse() throws Exception {
+        mockMvc.perform(get("/test/parameter?contentId=0"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.statusCode").value(400))
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+            .andExpect(jsonPath("$.data").isEmpty());
+    }
+
+    @Test
+    void handleNoHandlerFoundException_returnsNotFoundResponse() throws Exception {
+        mockMvc.perform(get("/test/missing-resource"))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.statusCode").value(404))
+            .andExpect(jsonPath("$.code").value("NOT_FOUND"))
+            .andExpect(jsonPath("$.message").value("요청한 리소스를 찾을 수 없습니다."))
+            .andExpect(jsonPath("$.data").isEmpty());
+    }
+
+    @Test
     void handleUnexpectedException_hidesInternalExceptionMessage() throws Exception {
         mockMvc.perform(get("/test/unexpected"))
             .andExpect(status().isInternalServerError())
@@ -102,6 +123,11 @@ class GlobalExceptionHandlerTest {
 
         @GetMapping("/type/{contentId}")
         String findById(@PathVariable Long contentId) {
+            return contentId.toString();
+        }
+
+        @GetMapping("/parameter")
+        String findByRequestParam(@RequestParam @Positive Long contentId) {
             return contentId.toString();
         }
 

@@ -6,12 +6,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
-import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.response.ApiResponse;
@@ -29,7 +32,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({
         MethodArgumentNotValidException.class,
         MissingServletRequestParameterException.class,
-        ConstraintViolationException.class
+        ConstraintViolationException.class,
+        HandlerMethodValidationException.class
     })
     public ResponseEntity<ApiResponse<Void>> handleInvalidInput(Exception exception) {
         return ApiResponse.fail(ErrorCode.INVALID_INPUT).toResponseEntity();
@@ -48,6 +52,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<ApiResponse<Void>> handleMethodNotAllowed(HttpRequestMethodNotSupportedException exception) {
         return ApiResponse.fail(ErrorCode.METHOD_NOT_ALLOWED).toResponseEntity();
+    }
+
+    @ExceptionHandler({NoHandlerFoundException.class, NoResourceFoundException.class})
+    public ResponseEntity<ApiResponse<Void>> handleNotFound(Exception exception) {
+        return ApiResponse.fail(ErrorCode.NOT_FOUND).toResponseEntity();
     }
 
     @ExceptionHandler(Exception.class)
