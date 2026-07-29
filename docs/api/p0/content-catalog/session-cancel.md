@@ -82,7 +82,7 @@ Accept: application/json
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `cancellationReason` | String | Y | 앞뒤 공백을 제거한 비어 있지 않은 최대 16,000자 텍스트여야 한다. `null`, 빈 문자열, 공백만으로 된 값 및 16,000자를 초과한 값은 허용하지 않는다. |
+| `cancellationReason` | String | Y | 앞뒤 공백을 제거한 비어 있지 않은 최대 500자 텍스트여야 한다. `null`, 빈 문자열, 공백만으로 된 값 및 500자를 초과한 값은 허용하지 않는다. |
 
 ### Response
 
@@ -124,7 +124,7 @@ Accept: application/json
 
 | HTTP Status | Code | Description |
 | --- | --- | --- |
-| 400 | `INVALID_INPUT` | 회차 식별자가 양의 정수가 아니거나 취소 사유가 누락·공백이거나 16,000자를 초과한다. 회차·홀드·예약은 변경되지 않으며 값을 수정해 다시 요청할 수 있다. |
+| 400 | `INVALID_INPUT` | 회차 식별자가 양의 정수가 아니거나 취소 사유가 누락·공백이거나 500자를 초과한다. 회차·홀드·예약은 변경되지 않으며 값을 수정해 다시 요청할 수 있다. |
 | 400 | `INVALID_JSON` | 요청 본문이 JSON 형식이 아니거나 역직렬화할 수 없다. 회차·홀드·예약은 변경되지 않는다. |
 | 400 | `INVALID_TYPE` | 회차 식별자를 정수로 변환할 수 없다. 회차·홀드·예약은 변경되지 않는다. |
 | 401 | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 회차·홀드·예약은 변경되지 않는다. |
