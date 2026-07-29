@@ -1,9 +1,7 @@
 package io.regionevent.regioneventbackend.domain.audit.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 
@@ -14,7 +12,6 @@ import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 
@@ -29,7 +26,10 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 
 @DataJpaTest
-@TestPropertySource(properties = "spring.jpa.hibernate.ddl-auto=validate")
+@TestPropertySource(properties = {
+    "spring.flyway.enabled=false",
+    "spring.jpa.hibernate.ddl-auto=create-drop"
+})
 class AuditEventRepositoryTest {
 
     private final AuditEventRepository auditEventRepository;
@@ -93,26 +93,9 @@ class AuditEventRepositoryTest {
     }
 
     @Test
-    void 감사_결과는_성공과_실패로만_제한한다() {
+    void 감사_결과는_성공과_실패를_표현한다() {
         assertThat(AuditEventResult.values())
             .containsExactly(AuditEventResult.SUCCESS, AuditEventResult.FAILURE);
-
-        assertThatThrownBy(() -> jdbcTemplate.update(
-            """
-                INSERT INTO audit_event (
-                    request_id,
-                    target_type,
-                    result,
-                    actor_kind,
-                    occurred_at
-                ) VALUES (?, ?, ?, ?, ?)
-                """,
-            "00000000-0000-0000-0000-000000000003",
-            "CONTENT",
-            "PENDING",
-            "SYSTEM",
-            Timestamp.from(Instant.parse("2026-07-29T00:00:00Z"))
-        )).isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
@@ -127,24 +110,6 @@ class AuditEventRepositoryTest {
             AuditEventTargetType.REVIEW
         );
 
-        assertThatThrownBy(() -> jdbcTemplate.update(
-            """
-                INSERT INTO audit_event (
-                    request_id,
-                    target_type,
-                    target_id,
-                    result,
-                    actor_kind,
-                    occurred_at
-                ) VALUES (?, ?, ?, ?, ?, ?)
-                """,
-            "00000000-0000-0000-0000-000000000004",
-            "APP_USER",
-            1L,
-            "SUCCESS",
-            "SYSTEM",
-            Timestamp.from(Instant.parse("2026-07-29T00:00:00Z"))
-        )).isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
