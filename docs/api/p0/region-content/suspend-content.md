@@ -23,7 +23,7 @@
 
 | 대상 | 기준 문서 | 이 API에서 명시할 내용 |
 | --- | --- | --- |
-| Base URL·미디어 타입·시간 형식 | [API 공통 규칙](../../common/api-conventions.md) | 실제 경로는 `/api/v1/region-admin/contents/{contentId}/suspend`; 시각은 ISO 8601 `+09:00` 오프셋 문자열 |
+| Base URL·미디어 타입·시간 형식 | [API 공통 규칙](../../common/api-conventions.md) | 실제 경로는 `/api/v1/region-admin/contents/{contentId}/suspend`; 생성·수정·심사·처리 이벤트 시각은 ISO 8601 UTC `Z` 문자열이며 콘텐츠 일정값만 `+09:00` 오프셋 문자열 |
 | 인증·인가 | [인증·인가](../../common/authentication.md) | 활성 `REGION_ADMIN`과 대상 콘텐츠의 담당 지역 일치가 필요 |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | `200 OK`와 `CONTENT_SUSPEND_CONFLICT`를 포함한 API별 오류 코드 |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | 명령 API이므로 적용하지 않음 |
@@ -61,7 +61,7 @@ Accept: application/json
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `contentId` | Long | Y | 운영 중단할 콘텐츠 식별자. 양의 정수여야 한다. |
+| `contentId` | String | Y | 운영 중단할 콘텐츠 식별자. 양의 10진 문자열이어야 한다. |
 
 #### Query Parameter
 
@@ -97,9 +97,9 @@ Accept: application/json
   "code": "SUCCESS",
   "message": "콘텐츠 운영 중단에 성공했습니다.",
   "data": {
-    "contentId": 101,
+    "contentId": "101",
     "status": "SUSPENDED",
-    "suspendedAt": "2026-07-30T10:00:00+09:00",
+    "suspendedAt": "2026-07-30T01:00:00Z",
     "suspensionReason": "기상 악화로 현장 운영을 중단합니다."
   }
 }
@@ -112,17 +112,17 @@ Accept: application/json
 | `statusCode` | Number | HTTP 상태 코드. 항상 `200` |
 | `code` | String | 성공 코드. 항상 `SUCCESS` |
 | `message` | String | 공개 성공 메시지 |
-| `data.contentId` | Long | 운영 중단된 콘텐츠 식별자 |
+| `data.contentId` | String | 양의 10진 문자열 운영 중단된 콘텐츠 식별자 |
 | `data.status` | String | 항상 `SUSPENDED` |
-| `data.suspendedAt` | String | `SUSPENDED` 상태 로그의 처리 시각 |
+| `data.suspendedAt` | String | `SUSPENDED` 상태 로그의 처리 시각. UTC `Z` 문자열 |
 | `data.suspensionReason` | String | 저장된 운영 중단 사유 |
 
 ### Error Code
 
 | HTTP Status | Code | Description |
 | --- | --- | --- |
-| `400` | `INVALID_INPUT` | `contentId`가 양의 정수가 아니거나 `reason`이 없거나 공백뿐이다. 콘텐츠·홀드·로그·감사 기록을 변경하지 않으며 요청 값을 수정한 뒤 재시도할 수 있다. |
-| `400` | `INVALID_TYPE` | `contentId`를 `Long`으로 변환할 수 없다. 콘텐츠·홀드·로그·감사 기록을 변경하지 않으며 값 형식을 수정한 뒤 재시도할 수 있다. |
+| `400` | `INVALID_INPUT` | `contentId`가 양의 10진 문자열이 아니거나 `reason`이 없거나 공백뿐이다. 콘텐츠·홀드·로그·감사 기록을 변경하지 않으며 요청 값을 수정한 뒤 재시도할 수 있다. |
+| `400` | `INVALID_TYPE` | `contentId`를 양의 10진 문자열 식별자로 해석할 수 없다. 콘텐츠·홀드·로그·감사 기록을 변경하지 않으며 값 형식을 수정한 뒤 재시도할 수 있다. |
 | `400` | `INVALID_JSON` | 요청 본문을 역직렬화할 수 없다. 콘텐츠·홀드·로그·감사 기록을 변경하지 않으며 JSON 형식을 수정한 뒤 재시도할 수 있다. |
 | `401` | `UNAUTHENTICATED` | 인증 정보가 없거나 유효하지 않다. 콘텐츠·홀드·로그·감사 기록을 변경하지 않으며 유효한 인증 정보로 재시도할 수 있다. |
 | `403` | `FORBIDDEN` | 인증 주체가 활성 `REGION_ADMIN`이 아니거나 대상 콘텐츠의 지역이 담당 지역과 일치하지 않는다. 콘텐츠·홀드·로그·감사 기록을 변경하지 않으며 동일한 권한 상태로 재시도해도 성공하지 않는다. |

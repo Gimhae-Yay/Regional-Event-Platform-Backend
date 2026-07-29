@@ -23,7 +23,7 @@
 
 | 대상 | 기준 문서 | 이 API에서 명시할 내용 |
 | --- | --- | --- |
-| Base URL·미디어 타입·시간 형식 | [API 공통 규칙](../../common/api-conventions.md) | 실제 경로는 `/api/v1/region-admin/content-revisions`; 시각은 ISO 8601 `+09:00` 오프셋 문자열 |
+| Base URL·미디어 타입·시간 형식 | [API 공통 규칙](../../common/api-conventions.md) | 실제 경로는 `/api/v1/region-admin/content-revisions`; 생성·수정·심사·처리 이벤트 시각은 ISO 8601 UTC `Z` 문자열이며 콘텐츠 일정값만 `+09:00` 오프셋 문자열 |
 | 인증·인가 | [인증·인가](../../common/authentication.md) | 활성 `REGION_ADMIN`과 담당 지역 일치가 필요 |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | `200 OK`의 단순 목록과 API별 오류 코드 |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | 페이지네이션을 적용하지 않는 P0 단순 목록 |
@@ -87,12 +87,12 @@ Accept: application/json
   "data": {
     "contentRevisions": [
       {
-        "contentRevisionId": 201,
-        "contentId": 101,
+        "contentRevisionId": "201",
+        "contentId": "101",
         "candidateTitle": "김해 가야문화 체험 여름 프로그램",
         "status": "EDIT_REQUESTED",
-        "submittedAt": "2026-07-30T09:00:00+09:00",
-        "editorId": 20
+        "submittedAt": "2026-07-30T00:00:00Z",
+        "editorId": "20"
       }
     ]
   }
@@ -107,12 +107,12 @@ Accept: application/json
 | `code` | String | 성공 코드. 항상 `SUCCESS` |
 | `message` | String | 공개 성공 메시지 |
 | `data.contentRevisions` | Array | 담당 지역의 심사 대기 수정본 목록. 결과가 없으면 빈 배열 `[]` |
-| `data.contentRevisions[].contentRevisionId` | Long | 수정본 식별자 |
-| `data.contentRevisions[].contentId` | Long | 원본 콘텐츠 식별자 |
+| `data.contentRevisions[].contentRevisionId` | String | 양의 10진 문자열 수정본 식별자 |
+| `data.contentRevisions[].contentId` | String | 양의 10진 문자열 원본 콘텐츠 식별자 |
 | `data.contentRevisions[].candidateTitle` | String | 생성 시 동결된 수정 후보의 제목 |
 | `data.contentRevisions[].status` | String | 항상 `EDIT_REQUESTED` |
-| `data.contentRevisions[].submittedAt` | String | 생성과 동시에 심사 요청된 수정본의 동결 시각 |
-| `data.contentRevisions[].editorId` | Long | 수정본을 생성한 소유 운영자 식별자 |
+| `data.contentRevisions[].submittedAt` | String | 생성과 동시에 심사 요청된 수정본의 동결 시각. UTC `Z` 문자열 |
+| `data.contentRevisions[].editorId` | String | 양의 10진 문자열 소유 운영자 식별자 |
 
 ### Error Code
 
