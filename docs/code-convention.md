@@ -415,8 +415,8 @@ return reservationRepository.findById(reservationId)
 
 #### 11.1.1 오류 타입과 발생
 
-- 예상 가능한 정책 위반은 공통 `BusinessException` 또는 의미 있는 도메인 예외와 `ErrorCode`의 조합으로
-  표현한다. 구분할 책임이나 추가 정보가 없는 예외 하위 타입을 오류 코드마다 만들지 않는다.
+- 예상 가능한 정책 위반은 전역 `ErrorCode` enum을 가진 공통 `BusinessException`으로 표현한다. 오류 코드마다
+  예외 하위 타입이나 도메인별 오류 enum을 만들지 않는다.
 - 도메인 객체와 Service는 `ResponseEntity`, `HttpStatus` 또는 오류 응답 DTO를 직접 생성하지 않는다.
 - 프로그래밍 오류, 알 수 없는 데이터 무결성 위반과 인프라 장애를 `BusinessException`으로 바꾸어 정상적인
   비즈니스 거절처럼 처리하지 않는다.

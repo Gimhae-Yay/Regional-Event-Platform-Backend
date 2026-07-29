@@ -18,8 +18,10 @@ JPA 엔티티와 영속성 Projection을 JSON으로 직접 노출하지 않는�
 
 ```json
 {
-  "{성공 코드 필드}": "{성공 코드}",
-  "{데이터 필드}": {
+  "statusCode": 200,
+  "code": "SUCCESS",
+  "message": "콘텐츠 목록 조회에 성공했습니다.",
+  "data": {
     "content": [],
     "{페이지 메타데이터 필드}": "{value}"
   }
