@@ -80,7 +80,7 @@ Accept: application/json
     "content": [
       {
         "reviewId": 501,
-        "authorDisplayName": "방문자",
+        "authorDisplayName": "인증 방문자",
         "rating": 5,
         "reviewText": "지역의 이야기를 직접 들을 수 있어 좋았습니다.",
         "createdAt": "공통 시각 형식",
@@ -104,7 +104,7 @@ Accept: application/json
 | `message` | String | 성공 메시지다. |
 | `data.content` | Array | 공개 후기 배열이다. 결과가 없으면 빈 배열이다. |
 | `data.content[].reviewId` | Long | 공개 후기 식별자다. |
-| `data.content[].authorDisplayName` | String | 활성 작성자의 표시명이다. 작성자 연결이 제거된 후기는 공통 `탈퇴한 사용자`를 반환한다. |
+| `data.content[].authorDisplayName` | String | 작성자 연결이 유지되면 공통 `인증 방문자`, 연결이 제거된 후기는 공통 `탈퇴한 사용자`를 반환한다. |
 | `data.content[].rating` | Integer | 별점이다. |
 | `data.content[].reviewText` | String | 후기 본문이다. |
 | `data.content[].createdAt` | String | 생성 시각이며 공통 시각 형식을 따른다. |

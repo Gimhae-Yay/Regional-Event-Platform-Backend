@@ -493,7 +493,7 @@ erDiagram
 
     reservation {
         bigint reservation_id PK
-        string reservation_no "고유 범위 미확정"
+        string reservation_no UK
         string qr_reference UK
         bigint region_id FK
         bigint hold_id FK, UK
@@ -599,8 +599,9 @@ erDiagram
   명시적 회차 취소가 없으면 유지한다.
 - 회차가 `CANCELLED`로 전환되면 신규 홀드·예약 확정·QR 발급·새 스캔을 차단하고,
   `ACTIVE` 홀드와 미체크인 `CONFIRMED` 예약만 정책에 따라 종결한다.
-- `reservation_no`는 예약 번호 보조 조회에 필요하지만 P0 문서가 고유 범위를 확정하지 않았다.
-  범위를 확정하기 전에는 전역 `UNIQUE`를 가정하지 않는다.
+- `reservation_no`는 시스템 전체에서 유일한 예약 번호다. QR 실패 시 운영자가 예약 번호만으로
+  정확히 한 예약을 보조 조회할 수 있도록 `UNIQUE` 제약을 둔다. 번호 형식은 서버가 생성하며
+  이름·연락처·`user_id`를 포함하지 않는다.
 - `qr_reference`는 QR에 넣는 불투명 예약 참조다. 이름·연락처·`user_id`를 QR에 넣지 않는다.
 - QR은 체크인 창에서 온디맨드로 서명하므로 `qr_token` 테이블을 만들지 않는다.
 
@@ -613,12 +614,16 @@ erDiagram
 - 예약 번호 보조 조회의 확인 사유·처리자·처리 시각은 `audit_event`에 남긴다.
 - `review.visit_id`는 유일하며 방문당 후기를 최대 한 건으로 제한한다.
 - 후기 작성 시 활성 사용자 연결이 `visit.user_id`와 같아야 한다.
+- `review.rating`은 `1` 이상 `5` 이하의 정수여야 한다.
+- `review.review_text`는 `null` 또는 공백만으로 구성할 수 없고 `1`자 이상 `2000`자 이하여야 한다.
 - `PUBLISHED` 후기의 수정 가능 조건은 `DB 현재 시각 < created_at + 30일`이다.
 - 후기 삭제 시 행과 `visit_id` 유일 연결은 보존하고 상태를 `DELETED`로 바꾼다.
   `deleted_at + 30일` 이후 `rating`과 `review_text`만 영구 파기한다.
   이 방식은 삭제 후 복구와 같은 방문의 재작성을 동시에 차단한다.
 - 회원 탈퇴는 후기 삭제가 아니다. `PUBLISHED` 상태와 원문을 유지하고 `user_id`를 제거하며
   `author_unlinked_at`을 기록한다. 작성자 표시 문자열은 저장하지 않고 공통 `탈퇴한 사용자`로 파생한다.
+- 공개 작성자 표시는 저장하지 않는다. `user_id` 연결이 유지되면 공통 `인증 방문자`,
+  탈퇴로 연결이 제거되면 공통 `탈퇴한 사용자`로 파생하며 이름·연락처를 공개 후기 응답에 사용하지 않는다.
 - `visit.user_id`, `review.user_id`가 제거돼도 콘텐츠·회차·방문 연결과 집계는 유지한다.
 
 ### 멱등 기록 정규화 규칙
@@ -734,6 +739,7 @@ erDiagram
 | 원본 대표 이미지 | `content_representative_image(content_id)`, `content_representative_image(image_object_id)` | 콘텐츠별 대표 이미지 최대 한 개, 객체 중복 연결 방지 |
 | 수정본 대표 이미지 | `content_revision_representative_image(content_revision_id)`, `content_revision_representative_image(image_object_id)` | 수정본별 대표 이미지 최대 한 개, 객체 중복 연결 방지 |
 | 예약 변환 | `reservation(hold_id)` | 한 홀드당 예약 최대 한 건 |
+| 예약 번호 | `reservation(reservation_no)` | QR 실패 보조 조회에서 예약 한 건 식별 |
 | QR 참조 | `reservation(qr_reference)` | 불투명 QR 참조로 예약 한 건 식별 |
 | 방문 | `visit(reservation_id)` | 예약당 방문 최대 한 건 |
 | 후기 | `review(visit_id)` | 방문당 후기 최대 한 건 |
@@ -783,7 +789,7 @@ MySQL 복합 FK를 사용하려면 상위 테이블에 대응하는 `UNIQUE` 후
 | `reservation.EXPIRED` | `expired_at` 존재, `capacity_released_at IS NULL`                                  |
 | `idempotency_record.SUCCEEDED` | `RESERVATION_CONFIRM`이면 `result_reservation_id`만, `CHECK_IN`이면 `result_visit_id`만 존재 |
 | `idempotency_record.PROCESSING`, `FAILED` | `result_reservation_id IS NULL`, `result_visit_id IS NULL`                       |
-| `review.PUBLISHED` | `rating`, `review_text` 존재, `deleted_at IS NULL`               |
+| `review.PUBLISHED` | `rating IS NOT NULL`, `1 <= rating <= 5`, `review_text IS NOT NULL`이고 공백이 아닌 `1`자 이상 `2000`자 이하, `deleted_at IS NULL` |
 | `review.DELETED` | `deleted_at` 존재; 파기 전에는 원문 존재, 파기 후에는 원문이 모두 `NULL`            |
 | `image_object.ACTIVE` | 대표 이미지 연결이 정확히 하나 존재                                                             |
 | `image_object.DELETE_PENDING` | 대표 이미지 연결이 없고 삭제 재시도에서만 조회                                                       |
@@ -808,7 +814,7 @@ MySQL 복합 FK를 사용하려면 상위 테이블에 대응하는 `UNIQUE` 후
 | 탈퇴 대상 활성 홀드 | `capacity_hold(user_id, status)` |
 | 사용자 예약 목록 | `reservation(user_id, status, confirmed_at)` |
 | 회차 예약자 목록·노쇼 | `reservation(session_id, status)` |
-| 예약 번호 보조 조회 | 예약 번호의 고유 범위가 확정된 뒤 `reservation_no` 선두 인덱스 정의 |
+| 예약 번호 보조 조회 | `reservation(reservation_no)` |
 | 멱등 기록 정리 | `idempotency_record(status, expires_at)` |
 | 방문 운영 조회 | `visit(region_id, content_id, session_id, checked_at)` |
 | 공개 후기 목록 | `review(content_id, status, created_at)` |
@@ -901,8 +907,6 @@ SQL의 단순 cascade가 아래 업무 순서를 대신해서는 안 된다.
 | `SUSPENDED` 후속 전이 | 재개·종료·철회 가능 여부 | 후속 전이를 추가하지 않음 |
 | 콘텐츠 종료 판정 기준 | 별도 종료 예정일, 마지막 회차 종료 또는 정상 종료의 구체 조건 | `content_log.status = ENDED`의 `date`만 기록하고 별도 `ended_at` 컬럼은 두지 않음 |
 | 공개 회차 수정 | 수정 가능한 일정·정원 필드 | 회차 리비전 테이블 제외 |
-| 예약 번호 | 형식과 전역·지역·콘텐츠·회차별 고유 범위 | 컬럼만 두고 유일 제약 보류 |
-| 별점·후기 validation | 별점 범위, 텍스트 길이·빈 값 허용 | 논리 타입만 표현 |
 | QR 운영 설정 | 토큰 TTL, 키 회전 유예 | 비영속 설정으로 유지 |
 | 멱등 운영 설정 | 보관 기간, 저장할 실패 종류·결과 코드 | 논리 필드만 표현 |
 | 물리 스키마 | SQL 타입·길이·기본값·인덱스명·FK 삭제 절 | Flyway 작성 전 확정 |
