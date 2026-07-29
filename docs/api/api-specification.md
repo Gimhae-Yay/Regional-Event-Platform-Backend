@@ -25,7 +25,7 @@
 | --- | --- | --- | --- |
 | 인증·프로필 | [인증·프로필 API](p0/auth-profile/auth-profile.md) | [인증·프로필](../p0/auth-profile.md) | 회원가입·로그인·로그아웃·회원탈퇴, 역할·지역 권한, 운영자 승인, 개인정보 |
 | 지역·콘텐츠 카탈로그 | [지역·콘텐츠 카탈로그 API 명세서](p0/content-catalog/content-catalog.md) | [지역·콘텐츠 카탈로그](../p0/content-catalog.md) | 지역 선택, 콘텐츠·회차, 공개·승인·운영 상태 |
-| 지역 콘텐츠 관리자 | [수정본 심사 대기 목록](p0/region-content/list-content-revisions.md) · [수정본 심사 상세](p0/region-content/get-content-revision.md) · [수정본 승인](p0/region-content/approve-content-revision.md) · [수정본 반려](p0/region-content/reject-content-revision.md) · [콘텐츠 삭제](p0/region-content/delete-content.md) · [운영 중단](p0/region-content/suspend-content.md) · [철회 승인](p0/region-content/approve-content-withdrawal.md) | [지역·콘텐츠 카탈로그](../p0/content-catalog.md) | 수정본 심사·공개본 반영, 공개 전 삭제, 운영 중단, 철회 승인 |
+| 지역 콘텐츠 관리자 | [수정본 심사 대기 목록](p0/region-content/list-content-revisions.md) · [수정본 심사 상세](p0/region-content/get-content-revision.md) · [수정본 승인](p0/region-content/approve-content-revision.md) · [수정본 반려](p0/region-content/reject-content-revision.md) · [콘텐츠 삭제](p0/region-content/delete-content.md) · [운영 중단](p0/region-content/suspend-content.md) | [지역·콘텐츠 카탈로그](../p0/content-catalog.md) | 수정본 심사·공개본 반영, 공개 전 삭제, 운영 중단 |
 | 정원 홀드·무료 예약 | [정원 홀드·무료 예약 API 명세서](p0/reservation/reservation.md) | [정원 홀드·무료 예약](../p0/reservation.md) | 정원 홀드, 예약 확정·취소·만료, 동시성·멱등성 |
 | 예약 QR·체크인 | [예약 QR·체크인 API 명세서](p0/check-in/check-in.md) | [예약 QR·체크인](../p0/check-in.md) | QR 발급·검증, 체크인, 방문 기록 |
 | 인증 후기 | [인증 후기 API](p0/review/review.md) | [인증 후기](../p0/review.md) | 후기 작성·조회·수정·삭제와 원문 파기 |
