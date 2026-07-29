@@ -14,7 +14,13 @@ CREATE TABLE audit_event (
     CONSTRAINT pk_audit_event PRIMARY KEY (audit_event_id),
     CONSTRAINT fk_audit_event_region
         FOREIGN KEY (region_id) REFERENCES region (region_id),
-    CONSTRAINT ck_audit_event_result CHECK (result IN ('SUCCESS', 'FAILURE'))
+    CONSTRAINT ck_audit_event_result CHECK (
+        CASE result
+            WHEN 'SUCCESS' THEN TRUE
+            WHEN 'FAILURE' THEN TRUE
+            ELSE FALSE
+        END
+    )
 );
 
 CREATE INDEX idx_audit_event_region_id_occurred_at
