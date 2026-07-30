@@ -131,7 +131,6 @@ public class ReservationConfirmationService {
         String requestId
     ) {
         AppUser actor = findActiveActor(actorUserId);
-        CapacityHold capacityHold = findOwnedCapacityHold(holdId, actor);
         String idempotencyKeyHash = hash(idempotencyKey);
         String requestHash = hash("holdId=" + holdId);
 
@@ -143,9 +142,17 @@ public class ReservationConfirmationService {
             )
             .orElse(null);
         if (existingRecord != null) {
-            return resolveExistingRecord(existingRecord, requestHash, requestId, actor, capacityHold);
+            return resolveExistingRecord(
+                existingRecord,
+                requestHash,
+                requestId,
+                actor,
+                findOwnedCapacityHoldIfPresent(holdId, actor),
+                holdId
+            );
         }
 
+        CapacityHold capacityHold = findOwnedCapacityHold(holdId, actor);
         Instant now = Instant.now();
         lockWaitTimeoutConfigurer.configureForCurrentTransaction();
         int insertedCount = insertProcessingIdempotencyRecord(
@@ -162,7 +169,7 @@ public class ReservationConfirmationService {
             )
             .orElseThrow(() -> new IllegalStateException("idempotency record must exist after reservation"));
         if (insertedCount == 0) {
-            return resolveExistingRecord(idempotencyRecord, requestHash, requestId, actor, capacityHold);
+            return resolveExistingRecord(idempotencyRecord, requestHash, requestId, actor, capacityHold, holdId);
         }
 
         Instant confirmedAt = capacityHoldRepository.findCurrentTimestamp();
@@ -215,10 +222,11 @@ public class ReservationConfirmationService {
         String requestHash,
         String requestId,
         AppUser actor,
-        CapacityHold capacityHold
+        CapacityHold capacityHold,
+        Long holdId
     ) {
         if (!idempotencyRecord.getRequestHash().equals(requestHash)) {
-            recordIdempotencyKeyConflict(requestId, actor, capacityHold);
+            recordIdempotencyKeyConflict(requestId, actor, capacityHold, holdId);
             throw new BusinessException(ErrorCode.IDEMPOTENCY_KEY_CONFLICT);
         }
         if (idempotencyRecord.getStatus() == IdempotencyRecordStatus.SUCCEEDED) {
@@ -233,13 +241,14 @@ public class ReservationConfirmationService {
     private void recordIdempotencyKeyConflict(
         String requestId,
         AppUser actor,
-        CapacityHold capacityHold
+        CapacityHold capacityHold,
+        Long holdId
     ) {
         log.warn(
             "Reservation idempotency key conflict. requestId={}, actorUserId={}, holdId={}, reasonCode={}",
             requestId,
             actor.getUserId(),
-            capacityHold.getHoldId(),
+            holdId,
             ErrorCode.IDEMPOTENCY_KEY_CONFLICT.code()
         );
         try {
@@ -350,6 +359,13 @@ public class ReservationConfirmationService {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         return capacityHold;
+    }
+
+    private CapacityHold findOwnedCapacityHoldIfPresent(Long holdId, AppUser actor) {
+        return capacityHoldRepository.findById(holdId)
+            .filter(capacityHold -> capacityHold.getUser() != null
+                && actor.getUserId().equals(capacityHold.getUser().getUserId()))
+            .orElse(null);
     }
 
     private static String hash(String value) {

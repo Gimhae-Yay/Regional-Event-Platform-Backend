@@ -216,6 +216,33 @@ class ReservationConfirmationServiceTest {
         assertThat(auditEventActorLinkRepository.count()).isEqualTo(3);
     }
 
+    @Test
+    void confirm_사용한_멱등_키를_존재하지_않는_홀드에_사용하면_충돌로_거부한다() {
+        ReservationFixtures fixtures = createFixtures();
+        reservationConfirmationService.confirm(
+            fixtures.user().getUserId(),
+            fixtures.capacityHold().getHoldId(),
+            "confirmation-key-5",
+            "dc98f47a-cc78-4146-8c8a-c423fb6c4cc5"
+        );
+
+        assertThatThrownBy(() -> reservationConfirmationService.confirm(
+            fixtures.user().getUserId(),
+            999999L,
+            "confirmation-key-5",
+            "41c24247-021c-4e9b-b3cb-bd5b20d1462d"
+        )).isInstanceOf(BusinessException.class)
+            .extracting(exception -> ((BusinessException) exception).getErrorCode())
+            .isEqualTo(ErrorCode.IDEMPOTENCY_KEY_CONFLICT);
+
+        assertThat(reservationRepository.count()).isEqualTo(1);
+        assertThat(idempotencyRecordRepository.count()).isEqualTo(1);
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(event -> ErrorCode.IDEMPOTENCY_KEY_CONFLICT.code().equals(event.getReasonCode()))
+            .singleElement()
+            .satisfies(event -> assertThat(event.getTargetId()).isNull());
+    }
+
     private ReservationFixtures createFixtures() {
         String suffix = UUID.randomUUID().toString();
         Region region = regionRepository.saveAndFlush(new Region("GIMHAE" + suffix.substring(0, 4), "김해시", true));
