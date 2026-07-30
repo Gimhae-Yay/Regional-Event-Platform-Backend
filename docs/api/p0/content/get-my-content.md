@@ -97,7 +97,7 @@ Accept: application/json
     "ageRequirement": "초등학생 이상",
     "materials": "필기도구",
     "cancellationPolicyText": "회차 시작 전까지 예약 전체 취소가 가능합니다.",
-    "publishAt": "2026-08-15T00:00:00Z",
+    "publishAt": "2026-08-15T09:00:00+09:00",
     "status": "REJECTED",
     "representativeImageUrl": "https://s3.ap-northeast-2.amazonaws.com/example-bucket/...",
     "representativeImageUrlExpiresAt": "2026-07-30T05:20:00Z",
@@ -126,7 +126,7 @@ Accept: application/json
 | `data.ageRequirement` | String | 연령 조건 |
 | `data.materials` | String | 준비물 |
 | `data.cancellationPolicyText` | String | P0 무료 예약 취소 정책 안내 문구 |
-| `data.publishAt` | String | 공개 예정 시각 |
+| `data.publishAt` | String | `Asia/Seoul` 기준 ISO 8601 `+09:00` 오프셋 형식의 공개 예정 시각. `Z` 또는 다른 오프셋은 허용하지 않는다. |
 | `data.status` | String | 현재 콘텐츠 상태 |
 | `data.representativeImageUrl` | String | 소유자에게만 발급하는 현재 대표 이미지의 짧은 유효기간 presigned GET URL |
 | `data.representativeImageUrlExpiresAt` | String | `representativeImageUrl`의 UTC `Z` 만료 시각 |
