@@ -104,7 +104,7 @@ Accept: application/json
 | `materials` | String | Y | 비어 있지 않은 준비물 |
 | `cancellationPolicyText` | String | Y | P0 무료 예약 취소 정책을 안내하는 비어 있지 않은 문구 |
 | `publishAt` | String | Y | ISO 8601 `+09:00` 오프셋 일시인 공개 예정 시각 |
-| `representativeImageObjectId` | String | Y | 양의 10진 문자열인 이미 존재하는 `ACTIVE` 이미지 객체 식별자. 연결 전 S3 객체 체크섬을 검증한다. |
+| `representativeImageObjectId` | String | Y | 양의 10진 문자열인 이미 존재하는 `ACTIVE` 이미지 객체 식별자. 연결 전 대표 이미지 업로드 URL 발급 API의 연결 검증 조건을 모두 확인한다. |
 | `sessions` | Array | Y | 하나 이상의 생성할 회차 배열 |
 | `sessions[].startsAt` | String | Y | `Asia/Seoul` 기준 ISO 8601 `+09:00` 오프셋 형식의 시작 시각 |
 | `sessions[].endsAt` | String | Y | `Asia/Seoul` 기준 ISO 8601 `+09:00` 오프셋 형식의 종료 시각 |
@@ -152,7 +152,7 @@ Accept: application/json
 
 | HTTP Status | Code | Description |
 | --- | --- | --- |
-| `400` | `INVALID_INPUT` | 필수 콘텐츠 필드·회차가 유효하지 않거나, 회차의 체크인 종료 시각이 회차 종료 시각보다 이르거나, 대표 이미지 객체가 존재하지 않거나 `ACTIVE` 상태가 아니거나 S3 객체 체크섬 검증에 실패한다. 콘텐츠·회차·로그를 생성하지 않는다. |
+| `400` | `INVALID_INPUT` | 필수 콘텐츠 필드·회차가 유효하지 않거나, 회차의 체크인 종료 시각이 회차 종료 시각보다 이르거나, 대표 이미지 객체 연결 검증에 실패한다. 콘텐츠·회차·로그를 생성하지 않는다. |
 | `400` | `INVALID_JSON` | 요청 본문을 역직렬화할 수 없다. 콘텐츠·회차·로그를 생성하지 않는다. |
 | `400` | `INVALID_TYPE` | `representativeImageObjectId`가 JSON 문자열이 아니거나 정원·시각 값을 선언된 타입으로 변환할 수 없다. 콘텐츠·회차·로그를 생성하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 콘텐츠·회차·로그를 생성하지 않는다. |
@@ -173,6 +173,6 @@ Accept: application/json
 ### 처리 규칙
 
 1. 서버는 인증된 승인 운영자를 `operator_id`로, 그 운영자의 담당 지역을 `region_id`로 설정한다. 요청에서 소유자·지역·콘텐츠 유형을 지정하거나 변경할 수 없다.
-2. 모든 정적 콘텐츠 필드, 현재 `ACTIVE`인 대표 이미지 한 개와 하나 이상의 유효 회차를 검증한다. 대표 이미지를 연결하기 전에 S3 `HEAD` 결과의 SHA-256 Base64 체크섬이 이미지 객체에 저장된 값과 같은지 확인한다. 각 회차는 `startsAt < endsAt`, `checkinOpenAt < checkinCloseAt`, `endsAt > checkinCloseAt`, 양수 정원을 만족해야 한다.
+2. 모든 정적 콘텐츠 필드, 현재 `ACTIVE`인 대표 이미지 한 개와 하나 이상의 유효 회차를 검증한다. 대표 이미지는 [대표 이미지 S3 업로드 URL 발급](upload-representative-image.md)의 연결 검증 조건을 모두 만족해야 한다. 각 회차는 `startsAt < endsAt`, `checkinOpenAt < checkinCloseAt`, `endsAt > checkinCloseAt`, 양수 정원을 만족해야 한다.
 3. 성공 시 콘텐츠와 회차를 만들고 `ACTIVE` 이미지 객체를 대표 이미지로 연결한 뒤, 콘텐츠를 `PENDING`으로 만들고 `PENDING` 로그를 같은 트랜잭션에서 기록한다.
 4. 생성된 `PENDING` 콘텐츠는 심사 결과가 나올 때까지 직접 편집하거나 재요청할 수 없다.
