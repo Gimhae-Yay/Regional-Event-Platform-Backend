@@ -10,6 +10,7 @@
 | --- | --- |
 | 패키지 구조·계층 책임·의존성 | [아키텍처](ARCHITECTURE.md) |
 | 유스케이스 경계·Port·Adapter 전환 | [ADR-0008](adr/0008-evolve-clean-architecture-by-use-case.md) |
+| Service 간 직접 의존·Repository 의존성 범위·UseCase 명명·컴포넌트 역할 | [ADR-0042](adr/0042-prohibit-direct-service-dependencies-and-use-usecase-orchestrators.md) |
 | API 응답·오류·페이지네이션 | [API 공통 계약](api/common/README.md) |
 | 제품 정책 | [PRD 정책 카탈로그](local-stamp-platform-prd.md#8-정책-카탈로그) |
 | 실제 버전·의존성 | [build.gradle](../build.gradle) |
