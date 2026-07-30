@@ -204,6 +204,15 @@ class ReservationConfirmationServiceTest {
         assertThat(idempotencyRecordRepository.count()).isEqualTo(1);
         assertThat(capacityHoldRepository.findById(anotherCapacityHold.getHoldId()).orElseThrow().getStatus())
             .isEqualTo(CapacityHoldStatus.ACTIVE);
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(event -> ErrorCode.IDEMPOTENCY_KEY_CONFLICT.code().equals(event.getReasonCode()))
+            .singleElement()
+            .satisfies(event -> {
+                assertThat(event.getResult()).isEqualTo(AuditEventResult.FAILURE);
+                assertThat(event.getTargetType()).isEqualTo(AuditEventTargetType.CAPACITY_HOLD);
+                assertThat(event.getTargetId()).isEqualTo(anotherCapacityHold.getHoldId());
+            });
+        assertThat(auditEventActorLinkRepository.count()).isEqualTo(3);
     }
 
     private ReservationFixtures createFixtures() {

@@ -2,6 +2,10 @@ spring:
   application:
     name: region-event-backend
 
+reservation:
+  idempotency:
+    lock-wait-timeout-seconds: 3
+
 logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [requestId=%X{requestId:-}] %logger{36} - %msg%n"
