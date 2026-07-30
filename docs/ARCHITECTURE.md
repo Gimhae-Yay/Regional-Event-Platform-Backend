@@ -6,9 +6,8 @@
 아키텍처 기준을 정의한다. 패키지는 업무 도메인을 우선하고, 클래스 간 의존성은 Controller, UseCase,
 Service, Repository의 책임 경계를 넘지 않도록 관리한다.
 
-패키지 구성과 코드 작성의 세부 기준은 [코드 컨벤션](code-convention.md)을 단일 출처로 삼는다.
-유스케이스 경계의 도입·전환·롤백 기준은 [ADR-0008](adr/0008-evolve-clean-architecture-by-use-case.md)을
-따른다.
+Java 코드 작성, JPA, 예외와 테스트의 세부 기준은 [코드 컨벤션](code-convention.md)을 따른다.
+유스케이스 경계의 도입·전환·롤백 기준은 [ADR-0008](adr/0008-evolve-clean-architecture-by-use-case.md)을 따른다.
 
 ## 2. 기본 구조
 
@@ -161,7 +160,8 @@ ReservationController → ReservationService
   `service` 패키지 또는 유스케이스 전용 하위 패키지에 둔다.
 - Repository는 `<도메인>Repository`로 이름 짓고 `repository` 패키지에 둔다.
 - UseCase 전용 패키지가 기본 패키지 계층도와 달라지는 경우에는 코드 변경 전에
-  [ADR-0008](adr/0008-evolve-clean-architecture-by-use-case.md)의 전환 절차에 따라 구조를 확정한다.
+  이 문서의 패키지 계층도를 먼저 갱신하고 [ADR-0008](adr/0008-evolve-clean-architecture-by-use-case.md)의
+  전환 절차에 따라 구조를 확정한다.
 
 ## 5. 유지보수 점검 기준
 
