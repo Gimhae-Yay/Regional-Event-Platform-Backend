@@ -110,7 +110,7 @@ Accept: application/json
 | `materials` | String | Y | 비어 있지 않은 준비물 |
 | `cancellationPolicyText` | String | Y | P0 무료 예약 취소 정책을 안내하는 비어 있지 않은 문구 |
 | `publishAt` | String | 조건부 | 기존 수정본의 후보 `publish_at`이 있으면 필수인 후보 공개 예정 시각이다. 후보 `publish_at`이 `NULL`인 공개 콘텐츠 수정본에서는 제공할 수 없다. |
-| `representativeImageObjectId` | String | N | 교체할 경우에만 제공하는 양의 10진 문자열인 이미 존재하는 `ACTIVE` 이미지 객체 식별자. 연결 전 S3 객체 체크섬을 검증한다. |
+| `representativeImageObjectId` | String | N | 교체할 경우에만 제공하는 양의 10진 문자열인 이미 존재하는 `ACTIVE` 이미지 객체 식별자. 연결 전 대표 이미지 업로드 URL 발급 API의 연결 검증 조건을 모두 확인한다. |
 
 ### Response
 
@@ -150,7 +150,7 @@ Accept: application/json
 
 | HTTP Status | Code | Description |
 | --- | --- | --- |
-| `400` | `INVALID_INPUT` | 식별자 또는 요청 필드가 누락·공백이거나 후보 `publish_at`과 `publishAt` 조건이 맞지 않거나, 지정한 이미지 객체가 존재하지 않거나 `ACTIVE` 상태가 아니거나 S3 객체 체크섬 검증에 실패한다. 수정본을 변경하지 않는다. |
+| `400` | `INVALID_INPUT` | 식별자 또는 요청 필드가 누락·공백이거나 후보 `publish_at`과 `publishAt` 조건이 맞지 않거나, 지정한 대표 이미지 객체 연결 검증에 실패한다. 수정본을 변경하지 않는다. |
 | `400` | `INVALID_JSON` | 요청 본문을 역직렬화할 수 없다. 수정본을 변경하지 않는다. |
 | `400` | `INVALID_TYPE` | `representativeImageObjectId`가 JSON 문자열이 아니다. 수정본을 변경하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 수정본을 변경하지 않는다. |
@@ -173,7 +173,7 @@ Accept: application/json
 
 1. `contentId`, 지역, 소유자와 콘텐츠 유형은 수정본 편집으로 바꾸지 않는다.
 2. 기존 수정본의 후보 `publish_at`이 있으면 `publishAt`이 필수이며 해당 후보 값을 교체한다. 후보 `publish_at`이 `NULL`인 공개 콘텐츠 수정본은 `publishAt`을 제공할 수 없다.
-3. `representativeImageObjectId`를 제공하면 서버는 현재 `ACTIVE`이고 S3 `HEAD` 결과의 SHA-256 Base64 체크섬이 이미지 객체에 저장된 값과 같은 이미지 객체일 때만 후보 대표 이미지로 연결한다. 제공하지 않으면 기존 후보 대표 이미지 스냅샷을 유지한다.
+3. `representativeImageObjectId`를 제공하면 서버는 [대표 이미지 S3 업로드 URL 발급](upload-representative-image.md)의 연결 검증 조건을 모두 만족하는 이미지 객체일 때만 후보 대표 이미지로 연결한다. 제공하지 않으면 기존 후보 대표 이미지 스냅샷을 유지한다.
 4. 공개 회차의 수정 가능 필드는 P0에서 확정되지 않았으므로 이 API는 회차·정원·체크인 창을 수정하지 않는다.
 5. `EDIT_REQUESTED`에서는 후보 필드가 동결된다. 심사에서 반려된 수정본은 이 API로 보완할 수 있지만 `EDIT_REJECTED` 상태는 종결 상태로 유지한다. 새 심사를 요청하려면 [콘텐츠 수정본 생성](create-content-revision.md)으로 새 수정본을 생성해야 한다.
 6. 편집은 원본 `content`와 공개 캐시의 버전을 변경하지 않는다.
