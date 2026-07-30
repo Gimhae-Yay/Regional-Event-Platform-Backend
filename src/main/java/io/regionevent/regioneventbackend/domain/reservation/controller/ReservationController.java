@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -34,7 +35,7 @@ public class ReservationController {
     }
 
     @PostMapping("/{holdId}/confirm")
-    public ApiResponse<ReservationConfirmationResponse> confirm(
+    public ResponseEntity<ApiResponse<ReservationConfirmationResponse>> confirm(
         @PathVariable @Positive Long holdId,
         @RequestHeader("Idempotency-Key") @NotBlank String idempotencyKey,
         Authentication authentication,
@@ -46,7 +47,8 @@ public class ReservationController {
             idempotencyKey,
             extractRequestId(request)
         );
-        return ApiResponse.success(HttpStatus.CREATED, RESERVATION_CONFIRMATION_SUCCESS_MESSAGE, response);
+        return ApiResponse.success(HttpStatus.CREATED, RESERVATION_CONFIRMATION_SUCCESS_MESSAGE, response)
+            .toResponseEntity();
     }
 
     private static Long extractActorUserId(Authentication authentication) {
