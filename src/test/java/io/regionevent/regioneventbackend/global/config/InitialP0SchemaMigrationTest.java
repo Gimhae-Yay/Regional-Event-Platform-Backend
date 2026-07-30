@@ -64,7 +64,7 @@ class InitialP0SchemaMigrationTest {
             String.class
         );
 
-        assertThat(appliedVersions).containsExactly("1", "2", "3", "4");
+        assertThat(appliedVersions).containsExactly("1", "2", "3", "4", "5");
         assertThat(tableNames).contains(
             "REGION",
             "APP_USER",
@@ -106,7 +106,8 @@ class InitialP0SchemaMigrationTest {
         );
         assertThat(contentRevisionColumnNames).contains(
             "CANDIDATE_IMAGE_OBJECT_ID",
-            "CANDIDATE_IMAGE_ASSIGNED_AT"
+            "CANDIDATE_IMAGE_ASSIGNED_AT",
+            "PUBLISH_AT"
         );
     }
 }

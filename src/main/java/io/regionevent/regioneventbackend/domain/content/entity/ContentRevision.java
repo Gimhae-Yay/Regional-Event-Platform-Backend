@@ -122,6 +122,9 @@ public class ContentRevision {
     @Column(name = "cancellation_policy_text", nullable = false, columnDefinition = "TEXT")
     private String cancellationPolicyText;
 
+    @Column(name = "publish_at")
+    private Instant publishAt;
+
     @Column(name = "candidate_image_assigned_at")
     private Instant candidateImageAssignedAt;
 
@@ -178,6 +181,7 @@ public class ContentRevision {
         String ageRequirement,
         String materials,
         String cancellationPolicyText,
+        Instant publishAt,
         Instant submittedAt,
         Instant reviewedAt,
         AppUser reviewedBy,
@@ -200,6 +204,7 @@ public class ContentRevision {
         this.ageRequirement = requireNotBlank(ageRequirement, "ageRequirement");
         this.materials = requireNotBlank(materials, "materials");
         this.cancellationPolicyText = requireNotBlank(cancellationPolicyText, "cancellationPolicyText");
+        this.publishAt = publishAt;
         this.submittedAt = requireNotNull(submittedAt, "submittedAt");
         this.reviewedAt = reviewedAt;
         this.reviewedBy = reviewedBy;
@@ -282,6 +287,10 @@ public class ContentRevision {
 
     public String getCancellationPolicyText() {
         return cancellationPolicyText;
+    }
+
+    public Instant getPublishAt() {
+        return publishAt;
     }
 
     public Instant getCandidateImageAssignedAt() {
