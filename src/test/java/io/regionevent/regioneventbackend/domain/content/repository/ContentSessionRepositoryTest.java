@@ -61,7 +61,7 @@ class ContentSessionRepositoryTest {
         Instant startsAt = Instant.parse("2026-08-02T01:00:00Z");
         Instant endsAt = Instant.parse("2026-08-02T03:00:00Z");
         Instant checkinOpenAt = Instant.parse("2026-08-02T00:30:00Z");
-        Instant checkinCloseAt = Instant.parse("2026-08-02T03:30:00Z");
+        Instant checkinCloseAt = Instant.parse("2026-08-02T02:30:00Z");
 
         ContentSession contentSession = contentSessionRepository.saveAndFlush(
             new ContentSession(
@@ -119,7 +119,7 @@ class ContentSessionRepositoryTest {
         Instant startsAt = Instant.parse("2026-08-02T01:00:00Z");
         Instant endsAt = Instant.parse("2026-08-02T03:00:00Z");
         Instant checkinOpenAt = Instant.parse("2026-08-02T00:30:00Z");
-        Instant checkinCloseAt = Instant.parse("2026-08-02T03:30:00Z");
+        Instant checkinCloseAt = Instant.parse("2026-08-02T02:30:00Z");
 
         assertThatThrownBy(() -> new ContentSession(
             content,
@@ -128,6 +128,16 @@ class ContentSessionRepositoryTest {
             startsAt,
             checkinOpenAt,
             checkinCloseAt,
+            20
+        )).isInstanceOf(IllegalArgumentException.class);
+
+        assertThatThrownBy(() -> new ContentSession(
+            content,
+            region,
+            startsAt,
+            endsAt,
+            checkinOpenAt,
+            endsAt,
             20
         )).isInstanceOf(IllegalArgumentException.class);
 

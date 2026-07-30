@@ -1,6 +1,7 @@
 ## 5. 담당 지역 승인 대기 목록 조회
 
-지역 관리자가 자신의 담당 지역에서 승인 심사를 기다리는 콘텐츠 목록을 조회한다.
+지역 관리자가 자신의 담당 지역에서 최초 승인 또는 반려 후 재제출 심사를 기다리는 콘텐츠 목록을 조회한다.
+공개 전 수정 심사 때문에 `APPROVED → PENDING`이 된 콘텐츠는 수정본 대기열에서 조회한다.
 조회 결과는 승인·반려 처리를 수행하지 않으며 콘텐츠 상태와 감사 이력을 변경하지 않는다.
 
 ### Request
@@ -127,7 +128,7 @@ Accept: application/json
 
 1. 인증 주체는 `ACTIVE` 상태이고 `REGION_ADMIN` 역할과 담당 `region_id`를 가진 회원이어야 한다.
 2. 서버는 인증 주체의 역할 배정에서 담당 지역을 결정하며 클라이언트가 지역을 지정하거나 변경할 수 없다.
-3. `content.region_id = 인증 지역 관리자의 담당 region_id`, `content.status = PENDING`, `content.deleted_at IS NULL`인 콘텐츠만 반환한다.
+3. `content.region_id = 인증 지역 관리자의 담당 region_id`, `content.status = PENDING`, `content.deleted_at IS NULL`이고 최신 `PENDING` 상태 로그의 직전 상태 로그가 `APPROVED`가 아닌 콘텐츠만 반환한다. 공개 전 수정 심사 대기 콘텐츠는 [심사 대기 수정본 목록](list-pending-content-revisions.md)에서 반환한다.
 4. 다른 지역 콘텐츠의 존재 여부와 개수는 응답과 오류로 노출하지 않는다.
 5. `status`가 누락되거나 `PENDING` 이외의 값이면 빈 목록으로 대체하지 않고 `INVALID_INPUT`으로 거부한다.
 6. `submittedAt`은 해당 콘텐츠의 가장 최근 `status = PENDING`인 `content_log.date`를 사용한다.

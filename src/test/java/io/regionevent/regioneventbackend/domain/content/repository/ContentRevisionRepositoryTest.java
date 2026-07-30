@@ -34,6 +34,7 @@ import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepositor
 class ContentRevisionRepositoryTest {
 
     private static final Instant SUBMITTED_AT = Instant.parse("2026-08-01T00:00:00Z");
+    private static final Instant CANDIDATE_PUBLISH_AT = Instant.parse("2026-08-05T00:00:00Z");
     private static final Instant REVIEWED_AT = Instant.parse("2026-08-01T01:00:00Z");
     private static final Instant WITHDRAWN_AT = Instant.parse("2026-08-01T02:00:00Z");
 
@@ -88,6 +89,7 @@ class ContentRevisionRepositoryTest {
         assertThat(foundContentRevision.getCancellationPolicyText()).isEqualTo("시작 이틀 전까지 취소할 수 있습니다.");
         assertThat(foundContentRevision.getCandidateImageObject()).isNull();
         assertThat(foundContentRevision.getCandidateImageAssignedAt()).isNull();
+        assertThat(foundContentRevision.getPublishAt()).isNull();
         assertThat(foundContentRevision.getSubmittedAt()).isEqualTo(SUBMITTED_AT);
         assertThat(foundContentRevision.getReviewedAt()).isNull();
         assertThat(foundContentRevision.getReviewedBy()).isNull();
@@ -96,6 +98,35 @@ class ContentRevisionRepositoryTest {
         assertThat(foundContentRevision.getWithdrawnBy()).isNull();
         assertThat(foundContentRevision.getWithdrawalReason()).isNull();
         assertThat(foundContentRevision.getCreatedAt()).isNotNull();
+    }
+
+    @Test
+    void 콘텐츠_수정본에_공개_예정_시각을_선택적으로_저장한다() {
+        Content content = saveContent();
+        AppUser editor = saveUser("editor@example.com");
+
+        ContentRevision contentRevision = contentRevisionRepository.saveAndFlush(
+            newRevision(
+                content,
+                1,
+                editor,
+                ContentRevisionStatus.EDIT_REQUESTED,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                CANDIDATE_PUBLISH_AT
+            )
+        );
+        entityManager.clear();
+
+        ContentRevision foundContentRevision = contentRevisionRepository.findById(
+            contentRevision.getContentRevisionId()
+        ).orElseThrow();
+
+        assertThat(foundContentRevision.getPublishAt()).isEqualTo(CANDIDATE_PUBLISH_AT);
     }
 
     @Test
@@ -308,6 +339,34 @@ class ContentRevisionRepositoryTest {
         AppUser withdrawnBy,
         String withdrawalReason
     ) {
+        return newRevision(
+            content,
+            revisionNo,
+            editor,
+            status,
+            reviewedAt,
+            reviewedBy,
+            reviewReason,
+            withdrawnAt,
+            withdrawnBy,
+            withdrawalReason,
+            null
+        );
+    }
+
+    private ContentRevision newRevision(
+        Content content,
+        int revisionNo,
+        AppUser editor,
+        ContentRevisionStatus status,
+        Instant reviewedAt,
+        AppUser reviewedBy,
+        String reviewReason,
+        Instant withdrawnAt,
+        AppUser withdrawnBy,
+        String withdrawalReason,
+        Instant publishAt
+    ) {
         return new ContentRevision(
             content,
             revisionNo,
@@ -323,6 +382,7 @@ class ContentRevisionRepositoryTest {
             "만 8세 이상",
             "운동화",
             "시작 이틀 전까지 취소할 수 있습니다.",
+            publishAt,
             SUBMITTED_AT,
             reviewedAt,
             reviewedBy,

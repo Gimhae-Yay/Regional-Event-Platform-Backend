@@ -1,167 +1,78 @@
-# 콘텐츠 수정본 승인·공개본 반영 API 명세서
+# 콘텐츠 수정본 승인 API 명세서
 
 | 항목 | 내용 |
 | --- | --- |
 | 대상 릴리스 | P0 |
-| 관련 요구사항 | `FR-10`, `FR-14`, `AUTH-01`, `CON-05`, `CON-09` |
-| 소유 도메인 | 콘텐츠·지역 관리자 |
-| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [인증·프로필](../../../p0/auth-profile.md), [API 공통 계약](../../common/README.md), [ADR-0014](../../../adr/0014-store-published-content-edits-in-relational-revision-tables.md) |
+| 관련 요구사항 | `FR-14`, `AUTH-01`, `CON-05`, `CON-09` |
+| 소유 도메인 | 지역·콘텐츠 카탈로그 |
+| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [ADR-0032](../../../adr/0032-block-automatic-publication-during-pre-publication-revision-review.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
-담당 지역 관리자가 생성 즉시 `EDIT_REQUESTED`로 동결된 완전 후보 수정본을 승인하고 후보 필드를 현재 공개본에 반영한다.
-승인 사유는 수정본의 상태별 필수값으로 요청 본문에서 반드시 받으며, 원본 반영·수정본 종결·감사 기록은 하나의 트랜잭션으로 처리한다.
+담당 지역 관리자가 심사 대기 수정본을 승인한다. 공개 콘텐츠 수정본은 후보 필드만 현재 공개본에 반영한다.
+공개 전 수정본은 후보 필드와 후보 공개 예정 시각을 반영하고 원본을 `PENDING → APPROVED`로 재승인한다.
 
-### 요구사항 추적
-
-| 요구사항 | HTTP 계약 | 주요 데이터 |
-| --- | --- | --- |
-| `FR-14`, `CON-05` | `POST /region-admin/content-revisions/{revisionId}/approve` | `content_revision`, `content` |
-| `AUTH-01`, `CON-09` | `POST /region-admin/content-revisions/{revisionId}/approve` | `content.region_id`, `user_role_assignment`, `audit_event` |
-
-## 2. 공통 계약 참조
-
-| 대상 | 기준 문서 | 이 API에서 명시할 내용 |
-| --- | --- | --- |
-| Base URL·미디어 타입·시간 형식 | [API 공통 규칙](../../common/api-conventions.md) | 실제 경로는 `/api/v1/region-admin/content-revisions/{revisionId}/approve`; 생성·수정·심사·처리 이벤트 시각은 ISO 8601 UTC `Z` 문자열이며 콘텐츠 일정값만 `+09:00` 오프셋 문자열 |
-| 인증·인가 | [인증·인가](../../common/authentication.md) | 활성 `REGION_ADMIN`과 원본 콘텐츠의 담당 지역 일치가 필요 |
-| 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | `200 OK`와 `CONTENT_REVISION_REVIEW_CONFLICT`를 포함한 API별 오류 코드 |
-| 페이지네이션 | [페이지네이션](../../common/pagination.md) | 명령 API이므로 적용하지 않음 |
-
-## 3. 콘텐츠 수정본 승인·공개본 반영
+## 2. 수정본 승인
 
 ### Request
 
 ```http
-POST /region-admin/content-revisions/{revisionId}/approve
+POST /api/v1/region-admin/content-revisions/{revisionId}/approve
 ```
 
-#### Request Example
-
-```http
-POST /api/v1/region-admin/content-revisions/201/approve HTTP/1.1
-Authorization: Bearer {accessToken}
-Content-Type: application/json
-Accept: application/json
-
-{
-  "reviewReason": "운영 기준을 충족해 승인합니다."
-}
-```
-
-#### Request Headers
-
-| Name | Required | Description |
-| --- | --- | --- |
-| `Authorization` | Y | `Bearer {accessToken}`. 인증 주체는 활성 상태의 `REGION_ADMIN`이어야 한다. |
-| `Content-Type` | Y | `application/json` |
-| `Accept` | N | `application/json` |
-
-#### Path Variable
-
-| Name | Type | Required | Description |
-| --- | --- | --- | --- |
-| `revisionId` | String | Y | 승인할 수정본 식별자. 양의 10진 문자열이어야 한다. |
-
-#### Query Parameter
-
-없음.
-
-#### Request Body
-
-```json
-{
-  "reviewReason": "운영 기준을 충족해 승인합니다."
-}
-```
-
-#### Request Field
+요청 본문은 없다.
 
 | Name | Type | Required | Description |
 | --- | --- | --- |
-| `reviewReason` | String | Y | 승인 사유. 공백만으로 구성할 수 없으며 `content_revision.review_reason`에 기록한다. |
+| `Authorization` | Header | Y | `Bearer <accessToken>` 형식의 지역 관리자 Access Token |
+| `revisionId` | Path | Y | 양의 10진 문자열인 수정본 식별자 |
 
 ### Response
-
-#### Status
 
 ```http
 200 OK
 ```
 
-#### Response Body
-
 ```json
 {
   "statusCode": 200,
   "code": "SUCCESS",
-  "message": "콘텐츠 수정본 승인과 공개본 반영에 성공했습니다.",
+  "message": "콘텐츠 수정본 승인에 성공했습니다.",
   "data": {
-    "contentRevisionId": "201",
+    "revisionId": "501",
     "contentId": "101",
     "revisionStatus": "EDIT_APPROVED",
-    "contentStatus": "PUBLISHED",
-    "reviewedAt": "2026-07-30T01:00:00Z",
-    "reviewReason": "운영 기준을 충족해 승인합니다."
+    "contentStatus": "APPROVED",
+    "publishAt": "2026-08-20T09:00:00+09:00",
+    "reviewedAt": "2026-07-30T02:10:00Z"
   }
 }
 ```
 
-#### Response Field
-
 | Name | Type | Description |
 | --- | --- | --- |
-| `statusCode` | Number | HTTP 상태 코드. 항상 `200` |
-| `code` | String | 성공 코드. 항상 `SUCCESS` |
-| `message` | String | 공개 성공 메시지 |
-| `data.contentRevisionId` | String | 양의 10진 문자열 승인된 수정본 식별자 |
-| `data.contentId` | String | 양의 10진 문자열 반영된 공개 콘텐츠 식별자 |
-| `data.revisionStatus` | String | 항상 `EDIT_APPROVED` |
-| `data.contentStatus` | String | 항상 `PUBLISHED` |
-| `data.reviewedAt` | String | 수정본 승인 처리 시각. UTC `Z` 문자열 |
-| `data.reviewReason` | String | 저장된 승인 사유 |
+| `data.revisionId` | String | 승인한 수정본 식별자 |
+| `data.contentId` | String | 원본 콘텐츠 식별자 |
+| `data.revisionStatus` | String | 승인 뒤 `EDIT_APPROVED` |
+| `data.contentStatus` | String | 공개 콘텐츠 수정본이면 `PUBLISHED`, 공개 전 수정본이면 `APPROVED` |
+| `data.publishAt` | String | 승인 뒤 원본의 공개 예정 시각 |
+| `data.reviewedAt` | String | 승인 처리 시각. UTC ISO 8601 형식 |
 
 ### Error Code
 
 | HTTP Status | Code | Description |
 | --- | --- | --- |
-| `400` | `INVALID_INPUT` | `revisionId`가 양의 10진 문자열이 아니거나 `reviewReason`이 없거나 공백뿐이다. 원본·수정본·감사 기록을 변경하지 않으며 요청 값을 수정한 뒤 재시도할 수 있다. |
-| `400` | `INVALID_TYPE` | `revisionId`를 양의 10진 문자열 식별자로 해석할 수 없다. 원본·수정본·감사 기록을 변경하지 않으며 값 형식을 수정한 뒤 재시도할 수 있다. |
-| `400` | `INVALID_JSON` | 요청 본문을 역직렬화할 수 없다. 원본·수정본·감사 기록을 변경하지 않으며 JSON 형식을 수정한 뒤 재시도할 수 있다. |
-| `401` | `UNAUTHENTICATED` | 인증 정보가 없거나 유효하지 않다. 원본·수정본·감사 기록을 변경하지 않으며 유효한 인증 정보로 재시도할 수 있다. |
-| `403` | `FORBIDDEN` | 인증 주체가 활성 `REGION_ADMIN`이 아니거나 원본 콘텐츠의 지역이 담당 지역과 일치하지 않는다. 원본·수정본·감사 기록을 변경하지 않으며 동일한 권한 상태로 재시도해도 성공하지 않는다. |
-| `404` | `NOT_FOUND` | 수정본이 없거나 심사 대상 `EDIT_REQUESTED`가 아니다. 심사 대상이 아닌 수정본의 존재·상태는 노출하지 않는다. 원본·수정본·감사 기록을 변경하지 않는다. |
-| `409` | `CONTENT_REVISION_REVIEW_CONFLICT` | 심사 대상 판정 뒤 동일 수정본의 승인·반려·운영자 철회가 먼저 종결되었거나, 원본이 `PUBLISHED`가 아니거나, 기준 원본 버전이 일치하지 않는다. 원본·수정본·성공 감사 기록을 부분 변경하지 않으며 현재 상태를 다시 조회해야 한다. 롤백 뒤에는 비개인 실패 `audit_event`를 별도 트랜잭션으로 기록한다. |
-| `500` | `INTERNAL_SERVER_ERROR` | 원본·수정본·후보 이미지 연결 정합성 오류 또는 예상하지 못한 서버 오류가 발생했다. 트랜잭션이 커밋되지 않은 경우 원본·수정본·감사 기록은 변경되지 않는다. |
-
-#### Error Response Body
-
-```json
-{
-  "statusCode": 409,
-  "code": "CONTENT_REVISION_REVIEW_CONFLICT",
-  "message": "콘텐츠 수정본을 심사할 수 없는 상태입니다.",
-  "data": null
-}
-```
+| `400` | `INVALID_INPUT` | `revisionId`가 양의 10진 문자열이 아니다. |
+| `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. |
+| `403` | `FORBIDDEN` | 지역 관리자 역할이 없거나 원본 콘텐츠가 담당 지역에 속하지 않는다. |
+| `404` | `NOT_FOUND` | 수정본이 없거나 원본 콘텐츠가 소프트 삭제됐다. |
+| `409` | `CONTENT_STATE_CONFLICT` | 수정본이 `EDIT_REQUESTED`가 아니거나 원본 상태·버전·후보 `publish_at` 조건이 맞지 않거나, 반려·철회·자동 공개가 먼저 종결됐다. |
 
 ### 처리 규칙
 
-1. 인증 주체는 활성 상태이며 담당 `region_id`가 연결된 `REGION_ADMIN`이어야 한다.
-2. 수정본의 원본 콘텐츠 `region_id`와 인증 지역 관리자의 담당 `region_id`가 일치해야 한다.
-3. 수정본이 `EDIT_REQUESTED`가 아니면 `404 NOT_FOUND`로 처리한다. 이때 심사 대상이 아닌 수정본의 존재·정확한 상태를 응답으로 노출하지 않는다.
-4. 생성 즉시 `EDIT_REQUESTED` 상태가 된 수정본은 필수 후보 필드와 후보 대표 이미지 연결을 검증한 완전 후보이며, 심사 중에는 후보 필드를 변경하지 않는다.
-5. 승인 조건은 심사 대상 수정본, 원본 콘텐츠 `PUBLISHED`, `content.version_no = content_revision.base_content_version`의 세 조건을 모두 만족하는 경우다.
-6. 성공 시 동결된 수정본의 모든 후보 필드와 후보 대표 이미지 연결을 현재 `content`에 반영하고 원본 `version_no`를 증가시킨다. 수정본의 후보 이미지 FK는 심사 스냅샷으로 보존해 제거하지 않는다.
-7. 후보 대표 이미지가 기존 공개본 이미지와 다르면 두 `image_object` 행을 식별자 오름차순으로 잠근다. 기존 공개본 이미지의 `content` FK를 교체한 뒤 `content`와 모든 `content_revision`의 직접 FK 참조를 검사해 참조가 0건일 때만 해당 객체를 `DELETE_PENDING`으로 전이한다.
-8. `DELETE_PENDING` 전이와 승인 반영은 같은 MySQL 트랜잭션에서 커밋하고, 커밋 뒤 비공개 S3 원본 삭제를 즉시 시도한다. S3 삭제 실패는 이미지 삭제 재시도 정책으로 처리하며 참조 중인 객체를 삭제하지 않는다.
-9. 성공 시 수정본을 `EDIT_APPROVED`로 전이하고 요청 본문의 `reviewReason`을 `reviewed_at`, `reviewed_by_user_id`, `review_reason`과 함께 기록한다.
-10. 승인·반려·운영자 철회가 같은 `EDIT_REQUESTED` 수정본을 경합하면 조건부 종결에 성공한 하나만 성공한다. 심사 대상 판정 후 다른 종결이 먼저 커밋되면 `409 CONTENT_REVISION_REVIEW_CONFLICT`로 처리하며, 이미 승인된 수정본은 새 수정본으로만 보정할 수 있다.
-11. 공개 회차는 수정본 승인으로 삭제·재배정·정원 변경하지 않는다.
-
-### 감사 및 정합성
-
-- 원본 후보 반영, 원본 버전 증가, 수정본 종결과 성공 `audit_event`는 하나의 MySQL 트랜잭션에서 함께 커밋하거나 함께 롤백한다.
-- 기존 대표 이미지의 참조 해제, 참조 0건 검사와 필요 시 `DELETE_PENDING` 전이는 원본 반영과 같은 트랜잭션에 포함한다. 두 이미지 객체를 함께 잠글 때는 식별자 오름차순으로 잠가 교착을 방지한다.
-- 성공 감사 기록은 처리자, 처리 시각, 원본 콘텐츠와 수정본 식별자, `EDIT_REQUESTED → EDIT_APPROVED` 결과 및 승인 사유를 재현할 수 있어야 한다.
-- 실패 시 원본·수정본·후보 이미지 연결과 성공 감사 이벤트를 부분 반영하지 않는다. 롤백된 거부·충돌은 롤백 완료 뒤 별도 트랜잭션에서 비개인 `FAILURE` `audit_event`로 기록한다.
+1. 담당 지역 관리자만 원본 콘텐츠의 `region_id` 범위에서 처리할 수 있다.
+2. 수정본 `EDIT_REQUESTED`, 원본 `deleted_at IS NULL`, `content.version_no = content_revision.base_content_version`을 함께 조건으로 확인한다.
+3. `content_revision.publish_at IS NULL`이면 원본은 `PUBLISHED`여야 한다. 후보 표시 필드와 대표 이미지만 반영하고 원본 상태·기존 `publish_at`은 유지한다.
+4. `content_revision.publish_at IS NOT NULL`이면 원본은 `PENDING`이고 최신 `PENDING` 상태 로그의 직전 상태 로그가 `APPROVED`여야 한다. 후보 표시 필드와 후보 `publish_at`을 반영하고 원본을 `PENDING → APPROVED`로 전이한다.
+5. 두 경우 모두 원본 반영, 원본 버전 증가, 수정본 `EDIT_APPROVED` 전이, 필요한 `APPROVED` 상태 로그와 성공 감사 기록을 하나의 MySQL 트랜잭션에서 함께 커밋한다.
+6. 승인·반려·철회·자동 공개가 경합하면 현재 수정본·원본 상태와 버전을 조건으로 먼저 커밋한 하나만 성공한다.
