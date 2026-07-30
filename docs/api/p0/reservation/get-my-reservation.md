@@ -98,7 +98,7 @@ Accept: application/json
 | `code` | String | 성공 코드. 항상 `SUCCESS` |
 | `message` | String | 공개 성공 메시지 |
 | `data.reservation.reservationId` | String | 예약 식별자 |
-| `data.reservation.reservationNo` | String | 시스템 전체에서 유일한 예약 번호. 형식은 서버가 생성한다. |
+| `data.reservation.reservationNo` | String | 시스템 전체에서 유일한 예약 번호. 서버가 `Asia/Seoul` 날짜의 `RyyyyMMdd`와 12자리 Crockford Base32 난수 접미사로 생성한다. |
 | `data.reservation.status` | String | 예약 상태. `CONFIRMED`, `CHECKED_IN`, `CANCELLED`, `EXPIRED` 중 하나 |
 | `data.reservation.confirmedAt` | String | 예약 확정 시각. API 공통 규칙에 따른 UTC ISO 8601 일시다. |
 | `data.reservation.cancelledAt` | String or null | `CANCELLED` 상태의 취소 시각. 그 외 상태에서는 `null` API 공통 규칙에 따른 UTC ISO 8601 일시다. |

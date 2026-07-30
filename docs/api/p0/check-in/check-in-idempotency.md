@@ -40,6 +40,10 @@ QR 발급·조회와 지역 관리자 QR 예외 조회에는 이 멱등 계약�
 
 같은 키와 다른 요청 해시는 저장 상태와 관계없이 `409 IDEMPOTENCY_KEY_CONFLICT`다.
 
+`SUCCEEDED`와 API 명세에서 저장 대상으로 정한 `FAILED` 멱등 기록은 `completed_at`부터 24시간 보관한다.
+동일 키 경합의 DB 대기 제한은 운영 설정으로 짧게 관리하며, 제한을 넘긴 요청은
+`409 IDEMPOTENCY_REQUEST_IN_PROGRESS`로 응답한다. `PROCESSING` 기록의 만료·재점유에 의한 자동 탈취는 하지 않는다.
+
 ### 네트워크 재시도와 새로운 스캔
 
 1. 동일 `Idempotency-Key`와 동일 요청은 최초 명령의 네트워크 재시도다. QR 토큰이 재시도 시점에 만료됐더라도 완료 결과를 재생한다.
