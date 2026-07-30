@@ -5,7 +5,7 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | `FR-03`, `FR-14`, `AUTH-01`, `CON-02`, `CON-05` |
 | 소유 도메인 | 콘텐츠 |
-| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [ERD](../../../erd.md), [ADR-0016](../../../adr/0016-use-private-s3-presigned-urls-and-immediate-image-deletion.md), [ADR-0030](../../../adr/0030-store-representative-image-references-on-content-roots.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [ERD](../../../erd.md), [ADR-0016](../../../adr/0016-use-private-s3-presigned-urls-and-immediate-image-deletion.md), [ADR-0030](../../../adr/0030-store-representative-image-references-on-content-roots.md), [ADR-0041](../../../adr/0041-bind-presigned-image-upload-to-operator-and-region.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
@@ -82,8 +82,8 @@ Accept: application/json
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
 | `mediaType` | String | Y | 대표 이미지 MIME 타입. P0에서는 `image/jpeg`, `image/png`, `image/webp`만 허용한다. |
-| `byteSize` | Integer | Y | 업로드할 파일의 바이트 크기. `1` 이상 `5242880` 이하만 허용한다. |
-| `checksum` | String | Y | 클라이언트가 계산한 SHA-256 Base64 체크섬. 비어 있지 않은 문자열이며 S3 업로드 헤더와 `image_object.checksum`에 같은 값으로 사용한다. |
+| `byteSize` | Integer | Y | 업로드할 파일의 바이트 크기. `1` 이상 `5242880` 이하만 허용하며, 실제 연결 직전 S3 `HEAD`의 `ContentLength`와 같아야 한다. |
+| `checksum` | String | Y | 클라이언트가 계산한 SHA-256 표준 Base64 체크섬. 디코딩 결과가 32바이트인 44자 Base64 문자열만 허용하며 S3 업로드 헤더와 `image_object.checksum`에 같은 값으로 사용한다. |
 | `usage` | String | Y | 업로드 용도. P0에서는 `CONTENT_REPRESENTATIVE`만 허용한다. |
 
 ### Response
@@ -107,6 +107,7 @@ Accept: application/json
     "expiresAt": "2026-07-30T05:10:00Z",
     "uploadHeaders": {
       "Content-Type": "image/webp",
+      "Content-Length": "524288",
       "x-amz-checksum-sha256": "m3vD5u5z9Q4p7nZf3s1q5u9w2x8a7b6c5d4e3f2g1h0="
     }
   }
@@ -125,13 +126,14 @@ Accept: application/json
 | `data.expiresAt` | String | 업로드 URL 만료 시각. API 공통 규칙에 따른 UTC ISO 8601 일시다. |
 | `data.uploadHeaders` | Object | S3 PUT 요청에 반드시 포함해야 하는 헤더 모음 |
 | `data.uploadHeaders.Content-Type` | String | 요청한 `mediaType`과 같은 값 |
+| `data.uploadHeaders.Content-Length` | String | 요청한 `byteSize`를 10진 문자열로 표현한 값 |
 | `data.uploadHeaders.x-amz-checksum-sha256` | String | 요청한 `checksum`과 같은 값 |
 
 ### Error Code
 
 | HTTP Status | Code | Description |
 | --- | --- | --- |
-| `400` | `INVALID_INPUT` | `mediaType`, `byteSize`, `checksum`, `usage`가 허용 범위가 아니거나 비어 있다. 이미지 객체와 업로드 URL을 생성하지 않는다. |
+| `400` | `INVALID_INPUT` | `mediaType`, `byteSize`, `checksum`, `usage`가 허용 범위가 아니거나 `checksum`이 SHA-256 Base64 형식이 아니다. 이미지 객체와 업로드 URL을 생성하지 않는다. |
 | `400` | `INVALID_JSON` | 요청 본문을 역직렬화할 수 없다. 이미지 객체와 업로드 URL을 생성하지 않는다. |
 | `400` | `INVALID_TYPE` | `byteSize`를 선언된 타입으로 변환할 수 없다. 이미지 객체와 업로드 URL을 생성하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 이미지 객체와 업로드 URL을 생성하지 않는다. |
@@ -153,14 +155,16 @@ Accept: application/json
 
 1. 서버는 인증 주체가 `ACTIVE` 상태이고 `OPERATOR` 역할과 담당 `region_id`를 가진 회원인지 확인한다. 요청에서 지역, 운영자, 콘텐츠, 수정본, S3 객체 키 또는 파일명을 지정할 수 없다.
 2. 서버는 `mediaType`, `byteSize`, `checksum`, `usage`를 검증한 뒤 예측 불가능한 새 S3 객체 키를 생성한다. 객체 키에는 사용자 식별자, 원본 파일명, 개인정보를 포함하지 않으며 응답에도 노출하지 않는다.
-3. 서버는 같은 트랜잭션에서 `image_object`를 `ACTIVE` 상태로 생성한다. `object_key`, `media_type`, `byte_size`, `checksum`, `lifecycle_status = ACTIVE`, `delete_attempt_count = 0`을 저장한다.
-4. 서버는 생성한 객체 키, 요청한 MIME 타입과 SHA-256 Base64 체크섬을 조건으로 S3 presigned PUT URL을 발급한다. 클라이언트는 응답의 `uploadHeaders`를 그대로 포함해 만료 전 업로드해야 한다.
+3. 서버는 같은 트랜잭션에서 `image_object`를 `ACTIVE` 상태로 생성한다. `object_key`, `media_type`, `byte_size`, `checksum`, `created_by_user_id`, `region_id`, `upload_expires_at`, `linked_at = NULL`, `lifecycle_status = ACTIVE`, `delete_attempt_count = 0`을 저장한다.
+4. 서버는 생성한 객체 키, 요청한 MIME 타입, 요청한 바이트 크기와 SHA-256 Base64 체크섬을 조건으로 S3 presigned PUT URL을 발급한다. 클라이언트는 응답의 `uploadHeaders`를 그대로 포함해 만료 전 업로드해야 한다.
 5. 이 API는 콘텐츠나 수정본을 생성·수정하지 않으며 `content`, `content_revision`, `content_log`, `audit_event`를 변경하지 않는다. 실제 대표 이미지 연결은 콘텐츠 생성·수정본 생성·수정 API가 `imageObjectId`를 다시 검증한 뒤 수행한다.
-6. 콘텐츠 생성·수정본 생성·수정 API는 연결 직전에 S3 `HEAD` 결과의 SHA-256 Base64 체크섬이 `image_object.checksum`과 같은지 확인하고, 일치하지 않으면 연결하지 않는다.
-7. 업로드 URL 발급 후 만료 전 업로드하지 않았거나 어떤 콘텐츠·수정본에도 연결하지 않은 `ACTIVE` 이미지 객체의 정리 정책은 P0에서 별도 API 계약으로 제공하지 않는다. 임시 이미지 상태가 필요하면 새 ADR·ERD 결정 뒤 이 명세를 갱신한다.
+6. 콘텐츠 생성·수정본 생성·수정 API는 연결 직전에 `image_object` 행을 잠그고 다음 조건을 모두 검증한다. `lifecycle_status = ACTIVE`, `created_by_user_id`가 현재 운영자, `region_id`가 운영자 담당 지역과 대상 콘텐츠 지역, `linked_at IS NULL`, `upload_expires_at > now`여야 한다. 또한 S3 `HEAD` 결과의 SHA-256 Base64 체크섬과 `ContentLength`가 각각 `image_object.checksum`, `image_object.byte_size`와 같아야 한다. 하나라도 맞지 않으면 연결하지 않는다.
+7. 콘텐츠 생성·수정본 생성·수정 API가 대표 이미지 연결을 성공시키면 같은 트랜잭션에서 `image_object.linked_at`을 현재 시각으로 설정한다. 이후 기존 대표 이미지를 수정본 스냅샷으로 공유하는 것은 ADR-0030의 직접 FK 참조 규칙을 따른다.
+8. 업로드 URL 발급 후 `upload_expires_at`까지 연결되지 않은 `ACTIVE` 이미지 객체는 보관 작업이 `linked_at IS NULL`과 직접 FK 참조 0건을 확인한 뒤 `DELETE_PENDING`으로 전환하고 S3 삭제를 시도한다. 삭제 실패 시 기존 `delete_attempt_count`, `last_delete_attempted_at`으로 멱등 재시도한다. 이 정리 흐름은 별도 클라이언트 API를 제공하지 않는다.
 
 ### 보안·로깅
 
 - 응답의 `uploadUrl`은 짧은 유효기간을 가지며, 서버는 URL 자체를 DB나 Redis에 저장하지 않는다.
 - 구조화 로그에는 `imageObjectId`, 요청 결과와 오류 코드처럼 비개인 식별만 남기고 `uploadUrl`, 객체 키, checksum, 토큰, 개인정보를 남기지 않는다.
+- `created_by_user_id`와 `region_id`는 업로드 객체의 연결 권한 검증에만 사용하며 응답과 로그에 노출하지 않는다.
 - S3 버킷과 객체는 공개 쓰기·공개 읽기를 허용하지 않는다. 서버가 발급한 presigned PUT URL 외 업로드 경로는 허용하지 않는다.
