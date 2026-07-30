@@ -23,6 +23,7 @@ import org.hibernate.type.SqlTypes;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.visit.entity.Visit;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 @Entity
 @Table(
@@ -204,6 +205,32 @@ public class IdempotencyRecord {
 
     public Instant getExpiresAt() {
         return expiresAt;
+    }
+
+    public void completeAsSucceeded(Reservation reservation, Instant completedAt, Instant expiresAt) {
+        if (status != IdempotencyRecordStatus.PROCESSING) {
+            throw new IllegalStateException("only processing idempotency record can be completed");
+        }
+        if (operation != IdempotencyOperation.RESERVATION_CONFIRM) {
+            throw new IllegalStateException("only reservation confirmation is supported");
+        }
+        this.status = IdempotencyRecordStatus.SUCCEEDED;
+        this.resultCode = "SUCCESS";
+        this.resultReservation = requireNotNull(reservation, "reservation");
+        this.completedAt = requireNotNull(completedAt, "completedAt");
+        this.expiresAt = requireNotNull(expiresAt, "expiresAt");
+        validateResultFields();
+    }
+
+    public void completeAsFailed(ErrorCode errorCode, Instant completedAt, Instant expiresAt) {
+        if (status != IdempotencyRecordStatus.PROCESSING) {
+            throw new IllegalStateException("only processing idempotency record can be completed");
+        }
+        this.status = IdempotencyRecordStatus.FAILED;
+        this.resultCode = requireNotNull(errorCode, "errorCode").code();
+        this.completedAt = requireNotNull(completedAt, "completedAt");
+        this.expiresAt = requireNotNull(expiresAt, "expiresAt");
+        validateResultFields();
     }
 
     private void validateResultFields() {

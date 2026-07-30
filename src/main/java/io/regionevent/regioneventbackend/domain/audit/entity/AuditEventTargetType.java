@@ -5,6 +5,7 @@ public enum AuditEventTargetType {
     OPERATOR_APPLICATION,
     CONTENT,
     CONTENT_SESSION,
+    CAPACITY_HOLD,
     RESERVATION,
     VISIT,
     REVIEW
