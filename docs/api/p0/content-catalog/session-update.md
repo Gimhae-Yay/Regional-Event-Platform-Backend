@@ -115,7 +115,8 @@ Accept: application/json
 5. 요청 행, 수정 요청 감사 이벤트와 처리자 연결을 하나의 트랜잭션으로 커밋한다.
 6. 지역 관리자 승인 때만 콘텐츠 상태·소프트 삭제 여부, 대상 회차 상태·버전, 활성 홀드와 `CONFIRMED` 예약을 같은
    트랜잭션에서 다시 확인한다. 모두 만족하면 후보 값을 반영하고 `content_session.version_no`를 증가시킨다.
-   승인·반려 HTTP 계약은 별도 회차 요청 심사 명세에서 확정한다.
+   심사는 [심사 대기 회차 수정 요청 목록](list-pending-session-revisions.md),
+   [회차 수정 요청 승인](approve-session-revision.md), [회차 수정 요청 반려](reject-session-revision.md) 계약을 따른다.
 
 ### Response
 
@@ -133,7 +134,7 @@ Accept: application/json
   "code": "SUCCESS",
   "message": "콘텐츠 회차 수정 요청에 성공했습니다.",
   "data": {
-    "requestId": "52",
+    "revisionId": "52",
     "status": "PENDING",
     "contentId": "10",
     "targetSessionId": "21",
@@ -155,7 +156,7 @@ Accept: application/json
 | `statusCode` | Integer | HTTP 상태와 같은 `201` |
 | `code` | String | 성공 코드 `SUCCESS` |
 | `message` | String | 성공 메시지 `콘텐츠 회차 수정 요청에 성공했습니다.` |
-| `data.requestId` | String | API 공통 규칙에 따른 회차 요청 식별자 |
+| `data.revisionId` | String | API 공통 규칙에 따른 회차 수정 요청 식별자 |
 | `data.status` | String | 심사 대기 상태 `PENDING` |
 | `data.contentId` | String | API 공통 규칙에 따른 대상 콘텐츠 식별자 |
 | `data.targetSessionId` | String | API 공통 규칙에 따른 수정 대상 회차 식별자 |
@@ -171,20 +172,21 @@ Accept: application/json
 
 | HTTP Status | Code | Description |
 | --- | --- | --- |
-| 400 | `INVALID_INPUT` | 회차 식별자가 양의 정수가 아니거나 일정·체크인 창·정원 규칙을 위반했거나, 대상 회차에 이미 `PENDING` 수정 요청이 있다. 요청과 감사 기록은 생성되지 않으며 값을 수정하거나 기존 요청 심사를 기다려야 한다. |
+| 400 | `INVALID_INPUT` | 회차 식별자가 양의 정수가 아니거나 일정·체크인 창·정원 규칙을 위반했다. 요청과 감사 기록은 생성되지 않으며 값을 수정해 다시 요청할 수 있다. |
 | 400 | `INVALID_JSON` | 요청 본문이 JSON 형식이 아니거나 역직렬화할 수 없다. 요청과 감사 기록은 생성되지 않는다. |
 | 400 | `INVALID_TYPE` | 회차 식별자를 정수로 변환할 수 없다. 요청과 감사 기록은 생성되지 않는다. |
 | 401 | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 요청과 감사 기록은 생성되지 않는다. |
 | 403 | `FORBIDDEN` | `OPERATOR` 역할, 담당 지역 또는 콘텐츠 소유 관계가 없다. 요청과 감사 기록은 생성되지 않는다. |
-| 404 | `NOT_FOUND` | 회차가 없거나 `SCHEDULED`가 아니거나, 콘텐츠가 소프트 삭제됐거나 수정 요청 대상 상태(`APPROVED`, `PUBLISHED`)가 아니다. 요청과 감사 기록은 생성되지 않는다. |
+| 404 | `NOT_FOUND` | 회차가 없거나 콘텐츠가 소프트 삭제됐다. 요청과 감사 기록은 생성되지 않는다. |
+| 409 | `SESSION_STATE_CONFLICT` | 대상 회차가 `SCHEDULED`가 아니거나 콘텐츠가 수정 요청 대상 상태(`APPROVED`, `PUBLISHED`)가 아니거나, 대상 회차에 이미 `PENDING` 수정 요청이 있거나 다른 상태 전이가 먼저 처리됐다. 요청과 감사 기록은 생성되지 않으며 최신 상태를 확인해야 한다. |
 
 #### Error Response Body
 
 ```json
 {
-  "statusCode": 404,
-  "code": "NOT_FOUND",
-  "message": "요청한 리소스를 찾을 수 없습니다.",
+  "statusCode": 409,
+  "code": "SESSION_STATE_CONFLICT",
+  "message": "회차 상태가 요청을 처리할 수 없습니다.",
   "data": null
 }
 ```

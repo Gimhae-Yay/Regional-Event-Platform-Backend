@@ -17,8 +17,9 @@
 공개 회차 조회는 `PUBLISHED` 콘텐츠의 `SCHEDULED` 회차만 노출한다. `PENDING` 콘텐츠의 최초 회차는 콘텐츠
 승인 요청과 함께 완성하며 별도 생성·수정 요청을 허용하지 않는다. 소유 운영자는 소프트 삭제되지 않은 `APPROVED` 또는
 `PUBLISHED` 콘텐츠에서 새 `content_session`을 `PENDING`으로 생성하거나 기존 회차 수정을 `session_revision`으로 심사
-요청할 수 있다. `PENDING` 생성 회차는 승인 때만 `SCHEDULED`가 되며, 수정 요청의 심사 중·반려는 실제 회차·공개·예약
-상태를 바꾸지 않는다. 소유 운영자의 회차 취소는
+요청할 수 있다. `PENDING` 생성 회차와 `session_revision`은 담당 지역 관리자의 목록·상세 조회 뒤 승인 또는 반려로 종결한다.
+생성 회차는 승인 때만 `SCHEDULED`가 되며, 수정 요청의 심사 중·반려는 실제 회차·공개·예약 상태를 바꾸지 않는다.
+소유 운영자의 회차 취소는
 `SCHEDULED → CANCELLED` 전이와 활성 홀드·미체크인 확정 예약의 종결, 성공 감사 기록을 하나의 트랜잭션으로 처리한다.
 운영자 API는 `OPERATOR` 역할, 담당 지역 일치와 콘텐츠 소유 관계를 함께 검증한다.
 
@@ -36,7 +37,7 @@
 | `AUTH-01` | `GET /region-admin/contents?status=PENDING` | `content.region_id`, `user_role_assignment.region_id` |
 | `CON-01` | `GET /region-admin/contents?status=PENDING` | `content.status`, `content.deleted_at` |
 | `CON-01`, `CON-09` | `POST /region-admin/contents/{contentId}/reject` | `content`, `content_log`, `audit_event` |
-| `CON-03`, `CON-09` | `POST /region-admin/contents/{contentId}/approve` | `content`, `content_log`, `audit_event` |
+| `CON-03`, `CON-09`, `SES-01` | `POST /region-admin/contents/{contentId}/approve` | `content`, `content_session`, `content_log`, `audit_event`, `audit_event_actor_link` |
 | `FR-14`, `CON-05`, `CON-09` | `GET /region-admin/content-revisions?status=EDIT_REQUESTED` | `content_revision`, `content`, `image_object` |
 | `FR-14`, `CON-05` | `GET /region-admin/content-revisions/{revisionId}` | `content_revision`, `content`, `content_session`, `image_object` |
 | `FR-14`, `CON-05`, `CON-09` | `POST /region-admin/content-revisions/{revisionId}/approve` | `content_revision`, `content`, `content_log`, `audit_event` |
@@ -45,6 +46,8 @@
 | `CON-02`, `CON-03` | `GET /region-admin/contents/{contentId}` | `content`, `content_session`, `content_representative_image` |
 | `FR-03`, `FR-04`, `AUTH-01`, `SES-01`, `SES-02` | `POST /operator/contents/{contentId}/sessions` | `content`, `content_session`, `user_role_assignment`, `audit_event`, `audit_event_actor_link` |
 | `FR-03`, `FR-04`, `AUTH-01`, `SES-01`, `SES-02`, `RSV-02` | `POST /operator/sessions/{sessionId}/change-requests` | `content`, `content_session`, `session_revision`, `capacity_hold`, `reservation`, `audit_event`, `audit_event_actor_link` |
+| `FR-04`, `AUTH-01`, `SES-01`, `SES-02`, `CON-09` | `GET /region-admin/sessions?status=PENDING`, `GET /region-admin/sessions/{sessionId}`, `POST /region-admin/sessions/{sessionId}/approve`, `POST /region-admin/sessions/{sessionId}/reject` | `content`, `content_session`, `app_user`, `audit_event`, `audit_event_actor_link` |
+| `FR-04`, `AUTH-01`, `SES-01`, `SES-02`, `RSV-02`, `CON-09` | `GET /region-admin/session-revisions?status=PENDING`, `GET /region-admin/session-revisions/{revisionId}`, `POST /region-admin/session-revisions/{revisionId}/approve`, `POST /region-admin/session-revisions/{revisionId}/reject` | `content`, `content_session`, `session_revision`, `capacity_hold`, `reservation`, `audit_event`, `audit_event_actor_link` |
 | `FR-02`, `SES-01`, `SES-02` | `GET /contents/{contentId}/sessions` | `content`, `content_session` |
 | `FR-02`, `RSV-02`, `SES-01`, `SES-02` | `GET /sessions/{sessionId}` | `content`, `content_session` |
 | `FR-06`, `AUTH-01`, `RSV-06` | `POST /operator/sessions/{sessionId}/cancel` | `content`, `content_session`, `capacity_hold`, `reservation`, `audit_event`, `audit_event_actor_link` |
@@ -75,6 +78,14 @@
 | 콘텐츠 반려·승인·종료 이력 조회 | `GET /region-admin/contents/{contentId}/history` | [content-history.md](content-history.md) |
 | 내 콘텐츠 회차 생성 | `POST /operator/contents/{contentId}/sessions` | [session-create.md](session-create.md) |
 | 내 콘텐츠 회차 수정 요청 | `POST /operator/sessions/{sessionId}/change-requests` | [session-update.md](session-update.md) |
+| 심사 대기 회차 목록 조회 | `GET /region-admin/sessions?status=PENDING` | [list-pending-sessions.md](list-pending-sessions.md) |
+| 심사 대기 회차 상세 조회 | `GET /region-admin/sessions/{sessionId}` | [review-session-detail.md](review-session-detail.md) |
+| 회차 승인 | `POST /region-admin/sessions/{sessionId}/approve` | [approve-session.md](approve-session.md) |
+| 사유를 포함한 회차 반려 | `POST /region-admin/sessions/{sessionId}/reject` | [reject-session.md](reject-session.md) |
+| 심사 대기 회차 수정 요청 목록 조회 | `GET /region-admin/session-revisions?status=PENDING` | [list-pending-session-revisions.md](list-pending-session-revisions.md) |
+| 심사 대기 회차 수정 요청 상세 조회 | `GET /region-admin/session-revisions/{revisionId}` | [review-session-revision-detail.md](review-session-revision-detail.md) |
+| 회차 수정 요청 승인 | `POST /region-admin/session-revisions/{revisionId}/approve` | [approve-session-revision.md](approve-session-revision.md) |
+| 사유를 포함한 회차 수정 요청 반려 | `POST /region-admin/session-revisions/{revisionId}/reject` | [reject-session-revision.md](reject-session-revision.md) |
 | 공개 콘텐츠 회차 목록 조회 | `GET /contents/{contentId}/sessions` | [list-public-content-sessions.md](list-public-content-sessions.md) |
 | 가격·실시간 잔여 정원·예약 가능 여부 조회 | `GET /sessions/{sessionId}` | [get-session-reservation-info.md](get-session-reservation-info.md) |
 | 소유 운영자의 회차 취소 | `POST /operator/sessions/{sessionId}/cancel` | [session-cancel.md](session-cancel.md) |

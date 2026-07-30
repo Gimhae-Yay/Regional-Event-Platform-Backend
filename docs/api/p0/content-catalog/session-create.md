@@ -34,8 +34,8 @@
 ## 3. 내 콘텐츠 회차 생성
 
 소유 운영자는 소프트 삭제되지 않은 `APPROVED` 또는 `PUBLISHED` 콘텐츠에만 새 회차를 생성할 수 있다.
-`PENDING` 콘텐츠의 최초 회차는 콘텐츠 승인 요청에 함께 제출하므로 이 API를 사용할 수 없다. 생성 회차의 승인·반려
-HTTP 계약은 별도 회차 심사 명세에서 확정한다.
+`PENDING` 콘텐츠의 최초 회차는 콘텐츠 승인 요청에 함께 제출하므로 이 API를 사용할 수 없다. 생성 회차의 심사는
+[심사 대기 회차 목록](list-pending-sessions.md), [회차 승인](approve-session.md), [회차 반려](reject-session.md) 계약을 따른다.
 
 ### Request
 
