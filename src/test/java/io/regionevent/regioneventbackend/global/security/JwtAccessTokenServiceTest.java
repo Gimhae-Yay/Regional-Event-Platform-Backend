@@ -10,12 +10,11 @@ import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.Date;
 
-import com.nimbusds.jose.JOSEObjectType;
-import com.nimbusds.jose.JWSAlgorithm;
-import com.nimbusds.jose.JWSHeader;
-import com.nimbusds.jose.crypto.MACSigner;
-import com.nimbusds.jwt.JWTClaimsSet;
-import com.nimbusds.jwt.SignedJWT;
+import javax.crypto.SecretKey;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
 
 import org.junit.jupiter.api.Test;
 
@@ -24,19 +23,24 @@ class JwtAccessTokenServiceTest {
     private static final Instant ISSUED_AT = Instant.parse("2026-07-30T00:00:00Z");
 
     @Test
-    void issueAndAuthenticate_withValidAccessToken_returnsAuthenticatedUser() throws Exception {
+    void issueAndAuthenticate_withValidAccessToken_returnsAuthenticatedUser() {
         JwtAccessTokenService jwtAccessTokenService = createService(Clock.fixed(ISSUED_AT, ZoneOffset.UTC));
 
         String token = jwtAccessTokenService.issue(1L);
-        SignedJWT signedJwt = SignedJWT.parse(token);
+        Claims claims = Jwts.parser()
+            .verifyWith(toSecretKey(key(0)))
+            .clock(() -> Date.from(ISSUED_AT))
+            .build()
+            .parseSignedClaims(token)
+            .getPayload();
 
         assertThat(jwtAccessTokenService.authenticate(token).userId()).isEqualTo(1L);
-        assertThat(signedJwt.getJWTClaimsSet().getIssuer()).isEqualTo("regional-event-platform");
-        assertThat(signedJwt.getJWTClaimsSet().getAudience()).containsExactly("regional-event-api");
-        assertThat(signedJwt.getJWTClaimsSet().getSubject()).isEqualTo("1");
-        assertThat(signedJwt.getJWTClaimsSet().getStringClaim("token_type")).isEqualTo("ACCESS");
-        assertThat(signedJwt.getJWTClaimsSet().getExpirationTime()).isEqualTo(Date.from(ISSUED_AT.plusSeconds(900)));
-        assertThat(signedJwt.getJWTClaimsSet().getClaims()).doesNotContainKeys("role", "region_id", "family_id", "jti");
+        assertThat(claims.getIssuer()).isEqualTo("regional-event-platform");
+        assertThat(claims.getAudience()).containsExactly("regional-event-api");
+        assertThat(claims.getSubject()).isEqualTo("1");
+        assertThat(claims.get("token_type", String.class)).isEqualTo("ACCESS");
+        assertThat(claims.getExpiration()).isEqualTo(Date.from(ISSUED_AT.plusSeconds(900)));
+        assertThat(claims).doesNotContainKeys("role", "region_id", "family_id", "jti");
     }
 
     @Test
@@ -49,7 +53,7 @@ class JwtAccessTokenServiceTest {
     }
 
     @Test
-    void authenticate_whenAccessTokenLifetimeExceeds15Minutes_throwsInvalidAccessTokenException() throws Exception {
+    void authenticate_whenAccessTokenLifetimeExceeds15Minutes_throwsInvalidAccessTokenException() {
         JwtAccessTokenService jwtAccessTokenService = createService(Clock.fixed(ISSUED_AT, ZoneOffset.UTC));
         String longLivedToken = createToken(
             "regional-event-platform",
@@ -64,7 +68,7 @@ class JwtAccessTokenServiceTest {
     }
 
     @Test
-    void authenticate_whenTokenTypeIsRefresh_throwsInvalidAccessTokenException() throws Exception {
+    void authenticate_whenTokenTypeIsRefresh_throwsInvalidAccessTokenException() {
         JwtAccessTokenService jwtAccessTokenService = createService(Clock.fixed(ISSUED_AT, ZoneOffset.UTC));
         String refreshToken = createToken(
             "regional-event-platform",
@@ -79,7 +83,7 @@ class JwtAccessTokenServiceTest {
     }
 
     @Test
-    void authenticate_whenIssuerOrAudienceDoesNotMatch_throwsInvalidAccessTokenException() throws Exception {
+    void authenticate_whenIssuerOrAudienceDoesNotMatch_throwsInvalidAccessTokenException() {
         JwtAccessTokenService jwtAccessTokenService = createService(Clock.fixed(ISSUED_AT, ZoneOffset.UTC));
         String wrongIssuerToken = createToken(
             "other-platform",
@@ -99,6 +103,48 @@ class JwtAccessTokenServiceTest {
         assertThatThrownBy(() -> jwtAccessTokenService.authenticate(wrongIssuerToken))
             .isInstanceOf(InvalidAccessTokenException.class);
         assertThatThrownBy(() -> jwtAccessTokenService.authenticate(wrongAudienceToken))
+            .isInstanceOf(InvalidAccessTokenException.class);
+    }
+
+    @Test
+    void authenticate_whenSignatureOrKeyIdOrAlgorithmIsInvalid_throwsInvalidAccessTokenException() {
+        JwtAccessTokenService jwtAccessTokenService = createService(Clock.fixed(ISSUED_AT, ZoneOffset.UTC));
+        String forgedToken = createToken(
+            "regional-event-platform",
+            "regional-event-api",
+            "ACCESS",
+            ISSUED_AT.plusSeconds(900),
+            key(1)
+        );
+        String unknownKeyToken = createToken(
+            "regional-event-platform",
+            "regional-event-api",
+            "ACCESS",
+            ISSUED_AT.plusSeconds(900),
+            "unknown-key",
+            key(0)
+        );
+        String hs384Token = Jwts.builder()
+            .header()
+                .type("JWT")
+                .keyId("test-key")
+                .and()
+            .issuer("regional-event-platform")
+            .audience()
+                .add("regional-event-api")
+                .and()
+            .subject("1")
+            .claim("token_type", "ACCESS")
+            .issuedAt(Date.from(ISSUED_AT))
+            .expiration(Date.from(ISSUED_AT.plusSeconds(900)))
+            .signWith(toSecretKey(key(2, 48)), Jwts.SIG.HS384)
+            .compact();
+
+        assertThatThrownBy(() -> jwtAccessTokenService.authenticate(forgedToken))
+            .isInstanceOf(InvalidAccessTokenException.class);
+        assertThatThrownBy(() -> jwtAccessTokenService.authenticate(unknownKeyToken))
+            .isInstanceOf(InvalidAccessTokenException.class);
+        assertThatThrownBy(() -> jwtAccessTokenService.authenticate(hs384Token))
             .isInstanceOf(InvalidAccessTokenException.class);
     }
 
@@ -147,28 +193,45 @@ class JwtAccessTokenServiceTest {
         String tokenType,
         Instant expiresAt,
         String encodedKey
-    ) throws Exception {
-        JWTClaimsSet claims = new JWTClaimsSet.Builder()
+    ) {
+        return createToken(issuer, audience, tokenType, expiresAt, "test-key", encodedKey);
+    }
+
+    private String createToken(
+        String issuer,
+        String audience,
+        String tokenType,
+        Instant expiresAt,
+        String keyId,
+        String encodedKey
+    ) {
+        return Jwts.builder()
+            .header()
+                .type("JWT")
+                .keyId(keyId)
+                .and()
             .issuer(issuer)
-            .audience(audience)
+            .audience()
+                .add(audience)
+                .and()
             .subject("1")
             .claim("token_type", tokenType)
-            .issueTime(Date.from(ISSUED_AT))
-            .expirationTime(Date.from(expiresAt))
-            .build();
-        SignedJWT signedJwt = new SignedJWT(
-            new JWSHeader.Builder(JWSAlgorithm.HS256)
-                .type(JOSEObjectType.JWT)
-                .keyID("test-key")
-                .build(),
-            claims
-        );
-        signedJwt.sign(new MACSigner(Base64.getDecoder().decode(encodedKey)));
-        return signedJwt.serialize();
+            .issuedAt(Date.from(ISSUED_AT))
+            .expiration(Date.from(expiresAt))
+            .signWith(toSecretKey(encodedKey), Jwts.SIG.HS256)
+            .compact();
+    }
+
+    private SecretKey toSecretKey(String encodedKey) {
+        return Keys.hmacShaKeyFor(Base64.getDecoder().decode(encodedKey));
     }
 
     private String key(int value) {
-        byte[] key = new byte[32];
+        return key(value, 32);
+    }
+
+    private String key(int value, int length) {
+        byte[] key = new byte[length];
         java.util.Arrays.fill(key, (byte) value);
         return Base64.getEncoder().encodeToString(key);
     }

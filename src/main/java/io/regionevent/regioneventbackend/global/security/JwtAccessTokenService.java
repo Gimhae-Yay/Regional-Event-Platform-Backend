@@ -1,35 +1,28 @@
 package io.regionevent.regioneventbackend.global.security;
 
-import java.security.Key;
-import java.text.ParseException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
 import javax.crypto.SecretKey;
-import javax.crypto.spec.SecretKeySpec;
 
-import com.nimbusds.jose.JOSEException;
-import com.nimbusds.jose.JOSEObjectType;
-import com.nimbusds.jose.JWSAlgorithm;
-import com.nimbusds.jose.JWSHeader;
-import com.nimbusds.jose.crypto.MACSigner;
-import com.nimbusds.jose.crypto.MACVerifier;
-import com.nimbusds.jwt.JWTClaimsSet;
-import com.nimbusds.jwt.SignedJWT;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Header;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.security.Keys;
 
 public class JwtAccessTokenService {
 
     private static final Duration ACCESS_TOKEN_TTL = Duration.ofMinutes(15);
     private static final String TOKEN_TYPE_CLAIM = "token_type";
     private static final String ACCESS_TOKEN_TYPE = "ACCESS";
-    private static final String HMAC_SHA_256 = "HmacSHA256";
+    private static final String JWT_TYPE = "JWT";
 
     private final Clock clock;
     private final String issuer;
@@ -53,35 +46,35 @@ public class JwtAccessTokenService {
 
         Instant issuedAt = clock.instant();
         Instant expiresAt = issuedAt.plus(ACCESS_TOKEN_TTL);
-        JWTClaimsSet claims = new JWTClaimsSet.Builder()
+        return Jwts.builder()
+            .header()
+                .type(JWT_TYPE)
+                .keyId(activeKeyId)
+                .and()
             .issuer(issuer)
-            .audience(audience)
+            .audience()
+                .add(audience)
+                .and()
             .subject(userId.toString())
             .claim(TOKEN_TYPE_CLAIM, ACCESS_TOKEN_TYPE)
-            .issueTime(Date.from(issuedAt))
-            .expirationTime(Date.from(expiresAt))
-            .build();
-        JWSHeader header = new JWSHeader.Builder(JWSAlgorithm.HS256)
-            .type(JOSEObjectType.JWT)
-            .keyID(activeKeyId)
-            .build();
-        SignedJWT signedJwt = new SignedJWT(header, claims);
-
-        try {
-            signedJwt.sign(new MACSigner(activeKey));
-            return signedJwt.serialize();
-        } catch (JOSEException exception) {
-            throw new IllegalStateException("Failed to issue access token", exception);
-        }
+            .issuedAt(Date.from(issuedAt))
+            .expiration(Date.from(expiresAt))
+            .signWith(activeKey, Jwts.SIG.HS256)
+            .compact();
     }
 
     public AuthenticatedUser authenticate(String token) {
         try {
-            SignedJWT signedJwt = SignedJWT.parse(token);
-            validateHeader(signedJwt.getHeader());
-            validateSignature(signedJwt);
-            return validateClaims(signedJwt.getJWTClaimsSet());
-        } catch (ParseException | JOSEException | IllegalArgumentException exception) {
+            Claims claims = Jwts.parser()
+                .keyLocator(this::locateVerificationKey)
+                .clock(() -> Date.from(clock.instant()))
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+            return validateClaims(claims);
+        } catch (InvalidAccessTokenException exception) {
+            throw exception;
+        } catch (JwtException | IllegalArgumentException exception) {
             throw new InvalidAccessTokenException();
         }
     }
@@ -114,38 +107,37 @@ public class JwtAccessTokenService {
         if (keyId.isBlank()) {
             throw new IllegalStateException("JWT key identifier must not be blank");
         }
-        return new SecretKeySpec(keyBytes, HMAC_SHA_256);
+        return Keys.hmacShaKeyFor(keyBytes);
     }
 
-    private void validateHeader(JWSHeader header) {
-        if (!JWSAlgorithm.HS256.equals(header.getAlgorithm())) {
+    private SecretKey locateVerificationKey(Header header) {
+        if (!Jwts.SIG.HS256.getId().equals(header.getAlgorithm())
+            || !JWT_TYPE.equals(header.getType())) {
             throw new InvalidAccessTokenException();
         }
-        if (!JOSEObjectType.JWT.equals(header.getType())) {
+
+        Object keyIdValue = header.get("kid");
+        if (!(keyIdValue instanceof String keyId)) {
             throw new InvalidAccessTokenException();
         }
-        if (header.getKeyID() == null || !verificationKeys.containsKey(header.getKeyID())) {
+        SecretKey verificationKey = verificationKeys.get(keyId);
+        if (verificationKey == null) {
             throw new InvalidAccessTokenException();
         }
+        return verificationKey;
     }
 
-    private void validateSignature(SignedJWT signedJwt) throws JOSEException {
-        Key verificationKey = verificationKeys.get(signedJwt.getHeader().getKeyID());
-        if (!signedJwt.verify(new MACVerifier(verificationKey.getEncoded()))) {
-            throw new InvalidAccessTokenException();
-        }
-    }
-
-    private AuthenticatedUser validateClaims(JWTClaimsSet claims) throws ParseException {
+    private AuthenticatedUser validateClaims(Claims claims) {
         Instant now = clock.instant();
-        Date issuedAt = requireClaim(claims.getIssueTime());
-        Date expiresAt = requireClaim(claims.getExpirationTime());
+        Date issuedAt = requireClaim(claims.getIssuedAt());
+        Date expiresAt = requireClaim(claims.getExpiration());
         Instant issuedAtInstant = issuedAt.toInstant();
         Instant expiresAtInstant = expiresAt.toInstant();
 
         if (!issuer.equals(claims.getIssuer())
-            || !List.of(audience).equals(claims.getAudience())
-            || !ACCESS_TOKEN_TYPE.equals(claims.getStringClaim(TOKEN_TYPE_CLAIM))
+            || claims.getAudience().size() != 1
+            || !claims.getAudience().contains(audience)
+            || !ACCESS_TOKEN_TYPE.equals(claims.get(TOKEN_TYPE_CLAIM, String.class))
             || issuedAtInstant.isAfter(now)
             || !expiresAtInstant.isAfter(now)
             || !expiresAtInstant.equals(issuedAtInstant.plus(ACCESS_TOKEN_TTL))) {
