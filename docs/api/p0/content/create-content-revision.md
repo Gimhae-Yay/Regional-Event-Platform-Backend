@@ -99,7 +99,7 @@ Accept: application/json
 | `materials` | String | Y | 비어 있지 않은 준비물 |
 | `cancellationPolicyText` | String | Y | P0 무료 예약 취소 정책을 안내하는 비어 있지 않은 문구 |
 | `publishAt` | String | 조건부 | `APPROVED` 원본 또는 공개 전 수정 심사로 `PENDING`인 원본에는 필수인 새 공개 예정 시각이다. `PUBLISHED` 원본에서는 제공할 수 없으며 수정본에 `NULL`로 저장한다. |
-| `representativeImageObjectId` | String | N | 이미지 변경 시에만 제공하는 양의 10진 문자열인 이미 존재하는 `ACTIVE` 이미지 객체 식별자. 연결 전 S3 객체 체크섬을 검증한다. |
+| `representativeImageObjectId` | String | N | 이미지 변경 시에만 제공하는 양의 10진 문자열인 이미 존재하는 `ACTIVE` 이미지 객체 식별자. 연결 전 대표 이미지 업로드 URL 발급 API의 연결 검증 조건을 모두 확인한다. |
 
 ### Response
 
@@ -143,7 +143,7 @@ Accept: application/json
 
 | HTTP Status | Code | Description |
 | --- | --- | --- |
-| `400` | `INVALID_INPUT` | 식별자·후보 필드가 유효하지 않거나 지정한 이미지 객체가 존재하지 않거나 `ACTIVE` 상태가 아니거나 S3 객체 체크섬 검증에 실패한다. 수정본을 생성하지 않는다. |
+| `400` | `INVALID_INPUT` | 식별자·후보 필드가 유효하지 않거나 지정한 대표 이미지 객체 연결 검증에 실패한다. 수정본을 생성하지 않는다. |
 | `400` | `INVALID_JSON` | 요청 본문을 역직렬화할 수 없다. 수정본을 생성하지 않는다. |
 | `400` | `INVALID_TYPE` | 이미지 객체 식별자가 JSON 문자열이 아니다. 수정본을 생성하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 수정본을 생성하지 않는다. |
@@ -168,5 +168,5 @@ Accept: application/json
 2. `PUBLISHED` 원본에는 `publishAt`을 제공할 수 없으며 수정본의 후보 `publish_at`은 `NULL`이다. 수정본 생성은 원본의 상태·내용·대표 이미지 연결과 공개 조회 결과를 변경하지 않는다.
 3. `APPROVED` 원본에는 `publishAt`이 필수다. 서버는 수정본 생성, 원본 `APPROVED → PENDING` 전이, `PENDING` 상태 로그와 성공 감사 기록을 하나의 트랜잭션으로 처리한다.
 4. `PENDING` 원본은 활성 수정본이 없고 직전 공개 전 수정 요청의 `APPROVED → PENDING` 이력이 있을 때만 재보완 후보를 만들 수 있으며, `publishAt`이 필수다. 최초 등록 후의 일반 `PENDING` 콘텐츠는 이 API로 수정본을 만들 수 없다.
-5. 서버는 모든 후보 필드를 검증해 수정본에 저장한다. `representativeImageObjectId`가 있으면 현재 `ACTIVE`이고 S3 `HEAD` 결과의 SHA-256 Base64 체크섬이 이미지 객체에 저장된 값과 같은 이미지 객체만 후보 대표 이미지로 연결한다.
+5. 서버는 모든 후보 필드를 검증해 수정본에 저장한다. `representativeImageObjectId`가 있으면 [대표 이미지 S3 업로드 URL 발급](upload-representative-image.md)의 연결 검증 조건을 모두 만족하는 이미지 객체만 후보 대표 이미지로 연결한다.
 6. 이미지 객체 ID를 생략하면 현재 원본 대표 이미지 객체와 연결 시각을 수정본에 스냅샷으로 저장한다.
