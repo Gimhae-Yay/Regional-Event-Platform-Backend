@@ -383,11 +383,11 @@ public class Reservation {
 
 ## 9. Lombok
 
-- Lombok은 반복 코드를 줄이는 범위에서만 사용한다.
-- 클래스 전체 setter를 만드는 `@Setter`와 복합 애너테이션 `@Data`를 사용하지 않는다.
-- 서비스와 컨트롤러는 명시적 생성자를 기본으로 한다. 팀 합의 시 `@RequiredArgsConstructor`를 일관되게 사용할 수 있다.
-- 엔티티의 빌더는 불완전한 객체를 만들 수 있으므로 기본적으로 사용하지 않는다.
-- DTO의 빌더는 필드가 많아 생성 의도가 더 명확해질 때만 사용한다.
+예외 사항을 명시하지 않는 한 아래와 같이 제한한다.
+
+- Lombok `@Setter` `@Builder`, `@Data`는 사용하지 않는다.
+- Constructor 관련 어노테이션은 상황에 맞게 사용한다.
+- Entity Class에 한해서 `@Getter` 사용을 허가한다.
 
 ## 10. null, Optional, 컬렉션
 
