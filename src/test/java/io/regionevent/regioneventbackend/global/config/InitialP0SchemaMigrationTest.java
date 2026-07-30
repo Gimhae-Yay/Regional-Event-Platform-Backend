@@ -23,7 +23,7 @@ class InitialP0SchemaMigrationTest {
     }
 
     @Test
-    void 빈_데이터베이스에_V1부터_V4까지_현재_P0_스키마를_생성한다() {
+    void 빈_데이터베이스에_V1부터_V6까지_현재_P0_스키마를_생성한다() {
         List<String> appliedVersions = jdbcTemplate.queryForList(
             "SELECT \"version\" FROM \"flyway_schema_history\" WHERE \"version\" IS NOT NULL AND \"success\" = TRUE",
             String.class
@@ -64,7 +64,7 @@ class InitialP0SchemaMigrationTest {
             String.class
         );
 
-        assertThat(appliedVersions).containsExactly("1", "2", "3", "4", "5");
+        assertThat(appliedVersions).containsExactly("1", "2", "3", "4", "5", "6");
         assertThat(tableNames).contains(
             "REGION",
             "APP_USER",
@@ -98,7 +98,11 @@ class InitialP0SchemaMigrationTest {
             "FK_VISIT_RESERVATION_SESSION_REGION",
             "FK_REVIEW_VISIT_CONTENT_REGION",
             "CK_CAPACITY_HOLD_TERMINAL",
-            "CK_IDEMPOTENCY_RECORD_RESULT"
+            "CK_IDEMPOTENCY_RECORD_PROCESSING_RESULT",
+            "CK_IDEMPOTENCY_RECORD_FAILED_RESULT",
+            "CK_IDEMPOTENCY_RECORD_RESERVATION_RESULT",
+            "CK_IDEMPOTENCY_RECORD_VISIT_RESULT",
+            "CK_REVIEW_STATE"
         );
         assertThat(contentColumnNames).contains(
             "REPRESENTATIVE_IMAGE_OBJECT_ID",

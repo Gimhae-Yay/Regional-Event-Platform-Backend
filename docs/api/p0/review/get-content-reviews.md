@@ -42,7 +42,7 @@ Accept: application/json
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `contentId` | Long | Y | 양의 정수인 공개 콘텐츠 식별자다. |
+| `contentId` | String | Y | 양의 10진 정수 문자열인 공개 콘텐츠 식별자다. signed 64비트 `Long` 범위를 함께 만족해야 한다. |
 
 #### Query Parameter
 
@@ -79,12 +79,12 @@ Accept: application/json
   "data": {
     "content": [
       {
-        "reviewId": 501,
+        "reviewId": "501",
         "authorDisplayName": "인증 방문자",
         "rating": 5,
         "reviewText": "지역의 이야기를 직접 들을 수 있어 좋았습니다.",
-        "createdAt": "공통 시각 형식",
-        "updatedAt": "공통 시각 형식"
+        "createdAt": "2026-07-29T08:20:00Z",
+        "updatedAt": "2026-07-30T08:20:00Z"
       }
     ],
     "page": 0,
@@ -103,12 +103,12 @@ Accept: application/json
 | `code` | String | 성공 코드 `SUCCESS`다. |
 | `message` | String | 성공 메시지다. |
 | `data.content` | Array | 공개 후기 배열이다. 결과가 없으면 빈 배열이다. |
-| `data.content[].reviewId` | Long | 공개 후기 식별자다. |
+| `data.content[].reviewId` | String | 양의 10진 정수 문자열인 공개 후기 식별자다. |
 | `data.content[].authorDisplayName` | String | 작성자 연결이 유지되면 공통 `인증 방문자`, 연결이 제거된 후기는 공통 `탈퇴한 사용자`를 반환한다. |
 | `data.content[].rating` | Integer | 별점이다. |
 | `data.content[].reviewText` | String | 후기 본문이다. |
-| `data.content[].createdAt` | String | 생성 시각이며 공통 시각 형식을 따른다. |
-| `data.content[].updatedAt` | String | 마지막 수정 시각이며 공통 시각 형식을 따른다. |
+| `data.content[].createdAt` | String | UTC ISO 8601 형식의 생성 시각이다. |
+| `data.content[].updatedAt` | String | UTC ISO 8601 형식의 마지막 수정 시각이다. |
 | `data.page` | Integer | 현재 페이지 번호다. |
 | `data.size` | Integer | 현재 페이지 크기다. |
 | `data.totalElements` | Long | 공개 후기 전체 수다. |
@@ -118,7 +118,7 @@ Accept: application/json
 
 | HTTP Status | Code | Description |
 | --- | --- | --- |
-| 400 | `INVALID_TYPE` | `contentId`, `page` 또는 `size`를 정수로 변환할 수 없다. 조회하지 않으며 값을 수정해 재시도할 수 있다. |
+| 400 | `INVALID_TYPE` | `contentId`, `page` 또는 `size`를 정수로 처리할 수 없다. 조회하지 않으며 값을 수정해 재시도할 수 있다. |
 | 400 | `INVALID_INPUT` | `contentId`, `page` 또는 `size`가 허용 형식·범위를 만족하지 않는다. 조회하지 않으며 값을 수정해 재시도할 수 있다. |
 | 404 | `NOT_FOUND` | 콘텐츠가 없거나 공개 후기 조회를 허용하는 공개 상태가 아니다. 존재 여부나 비공개 상태를 추가로 공개하지 않는다. |
 
