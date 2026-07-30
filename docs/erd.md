@@ -839,7 +839,7 @@ MySQL 복합 FK를 사용하려면 상위 테이블에 대응하는 `UNIQUE` 후
 | `idempotency_record.PROCESSING`, `FAILED` | `result_reservation_id IS NULL`, `result_visit_id IS NULL`                       |
 | `review.PUBLISHED` | `rating IS NOT NULL`, `1 <= rating <= 5`, `review_text IS NOT NULL`이고 공백이 아닌 `1`자 이상 `2000`자 이하, `deleted_at IS NULL` |
 | `review.DELETED` | `deleted_at` 존재; 파기 전에는 원문 존재, 파기 후에는 원문이 모두 `NULL`            |
-| `image_object.ACTIVE` | 대표 이미지 직접 FK 참조가 하나 이상 존재                                                               |
+| `image_object.ACTIVE` | 업로드·연결 가능한 비삭제 객체. 콘텐츠 또는 수정본 연결 전에는 직접 FK 참조가 없을 수 있고, 연결 후에는 대표 이미지 직접 FK로 참조된다. |
 | `image_object.DELETE_PENDING` | 모든 직접 FK 참조가 없고 삭제 재시도에서만 조회                                                       |
 
 ### 조회 인덱스 후보
