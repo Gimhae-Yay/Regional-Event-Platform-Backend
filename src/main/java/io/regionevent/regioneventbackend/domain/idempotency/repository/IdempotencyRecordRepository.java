@@ -21,7 +21,7 @@ public interface IdempotencyRecordRepository extends JpaRepository<IdempotencyRe
 
     @Modifying
     @Query(value = """
-        INSERT IGNORE INTO idempotency_record (
+        INSERT INTO idempotency_record (
             actor_user_id,
             operation,
             idempotency_key_hash,
@@ -38,6 +38,8 @@ public interface IdempotencyRecordRepository extends JpaRepository<IdempotencyRe
             :createdAt,
             :expiresAt
         )
+        ON DUPLICATE KEY UPDATE
+            idempotency_record_id = idempotency_record_id
         """, nativeQuery = true)
     int insertProcessingIfAbsent(
         @Param("actorUserId") Long actorUserId,
