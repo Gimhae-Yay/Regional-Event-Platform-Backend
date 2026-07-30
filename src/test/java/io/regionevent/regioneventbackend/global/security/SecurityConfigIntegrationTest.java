@@ -7,7 +7,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Instant;
+import java.util.Base64;
+import java.util.Date;
+
+import javax.crypto.SecretKey;
+
 import jakarta.servlet.http.Cookie;
+
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
 
 import tools.jackson.databind.ObjectMapper;
 
@@ -37,6 +46,9 @@ class SecurityConfigIntegrationTest {
 
     @Autowired
     private JwtAccessTokenService jwtAccessTokenService;
+
+    @Autowired
+    private JwtAccessTokenProperties jwtAccessTokenProperties;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -85,6 +97,17 @@ class SecurityConfigIntegrationTest {
     }
 
     @Test
+    void protectedPath_withAccessTokenWithoutAudience_returnsUnauthenticatedResponse() throws Exception {
+        String accessTokenWithoutAudience = issueAccessTokenWithoutAudience();
+
+        mockMvc.perform(get("/test/protected")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessTokenWithoutAudience))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.statusCode").value(401))
+            .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+    }
+
+    @Test
     void accessDeniedHandler_returnsForbiddenResponse() throws Exception {
         ApiResponseAccessDeniedHandler accessDeniedHandler = new ApiResponseAccessDeniedHandler(objectMapper);
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -97,6 +120,24 @@ class SecurityConfigIntegrationTest {
 
         assertThat(response.getStatus()).isEqualTo(403);
         assertThat(response.getContentAsString()).contains("\"code\":\"FORBIDDEN\"");
+    }
+
+    private String issueAccessTokenWithoutAudience() {
+        Instant issuedAt = Instant.now();
+        SecretKey key = Keys.hmacShaKeyFor(Base64.getDecoder().decode(jwtAccessTokenProperties.getActiveKey()));
+
+        return Jwts.builder()
+            .header()
+                .type("JWT")
+                .keyId(jwtAccessTokenProperties.getActiveKeyId())
+                .and()
+            .issuer(jwtAccessTokenProperties.getIssuer())
+            .subject("1")
+            .claim("token_type", "ACCESS")
+            .issuedAt(Date.from(issuedAt))
+            .expiration(Date.from(issuedAt.plusSeconds(900)))
+            .signWith(key, Jwts.SIG.HS256)
+            .compact();
     }
 
     @RestController

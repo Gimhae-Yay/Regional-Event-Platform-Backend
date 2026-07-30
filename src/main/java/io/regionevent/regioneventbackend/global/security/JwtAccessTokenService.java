@@ -8,6 +8,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import javax.crypto.SecretKey;
 
@@ -80,6 +81,10 @@ public class JwtAccessTokenService {
     }
 
     private Map<String, SecretKey> createVerificationKeys(JwtAccessTokenProperties properties) {
+        if (properties.getPreviousKeys().size() > 1) {
+            throw new IllegalStateException("Only one previous JWT verification key is allowed");
+        }
+
         Map<String, SecretKey> keys = new HashMap<>();
         keys.put(activeKeyId, activeKey);
 
@@ -131,12 +136,14 @@ public class JwtAccessTokenService {
         Instant now = clock.instant();
         Date issuedAt = requireClaim(claims.getIssuedAt());
         Date expiresAt = requireClaim(claims.getExpiration());
+        Set<String> audiences = claims.getAudience();
         Instant issuedAtInstant = issuedAt.toInstant();
         Instant expiresAtInstant = expiresAt.toInstant();
 
         if (!issuer.equals(claims.getIssuer())
-            || claims.getAudience().size() != 1
-            || !claims.getAudience().contains(audience)
+            || audiences == null
+            || audiences.size() != 1
+            || !audiences.contains(audience)
             || !ACCESS_TOKEN_TYPE.equals(claims.get(TOKEN_TYPE_CLAIM, String.class))
             || issuedAtInstant.isAfter(now)
             || !expiresAtInstant.isAfter(now)

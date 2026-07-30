@@ -157,6 +157,22 @@ class JwtAccessTokenServiceTest {
     }
 
     @Test
+    void createService_whenMoreThanOnePreviousKeyIsConfigured_throwsIllegalStateException() {
+        JwtAccessTokenProperties properties = new JwtAccessTokenProperties();
+        properties.setIssuer("regional-event-platform");
+        properties.setAudience("regional-event-api");
+        properties.setActiveKeyId("current-key");
+        properties.setActiveKey(key(2));
+        properties.setPreviousKeys(java.util.List.of(
+            verificationKey("previous-key-1", key(0)),
+            verificationKey("previous-key-2", key(1))
+        ));
+
+        assertThatThrownBy(() -> new JwtAccessTokenService(properties, Clock.systemUTC()))
+            .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
     void issue_whenUserIdIsNotPositive_throwsIllegalArgumentException() {
         JwtAccessTokenService jwtAccessTokenService = createService(Clock.fixed(ISSUED_AT, ZoneOffset.UTC));
 
@@ -180,11 +196,15 @@ class JwtAccessTokenServiceTest {
         properties.setActiveKeyId("current-key");
         properties.setActiveKey(key(1));
 
-        JwtAccessTokenProperties.VerificationKey previousKey = new JwtAccessTokenProperties.VerificationKey();
-        previousKey.setKeyId("test-key");
-        previousKey.setKey(key(0));
-        properties.setPreviousKeys(java.util.List.of(previousKey));
+        properties.setPreviousKeys(java.util.List.of(verificationKey("test-key", key(0))));
         return new JwtAccessTokenService(properties, clock);
+    }
+
+    private JwtAccessTokenProperties.VerificationKey verificationKey(String keyId, String key) {
+        JwtAccessTokenProperties.VerificationKey verificationKey = new JwtAccessTokenProperties.VerificationKey();
+        verificationKey.setKeyId(keyId);
+        verificationKey.setKey(key);
+        return verificationKey;
     }
 
     private String createToken(
