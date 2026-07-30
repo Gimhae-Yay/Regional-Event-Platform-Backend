@@ -21,13 +21,15 @@
 | [ADR-0003](../adr/0003-use-persisted-idempotency-for-reservation-and-checkin.md#결정) | 체크인 요청의 영속 멱등성 기록 |
 | [ADR-0004](../adr/0004-use-hmac-signed-reservation-qr.md#결정) | HMAC 서명, 키 관리와 예약당 방문 한 건 제약 |
 | [ADR-0010](../adr/0010-issue-short-lived-qr-on-demand-and-separate-retry-idempotency.md#결정) | 체크인 창 온디맨드 QR 발급·갱신과 재시도·재스캔 구분 |
+| [ADR-0034](../adr/0034-use-single-get-endpoint-for-my-reservation-qr.md#결정) | 내 예약 QR 조회 시 단기 QR을 발급하고 별도 발급 경로를 두지 않는 HTTP 계약 |
 | [ADR-0012](../adr/0012-retain-author-unlinked-reviews-and-visits-after-withdrawal.md#결정) | 탈퇴 회원의 미사용 QR·미체크인 예약 종결 |
 
-> QR 발급 시점과 재스캔 판정은 ADR-0010을 우선 적용하고, ADR-0004는 HMAC·키 관리·방문 고유 제약에 적용한다.
+> QR 발급 시점과 재스캔 판정은 ADR-0010을 우선 적용한다. HTTP 경로는 ADR-0034를 따라 내 예약 QR 조회 시
+> 발급하며, ADR-0004는 HMAC·키 관리·방문 고유 제약에 적용한다.
 
 ### 기능 범위
 
-- 예약 확정 시 QR 발급 자격을 만들고, 체크인 창 안에서 `CONFIRMED` 예약에 연결된 단기 서명 QR을 발급·갱신한다.
+- 예약 확정 시 QR 발급 자격을 만들고, 체크인 창 안에서 내 `CONFIRMED` 예약 QR을 조회할 때 단기 서명 QR을 발급·갱신한다.
 - 새로운 QR 스캔은 서명, 만료 시각, 체크인 창, 예약·회차 상태, 운영자 권한과 기존 체크인 여부를 검증한다.
 - 동일 체크인 요청의 네트워크 재시도와 새로운 QR 재스캔을 구분해 방문 기록을 한 건만 유지한다.
 - QR을 표시할 수 없거나 스캔에 실패하면 담당 운영자에게 예약 번호 보조 조회를 제공한다.
@@ -42,7 +44,7 @@
 
 ##### 기본 흐름
 
-1. 방문자가 체크인 창 안에서 짧은 TTL의 예약 QR을 발급하거나 갱신해 제시한다.
+1. 방문자가 체크인 창 안에서 내 예약 QR을 조회해 짧은 TTL의 QR을 발급받아 제시한다.
 2. 운영자 앱은 한 번의 체크인 시도에 고유한 `checkInRequestId`를 만들고 QR을 스캔한다.
 3. 시스템이 현재 운영자 권한, 서명, 만료 시각, 체크인 창과 회차 상태를 검증한 뒤 예약 상태와 기존 방문을 함께 확인한다.
 4. 검증에 성공하면 방문 기록을 한 건 생성하고 [정원 홀드·무료 예약](reservation.md)의 `RSV-04`에 따라 예약 상태를 전환한다.
@@ -67,7 +69,7 @@
 
 예약 확정은 QR 발급 자격만 생성한다.
 체크인 창과 토큰 만료는 MySQL 기준 시각으로 `[checkin_open_at, checkin_close_at)`을 판정한다.
-활성 회원 본인의 `CONFIRMED` 예약이고 회차가 `SCHEDULED`이며 체크인 창 안일 때만 단기 QR을 발급·갱신한다.
+활성 회원 본인의 `CONFIRMED` 예약이고 회차가 `SCHEDULED`이며 체크인 창 안일 때만 내 예약 QR 조회 시 단기 QR을 발급·갱신한다.
 QR은 HMAC-SHA256으로 서명하고 토큰 버전·키 식별자·불투명 예약 식별자·회차·만료 시각만 포함한다.
 사용자 연결은 서버의 예약 관계로 검증하며 토큰에는 이름·연락처와 사용자 식별자를 포함하지 않는다.
 토큰 만료 시각은 짧은 TTL과 체크인 창 종료 시각 중 먼저 도래하는 시각을 넘지 않는다.
@@ -117,7 +119,8 @@ QR을 표시할 수 없거나 스캔에 실패하면 운영자가 담당 콘텐�
 
 예약 상태는 [정원 홀드·무료 예약](reservation.md#rsv-04),
 운영자 권한과 예약자 마스킹은 [인증·프로필](auth-profile.md#auth-privacy-policies)을 적용한다.
-QR 발급·갱신과 요청 재시도·재스캔 구분은
+QR 조회 시 발급·갱신과 요청 재시도·재스캔 구분은
+[ADR-0034](../adr/0034-use-single-get-endpoint-for-my-reservation-qr.md)와
 [ADR-0010](../adr/0010-issue-short-lived-qr-on-demand-and-separate-retry-idempotency.md)을 따른다.
 
 ### 데이터 요구사항

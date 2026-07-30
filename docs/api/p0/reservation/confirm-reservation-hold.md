@@ -95,7 +95,7 @@ Accept: application/json
 | `data.status` | String | 예약 상태. 항상 `CONFIRMED` |
 | `data.confirmedAt` | String | 예약 확정 시각. API 공통 규칙에 따른 UTC ISO 8601 일시다. |
 
-예약 QR은 이 API에서 발급하지 않는다. `CONFIRMED` 예약은 체크인 창에서 별도 QR 발급 API를 사용할 수 있다.
+예약 QR은 이 API에서 발급하지 않는다. `CONFIRMED` 예약은 체크인 창에서 `GET /me/reservations/{reservationId}/qr`로 내 예약 QR을 조회해 발급받을 수 있다.
 
 ### Error Code
 

@@ -5,7 +5,7 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | `FR-07`, `FR-10`, `FR-11`, `AUTH-01`, `QR-03`, `QR-05`, `RSV-04` |
 | 소유 도메인 | 예약 QR·체크인 |
-| 기준 문서 | [예약 QR·체크인](../../../p0/check-in.md), [정원 홀드·무료 예약](../../../p0/reservation.md), [ADR-0003](../../../adr/0003-use-persisted-idempotency-for-reservation-and-checkin.md), [ADR-0010](../../../adr/0010-issue-short-lived-qr-on-demand-and-separate-retry-idempotency.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [예약 QR·체크인](../../../p0/check-in.md), [정원 홀드·무료 예약](../../../p0/reservation.md), [ADR-0003](../../../adr/0003-use-persisted-idempotency-for-reservation-and-checkin.md), [ADR-0010](../../../adr/0010-issue-short-lived-qr-on-demand-and-separate-retry-idempotency.md), [ADR-0034](../../../adr/0034-use-single-get-endpoint-for-my-reservation-qr.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
@@ -13,9 +13,9 @@
 체크인 창 안의 단기 QR 발급·조회, 소유 운영자의 QR·예약번호 체크인, 담당 지역 관리자의 QR 예외 조회를 포함한다.
 요청·응답의 공통 형식, 인증, 멱등성과 오류 구조는 `common/` 문서를 단일 출처로 삼는다.
 
-`POST /reservations/{reservationId}/qr`은 방문자가 QR을 명시적으로 발급·갱신하는 명령이고,
-`GET /me/reservations/{reservationId}/qr`은 내 예약 화면에서 QR을 조회하는 계약이다. QR 토큰은 저장하지 않으므로
-두 API 모두 성공할 때 현재 시각을 기준으로 새 단기 토큰을 생성할 수 있으며 같은 발급 자격과 만료 정책을 적용한다.
+`GET /me/reservations/{reservationId}/qr`은 내 예약 화면에서 QR을 조회하고, 성공 시 현재 시각을 기준으로
+새 단기 토큰을 발급해 반환하는 유일한 계약이다. QR 토큰과 발급 이력은 저장하지 않으므로 이 조회는
+예약·회차·정원·방문 상태를 변경하지 않는다. 브라우저와 중간 캐시는 `Cache-Control: no-store`로 응답을 저장하지 않는다.
 
 체크인 요청 멱등성은 별도 HTTP API가 아니다. `POST /operator/check-ins`와
 `POST /operator/check-ins/manual`의 필수 `Idempotency-Key` 헤더와 영속 멱등 기록으로 보장한다.
@@ -24,7 +24,7 @@
 
 | 요구사항 | HTTP 계약 | 주요 데이터 |
 | --- | --- | --- |
-| `FR-07`, `QR-01` | `POST /reservations/{reservationId}/qr`, `GET /me/reservations/{reservationId}/qr` | `reservation`, `content_session` |
+| `FR-07`, `QR-01` | `GET /me/reservations/{reservationId}/qr` | `reservation`, `content_session` |
 | `FR-07`, `QR-02` | `POST /operator/check-ins` | `reservation`, `content_session`, `visit` |
 | `FR-07`, `QR-03` | 체크인 명령의 `Idempotency-Key` | `idempotency_record`, `visit` |
 | `FR-10`, `AUTH-01` | `POST /operator/check-ins`, `POST /operator/check-ins/manual` | `content.operator_id`, `content.region_id`, `reservation.region_id` |
@@ -48,8 +48,7 @@
 | --- | --- | --- |
 | QR 실패·보조 처리 목록 조회 | `GET /region-admin/qr-exceptions` | [list-qr-exceptions.md](list-qr-exceptions.md) |
 | QR 예외·마스킹 예약자 단건 조회 | `GET /region-admin/qr-exceptions/{exceptionId}` | [get-qr-exception.md](get-qr-exception.md) |
-| HMAC 단기 QR 발급·갱신 | `POST /reservations/{reservationId}/qr` | [issue-or-refresh-reservation-qr.md](issue-or-refresh-reservation-qr.md) |
-| 내 예약 QR 조회 | `GET /me/reservations/{reservationId}/qr` | [get-my-reservation-qr.md](get-my-reservation-qr.md) |
+| 내 예약 단기 QR 조회·발급 | `GET /me/reservations/{reservationId}/qr` | [get-my-reservation-qr.md](get-my-reservation-qr.md) |
 | 예약번호 보조 조회 후 체크인 | `POST /operator/check-ins/manual` | [manual-check-in-by-reservation-number.md](manual-check-in-by-reservation-number.md) |
 | QR 검증·체크인과 방문 자동 생성 | `POST /operator/check-ins` | [check-in-by-qr.md](check-in-by-qr.md) |
 | 체크인 요청 멱등성 | 별도 HTTP 경로 없음 | [check-in-idempotency.md](check-in-idempotency.md) |
