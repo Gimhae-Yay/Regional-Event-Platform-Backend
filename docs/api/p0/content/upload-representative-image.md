@@ -159,12 +159,12 @@ Accept: application/json
 4. 서버는 생성한 객체 키, 요청한 MIME 타입, 요청한 바이트 크기와 SHA-256 Base64 체크섬을 조건으로 S3 presigned PUT URL을 발급한다. 클라이언트는 응답의 `uploadHeaders`를 그대로 포함해 만료 전 업로드해야 한다.
 5. 이 API는 콘텐츠나 수정본을 생성·수정하지 않으며 `content`, `content_revision`, `content_log`, `audit_event`를 변경하지 않는다. 실제 대표 이미지 연결은 콘텐츠 생성·수정본 생성·수정 API가 `imageObjectId`를 다시 검증한 뒤 수행한다.
 6. 콘텐츠 생성·수정본 생성·수정 API는 연결 직전에 `image_object` 행을 잠그고 다음 조건을 모두 검증한다. `lifecycle_status = ACTIVE`, `created_by_user_id`가 현재 운영자, `region_id`가 운영자 담당 지역과 대상 콘텐츠 지역, `linked_at IS NULL`, `upload_expires_at > now`여야 한다. 또한 S3 `HEAD` 결과의 SHA-256 Base64 체크섬과 `ContentLength`가 각각 `image_object.checksum`, `image_object.byte_size`와 같아야 한다. 하나라도 맞지 않으면 연결하지 않는다.
-7. 콘텐츠 생성·수정본 생성·수정 API가 대표 이미지 연결을 성공시키면 같은 트랜잭션에서 `image_object.linked_at`을 현재 시각으로 설정한다. 이후 기존 대표 이미지를 수정본 스냅샷으로 공유하는 것은 ADR-0030의 직접 FK 참조 규칙을 따른다.
+7. 콘텐츠 생성·수정본 생성·수정 API가 대표 이미지 연결을 성공시키면 같은 트랜잭션에서 `image_object.linked_at`을 현재 시각으로 설정하고 `created_by_user_id`를 `NULL`로 제거한다. 이후 기존 대표 이미지를 수정본 스냅샷으로 공유하는 것은 ADR-0030의 직접 FK 참조 규칙을 따른다.
 8. 업로드 URL 발급 후 `upload_expires_at`까지 연결되지 않은 `ACTIVE` 이미지 객체는 보관 작업이 `linked_at IS NULL`과 직접 FK 참조 0건을 확인한 뒤 `DELETE_PENDING`으로 전환하고 S3 삭제를 시도한다. 삭제 실패 시 기존 `delete_attempt_count`, `last_delete_attempted_at`으로 멱등 재시도한다. 이 정리 흐름은 별도 클라이언트 API를 제공하지 않는다.
 
 ### 보안·로깅
 
 - 응답의 `uploadUrl`은 짧은 유효기간을 가지며, 서버는 URL 자체를 DB나 Redis에 저장하지 않는다.
 - 구조화 로그에는 `imageObjectId`, 요청 결과와 오류 코드처럼 비개인 식별만 남기고 `uploadUrl`, 객체 키, checksum, 토큰, 개인정보를 남기지 않는다.
-- `created_by_user_id`와 `region_id`는 업로드 객체의 연결 권한 검증에만 사용하며 응답과 로그에 노출하지 않는다.
+- `created_by_user_id`는 업로드 객체의 최초 연결 권한 검증에만 사용하고 연결 성공 시 제거한다. `region_id`는 지역 경계 검증에 사용하며, 두 값 모두 응답과 로그에 노출하지 않는다.
 - S3 버킷과 객체는 공개 쓰기·공개 읽기를 허용하지 않는다. 서버가 발급한 presigned PUT URL 외 업로드 경로는 허용하지 않는다.

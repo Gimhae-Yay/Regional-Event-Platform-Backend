@@ -103,7 +103,7 @@ erDiagram
 | `session_revision` | 기존 `SCHEDULED` 회차 변경의 후보 일정·정원과 심사 상태를 보관한다. 승인 때만 실제 `content_session`을 변경하며, 반려는 현재 회차를 바꾸지 않는다. |
 | `content_log` | 콘텐츠 생성·상태 변경과 소프트 삭제의 콘텐츠, 처리자, 결과 상태·삭제 코드, 사유와 시각을 보관하는 추가 전용 로그다. 탈퇴 때만 `actor_id`를 제거한다. |
 | `content_revision` | 공개 콘텐츠 또는 공개 전 승인 콘텐츠를 수정하기 위한 모든 후보 필드, 후보 공개 예정 시각, 후보 대표 이미지 객체와 심사 상태를 보관한다. 원본 버전을 기준으로 충돌을 판정하고 승인 시에만 `content`에 반영한다. |
-| `image_object` | S3 객체 키, 콘텐츠 타입, 크기, 체크섬, 업로드 요청자·지역, 업로드 만료와 삭제 재시도 상태를 보관한다. 공개 URL·원본 파일명은 저장하지 않으며, 업로드 요청자 FK는 대표 이미지 연결 권한 검증에만 사용한다. |
+| `image_object` | S3 객체 키, 콘텐츠 타입, 크기, 체크섬, 업로드 요청자·지역, 업로드 만료와 삭제 재시도 상태를 보관한다. 공개 URL·원본 파일명은 저장하지 않으며, 업로드 요청자 FK는 대표 이미지 최초 연결 권한 검증 후 제거한다. |
 
 #### 정원·예약·체크인·후기
 
@@ -496,7 +496,7 @@ erDiagram
   `imageObjectId`의 타 운영자 재사용과 만료 후 연결을 막기 위한 내부 검증 정보다.
 - 콘텐츠 생성·수정본 생성·수정 API가 업로드된 새 대표 이미지를 연결할 때는 `image_object` 행을 잠그고
   `created_by_user_id`, `region_id`, `lifecycle_status`, `upload_expires_at`, `linked_at`과 S3 `HEAD`의 체크섬·`ContentLength`를
-  같은 트랜잭션의 연결 조건으로 다시 검증한다. 성공 시 `linked_at`을 설정한다.
+  같은 트랜잭션의 연결 조건으로 다시 검증한다. 성공 시 `linked_at`을 설정하고 `created_by_user_id`를 `NULL`로 제거한다.
 - 이미지 교체·제거·삭제 명령은 대상 객체 행을 잠근 뒤 `content`와 모든 `content_revision`의 직접 FK 참조를 같은 MySQL
   트랜잭션에서 검사한다. 두 이미지 객체를 함께 잠글 때는 ID 오름차순을 사용한다.
 - `image_object.lifecycle_status = ACTIVE`이면 대표 이미지 직접 FK가 하나 이상 존재하거나, 아직 `linked_at IS NULL`인 업로드 후보일 수 있다.
@@ -857,7 +857,7 @@ MySQL 복합 FK를 사용하려면 상위 테이블에 대응하는 `UNIQUE` 후
 | `idempotency_record.PROCESSING`, `FAILED` | `result_reservation_id IS NULL`, `result_visit_id IS NULL`                       |
 | `review.PUBLISHED` | `rating IS NOT NULL`, `1 <= rating <= 5`, `review_text IS NOT NULL`이고 공백이 아닌 `1`자 이상 `2000`자 이하, `deleted_at IS NULL` |
 | `review.DELETED` | `deleted_at` 존재; 파기 전에는 원문 존재, 파기 후에는 원문이 모두 `NULL`            |
-| `image_object.ACTIVE` | 업로드·연결 가능한 비삭제 객체. `region_id`, `upload_expires_at`이 존재한다. `linked_at IS NULL`이면 `created_by_user_id`가 존재하고 만료 전인 업로드 후보이며, 연결 성공 시 `linked_at`을 설정한다. |
+| `image_object.ACTIVE` | 업로드·연결 가능한 비삭제 객체. `region_id`, `upload_expires_at`이 존재한다. `linked_at IS NULL`이면 `created_by_user_id`가 존재하고 만료 전인 업로드 후보이며, 연결 성공 시 `linked_at`을 설정하고 `created_by_user_id`를 제거한다. |
 | `image_object.DELETE_PENDING` | 모든 직접 FK 참조가 없고 삭제 재시도에서만 조회                                                       |
 
 ### 조회 인덱스 후보
@@ -950,12 +950,12 @@ SQL의 단순 cascade가 아래 업무 순서를 대신해서는 안 된다.
 | 감사 기록 | `audit_event_actor_link` 제거, 이벤트 본문은 공통 `WITHDRAWN_MEMBER` 의미로 조회 |
 | 콘텐츠 | `PENDING`, `APPROVED`만 `deleted_at`을 기록하는 소프트 삭제 |
 | 콘텐츠 로그 | 상태·삭제 사유를 추가 전용으로 보관하고, 탈퇴 완료 전 `actor_id`를 `NULL`로 갱신해 actor 표시는 공통 `WITHDRAWN_MEMBER`로 조회 |
-| 이미지 | DB 참조 제거 후 S3 즉시 삭제, 실패 시 비공개 `DELETE_PENDING`으로 재시도 |
+| 이미지 | 미연결 업로드 후보는 계정 파기 전 `DELETE_PENDING` 전환과 S3 삭제 대상으로 처리한다. 연결된 이미지는 `created_by_user_id`가 제거돼 있으며, DB 참조 제거 후 S3 즉시 삭제, 실패 시 비공개 `DELETE_PENDING`으로 재시도한다. |
 
 - 운영 역할 또는 콘텐츠 소유 관계가 남은 계정의 셀프 탈퇴는 P0에서 거부한다.
 - 방문자 연결 제거는 명시적 탈퇴 유스케이스가 수행한다. `ON DELETE SET NULL`만으로 도메인 종결 순서를
   대체하지 않는다.
-- 계정 파기 직전에는 신청·홀드·예약·방문·후기·멱등·감사·콘텐츠 로그 어디에도 해당 `user_id`가 남지
+- 계정 파기 직전에는 신청·홀드·예약·방문·후기·멱등·감사·콘텐츠 로그·이미지 업로드 후보 어디에도 해당 `user_id`가 남지
   않았음을 같은 탈퇴 처리의 완료 조건으로 검사한다.
 - 지역, 콘텐츠, 회차, 방문과 후기 사실은 P0 업무 경로에서 연쇄 hard delete하지 않는다.
 
