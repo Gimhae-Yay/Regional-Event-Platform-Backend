@@ -154,7 +154,6 @@ public class ReservationConfirmationService {
 
         CapacityHold capacityHold = findOwnedCapacityHold(holdId, actor);
         Instant now = Instant.now();
-        lockWaitTimeoutConfigurer.configureForCurrentTransaction();
         int insertedCount = insertProcessingIdempotencyRecord(
             actorUserId,
             idempotencyKeyHash,
@@ -275,7 +274,8 @@ public class ReservationConfirmationService {
         String requestHash,
         Instant createdAt
     ) {
-        try {
+        try (ReservationIdempotencyLockWaitTimeoutConfigurer.LockWaitTimeoutScope ignored =
+                 lockWaitTimeoutConfigurer.configureForCurrentTransaction()) {
             return idempotencyRecordRepository.insertProcessingIfAbsent(
                 actorUserId,
                 idempotencyKeyHash,
