@@ -11,6 +11,10 @@
 | 토큰 만료·무효  | `401 Unauthorized`, `UNAUTHENTICATED`                         |
 
 Refresh Token은 `Path=/api/v1/auth` 범위의 인증 API에서만 수신하며 보호 업무 API의 인증 수단으로 사용할 수 없다.
+현재 MVP는 단일 신뢰 사이트 브라우저 클라이언트만 지원하므로 CORS 허용 구성을 두지 않으며, Spring Security의 CSRF
+검사는 적용하지 않는다. 이는 보호 업무 API가 Bearer Access Token으로만 인증되고 Refresh Token이 호스트 전용
+`SameSite=Strict` 쿠키로 위 경로에만 전송된다는 조건에 한정한다. 교차 사이트 또는 신뢰할 수 없는 같은 사이트 하위
+출처를 지원하려면 CSRF 방어·허용 Origin 정책을 ADR과 인증 API 명세에 먼저 확정한다.
 교차 사이트 요구로 `SameSite=Strict`를 변경하려면 CSRF 방어와 함께 후속 ADR과 인증 API 명세를 먼저 갱신한다.
 인증 제외 API를 추가하거나 제거할 때는 이 표와 해당 도메인 API 명세를 같은 변경에서 갱신한다.
 
