@@ -3,9 +3,9 @@
 | 항목 | 내용 |
 | --- | --- |
 | 대상 릴리스 | P0 |
-| 관련 요구사항 | `FR-14`, `AUTH-01`, `CON-05` |
+| 관련 요구사항 | `FR-10`, `FR-14`, `AUTH-01`, `CON-05` |
 | 소유 도메인 | 지역·콘텐츠 카탈로그 |
-| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [ERD](../../../erd.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [인증·프로필](../../../p0/auth-profile.md), [ERD](../../../erd.md), [ADR-0032](../../../adr/0032-block-automatic-publication-during-pre-publication-revision-review.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
@@ -22,7 +22,7 @@ GET /api/v1/region-admin/content-revisions/{revisionId}
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `Authorization` | Header | Y | `Bearer <accessToken>` 형식의 지역 관리자 Access Token |
+| `Authorization` | Header | Y | `Bearer <accessToken>` 형식의 활성 `REGION_ADMIN` Access Token |
 | `revisionId` | Path | Y | 양의 10진 문자열인 수정본 식별자 |
 
 ### Response
@@ -87,17 +87,25 @@ GET /api/v1/region-admin/content-revisions/{revisionId}
 
 | HTTP Status | Code | Description |
 | --- | --- | --- |
-| `400` | `INVALID_INPUT` | `revisionId`가 양의 10진 문자열이 아니다. |
-| `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. |
-| `403` | `FORBIDDEN` | 지역 관리자 역할이 없거나 원본 콘텐츠가 담당 지역에 속하지 않는다. |
-| `404` | `NOT_FOUND` | 수정본이 없거나 `EDIT_REQUESTED`가 아니거나 원본이 소프트 삭제됐다. |
-| `500` | `INTERNAL_SERVER_ERROR` | 수정본과 원본 상태·후보 `publish_at` 조합 또는 후보 이미지 연결이 정책과 일치하지 않는다. |
+| `400` | `INVALID_INPUT` | `revisionId`를 `Long`으로 해석한 값이 양수가 아니다. 수정본·원본 콘텐츠·이미지 객체와 감사 기록은 변경하지 않는다. |
+| `400` | `INVALID_TYPE` | `revisionId`를 signed 64비트 `Long`으로 변환할 수 없다. 수정본·원본 콘텐츠·이미지 객체와 감사 기록은 변경하지 않는다. |
+| `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 수정본·원본 콘텐츠·이미지 객체와 감사 기록은 변경하지 않는다. |
+| `403` | `FORBIDDEN` | 인증 주체가 활성 `REGION_ADMIN`이 아니거나 원본 콘텐츠가 담당 지역에 속하지 않는다. 수정본·원본 콘텐츠·이미지 객체와 감사 기록은 변경하지 않는다. |
+| `404` | `NOT_FOUND` | 수정본이 없거나 `EDIT_REQUESTED`가 아니거나 원본이 소프트 삭제됐다. 심사 대상이 아닌 수정본의 존재·상태는 노출하지 않으며 수정본·원본 콘텐츠·이미지 객체와 감사 기록은 변경하지 않는다. |
+| `500` | `INTERNAL_SERVER_ERROR` | 수정본과 원본 상태·후보 `publish_at` 조합 또는 후보 이미지 연결이 정책과 일치하지 않거나 예상하지 못한 서버 오류가 발생했다. 수정본·원본 콘텐츠·이미지 객체와 감사 기록은 변경하지 않는다. |
 
 ### 처리 규칙
 
-1. 서버는 수정본의 원본 콘텐츠를 기준으로 지역 권한을 검증한다.
-2. `EDIT_REQUESTED` 수정본만 조회한다. `EDIT_APPROVED`, `EDIT_REJECTED`, `EDIT_WITHDRAWN` 수정본은 반환하지 않는다.
+1. 인증 주체는 활성 상태이며 담당 `region_id`가 연결된 `REGION_ADMIN`이어야 한다. 서버는 수정본의 원본 콘텐츠 `region_id`와 인증 주체의 담당 `region_id`가 일치하는지 검증한다.
+2. 원본 콘텐츠가 소프트 삭제되지 않았고 수정본이 `EDIT_REQUESTED`인 경우만 반환한다. `EDIT_APPROVED`, `EDIT_REJECTED`, `EDIT_WITHDRAWN` 수정본과 소프트 삭제된 원본의 수정본은 반환하지 않는다.
 3. 공개 콘텐츠 수정본은 `candidatePublishAt = null`, 원본 `PUBLISHED`여야 한다.
 4. 공개 전 수정본은 `candidatePublishAt`이 있고 원본 `PENDING`이며 최신 `PENDING` 상태 로그의 직전 상태 로그가 `APPROVED`여야 한다.
-5. 후보 이미지의 `ACTIVE` 상태와 후보 이미지 연결을 검증한 뒤에만 presigned URL을 발급한다.
-6. 회차는 원본의 현재 값만 반환하며 수정본 승인으로 변경되지 않는다.
+5. 후보 이미지의 `ACTIVE` 상태와 수정본의 유효한 직접 연결을 검증한 뒤에만 단기 presigned GET URL과 정확한 UTC 만료 시각을 발급한다. 권한 검증을 통과하기 전에는 URL을 발급하지 않는다.
+6. `representativeImageUrl`과 만료 시각은 DB나 Redis에 저장하지 않고 응답을 조립할 때마다 새로 생성한다. 응답에는 `imageObjectId`, S3 객체 키, 원본 파일명 또는 사용자 식별정보를 포함하지 않는다.
+7. 회차는 원본의 현재 값만 반환하며 수정본 승인으로 회차·정원·체크인 창은 변경하지 않는다.
+8. 이 조회는 수정본·원본 콘텐츠·이미지 객체를 생성·수정·삭제하지 않고 감사 이벤트도 생성하지 않는다.
+
+### 감사 및 관측
+
+- 조회 성공과 실패는 `requestId`, 담당 지역 식별자, 수정본 식별자와 결과 코드만 구조화 로그에 남긴다.
+- 후보 이미지 객체 키, 후보 필드 원문과 사용자 식별정보는 구조화 로그에 남기지 않는다.
