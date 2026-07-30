@@ -66,7 +66,7 @@
 | 사유를 포함한 콘텐츠 반려 | `POST /region-admin/contents/{contentId}/reject` | [content-rejection.md](content-rejection.md) |
 | 심사 대기 수정본 목록 조회 | `GET /region-admin/content-revisions?status=EDIT_REQUESTED` | [list-pending-content-revisions.md](list-pending-content-revisions.md) |
 | 심사 대기 수정본 상세 조회 | `GET /region-admin/content-revisions/{revisionId}` | [review-content-revision-detail.md](review-content-revision-detail.md) |
-| 수정본 승인 | `POST /region-admin/content-revisions/{revisionId}/approve` | [approve-content-revision.md](approve-content-revision.md) |
+| 수정본 승인 | `POST /region-admin/content-revisions/{revisionId}/approve` | [approve-content-revision.md](../region-content/approve-content-revision.md) |
 | 사유를 포함한 수정본 반려 | `POST /region-admin/content-revisions/{revisionId}/reject` | [reject-content-revision.md](reject-content-revision.md) |
 | 콘텐츠 반려·승인·종료 이력 조회 | `GET /region-admin/contents/{contentId}/history` | [content-history.md](content-history.md) |
 | 공개 콘텐츠 회차 목록 조회 | `GET /contents/{contentId}/sessions` | [list-public-content-sessions.md](list-public-content-sessions.md) |
