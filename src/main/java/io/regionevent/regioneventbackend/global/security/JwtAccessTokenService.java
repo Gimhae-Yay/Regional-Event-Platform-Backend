@@ -140,12 +140,15 @@ public class JwtAccessTokenService {
         Instant now = clock.instant();
         Date issuedAt = requireClaim(claims.getIssueTime());
         Date expiresAt = requireClaim(claims.getExpirationTime());
+        Instant issuedAtInstant = issuedAt.toInstant();
+        Instant expiresAtInstant = expiresAt.toInstant();
 
         if (!issuer.equals(claims.getIssuer())
             || !List.of(audience).equals(claims.getAudience())
             || !ACCESS_TOKEN_TYPE.equals(claims.getStringClaim(TOKEN_TYPE_CLAIM))
-            || issuedAt.toInstant().isAfter(now)
-            || !expiresAt.toInstant().isAfter(now)) {
+            || issuedAtInstant.isAfter(now)
+            || !expiresAtInstant.isAfter(now)
+            || !expiresAtInstant.equals(issuedAtInstant.plus(ACCESS_TOKEN_TTL))) {
             throw new InvalidAccessTokenException();
         }
         return new AuthenticatedUser(toUserId(claims.getSubject()));

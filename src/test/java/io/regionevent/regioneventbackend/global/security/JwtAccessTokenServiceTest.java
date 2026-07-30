@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Base64;
@@ -44,6 +45,21 @@ class JwtAccessTokenServiceTest {
         JwtAccessTokenService verifier = createService(Clock.fixed(ISSUED_AT.plusSeconds(900), ZoneOffset.UTC));
 
         assertThatThrownBy(() -> verifier.authenticate(issuer.issue(1L)))
+            .isInstanceOf(InvalidAccessTokenException.class);
+    }
+
+    @Test
+    void authenticate_whenAccessTokenLifetimeExceeds15Minutes_throwsInvalidAccessTokenException() throws Exception {
+        JwtAccessTokenService jwtAccessTokenService = createService(Clock.fixed(ISSUED_AT, ZoneOffset.UTC));
+        String longLivedToken = createToken(
+            "regional-event-platform",
+            "regional-event-api",
+            "ACCESS",
+            ISSUED_AT.plus(Duration.ofDays(1)),
+            key(0)
+        );
+
+        assertThatThrownBy(() -> jwtAccessTokenService.authenticate(longLivedToken))
             .isInstanceOf(InvalidAccessTokenException.class);
     }
 
