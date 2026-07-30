@@ -5,7 +5,7 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | FR-09, AUTH-02 |
 | 소유 도메인 | 인증·프로필 |
-| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ADR-0031](../../../adr/0031-expose-business-information-only-in-protected-review-detail.md), [ERD](../../../erd.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ADR-0036](../../../adr/0036-expose-business-information-only-in-protected-review-detail.md), [ERD](../../../erd.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 

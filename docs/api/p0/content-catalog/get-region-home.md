@@ -179,7 +179,7 @@ Accept: application/json
 12. P0에서는 페이지네이션, 유형 필터와 사용자 지정 정렬을 적용하지 않는다.
 13. Redis에는 지역과 콘텐츠의 정적 표시 정보만 캐시한다. 목록 구분과 `displaySession`, `remainingCapacity`, `reservationAvailable`은 요청마다 MySQL의 현재 회차·정원 상태로 계산하며 전체 API 응답을 캐시하지 않는다.
 14. 서버는 캐시 사용 여부와 관계없이 MySQL의 현재 `PUBLISHED` 상태와 `version_no`를 확인하며, 이전 버전의 공개본을 정상 응답으로 반환하지 않는다.
-15. 캐시 키·버전 검증·무효화 실패 처리·TTL과 Redis 장애 시 MySQL 우회 정책은 [ADR-0029](../../../adr/0029-use-version-validated-cache-aside-for-public-content.md)를 따른다.
+15. 캐시 키·버전 검증·무효화 실패 처리·TTL과 Redis 장애 시 MySQL 우회 정책은 [ADR-0031](../../../adr/0031-use-version-validated-cache-aside-for-public-content.md)를 따른다.
 16. 공개 콘텐츠는 `ACTIVE` 상태의 대표 이미지 객체와 현재 대표 이미지 연결이 있어야 한다. 연결이 없거나 삭제 대기 객체가 연결돼 있으면 정상 콘텐츠로 대체하지 않고 정합성 오류로 처리한다.
 17. 서버는 콘텐츠가 여전히 `PUBLISHED`이고 현재 대표 이미지가 유효한지 확인한 뒤 비공개 S3 객체의 단기 presigned GET URL과 정확한 만료 시각을 함께 발급한다.
 18. presigned URL과 만료 시각은 DB나 Redis에 저장하지 않고 응답을 조립할 때마다 새로 생성한다. `representativeImageUrlExpiresAt` 이후에는 기존 URL을 재사용하지 않고 API를 다시 조회한다.

@@ -3,21 +3,22 @@
 | 항목 | 내용 |
 | --- | --- |
 | 대상 릴리스 | P0 |
-| 관련 요구사항 | [FR-04 승인·자동 공개·종료](../../../p0/content-catalog.md#fr-04-승인자동-공개종료), `CON-03`, `CON-09` |
+| 관련 요구사항 | [FR-04 승인·자동 공개·종료](../../../p0/content-catalog.md#fr-04-승인자동-공개종료), `CON-03`, `CON-09`, `SES-01` |
 | 소유 도메인 | 지역·콘텐츠 카탈로그 |
-| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [ADR-0019](../../../adr/0019-use-minimal-content-status-log.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [ADR-0019](../../../adr/0019-use-minimal-content-status-log.md), [ADR-0038](../../../adr/0038-create-sessions-with-lifecycle-and-review-session-changes.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
-담당 지역 관리자가 심사 대기 콘텐츠와 운영자가 지정한 `publish_at`을 함께 승인하는 API다. 승인은 `PENDING → APPROVED`로
-전이하며, 콘텐츠는 공개 예정 시각 전까지 일반 사용자에게 노출되지 않는다. 공개 예정 시각에 콘텐츠를 `PUBLISHED`로 바꾸는 것은
-이 API가 아니라 시스템의 자동 공개 처리 책임이다.
+담당 지역 관리자가 심사 대기 콘텐츠와 운영자가 지정한 `publish_at`을 함께 승인하는 API다. 최초 심사의 콘텐츠에는 하나 이상의
+`PENDING` 회차가 함께 존재하며, 승인 시 콘텐츠 `PENDING → APPROVED`와 최초 회차들의
+`PENDING → SCHEDULED` 전이를 같은 트랜잭션으로 처리한다. 콘텐츠는 공개 예정 시각 전까지 일반 사용자에게 노출되지 않는다.
+공개 예정 시각에 콘텐츠를 `PUBLISHED`로 바꾸는 것은 이 API가 아니라 시스템의 자동 공개 처리 책임이다.
 
 ### 요구사항 추적
 
 | 요구사항 | HTTP 계약 | 주요 데이터 |
 | --- | --- | --- |
-| FR-04, CON-03, CON-09 | `POST /api/v1/region-admin/contents/{contentId}/approve` | `content`, `content_log`, `audit_event` |
+| FR-04, CON-03, CON-09, SES-01 | `POST /api/v1/region-admin/contents/{contentId}/approve` | `content`, `content_session`, `content_log`, `audit_event`, `audit_event_actor_link` |
 
 ## 2. 공통 계약 참조
 
@@ -33,8 +34,10 @@
 `deleted_at IS NULL`이고 현재 상태가 `PENDING`인 최초 심사·반려 후 재제출 콘텐츠만 승인한다. 최신 `PENDING`
 상태 로그의 직전 상태 로그가 `APPROVED`인 콘텐츠는 공개 전 수정 심사 대기이므로, 활성·종결 수정본 여부와 관계없이
 이 API로 원본만 승인할 수 없다. 수정본 식별자를 기준으로 한 별도 심사 계약으로 승인해야 한다. 승인 시 콘텐츠 상태 변경,
-`APPROVED` 콘텐츠 로그와 감사 기록을 하나의 트랜잭션으로 함께 커밋한다. 요청 본문으로 공개 예정 시각을 변경하지 않는다. 이미 `APPROVED` 상태인
-콘텐츠에 대한 승인 재요청은 기존 승인 결과를 `200 OK`로 반환하며 상태·이력·감사 기록을 추가로 변경하지 않는다.
+`APPROVED` 콘텐츠 로그, 최초 `PENDING` 회차의 `SCHEDULED` 전이와 감사 기록을 하나의 트랜잭션으로 함께 커밋한다.
+최초 심사 콘텐츠에는 유효한 `PENDING` 회차가 하나 이상 있어야 하며, 해당 회차가 없거나 이미 다른 상태라면 데이터 정합성 위반으로
+승인 전체를 롤백한다. 요청 본문으로 공개 예정 시각을 변경하지 않는다. 이미 `APPROVED` 상태인 콘텐츠에 대한 승인 재요청은
+기존 승인 결과를 `200 OK`로 반환하며 상태·이력·감사 기록을 추가로 변경하지 않는다.
 
 ### Request
 

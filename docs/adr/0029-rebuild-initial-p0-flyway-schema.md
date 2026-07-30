@@ -1,4 +1,4 @@
-# ADR-0026: P0 전체 스키마를 단일 초기 Flyway migration으로 재구성
+# ADR-0029: P0 전체 스키마를 단일 초기 Flyway migration으로 재구성
 
 - 상태: 채택됨
 - 기록 유형: 신규

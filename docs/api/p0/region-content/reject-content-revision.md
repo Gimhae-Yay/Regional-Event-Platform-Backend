@@ -5,7 +5,7 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | `FR-14`, `AUTH-01`, `CON-05`, `CON-09` |
 | 소유 도메인 | 지역·콘텐츠 카탈로그 |
-| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [ADR-0032](../../../adr/0032-block-automatic-publication-during-pre-publication-revision-review.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [ADR-0037](../../../adr/0037-block-automatic-publication-during-pre-publication-revision-review.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
