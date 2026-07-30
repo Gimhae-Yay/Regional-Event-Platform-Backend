@@ -50,9 +50,11 @@
 | 제품 범위, 보안·동시성·정합성·Redis 정책                    | `docs/local-stamp-platform-prd.md`                            |
 | API 요청·응답, validation, status, 에러 코드          | `docs/api/common/README.md`, `docs/api/<도메인>.md`              |
 | 엔티티, 테이블, 관계, 컬럼, DB 제약·인덱스                   | `docs/erd.md`                                                 |
-| 도메인 규칙, 패키지 구조, 구현, 코드 스타일, 트랜잭션, 테스트, Git·PR | `docs/code-convention.md`                                     |
+| 패키지 구조, 계층별 책임, Controller·Service·UseCase·Repository 의존성, Service 간 직접 의존, UseCase 명명 | `docs/ARCHITECTURE.md` |
+| Java 코드 스타일, 명명, 소스 구성, Java·Spring·JPA, 트랜잭션, null, 예외·로깅, 테스트 | `docs/code-convention.md` |
 | 실제 버전·의존성·설정                                  | `build.gradle`, `settings.gradle`, `src/**/application*.yaml` |
 
 - 충돌 시 담당 영역의 기준 문서를 따르며, 제품·API·DB·성능·컨벤션 순으로 판단한다.
+- `docs/ARCHITECTURE.md`와 `docs/code-convention.md`가 충돌하면 아키텍처 문서를 우선한다.
 - 코드가 문서와 다르다는 이유만으로 코드를 기준 삼지 않는다.
 - 모호하거나 기준 문서가 없으면 추측하지 말고 차이와 필요한 결정을 밝힌다.
