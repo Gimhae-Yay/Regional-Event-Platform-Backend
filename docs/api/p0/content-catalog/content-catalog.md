@@ -9,7 +9,7 @@
 
 ## 1. 개요
 
-이 문서는 지역·콘텐츠 카탈로그 도메인의 공개 지역 탐색, 지역 홈, 담당 지역 승인 대기 콘텐츠 조회와 콘텐츠 회차
+이 문서는 지역·콘텐츠 카탈로그 도메인의 공개 지역 탐색, 지역 홈, 담당 지역 콘텐츠·수정본 심사 대기 조회와 콘텐츠 회차
 조회·취소 요구사항을 HTTP API 계약으로 구체화한다.
 요청·응답의 공통 형식, 인증, 페이지네이션과 오류 구조는 `common/` 문서를 단일 출처로 삼으며,
 이 문서에는 해당 API에만 적용되는 값과 규칙만 작성한다.
@@ -35,6 +35,10 @@
 | `CON-01` | `GET /region-admin/contents?status=PENDING` | `content.status`, `content.deleted_at` |
 | `CON-01`, `CON-09` | `POST /region-admin/contents/{contentId}/reject` | `content`, `content_log`, `audit_event` |
 | `CON-03`, `CON-09` | `POST /region-admin/contents/{contentId}/approve` | `content`, `content_log`, `audit_event` |
+| `FR-14`, `CON-05`, `CON-09` | `GET /region-admin/content-revisions?status=EDIT_REQUESTED` | `content_revision`, `content`, `image_object` |
+| `FR-14`, `CON-05` | `GET /region-admin/content-revisions/{revisionId}` | `content_revision`, `content`, `content_session`, `image_object` |
+| `FR-14`, `CON-05`, `CON-09` | `POST /region-admin/content-revisions/{revisionId}/approve` | `content_revision`, `content`, `content_log`, `audit_event` |
+| `FR-14`, `CON-05`, `CON-09` | `POST /region-admin/content-revisions/{revisionId}/reject` | `content_revision`, `content`, `audit_event` |
 | `CON-09` | `GET /region-admin/contents/{contentId}/history` | `content`, `content_log` |
 | `CON-02`, `CON-03` | `GET /region-admin/contents/{contentId}` | `content`, `content_session`, `content_representative_image` |
 | `FR-02`, `SES-01`, `SES-02` | `GET /contents/{contentId}/sessions` | `content`, `content_session` |
@@ -60,6 +64,10 @@
 | 승인 검토 콘텐츠 상세 조회 | `GET /region-admin/contents/{contentId}` | [review-content-detail.md](review-content-detail.md) |
 | 콘텐츠 승인 | `POST /region-admin/contents/{contentId}/approve` | [content-approval.md](content-approval.md) |
 | 사유를 포함한 콘텐츠 반려 | `POST /region-admin/contents/{contentId}/reject` | [content-rejection.md](content-rejection.md) |
+| 심사 대기 수정본 목록 조회 | `GET /region-admin/content-revisions?status=EDIT_REQUESTED` | [list-pending-content-revisions.md](list-pending-content-revisions.md) |
+| 심사 대기 수정본 상세 조회 | `GET /region-admin/content-revisions/{revisionId}` | [review-content-revision-detail.md](review-content-revision-detail.md) |
+| 수정본 승인 | `POST /region-admin/content-revisions/{revisionId}/approve` | [approve-content-revision.md](approve-content-revision.md) |
+| 사유를 포함한 수정본 반려 | `POST /region-admin/content-revisions/{revisionId}/reject` | [reject-content-revision.md](reject-content-revision.md) |
 | 콘텐츠 반려·승인·종료 이력 조회 | `GET /region-admin/contents/{contentId}/history` | [content-history.md](content-history.md) |
 | 공개 콘텐츠 회차 목록 조회 | `GET /contents/{contentId}/sessions` | [list-public-content-sessions.md](list-public-content-sessions.md) |
 | 가격·실시간 잔여 정원·예약 가능 여부 조회 | `GET /sessions/{sessionId}` | [get-session-reservation-info.md](get-session-reservation-info.md) |

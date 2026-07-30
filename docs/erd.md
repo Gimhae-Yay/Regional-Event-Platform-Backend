@@ -94,7 +94,7 @@ erDiagram
 | `content` | 행사·체험 콘텐츠의 현재 정보, 소유 운영자, 지역, 현재 상태, 현재 대표 이미지 객체와 공개 전 소프트 삭제 시각을 관리하는 현재 상태 스냅샷이다. P0에서 필요한 연령 조건·준비물·취소 안내도 이 행에 함께 보관한다. |
 | `content_session` | 콘텐츠별 예약 가능한 회차의 시간, 체크인 창, 정원과 잔여 정원을 관리한다. 홀드·예약·방문의 기준 단위다. |
 | `content_log` | 콘텐츠 생성·상태 변경과 소프트 삭제의 콘텐츠, 처리자, 결과 상태·삭제 코드, 사유와 시각을 보관하는 추가 전용 로그다. 탈퇴 때만 `actor_id`를 제거한다. |
-| `content_revision` | 이미 공개된 콘텐츠를 수정하기 위한 모든 후보 필드, 후보 대표 이미지 객체와 심사 상태를 보관한다. 원본 버전을 기준으로 충돌을 판정하고 승인 시에만 `content`에 반영한다. |
+| `content_revision` | 공개 콘텐츠 또는 공개 전 승인 콘텐츠를 수정하기 위한 모든 후보 필드, 후보 공개 예정 시각, 후보 대표 이미지 객체와 심사 상태를 보관한다. 원본 버전을 기준으로 충돌을 판정하고 승인 시에만 `content`에 반영한다. |
 | `image_object` | S3 객체 키, 콘텐츠 타입, 크기, 체크섬과 삭제 재시도 상태를 보관한다. 공개 URL·원본 파일명·사용자 식별자는 저장하지 않는다. |
 
 #### 정원·예약·체크인·후기
@@ -351,6 +351,7 @@ erDiagram
         string age_requirement
         text materials
         text cancellation_policy_text
+        timestamp publish_at "공개 전 수정본에서 필수, 공개 콘텐츠 수정본에서는 nullable"
         timestamp candidate_image_assigned_at "nullable"
         timestamp submitted_at
         timestamp reviewed_at "nullable"
@@ -410,11 +411,19 @@ erDiagram
 - `content_revision`의 논리 유일 키는 `(content_id, revision_no)`다.
 - 콘텐츠당 `EDIT_REQUESTED` 수정본은 최대 한 건이다. MySQL에서는 생성 컬럼을 포함한 유일 제약 또는
   동등한 조건부 쓰기 제약으로 강제한다.
-- 수정본 승인 조건은 원본 `PUBLISHED`, 수정본 `EDIT_REQUESTED`,
-  `content.version_no = content_revision.base_content_version`다.
-- 수정본 승인 시 `content_revision`의 모든 후보 필드를 `content`에 반영한다. 후보 대표 이미지 객체 FK는
-  `content`에 반영하되 수정본의 심사 당시 스냅샷으로 보존한다. 원본 버전 증가, 수정본 종결과 성공 감사 이벤트를 한 트랜잭션에서 처리한다.
-- `EDIT_REJECTED`와 `EDIT_WITHDRAWN` 수정본은 원본에 반영하지 않고 보존한다.
+- 공개 콘텐츠 수정본의 승인 조건은 원본 `PUBLISHED`, 수정본 `EDIT_REQUESTED`,
+  `content.version_no = content_revision.base_content_version`, `content_revision.publish_at IS NULL`이다.
+  승인 시 후보 필드를 원본에 반영하지만 원본 상태와 `content.publish_at`은 유지한다.
+- 공개 전 수정본은 원본 `APPROVED`에서만 생성하고 후보 `publish_at`을 필수로 저장하며, 같은 트랜잭션에서
+  원본을 `APPROVED → PENDING`으로 전이하고 `PENDING` 상태 로그와 성공 감사 기록을 추가한다. 이로써 자동 공개는
+  현재 상태 조건에서 제외된다. 활성 수정본이 없고 직전 공개 전 수정 요청의 `APPROVED → PENDING` 상태 이력이 있는
+  `PENDING` 콘텐츠만 새 공개 전 수정본을 다시 생성할 수 있다.
+- 공개 전 수정본의 승인 조건은 원본 `PENDING`, 수정본 `EDIT_REQUESTED`,
+  `content.version_no = content_revision.base_content_version`, `content_revision.publish_at IS NOT NULL`이다.
+  승인 시 모든 후보 필드와 후보 `publish_at`을 원본에 반영하고 `PENDING → APPROVED` 상태 로그, 원본 버전 증가,
+  수정본 종결과 성공 감사 이벤트를 한 트랜잭션에서 처리한다.
+- `EDIT_REJECTED`와 `EDIT_WITHDRAWN` 수정본은 원본 후보 필드를 반영하지 않고 보존한다. 원본이 공개 전 수정 심사로
+  `PENDING`이 된 경우에는 이 종결 뒤에도 `PENDING`을 유지한다.
 - P0 문서가 공개 회차의 수정 가능 필드를 확정하지 않았으므로 `content_session_revision`은 만들지 않는다.
   공개 회차는 `RSV-06`의 명시적 취소 외에 수정본 승인으로 삭제·재배정·정원 변경하지 않는다.
 - 현재 ERD는 별도 `DRAFT`가 확정되지 않았으므로 `PENDING`을 심사 제출이 끝난 상태로 해석한다.
@@ -699,7 +708,7 @@ erDiagram
 | --- | --- | --- |
 | `app_user` | `ACTIVE`, `WITHDRAWING` | `ACTIVE → WITHDRAWING`; 완료 후 행 파기 |
 | `operator_application` | `PENDING`, `APPROVED`, `REJECTED`, `CANCELLED` | `PENDING → {APPROVED, REJECTED, CANCELLED}` |
-| `content` | `PENDING`, `REJECTED`, `APPROVED`, `PUBLISHED`, `SUSPENDED`, `WITHDRAWN`, `ENDED` | `PENDING → {APPROVED, REJECTED}`, `REJECTED → PENDING`, `APPROVED → PUBLISHED`, `PUBLISHED → {SUSPENDED, WITHDRAWN, ENDED}` |
+| `content` | `PENDING`, `REJECTED`, `APPROVED`, `PUBLISHED`, `SUSPENDED`, `WITHDRAWN`, `ENDED` | `PENDING → {APPROVED, REJECTED}`, `REJECTED → PENDING`, `APPROVED → {PENDING, PUBLISHED}`, `PUBLISHED → {SUSPENDED, WITHDRAWN, ENDED}` |
 | `content_log.status` | `content` 상태 카탈로그의 값, `DELETED` | 생성·상태 변경 뒤의 `content.status` 또는 소프트 삭제 이벤트를 추가 전용으로 기록 |
 | `content_revision` | `EDIT_REQUESTED`, `EDIT_APPROVED`, `EDIT_REJECTED`, `EDIT_WITHDRAWN` | `EDIT_REQUESTED → {EDIT_APPROVED, EDIT_REJECTED, EDIT_WITHDRAWN}` |
 | `content_session` | `SCHEDULED`, `COMPLETED`, `CANCELLED` | `SCHEDULED → {COMPLETED, CANCELLED}` |
@@ -888,7 +897,6 @@ SQL의 단순 cascade가 아래 업무 순서를 대신해서는 안 된다.
 | 사업자 정보 | 세부 필드, 암호화·마스킹·보관 방식 | 회원가입 API는 비어 있지 않은 `business_information` 텍스트를 받으며, ERD는 논리 값으로 표현 |
 | 역할 중첩 | 한 사용자의 복수 역할 허용·금지 | 역할별 한 행은 허용하되 상호 배타 제약 없음 |
 | 콘텐츠 임시 저장 | 별도 `DRAFT` 저장 여부 | 확정 상태에 없는 `DRAFT`를 추가하지 않음 |
-| 승인된 `publish_at` 변경 요청 | 요청·심사 상태와 저장 모델 | 별도 엔티티를 추정하지 않음 |
 | 전체 콘텐츠 철회 요청 | 승인 전 요청 상태·반려·재시도 모델 | 승인 후 현재 상태와 감사만 표현 |
 | 콘텐츠 `REJECTED` 삭제 | 삭제 허용 여부 | 허용 상태에 임의 포함하지 않음 |
 | `SUSPENDED` 후속 전이 | 재개·종료·철회 가능 여부 | 후속 전이를 추가하지 않음 |
