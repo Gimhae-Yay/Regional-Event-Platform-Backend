@@ -1,0 +1,120 @@
+package io.regionevent.regioneventbackend.global.config;
+
+import java.time.Clock;
+import java.util.HashMap;
+import java.util.Map;
+
+import tools.jackson.databind.ObjectMapper;
+
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
+import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.DelegatingPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.AuthenticationEntryPoint;
+
+import io.regionevent.regioneventbackend.global.security.ApiResponseAccessDeniedHandler;
+import io.regionevent.regioneventbackend.global.security.ApiResponseAuthenticationEntryPoint;
+import io.regionevent.regioneventbackend.global.security.BearerAccessTokenAuthenticationFilter;
+import io.regionevent.regioneventbackend.global.security.JwtAccessTokenProperties;
+import io.regionevent.regioneventbackend.global.security.JwtAccessTokenService;
+
+@Configuration
+@EnableConfigurationProperties(JwtAccessTokenProperties.class)
+public class SecurityConfig {
+
+    private static final int BCRYPT_STRENGTH = 12;
+
+    @Bean
+    public Clock clock() {
+        return Clock.systemUTC();
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        Map<String, PasswordEncoder> encoders = new HashMap<>();
+        encoders.put("bcrypt", new BCryptPasswordEncoder(BCRYPT_STRENGTH));
+        return new DelegatingPasswordEncoder("bcrypt", encoders);
+    }
+
+    @Bean
+    public JwtAccessTokenService jwtAccessTokenService(
+        JwtAccessTokenProperties jwtAccessTokenProperties,
+        Clock clock
+    ) {
+        return new JwtAccessTokenService(jwtAccessTokenProperties, clock);
+    }
+
+    @Bean
+    public AuthenticationEntryPoint authenticationEntryPoint(ObjectMapper objectMapper) {
+        return new ApiResponseAuthenticationEntryPoint(objectMapper);
+    }
+
+    @Bean
+    public AccessDeniedHandler accessDeniedHandler(ObjectMapper objectMapper) {
+        return new ApiResponseAccessDeniedHandler(objectMapper);
+    }
+
+    @Bean
+    public BearerAccessTokenAuthenticationFilter bearerAccessTokenAuthenticationFilter(
+        JwtAccessTokenService jwtAccessTokenService,
+        AuthenticationEntryPoint authenticationEntryPoint
+    ) {
+        return new BearerAccessTokenAuthenticationFilter(jwtAccessTokenService, authenticationEntryPoint);
+    }
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(
+        HttpSecurity http,
+        BearerAccessTokenAuthenticationFilter bearerAccessTokenAuthenticationFilter,
+        AuthenticationEntryPoint authenticationEntryPoint,
+        AccessDeniedHandler accessDeniedHandler
+    ) throws Exception {
+        http
+            .csrf(AbstractHttpConfigurer::disable)
+            .cors(AbstractHttpConfigurer::disable)
+            .httpBasic(AbstractHttpConfigurer::disable)
+            .formLogin(AbstractHttpConfigurer::disable)
+            .logout(AbstractHttpConfigurer::disable)
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(authorize -> authorize
+                .requestMatchers(
+                    HttpMethod.POST,
+                    "/api/v1/auth/signup",
+                    "/api/v1/auth/login",
+                    "/api/v1/auth/refresh",
+                    "/api/v1/auth/logout"
+                ).permitAll()
+                .requestMatchers(
+                    HttpMethod.GET,
+                    "/api/v1/regions",
+                    "/api/v1/regions/*/home",
+                    "/api/v1/contents",
+                    "/api/v1/contents/*",
+                    "/api/v1/contents/*/reviews",
+                    "/api/v1/contents/*/sessions",
+                    "/api/v1/sessions/*"
+                ).permitAll()
+                .anyRequest().authenticated()
+            )
+            .exceptionHandling(exceptionHandling -> exceptionHandling
+                .authenticationEntryPoint(authenticationEntryPoint)
+                .accessDeniedHandler(accessDeniedHandler)
+            )
+            .addFilterBefore(
+                bearerAccessTokenAuthenticationFilter,
+                UsernamePasswordAuthenticationFilter.class
+            )
+            .securityContext(Customizer.withDefaults());
+        return http.build();
+    }
+}

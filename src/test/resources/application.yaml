@@ -1,0 +1,7 @@
+security:
+  jwt:
+    access:
+      issuer: regional-event-platform
+      audience: regional-event-api
+      active-key-id: test-key
+      active-key: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=

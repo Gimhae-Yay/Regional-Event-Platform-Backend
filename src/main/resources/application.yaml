@@ -2,6 +2,14 @@ spring:
   application:
     name: region-event-backend
 
+security:
+  jwt:
+    access:
+      issuer: regional-event-platform
+      audience: regional-event-api
+      active-key-id: ${JWT_ACCESS_ACTIVE_KEY_ID}
+      active-key: ${JWT_ACCESS_ACTIVE_KEY}
+
 logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [requestId=%X{requestId:-}] %logger{36} - %msg%n"
