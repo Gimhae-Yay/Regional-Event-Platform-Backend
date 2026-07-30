@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceUnitUtil;
@@ -243,6 +244,62 @@ class IdempotencyRecordRepositoryTest {
             .isEqualTo(fixtures.reservation().getReservationId());
         assertThat(foundSecondRecord.getResultReservation().getReservationId())
             .isEqualTo(fixtures.reservation().getReservationId());
+    }
+
+    @Test
+    void 만료된_종결_기록만_삭제한다() {
+        IdempotencyFixtures fixtures = createFixtures();
+        Instant now = Instant.now();
+        IdempotencyRecord expiredFailedRecord = idempotencyRecordRepository.saveAndFlush(new IdempotencyRecord(
+            fixtures.actor(),
+            IdempotencyOperation.RESERVATION_CONFIRM,
+            "expired-failed-key",
+            "expired-failed-request-hash",
+            IdempotencyRecordStatus.FAILED,
+            "RESERVATION_CONFIRM_CONFLICT",
+            null,
+            null,
+            now.minusSeconds(86401),
+            now.minusSeconds(86400),
+            now.minusSeconds(1)
+        ));
+        IdempotencyRecord expiredProcessingRecord = idempotencyRecordRepository.saveAndFlush(new IdempotencyRecord(
+            fixtures.actor(),
+            IdempotencyOperation.CHECK_IN,
+            "expired-processing-key",
+            "expired-processing-request-hash",
+            IdempotencyRecordStatus.PROCESSING,
+            null,
+            null,
+            null,
+            now.minusSeconds(86401),
+            null,
+            now.minusSeconds(1)
+        ));
+        IdempotencyRecord unexpiredFailedRecord = idempotencyRecordRepository.saveAndFlush(new IdempotencyRecord(
+            fixtures.actor(),
+            IdempotencyOperation.RESERVATION_CONFIRM,
+            "unexpired-failed-key",
+            "unexpired-failed-request-hash",
+            IdempotencyRecordStatus.FAILED,
+            "RESERVATION_CONFIRM_CONFLICT",
+            null,
+            null,
+            now,
+            now,
+            now.plusSeconds(86400)
+        ));
+
+        int deletedCount = idempotencyRecordRepository.deleteExpiredTerminalRecords(List.of(
+            IdempotencyRecordStatus.SUCCEEDED,
+            IdempotencyRecordStatus.FAILED
+        ));
+        entityManager.clear();
+
+        assertThat(deletedCount).isEqualTo(1);
+        assertThat(idempotencyRecordRepository.findById(expiredFailedRecord.getIdempotencyRecordId())).isEmpty();
+        assertThat(idempotencyRecordRepository.findById(expiredProcessingRecord.getIdempotencyRecordId())).isPresent();
+        assertThat(idempotencyRecordRepository.findById(unexpiredFailedRecord.getIdempotencyRecordId())).isPresent();
     }
 
     private IdempotencyRecord newReservationRecord(

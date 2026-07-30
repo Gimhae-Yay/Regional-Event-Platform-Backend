@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.domain.idempotency.repository;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -10,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 
 import io.regionevent.regioneventbackend.domain.idempotency.entity.IdempotencyRecord;
 import io.regionevent.regioneventbackend.domain.idempotency.entity.IdempotencyOperation;
+import io.regionevent.regioneventbackend.domain.idempotency.entity.IdempotencyRecordStatus;
 
 public interface IdempotencyRecordRepository extends JpaRepository<IdempotencyRecord, Long> {
 
@@ -47,5 +49,15 @@ public interface IdempotencyRecordRepository extends JpaRepository<IdempotencyRe
         @Param("requestHash") String requestHash,
         @Param("createdAt") Instant createdAt,
         @Param("expiresAt") Instant expiresAt
+    );
+
+    @Modifying
+    @Query("""
+        DELETE FROM IdempotencyRecord idempotencyRecord
+        WHERE idempotencyRecord.status IN :terminalStatuses
+          AND idempotencyRecord.expiresAt < CURRENT_TIMESTAMP
+        """)
+    int deleteExpiredTerminalRecords(
+        @Param("terminalStatuses") List<IdempotencyRecordStatus> terminalStatuses
     );
 }

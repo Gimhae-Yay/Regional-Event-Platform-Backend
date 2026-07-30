@@ -4,6 +4,7 @@ spring:
 
 reservation:
   idempotency:
+    cleanup-cron: "0 0 * * * *"
     lock-wait-timeout-seconds: 3
 
 logging:
