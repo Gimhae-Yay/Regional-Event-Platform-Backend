@@ -5,7 +5,7 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | `FR-03`, `FR-04`, `AUTH-01`, `SES-01`, `SES-02`, `RSV-02` |
 | 소유 도메인 | 지역·콘텐츠 카탈로그 |
-| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [정원 홀드·무료 예약](../../../p0/reservation.md), [ADR-0031](../../../adr/0031-create-sessions-with-lifecycle-and-review-session-changes.md), [ERD](../../../erd.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [정원 홀드·무료 예약](../../../p0/reservation.md), [ADR-0038](../../../adr/0038-create-sessions-with-lifecycle-and-review-session-changes.md), [ERD](../../../erd.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
@@ -14,7 +14,7 @@
 상태를 그대로 유지한다.
 
 지역 관리자가 변경안을 반려하면 요청만 `REJECTED`로 종결하고 기존 회차는 그대로 진행한다. 승인 때에는 콘텐츠와
-회차 상태, 회차 버전, 활성 홀드와 `CONFIRMED` 예약을 다시 확인한다. 하나라도 만족하지 않으면 변경안을 승인하지
+회차 상태·시작 전 여부·회차 버전, 활성 홀드와 `CONFIRMED`·`CHECKED_IN` 예약을 다시 확인한다. 하나라도 만족하지 않으면 변경안을 승인하지
 않으며 기존 회차를 유지한다.
 
 요청·응답의 공통 형식, 인증, 페이지네이션, 멱등성과 오류 구조는 `common/` 문서를 단일 출처로 삼으며,
@@ -37,8 +37,9 @@
 
 ## 3. 내 콘텐츠 회차 수정 요청
 
-소유 운영자는 소프트 삭제되지 않은 `APPROVED` 또는 `PUBLISHED` 콘텐츠의 `SCHEDULED` 회차에만 변경안을 제출할 수
-있다. 콘텐츠가 `PENDING`일 때는 최초 회차가 콘텐츠 승인 요청에 포함되므로 이 API를 사용할 수 없다. 대상 회차당
+소유 운영자는 소프트 삭제되지 않은 `APPROVED` 또는 `PUBLISHED` 콘텐츠의 `SCHEDULED` 상태이며 MySQL 현재 시각보다
+`starts_at`이 미래인 회차에만 변경안을 제출할 수 있다. 콘텐츠가 `PENDING`일 때는 최초 회차가 콘텐츠 승인 요청에 포함되므로
+이 API를 사용할 수 없다. 대상 회차당
 `PENDING` 수정 요청은 하나만 둘 수 있다.
 
 ### Request
@@ -107,14 +108,16 @@ Accept: application/json
 ### 처리 규칙
 
 1. 인증 주체가 활성 `OPERATOR`인지, 회차 콘텐츠의 소유 운영자이고 담당 지역이 콘텐츠·회차 지역과 일치하는지 확인한다.
-2. 콘텐츠가 소프트 삭제되지 않은 `APPROVED` 또는 `PUBLISHED`인지, 대상 회차가 `SCHEDULED`인지 확인한다.
+2. 콘텐츠가 소프트 삭제되지 않은 `APPROVED` 또는 `PUBLISHED`인지, 대상 회차가 `SCHEDULED`이고 `starts_at`이 MySQL
+   현재 시각보다 미래인지 확인한다.
 3. 일정이 현재 시각과 콘텐츠의 `publish_at` 이후인지, 체크인 창·정원이 유효한지 확인하고, 대상 회차에 `PENDING`
    수정 요청이 없는지 확인한다.
 4. 현재 회차의 `version_no`를 `base_session_version`으로 복사하고 `session_revision`을 `status = PENDING`으로
    생성한다. 이 API는 기존 `content_session`을 변경하지 않는다.
 5. 요청 행, 수정 요청 감사 이벤트와 처리자 연결을 하나의 트랜잭션으로 커밋한다.
-6. 지역 관리자 승인 때만 콘텐츠 상태·소프트 삭제 여부, 대상 회차 상태·버전, 활성 홀드와 `CONFIRMED` 예약을 같은
-   트랜잭션에서 다시 확인한다. 모두 만족하면 후보 값을 반영하고 `content_session.version_no`를 증가시킨다.
+6. 지역 관리자 승인 때만 콘텐츠 상태·소프트 삭제 여부, 대상 회차 상태·시작 전 여부·버전, 활성 홀드와 `CONFIRMED`·
+   `CHECKED_IN` 예약 부재를 같은 트랜잭션에서 다시 확인한다. 모두 만족하면 후보 값을 반영하고
+   `content_session.version_no`를 증가시킨다.
    심사는 [심사 대기 회차 수정 요청 목록](list-pending-session-revisions.md),
    [회차 수정 요청 승인](approve-session-revision.md), [회차 수정 요청 반려](reject-session-revision.md) 계약을 따른다.
 
@@ -178,7 +181,7 @@ Accept: application/json
 | 401 | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 요청과 감사 기록은 생성되지 않는다. |
 | 403 | `FORBIDDEN` | `OPERATOR` 역할, 담당 지역 또는 콘텐츠 소유 관계가 없다. 요청과 감사 기록은 생성되지 않는다. |
 | 404 | `NOT_FOUND` | 회차가 없거나 콘텐츠가 소프트 삭제됐다. 요청과 감사 기록은 생성되지 않는다. |
-| 409 | `SESSION_STATE_CONFLICT` | 대상 회차가 `SCHEDULED`가 아니거나 콘텐츠가 수정 요청 대상 상태(`APPROVED`, `PUBLISHED`)가 아니거나, 대상 회차에 이미 `PENDING` 수정 요청이 있거나 다른 상태 전이가 먼저 처리됐다. 요청과 감사 기록은 생성되지 않으며 최신 상태를 확인해야 한다. |
+| 409 | `SESSION_STATE_CONFLICT` | 대상 회차가 `SCHEDULED`가 아니거나 `starts_at`이 MySQL 현재 시각보다 미래가 아니거나, 콘텐츠가 수정 요청 대상 상태(`APPROVED`, `PUBLISHED`)가 아니거나, 대상 회차에 이미 `PENDING` 수정 요청이 있거나 다른 상태 전이가 먼저 처리됐다. 요청과 감사 기록은 생성되지 않으며 최신 상태를 확인해야 한다. |
 
 #### Error Response Body
 

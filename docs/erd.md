@@ -41,7 +41,7 @@ erDiagram
     content ||--|{ content_session : schedules
     region ||--o{ content_session : scopes
     content ||--o{ session_revision : receives
-    content_session o|--o{ session_revision : target_of
+    content_session ||--o{ session_revision : target_of
     region ||--o{ session_revision : scopes
     app_user ||--o{ session_revision : submits
     content ||--|{ content_log : records
@@ -336,7 +336,7 @@ erDiagram
     }
 
     session_revision {
-        bigint request_id PK
+        bigint session_revision_id PK
         bigint content_id FK
         bigint target_session_id FK
         bigint region_id FK
@@ -409,7 +409,7 @@ erDiagram
     app_user ||--o{ content : owns
     content ||--|{ content_session : schedules
     content ||--o{ session_revision : receives
-    content_session o|--o{ session_revision : target_of
+    content_session ||--o{ session_revision : target_of
     region ||--o{ session_revision : scopes
     app_user ||--o{ session_revision : submits
     content ||--|{ content_log : records
@@ -460,11 +460,11 @@ erDiagram
   `PENDING`이 된 경우에는 이 종결 뒤에도 `PENDING`을 유지한다.
 - 추가 회차는 `content_session`을 `PENDING`, `remaining_capacity = capacity`로 생성한다. 지역 관리자 승인 시에만
   `SCHEDULED`로 전이하며, `PENDING`·`REJECTED` 회차는 홀드·예약·공개 조회의 대상이 아니다.
-- `session_revision`은 기존 `SCHEDULED` 회차의 수정 후보와 심사 상태만 보관한다. `content_id`, `region_id`는
-  대상 `content_session`과 같아야 하며, `base_session_version`은 요청을 생성할 때의 대상 회차 버전이다.
-  대상 `SCHEDULED` 회차당 `PENDING` 수정 요청은 최대 한 건이다.
-- 수정 승인 시 콘텐츠 상태·소프트 삭제 여부, 대상 회차 `SCHEDULED` 상태, 버전 일치, 활성 홀드와 `CONFIRMED`
-  예약 부재를 같은 트랜잭션에서 다시 확인한다. 모두 만족하면 후보 일정·체크인 창·정원을 반영하고
+- `session_revision`은 MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 수정 후보와 심사 상태만
+  보관한다. `content_id`, `region_id`는 대상 `content_session`과 같아야 하며, `base_session_version`은 요청을
+  생성할 때의 대상 회차 버전이다. 대상 `SCHEDULED` 회차당 `PENDING` 수정 요청은 최대 한 건이다.
+- 수정 승인 시 콘텐츠 상태·소프트 삭제 여부, 대상 회차 `SCHEDULED` 상태·시작 전 여부, 버전 일치, 활성 홀드와
+  `CONFIRMED`·`CHECKED_IN` 예약 부재를 같은 트랜잭션에서 다시 확인한다. 모두 만족하면 후보 일정·체크인 창·정원을 반영하고
   `content_session.version_no`를 증가시킨다. 반려는 기존 회차를 변경하지 않는다.
 - 회차 생성·승인·반려와 수정 요청 생성·심사, 수정 승인에 따른 실제 회차 변경은 성공 `audit_event`와
   처리자 연결을 같은 MySQL 트랜잭션에서 커밋한다.

@@ -5,7 +5,7 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | `FR-04`, `AUTH-01`, `SES-01`, `SES-02`, `RSV-02`, `CON-09` |
 | 소유 도메인 | 지역·콘텐츠 카탈로그 |
-| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [정원 홀드·무료 예약](../../../p0/reservation.md), [ADR-0031](../../../adr/0031-create-sessions-with-lifecycle-and-review-session-changes.md), [ERD](../../../erd.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [정원 홀드·무료 예약](../../../p0/reservation.md), [ADR-0038](../../../adr/0038-create-sessions-with-lifecycle-and-review-session-changes.md), [ERD](../../../erd.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
@@ -117,7 +117,7 @@ Accept: application/json
 | 401 | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. |
 | 403 | `FORBIDDEN` | 담당 지역 관리자 역할이 없거나 담당 지역이 다르다. |
 | 404 | `NOT_FOUND` | 수정 요청이 없거나 콘텐츠가 소프트 삭제됐다. |
-| 409 | `SESSION_STATE_CONFLICT` | 수정 요청이 `PENDING`이 아니거나, 콘텐츠가 `APPROVED`·`PUBLISHED`가 아니거나, 대상 회차가 `SCHEDULED`가 아니거나, 기준 버전이 다르거나, 활성 홀드·`CONFIRMED` 예약이 있거나 다른 심사가 먼저 종결됐다. 수정 요청·실제 회차·감사 기록은 변경되지 않으며 최신 상태를 확인해야 한다. |
+| 409 | `SESSION_STATE_CONFLICT` | 수정 요청이 `PENDING`이 아니거나, 콘텐츠가 `APPROVED`·`PUBLISHED`가 아니거나, 대상 회차가 `SCHEDULED`가 아니거나 `starts_at`이 MySQL 현재 시각보다 미래가 아니거나, 기준 버전이 다르거나, 활성 홀드·`CONFIRMED`·`CHECKED_IN` 예약이 있거나 다른 심사가 먼저 종결됐다. 수정 요청·실제 회차·감사 기록은 변경되지 않으며 최신 상태를 확인해야 한다. |
 
 #### Error Response Body
 
@@ -134,7 +134,8 @@ Accept: application/json
 
 1. 수정 요청의 지역이 인증 주체의 담당 지역과 일치하는지 확인한다.
 2. 같은 MySQL 트랜잭션에서 수정 요청이 `PENDING`인지, 콘텐츠가 소프트 삭제되지 않은 `APPROVED` 또는 `PUBLISHED`인지 확인한다.
-3. 대상 회차가 `SCHEDULED`이고 `content_session.version_no = session_revision.base_session_version`인지 확인한다.
-4. 대상 회차에 활성 `capacity_hold`와 `CONFIRMED` 예약이 없는지 확인한다.
+3. 대상 회차가 `SCHEDULED`이고 `starts_at`이 MySQL 현재 시각보다 미래이며
+   `content_session.version_no = session_revision.base_session_version`인지 확인한다.
+4. 대상 회차에 활성 `capacity_hold`와 `CONFIRMED`·`CHECKED_IN` 예약이 없는지 확인한다.
 5. 모든 조건을 만족하면 후보 일정·체크인 창·정원을 실제 회차에 반영하고 `version_no`를 증가시킨다. 수정 요청은 `PENDING → APPROVED`로 전이하며 `reviewed_at`, `reviewed_by_user_id`를 기록한다.
 6. 실제 회차 반영, 수정 요청 종결, 성공 감사 이벤트와 처리자 연결을 하나의 트랜잭션으로 커밋한다.

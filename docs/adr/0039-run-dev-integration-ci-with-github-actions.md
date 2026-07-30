@@ -1,4 +1,4 @@
-# ADR-0033: GitHub Actions로 dev 통합 CI를 실행
+# ADR-0039: GitHub Actions로 dev 통합 CI를 실행
 
 - 상태: 채택됨
 - 기록 유형: 신규

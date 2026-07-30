@@ -110,7 +110,7 @@ Accept: application/json
     "sessions": [
       {
         "sessionId": 701,
-        "status": "SCHEDULED",
+        "status": "PENDING",
         "startsAt": "{ISO 8601 형식과 기준 시간대}",
         "endsAt": "{ISO 8601 형식과 기준 시간대}",
         "checkinOpenAt": "{ISO 8601 형식과 기준 시간대}",
@@ -147,9 +147,9 @@ Accept: application/json
 | `data.materials` | String | 운영자가 등록한 준비물이다. |
 | `data.cancellationPolicyText` | String | P0 무료 예약 취소 정책 안내 문구다. |
 | `data.publishAt` | String | 운영자가 지정한 공개 예정 시각이다. 시간 형식은 API 공통 규칙의 확정 값을 따른다. |
-| `data.sessions` | Array&lt;Object&gt; | 콘텐츠에 연결된 전체 회차다. 빈 배열은 허용하지 않으며, PENDING 콘텐츠는 유효한 회차를 하나 이상 가진다. |
+| `data.sessions` | Array&lt;Object&gt; | 콘텐츠에 연결된 전체 회차다. 빈 배열은 허용하지 않으며, 최초 콘텐츠 생성 시에는 유효한 회차를 하나 이상 `PENDING`으로 함께 만든다. |
 | `data.sessions[].sessionId` | Long | 회차 식별자다. |
-| `data.sessions[].status` | String | 회차 운영 상태다. 승인 검토 대상에서는 `SCHEDULED`다. |
+| `data.sessions[].status` | String | 회차 운영 상태다. 승인 검토 대상에서는 `PENDING`이다. |
 | `data.sessions[].startsAt` | String | 회차 시작 시각이다. |
 | `data.sessions[].endsAt` | String | 회차 종료 시각이다. |
 | `data.sessions[].checkinOpenAt` | String | 체크인 가능 시작 시각이다. |

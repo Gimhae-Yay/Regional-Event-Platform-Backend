@@ -5,7 +5,7 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | `FR-04`, `AUTH-01`, `SES-01`, `SES-02`, `RSV-02` |
 | 소유 도메인 | 지역·콘텐츠 카탈로그 |
-| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [정원 홀드·무료 예약](../../../p0/reservation.md), [ADR-0031](../../../adr/0031-create-sessions-with-lifecycle-and-review-session-changes.md), [ERD](../../../erd.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [정원 홀드·무료 예약](../../../p0/reservation.md), [ADR-0038](../../../adr/0038-create-sessions-with-lifecycle-and-review-session-changes.md), [ERD](../../../erd.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
@@ -149,5 +149,5 @@ Accept: application/json
 
 1. 인증 주체의 `REGION_ADMIN` 담당 지역과 `session_revision.region_id`가 같은 행만 반환한다.
 2. `session_revision.status = PENDING`이고 콘텐츠가 소프트 삭제되지 않은 행만 반환한다. 승인 가능 여부는 상세·승인 시점에 다시 판단한다.
-3. `submitted_at` 오름차순, 같은 시각이면 `request_id` 오름차순으로 정렬한다.
+3. `submitted_at` 오름차순, 같은 시각이면 `session_revision_id` 오름차순으로 정렬한다.
 4. 조회는 수정 요청·실제 회차·감사 기록을 변경하지 않는다.
