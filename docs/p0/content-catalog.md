@@ -48,7 +48,9 @@
 5. 담당 지역 관리자가 콘텐츠와 공개 예정 시각을 함께 검토해 승인 또는 반려한다.
 6. 승인된 콘텐츠는 `APPROVED` 상태로 유지되며 공개 예정 시각 전에는 일반 사용자에게 노출되지 않는다.
 7. 승인된 공개 예정 시각이 되면 시스템이 콘텐츠를 한 번만 `PUBLISHED`로 전환하고 지역 홈과 목록에 노출한다.
-8. 모든 회차가 `COMPLETED` 또는 `CANCELLED`가 된 뒤 종료일이 지나거나 정상 종료 처리되면 예약 접수와 노출을 종료한다.
+8. `APPROVED` 또는 `PUBLISHED` 콘텐츠의 운영자는 추가 회차를 `PENDING`으로 생성하거나 기존 회차 변경안을 별도 심사 요청으로 제출할 수 있다.
+   생성 회차는 승인 뒤 `SCHEDULED`가 되고, 심사 중·반려된 수정 요청은 기존 회차와 콘텐츠 공개 상태를 바꾸지 않는다.
+9. 모든 회차가 `COMPLETED` 또는 `CANCELLED`가 된 뒤 종료일이 지나거나 정상 종료 처리되면 예약 접수와 노출을 종료한다.
 
 #### 예외 흐름
 
@@ -70,7 +72,13 @@
 ### `SES-01`
 
 회차 운영 상태는 콘텐츠 공개 상태와 분리하며 P0 상태는
-`SCHEDULED → COMPLETED` 또는 `SCHEDULED → CANCELLED`다.
+`PENDING → SCHEDULED`, `PENDING → REJECTED`, `SCHEDULED → COMPLETED` 또는 `SCHEDULED → CANCELLED`다.
+`PENDING` 콘텐츠는 최초 회차를 콘텐츠 심사에 함께 제출하므로 별도 회차 생성·수정 API를 만들 수 없다. 소프트 삭제되지 않은
+`APPROVED` 또는 `PUBLISHED` 콘텐츠에서만 소유 운영자가 추가 `PENDING` 회차를 생성할 수 있다. `PENDING` 회차는
+공개·예약 대상이 아니며 담당 지역 관리자가 승인한 뒤에만 `SCHEDULED`가 된다.
+기존 `SCHEDULED` 회차의 수정 후보만 `session_revision`에 분리해 `PENDING → APPROVED` 또는 `PENDING → REJECTED`로
+전이한다. 수정 요청은 심사 중·반려 시 기존 `SCHEDULED` 회차를 유지하며, 승인 때 대상 회차의
+버전 일치와 활성 홀드·`CONFIRMED` 예약 부재를 다시 확인한다.
 회차 종료 이후 체크인 창이 닫히고 미체크인 예약의 노쇼 처리가 끝나면 `COMPLETED`로 전환한다.
 콘텐츠 상태 변경만으로 회차를 자동 취소하지 않고, 명시적 회차 취소는
 [정원 홀드·무료 예약](reservation.md)의 `RSV-06`을 적용한다.
@@ -86,13 +94,16 @@
 | [ADR-0002](../adr/0002-isolate-regions-in-a-shared-schema.md#결정) | 지역 범위와 저장된 소유 관계의 검증 |
 | [ADR-0020](../adr/0020-merge-event-experience-details-into-content-and-revision.md#결정) | 행사·체험 필드를 통합한 콘텐츠·수정본·회차의 모델 경계 |
 | [ADR-0011](../adr/0011-bootstrap-operator-ownership-on-content-creation.md#결정) | 서버가 인증 운영자와 승인된 담당 지역으로 최초 소유 관계를 생성하는 방식 |
+| [ADR-0031](../adr/0031-create-sessions-with-lifecycle-and-review-session-changes.md#결정) | 추가 회차는 상태 전이로 생성하고 기존 회차 수정만 별도 심사하는 정책 |
 | [P0 명세](../p0-spec.md#88-감사-및-운영-로그) | 최초 소유자 설정과 상태 전이 감사 요건 |
 
 ### 기능 범위
 
 - 승인된 운영자는 담당 지역에 콘텐츠를 생성하며 서버가 인증 운영자를 최초 소유자로 설정한다.
 - 운영자는 소유 콘텐츠의 표준 필수 정보, 회차별 일정·정원과 공개 예정 시각을 등록한다.
-- 신규 회차의 운영 상태는 `SCHEDULED`다.
+- 신규 회차의 상태는 `PENDING`이며, 담당 지역 관리자가 승인한 뒤에만 `SCHEDULED`가 된다.
+- 콘텐츠가 `APPROVED` 또는 `PUBLISHED`가 된 뒤에는 새 `PENDING` 회차를 생성할 수 있고, `SCHEDULED` 회차의
+  일정·체크인 창·정원 변경만 별도 심사 요청으로 제출한다. 심사 중인 변경안은 현재 회차를 바꾸지 않는다.
 - 필수 검증을 통과한 콘텐츠만 승인 요청할 수 있다.
 
 ### 콘텐츠·회차 등록 정책
@@ -103,6 +114,9 @@
 연령·준비물, P0 취소 정책을 안내하는 문구와 공개 예정 시각의 필수 검증을 통과해야 승인 요청할 수 있다.
 취소 기준은 고정된 무료 예약 취소 정책의 표시 문구이며, 운영자가 취소 가능 시점·인원 변경 또는
 금전·환불 정책을 변경하는 수단이 아니다.
+콘텐츠가 `PENDING`이면 최초 회차도 콘텐츠 승인 범위에 포함하므로 별도 회차 생성·수정 API를 허용하지 않는다.
+콘텐츠가 `APPROVED` 또는 `PUBLISHED`이면 소유 운영자가 실제 회차를 `PENDING`으로 생성하고, 담당 지역 관리자가
+승인한 회차만 `SCHEDULED`가 된다. 기존 `SCHEDULED` 회차의 변경 후보만 `session_revision`으로 제출한다.
 
 ## FR-04. 승인·자동 공개·종료
 
@@ -119,6 +133,8 @@
 ### 기능 범위
 
 - 지역 관리자는 콘텐츠와 공개 예정 시각을 함께 승인하거나 사유와 함께 반려한다.
+- 지역 관리자는 `PENDING` 회차를 승인하거나 사유와 함께 반려한다. `session_revision`의 수정 후보도 승인하거나
+  사유와 함께 반려하며, 수정 승인 시에는 대상 회차의 버전, 활성 홀드와 `CONFIRMED` 예약 부재를 다시 확인한 뒤에만 반영한다.
 - 시스템은 승인된 공개 예정 시각에 콘텐츠를 한 번만 자동 공개한다.
 - 모든 회차가 `COMPLETED` 또는 `CANCELLED`가 된 뒤 종료일이 지나거나 정상 종료되면
   예약 접수와 노출을 종료하고 상태 이력을 남긴다.
@@ -249,5 +265,6 @@
 | 콘텐츠 수정본 | `content_revision_id`, content_id, editor_id, status, 행사·체험 후보 표시 필드, submitted_at, reviewed_at, withdrawn_at, withdrawn_by, withdrawal_reason | 공개본을 유지한 수정 심사·철회 |
 | 콘텐츠 상태 로그 | id, `content_id`, `actor_id`, status, reason, date | 생성·승인·자동 공개·중단·철회·종료·삭제의 처리자, 사유와 상태 변경 시각 |
 | 행사·체험 회차 | `session_id`, `content_id`, 시작·종료 시각, 정원, status, 체크인 시작·종료 시각 | 무료 예약 마감·QR 가능 단위 |
+| 회차 수정 심사 요청 | `request_id`, content_id, target_session_id, 후보 일정·정원, base_session_version, status, submitted_at, reviewed_at | 기존 `SCHEDULED` 회차 변경의 심사 후보. 승인 때만 실제 회차에 반영 |
 
 세부 컬럼, 관계와 DB 제약은 [ERD](../erd.md)를 기준으로 한다.

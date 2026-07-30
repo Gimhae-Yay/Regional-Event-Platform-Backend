@@ -39,6 +39,10 @@ erDiagram
     app_user ||--o{ content : owns
     content ||--|{ content_session : schedules
     region ||--o{ content_session : scopes
+    content ||--o{ session_revision : receives
+    content_session o|--o{ session_revision : target_of
+    region ||--o{ session_revision : scopes
+    app_user ||--o{ session_revision : submits
     content ||--|{ content_log : records
     app_user o|--o{ content_log : acts
     content ||--o{ content_revision : revises
@@ -92,7 +96,8 @@ erDiagram
 | 테이블 | 역할 |
 | --- | --- |
 | `content` | 행사·체험 콘텐츠의 현재 정보, 소유 운영자, 지역, 현재 상태, 현재 대표 이미지 객체와 공개 전 소프트 삭제 시각을 관리하는 현재 상태 스냅샷이다. P0에서 필요한 연령 조건·준비물·취소 안내도 이 행에 함께 보관한다. |
-| `content_session` | 콘텐츠별 예약 가능한 회차의 시간, 체크인 창, 정원과 잔여 정원을 관리한다. 홀드·예약·방문의 기준 단위다. |
+| `content_session` | 콘텐츠별 회차의 시간, 체크인 창, 정원과 잔여 정원을 관리한다. `SCHEDULED` 회차만 홀드·예약·방문의 기준 단위다. |
+| `session_revision` | 기존 `SCHEDULED` 회차 변경의 후보 일정·정원과 심사 상태를 보관한다. 승인 때만 실제 `content_session`을 변경하며, 반려는 현재 회차를 바꾸지 않는다. |
 | `content_log` | 콘텐츠 생성·상태 변경과 소프트 삭제의 콘텐츠, 처리자, 결과 상태·삭제 코드, 사유와 시각을 보관하는 추가 전용 로그다. 탈퇴 때만 `actor_id`를 제거한다. |
 | `content_revision` | 이미 공개된 콘텐츠를 수정하기 위한 모든 후보 필드, 후보 대표 이미지 객체와 심사 상태를 보관한다. 원본 버전을 기준으로 충돌을 판정하고 승인 시에만 `content`에 반영한다. |
 | `image_object` | S3 객체 키, 콘텐츠 타입, 크기, 체크섬과 삭제 재시도 상태를 보관한다. 공개 URL·원본 파일명·사용자 식별자는 저장하지 않는다. |
@@ -153,6 +158,7 @@ P0 흐름을 하나의 레코드로 합치면 사용자 역할·지역, 콘텐�
 | 사용자의 역할·담당 지역 목록 | `user_role_assignment` |
 | 운영자 신청과 재신청 이력 | `operator_application` |
 | 콘텐츠별 회차 목록 | `content_session` |
+| 기존 회차 수정 심사 후보 | `session_revision` |
 | 콘텐츠의 상태 변경·소프트 삭제 이력 | `content_log` |
 | 공개 콘텐츠 수정 이력 | `content_revision` |
 | 상태 전이·실패 이력 | `audit_event` |
@@ -316,6 +322,9 @@ erDiagram
         timestamp checkin_close_at
         int capacity
         int remaining_capacity
+        timestamp reviewed_at "nullable"
+        bigint reviewed_by_user_id FK "nullable"
+        text reject_reason "nullable"
         timestamp cancelled_at "nullable"
         bigint cancelled_by_user_id FK "nullable"
         text cancellation_reason "nullable"
@@ -323,6 +332,26 @@ erDiagram
         int version_no
         timestamp created_at
         timestamp updated_at
+    }
+
+    session_revision {
+        bigint request_id PK
+        bigint content_id FK
+        bigint target_session_id FK
+        bigint region_id FK
+        bigint requested_by_user_id FK
+        string status
+        int base_session_version
+        timestamp starts_at
+        timestamp ends_at
+        timestamp checkin_open_at
+        timestamp checkin_close_at
+        int capacity
+        timestamp submitted_at
+        timestamp reviewed_at "nullable"
+        bigint reviewed_by_user_id FK "nullable"
+        text reject_reason "nullable"
+        timestamp created_at
     }
 
     content_log {
@@ -377,6 +406,10 @@ erDiagram
     region ||--o{ content : scopes
     app_user ||--o{ content : owns
     content ||--|{ content_session : schedules
+    content ||--o{ session_revision : receives
+    content_session o|--o{ session_revision : target_of
+    region ||--o{ session_revision : scopes
+    app_user ||--o{ session_revision : submits
     content ||--|{ content_log : records
     app_user o|--o{ content_log : acts
     content ||--o{ content_revision : revises
@@ -385,7 +418,7 @@ erDiagram
     image_object o|--o{ content_revision : is_snapshot_of
 ```
 
-`content_revision.reviewed_by_user_id` 등 반복 처리자 FK 간선은 관계도를 읽기 어렵게 만들므로 Mermaid에서는
+`content_session.reviewed_by_user_id`, `content_revision.reviewed_by_user_id`, `session_revision.reviewed_by_user_id` 등 반복 처리자 FK 간선은 관계도를 읽기 어렵게 만들므로 Mermaid에서는
 생략했다. 이 컬럼들은 `app_user.user_id`를 참조하고 아래 제약을 따른다.
 
 ### 콘텐츠·회차 정규화 규칙
@@ -415,11 +448,22 @@ erDiagram
 - 수정본 승인 시 `content_revision`의 모든 후보 필드를 `content`에 반영한다. 후보 대표 이미지 객체 FK는
   `content`에 반영하되 수정본의 심사 당시 스냅샷으로 보존한다. 원본 버전 증가, 수정본 종결과 성공 감사 이벤트를 한 트랜잭션에서 처리한다.
 - `EDIT_REJECTED`와 `EDIT_WITHDRAWN` 수정본은 원본에 반영하지 않고 보존한다.
-- P0 문서가 공개 회차의 수정 가능 필드를 확정하지 않았으므로 `content_session_revision`은 만들지 않는다.
-  공개 회차는 `RSV-06`의 명시적 취소 외에 수정본 승인으로 삭제·재배정·정원 변경하지 않는다.
+- 추가 회차는 `content_session`을 `PENDING`, `remaining_capacity = capacity`로 생성한다. 지역 관리자 승인 시에만
+  `SCHEDULED`로 전이하며, `PENDING`·`REJECTED` 회차는 홀드·예약·공개 조회의 대상이 아니다.
+- `session_revision`은 기존 `SCHEDULED` 회차의 수정 후보와 심사 상태만 보관한다. `content_id`, `region_id`는
+  대상 `content_session`과 같아야 하며, `base_session_version`은 요청을 생성할 때의 대상 회차 버전이다.
+  대상 `SCHEDULED` 회차당 `PENDING` 수정 요청은 최대 한 건이다.
+- 수정 승인 시 콘텐츠 상태·소프트 삭제 여부, 대상 회차 `SCHEDULED` 상태, 버전 일치, 활성 홀드와 `CONFIRMED`
+  예약 부재를 같은 트랜잭션에서 다시 확인한다. 모두 만족하면 후보 일정·체크인 창·정원을 반영하고
+  `content_session.version_no`를 증가시킨다. 반려는 기존 회차를 변경하지 않는다.
+- 회차 생성·승인·반려와 수정 요청 생성·심사, 수정 승인에 따른 실제 회차 변경은 성공 `audit_event`와
+  처리자 연결을 같은 MySQL 트랜잭션에서 커밋한다.
 - 현재 ERD는 별도 `DRAFT`가 확정되지 않았으므로 `PENDING`을 심사 제출이 끝난 상태로 해석한다.
-  `PENDING` 생성은 필수 콘텐츠 필드·현재 대표 이미지 정확히 한 개와 유효 회차 한 개 이상을
-  같은 유스케이스에서 완성해야 한다. 이후 소프트 삭제 전까지 이 최소 관계를 유지한다.
+  `PENDING` 생성은 필수 콘텐츠 필드·현재 대표 이미지 정확히 한 개와 유효 `PENDING` 회차 한 개 이상을
+  같은 유스케이스에서 완성해야 한다. 콘텐츠 승인 시 최초 회차도 같은 심사 흐름에서 `SCHEDULED`로 전이한다.
+  이후 소프트 삭제 전까지 이 최소 관계를 유지한다.
+- `session_revision`은 소프트 삭제되지 않은 `APPROVED` 또는 `PUBLISHED` 콘텐츠에만 만들 수 있다.
+  `PENDING` 콘텐츠의 최초 회차는 콘텐츠 심사 범위에 포함하므로 별도 `session_revision`을 만들지 않는다.
 - `content_session.region_id`는 `content.region_id`와 같아야 한다.
 - 다음 시각·정원 제약을 적용한다.
   - `starts_at < ends_at`
@@ -697,7 +741,8 @@ erDiagram
 | `content` | `PENDING`, `REJECTED`, `APPROVED`, `PUBLISHED`, `SUSPENDED`, `WITHDRAWN`, `ENDED` | `PENDING → {APPROVED, REJECTED}`, `REJECTED → PENDING`, `APPROVED → PUBLISHED`, `PUBLISHED → {SUSPENDED, WITHDRAWN, ENDED}` |
 | `content_log.status` | `content` 상태 카탈로그의 값, `DELETED` | 생성·상태 변경 뒤의 `content.status` 또는 소프트 삭제 이벤트를 추가 전용으로 기록 |
 | `content_revision` | `EDIT_REQUESTED`, `EDIT_APPROVED`, `EDIT_REJECTED`, `EDIT_WITHDRAWN` | `EDIT_REQUESTED → {EDIT_APPROVED, EDIT_REJECTED, EDIT_WITHDRAWN}` |
-| `content_session` | `SCHEDULED`, `COMPLETED`, `CANCELLED` | `SCHEDULED → {COMPLETED, CANCELLED}` |
+| `content_session` | `PENDING`, `SCHEDULED`, `REJECTED`, `COMPLETED`, `CANCELLED` | `PENDING → {SCHEDULED, REJECTED}`, `SCHEDULED → {COMPLETED, CANCELLED}` |
+| `session_revision.status` | `PENDING`, `APPROVED`, `REJECTED` | `PENDING → {APPROVED, REJECTED}` |
 | `image_object` | `ACTIVE`, `DELETE_PENDING` | 참조 제거 후 `ACTIVE → DELETE_PENDING`; S3 삭제 성공 후 행 파기 |
 | `capacity_hold` | `ACTIVE`, `CONSUMED`, `EXPIRED`, `INVALIDATED` | `ACTIVE → {CONSUMED, EXPIRED, INVALIDATED}` |
 | `reservation` | `CONFIRMED`, `CHECKED_IN`, `CANCELLED`, `EXPIRED` | `CONFIRMED → {CHECKED_IN, CANCELLED, EXPIRED}` |
@@ -720,6 +765,7 @@ erDiagram
 | 사용자 역할 | `user_role_assignment(user_id, role)` | 역할별 담당 지역 최대 한 곳 |
 | 콘텐츠 수정본 | `content_revision(content_id, revision_no)` | 콘텐츠별 순차 수정본 식별 |
 | 활성 콘텐츠 수정본 | 콘텐츠별 `EDIT_REQUESTED` 최대 한 건 | 병렬 심사 방지 |
+| 활성 회차 수정본 | 대상 회차별 `PENDING` `session_revision` 최대 한 건 | 같은 회차의 병렬 변경 심사 방지 |
 | 예약 변환 | `reservation(hold_id)` | 한 홀드당 예약 최대 한 건 |
 | 예약 번호 | `reservation(reservation_no)` | QR 실패 보조 조회에서 예약 한 건 식별 |
 | QR 참조 | `reservation(qr_reference)` | 불투명 QR 참조로 예약 한 건 식별 |
@@ -733,6 +779,7 @@ erDiagram
 | 하위 엔티티 | 일치해야 하는 상위 관계 |
 | --- | --- |
 | `content_session` | `(content_id, region_id) = content(content_id, region_id)` |
+| `session_revision` | `(target_session_id, content_id, region_id) = content_session(session_id, content_id, region_id)` |
 | `capacity_hold` | `(session_id, region_id) = content_session(session_id, region_id)` |
 | `reservation` | `(hold_id, session_id, region_id) = capacity_hold(hold_id, session_id, region_id)` |
 | `visit` | `(reservation_id, session_id, region_id) = reservation(reservation_id, session_id, region_id)` |
@@ -762,6 +809,10 @@ MySQL 복합 FK를 사용하려면 상위 테이블에 대응하는 `UNIQUE` 후
 | 소프트 삭제된 `content` | `deleted_at` 존재하고 상태는 `PENDING` 또는 `APPROVED`; 사유를 가진 `DELETED` 로그가 정확히 한 건 존재   |
 | `content_revision`의 `EDIT_APPROVED`, `EDIT_REJECTED` | `reviewed_at`, `reviewed_by_user_id`, `review_reason` 존재                         |
 | `content_revision.EDIT_WITHDRAWN` | `withdrawn_at`, `withdrawn_by_user_id`, `withdrawal_reason` 존재                   |
+| `content_session.REJECTED` | `reviewed_at`, `reviewed_by_user_id`, `reject_reason` 존재 |
+| 모든 `session_revision` | `target_session_id`, `base_session_version`, 후보 일정·체크인 창·정원 존재 |
+| `session_revision.APPROVED` | `reviewed_at`, `reviewed_by_user_id` 존재, `reject_reason IS NULL` |
+| `session_revision.REJECTED` | `reviewed_at`, `reviewed_by_user_id`, `reject_reason` 존재 |
 | 소프트 삭제 전 모든 `content` | P0 필수 콘텐츠 필드 존재, 현재 대표 이미지 정확히 한 개, `content_session` 한 개 이상 존재                  |
 | `content_session.CANCELLED` | `cancelled_at`, `cancelled_by_user_id`, `cancellation_reason` 존재                 |
 | `content_session.COMPLETED` | `completed_at` 존재                                                                |
@@ -789,6 +840,8 @@ MySQL 복합 FK를 사용하려면 상위 테이블에 대응하는 `UNIQUE` 후
 | 자동 공개 대상 | `content(status, publish_at, deleted_at)` |
 | 콘텐츠 상태 변경 이력 | `content_log(content_id, date, id)` |
 | 콘텐츠 수정본 조회 | `content_revision(content_id, status, created_at)` |
+| 지역 회차 수정본 심사 | `session_revision(region_id, status, submitted_at)` |
+| 회차별 활성 수정본 | `session_revision(target_session_id, status)` |
 | 회차 목록·운영 상태 | `content_session(content_id, status, starts_at)` |
 | 지역 회차 운영 조회 | `content_session(region_id, status, starts_at)` |
 | 이미지 삭제 재시도 | `image_object(lifecycle_status, last_delete_attempted_at)` |
@@ -888,7 +941,6 @@ SQL의 단순 cascade가 아래 업무 순서를 대신해서는 안 된다.
 | 콘텐츠 `REJECTED` 삭제 | 삭제 허용 여부 | 허용 상태에 임의 포함하지 않음 |
 | `SUSPENDED` 후속 전이 | 재개·종료·철회 가능 여부 | 후속 전이를 추가하지 않음 |
 | 콘텐츠 종료 판정 기준 | 별도 종료 예정일, 마지막 회차 종료 또는 정상 종료의 구체 조건 | `content_log.status = ENDED`의 `date`만 기록하고 별도 `ended_at` 컬럼은 두지 않음 |
-| 공개 회차 수정 | 수정 가능한 일정·정원 필드 | 회차 리비전 테이블 제외 |
 | 별점·후기 validation | 별점 범위, 텍스트 길이·빈 값 허용 | 논리 타입만 표현 |
 | QR 운영 설정 | 토큰 TTL, 키 회전 유예 | 비영속 설정으로 유지 |
 | 멱등 운영 설정 | 보관 기간, 저장할 실패 종류·결과 코드 | 논리 필드만 표현 |
