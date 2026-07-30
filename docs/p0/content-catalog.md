@@ -68,6 +68,8 @@
 
 콘텐츠 기본 상태는 `PENDING → APPROVED → PUBLISHED → ENDED`로 전이한다.
 반려 시 `PENDING → REJECTED → PENDING`으로 전이하며 반려 사유를 기록하고 운영자가 보완 후 다시 제출한다.
+공개 전 `APPROVED` 콘텐츠의 수정 요청은 수정본 생성과 함께 `APPROVED → PENDING`으로 전이한다.
+이 `PENDING`은 수정본 심사가 종결돼도 유지하며, 승인된 공개 전 수정본을 반영할 때만 다시 `APPROVED`로 전이한다.
 
 ### `SES-01`
 
@@ -150,7 +152,10 @@
 
 #### `CON-04`
 
-승인된 공개 예정 시각을 변경하려면 운영자가 변경 요청을 제출하고 지역 관리자의 승인을 다시 받아야 한다.
+승인되었지만 아직 공개되지 않은 콘텐츠의 공개 예정 시각을 변경하려면 운영자가 수정본을 제출한다.
+이때 원본은 `APPROVED → PENDING`으로 전이해 기존 `publish_at`에 따른 자동 공개를 차단한다.
+수정본 승인 시 후보 `publish_at`을 원본에 반영하고 `PENDING → APPROVED`로 재승인한다.
+수정본 반려·철회 시 원본은 `PENDING`으로 유지하며 자동 공개를 재개하지 않는다.
 모든 회차가 `COMPLETED` 또는 `CANCELLED`가 된 뒤 종료일이 지나거나 정상 종료 처리되면 `ENDED`로 전환하고
 신규 예약 접수와 노출을 종료한다. 기존 `CONFIRMED` 예약을 취소해야 하면 먼저 명시적으로 회차를 취소한다.
 
@@ -168,6 +173,7 @@
 | [인증·프로필](auth-profile.md#fr-01-인증역할지역-권한)                                      | 담당 지역·소유 관계 기반의 변경 권한       |
 | [ADR-0011](../adr/0011-bootstrap-operator-ownership-on-content-creation.md#결정) | 저장된 최초 소유 관계를 기준으로 한 운영자 권한 |
 | [ADR-0020](../adr/0020-merge-event-experience-details-into-content-and-revision.md#결정) | 행사·체험 후보 필드를 수정본에 통합하는 모델 |
+| [ADR-0032](../adr/0032-block-automatic-publication-during-pre-publication-revision-review.md#결정) | 공개 전 수정 심사 중 자동 공개 차단과 후보 공개 예정 시각 |
 | [P0 명세](../p0-spec.md#88-감사-및-운영-로그)                                           | 수정본 철회·중단·철회·삭제 상태 전이 감사    |
 | [ADR-0021](../adr/0021-record-content-reasons-in-content-log.md#결정)              | 콘텐츠 사유를 상태 로그에 기록하고 현재 상태와 분리하는 모델 |
 
@@ -181,18 +187,31 @@
 
 #### `CON-05`
 
-`PUBLISHED` 콘텐츠는 직접 수정하지 않는다.
-소유 운영자는 수정본을 `EDIT_REQUESTED`로 제출하고,
+`PUBLISHED` 콘텐츠는 직접 수정하지 않는다. 소유 운영자는 수정본을 `EDIT_REQUESTED`로 제출하고,
 담당 지역 관리자는 `EDIT_REQUESTED → EDIT_APPROVED` 또는 `EDIT_REQUESTED → EDIT_REJECTED`로 심사한다.
+공개 콘텐츠에서 만든 수정본의 `publish_at`은 `NULL`이며, 승인돼도 원본의 공개 상태와 기존 `publish_at`은 유지한다.
+
+공개 전 `APPROVED` 콘텐츠도 수정본을 제출할 수 있다. 이 수정본의 후보 `publish_at`은 필수이고,
+생성과 함께 원본을 `APPROVED → PENDING`으로 전이해 자동 공개를 막는다. 그 뒤 `EDIT_REJECTED` 또는
+`EDIT_WITHDRAWN`이 되어도 원본은 `PENDING`으로 유지한다. 운영자는 활성 수정본이 없고 직전 공개 전 수정
+요청으로 `APPROVED → PENDING`이 기록된 콘텐츠에 새 수정본을 다시 제출할 수 있다. 최초 등록 뒤의 일반
+`PENDING` 콘텐츠에는 이 예외를 적용하지 않는다.
+
+공개 전 수정본 승인에는 원본 `PENDING`, 수정본 `EDIT_REQUESTED`, 기준 원본 버전 일치와 후보 `publish_at` 존재가
+필요하다. 성공 시 모든 후보 필드와 `publish_at`을 원본에 반영하고 원본을 `PENDING → APPROVED`로 전이한다.
+공개 콘텐츠 수정본 승인에는 원본 `PUBLISHED`, 수정본 `EDIT_REQUESTED`, 기준 원본 버전 일치와 후보 `publish_at = NULL`이
+필요하며, 원본 상태와 `publish_at`은 변경하지 않는다. 두 경우 모두 원본 반영, 원본 버전 증가, 수정본 종결과
+감사 기록은 하나의 트랜잭션으로 처리한다.
+
 소유 운영자는 심사 결정 전에 `EDIT_REQUESTED → EDIT_WITHDRAWN`으로 철회할 수 있고,
 철회 시각·처리자·사유를 기록하며 반복 철회 요청은 기존 결과를 반환한다.
 승인·반려·철회는 모두 `EDIT_REQUESTED` 상태를 조건으로 전이하며 경합하면 성공한 최초 전이만 적용한다.
 승인·반려가 먼저 성공하면 이후 철회를 거부하고, 철회가 먼저 성공하면 이후 승인·반려를 거부한다.
-심사 중에는 원본의 `PUBLISHED` 상태와 기존 내용을 유지하고 승인된 수정본만 원본에 반영한다.
-`EDIT_REJECTED`와 `EDIT_WITHDRAWN` 수정본은 원본에 반영하지 않고 상태와 사유 이력을 보존한다.
+`EDIT_REJECTED`와 `EDIT_WITHDRAWN` 수정본은 원본 후보 필드를 반영하지 않고 상태와 사유 이력을 보존한다.
 `EDIT_APPROVED` 반영 후에는 기존 수정본을 철회하지 않고 새 수정본 또는 전체 콘텐츠 철회 절차를 사용한다.
 수정본의 관계형 리비전 영속 모델과 승인 시 원자 반영은
-[ADR-0014](../adr/0014-store-published-content-edits-in-relational-revision-tables.md)를 따르며,
+[ADR-0014](../adr/0014-store-published-content-edits-in-relational-revision-tables.md)와
+[ADR-0032](../adr/0032-block-automatic-publication-during-pre-publication-revision-review.md)를 따르며,
 행사·체험 후보 필드를 수정본에 함께 저장하는 방식은
 [ADR-0020](../adr/0020-merge-event-experience-details-into-content-and-revision.md)를 따른다.
 
@@ -262,7 +281,7 @@
 | --- | --- | --- |
 | 지역 | `region_id`, 공개 상태 | 지역 선택과 공개 범위 |
 | 콘텐츠 | `content_id`, `region_id`, type, status, operator_id, 행사·체험 표시 필드(연령 조건·준비물·취소 안내), publish_at, deleted_at | 탐색·승인·자동 공개, 서버가 설정한 소유 관계와 공개 전 소프트 삭제 현재 상태 |
-| 콘텐츠 수정본 | `content_revision_id`, content_id, editor_id, status, 행사·체험 후보 표시 필드, submitted_at, reviewed_at, withdrawn_at, withdrawn_by, withdrawal_reason | 공개본을 유지한 수정 심사·철회 |
+| 콘텐츠 수정본 | `content_revision_id`, content_id, editor_id, status, 행사·체험 후보 표시 필드, 후보 `publish_at`, submitted_at, reviewed_at, withdrawn_at, withdrawn_by, withdrawal_reason | 공개·공개 전 승인본을 분리한 수정 심사·철회 |
 | 콘텐츠 상태 로그 | id, `content_id`, `actor_id`, status, reason, date | 생성·승인·자동 공개·중단·철회·종료·삭제의 처리자, 사유와 상태 변경 시각 |
 | 행사·체험 회차 | `session_id`, `content_id`, 시작·종료 시각, 정원, status, 체크인 시작·종료 시각 | 무료 예약 마감·QR 가능 단위 |
 | 회차 수정 심사 요청 | `request_id`, content_id, target_session_id, 후보 일정·정원, base_session_version, status, submitted_at, reviewed_at | 기존 `SCHEDULED` 회차 변경의 심사 후보. 승인 때만 실제 회차에 반영 |

@@ -217,8 +217,8 @@ public class ContentSession {
         if (!checkinOpenAt.isBefore(checkinCloseAt)) {
             throw new IllegalArgumentException("checkinOpenAt must be before checkinCloseAt");
         }
-        if (endsAt.isAfter(checkinCloseAt)) {
-            throw new IllegalArgumentException("endsAt must be before or equal to checkinCloseAt");
+        if (!endsAt.isAfter(checkinCloseAt)) {
+            throw new IllegalArgumentException("endsAt must be after checkinCloseAt");
         }
     }
 

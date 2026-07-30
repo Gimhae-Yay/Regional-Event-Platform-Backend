@@ -1,15 +1,15 @@
 # 지역·콘텐츠 카탈로그 API 명세서
 
-| 항목 | 내용 |
-| --- | --- |
-| 대상 릴리스 | P0 |
-| 관련 요구사항 | `FR-02`, `FR-03`, `FR-04`, `FR-06`, `AUTH-01`, `CON-01`, `CON-02`, `CON-03`, `CON-04`, `SES-01`, `SES-02`, `RSV-02`, `RSV-06` |
-| 소유 도메인 | 지역·콘텐츠 카탈로그 |
+| 항목 | 내용                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| --- |----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 대상 릴리스 | P0                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| 관련 요구사항 | `FR-02`, `FR-03`, `FR-04`, `FR-06`, `AUTH-01`, `CON-01`, `CON-02`, `CON-03`, `CON-04`, `CON-09`, `SES-01`, `SES-02`, `RSV-02`, `RSV-06`                                                                                                                                                                                                                                                                                                        |
+| 소유 도메인 | 지역·콘텐츠 카탈로그                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [정원 홀드·무료 예약](../../../p0/reservation.md), [인증·프로필](../../../p0/auth-profile.md), [ERD](../../../erd.md), [기술 스택](../../../local-stamp-platform-tech-stack.md), [ADR-0016](../../../adr/0016-use-private-s3-presigned-urls-and-immediate-image-deletion.md), [ADR-0029](../../../adr/0029-use-version-validated-cache-aside-for-public-content.md), [ADR-0031](../../../adr/0031-create-sessions-with-lifecycle-and-review-session-changes.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
-이 문서는 지역·콘텐츠 카탈로그 도메인의 공개 지역 탐색, 지역 홈, 담당 지역 승인 대기 콘텐츠 조회와 콘텐츠 회차
+이 문서는 지역·콘텐츠 카탈로그 도메인의 공개 지역 탐색, 지역 홈, 담당 지역 콘텐츠·수정본 심사 대기 조회와 콘텐츠 회차
 조회·취소 요구사항을 HTTP API 계약으로 구체화한다.
 요청·응답의 공통 형식, 인증, 페이지네이션과 오류 구조는 `common/` 문서를 단일 출처로 삼으며,
 이 문서에는 해당 API에만 적용되는 값과 규칙만 작성한다.
@@ -35,6 +35,14 @@
 | `FR-04` | `GET /region-admin/contents?status=PENDING` | `content`, `content_log`, `app_user` |
 | `AUTH-01` | `GET /region-admin/contents?status=PENDING` | `content.region_id`, `user_role_assignment.region_id` |
 | `CON-01` | `GET /region-admin/contents?status=PENDING` | `content.status`, `content.deleted_at` |
+| `CON-01`, `CON-09` | `POST /region-admin/contents/{contentId}/reject` | `content`, `content_log`, `audit_event` |
+| `CON-03`, `CON-09` | `POST /region-admin/contents/{contentId}/approve` | `content`, `content_log`, `audit_event` |
+| `FR-14`, `CON-05`, `CON-09` | `GET /region-admin/content-revisions?status=EDIT_REQUESTED` | `content_revision`, `content`, `image_object` |
+| `FR-14`, `CON-05` | `GET /region-admin/content-revisions/{revisionId}` | `content_revision`, `content`, `content_session`, `image_object` |
+| `FR-14`, `CON-05`, `CON-09` | `POST /region-admin/content-revisions/{revisionId}/approve` | `content_revision`, `content`, `content_log`, `audit_event` |
+| `FR-14`, `CON-05`, `CON-09` | `POST /region-admin/content-revisions/{revisionId}/reject` | `content_revision`, `content`, `audit_event` |
+| `CON-09` | `GET /region-admin/contents/{contentId}/history` | `content`, `content_log` |
+| `CON-02`, `CON-03` | `GET /region-admin/contents/{contentId}` | `content`, `content_session`, `content_representative_image` |
 | `FR-03`, `FR-04`, `AUTH-01`, `SES-01`, `SES-02` | `POST /operator/contents/{contentId}/sessions` | `content`, `content_session`, `user_role_assignment`, `audit_event`, `audit_event_actor_link` |
 | `FR-03`, `FR-04`, `AUTH-01`, `SES-01`, `SES-02`, `RSV-02` | `POST /operator/sessions/{sessionId}/change-requests` | `content`, `content_session`, `session_revision`, `capacity_hold`, `reservation`, `audit_event`, `audit_event_actor_link` |
 | `FR-02`, `SES-01`, `SES-02` | `GET /contents/{contentId}/sessions` | `content`, `content_session` |
@@ -57,6 +65,14 @@
 | 공개 지역 목록 조회 | `GET /regions` | [list-public-regions.md](list-public-regions.md) |
 | 지역 홈·진행/임박 콘텐츠 조회 | `GET /regions/{regionId}/home` | [get-region-home.md](get-region-home.md) |
 | 담당 지역 승인 대기 목록 조회 | `GET /region-admin/contents?status=PENDING` | [list-pending-contents.md](list-pending-contents.md) |
+| 승인 검토 콘텐츠 상세 조회 | `GET /region-admin/contents/{contentId}` | [review-content-detail.md](review-content-detail.md) |
+| 콘텐츠 승인 | `POST /region-admin/contents/{contentId}/approve` | [content-approval.md](content-approval.md) |
+| 사유를 포함한 콘텐츠 반려 | `POST /region-admin/contents/{contentId}/reject` | [content-rejection.md](content-rejection.md) |
+| 심사 대기 수정본 목록 조회 | `GET /region-admin/content-revisions?status=EDIT_REQUESTED` | [list-pending-content-revisions.md](list-pending-content-revisions.md) |
+| 심사 대기 수정본 상세 조회 | `GET /region-admin/content-revisions/{revisionId}` | [review-content-revision-detail.md](review-content-revision-detail.md) |
+| 수정본 승인 | `POST /region-admin/content-revisions/{revisionId}/approve` | [approve-content-revision.md](../region-content/approve-content-revision.md) |
+| 사유를 포함한 수정본 반려 | `POST /region-admin/content-revisions/{revisionId}/reject` | [reject-content-revision.md](../region-content/reject-content-revision.md) |
+| 콘텐츠 반려·승인·종료 이력 조회 | `GET /region-admin/contents/{contentId}/history` | [content-history.md](content-history.md) |
 | 내 콘텐츠 회차 생성 | `POST /operator/contents/{contentId}/sessions` | [session-create.md](session-create.md) |
 | 내 콘텐츠 회차 수정 요청 | `POST /operator/sessions/{sessionId}/change-requests` | [session-update.md](session-update.md) |
 | 공개 콘텐츠 회차 목록 조회 | `GET /contents/{contentId}/sessions` | [list-public-content-sessions.md](list-public-content-sessions.md) |
