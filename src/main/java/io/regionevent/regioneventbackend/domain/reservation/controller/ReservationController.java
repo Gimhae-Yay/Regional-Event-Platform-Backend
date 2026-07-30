@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import io.regionevent.regioneventbackend.domain.reservation.service.ReservationConfirmationResponse;
+import io.regionevent.regioneventbackend.domain.reservation.dto.ReservationConfirmationResponse;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationConfirmationService;
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.error.BusinessException;

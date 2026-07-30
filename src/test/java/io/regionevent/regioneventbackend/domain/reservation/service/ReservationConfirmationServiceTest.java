@@ -31,6 +31,7 @@ import io.regionevent.regioneventbackend.domain.idempotency.entity.IdempotencyRe
 import io.regionevent.regioneventbackend.domain.idempotency.repository.IdempotencyRecordRepository;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
+import io.regionevent.regioneventbackend.domain.reservation.dto.ReservationConfirmationResponse;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;

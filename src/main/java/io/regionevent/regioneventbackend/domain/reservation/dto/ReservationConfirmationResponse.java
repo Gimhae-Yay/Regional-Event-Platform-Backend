@@ -1,4 +1,4 @@
-package io.regionevent.regioneventbackend.domain.reservation.service;
+package io.regionevent.regioneventbackend.domain.reservation.dto;
 
 import java.time.Instant;
 

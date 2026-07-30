@@ -15,7 +15,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
-import io.regionevent.regioneventbackend.domain.reservation.service.ReservationConfirmationResponse;
+import io.regionevent.regioneventbackend.domain.reservation.dto.ReservationConfirmationResponse;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationConfirmationService;
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 
