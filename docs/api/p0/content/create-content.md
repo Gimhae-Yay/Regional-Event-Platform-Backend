@@ -173,6 +173,6 @@ Accept: application/json
 ### 처리 규칙
 
 1. 서버는 인증된 승인 운영자를 `operator_id`로, 그 운영자의 담당 지역을 `region_id`로 설정한다. 요청에서 소유자·지역·콘텐츠 유형을 지정하거나 변경할 수 없다.
-2. 모든 정적 콘텐츠 필드, 현재 `ACTIVE`인 대표 이미지 한 개와 하나 이상의 유효 회차를 검증한다. 대표 이미지를 연결하기 전에 S3 `HEAD` 결과의 SHA-256 Base64 체크섬이 이미지 객체에 저장된 값과 같은지 확인한다. 각 회차는 `startsAt < endsAt`, `checkinOpenAt < checkinCloseAt`, `endsAt <= checkinCloseAt`, 양수 정원을 만족해야 한다.
+2. 모든 정적 콘텐츠 필드, 현재 `ACTIVE`인 대표 이미지 한 개와 하나 이상의 유효 회차를 검증한다. 대표 이미지를 연결하기 전에 S3 `HEAD` 결과의 SHA-256 Base64 체크섬이 이미지 객체에 저장된 값과 같은지 확인한다. 각 회차는 `startsAt < endsAt`, `checkinOpenAt < checkinCloseAt`, `endsAt > checkinCloseAt`, 양수 정원을 만족해야 한다.
 3. 성공 시 콘텐츠와 회차를 만들고 `ACTIVE` 이미지 객체를 대표 이미지로 연결한 뒤, 콘텐츠를 `PENDING`으로 만들고 `PENDING` 로그를 같은 트랜잭션에서 기록한다.
 4. 생성된 `PENDING` 콘텐츠는 심사 결과가 나올 때까지 직접 편집하거나 재요청할 수 없다.

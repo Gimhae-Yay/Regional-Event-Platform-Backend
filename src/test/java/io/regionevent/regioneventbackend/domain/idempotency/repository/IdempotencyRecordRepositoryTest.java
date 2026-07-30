@@ -345,7 +345,7 @@ class IdempotencyRecordRepositoryTest {
             Instant.parse("2026-08-02T01:00:00Z"),
             Instant.parse("2026-08-02T03:00:00Z"),
             Instant.parse("2026-08-02T00:30:00Z"),
-            Instant.parse("2026-08-02T03:30:00Z"),
+            Instant.parse("2026-08-02T02:30:00Z"),
             20
         ));
         CapacityHold capacityHold = capacityHoldRepository.saveAndFlush(new CapacityHold(

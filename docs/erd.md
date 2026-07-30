@@ -434,7 +434,7 @@ erDiagram
 - 다음 시각·정원 제약을 적용한다.
   - `starts_at < ends_at`
   - `checkin_open_at < checkin_close_at`
-  - `ends_at <= checkin_close_at`
+  - `ends_at > checkin_close_at`
   - `capacity > 0`
   - `0 <= remaining_capacity <= capacity`
 - 대표 이미지 객체 FK와 연결 시각은 콘텐츠·수정본 루트에 직접 둔다. 콘텐츠 또는 수정본은 대표 이미지 객체를 최대 한 개만 가지며,
