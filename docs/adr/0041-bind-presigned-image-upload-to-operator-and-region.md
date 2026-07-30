@@ -7,7 +7,8 @@
 - 관련 요구사항: [PRD](../local-stamp-platform-prd.md)의 `FR-03`, `FR-14`, `AUTH-01`, `CON-02`, `CON-05`
 - 관련 단계: 단계 0. 정책·설계 확정, 단계 1. MVP 구현·검증
 - 관련 이슈: [#97](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/97), [#164](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/164)
-- 대체 대상: 없음
+- 대체 대상: [ADR-0016](0016-use-private-s3-presigned-urls-and-immediate-image-deletion.md)의 업로드 URL 발급 시
+  콘텐츠 또는 활성 수정본 문맥 확인 요구 중 사전 업로드 범위
 
 ## 맥락
 
@@ -37,6 +38,11 @@
 | 3 | DB 컬럼 없이 서명 토큰만으로 연결 권한을 검증한다 | 스키마 변경이 없다. | 만료·소비 여부·운영자/지역 검증과 정리 대상을 서버 상태로 안정적으로 추적하기 어렵다. | 중간. 토큰 형식과 검증 실패 원인 추적을 다시 설계해야 한다. | 권한 경계와 운영 정리에 부적합하다. |
 
 ## 결정
+
+콘텐츠 생성 전 사전 업로드와 공용 대표 이미지 업로드 URL 발급 API에서는 ADR-0016의 발급 시점 콘텐츠 또는
+활성 수정본 문맥 확인을 적용하지 않고, 운영자·지역·만료·최초 연결 검증으로 대체한다. 기존 콘텐츠나
+수정본에 실제로 연결할 수 있는지는 연결 API가 소유 관계, 상태와 아래 이미지 객체 조건을 같은 트랜잭션에서
+다시 확인한다.
 
 `image_object`에 다음 컬럼을 추가한다.
 
