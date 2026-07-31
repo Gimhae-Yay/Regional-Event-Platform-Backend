@@ -5,7 +5,7 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | [FR-01 인증·역할·지역 권한](../../../p0/auth-profile.md#fr-01-인증역할지역-권한) |
 | 소유 도메인 | 인증·프로필 |
-| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ERD](../../../erd.md), [ADR-0042](../../../adr/0042-use-delegating-bcrypt-password-encoder.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ERD](../../../erd.md), [ADR-0044](../../../adr/0044-use-delegating-bcrypt-password-encoder.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 

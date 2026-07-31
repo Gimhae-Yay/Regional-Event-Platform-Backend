@@ -1,17 +1,17 @@
-# ADR-0044: HS256 Access Token 구현에 JJWT를 사용한다
+# ADR-0046: HS256 Access Token 구현에 JJWT를 사용한다
 
 - 상태: 채택됨
-- 기록 유형: 고급
+- 기록 유형: 소급
 - 기록일: 2026-07-30
 - 결정일: 2026-07-30
 - 관련 요구사항: [FR-01 인증·역할·지역 권한](../p0/auth-profile.md#fr-01-인증역할지역-권한), [공통 인증·인가 계약](../api/common/authentication.md)
 - 관련 단계: 단계 1. MVP 구현·검증
 - 관련 이슈: [#161 Spring Security와 JWT Access Token 인증 기반 구현](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/161)
-- 대체 대상: [ADR-0041](0041-define-jwt-access-token-security-profile.md)의 Access Token 발급·검증 라이브러리 선택만 대체한다. HS256, claim, 15분 수명, `kid` 키 회전 규칙은 대체하지 않는다.
+- 대체 대상: [ADR-0043](0043-define-jwt-access-token-security-profile.md)의 Access Token 발급·검증 라이브러리 선택만 대체한다. HS256, claim, 15분 수명, `kid` 키 회전 규칙은 대체하지 않는다.
 
 ## 맥락
 
-ADR-0041은 Access Token의 보안 프로필을 확정하면서 발급·검증 구현에 Spring Security JOSE/Nimbus를 선택했다. 그러나 P0의 현재 인증 경계는 하나의 백엔드가 대칭 키로 HS256 Access Token을 발급하고 같은 애플리케이션이 검증하는 구조다. 외부 IdP, JWKS, OAuth2 Resource Server, 비대칭 키 검증자는 아직 없다.
+ADR-0043은 Access Token의 보안 프로필을 확정하면서 발급·검증 구현에 Spring Security JOSE/Nimbus를 선택했다. 그러나 P0의 현재 인증 경계는 하나의 백엔드가 대칭 키로 HS256 Access Token을 발급하고 같은 애플리케이션이 검증하는 구조다. 외부 IdP, JWKS, OAuth2 Resource Server, 비대칭 키 검증자는 아직 없다.
 
 이 범위에서는 JWT 발급과 검증 규칙을 직접 읽고 테스트하기 쉬운 API가 필요하다. OAuth2/JWK/JWE까지 포함하는 Spring Security JOSE 의존성을 유지하면 현재 사용하지 않는 범위까지 함께 도입하게 된다. 다만 라이브러리 변경이 토큰 보안 정책 자체를 완화해서는 안 된다.
 
@@ -36,7 +36,7 @@ Access Token의 발급·검증 라이브러리를 JJWT 0.13.0으로 변경한다
 
 `JwtAccessTokenService`는 JJWT만 사용해 HS256으로 서명하고, 파싱 전에 허용 알고리즘과 `kid`를 확인한다. 선택된 검증 키로 서명, issuer, audience, token type, subject, 발급·만료 시각과 정확한 15분 수명을 검증한다. 외부에 노출되는 인증 실패 계약은 기존 `UNAUTHENTICATED`를 유지한다.
 
-이 결정은 ADR-0041 중 라이브러리 선택만 대체한다. Access Token의 형식과 보안 프로필은 유지하므로 HTTP API, 환경 변수 이름, 키 저장 방식, `SecurityContext` 구성 방식은 변경하지 않는다.
+이 결정은 ADR-0043 중 라이브러리 선택만 대체한다. Access Token의 형식과 보안 프로필은 유지하므로 HTTP API, 환경 변수 이름, 키 저장 방식, `SecurityContext` 구성 방식은 변경하지 않는다.
 
 ## 결과와 트레이드오프
 
