@@ -5,7 +5,7 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | [FR-01 인증·역할·지역 권한](../../../p0/auth-profile.md#fr-01-인증역할지역-권한) |
 | 소유 도메인 | 인증·프로필 |
-| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ADR-0005](../../../adr/0005-use-jwt-access-and-rotating-refresh-tokens.md), [ADR-0023](../../../adr/0023-manage-refresh-token-revocation-in-redis.md), [ADR-0027](../../../adr/0027-deliver-refresh-token-in-http-only-cookie.md), [ADR-0043](../../../adr/0043-define-jwt-access-token-security-profile.md), [ADR-0044](../../../adr/0044-use-delegating-bcrypt-password-encoder.md), [ADR-0045](../../../adr/0045-use-stateless-bearer-security-with-same-site-refresh-cookie.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ADR-0005](../../../adr/0005-use-jwt-access-and-rotating-refresh-tokens.md), [ADR-0023](../../../adr/0023-manage-refresh-token-revocation-in-redis.md), [ADR-0027](../../../adr/0027-deliver-refresh-token-in-http-only-cookie.md), [ADR-0043](../../../adr/0043-define-jwt-access-token-security-profile.md), [ADR-0044](../../../adr/0044-use-delegating-bcrypt-password-encoder.md), [ADR-0045](../../../adr/0045-use-stateless-bearer-security-with-same-site-refresh-cookie.md), [ADR-0052](../../../adr/0052-define-refresh-token-security-profile-and-fail-closed-redis-state.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
@@ -100,7 +100,7 @@ Accept: application/json
 | Name | Required | Description |
 | --- | --- | --- |
 | `Authorization` | Y | `Bearer <accessToken>`. 일반 보호 API 호출에 사용하는 짧은 수명의 Access Token이다. |
-| `Set-Cookie` | Y | `refreshToken=<refreshToken>; Max-Age=<refresh-token-ttl>; Path=/api/v1/auth; HttpOnly; Secure; SameSite=Strict`. `Domain`은 생략해 호스트 전용으로 한다. |
+| `Set-Cookie` | Y | `refreshToken=<refreshToken>; Max-Age=1209600; Path=/api/v1/auth; HttpOnly; Secure; SameSite=Strict`. 새 Refresh Token 계열은 발급 시점부터 14일간 유효하며, `Domain`은 생략해 호스트 전용으로 한다. |
 
 Refresh Token은 JSON 본문, `Authorization` 헤더 또는 다른 일반 응답 헤더에 포함하지 않는다.
 
