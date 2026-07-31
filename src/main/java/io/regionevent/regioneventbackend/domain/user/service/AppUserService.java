@@ -1,0 +1,53 @@
+package io.regionevent.regioneventbackend.domain.user.service;
+
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
+import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
+import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
+import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
+
+@Service
+public class AppUserService {
+
+    private final AppUserRepository appUserRepository;
+    private final PasswordEncoder passwordEncoder;
+
+    public AppUserService(
+        AppUserRepository appUserRepository,
+        PasswordEncoder passwordEncoder
+    ) {
+        this.appUserRepository = appUserRepository;
+        this.passwordEncoder = passwordEncoder;
+    }
+
+    public AppUser createActiveUser(
+        String email,
+        String password,
+        String name,
+        String phone
+    ) {
+        validateLoginIdentifierAvailable(email);
+
+        try {
+            return appUserRepository.saveAndFlush(new AppUser(
+                email,
+                passwordEncoder.encode(password),
+                name,
+                phone,
+                AppUserStatus.ACTIVE
+            ));
+        } catch (DataIntegrityViolationException exception) {
+            throw new BusinessException(ErrorCode.DUPLICATE_LOGIN_IDENTIFIER, exception);
+        }
+    }
+
+    private void validateLoginIdentifierAvailable(String email) {
+        if (appUserRepository.existsByLoginIdentifier(email)) {
+            throw new BusinessException(ErrorCode.DUPLICATE_LOGIN_IDENTIFIER);
+        }
+    }
+}
