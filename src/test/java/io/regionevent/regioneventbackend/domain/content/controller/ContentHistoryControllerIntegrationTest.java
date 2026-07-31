@@ -247,6 +247,24 @@ class ContentHistoryControllerIntegrationTest {
                 .accept(MediaType.APPLICATION_JSON))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+
+        mockMvc.perform(get("/api/v1/region-admin/contents/01/history")
+                .header("Authorization", authorization)
+                .accept(MediaType.APPLICATION_JSON))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        mockMvc.perform(get("/api/v1/region-admin/contents/+1/history")
+                .header("Authorization", authorization)
+                .accept(MediaType.APPLICATION_JSON))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        mockMvc.perform(get("/api/v1/region-admin/contents/9223372036854775808/history")
+                .header("Authorization", authorization)
+                .accept(MediaType.APPLICATION_JSON))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
     }
 
     private ResultActions performGet(AppUser user, Long contentId) throws Exception {

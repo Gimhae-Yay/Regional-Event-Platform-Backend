@@ -41,7 +41,7 @@ class ContentHistoryControllerTest {
         ));
 
         ResponseEntity<ApiResponse<ContentHistoryResponse>> response =
-            contentHistoryController.getContentHistory(authentication, CONTENT_ID);
+            contentHistoryController.getContentHistory(authentication, CONTENT_ID.toString());
 
         assertThat(response.getStatusCode().value()).isEqualTo(200);
         assertThat(response.getBody()).isNotNull();
