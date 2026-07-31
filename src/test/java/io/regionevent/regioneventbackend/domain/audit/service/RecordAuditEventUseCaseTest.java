@@ -136,6 +136,16 @@ class RecordAuditEventUseCaseTest {
     }
 
     @Test
+    void 실패_기록은_호출_트랜잭션이_커밋되면_저장하지_않는다() {
+        recordFailedAuditEventUseCase.record(createCommand("RESERVATION_NOT_FOUND"));
+
+        TestTransaction.flagForCommit();
+        TestTransaction.end();
+
+        assertThat(auditEventRepository.count()).isZero();
+    }
+
+    @Test
     void 성공_기록은_실패_결과를_받지_않는다() {
         assertThatIllegalArgumentException().isThrownBy(
             () -> recordAuditEventUseCase.record(createCommand("RESERVATION_NOT_FOUND"))
