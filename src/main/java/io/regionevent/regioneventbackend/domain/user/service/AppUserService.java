@@ -45,6 +45,13 @@ public class AppUserService {
         }
     }
 
+    public AppUser authenticate(String email, String password) {
+        return appUserRepository.findByLoginIdentifier(email)
+            .filter(user -> user.getStatus() == AppUserStatus.ACTIVE)
+            .filter(user -> passwordEncoder.matches(password, user.getPasswordHash()))
+            .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_CREDENTIALS));
+    }
+
     private void validateLoginIdentifierAvailable(String email) {
         if (appUserRepository.existsByLoginIdentifier(email)) {
             throw new BusinessException(ErrorCode.DUPLICATE_LOGIN_IDENTIFIER);

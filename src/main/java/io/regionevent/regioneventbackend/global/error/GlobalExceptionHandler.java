@@ -18,6 +18,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.response.ApiResponse;
+import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStoreUnavailableException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -27,6 +28,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException exception) {
         return ApiResponse.fail(exception.getErrorCode()).toResponseEntity();
+    }
+
+    @ExceptionHandler(RefreshTokenStoreUnavailableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleRefreshTokenStoreUnavailable(
+        RefreshTokenStoreUnavailableException exception
+    ) {
+        return ApiResponse.fail(ErrorCode.AUTH_SERVICE_UNAVAILABLE).toResponseEntity();
     }
 
     @ExceptionHandler({
