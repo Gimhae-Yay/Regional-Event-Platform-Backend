@@ -27,6 +27,8 @@ presigned URL 발급, 객체 HEAD 검증, 삭제 구현이 특정 SDK 구성 방
 - 실제 의존성은 프로젝트의 Gradle 설정에서 한 곳에 선언하고, S3 접근 코드는 인프라 계층에 격리해야 한다.
 - S3 starter 의존성은 Gradle이 해석할 수 있는 정확한 좌표로 선언해야 한다.
 - Spring Cloud AWS 버전은 Spring Boot 버전과의 공식 호환성 확인 뒤 한 곳에서 관리해야 한다.
+- Spring Cloud AWS 4.1.0은 2026-07-22 릴리스되었고, Spring Cloud 2025.1.x는 2025.1.2부터
+  Spring Boot 4.1.x와 호환된다.
 
 ## 검토한 선택지
 
@@ -42,10 +44,11 @@ presigned URL 발급, 객체 HEAD 검증, 삭제 구현이 특정 SDK 구성 방
 모듈 대신 `io.awspring.cloud:spring-cloud-aws-starter-s3`를 사용한다.
 
 버전은 `build.gradle` 한 곳에서 Spring Cloud AWS BOM으로 관리한다. starter 의존성에는 개별 버전을 적지 않는다.
+현재 프로젝트의 Spring Boot `4.1.0` 기준 Spring Cloud AWS 버전은 `4.1.0`으로 확정한다.
 
 ```gradle
 ext {
-    springCloudAwsVersion = '<프로젝트 Spring Boot 버전과 호환되는 Spring Cloud AWS 4.x 버전>'
+    springCloudAwsVersion = '4.1.0'
 }
 
 dependencies {
@@ -54,9 +57,17 @@ dependencies {
 }
 ```
 
-현재 프로젝트의 Spring Boot 버전이 `4.1.0`이므로 #164 구현 시점에는 선택한 Spring Cloud AWS 4.x 릴리스가
-Spring Boot 4.1.x와 호환되는지 공식 호환성 표 또는 릴리스 노트로 확인하고, `./gradlew test`와 Gradle
-의존성 해석으로 재현성을 검증해야 한다.
+Spring Cloud AWS 4.1.0의 BOM은 `io.awspring.cloud:spring-cloud-aws-dependencies:4.1.0`이며,
+`io.awspring.cloud:spring-cloud-aws-starter-s3`는 이 BOM으로 버전을 해석한다. #185에서 Gradle
+의존성 해석과 테스트로 재현성을 검증한다.
+
+공식 확인 근거는 다음과 같다.
+
+- Spring Cloud 호환성 표: `2025.1.x`는 `2025.1.2`부터 Spring Boot `4.1.x`를 지원한다.
+- Spring Cloud AWS 4.1.0 릴리스 노트: 2026-07-22에 `4.1.0`이 릴리스되었다.
+- Spring Cloud AWS 4.1.0 Reference Docs: BOM과 `spring-cloud-aws-starter-s3` artifact를 제공한다.
+- Spring Cloud AWS 4.1.0 BOM은 Spring Cloud `5.0.2` 계열을 사용하며, Gradle 의존성 해석과
+  `./gradlew build`로 프로젝트 적용 가능성을 검증했다.
 
 presigned PUT URL 발급, S3 객체 HEAD 검증, 객체 삭제는 인프라 계층의 S3 어댑터가 담당한다. 애플리케이션
 서비스와 유스케이스는 업로드 URL 발급, 객체 메타데이터 확인, 삭제 요청 같은 프로젝트 내부 인터페이스에만
@@ -88,7 +99,7 @@ S3 관련 구현은 인프라 어댑터에만 남기고 서비스 계층의 SDK 
 
 - 빌드 의존성에 직접 AWS SDK S3 모듈이 남아 있지 않고 Spring Cloud AWS BOM과
   `io.awspring.cloud:spring-cloud-aws-starter-s3`가 사용되는지 확인한다.
-- 선택한 Spring Cloud AWS 버전이 프로젝트의 Spring Boot 버전과 호환되는지 공식 문서로 확인하고,
+- Spring Cloud AWS `4.1.0`이 프로젝트의 Spring Boot `4.1.0`과 호환되는지 공식 문서로 확인하고,
   Gradle 의존성 해석과 `./gradlew test`가 성공하는지 검증한다.
 - 대표 이미지 업로드 URL 발급 시 응답의 `uploadUrl`, `uploadHeaders`, `expiresAt`이 API 명세와 같은지 검증한다.
 - 연결 직전 S3 HEAD 결과의 체크섬과 `ContentLength` 불일치가 연결 실패로 처리되는지 검증한다.
