@@ -93,7 +93,8 @@ class InitialP0SchemaMigrationTest {
             "8",
             "9",
             "10",
-            "11"
+            "11",
+            "12"
         );
         assertThat(tableNames).contains(
             "REGION",
