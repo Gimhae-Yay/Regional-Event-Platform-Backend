@@ -9,6 +9,11 @@ security:
       audience: regional-event-api
       active-key-id: ${JWT_ACCESS_ACTIVE_KEY_ID}
       active-key: ${JWT_ACCESS_ACTIVE_KEY}
+    refresh:
+      issuer: regional-event-platform
+      audience: regional-event-refresh
+      active-key-id: ${JWT_REFRESH_ACTIVE_KEY_ID}
+      active-key: ${JWT_REFRESH_ACTIVE_KEY}
 
 logging:
   pattern:

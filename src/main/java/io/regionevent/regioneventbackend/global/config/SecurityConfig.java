@@ -27,9 +27,13 @@ import io.regionevent.regioneventbackend.global.security.ApiResponseAuthenticati
 import io.regionevent.regioneventbackend.global.security.BearerAccessTokenAuthenticationFilter;
 import io.regionevent.regioneventbackend.global.security.JwtAccessTokenProperties;
 import io.regionevent.regioneventbackend.global.security.JwtAccessTokenService;
+import io.regionevent.regioneventbackend.global.security.JwtRefreshTokenProperties;
+import io.regionevent.regioneventbackend.global.security.JwtRefreshTokenService;
+import io.regionevent.regioneventbackend.global.security.RefreshTokenService;
+import io.regionevent.regioneventbackend.global.security.RefreshTokenStore;
 
 @Configuration
-@EnableConfigurationProperties(JwtAccessTokenProperties.class)
+@EnableConfigurationProperties({JwtAccessTokenProperties.class, JwtRefreshTokenProperties.class})
 public class SecurityConfig {
 
     private static final int BCRYPT_STRENGTH = 12;
@@ -52,6 +56,23 @@ public class SecurityConfig {
         Clock clock
     ) {
         return new JwtAccessTokenService(jwtAccessTokenProperties, clock);
+    }
+
+    @Bean
+    public JwtRefreshTokenService jwtRefreshTokenService(
+        JwtRefreshTokenProperties jwtRefreshTokenProperties,
+        Clock clock
+    ) {
+        return new JwtRefreshTokenService(jwtRefreshTokenProperties, clock);
+    }
+
+    @Bean
+    public RefreshTokenService refreshTokenService(
+        JwtRefreshTokenService jwtRefreshTokenService,
+        RefreshTokenStore refreshTokenStore,
+        Clock clock
+    ) {
+        return new RefreshTokenService(jwtRefreshTokenService, refreshTokenStore, clock);
     }
 
     @Bean
