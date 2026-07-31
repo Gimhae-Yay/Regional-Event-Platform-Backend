@@ -1,4 +1,4 @@
-package io.regionevent.regioneventbackend.global.security;
+package io.regionevent.regioneventbackend.global.security.access;
 
 import java.io.IOException;
 
@@ -13,6 +13,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.web.filter.OncePerRequestFilter;
+
+import io.regionevent.regioneventbackend.global.security.common.ApiResponseAuthenticationEntryPoint;
 
 public class BearerAccessTokenAuthenticationFilter extends OncePerRequestFilter {
 
