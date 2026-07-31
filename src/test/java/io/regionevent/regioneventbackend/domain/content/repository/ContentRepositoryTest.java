@@ -225,6 +225,30 @@ class ContentRepositoryTest {
         assertThat(foundContent.getOperator().getUserId()).isEqualTo(operator.getUserId());
     }
 
+    @Test
+    void 소프트_삭제된_콘텐츠도_지역과_함께_조회한다() {
+        Region region = saveRegion();
+        Content content = contentRepository.saveAndFlush(
+            newContent(
+                region,
+                saveOperator(),
+                ContentStatus.PENDING,
+                Instant.parse("2026-08-01T00:00:00Z")
+            )
+        );
+        content.softDelete();
+        contentRepository.flush();
+        Long contentId = content.getContentId();
+        entityManager.clear();
+
+        Content foundContent = contentRepository.findByContentId(contentId).orElseThrow();
+        PersistenceUnitUtil persistenceUnitUtil = entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
+
+        assertThat(foundContent.getDeletedAt()).isNotNull();
+        assertThat(persistenceUnitUtil.isLoaded(foundContent, "region")).isTrue();
+        assertThat(foundContent.getRegion().getRegionId()).isEqualTo(region.getRegionId());
+    }
+
     private Region saveRegion() {
         return regionRepository.saveAndFlush(new Region("GIMHAE", "김해시", true));
     }
