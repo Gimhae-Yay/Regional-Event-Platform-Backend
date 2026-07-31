@@ -105,6 +105,7 @@ class AuditEventRepositoryTest {
             AuditEventTargetType.OPERATOR_APPLICATION,
             AuditEventTargetType.CONTENT,
             AuditEventTargetType.CONTENT_SESSION,
+            AuditEventTargetType.CAPACITY_HOLD,
             AuditEventTargetType.RESERVATION,
             AuditEventTargetType.VISIT,
             AuditEventTargetType.REVIEW
