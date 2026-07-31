@@ -101,6 +101,90 @@ class ImageObjectRepositoryTest {
     }
 
     @Test
+    void markLinked_whenUploadCandidateIsConnectable_setsLinkedAtAndClearsRequester() {
+        Region region = regionRepository.saveAndFlush(new Region("LINK", "김해시", true));
+        AppUser operator = appUserRepository.saveAndFlush(new AppUser(
+            "link-operator@example.com",
+            "hashed-password",
+            "운영자",
+            "010-1234-5678",
+            AppUserStatus.ACTIVE
+        ));
+        Instant expiresAt = Instant.parse("2026-07-30T01:00:00Z");
+        Instant linkedAt = Instant.parse("2026-07-30T00:59:00Z");
+        ImageObject imageObject = imageObjectRepository.saveAndFlush(ImageObject.createUploadCandidate(
+            "content/link-candidate.webp",
+            operator,
+            region,
+            "image/webp",
+            1024L,
+            "sha256:link",
+            expiresAt
+        ));
+
+        imageObject.markLinked(linkedAt);
+        ImageObject savedImageObject = imageObjectRepository.saveAndFlush(imageObject);
+
+        assertThat(savedImageObject.getLinkedAt()).isEqualTo(linkedAt);
+        assertThat(savedImageObject.getCreatedByUser()).isNull();
+    }
+
+    @Test
+    void markLinked_whenUploadCandidateIsExpired_rejectsTransition() {
+        Region region = regionRepository.saveAndFlush(new Region("EXPIRED", "김해시", true));
+        AppUser operator = appUserRepository.saveAndFlush(new AppUser(
+            "expired-operator@example.com",
+            "hashed-password",
+            "운영자",
+            "010-1234-5678",
+            AppUserStatus.ACTIVE
+        ));
+        Instant expiresAt = Instant.parse("2026-07-30T01:00:00Z");
+        ImageObject imageObject = ImageObject.createUploadCandidate(
+            "content/expired-candidate.webp",
+            operator,
+            region,
+            "image/webp",
+            1024L,
+            "sha256:expired",
+            expiresAt
+        );
+
+        assertThat(imageObject.isConnectableAt(expiresAt)).isFalse();
+        assertThatThrownBy(() -> imageObject.markLinked(expiresAt))
+            .isInstanceOf(IllegalStateException.class);
+        assertThat(imageObject.getLinkedAt()).isNull();
+        assertThat(imageObject.getCreatedByUser()).isEqualTo(operator);
+    }
+
+    @Test
+    void markLinked_whenImageObjectIsDeletePending_rejectsTransition() {
+        Region region = regionRepository.saveAndFlush(new Region("DELETE-PENDING", "김해시", true));
+        AppUser operator = appUserRepository.saveAndFlush(new AppUser(
+            "delete-pending-operator@example.com",
+            "hashed-password",
+            "운영자",
+            "010-1234-5678",
+            AppUserStatus.ACTIVE
+        ));
+        ImageObject imageObject = ImageObject.createUploadCandidate(
+            "content/delete-pending-candidate.webp",
+            operator,
+            region,
+            "image/webp",
+            1024L,
+            "sha256:delete-pending",
+            Instant.parse("2026-07-30T01:00:00Z")
+        );
+        imageObject.markDeletePending();
+
+        assertThatThrownBy(() -> imageObject.markLinked(Instant.parse("2026-07-30T00:59:00Z")))
+            .isInstanceOf(IllegalStateException.class);
+        assertThat(imageObject.getLinkedAt()).isNull();
+        assertThat(imageObject.getCreatedByUser()).isEqualTo(operator);
+    }
+
+    @Test
     void save_whenObjectKeyIsDuplicated_violatesUniqueConstraint() {
         ImageObject firstImageObject = createImageObject("content/duplicate.webp");
         ImageObject secondImageObject = createImageObject("content/duplicate.webp");

@@ -227,17 +227,24 @@ public class ImageObject {
     }
 
     public boolean isConnectableAt(Instant now) {
+        Instant checkedAt = requireNotNull(now, "now");
         return lifecycleStatus == ImageLifecycleStatus.ACTIVE
+            && createdByUser != null
+            && region != null
             && linkedAt == null
             && uploadExpiresAt != null
-            && uploadExpiresAt.isAfter(now);
+            && uploadExpiresAt.isAfter(checkedAt);
     }
 
     public void markLinked(Instant linkedAt) {
+        Instant linkedAtValue = requireNotNull(linkedAt, "linkedAt");
         if (this.linkedAt != null) {
             throw new IllegalStateException("image object is already linked");
         }
-        this.linkedAt = requireNotNull(linkedAt, "linkedAt");
+        if (!isConnectableAt(linkedAtValue)) {
+            throw new IllegalStateException("image object is not connectable");
+        }
+        this.linkedAt = linkedAtValue;
         createdByUser = null;
     }
 
