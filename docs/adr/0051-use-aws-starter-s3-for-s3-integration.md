@@ -66,6 +66,8 @@ Spring Cloud AWS 4.1.0의 BOM은 `io.awspring.cloud:spring-cloud-aws-dependencie
 - Spring Cloud 호환성 표: `2025.1.x`는 `2025.1.2`부터 Spring Boot `4.1.x`를 지원한다.
 - Spring Cloud AWS 4.1.0 릴리스 노트: 2026-07-22에 `4.1.0`이 릴리스되었다.
 - Spring Cloud AWS 4.1.0 Reference Docs: BOM과 `spring-cloud-aws-starter-s3` artifact를 제공한다.
+- Spring Cloud AWS 4.1.0 BOM은 Spring Cloud `5.0.2` 계열을 사용하며, Gradle 의존성 해석과
+  `./gradlew build`로 프로젝트 적용 가능성을 검증했다.
 
 presigned PUT URL 발급, S3 객체 HEAD 검증, 객체 삭제는 인프라 계층의 S3 어댑터가 담당한다. 애플리케이션
 서비스와 유스케이스는 업로드 URL 발급, 객체 메타데이터 확인, 삭제 요청 같은 프로젝트 내부 인터페이스에만
