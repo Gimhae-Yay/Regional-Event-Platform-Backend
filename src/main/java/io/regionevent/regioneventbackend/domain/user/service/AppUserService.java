@@ -45,6 +45,12 @@ public class AppUserService {
         }
     }
 
+    public AppUser findActiveUser(Long userId) {
+        return appUserRepository.findById(userId)
+            .filter(user -> user.getStatus() == AppUserStatus.ACTIVE)
+            .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+    }
+
     private void validateLoginIdentifierAvailable(String email) {
         if (appUserRepository.existsByLoginIdentifier(email)) {
             throw new BusinessException(ErrorCode.DUPLICATE_LOGIN_IDENTIFIER);
