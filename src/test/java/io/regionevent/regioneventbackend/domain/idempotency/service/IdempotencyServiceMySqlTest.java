@@ -230,7 +230,7 @@ class IdempotencyServiceMySqlTest {
         inTransaction(() -> {
             jdbcTemplate.update(
                 "UPDATE idempotency_record SET expires_at = ? WHERE actor_user_id = ? AND idempotency_key_hash = ?",
-                Timestamp.from(Instant.EPOCH),
+                Timestamp.from(NOW.minusSeconds(1)),
                 actor.getUserId(),
                 "expired-failed-key"
             );
