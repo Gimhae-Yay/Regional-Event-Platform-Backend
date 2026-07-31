@@ -5,7 +5,7 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | `FR-03`, `FR-14`, `AUTH-01`, `CON-02`, `CON-05` |
 | 소유 도메인 | 콘텐츠 |
-| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [ERD](../../../erd.md), [ADR-0016](../../../adr/0016-use-private-s3-presigned-urls-and-immediate-image-deletion.md), [ADR-0030](../../../adr/0030-store-representative-image-references-on-content-roots.md), [ADR-0041](../../../adr/0041-bind-presigned-image-upload-to-operator-and-region.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [ERD](../../../erd.md), [ADR-0016](../../../adr/0016-use-private-s3-presigned-urls-and-immediate-image-deletion.md), [ADR-0030](../../../adr/0030-store-representative-image-references-on-content-roots.md), [ADR-0041](../../../adr/0041-bind-presigned-image-upload-to-operator-and-region.md), [ADR-0043](../../../adr/0043-use-aws-starter-s3-for-s3-integration.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
@@ -14,6 +14,7 @@
 `image_object`를 만들고, 이후 콘텐츠·수정본 API는 반환된 `imageObjectId`만 받아 대표 이미지로 연결한다.
 콘텐츠 생성 전에는 아직 소유 콘텐츠 식별자가 없으므로 이 API는 승인된 운영자의 담당 지역과 업로드 용도만 검증한다.
 기존 콘텐츠 또는 수정본에 실제로 연결할 수 있는지는 콘텐츠 생성·수정본 생성·수정 API가 소유 관계와 상태를 다시 검증한다.
+S3 연동 구현은 `aws-starter-s3` 기반 인프라 어댑터를 사용한다.
 
 ### 요구사항 추적
 
@@ -156,11 +157,11 @@ Accept: application/json
 1. 서버는 인증 주체가 `ACTIVE` 상태이고 `OPERATOR` 역할과 담당 `region_id`를 가진 회원인지 확인한다. 요청에서 지역, 운영자, 콘텐츠, 수정본, S3 객체 키 또는 파일명을 지정할 수 없다.
 2. 서버는 `mediaType`, `byteSize`, `checksum`, `usage`를 검증한 뒤 예측 불가능한 새 S3 객체 키를 생성한다. 객체 키에는 사용자 식별자, 원본 파일명, 개인정보를 포함하지 않으며 응답에도 노출하지 않는다.
 3. 서버는 같은 트랜잭션에서 `image_object`를 `ACTIVE` 상태로 생성한다. `object_key`, `media_type`, `byte_size`, `checksum`, `created_by_user_id`, `region_id`, `upload_expires_at`, `linked_at = NULL`, `lifecycle_status = ACTIVE`, `delete_attempt_count = 0`을 저장한다.
-4. 서버는 생성한 객체 키, 요청한 MIME 타입, 요청한 바이트 크기와 SHA-256 Base64 체크섬을 조건으로 S3 presigned PUT URL을 발급한다. 클라이언트는 응답의 `uploadHeaders`를 그대로 포함해 만료 전 업로드해야 한다.
+4. 서버는 `aws-starter-s3` 기반 S3 어댑터를 통해 생성한 객체 키, 요청한 MIME 타입, 요청한 바이트 크기와 SHA-256 Base64 체크섬을 조건으로 S3 presigned PUT URL을 발급한다. 클라이언트는 응답의 `uploadHeaders`를 그대로 포함해 만료 전 업로드해야 한다.
 5. 이 API는 콘텐츠나 수정본을 생성·수정하지 않으며 `content`, `content_revision`, `content_log`, `audit_event`를 변경하지 않는다. 실제 대표 이미지 연결은 콘텐츠 생성·수정본 생성·수정 API가 `imageObjectId`를 다시 검증한 뒤 수행한다.
-6. 콘텐츠 생성·수정본 생성·수정 API는 연결 직전에 `image_object` 행을 잠그고 다음 조건을 모두 검증한다. `lifecycle_status = ACTIVE`, `created_by_user_id`가 현재 운영자, `region_id`가 운영자 담당 지역과 대상 콘텐츠 지역, `linked_at IS NULL`, `upload_expires_at > now`여야 한다. 또한 S3 `HEAD` 결과의 SHA-256 Base64 체크섬과 `ContentLength`가 각각 `image_object.checksum`, `image_object.byte_size`와 같아야 한다. 하나라도 맞지 않으면 연결하지 않는다.
+6. 콘텐츠 생성·수정본 생성·수정 API는 연결 직전에 `image_object` 행을 잠그고 다음 조건을 모두 검증한다. `lifecycle_status = ACTIVE`, `created_by_user_id`가 현재 운영자, `region_id`가 운영자 담당 지역과 대상 콘텐츠 지역, `linked_at IS NULL`, `upload_expires_at > now`여야 한다. 또한 `aws-starter-s3` 기반 S3 어댑터가 조회한 S3 `HEAD` 결과의 SHA-256 Base64 체크섬과 `ContentLength`가 각각 `image_object.checksum`, `image_object.byte_size`와 같아야 한다. 하나라도 맞지 않으면 연결하지 않는다.
 7. 콘텐츠 생성·수정본 생성·수정 API가 대표 이미지 연결을 성공시키면 같은 트랜잭션에서 `image_object.linked_at`을 현재 시각으로 설정하고 `created_by_user_id`를 `NULL`로 제거한다. 이후 기존 대표 이미지를 수정본 스냅샷으로 공유하는 것은 ADR-0030의 직접 FK 참조 규칙을 따른다.
-8. 업로드 URL 발급 후 `upload_expires_at`까지 연결되지 않은 `ACTIVE` 이미지 객체는 보관 작업이 `linked_at IS NULL`과 직접 FK 참조 0건을 확인한 뒤 `DELETE_PENDING`으로 전환하고 S3 삭제를 시도한다. 삭제 실패 시 기존 `delete_attempt_count`, `last_delete_attempted_at`으로 멱등 재시도한다. 이 정리 흐름은 별도 클라이언트 API를 제공하지 않는다.
+8. 업로드 URL 발급 후 `upload_expires_at`까지 연결되지 않은 `ACTIVE` 이미지 객체는 보관 작업이 `linked_at IS NULL`과 직접 FK 참조 0건을 확인한 뒤 `DELETE_PENDING`으로 전환하고 `aws-starter-s3` 기반 S3 어댑터를 통해 S3 삭제를 시도한다. 삭제 실패 시 기존 `delete_attempt_count`, `last_delete_attempted_at`으로 멱등 재시도한다. 이 정리 흐름은 별도 클라이언트 API를 제공하지 않는다.
 
 ### 보안·로깅
 
