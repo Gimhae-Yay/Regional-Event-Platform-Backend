@@ -2,6 +2,8 @@ package io.regionevent.regioneventbackend.infra.storage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Clock;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
@@ -13,7 +15,8 @@ import io.regionevent.regioneventbackend.domain.image.service.ImageStorageGatewa
 class ImageStorageConfigTest {
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-        .withUserConfiguration(ImageStorageConfig.class);
+        .withUserConfiguration(ImageStorageConfig.class)
+        .withBean(Clock.class, Clock::systemUTC);
 
     @Test
     void imageStorageGateway_storageS3Enabled_createsS3GatewayAndClients() {

@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.infra.storage;
 
 import java.net.URL;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -25,17 +26,20 @@ import io.regionevent.regioneventbackend.domain.image.service.ImageStorageExcept
 public class S3ImageStorageClient implements ImageStorageGateway {
 
     private final String bucketName;
+    private final Clock clock;
     private final Duration presignedPutUrlTtl;
     private final S3Client s3Client;
     private final S3Presigner s3Presigner;
 
     public S3ImageStorageClient(
         String bucketName,
+        Clock clock,
         Duration presignedPutUrlTtl,
         S3Client s3Client,
         S3Presigner s3Presigner
     ) {
         this.bucketName = bucketName;
+        this.clock = clock;
         this.presignedPutUrlTtl = presignedPutUrlTtl;
         this.s3Client = s3Client;
         this.s3Presigner = s3Presigner;
@@ -46,10 +50,10 @@ public class S3ImageStorageClient implements ImageStorageGateway {
         String objectKey,
         String mediaType,
         long byteSize,
-        String checksum,
-        Instant expiresAt
+        String checksum
     ) {
         try {
+            Instant expiresAt = clock.instant().plus(presignedPutUrlTtl);
             PutObjectRequest putObjectRequest = PutObjectRequest.builder()
                 .bucket(bucketName)
                 .key(objectKey)

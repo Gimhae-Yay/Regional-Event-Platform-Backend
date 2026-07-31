@@ -1,7 +1,7 @@
 package io.regionevent.regioneventbackend.infra.storage;
 
+import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -45,11 +45,13 @@ public class ImageStorageConfig {
     @ConditionalOnProperty(prefix = "storage.s3", name = "enabled", havingValue = "true")
     public ImageStorageGateway s3ImageStorageGateway(
         S3StorageProperties properties,
+        Clock clock,
         S3Client s3Client,
         S3Presigner s3Presigner
     ) {
         return new S3ImageStorageClient(
             requireNotBlank(properties.bucketName(), "storage.s3.bucket-name"),
+            clock,
             properties.presignedPutUrlTtl(),
             s3Client,
             s3Presigner
@@ -97,8 +99,7 @@ public class ImageStorageConfig {
             String objectKey,
             String mediaType,
             long byteSize,
-            String checksum,
-            Instant expiresAt
+            String checksum
         ) {
             throw imageStorageDisabled();
         }

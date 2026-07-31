@@ -9,8 +9,7 @@ public interface ImageStorageGateway {
         String objectKey,
         String mediaType,
         long byteSize,
-        String checksum,
-        Instant expiresAt
+        String checksum
     );
 
     StoredObjectMetadata findMetadata(String objectKey);

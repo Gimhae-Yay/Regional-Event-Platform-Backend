@@ -8,8 +8,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.net.URI;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
@@ -34,6 +36,7 @@ class S3ImageStorageClientTest {
 
     private static final String BUCKET_NAME = "bucket";
     private static final Duration PRESIGNED_PUT_URL_TTL = Duration.ofMinutes(10);
+    private static final Instant NOW = Instant.parse("2026-07-31T00:00:00Z");
 
     @Test
     void createPresignedPutUpload_usesS3PresignerAndReturnsRequiredHeaders() throws Exception {
@@ -41,7 +44,6 @@ class S3ImageStorageClientTest {
         S3Presigner s3Presigner = mock(S3Presigner.class);
         PresignedPutObjectRequest presignedRequest = mock(PresignedPutObjectRequest.class);
         S3ImageStorageClient imageStorageClient = newImageStorageClient(s3Client, s3Presigner);
-        Instant expiresAt = Instant.parse("2026-07-31T00:10:00Z");
         when(presignedRequest.url()).thenReturn(URI.create("https://example.com/upload").toURL());
         when(s3Presigner.presignPutObject(any(PutObjectPresignRequest.class))).thenReturn(presignedRequest);
 
@@ -49,8 +51,7 @@ class S3ImageStorageClientTest {
             "contents/image.webp",
             "image/webp",
             123L,
-            "checksum",
-            expiresAt
+            "checksum"
         );
 
         ArgumentCaptor<PutObjectPresignRequest> requestCaptor =
@@ -65,7 +66,7 @@ class S3ImageStorageClientTest {
         assertThat(putObjectRequest.contentType()).isEqualTo("image/webp");
         assertThat(putObjectRequest.checksumSHA256()).isEqualTo("checksum");
         assertThat(presignedUpload.uploadUrl()).isEqualTo("https://example.com/upload");
-        assertThat(presignedUpload.expiresAt()).isEqualTo(expiresAt);
+        assertThat(presignedUpload.expiresAt()).isEqualTo(NOW.plus(PRESIGNED_PUT_URL_TTL));
         assertThat(uploadHeaders).containsEntry("Content-Type", "image/webp");
         assertThat(uploadHeaders).containsEntry("Content-Length", "123");
         assertThat(uploadHeaders).containsEntry("x-amz-checksum-sha256", "checksum");
@@ -119,8 +120,7 @@ class S3ImageStorageClientTest {
             "contents/image.webp",
             "image/webp",
             123L,
-            "checksum",
-            Instant.parse("2026-07-31T00:10:00Z")
+            "checksum"
         ))
             .isInstanceOf(ImageStorageException.class)
             .hasCauseInstanceOf(SdkClientException.class);
@@ -158,6 +158,7 @@ class S3ImageStorageClientTest {
     ) {
         return new S3ImageStorageClient(
             BUCKET_NAME,
+            Clock.fixed(NOW, ZoneOffset.UTC),
             PRESIGNED_PUT_URL_TTL,
             s3Client,
             s3Presigner
