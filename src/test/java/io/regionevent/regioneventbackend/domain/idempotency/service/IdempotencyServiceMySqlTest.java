@@ -66,7 +66,7 @@ class IdempotencyServiceMySqlTest {
     private static final Instant NOW = Instant.parse("2026-08-02T00:00:00Z");
 
     @Container
-    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4.3");
+    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.42");
 
     private final IdempotencyService idempotencyService;
     private final IdempotencyRecordRepository idempotencyRecordRepository;
