@@ -69,6 +69,31 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void handleHttpMessageNotReadableException_whenBodyIsMissing_returnsInvalidJsonResponse() throws Exception {
+        mockMvc.perform(post("/test/validation")
+                .contentType(MediaType.APPLICATION_JSON))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.statusCode").value(400))
+            .andExpect(jsonPath("$.code").value("INVALID_JSON"))
+            .andExpect(jsonPath("$.data").isEmpty());
+    }
+
+    @Test
+    void handleHttpMessageNotReadableException_whenJsonFieldTypeMismatched_returnsInvalidTypeResponse() throws Exception {
+        mockMvc.perform(post("/test/typed-validation")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "count": "not-a-number"
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.statusCode").value(400))
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"))
+            .andExpect(jsonPath("$.data").isEmpty());
+    }
+
+    @Test
     void handleMethodArgumentTypeMismatchException_returnsInvalidTypeResponse() throws Exception {
         mockMvc.perform(get("/test/type/not-a-number"))
             .andExpect(status().isBadRequest())
@@ -135,8 +160,16 @@ class GlobalExceptionHandlerTest {
         String unexpected() {
             throw new IllegalStateException("internal failure");
         }
+
+        @PostMapping("/typed-validation")
+        Long validateTyped(@Valid @RequestBody TypedValidationRequest request) {
+            return request.count();
+        }
     }
 
     private record ValidationRequest(@NotBlank String title) {
+    }
+
+    private record TypedValidationRequest(Long count) {
     }
 }
