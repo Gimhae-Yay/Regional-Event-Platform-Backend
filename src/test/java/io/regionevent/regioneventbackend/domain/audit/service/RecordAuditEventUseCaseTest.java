@@ -13,12 +13,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.transaction.TestTransaction;
 
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEvent;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventActorLink;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventActorLinkRepository;
+import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -30,12 +32,15 @@ import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepositor
 @Import({
     AuditEventService.class,
     AuditEventActorLinkService.class,
-    RecordAuditEventUseCase.class
+    RecordAuditEventUseCase.class,
+    RecordFailedAuditEventUseCase.class
 })
 class RecordAuditEventUseCaseTest {
 
     private final RecordAuditEventUseCase recordAuditEventUseCase;
+    private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase;
     private final AuditEventActorLinkRepository auditEventActorLinkRepository;
+    private final AuditEventRepository auditEventRepository;
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
     private final EntityManager entityManager;
@@ -43,13 +48,17 @@ class RecordAuditEventUseCaseTest {
     @Autowired
     RecordAuditEventUseCaseTest(
         RecordAuditEventUseCase recordAuditEventUseCase,
+        RecordFailedAuditEventUseCase recordFailedAuditEventUseCase,
         AuditEventActorLinkRepository auditEventActorLinkRepository,
+        AuditEventRepository auditEventRepository,
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
         EntityManager entityManager
     ) {
         this.recordAuditEventUseCase = recordAuditEventUseCase;
+        this.recordFailedAuditEventUseCase = recordFailedAuditEventUseCase;
         this.auditEventActorLinkRepository = auditEventActorLinkRepository;
+        this.auditEventRepository = auditEventRepository;
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
         this.entityManager = entityManager;
@@ -114,6 +123,23 @@ class RecordAuditEventUseCaseTest {
         assertThat(savedAuditEvent.getActorKind()).isEqualTo("SYSTEM");
         assertThat(savedAuditEvent.getActorRole()).isNull();
         assertThat(auditEventActorLinkRepository.findById(auditEvent.getAuditEventId())).isEmpty();
+    }
+
+    @Test
+    void 실패_기록은_호출_트랜잭션이_롤백되어도_독립적으로_보존한다() {
+        recordFailedAuditEventUseCase.record(createCommand("RESERVATION_NOT_FOUND"));
+
+        TestTransaction.flagForRollback();
+        TestTransaction.end();
+
+        assertThat(auditEventRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void 성공_기록은_실패_결과를_받지_않는다() {
+        assertThatIllegalArgumentException().isThrownBy(
+            () -> recordAuditEventUseCase.record(createCommand("RESERVATION_NOT_FOUND"))
+        );
     }
 
     @Test

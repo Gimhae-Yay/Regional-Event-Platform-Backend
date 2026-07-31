@@ -8,12 +8,12 @@ import io.regionevent.regioneventbackend.domain.audit.entity.AuditEvent;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 
 @Service
-public class RecordAuditEventUseCase {
+public class RecordFailedAuditEventUseCase {
 
     private final AuditEventService auditEventService;
     private final AuditEventActorLinkService auditEventActorLinkService;
 
-    public RecordAuditEventUseCase(
+    public RecordFailedAuditEventUseCase(
         AuditEventService auditEventService,
         AuditEventActorLinkService auditEventActorLinkService
     ) {
@@ -21,10 +21,10 @@ public class RecordAuditEventUseCase {
         this.auditEventActorLinkService = auditEventActorLinkService;
     }
 
-    @Transactional(propagation = Propagation.MANDATORY)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public AuditEvent record(AuditEventCommand command) {
-        if (command.result() != AuditEventResult.SUCCESS) {
-            throw new IllegalArgumentException("success audit event must have SUCCESS result");
+        if (command.result() != AuditEventResult.FAILURE) {
+            throw new IllegalArgumentException("failed audit event must have FAILURE result");
         }
         AuditEvent auditEvent = auditEventService.record(command);
         auditEventActorLinkService.record(auditEvent, command.actor());
