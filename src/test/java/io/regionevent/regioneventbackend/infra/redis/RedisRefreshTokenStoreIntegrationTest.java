@@ -19,8 +19,8 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import io.regionevent.regioneventbackend.global.security.RefreshToken;
-import io.regionevent.regioneventbackend.global.security.RefreshTokenStore;
+import io.regionevent.regioneventbackend.global.security.refresh.RefreshToken;
+import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
 @SpringBootTest
 @Testcontainers(disabledWithoutDocker = true)

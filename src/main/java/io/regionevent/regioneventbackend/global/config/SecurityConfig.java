@@ -22,15 +22,15 @@ import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.AuthenticationEntryPoint;
 
-import io.regionevent.regioneventbackend.global.security.ApiResponseAccessDeniedHandler;
-import io.regionevent.regioneventbackend.global.security.ApiResponseAuthenticationEntryPoint;
-import io.regionevent.regioneventbackend.global.security.BearerAccessTokenAuthenticationFilter;
-import io.regionevent.regioneventbackend.global.security.JwtAccessTokenProperties;
-import io.regionevent.regioneventbackend.global.security.JwtAccessTokenService;
-import io.regionevent.regioneventbackend.global.security.JwtRefreshTokenProperties;
-import io.regionevent.regioneventbackend.global.security.JwtRefreshTokenService;
-import io.regionevent.regioneventbackend.global.security.RefreshTokenService;
-import io.regionevent.regioneventbackend.global.security.RefreshTokenStore;
+import io.regionevent.regioneventbackend.global.security.access.BearerAccessTokenAuthenticationFilter;
+import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenProperties;
+import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
+import io.regionevent.regioneventbackend.global.security.common.ApiResponseAccessDeniedHandler;
+import io.regionevent.regioneventbackend.global.security.common.ApiResponseAuthenticationEntryPoint;
+import io.regionevent.regioneventbackend.global.security.refresh.JwtRefreshTokenProperties;
+import io.regionevent.regioneventbackend.global.security.refresh.JwtRefreshTokenService;
+import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenService;
+import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
 @Configuration
 @EnableConfigurationProperties({JwtAccessTokenProperties.class, JwtRefreshTokenProperties.class})

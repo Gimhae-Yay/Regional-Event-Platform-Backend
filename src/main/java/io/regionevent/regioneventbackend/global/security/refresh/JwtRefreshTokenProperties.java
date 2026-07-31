@@ -1,4 +1,4 @@
-package io.regionevent.regioneventbackend.global.security;
+package io.regionevent.regioneventbackend.global.security.refresh;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 

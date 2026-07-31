@@ -11,9 +11,9 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
 
-import io.regionevent.regioneventbackend.global.security.RefreshToken;
-import io.regionevent.regioneventbackend.global.security.RefreshTokenStore;
-import io.regionevent.regioneventbackend.global.security.RefreshTokenStoreUnavailableException;
+import io.regionevent.regioneventbackend.global.security.refresh.RefreshToken;
+import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
+import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStoreUnavailableException;
 
 @Component
 public class RedisRefreshTokenStore implements RefreshTokenStore {

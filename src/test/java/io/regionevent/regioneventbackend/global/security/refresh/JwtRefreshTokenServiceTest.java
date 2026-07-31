@@ -1,4 +1,4 @@
-package io.regionevent.regioneventbackend.global.security;
+package io.regionevent.regioneventbackend.global.security.refresh;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

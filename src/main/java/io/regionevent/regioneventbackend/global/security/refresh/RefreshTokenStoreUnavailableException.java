@@ -1,4 +1,4 @@
-package io.regionevent.regioneventbackend.global.security;
+package io.regionevent.regioneventbackend.global.security.refresh;
 
 public class RefreshTokenStoreUnavailableException extends RuntimeException {
 

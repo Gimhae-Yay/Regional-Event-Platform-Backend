@@ -16,8 +16,8 @@ import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
 
-import io.regionevent.regioneventbackend.global.security.RefreshToken;
-import io.regionevent.regioneventbackend.global.security.RefreshTokenStoreUnavailableException;
+import io.regionevent.regioneventbackend.global.security.refresh.RefreshToken;
+import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStoreUnavailableException;
 
 class RedisRefreshTokenStoreTest {
 
