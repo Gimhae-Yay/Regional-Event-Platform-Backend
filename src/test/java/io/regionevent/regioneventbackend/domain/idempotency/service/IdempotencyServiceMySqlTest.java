@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -372,7 +373,7 @@ class IdempotencyServiceMySqlTest {
 
         @Bean
         Clock clock() {
-            return Clock.systemUTC();
+            return Clock.fixed(NOW, ZoneOffset.UTC);
         }
     }
 }
