@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.domain.idempotency.service;
 
 import java.sql.Connection;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Clock;
@@ -11,6 +12,7 @@ import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.idempotency.entity.IdempotencyRecord;
@@ -57,10 +59,10 @@ public class IdempotencyService {
         this.properties = properties;
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.MANDATORY)
     public IdempotencyAcquireResult acquire(IdempotencyCommand command) {
+        Integer previousLockWaitTimeout = configureMySqlLockWaitTimeout();
         try {
-            configureMySqlLockWaitTimeout();
             Instant now = clock.instant();
             jdbcTemplate.update(
                 CLAIM_SQL,
@@ -86,10 +88,12 @@ public class IdempotencyService {
             return toExistingResult(record, command.requestHash());
         } catch (CannotAcquireLockException | QueryTimeoutException exception) {
             return new IdempotencyAcquireResult.InProgress();
+        } finally {
+            restoreMySqlLockWaitTimeout(previousLockWaitTimeout);
         }
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.MANDATORY)
     public void completeWithReservation(
         IdempotencyRecord record,
         String resultCode,
@@ -104,7 +108,7 @@ public class IdempotencyService {
         );
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.MANDATORY)
     public void completeWithVisit(IdempotencyRecord record, String resultCode, Visit visit) {
         Instant completedAt = clock.instant();
         record.completeWithVisit(
@@ -115,7 +119,7 @@ public class IdempotencyService {
         );
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.MANDATORY)
     public void completeWithFailure(IdempotencyRecord record, String resultCode) {
         Instant completedAt = clock.instant();
         record.completeWithFailure(
@@ -127,9 +131,8 @@ public class IdempotencyService {
 
     @Transactional
     public int deleteExpiredTerminalRecords() {
-        return idempotencyRecordRepository.deleteExpiredByStatusInAndExpiresAtBefore(
-            TERMINAL_STATUSES,
-            clock.instant()
+        return idempotencyRecordRepository.deleteExpiredTerminalRecords(
+            TERMINAL_STATUSES
         );
     }
 
@@ -145,17 +148,34 @@ public class IdempotencyService {
         };
     }
 
-    private void configureMySqlLockWaitTimeout() {
-        jdbcTemplate.execute((Connection connection) -> {
+    private Integer configureMySqlLockWaitTimeout() {
+        return jdbcTemplate.execute((Connection connection) -> {
             if (!"MySQL".equalsIgnoreCase(connection.getMetaData().getDatabaseProductName())) {
                 return null;
             }
             try (Statement statement = connection.createStatement()) {
+                int previousLockWaitTimeout = findMySqlLockWaitTimeout(statement);
                 statement.execute("SET SESSION innodb_lock_wait_timeout = " + properties.lockWaitTimeoutSeconds());
+                return previousLockWaitTimeout;
             } catch (SQLException exception) {
                 throw new IllegalStateException("failed to configure MySQL lock wait timeout", exception);
             }
-            return null;
         });
+    }
+
+    private int findMySqlLockWaitTimeout(Statement statement) throws SQLException {
+        try (ResultSet resultSet = statement.executeQuery("SELECT @@SESSION.innodb_lock_wait_timeout")) {
+            if (!resultSet.next()) {
+                throw new IllegalStateException("MySQL lock wait timeout does not exist");
+            }
+            return resultSet.getInt(1);
+        }
+    }
+
+    private void restoreMySqlLockWaitTimeout(Integer previousLockWaitTimeout) {
+        if (previousLockWaitTimeout == null) {
+            return;
+        }
+        jdbcTemplate.execute("SET SESSION innodb_lock_wait_timeout = " + previousLockWaitTimeout);
     }
 }

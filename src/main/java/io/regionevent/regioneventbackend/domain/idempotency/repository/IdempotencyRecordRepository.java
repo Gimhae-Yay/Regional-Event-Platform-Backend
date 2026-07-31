@@ -1,6 +1,5 @@
 package io.regionevent.regioneventbackend.domain.idempotency.repository;
 
-import java.time.Instant;
 import java.util.Collection;
 import java.util.Optional;
 
@@ -32,10 +31,9 @@ public interface IdempotencyRecordRepository extends JpaRepository<IdempotencyRe
     @Query("""
         DELETE FROM IdempotencyRecord record
         WHERE record.status IN :terminalStatuses
-            AND record.expiresAt < :now
+            AND record.expiresAt < CURRENT_TIMESTAMP
         """)
-    int deleteExpiredByStatusInAndExpiresAtBefore(
-        @Param("terminalStatuses") Collection<IdempotencyRecordStatus> terminalStatuses,
-        @Param("now") Instant now
+    int deleteExpiredTerminalRecords(
+        @Param("terminalStatuses") Collection<IdempotencyRecordStatus> terminalStatuses
     );
 }
