@@ -39,6 +39,7 @@ class CapacityHoldRepositoryTest {
     private static final Instant EXPIRES_AT = Instant.parse("2026-08-02T00:10:00Z");
     private static final Instant TERMINAL_AT = Instant.parse("2026-08-02T00:05:00Z");
     private static final Instant CAPACITY_RELEASED_AT = Instant.parse("2026-08-02T00:05:01Z");
+    private static final Instant REVIEWED_AT = Instant.parse("2026-08-02T00:00:00Z");
 
     private final CapacityHoldRepository capacityHoldRepository;
     private final RegionRepository regionRepository;
@@ -300,7 +301,7 @@ class CapacityHoldRepositoryTest {
             Instant.parse("2026-08-01T00:00:00Z")
         ));
 
-        return contentSessionRepository.saveAndFlush(new ContentSession(
+        ContentSession contentSession = new ContentSession(
             content,
             region,
             Instant.parse("2026-08-02T01:00:00Z"),
@@ -308,7 +309,9 @@ class CapacityHoldRepositoryTest {
             Instant.parse("2026-08-02T00:30:00Z"),
             Instant.parse("2026-08-02T02:30:00Z"),
             20
-        ));
+        );
+        contentSession.approve(operator, REVIEWED_AT);
+        return contentSessionRepository.saveAndFlush(contentSession);
     }
 
     private AppUser saveUser(String loginIdentifier) {

@@ -335,7 +335,7 @@ class VisitRepositoryTest {
     }
 
     private ContentSession saveContentSession(Content content, Region region) {
-        return contentSessionRepository.saveAndFlush(new ContentSession(
+        ContentSession contentSession = new ContentSession(
             content,
             region,
             Instant.parse("2026-08-02T01:00:00Z"),
@@ -343,7 +343,9 @@ class VisitRepositoryTest {
             Instant.parse("2026-08-02T00:30:00Z"),
             Instant.parse("2026-08-02T02:30:00Z"),
             20
-        ));
+        );
+        contentSession.approve(content.getOperator(), CONFIRMED_AT);
+        return contentSessionRepository.saveAndFlush(contentSession);
     }
 
     private AppUser saveUser(String loginIdentifier) {

@@ -297,7 +297,7 @@ class IdempotencyServiceMySqlTest {
                 "시작 하루 전까지 취소할 수 있습니다.",
                 NOW
             ));
-            ContentSession session = contentSessionRepository.saveAndFlush(new ContentSession(
+            ContentSession session = new ContentSession(
                 content,
                 region,
                 NOW.plusSeconds(3_600),
@@ -305,7 +305,9 @@ class IdempotencyServiceMySqlTest {
                 NOW.plusSeconds(1_800),
                 NOW.plusSeconds(9_000),
                 20
-            ));
+            );
+            session.approve(operator, NOW);
+            session = contentSessionRepository.saveAndFlush(session);
             CapacityHold hold = capacityHoldRepository.saveAndFlush(new CapacityHold(
                 region,
                 session,
