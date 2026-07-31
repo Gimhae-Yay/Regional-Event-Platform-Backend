@@ -5,7 +5,7 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | [FR-01 인증·역할·지역 권한](../../../p0/auth-profile.md#fr-01-인증역할지역-권한) |
 | 소유 도메인 | 인증·프로필 |
-| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ERD](../../../erd.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ERD](../../../erd.md), [ADR-0044](../../../adr/0044-use-delegating-bcrypt-password-encoder.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
@@ -96,7 +96,7 @@ Accept: application/json
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
 | `email` | String | Y | 이메일 형식, 최대 254자, `null`·빈 문자열 불가. 앞뒤 공백을 제거하고 소문자로 정규화해 로그인 식별자 유일성을 검사·저장한다. |
-| `password` | String | Y | 8~64자. 영문자·숫자·특수문자를 각각 하나 이상 포함해야 하며 `null`·빈 문자열·공백만으로 된 값은 허용하지 않는다. 서버는 해시만 보관하고 원문을 응답·로그에 남기지 않는다. |
+| `password` | String | Y | 8~64자이면서 UTF-8 인코딩 기준 72바이트 이하다. 영문자·숫자·특수문자를 각각 하나 이상 포함해야 하며 `null`·빈 문자열·공백만으로 된 값은 허용하지 않는다. 서버는 해시만 보관하고 원문을 응답·로그에 남기지 않는다. |
 | `name` | String | Y | 앞뒤 공백을 제거한 뒤 1~50자여야 한다. `null`·빈 문자열·공백만으로 된 값은 허용하지 않는다. |
 | `phone` | String | Y | 숫자 10~11자리다. 하이픈은 입력 시 제거하고 숫자만 저장한다. `null`·빈 문자열은 허용하지 않는다. |
 | `requestedRole` | String | Y | `VISITOR` 또는 `OPERATOR`만 허용한다. `REGION_ADMIN`은 가입 요청에서 선택할 수 없다. |
