@@ -31,9 +31,9 @@
 | [ADR-0023](../adr/0023-manage-refresh-token-revocation-in-redis.md#결정) | Redis TTL 블랙리스트 기반 Refresh Token 회전·폐기와 탈퇴 선행 폐기 |
 | [ADR-0026](../adr/0026-select-signup-role-and-create-operator-application.md#결정) | 가입 시 역할 선택, 방문자 즉시 부여와 운영자 `PENDING` 신청 생성 |
 | [ADR-0027](../adr/0027-deliver-refresh-token-in-http-only-cookie.md#결정) | Access Token 응답 헤더와 Refresh Token HttpOnly 쿠키 전달 |
-| [ADR-0041](../adr/0041-define-jwt-access-token-security-profile.md#결정) | JWT Access Token의 서명·claim·키 회전·유효기간 검증 |
-| [ADR-0042](../adr/0042-use-delegating-bcrypt-password-encoder.md#결정) | 교체 가능한 BCrypt 비밀번호 해싱 |
-| [ADR-0043](../adr/0043-use-stateless-bearer-security-with-same-site-refresh-cookie.md#결정) | 무상태 Bearer 보안 체인과 동일 사이트 Refresh 쿠키 경계 |
+| [ADR-0043](../adr/0043-define-jwt-access-token-security-profile.md#결정) | JWT Access Token의 서명·claim·키 회전·유효기간 검증 |
+| [ADR-0044](../adr/0044-use-delegating-bcrypt-password-encoder.md#결정) | 교체 가능한 BCrypt 비밀번호 해싱 |
+| [ADR-0045](../adr/0045-use-stateless-bearer-security-with-same-site-refresh-cookie.md#결정) | 무상태 Bearer 보안 체인과 동일 사이트 Refresh 쿠키 경계 |
 
 > ADR-0002와 ADR-0005의 전체 관리자 관련 결정 부분은 ADR-0009로 대체한다.
 

@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.global.security;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -58,6 +59,7 @@ public class JwtAccessTokenProperties {
 
         private String keyId;
         private String key;
+        private Instant verificationEndsAt;
 
         public String getKeyId() {
             return keyId;
@@ -73,6 +75,14 @@ public class JwtAccessTokenProperties {
 
         public void setKey(String key) {
             this.key = key;
+        }
+
+        public Instant getVerificationEndsAt() {
+            return verificationEndsAt;
+        }
+
+        public void setVerificationEndsAt(Instant verificationEndsAt) {
+            this.verificationEndsAt = verificationEndsAt;
         }
     }
 }

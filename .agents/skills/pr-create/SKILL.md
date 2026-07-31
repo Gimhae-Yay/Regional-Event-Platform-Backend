@@ -22,13 +22,14 @@ description: 현재 브랜치의 커밋과 `dev` 기준 diff를 검증하고, PR
 
 `origin/<base>..HEAD`의 병합 커밋을 제외한 모든 제목은 소문자 `<type>: <summary>` 형식이어야 한다. 각 type을 다음 저장소 라벨로 매핑하고 중복 없이 모두 적용한다.
 
-| 커밋 type | PR 라벨         |
-| --- |---------------|
-| `feat` | `New Feature` |
-| `fix` | `Fix`         |
+| 커밋 type    | PR 라벨         |
+|------------|---------------|
+| `feat`     | `New Feature` |
+| `fix`      | `Fix`         |
 | `refactor` | `Refactor`    |
-| `docs` | `Docs`        |
-| `chore` | `Chore`       |
+| `docs`     | `Docs`        |
+| `chore`    | `Chore`       |
+| `test`     | `Test`        |
 
 - 형식에 맞지 않는 커밋, 대문자 type, 표에 없는 type이 하나라도 있으면 생성을 중단하고 해당 커밋을 보고한다.
 - `test`, `perf`, `build`, `ci` 등의 라벨이 없다면 다른 라벨로 대체하거나 라벨 없이 생성하지 않는다.

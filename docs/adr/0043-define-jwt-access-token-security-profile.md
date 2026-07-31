@@ -1,4 +1,4 @@
-# ADR-0041: JWT Access Token 보안 프로필을 확정한다
+# ADR-0043: JWT Access Token 보안 프로필을 확정한다
 
 - 상태: 채택됨
 - 기록 유형: 신규
