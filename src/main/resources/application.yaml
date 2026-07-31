@@ -1,6 +1,10 @@
 spring:
   application:
     name: region-event-backend
+  data:
+    redis:
+      host: ${AUTH_REDIS_HOST:localhost}
+      port: ${AUTH_REDIS_PORT:6379}
 
 security:
   jwt:
@@ -9,6 +13,11 @@ security:
       audience: regional-event-api
       active-key-id: ${JWT_ACCESS_ACTIVE_KEY_ID}
       active-key: ${JWT_ACCESS_ACTIVE_KEY}
+    refresh:
+      issuer: regional-event-platform
+      audience: regional-event-refresh
+      active-key-id: ${JWT_REFRESH_ACTIVE_KEY_ID}
+      active-key: ${JWT_REFRESH_ACTIVE_KEY}
 
 idempotency:
   retention: PT24H

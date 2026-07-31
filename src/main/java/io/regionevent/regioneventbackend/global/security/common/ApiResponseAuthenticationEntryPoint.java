@@ -1,4 +1,4 @@
-package io.regionevent.regioneventbackend.global.security;
+package io.regionevent.regioneventbackend.global.security.common;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;

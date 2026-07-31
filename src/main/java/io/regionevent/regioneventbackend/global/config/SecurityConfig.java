@@ -22,14 +22,18 @@ import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.AuthenticationEntryPoint;
 
-import io.regionevent.regioneventbackend.global.security.ApiResponseAccessDeniedHandler;
-import io.regionevent.regioneventbackend.global.security.ApiResponseAuthenticationEntryPoint;
-import io.regionevent.regioneventbackend.global.security.BearerAccessTokenAuthenticationFilter;
-import io.regionevent.regioneventbackend.global.security.JwtAccessTokenProperties;
-import io.regionevent.regioneventbackend.global.security.JwtAccessTokenService;
+import io.regionevent.regioneventbackend.global.security.access.BearerAccessTokenAuthenticationFilter;
+import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenProperties;
+import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
+import io.regionevent.regioneventbackend.global.security.common.ApiResponseAccessDeniedHandler;
+import io.regionevent.regioneventbackend.global.security.common.ApiResponseAuthenticationEntryPoint;
+import io.regionevent.regioneventbackend.global.security.refresh.JwtRefreshTokenProperties;
+import io.regionevent.regioneventbackend.global.security.refresh.JwtRefreshTokenService;
+import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenService;
+import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
 @Configuration
-@EnableConfigurationProperties(JwtAccessTokenProperties.class)
+@EnableConfigurationProperties({JwtAccessTokenProperties.class, JwtRefreshTokenProperties.class})
 public class SecurityConfig {
 
     private static final int BCRYPT_STRENGTH = 12;
@@ -52,6 +56,23 @@ public class SecurityConfig {
         Clock clock
     ) {
         return new JwtAccessTokenService(jwtAccessTokenProperties, clock);
+    }
+
+    @Bean
+    public JwtRefreshTokenService jwtRefreshTokenService(
+        JwtRefreshTokenProperties jwtRefreshTokenProperties,
+        Clock clock
+    ) {
+        return new JwtRefreshTokenService(jwtRefreshTokenProperties, clock);
+    }
+
+    @Bean
+    public RefreshTokenService refreshTokenService(
+        JwtRefreshTokenService jwtRefreshTokenService,
+        RefreshTokenStore refreshTokenStore,
+        Clock clock
+    ) {
+        return new RefreshTokenService(jwtRefreshTokenService, refreshTokenStore, clock);
     }
 
     @Bean

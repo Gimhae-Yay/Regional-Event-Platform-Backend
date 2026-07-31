@@ -339,7 +339,8 @@ class IdempotencyRecordRepositoryTest {
             "시작 하루 전까지 취소할 수 있습니다.",
             Instant.parse("2026-08-01T00:00:00Z")
         ));
-        ContentSession contentSession = contentSessionRepository.saveAndFlush(new ContentSession(
+        AppUser reviewer = saveUser("reviewer-" + content.getContentId() + "@example.com", "심사자");
+        ContentSession contentSession = new ContentSession(
             content,
             region,
             Instant.parse("2026-08-02T01:00:00Z"),
@@ -347,7 +348,9 @@ class IdempotencyRecordRepositoryTest {
             Instant.parse("2026-08-02T00:30:00Z"),
             Instant.parse("2026-08-02T02:30:00Z"),
             20
-        ));
+        );
+        contentSession.approve(reviewer, CREATED_AT);
+        contentSession = contentSessionRepository.saveAndFlush(contentSession);
         CapacityHold capacityHold = capacityHoldRepository.saveAndFlush(new CapacityHold(
             region,
             contentSession,

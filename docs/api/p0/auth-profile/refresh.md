@@ -5,7 +5,7 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | [FR-01 인증·역할·지역 권한](../../../p0/auth-profile.md#fr-01-인증역할지역-권한) |
 | 소유 도메인 | 인증·프로필 |
-| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ADR-0005](../../../adr/0005-use-jwt-access-and-rotating-refresh-tokens.md), [ADR-0023](../../../adr/0023-manage-refresh-token-revocation-in-redis.md), [ADR-0027](../../../adr/0027-deliver-refresh-token-in-http-only-cookie.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ADR-0005](../../../adr/0005-use-jwt-access-and-rotating-refresh-tokens.md), [ADR-0023](../../../adr/0023-manage-refresh-token-revocation-in-redis.md), [ADR-0027](../../../adr/0027-deliver-refresh-token-in-http-only-cookie.md), [ADR-0052](../../../adr/0052-define-refresh-token-security-profile-and-fail-closed-redis-state.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
@@ -34,6 +34,9 @@ Refresh Token은 이 API와 다른 인증 API에서만 수신한다. 보호 업�
 
 이 API는 서명·만료·계열 폐기·소비 상태가 유효한 Refresh Token의 최초 요청만 성공시킨다. 성공하면 이전
 Refresh Token을 소비하고 같은 계열의 새 Refresh Token과 새 Access Token을 발급한다.
+
+Refresh Token 계열의 절대 만료는 최초 로그인부터 14일이다. 회전된 토큰은 새 `jti`를 가지지만 같은 계열의
+기존 만료 시각을 유지하며, 갱신 요청으로 수명을 연장하지 않는다.
 
 같은 Refresh Token의 동시 갱신은 하나만 성공한다. 진행 중인 다른 갱신 요청은 `REFRESH_TOKEN_CONFLICT`로
 반환하며 기존 쿠키를 변경하지 않는다. 이미 소비된 Refresh Token이 이후 재사용되면 계열 전체를 폐기하고
@@ -91,7 +94,7 @@ Accept: application/json
 | Name | Required | Description |
 | --- | --- | --- |
 | `Authorization` | Y | `Bearer <accessToken>`. 새로 발급한 Access Token이며 일반 보호 API 호출에 사용한다. |
-| `Set-Cookie` | Y | `refreshToken=<refreshToken>; Max-Age=<refresh-token-ttl>; Path=/api/v1/auth; HttpOnly; Secure; SameSite=Strict`. 회전된 새 Refresh Token이며 `Domain`은 생략해 호스트 전용으로 한다. |
+| `Set-Cookie` | Y | `refreshToken=<refreshToken>; Max-Age=<remaining-family-ttl-seconds>; Path=/api/v1/auth; HttpOnly; Secure; SameSite=Strict`. 회전된 새 Refresh Token이며 `Max-Age`는 최초 로그인부터 14일인 계열 만료까지 남은 전체 초다. `Domain`은 생략해 호스트 전용으로 한다. |
 
 Refresh Token은 JSON 본문, `Authorization` 헤더 또는 다른 일반 응답 헤더에 포함하지 않는다.
 
@@ -119,7 +122,7 @@ Refresh Token은 JSON 본문, `Authorization` 헤더 또는 다른 일반 응답
 
 | HTTP Status | Code | Description |
 | --- | --- | --- |
-| 401 | `UNAUTHENTICATED` | Refresh Token이 없거나 서명·만료·계열 폐기·소비 상태가 유효하지 않다. 토큰을 발급하지 않으며 재로그인이 필요하다. `Set-Cookie`로 기존 `refreshToken`을 즉시 만료시킨다. |
+| 401 | `UNAUTHENTICATED` | Refresh Token이 없거나 서명·만료·활성 계열·계열 폐기·소비 상태가 유효하지 않다. 토큰을 발급하지 않으며 재로그인이 필요하다. `Set-Cookie`로 기존 `refreshToken`을 즉시 만료시킨다. |
 | 409 | `REFRESH_TOKEN_CONFLICT` | 같은 Refresh Token의 다른 갱신 요청이 진행 중이다. 토큰을 발급하지 않고 쿠키를 변경하지 않으며, 클라이언트는 진행 중인 갱신 결과를 사용하거나 완료 뒤 다시 시도한다. |
 | 503 | `AUTH_SERVICE_UNAVAILABLE` | Redis를 사용할 수 없어 계열 폐기·소비 상태를 안전하게 확인할 수 없다. 토큰을 발급하지 않고 쿠키를 변경하지 않으며 잠시 뒤 재시도할 수 있다. |
 

@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.context.TestPropertySource;
@@ -38,19 +39,23 @@ class ContentSessionRepositoryTest {
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
     private final EntityManager entityManager;
+    private final JdbcTemplate jdbcTemplate;
+
     @Autowired
     ContentSessionRepositoryTest(
         ContentSessionRepository contentSessionRepository,
         ContentRepository contentRepository,
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
-        EntityManager entityManager
+        EntityManager entityManager,
+        JdbcTemplate jdbcTemplate
     ) {
         this.contentSessionRepository = contentSessionRepository;
         this.contentRepository = contentRepository;
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
         this.entityManager = entityManager;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Test
@@ -79,13 +84,16 @@ class ContentSessionRepositoryTest {
             contentSession.getSessionId()
         ).orElseThrow();
 
-        assertThat(foundContentSession.getStatus()).isEqualTo(ContentSessionStatus.SCHEDULED);
+        assertThat(foundContentSession.getStatus()).isEqualTo(ContentSessionStatus.PENDING);
         assertThat(foundContentSession.getStartsAt()).isEqualTo(startsAt);
         assertThat(foundContentSession.getEndsAt()).isEqualTo(endsAt);
         assertThat(foundContentSession.getCheckinOpenAt()).isEqualTo(checkinOpenAt);
         assertThat(foundContentSession.getCheckinCloseAt()).isEqualTo(checkinCloseAt);
         assertThat(foundContentSession.getCapacity()).isEqualTo(20);
         assertThat(foundContentSession.getRemainingCapacity()).isEqualTo(20);
+        assertThat(foundContentSession.getReviewedAt()).isNull();
+        assertThat(foundContentSession.getReviewedByUser()).isNull();
+        assertThat(foundContentSession.getRejectReason()).isNull();
         assertThat(foundContentSession.getCancelledAt()).isNull();
         assertThat(foundContentSession.getCancelledByUser()).isNull();
         assertThat(foundContentSession.getCancellationReason()).isNull();
@@ -93,6 +101,72 @@ class ContentSessionRepositoryTest {
         assertThat(foundContentSession.getVersionNo()).isZero();
         assertThat(foundContentSession.getCreatedAt()).isNotNull();
         assertThat(foundContentSession.getUpdatedAt()).isNotNull();
+    }
+
+    @Test
+    void 반려된_회차의_필수_심사정보를_저장한다() {
+        Region region = saveRegion();
+        AppUser operator = saveUser("operator-rejected@example.com");
+        AppUser reviewer = saveUser("reviewer@example.com");
+        Content content = saveContent(region, operator);
+        Instant reviewedAt = Instant.parse("2026-08-01T01:00:00Z");
+        ContentSession contentSession = createContentSession(content, region);
+        contentSession.reject(reviewer, reviewedAt, "운영 시간이 기준에 맞지 않습니다.");
+
+        contentSessionRepository.saveAndFlush(contentSession);
+        entityManager.clear();
+
+        ContentSession foundContentSession = contentSessionRepository.findById(
+            contentSession.getSessionId()
+        ).orElseThrow();
+
+        assertThat(foundContentSession.getStatus()).isEqualTo(ContentSessionStatus.REJECTED);
+        assertThat(foundContentSession.getReviewedAt()).isEqualTo(reviewedAt);
+        assertThat(foundContentSession.getReviewedByUser().getUserId()).isEqualTo(reviewer.getUserId());
+        assertThat(foundContentSession.getRejectReason()).isEqualTo("운영 시간이 기준에 맞지 않습니다.");
+    }
+
+    @Test
+    void 반려_상태는_필수_심사정보_없이_저장할_수_없다() {
+        Region region = saveRegion();
+        AppUser operator = saveUser("operator-invalid-rejected@example.com");
+        Content content = saveContent(region, operator);
+        ContentSession contentSession = contentSessionRepository.saveAndFlush(
+            createContentSession(content, region)
+        );
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+            "UPDATE content_session SET status = 'REJECTED' WHERE session_id = ?",
+            contentSession.getSessionId()
+        )).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void 기존_SCHEDULED_회차는_심사정보_없이_종료_전이할_수_있다() {
+        Region region = saveRegion();
+        AppUser operator = saveUser("operator-legacy-scheduled@example.com");
+        Content content = saveContent(region, operator);
+        ContentSession contentSession = contentSessionRepository.saveAndFlush(
+            createContentSession(content, region)
+        );
+        jdbcTemplate.update(
+            "UPDATE content_session SET status = 'SCHEDULED' WHERE session_id = ?",
+            contentSession.getSessionId()
+        );
+        entityManager.clear();
+        ContentSession legacyScheduledSession = contentSessionRepository.findById(
+            contentSession.getSessionId()
+        ).orElseThrow();
+
+        legacyScheduledSession.complete(Instant.parse("2026-08-03T00:00:00Z"));
+        contentSessionRepository.saveAndFlush(legacyScheduledSession);
+
+        assertThat(legacyScheduledSession.getStatus()).isEqualTo(ContentSessionStatus.COMPLETED);
+        assertThat(legacyScheduledSession.getReviewedAt()).isNull();
+        assertThat(legacyScheduledSession.getReviewedByUser()).isNull();
+        assertThat(legacyScheduledSession.getCompletedAt()).isEqualTo(
+            Instant.parse("2026-08-03T00:00:00Z")
+        );
     }
 
     @Test
@@ -186,6 +260,21 @@ class ContentSessionRepositoryTest {
                 "시작 하루 전까지 취소할 수 있습니다.",
                 Instant.parse("2026-08-01T00:00:00Z")
             )
+        );
+    }
+
+    private ContentSession createContentSession(
+        Content content,
+        Region region
+    ) {
+        return new ContentSession(
+            content,
+            region,
+            Instant.parse("2026-08-02T01:00:00Z"),
+            Instant.parse("2026-08-02T03:00:00Z"),
+            Instant.parse("2026-08-02T00:30:00Z"),
+            Instant.parse("2026-08-02T02:30:00Z"),
+            20
         );
     }
 
