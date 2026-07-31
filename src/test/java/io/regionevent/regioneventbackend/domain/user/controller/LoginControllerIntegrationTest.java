@@ -1,12 +1,15 @@
 package io.regionevent.regioneventbackend.domain.user.controller;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
-import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,7 +32,6 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshToken;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStoreUnavailableException;
 
@@ -55,11 +57,11 @@ class LoginControllerIntegrationTest {
     private PasswordEncoder passwordEncoder;
 
     @Autowired
-    private TestRefreshTokenStore refreshTokenStore;
+    private RefreshTokenStore refreshTokenStore;
 
     @BeforeEach
     void setUp() {
-        refreshTokenStore.reset();
+        reset(refreshTokenStore);
     }
 
     @Test
@@ -91,7 +93,7 @@ class LoginControllerIntegrationTest {
             .andExpect(jsonPath("$.data.accessToken").doesNotExist())
             .andExpect(jsonPath("$.data.refreshToken").doesNotExist());
 
-        assertThat(refreshTokenStore.createdFamilyCount).isEqualTo(1);
+        verify(refreshTokenStore).createFamily(any());
     }
 
     @Test
@@ -121,7 +123,7 @@ class LoginControllerIntegrationTest {
             .andExpect(header().doesNotExist(HttpHeaders.AUTHORIZATION))
             .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE));
 
-        assertThat(refreshTokenStore.createdFamilyCount).isZero();
+        verifyNoInteractions(refreshTokenStore);
     }
 
     @Test
@@ -135,7 +137,7 @@ class LoginControllerIntegrationTest {
             .andExpect(header().doesNotExist(HttpHeaders.AUTHORIZATION))
             .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE));
 
-        assertThat(refreshTokenStore.createdFamilyCount).isZero();
+        verifyNoInteractions(refreshTokenStore);
     }
 
     @Test
@@ -151,7 +153,7 @@ class LoginControllerIntegrationTest {
             .andExpect(header().doesNotExist(HttpHeaders.AUTHORIZATION))
             .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE));
 
-        assertThat(refreshTokenStore.createdFamilyCount).isZero();
+        verifyNoInteractions(refreshTokenStore);
     }
 
     @Test
@@ -167,13 +169,15 @@ class LoginControllerIntegrationTest {
             .andExpect(header().doesNotExist(HttpHeaders.AUTHORIZATION))
             .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE));
 
-        assertThat(refreshTokenStore.createdFamilyCount).isZero();
+        verifyNoInteractions(refreshTokenStore);
     }
 
     @Test
     void login_whenRefreshTokenStoreIsUnavailable_returnsServiceUnavailableWithoutTokens() throws Exception {
         saveUser(AppUserStatus.ACTIVE, PASSWORD);
-        refreshTokenStore.unavailable = true;
+        doThrow(new RefreshTokenStoreUnavailableException(new IllegalStateException("Redis unavailable")))
+            .when(refreshTokenStore)
+            .createFamily(any());
 
         mockMvc.perform(post("/api/v1/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -209,52 +213,8 @@ class LoginControllerIntegrationTest {
 
         @Bean
         @Primary
-        TestRefreshTokenStore refreshTokenStore() {
-            return new TestRefreshTokenStore();
-        }
-    }
-
-    static class TestRefreshTokenStore implements RefreshTokenStore {
-
-        private int createdFamilyCount;
-        private boolean unavailable;
-
-        @Override
-        public void createFamily(RefreshToken refreshToken) {
-            if (unavailable) {
-                throw new RefreshTokenStoreUnavailableException(new IllegalStateException("Redis unavailable"));
-            }
-            createdFamilyCount++;
-        }
-
-        @Override
-        public RotationStartResult startRotation(RefreshToken refreshToken, UUID attemptId) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public boolean completeRotation(RefreshToken refreshToken, UUID nextTokenId, UUID attemptId) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public void cancelRotation(RefreshToken refreshToken, UUID attemptId) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public void revokeFamily(RefreshToken refreshToken) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public void revokeAllFamilies(Long userId) {
-            throw new UnsupportedOperationException();
-        }
-
-        private void reset() {
-            createdFamilyCount = 0;
-            unavailable = false;
+        RefreshTokenStore refreshTokenStore() {
+            return mock(RefreshTokenStore.class);
         }
     }
 }

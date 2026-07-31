@@ -23,7 +23,6 @@ import io.regionevent.regioneventbackend.global.security.refresh.JwtRefreshToken
 public class LoginController {
 
     private static final String LOGIN_SUCCESS_MESSAGE = "로그인에 성공했습니다.";
-    private static final String BEARER_PREFIX = "Bearer ";
     private static final String REFRESH_TOKEN_COOKIE_NAME = "refreshToken";
     private static final String REFRESH_TOKEN_COOKIE_PATH = "/api/v1/auth";
 
@@ -41,7 +40,7 @@ public class LoginController {
 
         return ResponseEntity
             .status(HttpStatus.OK)
-            .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + result.accessToken())
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + result.accessToken())
             .header(HttpHeaders.SET_COOKIE, refreshTokenCookie.toString())
             .body(response);
     }
