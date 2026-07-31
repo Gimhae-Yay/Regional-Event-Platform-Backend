@@ -4,7 +4,7 @@
 
 | 항목 | 내용 |
 | --- | --- |
-| 상태 | 원인 확인 |
+| 상태 | 해결 |
 | 영향 | PR #204 GitHub Actions `빌드 및 테스트` 실패로 병합 검증이 차단됨 |
 | 최초 확인 시각·시간대 | 2026-07-31 16:35 KST |
 | 관련 요구사항·이슈 | PR #204, 이슈 #183, PRD `RSV-03` |
@@ -36,16 +36,18 @@ GitHub Actions에서 `IdempotencyServiceMySqlTest.만료된_종결_기록만_정
 
 ### 재현 결과
 
-- 실행 횟수: CI 1회, 로컬 1회
-- 성공 횟수: 0회
-- 실패 횟수: CI 1회
-- 종료 코드·HTTP 상태: CI 종료 코드 1, 로컬은 Docker 부재로 대상 테스트 1건 skip
+- 실행 횟수: CI 3회, 로컬 2회
+- 성공 횟수: CI 1회
+- 실패 횟수: CI 2회
+- 종료 코드·HTTP 상태: 최초·중간 CI 종료 코드 1, 최종 CI 종료 코드 0, 로컬은 Docker 부재로 대상 테스트 skip
 
 ## 수집한 증거
 
 - GitHub Actions run `30612073295`는 `IdempotencyServiceMySqlTest.java:231`에서 `DataIntegrityViolationException`과 원인 `MysqlDataTruncation`을 보고했다.
 - 실패 입력은 `Timestamp.from(Instant.EPOCH)`이고 대상 컬럼은 V1 스키마의 `TIMESTAMP(6) NOT NULL`이다.
-- 테스트는 `NOW = 2026-08-02T00:00:00Z`로 Clock을 고정하므로 DB 표현 범위 안의 과거 시각을 만들 수 있다.
+- 중간 run `30613536184`는 DB 범위 오류가 사라진 뒤 삭제 건수가 기대값 1이 아닌 0이라고 보고했다.
+- 테스트는 `NOW = 2026-08-02T00:00:00Z` 상수를 사용하면서도 `Clock.systemUTC()`를 주입해 테스트 데이터와 만료 판정의 기준 시각이 달랐다.
+- `Clock.fixed(NOW, ZoneOffset.UTC)`로 기준을 일치시킨 최종 run `30613709518`은 MySQL 통합 테스트를 포함한 전체 CI를 통과했다.
 
 ## 조사 타임라인
 
@@ -58,6 +60,9 @@ GitHub Actions에서 `IdempotencyServiceMySqlTest.만료된_종결_기록만_정
 | 2026-07-31 16:36 KST | 검증 | 로컬 단일 테스트 실행 | Docker가 있으면 동일 MySQL 조건에서 재현되어야 한다. | Docker daemon 부재로 Testcontainers 테스트 1건 skip | 대기 |
 | 2026-07-31 16:37 KST | 변경 | 만료 입력을 `NOW.minusSeconds(1)`로 교체 | 만료 조건을 유지하면서 MySQL 표현 범위를 벗어나지 않아야 한다. | 테스트 픽스처 한 줄만 변경 | 채택 |
 | 2026-07-31 16:37 KST | 검증 | 단일 테스트, 전체 build, diff 검사 | 로컬 검증이 통과하고 무관한 변경이 없어야 한다. | 단일 테스트는 Docker 부재로 skip, build와 diff 검사 통과 | 채택 |
+| 2026-07-31 16:40 KST | 검증 | 수정 후 CI run `30613536184` | DB 입력이 성공하고 만료 기록 1건이 삭제되어야 한다. | 입력은 성공했지만 실제 시스템 Clock보다 `NOW.minusSeconds(1)`이 미래여서 삭제 건수 0 | 기각 |
+| 2026-07-31 16:41 KST | 가설 | 테스트 Clock과 `NOW` 상수 불일치가 만료 판정을 비결정적으로 만든다. | Clock을 `NOW`에 고정하면 해당 입력이 정확히 1초 전이 되어야 한다. | `Clock.fixed(NOW, ZoneOffset.UTC)` 적용 | 채택 |
+| 2026-07-31 16:43 KST | 검증 | 최종 CI run `30613709518` | MySQL 통합 테스트와 전체 build가 통과해야 한다. | `빌드 및 테스트` 성공, job 소요 1분 25초 | 채택 |
 
 ## 가설과 검증
 
@@ -67,20 +72,20 @@ GitHub Actions에서 `IdempotencyServiceMySqlTest.만료된_종결_기록만_정
 - 참일 때의 예측: `Instant.EPOCH` 입력은 실패하고, 고정 Clock보다 과거이면서 MySQL 표현 범위 안인 입력은 삭제 계약을 동일하게 검증하며 통과한다.
 - 반증 조건: 같은 MySQL 8.0.42 환경에서 epoch 입력이 정상 저장되거나 유효한 과거 입력도 같은 예외로 실패한다.
 - 검증 방법: 원래 단일 테스트를 재현한 뒤 입력만 `NOW.minusSeconds(1)`로 바꾸어 같은 테스트를 재실행한다.
-- 결과: CI artifact에서 MySQL 8.0.42가 epoch 값을 직접 거부한 사실을 확인했다. 수정 후 동일 MySQL 검증은 PR CI 재실행이 필요하다.
+- 결과: CI artifact에서 MySQL 8.0.42가 epoch 값을 직접 거부한 사실을 확인했고, DB 범위 안의 입력과 고정 Clock을 함께 적용한 최종 CI가 통과했다.
 - 판정: 채택
 
 ## 근본 원인
 
-- 촉발 조건: 만료된 종결 기록을 만들기 위해 테스트가 `TIMESTAMP(6)` 컬럼에 `1970-01-01T00:00:00Z`를 기록했다.
-- 결함이 있는 코드·설정·데이터·계약: 운영 코드가 아니라 `IdempotencyServiceMySqlTest`의 DB 표현 범위를 고려하지 않은 시간 픽스처다.
-- 증상으로 이어진 메커니즘: MySQL 8.0.42가 해당 값을 `Incorrect datetime value`로 거부해 정리 로직 호출 전에 JDBC 갱신이 실패했다.
+- 촉발 조건: 만료된 종결 기록을 만들기 위해 테스트가 `TIMESTAMP(6)` 컬럼에 `1970-01-01T00:00:00Z`를 기록했고, 테스트 기준 상수와 다른 시스템 Clock을 사용했다.
+- 결함이 있는 코드·설정·데이터·계약: 운영 코드가 아니라 `IdempotencyServiceMySqlTest`의 DB 표현 범위를 고려하지 않은 시간 픽스처와 고정되지 않은 Clock 설정이다.
+- 증상으로 이어진 메커니즘: 최초에는 MySQL 8.0.42가 epoch 값을 `Incorrect datetime value`로 거부했다. 범위만 수정했을 때는 `NOW.minusSeconds(1)`이 실행 당시 시스템 Clock보다 미래여서 만료 삭제 대상이 되지 않았다.
 - 기존 방어가 막지 못한 이유: 로컬 Docker가 없는 환경에서는 `disabledWithoutDocker = true` 때문에 MySQL 통합 테스트가 skip되어 전체 build 성공만으로 픽스처의 DB 호환성을 검증하지 못했다.
-- 결론의 증거: CI 테스트 XML의 실제 거부 값·컬럼·예외, V1의 `TIMESTAMP(6)` 정의, 테스트 소스의 `Timestamp.from(Instant.EPOCH)`가 일치한다.
+- 결론의 증거: 최초 CI XML의 거부 값·컬럼·예외가 V1의 `TIMESTAMP(6)` 정의와 `Instant.EPOCH` 입력에 일치하고, 중간 CI의 삭제 건수 0이 시스템 Clock과 미래 `NOW`의 불일치에 일치하며, 두 조건을 수정한 최종 CI가 통과했다.
 
 ## 해결 또는 완화
 
-- 선택한 방법: 고정 Clock보다 1초 과거인 `NOW.minusSeconds(1)`을 사용해 만료 의미를 유지하면서 DB 표현 범위 안의 값을 제공한다.
+- 선택한 방법: DB 표현 범위 안인 `NOW.minusSeconds(1)`을 사용하고 테스트 Clock을 `NOW`에 고정해 만료 의미를 결정적으로 만든다.
 - 변경 파일: `src/test/java/io/regionevent/regioneventbackend/domain/idempotency/service/IdempotencyServiceMySqlTest.java`
 - 정책·계약 변경 여부: 없음
 
@@ -88,13 +93,13 @@ GitHub Actions에서 `IdempotencyServiceMySqlTest.만료된_종결_기록만_정
 
 | 검증 항목 | Before | After | 판정 |
 | --- | --- | --- | --- |
-| 원래 재현 절차 | CI MySQL 8.0.42에서 `Incorrect datetime value: '1970-01-01 00:00:00'` | PR CI 재실행 대기 | 원인 확인 |
+| 원래 재현 절차 | run `30612073295`: MySQL이 epoch 입력 거부 | run `30613709518`: MySQL 통합 테스트와 전체 build 통과 | 해결 |
 
 ## 회귀 테스트
 
 | 테스트·명령 | 결과 | 비고 |
 | --- | --- | --- |
-| 단일 MySQL 통합 테스트 | skip | 로컬 Docker daemon 부재, PR CI에서 검증 필요 |
+| 단일 MySQL 통합 테스트 | 통과 | GitHub Actions MySQL 8.0.42 Testcontainers |
 | `./gradlew build` | 통과 | MySQL Testcontainers 테스트는 로컬에서 skip |
 | `git diff --check` | 통과 | 변경 정합성 |
 
@@ -104,11 +109,13 @@ GitHub Actions에서 `IdempotencyServiceMySqlTest.만료된_종결_기록만_정
 
 ## 잔여 위험과 후속 작업
 
-로컬에 Docker daemon이 없어 수정 후 동일 MySQL 8.0.42 실행은 PR CI 재실행으로 확인해야 한다. CI 통과 전에는 상태를 `해결`로 올리지 않는다.
+로컬 Docker daemon 부재로 로컬에서는 MySQL 통합 테스트가 skip되지만, 동일 revision의 GitHub Actions MySQL 8.0.42 실행이 통과했다. Node.js 20 deprecation 경고는 테스트 실패와 무관한 워크플로 의존성 경고로 남아 있다.
 
 ## 관련 자료
 
 - GitHub Actions run `30612073295`
+- GitHub Actions run `30613536184`
+- GitHub Actions run `30613709518`
 - GitHub Actions test report artifact `8785877698`
 - `src/test/java/io/regionevent/regioneventbackend/domain/idempotency/service/IdempotencyServiceMySqlTest.java`
 - `src/main/resources/db/migration/V1__initial_p0_schema.sql`
