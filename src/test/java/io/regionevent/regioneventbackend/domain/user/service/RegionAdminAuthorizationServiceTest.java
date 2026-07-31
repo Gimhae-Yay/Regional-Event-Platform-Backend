@@ -30,33 +30,51 @@ class RegionAdminAuthorizationServiceTest {
         new RegionAdminAuthorizationService(userRoleAssignmentRepository);
 
     @Test
-    void authorize_whenUserDoesNotExist_throwsForbidden() {
+    void requireAuthorizedRegionId_whenUserDoesNotExist_throwsForbidden() {
         givenAuthorizationAssignment(Optional.empty());
 
-        assertForbidden(() -> authorizationService.authorize(USER_ID, GIMHAE_REGION_ID));
+        assertForbidden(() -> authorizationService.requireAuthorizedRegionId(USER_ID));
     }
 
     @Test
-    void authorize_whenUserIsWithdrawing_throwsForbidden() {
+    void requireAuthorizedRegionId_whenUserIsWithdrawing_throwsForbidden() {
         givenAuthorizationAssignment(Optional.empty());
 
-        assertForbidden(() -> authorizationService.authorize(USER_ID, GIMHAE_REGION_ID));
+        assertForbidden(() -> authorizationService.requireAuthorizedRegionId(USER_ID));
     }
 
     @Test
-    void authorize_whenRegionAdminRoleIsMissing_throwsForbidden() {
+    void requireAuthorizedRegionId_whenRegionAdminRoleIsMissing_throwsForbidden() {
         givenAuthorizationAssignment(Optional.empty());
 
-        assertForbidden(() -> authorizationService.authorize(USER_ID, GIMHAE_REGION_ID));
+        assertForbidden(() -> authorizationService.requireAuthorizedRegionId(USER_ID));
     }
 
     @Test
-    void authorize_whenAssignedRegionIsMissing_throwsForbidden() {
+    void requireAuthorizedRegionId_whenAssignedRegionIsMissing_throwsForbidden() {
         UserRoleAssignment assignment = mock(UserRoleAssignment.class);
         givenAuthorizationAssignment(Optional.of(assignment));
         when(assignment.getRegion()).thenReturn(null);
 
-        assertForbidden(() -> authorizationService.authorize(USER_ID, GIMHAE_REGION_ID));
+        assertForbidden(() -> authorizationService.requireAuthorizedRegionId(USER_ID));
+    }
+
+    @Test
+    void requireAuthorizedRegionId_whenAssignedRegionIdIsMissing_throwsForbidden() {
+        UserRoleAssignment assignment = assignmentInRegion(null);
+        givenAuthorizationAssignment(Optional.of(assignment));
+
+        assertForbidden(() -> authorizationService.requireAuthorizedRegionId(USER_ID));
+    }
+
+    @Test
+    void requireAuthorizedRegionId_whenActiveRegionAdminIsAssigned_returnsRegionId() {
+        UserRoleAssignment assignment = assignmentInRegion(GIMHAE_REGION_ID);
+        givenAuthorizationAssignment(Optional.of(assignment));
+
+        Long authorizedRegionId = authorizationService.requireAuthorizedRegionId(USER_ID);
+
+        assertThat(authorizedRegionId).isEqualTo(GIMHAE_REGION_ID);
     }
 
     @Test

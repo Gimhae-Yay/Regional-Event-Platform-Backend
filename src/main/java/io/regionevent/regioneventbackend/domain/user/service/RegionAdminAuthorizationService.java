@@ -1,7 +1,5 @@
 package io.regionevent.regioneventbackend.domain.user.service;
 
-import java.util.Objects;
-
 import org.springframework.stereotype.Service;
 
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
@@ -27,6 +25,13 @@ public class RegionAdminAuthorizationService {
         Long userId,
         Long targetRegionId
     ) {
+        Long authorizedRegionId = requireAuthorizedRegionId(userId);
+        if (!authorizedRegionId.equals(targetRegionId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+    }
+
+    public Long requireAuthorizedRegionId(Long userId) {
         UserRoleAssignment assignment = userRoleAssignmentRepository
             .findByIdUserIdAndIdRoleAndAppUserStatus(
                 userId,
@@ -35,15 +40,10 @@ public class RegionAdminAuthorizationService {
             )
             .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
 
-        validateAssignedRegion(assignment.getRegion(), targetRegionId);
-    }
-
-    private void validateAssignedRegion(
-        Region assignedRegion,
-        Long targetRegionId
-    ) {
-        if (assignedRegion == null || !Objects.equals(assignedRegion.getRegionId(), targetRegionId)) {
+        Region assignedRegion = assignment.getRegion();
+        if (assignedRegion == null || assignedRegion.getRegionId() == null) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
+        return assignedRegion.getRegionId();
     }
 }
