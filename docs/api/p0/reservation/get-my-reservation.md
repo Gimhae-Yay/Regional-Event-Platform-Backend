@@ -68,7 +68,7 @@ Accept: application/json
       "reservationId": "123",
       "reservationNo": "R20260730A7K3M9Q2W5XZ",
       "status": "CONFIRMED",
-      "confirmedAt": "2026-07-29T03:00:00Z",
+      "confirmedAt": "2026-07-30T03:00:00Z",
       "cancelledAt": null,
       "cancellationReason": null,
       "expiredAt": null

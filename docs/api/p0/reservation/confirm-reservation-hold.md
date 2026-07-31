@@ -76,7 +76,7 @@ Accept: application/json
     "holdId": "789",
     "sessionId": "456",
     "status": "CONFIRMED",
-    "confirmedAt": "2026-07-29T03:00:00Z"
+    "confirmedAt": "2026-07-30T03:00:00Z"
   }
 }
 ```
