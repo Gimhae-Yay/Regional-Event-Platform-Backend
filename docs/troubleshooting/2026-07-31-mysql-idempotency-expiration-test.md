@@ -4,7 +4,7 @@
 
 | 항목 | 내용 |
 | --- | --- |
-| 상태 | 원인 확인 |
+| 상태 | 해결 |
 | 영향 | PR #205의 GitHub Actions `빌드 및 테스트` 체크 실패 |
 | 최초 확인 시각·시간대 | 2026-07-31 16:35 KST |
 | 관련 요구사항·이슈 | RSV-03, #200, PR #205 |
@@ -36,10 +36,10 @@
 
 ### 재현 결과
 
-- 실행 횟수: GitHub Actions 1회, 로컬 대상 테스트 1회
-- 성공 횟수: 0회
+- 실행 횟수: GitHub Actions 2회, 로컬 대상 테스트 1회
+- 성공 횟수: GitHub Actions 1회
 - 실패 횟수: GitHub Actions 1회
-- 종료 코드·HTTP 상태: GitHub Actions Gradle 빌드 종료 코드 1, 로컬은 Docker 데몬 부재로 1건 skip
+- 종료 코드·HTTP 상태: 수정 전 GitHub Actions 종료 코드 1, 수정 후 종료 코드 0, 로컬은 Docker 데몬 부재로 1건 skip
 
 ## 수집한 증거
 
@@ -58,6 +58,7 @@
 | 2026-07-31 16:35 KST | 가설 | 테스트 데이터가 DB 시간 범위를 위반했다. | 유효한 과거 시각이면 같은 정리 계약을 검증하면서 준비 SQL이 성공한다. | artifact의 MySQL 오류와 실제 스키마·테스트 입력을 대조했다. | 채택 |
 | 2026-07-31 16:36 KST | 검증 | 원래 대상 테스트를 로컬에서 실행했다. | Docker가 사용 가능하면 MySQL 8.0에서 같은 오류가 발생한다. | Docker 데몬 부재로 Testcontainers 테스트 1건이 skip됐다. | 기각 |
 | 2026-07-31 16:37 KST | 변경 | 테스트 Clock과 만료 시각을 같은 고정 기준으로 맞췄다. | `NOW - 1초`는 MySQL 저장 범위 안이면서 정리 기준보다 과거다. | 테스트 컴파일과 Docker 비의존 회귀를 포함한 전체 빌드가 통과했다. | 채택 |
+| 2026-07-31 16:40 KST | 검증 | 수정 커밋의 GitHub Actions를 재실행했다. | MySQL 8.0.42에서 대상 테스트와 전체 빌드가 통과한다. | CI run `30613533039`가 성공했다. | 채택 |
 
 ## 가설과 검증
 
@@ -88,14 +89,15 @@
 
 | 검증 항목 | Before | After | 판정 |
 | --- | --- | --- | --- |
-| 원래 재현 절차 | GitHub Actions에서 MySQL 데이터 변환 실패 | 로컬 Docker 부재로 skip, 원격 CI 재실행 대기 | 대기 |
+| 원래 재현 절차 | GitHub Actions에서 MySQL 데이터 변환 실패 | MySQL 8.0.42를 사용하는 GitHub Actions 전체 빌드 성공 | 해결 |
 
 ## 회귀 테스트
 
 | 테스트·명령 | 결과 | 비고 |
 | --- | --- | --- |
-| 대상 MySQL 통합 테스트 | skip | 로컬 Docker 데몬 부재, 원격 CI에서 확인 필요 |
+| 대상 MySQL 통합 테스트 | 로컬 skip, 원격 성공 | 로컬 Docker 데몬 부재, GitHub Actions MySQL 8.0.42에서 검증 |
 | `./gradlew build` | 성공 | 전체 회귀, MySQL Testcontainers 테스트는 skip |
+| GitHub Actions run `30613533039` | 성공 | MySQL 8.0.42를 포함한 전체 빌드 및 테스트 |
 | `git diff --check` | 성공 | 변경 정합성 |
 
 ## 재발 방지와 문서 반영
@@ -104,9 +106,10 @@
 
 ## 잔여 위험과 후속 작업
 
-수정 커밋을 push한 뒤 GitHub Actions의 MySQL 8.0.42 환경에서 원래 테스트와 전체 빌드 통과를 확인해야 한다.
+기능상 잔여 위험은 확인되지 않았다. Actions의 Node.js 20 deprecation 경고는 이번 테스트 실패 및 수정 범위와 무관하다.
 
 ## 관련 자료
 
 - GitHub Actions run `30612368321`
+- GitHub Actions run `30613533039`
 - PR #205
