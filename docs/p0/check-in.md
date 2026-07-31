@@ -19,12 +19,13 @@
 | [정원 홀드·무료 예약](reservation.md#rsv-04) | 체크인에 따른 예약 상태 전이 |
 | [인증·프로필](auth-profile.md#권한개인정보-정책-라우팅) | 운영자 권한, 예약자 마스킹과 탈퇴 후 QR 무효화 |
 | [ADR-0003](../adr/0003-use-persisted-idempotency-for-reservation-and-checkin.md#결정) | 체크인 요청의 영속 멱등성 기록 |
+| [ADR-0048](../adr/0048-retain-terminal-idempotency-records-for-24-hours.md#결정) | 종결 멱등 결과 24시간 보관과 `PROCESSING` 자동 탈취 금지 |
 | [ADR-0004](../adr/0004-use-hmac-signed-reservation-qr.md#결정) | HMAC 서명, 키 관리와 예약당 방문 한 건 제약 |
 | [ADR-0010](../adr/0010-issue-short-lived-qr-on-demand-and-separate-retry-idempotency.md#결정) | 체크인 창 온디맨드 QR 발급·갱신과 재시도·재스캔 구분 |
-| [ADR-0034](../adr/0034-use-single-get-endpoint-for-my-reservation-qr.md#결정) | 내 예약 QR 조회 시 단기 QR을 발급하고 별도 발급 경로를 두지 않는 HTTP 계약 |
+| [ADR-0040](../adr/0040-use-single-get-endpoint-for-my-reservation-qr.md#결정) | 내 예약 QR 조회 시 단기 QR을 발급하고 별도 발급 경로를 두지 않는 HTTP 계약 |
 | [ADR-0012](../adr/0012-retain-author-unlinked-reviews-and-visits-after-withdrawal.md#결정) | 탈퇴 회원의 미사용 QR·미체크인 예약 종결 |
 
-> QR 발급 시점과 재스캔 판정은 ADR-0010을 우선 적용한다. HTTP 경로는 ADR-0034를 따라 내 예약 QR 조회 시
+> QR 발급 시점과 재스캔 판정은 ADR-0010을 우선 적용한다. HTTP 경로는 ADR-0040을 따라 내 예약 QR 조회 시
 > 발급하며, ADR-0004는 HMAC·키 관리·방문 고유 제약에 적용한다.
 
 ### 기능 범위
@@ -96,7 +97,8 @@ QR은 HMAC-SHA256으로 서명하고 토큰 버전·키 식별자·불투명 예
 통신 실패로 같은 명령을 재전송할 때만 같은 ID를 사용한다.
 같은 ID가 최초 요청과 동일한 운영자·예약·회차 및 정규화된 요청 의미에 사용되면 체크인을 다시 실행하지 않고
 저장된 결과를 반환하며, 운영자·예약·회차 또는 요청 의미가 다르면 거부한다.
-멱등 결과 보관 기간은 허용할 최대 네트워크 재시도 기간을 포함하도록 출시 전에 운영 설정으로 확정한다.
+`SUCCEEDED`와 저장 대상으로 정한 `FAILED` 멱등 기록은 `completed_at`부터 24시간 보관하며,
+`PROCESSING` 기록은 만료·정리·재점유로 자동 탈취하지 않는다. 보관 기간 변경은 새 ADR로 재검토한다.
 새로운 ID의 스캔은 `QR-02` 검증을 모두 통과해야 하고, 기존 방문이 있으면 기존 성공 결과를 반환한다.
 방문이 없으면 예약당 방문 기록을 한 건만 생성하고
 [정원 홀드·무료 예약](reservation.md)의 `RSV-04`에 따라 예약을 `CHECKED_IN`으로 전환한다.
@@ -120,7 +122,7 @@ QR을 표시할 수 없거나 스캔에 실패하면 운영자가 담당 콘텐�
 예약 상태는 [정원 홀드·무료 예약](reservation.md#rsv-04),
 운영자 권한과 예약자 마스킹은 [인증·프로필](auth-profile.md#auth-privacy-policies)을 적용한다.
 QR 조회 시 발급·갱신과 요청 재시도·재스캔 구분은
-[ADR-0034](../adr/0034-use-single-get-endpoint-for-my-reservation-qr.md)와
+[ADR-0040](../adr/0040-use-single-get-endpoint-for-my-reservation-qr.md)와
 [ADR-0010](../adr/0010-issue-short-lived-qr-on-demand-and-separate-retry-idempotency.md)을 따른다.
 
 ### 데이터 요구사항

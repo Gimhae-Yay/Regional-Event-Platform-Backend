@@ -77,10 +77,10 @@ Accept: application/json
     "reservations": [
       {
         "reservationId": "123",
-        "reservationNo": "R202607290001",
+        "reservationNo": "R20260730A7K3M9Q2W5XZ",
         "status": "CONFIRMED",
         "quantity": 2,
-        "confirmedAt": "2026-07-29T03:00:00Z",
+        "confirmedAt": "2026-07-30T03:00:00Z",
         "participant": {
           "name": "김*수",
           "phone": "010-****-1234"

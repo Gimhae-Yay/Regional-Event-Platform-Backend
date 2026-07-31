@@ -28,7 +28,7 @@ Content-Type: application/json
 Accept: application/json
 
 {
-  "reservationNo": "R202607290001",
+  "reservationNo": "R20260730A7K3M9Q2W5XZ",
   "reason": "QR_SCAN_FAILED"
 }
 ```
@@ -54,7 +54,7 @@ Accept: application/json
 
 ```json
 {
-  "reservationNo": "R202607290001",
+  "reservationNo": "R20260730A7K3M9Q2W5XZ",
   "reason": "QR_SCAN_FAILED"
 }
 ```

@@ -66,9 +66,9 @@ Accept: application/json
     "reservations": [
       {
         "reservationId": "123",
-        "reservationNo": "R202607290001",
+        "reservationNo": "R20260730A7K3M9Q2W5XZ",
         "status": "CONFIRMED",
-        "confirmedAt": "2026-07-29T03:00:00Z",
+        "confirmedAt": "2026-07-30T03:00:00Z",
         "content": {
           "contentId": "789",
           "title": "김해 가야문화 체험"
@@ -98,7 +98,7 @@ Accept: application/json
 | `message` | String | 공개 성공 메시지 |
 | `data.reservations` | Array | 내 예약 목록. 결과가 없으면 빈 배열 `[]` |
 | `data.reservations[].reservationId` | String | 예약 식별자 |
-| `data.reservations[].reservationNo` | String | 시스템 전체에서 유일한 예약 번호. 형식은 서버가 생성한다. |
+| `data.reservations[].reservationNo` | String | 시스템 전체에서 유일한 예약 번호. 서버가 `Asia/Seoul` 날짜의 `RyyyyMMdd`와 12자리 Crockford Base32 난수 접미사로 생성한다. |
 | `data.reservations[].status` | String | 예약 상태. `CONFIRMED`, `CHECKED_IN`, `CANCELLED`, `EXPIRED` 중 하나 |
 | `data.reservations[].confirmedAt` | String | 예약 확정 시각. API 공통 규칙에 따른 UTC ISO 8601 일시다. |
 | `data.reservations[].content.contentId` | String | 예약 콘텐츠 식별자 |

@@ -72,11 +72,11 @@ Accept: application/json
   "message": "무료 예약 확정에 성공했습니다.",
   "data": {
     "reservationId": "123",
-    "reservationNo": "R202607290001",
+    "reservationNo": "R20260730A7K3M9Q2W5XZ",
     "holdId": "789",
     "sessionId": "456",
     "status": "CONFIRMED",
-    "confirmedAt": "2026-07-29T03:00:00Z"
+    "confirmedAt": "2026-07-30T03:00:00Z"
   }
 }
 ```
@@ -89,7 +89,7 @@ Accept: application/json
 | `code` | String | 성공 코드. 항상 `SUCCESS` |
 | `message` | String | 공개 성공 메시지 |
 | `data.reservationId` | String | 생성된 예약 식별자 |
-| `data.reservationNo` | String | 시스템 전체에서 유일한 예약 번호. 형식은 서버가 생성한다. |
+| `data.reservationNo` | String | 시스템 전체에서 유일한 예약 번호. 서버가 `Asia/Seoul` 날짜의 `RyyyyMMdd`와 12자리 Crockford Base32 난수 접미사로 생성한다. |
 | `data.holdId` | String | 소비된 정원 홀드 식별자 |
 | `data.sessionId` | String | 예약한 회차 식별자 |
 | `data.status` | String | 예약 상태. 항상 `CONFIRMED` |
@@ -130,7 +130,7 @@ Accept: application/json
 4. 멱등 키의 논리 유일 범위는 `(actor_user_id, operation = RESERVATION_CONFIRM, idempotency_key_hash)`다.
 5. 같은 멱등 키와 같은 `holdId`의 `SUCCEEDED` 기록이 있으면 해당 `result_reservation_id`로 최초 성공 응답을 재구성해 반환한다. 홀드 소비와 예약 생성을 다시 실행하지 않는다.
 6. 같은 멱등 키에 다른 `holdId`를 요청하면 `409 IDEMPOTENCY_KEY_CONFLICT`로 거부한다.
-7. 같은 멱등 키와 같은 `holdId`의 최초 요청이 `PROCESSING`이면 `409 IDEMPOTENCY_REQUEST_IN_PROGRESS`로 응답한다. 대기 제한을 넘긴 뒤에도 새 도메인 작업을 실행하지 않는다.
+7. 같은 멱등 키와 같은 `holdId`의 최초 요청이 `PROCESSING`이면 `409 IDEMPOTENCY_REQUEST_IN_PROGRESS`로 응답한다. DB 대기 제한은 운영 설정으로 짧게 관리하며, 제한을 넘긴 뒤에도 새 도메인 작업을 실행하거나 `PROCESSING` 기록을 자동 탈취하지 않는다.
 8. 대상 홀드는 유효한 `ACTIVE` 상태여야 하고 `expires_at`이 MySQL 기준 현재 시각보다 미래여야 한다.
 9. 대상 콘텐츠는 `PUBLISHED`, 회차는 `SCHEDULED` 상태여야 하며 MySQL 기준 현재 시각이 회차 시작 전이어야 한다.
 10. 유효한 홀드는 `ACTIVE → CONSUMED`으로 조건부 전이하고, 같은 트랜잭션에서 `CONFIRMED` 예약을 한 건 생성한다.
@@ -140,6 +140,7 @@ Accept: application/json
 14. 종결·상태 충돌처럼 재시도해도 결과가 바뀌지 않는 확정 실패는 `idempotency_record.status = FAILED`와 `result_code`로 기록하고, 같은 키·같은 홀드의 재요청에는 저장된 실패 결과를 반환한다.
 15. 검증·인증·인가·대상 부재 오류와 트랜잭션 롤백이 필요한 일시적 서버 오류는 성공 멱등 결과로 기록하지 않는다.
 16. 서로 다른 멱등 키로 같은 홀드를 동시에 확정하면 `ACTIVE → CONSUMED` 조건부 전이와 `reservation.hold_id` 유일 제약으로 한 요청만 성공한다. 나머지 요청은 `409 RESERVATION_CONFIRM_CONFLICT`로 응답한다.
+17. `SUCCEEDED`와 저장 대상 `FAILED` 멱등 결과는 완료 시각부터 24시간 보관한다. 보관 기간이 지난 키는 이전 결과 재반환을 보장하지 않으며, 클라이언트는 새 확정 요청에 항상 새 키를 사용한다.
 
 ### 감사 및 정합성
 
@@ -147,6 +148,7 @@ Accept: application/json
 - 성공 멱등 기록의 `operation`은 `RESERVATION_CONFIRM`, `status`는 `SUCCEEDED`, `result_reservation_id`는 생성한 예약 식별자로 기록한다. `result_visit_id`는 `null`이다.
 - `request_hash`는 `holdId`를 포함한 정규화된 명령 의미로 계산하며 개인정보 원문을 포함하지 않는다.
 - `capacity_hold.terminal_at`과 예약의 `confirmed_at`은 확정 처리 시각으로 기록한다.
-- `reservation.qr_reference`는 서버가 생성한 불투명 참조이며, 이름·연락처·`user_id`를 포함하지 않는다.
-- 성공 감사 이벤트는 처리자, 홀드·예약 식별자, `ACTIVE → CONSUMED` 및 `CONFIRMED` 결과와 처리 시각을 재현할 수 있어야 한다.
+- `reservation.reservation_no`는 `Asia/Seoul` 날짜의 `RyyyyMMdd`와 12자리 Crockford Base32 난수 접미사로 생성한다. DB 유일 제약 충돌 시 새 접미사로 재시도한다.
+- `reservation.qr_reference`는 서버가 UUID v4로 생성한 불투명 참조이며, 이름·연락처·`user_id`를 포함하지 않는다. DB 유일 제약 충돌 시 새 UUID v4를 생성한다.
+- 성공 감사 이벤트는 같은 `requestId`로 두 건을 기록한다. `CAPACITY_HOLD` 이벤트는 대상 홀드의 `ACTIVE → CONSUMED`를, `RESERVATION` 이벤트는 생성 예약의 `NULL → CONFIRMED`를 기록하며, 처리자 연결과 함께 확정 트랜잭션에서 커밋한다.
 - 확정 실패와 멱등 충돌의 사유는 감사 기록과 구조화 로그로 추적한다.
