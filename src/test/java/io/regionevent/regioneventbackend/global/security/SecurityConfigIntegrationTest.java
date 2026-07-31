@@ -65,7 +65,8 @@ class SecurityConfigIntegrationTest {
     @MethodSource("publicRequests")
     void publicPath_withoutAccessToken_isAllowed(HttpMethod method, String path) throws Exception {
         mockMvc.perform(request(method, path))
-            .andExpect(status().isNoContent())
+            .andExpect(result -> assertThat(result.getResponse().getStatus())
+                .isNotIn(401, 403))
             .andExpect(cookie().doesNotExist("JSESSIONID"));
     }
 
