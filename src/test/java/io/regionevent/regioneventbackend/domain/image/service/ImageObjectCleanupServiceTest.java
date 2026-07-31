@@ -19,6 +19,7 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -197,6 +198,35 @@ class ImageObjectCleanupServiceTest {
         assertThat(foundImageObject.getLifecycleStatus()).isEqualTo(ImageLifecycleStatus.ACTIVE);
         assertThat(foundImageObject.getLinkedAt()).isNotNull();
         assertThat(imageStorageGateway.deletedObjectKeys()).isEmpty();
+    }
+
+    @Test
+    @Transactional
+    void markDeletePending_whenCandidateIsLinkedAfterCandidateRead_skipsTransition() {
+        Instant uploadExpiresAt = Instant.now().minusSeconds(60);
+        ImageObject imageObject = saveUploadCandidate("content/linked-after-read.webp", uploadExpiresAt);
+        List<Long> candidateIds = imageObjectRepository.findExpiredUnlinkedUploadCandidateIdsWithoutDirectReferences(
+            ImageLifecycleStatus.ACTIVE,
+            PageRequest.of(0, 100)
+        );
+        Content content = saveContent("linked-after-read");
+        assertThat(candidateIds).containsExactly(imageObject.getImageObjectId());
+
+        imageObject.markLinked(uploadExpiresAt.minusSeconds(1));
+        content.assignRepresentativeImage(imageObject, uploadExpiresAt.minusSeconds(1));
+        imageObjectRepository.saveAndFlush(imageObject);
+        contentRepository.saveAndFlush(content);
+
+        int updatedCount = imageObjectRepository.markExpiredUnlinkedUploadCandidateDeletePending(
+            candidateIds.getFirst(),
+            ImageLifecycleStatus.ACTIVE,
+            ImageLifecycleStatus.DELETE_PENDING
+        );
+
+        ImageObject foundImageObject = imageObjectRepository.findById(imageObject.getImageObjectId()).orElseThrow();
+        assertThat(updatedCount).isZero();
+        assertThat(foundImageObject.getLifecycleStatus()).isEqualTo(ImageLifecycleStatus.ACTIVE);
+        assertThat(foundImageObject.getLinkedAt()).isNotNull();
     }
 
     @Test

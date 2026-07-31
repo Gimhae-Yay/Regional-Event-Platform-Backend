@@ -22,7 +22,7 @@ public interface ImageObjectRepository extends JpaRepository<ImageObject, Long> 
     Optional<ImageObject> findByImageObjectId(Long imageObjectId);
 
     @Query("""
-        SELECT imageObject
+        SELECT imageObject.imageObjectId
         FROM ImageObject imageObject
         WHERE imageObject.lifecycleStatus = :activeStatus
             AND imageObject.linkedAt IS NULL
@@ -39,9 +39,34 @@ public interface ImageObjectRepository extends JpaRepository<ImageObject, Long> 
             )
         ORDER BY imageObject.imageObjectId ASC
         """)
-    List<ImageObject> findExpiredUnlinkedUploadCandidatesWithoutDirectReferences(
+    List<Long> findExpiredUnlinkedUploadCandidateIdsWithoutDirectReferences(
         @Param("activeStatus") ImageLifecycleStatus activeStatus,
         Pageable pageable
+    );
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+        UPDATE ImageObject imageObject
+        SET imageObject.lifecycleStatus = :deletePendingStatus
+        WHERE imageObject.imageObjectId = :imageObjectId
+            AND imageObject.lifecycleStatus = :activeStatus
+            AND imageObject.linkedAt IS NULL
+            AND imageObject.uploadExpiresAt <= CURRENT_TIMESTAMP
+            AND NOT EXISTS (
+                SELECT content.contentId
+                FROM Content content
+                WHERE content.representativeImageObject = imageObject
+            )
+            AND NOT EXISTS (
+                SELECT contentRevision.contentRevisionId
+                FROM ContentRevision contentRevision
+                WHERE contentRevision.candidateImageObject = imageObject
+            )
+        """)
+    int markExpiredUnlinkedUploadCandidateDeletePending(
+        @Param("imageObjectId") Long imageObjectId,
+        @Param("activeStatus") ImageLifecycleStatus activeStatus,
+        @Param("deletePendingStatus") ImageLifecycleStatus deletePendingStatus
     );
 
     @Query("""

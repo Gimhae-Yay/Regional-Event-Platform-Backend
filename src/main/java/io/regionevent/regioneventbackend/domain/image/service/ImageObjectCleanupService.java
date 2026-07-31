@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -45,11 +46,13 @@ public class ImageObjectCleanupService {
 
     private List<ImageObjectCleanupTarget> findCleanupTargets() {
         List<ImageObject> expiredUploadCandidates =
-            imageObjectRepository.findExpiredUnlinkedUploadCandidatesWithoutDirectReferences(
+            imageObjectRepository.findExpiredUnlinkedUploadCandidateIdsWithoutDirectReferences(
                 ImageLifecycleStatus.ACTIVE,
                 PageRequest.of(0, CLEANUP_BATCH_SIZE)
-            );
-        expiredUploadCandidates.forEach(ImageObject::markDeletePending);
+            ).stream()
+                .map(this::markDeletePendingIfStillUnlinked)
+                .flatMap(Optional::stream)
+                .toList();
 
         List<ImageObject> retryableDeletePendingObjects =
             imageObjectRepository.findRetryableDeletePendingObjectsWithoutDirectReferences(
@@ -58,6 +61,18 @@ public class ImageObjectCleanupService {
             );
 
         return toCleanupTargets(expiredUploadCandidates, retryableDeletePendingObjects);
+    }
+
+    private Optional<ImageObject> markDeletePendingIfStillUnlinked(Long imageObjectId) {
+        int updatedCount = imageObjectRepository.markExpiredUnlinkedUploadCandidateDeletePending(
+            imageObjectId,
+            ImageLifecycleStatus.ACTIVE,
+            ImageLifecycleStatus.DELETE_PENDING
+        );
+        if (updatedCount == 0) {
+            return Optional.empty();
+        }
+        return imageObjectRepository.findById(imageObjectId);
     }
 
     private List<ImageObjectCleanupTarget> toCleanupTargets(
