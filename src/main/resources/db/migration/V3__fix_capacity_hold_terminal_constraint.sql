@@ -21,7 +21,7 @@ ALTER TABLE capacity_hold
                     AND terminal_at IS NOT NULL
                     AND capacity_released_at IS NOT NULL
                     AND invalidation_reason IS NOT NULL
-                    AND REGEXP_LIKE(invalidation_reason, CONCAT(CHAR(92), 'S')) THEN 1
+                    AND REGEXP_LIKE(invalidation_reason, CONCAT(CAST(CHAR(92) AS CHAR), 'S')) THEN 1
                 ELSE 0
             END = 1
         );
