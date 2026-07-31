@@ -6,7 +6,7 @@ import org.springframework.http.HttpStatus;
 
 public enum ErrorCode {
 
-    RESERVATION_HOLD_CONFLICT(HttpStatus.CONFLICT, "RESERVATION_HOLD_CONFLICT", "예약 대기 홀드를 생성할 수 없는 상태입니다."),
+    RESERVATION_HOLD_CONFLICT(HttpStatus.CONFLICT, "RESERVATION_HOLD_CONFLICT", "예약 대기를 생성할 수 없는 상태입니다."),
 
     INVALID_INPUT(HttpStatus.BAD_REQUEST, "INVALID_INPUT", "요청 값이 올바르지 않습니다."),
     INVALID_JSON(HttpStatus.BAD_REQUEST, "INVALID_JSON", "요청 본문 형식이 올바르지 않습니다."),

@@ -187,7 +187,8 @@ class ReservationControllerIntegrationTest {
 
         performCreate(fixture, 2)
             .andExpect(status().isConflict())
-            .andExpect(jsonPath("$.code").value("RESERVATION_HOLD_CONFLICT"));
+            .andExpect(jsonPath("$.code").value("RESERVATION_HOLD_CONFLICT"))
+            .andExpect(jsonPath("$.message").value("예약 대기를 생성할 수 없는 상태입니다."));
 
         assertThat(getRemainingCapacity(fixture.session().getSessionId())).isEqualTo(1);
         assertThat(capacityHoldRepository.count()).isZero();
@@ -199,7 +200,8 @@ class ReservationControllerIntegrationTest {
 
         performCreate(fixture, 1)
             .andExpect(status().isConflict())
-            .andExpect(jsonPath("$.code").value("RESERVATION_HOLD_CONFLICT"));
+            .andExpect(jsonPath("$.code").value("RESERVATION_HOLD_CONFLICT"))
+            .andExpect(jsonPath("$.message").value("예약 대기를 생성할 수 없는 상태입니다."));
 
         assertThat(getRemainingCapacity(fixture.session().getSessionId())).isEqualTo(2);
         assertThat(capacityHoldRepository.count()).isZero();
@@ -217,7 +219,8 @@ class ReservationControllerIntegrationTest {
 
         performCreate(fixture, 1)
             .andExpect(status().isConflict())
-            .andExpect(jsonPath("$.code").value("RESERVATION_HOLD_CONFLICT"));
+            .andExpect(jsonPath("$.code").value("RESERVATION_HOLD_CONFLICT"))
+            .andExpect(jsonPath("$.message").value("예약 대기를 생성할 수 없는 상태입니다."));
 
         assertThat(getRemainingCapacity(fixture.session().getSessionId())).isEqualTo(2);
         assertThat(capacityHoldRepository.count()).isZero();
