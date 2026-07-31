@@ -31,7 +31,7 @@ import io.regionevent.regioneventbackend.domain.reservation.repository.CapacityH
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
-import io.regionevent.regioneventbackend.global.security.JwtAccessTokenService;
+import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -272,7 +272,7 @@ class ReservationControllerIntegrationTest {
             Instant.now().minusSeconds(60)
         ));
         Instant startsAt = Instant.now().plusSeconds(startsInMinutes * 60);
-        ContentSession session = contentSessionRepository.saveAndFlush(new ContentSession(
+        ContentSession session = new ContentSession(
             content,
             region,
             startsAt,
@@ -280,7 +280,9 @@ class ReservationControllerIntegrationTest {
             startsAt.minusSeconds(1_800),
             startsAt.plusSeconds(5_400),
             capacity
-        ));
+        );
+        session.approve(operator, Instant.now());
+        session = contentSessionRepository.saveAndFlush(session);
         return new Fixture(user, session);
     }
 
