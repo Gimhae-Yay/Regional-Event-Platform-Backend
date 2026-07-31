@@ -15,3 +15,8 @@ security:
         - key-id: expired-previous-key
           key: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
           verification-ends-at: 2026-01-01T00:00:00Z
+    refresh:
+      issuer: regional-event-platform
+      audience: regional-event-refresh
+      active-key-id: refresh-test-key
+      active-key: AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=
