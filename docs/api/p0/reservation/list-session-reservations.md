@@ -77,7 +77,7 @@ Accept: application/json
     "reservations": [
       {
         "reservationId": "123",
-        "reservationNo": "R202607290001",
+        "reservationNo": "R20260730A7K3M9Q2W5XZ",
         "status": "CONFIRMED",
         "quantity": 2,
         "confirmedAt": "2026-07-29T03:00:00Z",

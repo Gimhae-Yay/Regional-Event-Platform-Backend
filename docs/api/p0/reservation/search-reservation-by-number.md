@@ -23,7 +23,7 @@ GET /api/v1/region-admin/reservations/search?reservationNo={reservationNo}
 #### Request Example
 
 ```http
-GET /api/v1/operator/reservations/search?reservationNo=R202607290001 HTTP/1.1
+GET /api/v1/operator/reservations/search?reservationNo=R20260730A7K3M9Q2W5XZ HTTP/1.1
 Authorization: Bearer {accessToken}
 Accept: application/json
 ```
@@ -66,7 +66,7 @@ Accept: application/json
   "message": "예약번호 보조 조회에 성공했습니다.",
   "data": {
     "reservationId": "123",
-    "reservationNo": "R202607290001",
+    "reservationNo": "R20260730A7K3M9Q2W5XZ",
     "status": "CONFIRMED",
     "content": {
       "contentId": "789",

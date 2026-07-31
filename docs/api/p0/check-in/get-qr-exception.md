@@ -73,7 +73,7 @@ Accept: application/json
     "reservationResolved": true,
     "reservation": {
       "reservationId": 123,
-      "reservationNo": "R202607290001",
+      "reservationNo": "R20260730A7K3M9Q2W5XZ",
       "status": "CHECKED_IN",
       "contentId": 77,
       "contentTitle": "김해 도자기 체험",

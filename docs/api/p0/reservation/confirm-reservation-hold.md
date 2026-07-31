@@ -72,7 +72,7 @@ Accept: application/json
   "message": "무료 예약 확정에 성공했습니다.",
   "data": {
     "reservationId": "123",
-    "reservationNo": "R202607290001",
+    "reservationNo": "R20260730A7K3M9Q2W5XZ",
     "holdId": "789",
     "sessionId": "456",
     "status": "CONFIRMED",
