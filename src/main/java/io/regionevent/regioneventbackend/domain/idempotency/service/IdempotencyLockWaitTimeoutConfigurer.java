@@ -1,4 +1,4 @@
-package io.regionevent.regioneventbackend.domain.reservation.service;
+package io.regionevent.regioneventbackend.domain.idempotency.service;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -11,12 +11,12 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 @Component
-public class ReservationIdempotencyLockWaitTimeoutConfigurer {
+public class IdempotencyLockWaitTimeoutConfigurer {
 
     private final JdbcTemplate jdbcTemplate;
     private final int lockWaitTimeoutSeconds;
 
-    public ReservationIdempotencyLockWaitTimeoutConfigurer(
+    public IdempotencyLockWaitTimeoutConfigurer(
         JdbcTemplate jdbcTemplate,
         @Value("${reservation.idempotency.lock-wait-timeout-seconds}") int lockWaitTimeoutSeconds
     ) {

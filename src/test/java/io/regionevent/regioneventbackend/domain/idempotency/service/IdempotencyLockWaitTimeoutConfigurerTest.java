@@ -1,4 +1,4 @@
-package io.regionevent.regioneventbackend.domain.reservation.service;
+package io.regionevent.regioneventbackend.domain.idempotency.service;
 
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -15,7 +15,7 @@ import org.mockito.InOrder;
 import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-class ReservationIdempotencyLockWaitTimeoutConfigurerTest {
+class IdempotencyLockWaitTimeoutConfigurerTest {
 
     @Test
     void configureForCurrentTransaction_MySql에서는_원래_세션_대기_시간을_복구한다() throws Exception {
@@ -25,10 +25,10 @@ class ReservationIdempotencyLockWaitTimeoutConfigurerTest {
         Statement statement = mock(Statement.class);
         ResultSet resultSet = mock(ResultSet.class);
         when(jdbcTemplate.execute(
-            org.mockito.ArgumentMatchers.<ConnectionCallback<ReservationIdempotencyLockWaitTimeoutConfigurer.LockWaitTimeoutScope>>any()
+            org.mockito.ArgumentMatchers.<ConnectionCallback<IdempotencyLockWaitTimeoutConfigurer.LockWaitTimeoutScope>>any()
         ))
             .thenAnswer(invocation -> {
-                ConnectionCallback<ReservationIdempotencyLockWaitTimeoutConfigurer.LockWaitTimeoutScope> callback =
+                ConnectionCallback<IdempotencyLockWaitTimeoutConfigurer.LockWaitTimeoutScope> callback =
                     invocation.getArgument(0);
                 return callback.doInConnection(connection);
             });
@@ -39,8 +39,8 @@ class ReservationIdempotencyLockWaitTimeoutConfigurerTest {
         when(resultSet.next()).thenReturn(true);
         when(resultSet.getInt(1)).thenReturn(50);
 
-        ReservationIdempotencyLockWaitTimeoutConfigurer configurer =
-            new ReservationIdempotencyLockWaitTimeoutConfigurer(jdbcTemplate, 3);
+        IdempotencyLockWaitTimeoutConfigurer configurer =
+            new IdempotencyLockWaitTimeoutConfigurer(jdbcTemplate, 3);
 
         try (var ignored = configurer.configureForCurrentTransaction()) {
         }

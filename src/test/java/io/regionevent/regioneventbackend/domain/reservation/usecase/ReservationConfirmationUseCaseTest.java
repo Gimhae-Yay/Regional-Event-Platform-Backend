@@ -1,4 +1,4 @@
-package io.regionevent.regioneventbackend.domain.reservation.service;
+package io.regionevent.regioneventbackend.domain.reservation.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -49,9 +49,9 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
     "spring.jpa.hibernate.ddl-auto=validate"
 })
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
-class ReservationConfirmationServiceTest {
+class ReservationConfirmationUseCaseTest {
 
-    private final ReservationConfirmationService reservationConfirmationService;
+    private final ReservationConfirmationUseCase reservationConfirmationUseCase;
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
     private final ContentRepository contentRepository;
@@ -63,8 +63,8 @@ class ReservationConfirmationServiceTest {
     private final AuditEventActorLinkRepository auditEventActorLinkRepository;
 
     @Autowired
-    ReservationConfirmationServiceTest(
-        ReservationConfirmationService reservationConfirmationService,
+    ReservationConfirmationUseCaseTest(
+        ReservationConfirmationUseCase reservationConfirmationUseCase,
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
         ContentRepository contentRepository,
@@ -75,7 +75,7 @@ class ReservationConfirmationServiceTest {
         AuditEventRepository auditEventRepository,
         AuditEventActorLinkRepository auditEventActorLinkRepository
     ) {
-        this.reservationConfirmationService = reservationConfirmationService;
+        this.reservationConfirmationUseCase = reservationConfirmationUseCase;
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
         this.contentRepository = contentRepository;
@@ -92,7 +92,7 @@ class ReservationConfirmationServiceTest {
         ReservationFixtures fixtures = createFixtures();
         int remainingCapacityBeforeConfirmation = fixtures.contentSession().getRemainingCapacity();
 
-        ReservationConfirmationResponse response = reservationConfirmationService.confirm(
+        ReservationConfirmationResponse response = reservationConfirmationUseCase.confirm(
             fixtures.user().getUserId(),
             fixtures.capacityHold().getHoldId(),
             "confirmation-key-1",
@@ -126,13 +126,13 @@ class ReservationConfirmationServiceTest {
     void confirm_같은_멱등_키와_홀드로_재시도하면_저장된_성공_결과를_반환한다() {
         ReservationFixtures fixtures = createFixtures();
 
-        ReservationConfirmationResponse firstResponse = reservationConfirmationService.confirm(
+        ReservationConfirmationResponse firstResponse = reservationConfirmationUseCase.confirm(
             fixtures.user().getUserId(),
             fixtures.capacityHold().getHoldId(),
             "confirmation-key-2",
             "0e000f39-3b3e-4309-aa32-444a238e43a5"
         );
-        ReservationConfirmationResponse retryResponse = reservationConfirmationService.confirm(
+        ReservationConfirmationResponse retryResponse = reservationConfirmationUseCase.confirm(
             fixtures.user().getUserId(),
             fixtures.capacityHold().getHoldId(),
             "confirmation-key-2",
@@ -148,14 +148,14 @@ class ReservationConfirmationServiceTest {
     @Test
     void confirm_다른_키로_소비된_홀드를_확정하면_실패_결과를_저장한다() {
         ReservationFixtures fixtures = createFixtures();
-        reservationConfirmationService.confirm(
+        reservationConfirmationUseCase.confirm(
             fixtures.user().getUserId(),
             fixtures.capacityHold().getHoldId(),
             "confirmation-key-3-first",
             "54f1f2a0-10d0-4ae7-bc76-8c9a00aaf3d0"
         );
 
-        assertThatThrownBy(() -> reservationConfirmationService.confirm(
+        assertThatThrownBy(() -> reservationConfirmationUseCase.confirm(
             fixtures.user().getUserId(),
             fixtures.capacityHold().getHoldId(),
             "confirmation-key-3-second",
@@ -185,14 +185,14 @@ class ReservationConfirmationServiceTest {
             null,
             null
         ));
-        reservationConfirmationService.confirm(
+        reservationConfirmationUseCase.confirm(
             fixtures.user().getUserId(),
             fixtures.capacityHold().getHoldId(),
             "confirmation-key-4",
             "91d59c84-5133-42a0-a0ec-4847d84984b3"
         );
 
-        assertThatThrownBy(() -> reservationConfirmationService.confirm(
+        assertThatThrownBy(() -> reservationConfirmationUseCase.confirm(
             fixtures.user().getUserId(),
             anotherCapacityHold.getHoldId(),
             "confirmation-key-4",
@@ -219,14 +219,14 @@ class ReservationConfirmationServiceTest {
     @Test
     void confirm_사용한_멱등_키를_존재하지_않는_홀드에_사용하면_충돌로_거부한다() {
         ReservationFixtures fixtures = createFixtures();
-        reservationConfirmationService.confirm(
+        reservationConfirmationUseCase.confirm(
             fixtures.user().getUserId(),
             fixtures.capacityHold().getHoldId(),
             "confirmation-key-5",
             "dc98f47a-cc78-4146-8c8a-c423fb6c4cc5"
         );
 
-        assertThatThrownBy(() -> reservationConfirmationService.confirm(
+        assertThatThrownBy(() -> reservationConfirmationUseCase.confirm(
             fixtures.user().getUserId(),
             999999L,
             "confirmation-key-5",

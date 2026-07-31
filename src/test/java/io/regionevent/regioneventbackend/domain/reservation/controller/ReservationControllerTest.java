@@ -14,21 +14,21 @@ import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.reservation.dto.ReservationConfirmationResponse;
-import io.regionevent.regioneventbackend.domain.reservation.service.ReservationConfirmationService;
+import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
+import io.regionevent.regioneventbackend.domain.reservation.usecase.ReservationConfirmationUseCase;
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 
 class ReservationControllerTest {
 
-    private ReservationConfirmationService reservationConfirmationService;
+    private ReservationConfirmationUseCase reservationConfirmationUseCase;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        reservationConfirmationService = Mockito.mock(ReservationConfirmationService.class);
+        reservationConfirmationUseCase = Mockito.mock(ReservationConfirmationUseCase.class);
         mockMvc = MockMvcBuilders
-            .standaloneSetup(new ReservationController(reservationConfirmationService))
+            .standaloneSetup(new ReservationController(reservationConfirmationUseCase))
             .build();
     }
 
@@ -42,7 +42,7 @@ class ReservationControllerTest {
             ReservationStatus.CONFIRMED,
             Instant.parse("2026-07-30T00:00:00Z")
         );
-        given(reservationConfirmationService.confirm(1L, 10L, "confirmation-key", "request-id"))
+        given(reservationConfirmationUseCase.confirm(1L, 10L, "confirmation-key", "request-id"))
             .willReturn(response);
 
         TestingAuthenticationToken authentication = new TestingAuthenticationToken("1", null, "ROLE_VISITOR");

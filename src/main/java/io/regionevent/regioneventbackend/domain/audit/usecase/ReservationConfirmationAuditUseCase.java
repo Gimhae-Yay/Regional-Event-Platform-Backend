@@ -1,4 +1,4 @@
-package io.regionevent.regioneventbackend.domain.reservation.service;
+package io.regionevent.regioneventbackend.domain.audit.usecase;
 
 import java.time.Instant;
 
@@ -7,30 +7,26 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEvent;
-import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventActorLink;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
-import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventActorLinkRepository;
-import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
+import io.regionevent.regioneventbackend.domain.audit.service.AuditEventActorLinkService;
+import io.regionevent.regioneventbackend.domain.audit.service.AuditEventService;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 
 @Service
-public class ReservationConfirmationAuditService {
+public class ReservationConfirmationAuditUseCase {
 
-    private static final String ACTOR_KIND = "MEMBER";
-    private static final String ACTOR_ROLE = "VISITOR";
+    private final AuditEventService auditEventService;
+    private final AuditEventActorLinkService auditEventActorLinkService;
 
-    private final AuditEventRepository auditEventRepository;
-    private final AuditEventActorLinkRepository auditEventActorLinkRepository;
-
-    public ReservationConfirmationAuditService(
-        AuditEventRepository auditEventRepository,
-        AuditEventActorLinkRepository auditEventActorLinkRepository
+    public ReservationConfirmationAuditUseCase(
+        AuditEventService auditEventService,
+        AuditEventActorLinkService auditEventActorLinkService
     ) {
-        this.auditEventRepository = auditEventRepository;
-        this.auditEventActorLinkRepository = auditEventActorLinkRepository;
+        this.auditEventService = auditEventService;
+        this.auditEventActorLinkService = auditEventActorLinkService;
     }
 
     public void recordSuccess(
@@ -40,7 +36,7 @@ public class ReservationConfirmationAuditService {
         Reservation reservation,
         Instant occurredAt
     ) {
-        saveEventWithActor(
+        recordAndLink(
             requestId,
             actor,
             capacityHold,
@@ -52,7 +48,7 @@ public class ReservationConfirmationAuditService {
             null,
             occurredAt
         );
-        saveEventWithActor(
+        recordAndLink(
             requestId,
             actor,
             capacityHold,
@@ -74,7 +70,7 @@ public class ReservationConfirmationAuditService {
         String reasonCode,
         Instant occurredAt
     ) {
-        saveEventWithActor(
+        recordAndLink(
             requestId,
             actor,
             capacityHold,
@@ -88,7 +84,7 @@ public class ReservationConfirmationAuditService {
         );
     }
 
-    private void saveEventWithActor(
+    private void recordAndLink(
         String requestId,
         AppUser actor,
         CapacityHold capacityHold,
@@ -100,19 +96,17 @@ public class ReservationConfirmationAuditService {
         String reasonCode,
         Instant occurredAt
     ) {
-        AuditEvent auditEvent = auditEventRepository.save(new AuditEvent(
+        AuditEvent auditEvent = auditEventService.record(
             requestId,
-            capacityHold == null ? null : capacityHold.getRegion(),
+            capacityHold,
             targetType,
             targetId,
             previousState,
             nextState,
             result,
             reasonCode,
-            ACTOR_KIND,
-            ACTOR_ROLE,
             occurredAt
-        ));
-        auditEventActorLinkRepository.save(new AuditEventActorLink(auditEvent, actor));
+        );
+        auditEventActorLinkService.link(auditEvent, actor);
     }
 }

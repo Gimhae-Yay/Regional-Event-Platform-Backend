@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import io.regionevent.regioneventbackend.domain.reservation.dto.ReservationConfirmationResponse;
-import io.regionevent.regioneventbackend.domain.reservation.service.ReservationConfirmationService;
+import io.regionevent.regioneventbackend.domain.reservation.usecase.ReservationConfirmationUseCase;
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
@@ -28,10 +28,10 @@ public class ReservationController {
 
     private static final String RESERVATION_CONFIRMATION_SUCCESS_MESSAGE = "무료 예약 확정에 성공했습니다.";
 
-    private final ReservationConfirmationService reservationConfirmationService;
+    private final ReservationConfirmationUseCase reservationConfirmationUseCase;
 
-    public ReservationController(ReservationConfirmationService reservationConfirmationService) {
-        this.reservationConfirmationService = reservationConfirmationService;
+    public ReservationController(ReservationConfirmationUseCase reservationConfirmationUseCase) {
+        this.reservationConfirmationUseCase = reservationConfirmationUseCase;
     }
 
     @PostMapping("/{holdId}/confirm")
@@ -41,7 +41,7 @@ public class ReservationController {
         Authentication authentication,
         HttpServletRequest request
     ) {
-        ReservationConfirmationResponse response = reservationConfirmationService.confirm(
+        ReservationConfirmationResponse response = reservationConfirmationUseCase.confirm(
             extractActorUserId(authentication),
             holdId,
             idempotencyKey,
