@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
+import java.util.List;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceUnitUtil;
@@ -135,6 +136,35 @@ class ContentLogRepositoryTest {
         assertThat(unlinkedContentLog.getActor()).isNull();
         assertThat(unlinkedContentLog.getStatus()).isEqualTo(ContentLogStatus.REJECTED);
         assertThat(unlinkedContentLog.getReason()).isEqualTo("필수 정보가 누락되었습니다.");
+    }
+
+    @Test
+    void 소프트_삭제_콘텐츠의_로그와_처리자를_처리시각과_식별자_오름차순으로_조회한다() {
+        Content content = saveContent();
+        AppUser actor = saveUser("history-actor@example.com");
+        Instant earlier = Instant.parse("2026-08-01T00:00:00Z");
+        Instant later = Instant.parse("2026-08-01T01:00:00Z");
+        ContentLog firstAtSameTime = contentLogRepository.saveAndFlush(
+            new ContentLog(content, actor, ContentLogStatus.APPROVED, null, later)
+        );
+        ContentLog secondAtSameTime = contentLogRepository.saveAndFlush(
+            new ContentLog(content, null, ContentLogStatus.DELETED, "등록 요청 철회", later)
+        );
+        ContentLog earliest = contentLogRepository.saveAndFlush(
+            new ContentLog(content, actor, ContentLogStatus.PENDING, null, earlier)
+        );
+        content.softDelete();
+        contentRepository.flush();
+        entityManager.clear();
+
+        List<ContentLog> histories = contentLogRepository
+            .findByContentContentIdOrderByDateAscIdAsc(content.getContentId());
+
+        assertThat(histories).extracting(ContentLog::getId)
+            .containsExactly(earliest.getId(), firstAtSameTime.getId(), secondAtSameTime.getId());
+        PersistenceUnitUtil persistenceUnitUtil = entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
+        assertThat(persistenceUnitUtil.isLoaded(histories.get(0), "actor")).isTrue();
+        assertThat(histories.get(0).getActor().getName()).isEqualTo("홍길동");
     }
 
     private Content saveContent() {

@@ -10,6 +10,9 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 
 public interface ContentLogRepository extends JpaRepository<ContentLog, Long> {
 
+    @EntityGraph(attributePaths = "actor")
+    List<ContentLog> findByContentContentIdOrderByDateAscIdAsc(Long contentId);
+
     @EntityGraph(attributePaths = "content")
     List<ContentLog> findTop2ByContentContentIdAndContentDeletedAtIsNullAndContentStatusOrderByDateDescIdDesc(
         Long contentId,
