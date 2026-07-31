@@ -118,9 +118,79 @@ class UserRoleAssignmentRepositoryTest {
         ).isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
+    void 활성_지역관리자_역할과_담당지역을_한번에_조회한다() {
+        AppUser appUser = saveUser("region-admin@example.com");
+        Region region = regionRepository.saveAndFlush(new Region("GIMHAE", "김해시", true));
+        userRoleAssignmentRepository.saveAndFlush(
+            new UserRoleAssignment(appUser, UserRole.REGION_ADMIN, region)
+        );
+        entityManager.clear();
+
+        UserRoleAssignment assignment = userRoleAssignmentRepository
+            .findByIdUserIdAndIdRoleAndAppUserStatus(
+                appUser.getUserId(),
+                UserRole.REGION_ADMIN,
+                AppUserStatus.ACTIVE
+            )
+            .orElseThrow();
+
+        assertThat(assignment.getAppUser().getUserId()).isEqualTo(appUser.getUserId());
+        assertThat(assignment.getRole()).isEqualTo(UserRole.REGION_ADMIN);
+        assertThat(Hibernate.isInitialized(assignment.getRegion())).isTrue();
+        assertThat(assignment.getRegion().getRegionId()).isEqualTo(region.getRegionId());
+    }
+
+    @Test
+    void 존재하지_않는_회원은_지역관리자로_조회되지_않는다() {
+        assertThat(userRoleAssignmentRepository.findByIdUserIdAndIdRoleAndAppUserStatus(
+            Long.MAX_VALUE,
+            UserRole.REGION_ADMIN,
+            AppUserStatus.ACTIVE
+        )).isEmpty();
+    }
+
+    @Test
+    void 탈퇴_처리중인_회원은_지역관리자로_조회되지_않는다() {
+        AppUser appUser = saveUser("withdrawing-admin@example.com", AppUserStatus.WITHDRAWING);
+        Region region = regionRepository.saveAndFlush(new Region("DONGHAE", "동해시", true));
+        userRoleAssignmentRepository.saveAndFlush(
+            new UserRoleAssignment(appUser, UserRole.REGION_ADMIN, region)
+        );
+        entityManager.clear();
+
+        assertThat(userRoleAssignmentRepository.findByIdUserIdAndIdRoleAndAppUserStatus(
+            appUser.getUserId(),
+            UserRole.REGION_ADMIN,
+            AppUserStatus.ACTIVE
+        )).isEmpty();
+    }
+
+    @Test
+    void 지역관리자_역할이_없는_회원은_조회되지_않는다() {
+        AppUser appUser = saveUser("visitor-only@example.com");
+        userRoleAssignmentRepository.saveAndFlush(
+            new UserRoleAssignment(appUser, UserRole.VISITOR, null)
+        );
+        entityManager.clear();
+
+        assertThat(userRoleAssignmentRepository.findByIdUserIdAndIdRoleAndAppUserStatus(
+            appUser.getUserId(),
+            UserRole.REGION_ADMIN,
+            AppUserStatus.ACTIVE
+        )).isEmpty();
+    }
+
     private AppUser saveUser(String loginIdentifier) {
+        return saveUser(loginIdentifier, AppUserStatus.ACTIVE);
+    }
+
+    private AppUser saveUser(
+        String loginIdentifier,
+        AppUserStatus status
+    ) {
         return appUserRepository.saveAndFlush(
-            new AppUser(loginIdentifier, "hashed-password", "홍길동", "010-1234-5678", AppUserStatus.ACTIVE)
+            new AppUser(loginIdentifier, "hashed-password", "홍길동", "010-1234-5678", status)
         );
     }
 }
