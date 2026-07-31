@@ -23,7 +23,7 @@ class InitialP0SchemaMigrationTest {
     }
 
     @Test
-    void 빈_데이터베이스에_V1부터_V10까지_현재_P0_스키마를_생성한다() {
+    void 빈_데이터베이스에_V1부터_V11까지_현재_P0_스키마를_생성한다() {
         List<String> appliedVersions = jdbcTemplate.queryForList(
             "SELECT \"version\" FROM \"flyway_schema_history\" WHERE \"version\" IS NOT NULL AND \"success\" = TRUE",
             String.class
@@ -60,6 +60,15 @@ class InitialP0SchemaMigrationTest {
                 FROM information_schema.columns
                 WHERE table_schema = 'PUBLIC'
                   AND table_name = 'CONTENT_REVISION'
+            """,
+            String.class
+        );
+        List<String> imageObjectColumnNames = jdbcTemplate.queryForList(
+            """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'PUBLIC'
+                  AND table_name = 'IMAGE_OBJECT'
                 """,
             String.class
         );
@@ -73,7 +82,19 @@ class InitialP0SchemaMigrationTest {
             String.class
         );
 
-        assertThat(appliedVersions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10");
+        assertThat(appliedVersions).containsExactly(
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11"
+        );
         assertThat(tableNames).contains(
             "REGION",
             "APP_USER",
@@ -107,6 +128,8 @@ class InitialP0SchemaMigrationTest {
             "CK_CONTENT_SESSION_STATUS_V2",
             "CK_CONTENT_SESSION_REVIEW_STATE",
             "FK_SESSION_REVISION_TARGET_SESSION_CONTENT_REGION",
+            "FK_IMAGE_OBJECT_CREATED_BY_USER",
+            "FK_IMAGE_OBJECT_REGION",
             "CK_SESSION_REVISION_REVIEW_STATE",
             "FK_RESERVATION_HOLD_SESSION_REGION",
             "UK_RESERVATION_RESERVATION_NO",
@@ -132,6 +155,12 @@ class InitialP0SchemaMigrationTest {
             "REVIEWED_AT",
             "REVIEWED_BY_USER_ID",
             "REJECT_REASON"
+        );
+        assertThat(imageObjectColumnNames).contains(
+            "CREATED_BY_USER_ID",
+            "REGION_ID",
+            "UPLOAD_EXPIRES_AT",
+            "LINKED_AT"
         );
     }
 }
