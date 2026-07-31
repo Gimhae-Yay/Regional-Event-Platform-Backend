@@ -2,8 +2,11 @@ package io.regionevent.regioneventbackend.infra.redis;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Duration;
 import java.time.Instant;
+import java.util.Properties;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,6 +28,7 @@ class RedisRefreshTokenStoreIntegrationTest {
 
     @Container
     static final GenericContainer<?> redis = new GenericContainer<>("redis:7.4-alpine")
+        .withCommand("redis-server", "--maxmemory", "64mb", "--maxmemory-policy", "noeviction")
         .withExposedPorts(6379);
 
     @Autowired
@@ -42,6 +46,15 @@ class RedisRefreshTokenStoreIntegrationTest {
     @BeforeEach
     void clearRedis() {
         stringRedisTemplate.getConnectionFactory().getConnection().serverCommands().flushDb();
+    }
+
+    @Test
+    void authRedis_usesNoevictionPolicy() {
+        Properties configuration = stringRedisTemplate.getConnectionFactory().getConnection()
+            .serverCommands()
+            .getConfig("maxmemory-policy");
+
+        assertThat(configuration.getProperty("maxmemory-policy")).isEqualTo("noeviction");
     }
 
     @Test
@@ -82,6 +95,66 @@ class RedisRefreshTokenStoreIntegrationTest {
     }
 
     @Test
+    void startRotation_whenUserFamilyIndexIsMissing_returnsInvalid() {
+        RefreshToken current = refreshToken(1L);
+        refreshTokenStore.createFamily(current);
+        stringRedisTemplate.delete("auth:refresh:user:1:families");
+
+        assertThat(refreshTokenStore.startRotation(current, UUID.randomUUID()))
+            .isEqualTo(RefreshTokenStore.RotationStartResult.INVALID);
+    }
+
+    @Test
+    void startRotation_whenConsumedTokenMarkerIsMissing_revokesFamily() {
+        RefreshToken current = refreshToken(1L);
+        refreshTokenStore.createFamily(current);
+        UUID attemptId = UUID.randomUUID();
+        UUID nextTokenId = UUID.randomUUID();
+        assertThat(refreshTokenStore.startRotation(current, attemptId))
+            .isEqualTo(RefreshTokenStore.RotationStartResult.STARTED);
+        assertThat(refreshTokenStore.completeRotation(current, nextTokenId, attemptId)).isTrue();
+        stringRedisTemplate.delete("auth:refresh:token:" + current.tokenId() + ":consumed");
+
+        assertThat(refreshTokenStore.startRotation(current, UUID.randomUUID()))
+            .isEqualTo(RefreshTokenStore.RotationStartResult.INVALID);
+        assertThat(refreshTokenStore.startRotation(nextToken(current, nextTokenId), UUID.randomUUID()))
+            .isEqualTo(RefreshTokenStore.RotationStartResult.INVALID);
+    }
+
+    @Test
+    void revokeFamily_removesCurrentRotationMarkerAndUserIndex() {
+        RefreshToken current = refreshToken(1L);
+        refreshTokenStore.createFamily(current);
+        assertThat(refreshTokenStore.startRotation(current, UUID.randomUUID()))
+            .isEqualTo(RefreshTokenStore.RotationStartResult.STARTED);
+
+        refreshTokenStore.revokeFamily(current);
+
+        assertThat(stringRedisTemplate.hasKey("auth:refresh:family:" + current.familyId() + ":active")).isFalse();
+        assertThat(stringRedisTemplate.hasKey("auth:refresh:token:" + current.tokenId() + ":rotation")).isFalse();
+        assertThat(stringRedisTemplate.hasKey("auth:refresh:user:1:families")).isFalse();
+    }
+
+    @Test
+    void expiredFamilyState_isRemovedByRedisTtl() throws InterruptedException {
+        RefreshToken current = refreshToken(1L, Duration.ofMillis(500));
+        refreshTokenStore.createFamily(current);
+
+        Long remainingTtl = stringRedisTemplate.getExpire(
+            "auth:refresh:family:" + current.familyId() + ":active",
+            TimeUnit.MILLISECONDS
+        );
+        assertThat(remainingTtl).isPositive().isLessThanOrEqualTo(500L);
+
+        Thread.sleep(700L);
+
+        assertThat(stringRedisTemplate.hasKey("auth:refresh:family:" + current.familyId() + ":active")).isFalse();
+        assertThat(stringRedisTemplate.hasKey("auth:refresh:user:1:families")).isFalse();
+        assertThat(refreshTokenStore.startRotation(current, UUID.randomUUID()))
+            .isEqualTo(RefreshTokenStore.RotationStartResult.INVALID);
+    }
+
+    @Test
     void revokeAllFamilies_invalidatesEveryActiveFamilyAndRemovesUserIndex() {
         RefreshToken first = refreshToken(1L);
         RefreshToken second = refreshToken(1L);
@@ -98,13 +171,27 @@ class RedisRefreshTokenStoreIntegrationTest {
     }
 
     private RefreshToken refreshToken(Long userId) {
+        return refreshToken(userId, Duration.ofHours(1));
+    }
+
+    private RefreshToken refreshToken(Long userId, Duration expiresIn) {
         Instant issuedAt = Instant.now();
         return new RefreshToken(
             userId,
             UUID.randomUUID(),
             UUID.randomUUID(),
             issuedAt,
-            issuedAt.plusSeconds(3_600)
+            issuedAt.plus(expiresIn)
+        );
+    }
+
+    private RefreshToken nextToken(RefreshToken current, UUID nextTokenId) {
+        return new RefreshToken(
+            current.userId(),
+            nextTokenId,
+            current.familyId(),
+            Instant.now(),
+            current.expiresAt()
         );
     }
 }
