@@ -206,6 +206,66 @@ public class IdempotencyRecord {
         return expiresAt;
     }
 
+    public void completeWithReservation(
+        String resultCode,
+        Reservation reservation,
+        Instant completedAt,
+        Instant expiresAt
+    ) {
+        requireProcessing();
+        if (operation != IdempotencyOperation.RESERVATION_CONFIRM) {
+            throw new IllegalStateException("only reservation confirmation can have a reservation result");
+        }
+        this.resultCode = requireNonBlank(resultCode, "resultCode");
+        this.resultReservation = requireNotNull(reservation, "reservation");
+        this.resultVisit = null;
+        complete(completedAt, expiresAt, IdempotencyRecordStatus.SUCCEEDED);
+    }
+
+    public void completeWithVisit(
+        String resultCode,
+        Visit visit,
+        Instant completedAt,
+        Instant expiresAt
+    ) {
+        requireProcessing();
+        if (operation != IdempotencyOperation.CHECK_IN) {
+            throw new IllegalStateException("only check-in can have a visit result");
+        }
+        this.resultCode = requireNonBlank(resultCode, "resultCode");
+        this.resultReservation = null;
+        this.resultVisit = requireNotNull(visit, "visit");
+        complete(completedAt, expiresAt, IdempotencyRecordStatus.SUCCEEDED);
+    }
+
+    public void completeWithFailure(String resultCode, Instant completedAt, Instant expiresAt) {
+        requireProcessing();
+        this.resultCode = requireNonBlank(resultCode, "resultCode");
+        this.resultReservation = null;
+        this.resultVisit = null;
+        complete(completedAt, expiresAt, IdempotencyRecordStatus.FAILED);
+    }
+
+    private void requireProcessing() {
+        if (status != IdempotencyRecordStatus.PROCESSING) {
+            throw new IllegalStateException("only processing record can be completed");
+        }
+    }
+
+    private void complete(
+        Instant completedAt,
+        Instant expiresAt,
+        IdempotencyRecordStatus completedStatus
+    ) {
+        this.completedAt = requireNotNull(completedAt, "completedAt");
+        this.expiresAt = requireNotNull(expiresAt, "expiresAt");
+        if (!expiresAt.isAfter(completedAt)) {
+            throw new IllegalArgumentException("expiresAt must be after completedAt");
+        }
+        this.status = completedStatus;
+        validateResultFields();
+    }
+
     private void validateResultFields() {
         if (status == IdempotencyRecordStatus.PROCESSING || status == IdempotencyRecordStatus.FAILED) {
             validateNoResult();
