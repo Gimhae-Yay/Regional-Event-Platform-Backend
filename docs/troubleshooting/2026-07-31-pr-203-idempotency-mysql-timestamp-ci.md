@@ -4,7 +4,7 @@
 
 | 항목 | 내용 |
 | --- | --- |
-| 상태 | 원인 확인 |
+| 상태 | 해결 |
 | 영향 | PR #203의 GitHub Actions `빌드 및 테스트`가 실패해 병합할 수 없다. |
 | 최초 확인 시각·시간대 | 2026-07-31 16:31 KST |
 | 관련 요구사항·이슈 | ADR-0048, #182, PR #203 |
@@ -70,6 +70,7 @@
 | 2026-07-31 16:37 KST | 변경 | 만료 입력을 `NOW.minusSeconds(1)`로 교체 | 테스트 시계도 `NOW`로 고정돼 있다면 정책상 만료됐고 MySQL이 수용 가능한 시각이 된다. | 관련 저장소 테스트와 로컬 전체 빌드는 통과했지만 Docker 테스트는 스킵됐다. | 부분 채택 |
 | 2026-07-31 16:39 KST | 검증 | 수정 후 Actions run `30613494008` 확인 | 데이터 절단이 사라지고 삭제 정책까지 통과한다. | 데이터 절단은 사라졌으나 삭제 건수는 0이었다. | 부분 채택 |
 | 2026-07-31 16:41 KST | 가설 | 테스트 시계와 `NOW` 기반 데이터가 서로 다른 시간축을 사용한다. | `Clock.systemUTC()`의 현재는 `NOW.minusSeconds(1)`보다 이르므로 삭제되지 않는다. | Actions 실행일은 2026-07-31이고 `NOW`는 2026-08-02라 예측과 일치한다. | 채택 |
+| 2026-07-31 16:44 KST | 검증 | 시계 고정 후 Actions run `30613755161` 확인 | MySQL 통합 테스트와 전체 빌드가 통과한다. | `./gradlew --no-daemon clean build`가 1분 9초에 성공했다. | 채택 |
 
 ## 가설과 검증
 
@@ -91,7 +92,7 @@
   `deleteExpiredTerminalRecords()`가 0을 반환한다.
 - 반증 조건: 서비스의 주입 시계가 `NOW`로 고정돼 있거나 저장된 `expires_at`이 실제 실행 시각보다 과거다.
 - 검증 방법: 테스트 설정과 Actions 실행 시각을 대조하고, 테스트 시계를 `NOW`로 고정해 동일 Actions를 재실행한다.
-- 결과: 설정과 실행 시각이 예측과 일치한다. 수정 후 Actions 검증이 필요하다.
+- 결과: 설정과 실행 시각이 예측과 일치했고, 시계를 고정한 Actions run `30613755161`이 통과했다.
 - 판정: 채택
 
 ## 근본 원인
@@ -121,7 +122,7 @@
 
 | 검증 항목 | Before | After | 판정 |
 | --- | --- | --- | --- |
-| 원래 재현 절차 | 첫 Actions에서 `MysqlDataTruncation` | 두 번째 Actions에서 데이터 절단 해소, 삭제 건수 0 | 부분 통과 |
+| 원래 재현 절차 | 첫 Actions에서 `MysqlDataTruncation`, 두 번째 Actions에서 삭제 건수 0 | 세 번째 Actions에서 전체 빌드 성공 | 통과 |
 
 ## 회귀 테스트
 
@@ -131,6 +132,7 @@
 | `IdempotencyRecordRepositoryTest` | 성공 | 관련 저장소 회귀 |
 | `./gradlew build` | 성공 | Docker 의존 테스트 5개 스킵 |
 | `git diff --check` | 성공 | 변경 정합성 |
+| Actions run `30613755161`의 `./gradlew --no-daemon clean build` | 성공 | MySQL 8.0.42 Testcontainers 포함 |
 
 ## 재발 방지와 문서 반영
 
@@ -139,11 +141,12 @@ DB 시각 경계를 테스트 목적과 무관한 임의 최솟값으로 표현�
 
 ## 잔여 위험과 후속 작업
 
-테스트 시계를 고정한 뒤 GitHub Actions의 MySQL 8.0.42 실행으로 데이터 저장과 삭제 정책이 모두
-통과하는지 확인해야 한다. 로컬 전체 빌드는 성공했지만 Docker 의존 테스트 5개는 스킵됐다.
+로컬에서는 Docker 의존 테스트 5개가 스킵됐지만 GitHub Actions의 MySQL 8.0.42 전체 빌드로 보완했다.
+현재 확인된 잔여 기능 위험은 없다.
 
 ## 관련 자료
 
 - GitHub Actions run `30611504848`
 - GitHub Actions run `30613494008`
+- GitHub Actions run `30613755161`
 - `docs/adr/0048-retain-terminal-idempotency-records-for-24-hours.md`
