@@ -23,7 +23,7 @@ public interface IdempotencyRecordRepository extends JpaRepository<IdempotencyRe
 
     @Modifying
     @Query(value = """
-        INSERT INTO idempotency_record (
+        INSERT IGNORE INTO idempotency_record (
             actor_user_id,
             operation,
             idempotency_key_hash,
