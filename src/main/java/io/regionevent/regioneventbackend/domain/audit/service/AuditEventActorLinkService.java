@@ -22,6 +22,6 @@ public class AuditEventActorLinkService {
         if (actor == null) {
             return;
         }
-        auditEventActorLinkRepository.save(new AuditEventActorLink(auditEvent, actor.user()));
+        auditEventActorLinkRepository.save(new AuditEventActorLink(auditEvent, actor.getAppUser()));
     }
 }

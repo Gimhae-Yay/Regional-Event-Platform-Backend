@@ -32,7 +32,7 @@ public class AuditEventService {
             command.result(),
             command.reasonCode(),
             actor == null ? SYSTEM_ACTOR_KIND : USER_ACTOR_KIND,
-            actor == null ? null : actor.role().name(),
+            actor == null ? null : actor.getRole().name(),
             command.occurredAt()
         ));
     }

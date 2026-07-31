@@ -26,7 +26,9 @@ import io.regionevent.regioneventbackend.domain.region.repository.RegionReposito
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
+import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
+import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 
 @DataJpaTest
 @Import({
@@ -43,6 +45,7 @@ class RecordAuditEventUseCaseTest {
     private final AuditEventRepository auditEventRepository;
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
+    private final UserRoleAssignmentRepository userRoleAssignmentRepository;
     private final EntityManager entityManager;
 
     @Autowired
@@ -53,6 +56,7 @@ class RecordAuditEventUseCaseTest {
         AuditEventRepository auditEventRepository,
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
+        UserRoleAssignmentRepository userRoleAssignmentRepository,
         EntityManager entityManager
     ) {
         this.recordAuditEventUseCase = recordAuditEventUseCase;
@@ -61,6 +65,7 @@ class RecordAuditEventUseCaseTest {
         this.auditEventRepository = auditEventRepository;
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
+        this.userRoleAssignmentRepository = userRoleAssignmentRepository;
         this.entityManager = entityManager;
     }
 
@@ -74,6 +79,9 @@ class RecordAuditEventUseCaseTest {
             "010-1234-5678",
             AppUserStatus.ACTIVE
         ));
+        UserRoleAssignment roleAssignment = userRoleAssignmentRepository.saveAndFlush(
+            new UserRoleAssignment(actor, UserRole.REGION_ADMIN, region)
+        );
 
         AuditEvent auditEvent = recordAuditEventUseCase.record(new AuditEventCommand(
             UUID.fromString("00000000-0000-0000-0000-000000000001"),
@@ -84,7 +92,7 @@ class RecordAuditEventUseCaseTest {
             "PUBLISHED",
             AuditEventResult.SUCCESS,
             "CONTENT_APPROVED",
-            new AuditEventActor(actor, UserRole.REGION_ADMIN),
+            new AuditEventActor(roleAssignment),
             Instant.parse("2026-07-31T00:00:00Z")
         ));
         entityManager.flush();
@@ -169,9 +177,33 @@ class RecordAuditEventUseCaseTest {
             "010-9876-5432",
             AppUserStatus.WITHDRAWING
         ));
+        UserRoleAssignment roleAssignment = userRoleAssignmentRepository.saveAndFlush(
+            new UserRoleAssignment(withdrawingUser, UserRole.VISITOR, null)
+        );
 
         assertThatIllegalArgumentException().isThrownBy(
-            () -> new AuditEventActor(withdrawingUser, UserRole.VISITOR)
+            () -> new AuditEventActor(roleAssignment)
+        );
+    }
+
+    @Test
+    void 실제로_부여되지_않은_역할은_감사_처리자_입력으로_사용할_수_없다() {
+        AppUser appUser = appUserRepository.saveAndFlush(new AppUser(
+            "visitor@example.com",
+            "password-hash",
+            "방문자",
+            "010-2222-3333",
+            AppUserStatus.ACTIVE
+        ));
+        Region region = regionRepository.saveAndFlush(new Region("GIMHAE", "김해시", true));
+        userRoleAssignmentRepository.saveAndFlush(
+            new UserRoleAssignment(appUser, UserRole.VISITOR, null)
+        );
+
+        assertThatIllegalArgumentException().isThrownBy(
+            () -> new AuditEventActor(
+                new UserRoleAssignment(appUser, UserRole.REGION_ADMIN, region)
+            )
         );
     }
 
