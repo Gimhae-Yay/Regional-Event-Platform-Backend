@@ -59,7 +59,7 @@
 `upload_expires_at`, `linked_at`, `lifecycle_status`를 검증한다. 동시에 S3 `HEAD` 결과의 SHA-256 Base64
 체크섬과 `ContentLength`가 DB에 저장된 `checksum`, `byte_size`와 같은지 확인한다. 모든 조건을 만족할 때만
 대표 이미지 FK를 설정하고 같은 트랜잭션에서 `linked_at`을 현재 시각으로 저장한 뒤 `created_by_user_id`를 `NULL`로 제거한다.
-S3 `HEAD` 검증과 삭제 요청은 ADR-0051의 `aws-starter-s3` 기반 인프라 어댑터를 통해 수행하며, 연결
+S3 `HEAD` 검증과 삭제 요청은 ADR-0051의 Spring Cloud AWS S3 starter 기반 인프라 어댑터를 통해 수행하며, 연결
 트랜잭션 안의 권한·상태 검증 계약은 그대로 유지한다.
 
 만료 시각까지 `linked_at IS NULL`이고 콘텐츠·수정본 직접 FK 참조도 없는 `ACTIVE` 객체는 보관 작업이
