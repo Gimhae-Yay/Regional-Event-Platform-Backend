@@ -13,7 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 import io.regionevent.regioneventbackend.domain.image.dto.UploadRepresentativeImageRequest;
 import io.regionevent.regioneventbackend.domain.image.dto.UploadRepresentativeImageResponse;
 import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
-import io.regionevent.regioneventbackend.domain.image.repository.ImageObjectRepository;
 import io.regionevent.regioneventbackend.domain.image.service.ImageStorageGateway.PresignedUpload;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService.AuthorizedOperator;
@@ -36,18 +35,18 @@ public class UploadRepresentativeImageUseCase {
         .withZone(ZoneOffset.UTC);
 
     private final OperatorAuthorizationService operatorAuthorizationService;
-    private final ImageObjectRepository imageObjectRepository;
+    private final ImageObjectService imageObjectService;
     private final ImageStorageGateway imageStorageGateway;
     private final Clock clock;
 
     public UploadRepresentativeImageUseCase(
         OperatorAuthorizationService operatorAuthorizationService,
-        ImageObjectRepository imageObjectRepository,
+        ImageObjectService imageObjectService,
         ImageStorageGateway imageStorageGateway,
         Clock clock
     ) {
         this.operatorAuthorizationService = operatorAuthorizationService;
-        this.imageObjectRepository = imageObjectRepository;
+        this.imageObjectService = imageObjectService;
         this.imageStorageGateway = imageStorageGateway;
         this.clock = clock;
     }
@@ -61,7 +60,7 @@ public class UploadRepresentativeImageUseCase {
         AuthorizedOperator operator = operatorAuthorizationService.requireAuthorizedOperator(authenticatedUserId);
         String objectKey = generateObjectKey(request.mediaType());
         PresignedUpload presignedUpload = createPresignedUpload(request, objectKey);
-        ImageObject imageObject = ImageObject.createUploadCandidate(
+        ImageObject imageObject = imageObjectService.createUploadCandidate(
             objectKey,
             operator.user(),
             operator.region(),
@@ -70,10 +69,9 @@ public class UploadRepresentativeImageUseCase {
             request.checksum(),
             presignedUpload.expiresAt()
         );
-        ImageObject savedImageObject = imageObjectRepository.saveAndFlush(imageObject);
 
         return new UploadRepresentativeImageResponse(
-            savedImageObject.getImageObjectId().toString(),
+            imageObject.getImageObjectId().toString(),
             presignedUpload.uploadUrl(),
             presignedUpload.expiresAt(),
             presignedUpload.uploadHeaders()
