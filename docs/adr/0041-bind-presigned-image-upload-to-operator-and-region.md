@@ -9,6 +9,7 @@
 - 관련 이슈: [#97](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/97), [#164](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/164)
 - 대체 대상: [ADR-0016](0016-use-private-s3-presigned-urls-and-immediate-image-deletion.md)의 업로드 URL 발급 시
   콘텐츠 또는 활성 수정본 문맥 확인 요구 중 사전 업로드 범위
+- 구현 의존성: [ADR-0051](0051-use-aws-starter-s3-for-s3-integration.md)
 
 ## 맥락
 
@@ -58,6 +59,8 @@
 `upload_expires_at`, `linked_at`, `lifecycle_status`를 검증한다. 동시에 S3 `HEAD` 결과의 SHA-256 Base64
 체크섬과 `ContentLength`가 DB에 저장된 `checksum`, `byte_size`와 같은지 확인한다. 모든 조건을 만족할 때만
 대표 이미지 FK를 설정하고 같은 트랜잭션에서 `linked_at`을 현재 시각으로 저장한 뒤 `created_by_user_id`를 `NULL`로 제거한다.
+S3 `HEAD` 검증과 삭제 요청은 ADR-0051의 Spring Cloud AWS S3 starter 기반 인프라 어댑터를 통해 수행하며, 연결
+트랜잭션 안의 권한·상태 검증 계약은 그대로 유지한다.
 
 만료 시각까지 `linked_at IS NULL`이고 콘텐츠·수정본 직접 FK 참조도 없는 `ACTIVE` 객체는 보관 작업이
 `DELETE_PENDING`으로 전환한 뒤 S3 삭제를 시도한다. 삭제 실패 시 기존 삭제 재시도 컬럼으로 멱등 재시도한다.
