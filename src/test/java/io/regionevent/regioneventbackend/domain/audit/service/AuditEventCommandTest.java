@@ -41,11 +41,35 @@ class AuditEventCommandTest {
         ).doesNotThrowAnyException();
     }
 
+    @Test
+    void 실패_감사_이벤트는_사유_코드가_없으면_생성할_수_없다() {
+        assertThatIllegalArgumentException().isThrownBy(
+            () -> createCommand(AuditEventResult.FAILURE, null, null, null, null)
+        );
+    }
+
+    @Test
+    void 실패_감사_이벤트는_공백_사유_코드를_허용하지_않는다() {
+        assertThatIllegalArgumentException().isThrownBy(
+            () -> createCommand(AuditEventResult.FAILURE, null, null, null, " ")
+        );
+    }
+
     private AuditEventCommand createCommand(
         AuditEventResult result,
         Long targetId,
         String previousState,
         String nextState
+    ) {
+        return createCommand(result, targetId, previousState, nextState, "CONTENT_APPROVED");
+    }
+
+    private AuditEventCommand createCommand(
+        AuditEventResult result,
+        Long targetId,
+        String previousState,
+        String nextState,
+        String reasonCode
     ) {
         return new AuditEventCommand(
             UUID.fromString("00000000-0000-0000-0000-000000000004"),
@@ -55,7 +79,7 @@ class AuditEventCommandTest {
             previousState,
             nextState,
             result,
-            "CONTENT_APPROVED",
+            reasonCode,
             null,
             Instant.parse("2026-07-31T00:00:00Z")
         );

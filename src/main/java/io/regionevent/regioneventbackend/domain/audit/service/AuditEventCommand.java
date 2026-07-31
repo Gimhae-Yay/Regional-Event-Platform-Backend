@@ -44,6 +44,7 @@ public record AuditEventCommand(
             throw new IllegalArgumentException("result must not be null");
         }
         validateSuccessfulStateTransition(result, targetId, nextState);
+        validateFailedAuditReasonCode(result, reasonCode);
         validateOptionalCode(reasonCode, MAX_REASON_CODE_LENGTH, "reasonCode");
         if (occurredAt == null) {
             throw new IllegalArgumentException("occurredAt must not be null");
@@ -63,6 +64,15 @@ public record AuditEventCommand(
         }
         if (nextState == null) {
             throw new IllegalArgumentException("success audit event nextState must not be null");
+        }
+    }
+
+    private static void validateFailedAuditReasonCode(
+        AuditEventResult result,
+        String reasonCode
+    ) {
+        if (result == AuditEventResult.FAILURE && (reasonCode == null || reasonCode.isBlank())) {
+            throw new IllegalArgumentException("failed audit event reasonCode must not be null or blank");
         }
     }
 
