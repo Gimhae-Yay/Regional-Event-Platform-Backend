@@ -1,10 +1,13 @@
 package io.regionevent.regioneventbackend.domain.idempotency.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.Timestamp;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -22,6 +25,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,6 +55,9 @@ import io.regionevent.regioneventbackend.domain.reservation.repository.Reservati
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
+import io.regionevent.regioneventbackend.domain.visit.entity.CheckinMethod;
+import io.regionevent.regioneventbackend.domain.visit.entity.Visit;
+import io.regionevent.regioneventbackend.domain.visit.repository.VisitRepository;
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -63,7 +70,8 @@ import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepositor
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class IdempotencyServiceMySqlTest {
 
-    private static final Instant NOW = Instant.parse("2026-08-02T00:00:00Z");
+    private static final Instant NOW = Instant.parse("2037-08-02T00:00:00Z");
+    private static final Instant EXPIRED_AT = Instant.parse("2000-01-01T00:00:00Z");
 
     @Container
     static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.42");
@@ -76,6 +84,7 @@ class IdempotencyServiceMySqlTest {
     private final ContentSessionRepository contentSessionRepository;
     private final CapacityHoldRepository capacityHoldRepository;
     private final ReservationRepository reservationRepository;
+    private final VisitRepository visitRepository;
     private final JdbcTemplate jdbcTemplate;
     private final TransactionTemplate transactionTemplate;
 
@@ -89,6 +98,7 @@ class IdempotencyServiceMySqlTest {
         ContentSessionRepository contentSessionRepository,
         CapacityHoldRepository capacityHoldRepository,
         ReservationRepository reservationRepository,
+        VisitRepository visitRepository,
         JdbcTemplate jdbcTemplate,
         PlatformTransactionManager transactionManager
     ) {
@@ -100,6 +110,7 @@ class IdempotencyServiceMySqlTest {
         this.contentSessionRepository = contentSessionRepository;
         this.capacityHoldRepository = capacityHoldRepository;
         this.reservationRepository = reservationRepository;
+        this.visitRepository = visitRepository;
         this.jdbcTemplate = jdbcTemplate;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
@@ -140,7 +151,29 @@ class IdempotencyServiceMySqlTest {
         assertThat(savedRecord.getResultCode()).isEqualTo("RESERVATION_CONFIRMED");
         assertThat(savedRecord.getResultReservation().getReservationId())
             .isEqualTo(fixture.reservation().getReservationId());
-        assertThat(savedRecord.getExpiresAt()).isAfter(savedRecord.getCompletedAt());
+        assertThat(savedRecord.getCompletedAt()).isEqualTo(NOW);
+        assertThat(savedRecord.getExpiresAt()).isEqualTo(NOW.plus(Duration.ofHours(24)));
+    }
+
+    @Test
+    void 체크인_성공_결과를_재사용한다() {
+        ReservationFixture fixture = createReservationFixture();
+        Visit visit = createVisit(fixture);
+        IdempotencyCommand command = checkInCommand(fixture.actor(), "check-in-key", "check-in-request");
+
+        inTransaction(() -> {
+            IdempotencyAcquireResult.Acquired acquired =
+                (IdempotencyAcquireResult.Acquired) idempotencyService.acquire(command);
+            idempotencyService.completeWithVisit(acquired.record(), "CHECKED_IN", visit);
+            return null;
+        });
+        IdempotencyAcquireResult retryResult = inTransaction(() -> idempotencyService.acquire(command));
+
+        assertThat(retryResult).isInstanceOf(IdempotencyAcquireResult.Succeeded.class);
+        IdempotencyRecord savedRecord = ((IdempotencyAcquireResult.Succeeded) retryResult).record();
+        assertThat(savedRecord.getOperation()).isEqualTo(IdempotencyOperation.CHECK_IN);
+        assertThat(savedRecord.getResultCode()).isEqualTo("CHECKED_IN");
+        assertThat(savedRecord.getResultVisit().getVisitId()).isEqualTo(visit.getVisitId());
     }
 
     @Test
@@ -177,6 +210,27 @@ class IdempotencyServiceMySqlTest {
         IdempotencyAcquireResult retryResult = inTransaction(() -> idempotencyService.acquire(command));
 
         assertThat(retryResult).isInstanceOf(IdempotencyAcquireResult.Acquired.class);
+    }
+
+    @Test
+    void 외부_트랜잭션_없이_점유할_수_없다() {
+        AppUser actor = createActor();
+
+        assertThatThrownBy(() -> idempotencyService.acquire(command(actor, "mandatory-key", "mandatory-request")))
+            .isInstanceOf(IllegalTransactionStateException.class);
+    }
+
+    @Test
+    void 점유_뒤에_MySQL_세션_잠금_대기_제한을_복원한다() {
+        AppUser actor = createActor();
+
+        int originalLockWaitTimeout = inTransaction(this::findMySqlLockWaitTimeout);
+        int restoredLockWaitTimeout = inTransaction(() -> {
+            idempotencyService.acquire(command(actor, "lock-timeout-key", "lock-timeout-request"));
+            return findMySqlLockWaitTimeout();
+        });
+
+        assertThat(restoredLockWaitTimeout).isEqualTo(originalLockWaitTimeout);
     }
 
     @Test
@@ -230,7 +284,7 @@ class IdempotencyServiceMySqlTest {
         inTransaction(() -> {
             jdbcTemplate.update(
                 "UPDATE idempotency_record SET expires_at = ? WHERE actor_user_id = ? AND idempotency_key_hash = ?",
-                Timestamp.from(Instant.EPOCH),
+                Timestamp.from(EXPIRED_AT),
                 actor.getUserId(),
                 "expired-failed-key"
             );
@@ -250,6 +304,37 @@ class IdempotencyServiceMySqlTest {
             IdempotencyOperation.RESERVATION_CONFIRM,
             "processing-key"
         )).hasValueSatisfying(record -> assertThat(record.getStatus()).isEqualTo(IdempotencyRecordStatus.PROCESSING));
+    }
+
+    @Test
+    void 데이터베이스_현재_시각보다_이르지_않은_종결_기록은_정리하지_않는다() {
+        AppUser actor = createActor();
+        IdempotencyCommand command = command(actor, "database-clock-key", "database-clock-request");
+
+        inTransaction(() -> {
+            IdempotencyAcquireResult.Acquired acquired =
+                (IdempotencyAcquireResult.Acquired) idempotencyService.acquire(command);
+            idempotencyService.completeWithFailure(acquired.record(), "RESERVATION_CONFIRM_CONFLICT");
+            return null;
+        });
+        inTransaction(() -> {
+            jdbcTemplate.update(
+                "UPDATE idempotency_record SET expires_at = ? WHERE actor_user_id = ? AND idempotency_key_hash = ?",
+                Timestamp.from(NOW.minusSeconds(1)),
+                actor.getUserId(),
+                "database-clock-key"
+            );
+            return null;
+        });
+
+        int deletedCount = inTransaction(idempotencyService::deleteExpiredTerminalRecords);
+
+        assertThat(deletedCount).isZero();
+        assertThat(idempotencyRecordRepository.findByActorUserIdAndOperationAndIdempotencyKeyHash(
+            actor.getUserId(),
+            IdempotencyOperation.RESERVATION_CONFIRM,
+            "database-clock-key"
+        )).isPresent();
     }
 
     private AppUser createActor() {
@@ -330,8 +415,21 @@ class IdempotencyServiceMySqlTest {
                 null,
                 null
             ));
-            return new ReservationFixture(actor, reservation);
+            return new ReservationFixture(actor, operator, region, content, session, reservation);
         });
+    }
+
+    private Visit createVisit(ReservationFixture fixture) {
+        return inTransaction(() -> visitRepository.saveAndFlush(new Visit(
+            fixture.region(),
+            fixture.reservation(),
+            fixture.actor(),
+            fixture.content(),
+            fixture.session(),
+            fixture.operator(),
+            CheckinMethod.QR,
+            NOW
+        )));
     }
 
     private IdempotencyCommand command(AppUser actor, String idempotencyKeyHash, String requestHash) {
@@ -341,6 +439,19 @@ class IdempotencyServiceMySqlTest {
             idempotencyKeyHash,
             requestHash
         );
+    }
+
+    private IdempotencyCommand checkInCommand(AppUser actor, String idempotencyKeyHash, String requestHash) {
+        return new IdempotencyCommand(
+            actor,
+            IdempotencyOperation.CHECK_IN,
+            idempotencyKeyHash,
+            requestHash
+        );
+    }
+
+    private int findMySqlLockWaitTimeout() {
+        return jdbcTemplate.queryForObject("SELECT @@SESSION.innodb_lock_wait_timeout", Integer.class);
     }
 
     private <T> T inTransaction(TransactionalSupplier<T> supplier) {
@@ -364,7 +475,14 @@ class IdempotencyServiceMySqlTest {
         T get();
     }
 
-    private record ReservationFixture(AppUser actor, Reservation reservation) {
+    private record ReservationFixture(
+        AppUser actor,
+        AppUser operator,
+        Region region,
+        Content content,
+        ContentSession session,
+        Reservation reservation
+    ) {
     }
 
     @TestConfiguration
@@ -372,7 +490,7 @@ class IdempotencyServiceMySqlTest {
 
         @Bean
         Clock clock() {
-            return Clock.systemUTC();
+            return Clock.fixed(NOW, ZoneOffset.UTC);
         }
     }
 }
