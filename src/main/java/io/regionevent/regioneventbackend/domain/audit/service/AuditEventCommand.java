@@ -43,9 +43,26 @@ public record AuditEventCommand(
         if (result == null) {
             throw new IllegalArgumentException("result must not be null");
         }
+        validateSuccessfulStateTransition(result, targetId, nextState);
         validateOptionalCode(reasonCode, MAX_REASON_CODE_LENGTH, "reasonCode");
         if (occurredAt == null) {
             throw new IllegalArgumentException("occurredAt must not be null");
+        }
+    }
+
+    private static void validateSuccessfulStateTransition(
+        AuditEventResult result,
+        Long targetId,
+        String nextState
+    ) {
+        if (result != AuditEventResult.SUCCESS) {
+            return;
+        }
+        if (targetId == null) {
+            throw new IllegalArgumentException("success audit event targetId must not be null");
+        }
+        if (nextState == null) {
+            throw new IllegalArgumentException("success audit event nextState must not be null");
         }
     }
 

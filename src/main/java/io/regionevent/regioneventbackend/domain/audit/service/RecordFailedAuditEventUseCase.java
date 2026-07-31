@@ -60,12 +60,13 @@ public class RecordFailedAuditEventUseCase {
                 auditEventActorLinkService.record(auditEvent, command.actor());
             });
         } catch (RuntimeException exception) {
-            log.warn(
+            log.error(
                 "독립 감사 기록에 실패했습니다. requestId={}, targetType={}, targetId={}, reasonCode={}",
                 command.requestId(),
                 command.targetType(),
                 command.targetId(),
-                command.reasonCode()
+                command.reasonCode(),
+                exception
             );
         }
     }
