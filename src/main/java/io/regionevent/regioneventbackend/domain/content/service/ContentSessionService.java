@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.domain.content.service;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
@@ -23,6 +24,16 @@ public class ContentSessionService {
             sessionId,
             ContentStatus.PUBLISHED
         ).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    @Transactional(readOnly = true)
+    public PublicSessionReservationInfo findPublicScheduledReservationInfo(Long sessionId) {
+        return contentSessionRepository.findPublicScheduledReservationInfo(
+            sessionId,
+            ContentStatus.PUBLISHED,
+            ContentSessionStatus.SCHEDULED
+        ).map(PublicSessionReservationInfo::from)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
     public void reserveCapacity(Long sessionId, int quantity) {
