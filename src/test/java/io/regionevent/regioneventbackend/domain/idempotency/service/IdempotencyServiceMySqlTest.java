@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -230,7 +231,7 @@ class IdempotencyServiceMySqlTest {
         inTransaction(() -> {
             jdbcTemplate.update(
                 "UPDATE idempotency_record SET expires_at = ? WHERE actor_user_id = ? AND idempotency_key_hash = ?",
-                Timestamp.from(Instant.EPOCH),
+                Timestamp.from(NOW.minusSeconds(1)),
                 actor.getUserId(),
                 "expired-failed-key"
             );
@@ -372,7 +373,7 @@ class IdempotencyServiceMySqlTest {
 
         @Bean
         Clock clock() {
-            return Clock.systemUTC();
+            return Clock.fixed(NOW, ZoneOffset.UTC);
         }
     }
 }
