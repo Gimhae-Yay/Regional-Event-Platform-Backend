@@ -68,6 +68,19 @@ public class ContentSession {
     @Column(name = "remaining_capacity", nullable = false)
     private int remainingCapacity;
 
+    @Column(name = "reviewed_at")
+    private Instant reviewedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+        name = "reviewed_by_user_id",
+        foreignKey = @ForeignKey(name = "fk_content_session_reviewed_by_user")
+    )
+    private AppUser reviewedByUser;
+
+    @Column(name = "reject_reason", columnDefinition = "TEXT")
+    private String rejectReason;
+
     @Column(name = "cancelled_at")
     private Instant cancelledAt;
 
@@ -108,7 +121,7 @@ public class ContentSession {
     ) {
         this.content = requireNotNull(content, "content");
         this.region = requireNotNull(region, "region");
-        this.status = ContentSessionStatus.SCHEDULED;
+        this.status = ContentSessionStatus.PENDING;
         this.startsAt = requireNotNull(startsAt, "startsAt");
         this.endsAt = requireNotNull(endsAt, "endsAt");
         this.checkinOpenAt = requireNotNull(checkinOpenAt, "checkinOpenAt");
@@ -128,6 +141,55 @@ public class ContentSession {
     @PreUpdate
     protected void onUpdate() {
         updatedAt = Instant.now();
+    }
+
+    public void approve(
+        AppUser reviewedByUser,
+        Instant reviewedAt
+    ) {
+        validateStatus(ContentSessionStatus.PENDING);
+        AppUser validatedReviewer = requireNotNull(reviewedByUser, "reviewedByUser");
+        Instant validatedReviewedAt = requireNotNull(reviewedAt, "reviewedAt");
+        this.status = ContentSessionStatus.SCHEDULED;
+        this.reviewedByUser = validatedReviewer;
+        this.reviewedAt = validatedReviewedAt;
+    }
+
+    public void reject(
+        AppUser reviewedByUser,
+        Instant reviewedAt,
+        String rejectReason
+    ) {
+        validateStatus(ContentSessionStatus.PENDING);
+        AppUser validatedReviewer = requireNotNull(reviewedByUser, "reviewedByUser");
+        Instant validatedReviewedAt = requireNotNull(reviewedAt, "reviewedAt");
+        String validatedRejectReason = requireNotBlank(rejectReason, "rejectReason");
+        this.status = ContentSessionStatus.REJECTED;
+        this.reviewedByUser = validatedReviewer;
+        this.reviewedAt = validatedReviewedAt;
+        this.rejectReason = validatedRejectReason;
+    }
+
+    public void complete(Instant completedAt) {
+        validateStatus(ContentSessionStatus.SCHEDULED);
+        Instant validatedCompletedAt = requireNotNull(completedAt, "completedAt");
+        this.status = ContentSessionStatus.COMPLETED;
+        this.completedAt = validatedCompletedAt;
+    }
+
+    public void cancel(
+        AppUser cancelledByUser,
+        Instant cancelledAt,
+        String cancellationReason
+    ) {
+        validateStatus(ContentSessionStatus.SCHEDULED);
+        AppUser validatedCanceller = requireNotNull(cancelledByUser, "cancelledByUser");
+        Instant validatedCancelledAt = requireNotNull(cancelledAt, "cancelledAt");
+        String validatedCancellationReason = requireNotBlank(cancellationReason, "cancellationReason");
+        this.status = ContentSessionStatus.CANCELLED;
+        this.cancelledByUser = validatedCanceller;
+        this.cancelledAt = validatedCancelledAt;
+        this.cancellationReason = validatedCancellationReason;
     }
 
     public Long getSessionId() {
@@ -170,6 +232,18 @@ public class ContentSession {
         return remainingCapacity;
     }
 
+    public Instant getReviewedAt() {
+        return reviewedAt;
+    }
+
+    public AppUser getReviewedByUser() {
+        return reviewedByUser;
+    }
+
+    public String getRejectReason() {
+        return rejectReason;
+    }
+
     public Instant getCancelledAt() {
         return cancelledAt;
     }
@@ -203,6 +277,21 @@ public class ContentSession {
             throw new IllegalArgumentException(fieldName + " must not be null");
         }
         return value;
+    }
+
+    private static String requireNotBlank(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(fieldName + " must not be null or blank");
+        }
+        return value;
+    }
+
+    private void validateStatus(ContentSessionStatus expectedStatus) {
+        if (status != expectedStatus) {
+            throw new IllegalStateException(
+                "content session status must be " + expectedStatus + " but was " + status
+            );
+        }
     }
 
     private static void validateTimeRange(

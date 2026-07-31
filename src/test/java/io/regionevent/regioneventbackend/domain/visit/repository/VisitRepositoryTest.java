@@ -183,7 +183,11 @@ class VisitRepositoryTest {
     @Test
     void 방문은_예약과_회차와_콘텐츠와_지역의_복합_관계를_강제한다() {
         VisitFixtures fixtures = createFixtures();
-        ContentSession anotherContentSession = saveContentSession(fixtures.content(), fixtures.region());
+        ContentSession anotherContentSession = saveContentSession(
+            fixtures.content(),
+            fixtures.region(),
+            "another-session"
+        );
 
         assertThatThrownBy(() -> insertVisit(
             fixtures.reservation(),
@@ -216,7 +220,7 @@ class VisitRepositoryTest {
         VisitFixtures fixtures = createFixtures();
         Region anotherRegion = saveRegion("BUSAN");
         Content anotherContent = saveContent(anotherRegion, "busan-operator@example.com");
-        ContentSession anotherContentSession = saveContentSession(anotherContent, anotherRegion);
+        ContentSession anotherContentSession = saveContentSession(anotherContent, anotherRegion, "another-region");
 
         assertThatThrownBy(() -> new Visit(
             anotherRegion,
@@ -279,7 +283,7 @@ class VisitRepositoryTest {
     private VisitFixtures createFixtures() {
         Region region = saveRegion("GIMHAE");
         Content content = saveContent(region, "operator@example.com");
-        ContentSession contentSession = saveContentSession(content, region);
+        ContentSession contentSession = saveContentSession(content, region, "primary-session");
         AppUser user = saveUser("visitor@example.com");
         AppUser checkinOperator = saveUser("checkin-operator@example.com");
         CapacityHold capacityHold = capacityHoldRepository.saveAndFlush(new CapacityHold(
@@ -334,8 +338,9 @@ class VisitRepositoryTest {
         ));
     }
 
-    private ContentSession saveContentSession(Content content, Region region) {
-        return contentSessionRepository.saveAndFlush(new ContentSession(
+    private ContentSession saveContentSession(Content content, Region region, String reviewerIdentifier) {
+        AppUser reviewer = saveUser("reviewer-" + reviewerIdentifier + "@example.com");
+        ContentSession contentSession = new ContentSession(
             content,
             region,
             Instant.parse("2026-08-02T01:00:00Z"),
@@ -343,7 +348,9 @@ class VisitRepositoryTest {
             Instant.parse("2026-08-02T00:30:00Z"),
             Instant.parse("2026-08-02T02:30:00Z"),
             20
-        ));
+        );
+        contentSession.approve(reviewer, CONFIRMED_AT);
+        return contentSessionRepository.saveAndFlush(contentSession);
     }
 
     private AppUser saveUser(String loginIdentifier) {
