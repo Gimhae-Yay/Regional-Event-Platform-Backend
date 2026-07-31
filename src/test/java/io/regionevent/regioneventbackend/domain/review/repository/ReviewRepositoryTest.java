@@ -365,6 +365,7 @@ class ReviewRepositoryTest {
     }
 
     private ContentSession saveContentSession(Content content, Region region) {
+        AppUser reviewer = saveUser("reviewer-" + content.getContentId() + "@example.com");
         ContentSession contentSession = new ContentSession(
             content,
             region,
@@ -374,7 +375,7 @@ class ReviewRepositoryTest {
             Instant.parse("2026-08-02T02:30:00Z"),
             20
         );
-        contentSession.approve(content.getOperator(), CONFIRMED_AT);
+        contentSession.approve(reviewer, CONFIRMED_AT);
         return contentSessionRepository.saveAndFlush(contentSession);
     }
 

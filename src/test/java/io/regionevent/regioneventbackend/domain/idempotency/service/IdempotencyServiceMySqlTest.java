@@ -365,6 +365,13 @@ class IdempotencyServiceMySqlTest {
                 "010-9876-5432",
                 AppUserStatus.ACTIVE
             ));
+            AppUser reviewer = appUserRepository.saveAndFlush(new AppUser(
+                "reservation-reviewer-" + suffix + "@example.com",
+                "hashed-password",
+                "심사자",
+                "010-1111-2222",
+                AppUserStatus.ACTIVE
+            ));
             Content content = contentRepository.saveAndFlush(new Content(
                 region,
                 operator,
@@ -390,7 +397,7 @@ class IdempotencyServiceMySqlTest {
                 NOW.plusSeconds(9_000),
                 20
             );
-            session.approve(operator, NOW);
+            session.approve(reviewer, NOW);
             session = contentSessionRepository.saveAndFlush(session);
             CapacityHold hold = capacityHoldRepository.saveAndFlush(new CapacityHold(
                 region,

@@ -398,6 +398,7 @@ class ReservationRepositoryTest {
             "시작 하루 전까지 취소할 수 있습니다.",
             Instant.parse("2026-08-01T00:00:00Z")
         ));
+        AppUser reviewer = saveUser("reviewer-" + content.getContentId() + "@example.com");
 
         ContentSession contentSession = new ContentSession(
             content,
@@ -408,7 +409,7 @@ class ReservationRepositoryTest {
             Instant.parse("2026-08-02T02:30:00Z"),
             20
         );
-        contentSession.approve(operator, CONFIRMED_AT);
+        contentSession.approve(reviewer, CONFIRMED_AT);
         return contentSessionRepository.saveAndFlush(contentSession);
     }
 
