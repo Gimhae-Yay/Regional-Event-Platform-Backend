@@ -140,6 +140,32 @@ public class CapacityHold {
         String invalidationReason,
         Instant capacityReleasedAt
     ) {
+        this(
+            region,
+            contentSession,
+            user,
+            quantity,
+            status,
+            expiresAt,
+            terminalAt,
+            invalidationReason,
+            capacityReleasedAt,
+            null
+        );
+    }
+
+    public CapacityHold(
+        Region region,
+        ContentSession contentSession,
+        AppUser user,
+        int quantity,
+        CapacityHoldStatus status,
+        Instant expiresAt,
+        Instant terminalAt,
+        String invalidationReason,
+        Instant capacityReleasedAt,
+        Instant createdAt
+    ) {
         this.region = requireNotNull(region, "region");
         this.contentSession = requireNotNull(contentSession, "contentSession");
         validateSessionRegion(region, contentSession);
@@ -150,12 +176,15 @@ public class CapacityHold {
         this.terminalAt = terminalAt;
         this.invalidationReason = invalidationReason;
         this.capacityReleasedAt = capacityReleasedAt;
+        this.createdAt = createdAt;
         validateTerminalFields();
     }
 
     @PrePersist
     protected void onCreate() {
-        createdAt = Instant.now();
+        if (createdAt == null) {
+            createdAt = Instant.now();
+        }
     }
 
     public Long getHoldId() {
