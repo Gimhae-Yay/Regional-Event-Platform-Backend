@@ -17,20 +17,31 @@ import org.springframework.test.context.TestPropertySource;
 
 import io.regionevent.regioneventbackend.domain.image.entity.ImageLifecycleStatus;
 import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
+import io.regionevent.regioneventbackend.domain.region.entity.Region;
+import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
+import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
+import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
+import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 
 @DataJpaTest
 @TestPropertySource(properties = "spring.jpa.hibernate.ddl-auto=validate")
 class ImageObjectRepositoryTest {
 
     private final ImageObjectRepository imageObjectRepository;
+    private final RegionRepository regionRepository;
+    private final AppUserRepository appUserRepository;
     private final JdbcTemplate jdbcTemplate;
 
     @Autowired
     ImageObjectRepositoryTest(
         ImageObjectRepository imageObjectRepository,
+        RegionRepository regionRepository,
+        AppUserRepository appUserRepository,
         JdbcTemplate jdbcTemplate
     ) {
         this.imageObjectRepository = imageObjectRepository;
+        this.regionRepository = regionRepository;
+        this.appUserRepository = appUserRepository;
         this.jdbcTemplate = jdbcTemplate;
     }
 
@@ -58,6 +69,35 @@ class ImageObjectRepositoryTest {
         assertThat(savedImageObject.getDeleteAttemptCount()).isEqualTo(2);
         assertThat(savedImageObject.getLastDeleteAttemptedAt()).isEqualTo(lastDeleteAttemptedAt);
         assertThat(savedImageObject.getCreatedAt()).isNotNull();
+    }
+
+    @Test
+    void save_whenUploadCandidate_persistsUploadContext() {
+        Region region = regionRepository.saveAndFlush(new Region("UPLOAD", "김해시", true));
+        AppUser operator = appUserRepository.saveAndFlush(new AppUser(
+            "upload-operator@example.com",
+            "hashed-password",
+            "운영자",
+            "010-1234-5678",
+            AppUserStatus.ACTIVE
+        ));
+        Instant expiresAt = Instant.parse("2026-07-30T01:00:00Z");
+        ImageObject imageObject = ImageObject.createUploadCandidate(
+            "content/upload-candidate.webp",
+            operator,
+            region,
+            "image/webp",
+            1024L,
+            "sha256:upload",
+            expiresAt
+        );
+
+        ImageObject savedImageObject = imageObjectRepository.saveAndFlush(imageObject);
+
+        assertThat(savedImageObject.getCreatedByUser().getUserId()).isEqualTo(operator.getUserId());
+        assertThat(savedImageObject.getRegion().getRegionId()).isEqualTo(region.getRegionId());
+        assertThat(savedImageObject.getUploadExpiresAt()).isEqualTo(expiresAt);
+        assertThat(savedImageObject.getLinkedAt()).isNull();
     }
 
     @Test
@@ -138,6 +178,29 @@ class ImageObjectRepositoryTest {
 
         assertThat(indexedColumns)
             .containsExactly("LIFECYCLE_STATUS", "LAST_DELETE_ATTEMPTED_AT");
+    }
+
+    @Test
+    void flywayMigration_whenApplied_createsUploadCandidateIndex() {
+        List<String> indexedColumns = jdbcTemplate.query(
+            """
+                SELECT COLUMN_NAME
+                FROM INFORMATION_SCHEMA.INDEX_COLUMNS
+                WHERE TABLE_NAME = 'IMAGE_OBJECT'
+                  AND INDEX_NAME = 'IDX_IMAGE_OBJECT_UPLOAD_CANDIDATE'
+                ORDER BY ORDINAL_POSITION
+                """,
+            (resultSet, rowNumber) -> resultSet.getString("COLUMN_NAME")
+        );
+
+        assertThat(indexedColumns)
+            .containsExactly(
+                "REGION_ID",
+                "CREATED_BY_USER_ID",
+                "LIFECYCLE_STATUS",
+                "UPLOAD_EXPIRES_AT",
+                "LINKED_AT"
+            );
     }
 
     @Test
