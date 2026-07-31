@@ -31,6 +31,7 @@ public class JwtAccessTokenService {
     private final String activeKeyId;
     private final SecretKey activeKey;
     private final Map<String, SecretKey> verificationKeys;
+    private final Map<String, Instant> previousKeyVerificationEndTimes;
 
     public JwtAccessTokenService(JwtAccessTokenProperties properties, Clock clock) {
         Objects.requireNonNull(properties, "properties must not be null");
@@ -39,7 +40,9 @@ public class JwtAccessTokenService {
         audience = requireNotBlank(properties.getAudience(), "audience");
         activeKeyId = requireNotBlank(properties.getActiveKeyId(), "activeKeyId");
         activeKey = toSecretKey(properties.getActiveKey(), activeKeyId);
-        verificationKeys = createVerificationKeys(properties);
+        VerificationKeys configuredVerificationKeys = createVerificationKeys(properties);
+        verificationKeys = configuredVerificationKeys.keys();
+        previousKeyVerificationEndTimes = configuredVerificationKeys.previousKeyVerificationEndTimes();
     }
 
     public String issue(Long userId) {
@@ -80,22 +83,28 @@ public class JwtAccessTokenService {
         }
     }
 
-    private Map<String, SecretKey> createVerificationKeys(JwtAccessTokenProperties properties) {
+    private VerificationKeys createVerificationKeys(JwtAccessTokenProperties properties) {
         if (properties.getPreviousKeys().size() > 1) {
             throw new IllegalStateException("Only one previous JWT verification key is allowed");
         }
 
         Map<String, SecretKey> keys = new HashMap<>();
+        Map<String, Instant> previousKeyVerificationEndTimes = new HashMap<>();
         keys.put(activeKeyId, activeKey);
 
         for (JwtAccessTokenProperties.VerificationKey previousKey : properties.getPreviousKeys()) {
             String keyId = requireNotBlank(previousKey.getKeyId(), "previousKeyId");
             SecretKey key = toSecretKey(previousKey.getKey(), keyId);
+            Instant verificationEndsAt = requireVerificationEndsAt(previousKey.getVerificationEndsAt());
+            if (verificationEndsAt.isAfter(clock.instant().plus(ACCESS_TOKEN_TTL))) {
+                throw new IllegalStateException("Previous JWT verification key must expire within the access token lifetime");
+            }
             if (keys.putIfAbsent(keyId, key) != null) {
                 throw new IllegalStateException("Duplicate JWT verification key identifier");
             }
+            previousKeyVerificationEndTimes.put(keyId, verificationEndsAt);
         }
-        return Map.copyOf(keys);
+        return new VerificationKeys(Map.copyOf(keys), Map.copyOf(previousKeyVerificationEndTimes));
     }
 
     private SecretKey toSecretKey(String encodedKey, String keyId) {
@@ -126,7 +135,9 @@ public class JwtAccessTokenService {
             throw new InvalidAccessTokenException();
         }
         SecretKey verificationKey = verificationKeys.get(keyId);
-        if (verificationKey == null) {
+        Instant verificationEndsAt = previousKeyVerificationEndTimes.get(keyId);
+        if (verificationKey == null
+            || verificationEndsAt != null && !clock.instant().isBefore(verificationEndsAt)) {
             throw new InvalidAccessTokenException();
         }
         return verificationKey;
@@ -183,6 +194,19 @@ public class JwtAccessTokenService {
             throw new IllegalStateException(fieldName + " must not be blank");
         }
         return value;
+    }
+
+    private Instant requireVerificationEndsAt(Instant verificationEndsAt) {
+        if (verificationEndsAt == null) {
+            throw new IllegalStateException("previousKeyVerificationEndsAt must not be null");
+        }
+        return verificationEndsAt;
+    }
+
+    private record VerificationKeys(
+        Map<String, SecretKey> keys,
+        Map<String, Instant> previousKeyVerificationEndTimes
+    ) {
     }
 
     public record AuthenticatedUser(Long userId) {

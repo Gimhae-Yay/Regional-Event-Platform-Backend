@@ -5,3 +5,7 @@ security:
       audience: regional-event-api
       active-key-id: test-key
       active-key: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      previous-keys:
+        - key-id: expired-previous-key
+          key: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+          verification-ends-at: 2026-01-01T00:00:00Z

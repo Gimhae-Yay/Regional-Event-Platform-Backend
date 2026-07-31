@@ -157,6 +157,16 @@ class JwtAccessTokenServiceTest {
     }
 
     @Test
+    void authenticate_whenPreviousKeyVerificationHasEnded_throwsInvalidAccessTokenException() {
+        Clock verificationEndTime = Clock.fixed(ISSUED_AT.plus(Duration.ofMinutes(15)), ZoneOffset.UTC);
+        JwtAccessTokenService oldKeyService = createService(verificationEndTime);
+        JwtAccessTokenService rotatedKeyService = createRotatedKeyService(verificationEndTime);
+
+        assertThatThrownBy(() -> rotatedKeyService.authenticate(oldKeyService.issue(1L)))
+            .isInstanceOf(InvalidAccessTokenException.class);
+    }
+
+    @Test
     void createService_whenMoreThanOnePreviousKeyIsConfigured_throwsIllegalStateException() {
         JwtAccessTokenProperties properties = new JwtAccessTokenProperties();
         properties.setIssuer("regional-event-platform");
@@ -164,8 +174,8 @@ class JwtAccessTokenServiceTest {
         properties.setActiveKeyId("current-key");
         properties.setActiveKey(key(2));
         properties.setPreviousKeys(java.util.List.of(
-            verificationKey("previous-key-1", key(0)),
-            verificationKey("previous-key-2", key(1))
+            verificationKey("previous-key-1", key(0), ISSUED_AT.plus(Duration.ofMinutes(15))),
+            verificationKey("previous-key-2", key(1), ISSUED_AT.plus(Duration.ofMinutes(15)))
         ));
 
         assertThatThrownBy(() -> new JwtAccessTokenService(properties, Clock.systemUTC()))
@@ -178,6 +188,21 @@ class JwtAccessTokenServiceTest {
 
         assertThatThrownBy(() -> jwtAccessTokenService.issue(0L))
             .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void createService_whenPreviousKeyVerificationEndExceedsAccessTokenLifetime_throwsIllegalStateException() {
+        JwtAccessTokenProperties properties = new JwtAccessTokenProperties();
+        properties.setIssuer("regional-event-platform");
+        properties.setAudience("regional-event-api");
+        properties.setActiveKeyId("current-key");
+        properties.setActiveKey(key(1));
+        properties.setPreviousKeys(java.util.List.of(
+            verificationKey("previous-key", key(0), ISSUED_AT.plus(Duration.ofMinutes(15)).plusSeconds(1))
+        ));
+
+        assertThatThrownBy(() -> new JwtAccessTokenService(properties, Clock.fixed(ISSUED_AT, ZoneOffset.UTC)))
+            .isInstanceOf(IllegalStateException.class);
     }
 
     private JwtAccessTokenService createService(Clock clock) {
@@ -196,14 +221,21 @@ class JwtAccessTokenServiceTest {
         properties.setActiveKeyId("current-key");
         properties.setActiveKey(key(1));
 
-        properties.setPreviousKeys(java.util.List.of(verificationKey("test-key", key(0))));
+        properties.setPreviousKeys(java.util.List.of(
+            verificationKey("test-key", key(0), ISSUED_AT.plus(Duration.ofMinutes(15)))
+        ));
         return new JwtAccessTokenService(properties, clock);
     }
 
-    private JwtAccessTokenProperties.VerificationKey verificationKey(String keyId, String key) {
+    private JwtAccessTokenProperties.VerificationKey verificationKey(
+        String keyId,
+        String key,
+        Instant verificationEndsAt
+    ) {
         JwtAccessTokenProperties.VerificationKey verificationKey = new JwtAccessTokenProperties.VerificationKey();
         verificationKey.setKeyId(keyId);
         verificationKey.setKey(key);
+        verificationKey.setVerificationEndsAt(verificationEndsAt);
         return verificationKey;
     }
 
