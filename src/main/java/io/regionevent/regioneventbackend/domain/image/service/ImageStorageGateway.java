@@ -13,10 +13,20 @@ public interface ImageStorageGateway {
         Instant expiresAt
     );
 
+    StoredObjectMetadata findMetadata(String objectKey);
+
+    void delete(String objectKey);
+
     record PresignedUpload(
         String uploadUrl,
         Instant expiresAt,
         Map<String, String> uploadHeaders
+    ) {
+    }
+
+    record StoredObjectMetadata(
+        long byteSize,
+        String checksum
     ) {
     }
 }
