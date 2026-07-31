@@ -5,6 +5,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -12,6 +19,8 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.operator.entity.OperatorApplicationStatus;
@@ -27,6 +36,19 @@ import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignme
 @AutoConfigureMockMvc
 @Transactional
 class SignupControllerIntegrationTest {
+
+    private static final String VISITOR_SIGNUP_REQUEST = """
+        {
+          "email": "visitor@example.com",
+          "password": "LocalStamp!2026",
+          "name": "홍길동",
+          "phone": "01012345678",
+          "requestedRole": "VISITOR"
+        }
+        """;
+
+    private static final int CONCURRENT_SIGNUP_REQUEST_COUNT = 2;
+    private static final long CONCURRENT_SIGNUP_TIMEOUT_SECONDS = 5;
 
     @Autowired
     private MockMvc mockMvc;
@@ -220,4 +242,76 @@ class SignupControllerIntegrationTest {
         assertThat(appUserRepository.count()).isEqualTo(1);
         assertThat(userRoleAssignmentRepository.count()).isEqualTo(1);
     }
+
+    @Test
+    void signup_withNonAsciiPassword_returnsInvalidInputWithoutCreatingUser() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/signup")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "email": "visitor@example.com",
+                      "password": "\\uAC00A123456",
+                      "name": "홍길동",
+                      "phone": "01012345678",
+                      "requestedRole": "VISITOR"
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        assertThat(appUserRepository.count()).isZero();
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void signup_withSameEmailConcurrently_createsOneUserAndReturnsConflictForOtherRequest() throws Exception {
+        ExecutorService executorService = Executors.newFixedThreadPool(CONCURRENT_SIGNUP_REQUEST_COUNT);
+        CountDownLatch ready = new CountDownLatch(CONCURRENT_SIGNUP_REQUEST_COUNT);
+        CountDownLatch start = new CountDownLatch(1);
+
+        try {
+            Future<MvcResult> firstRequest = submitSignupRequest(executorService, ready, start);
+            Future<MvcResult> secondRequest = submitSignupRequest(executorService, ready, start);
+
+            assertThat(ready.await(CONCURRENT_SIGNUP_TIMEOUT_SECONDS, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            List<MvcResult> completedResults = List.of(
+                firstRequest.get(CONCURRENT_SIGNUP_TIMEOUT_SECONDS, TimeUnit.SECONDS),
+                secondRequest.get(CONCURRENT_SIGNUP_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            );
+
+            assertThat(completedResults)
+                .extracting(result -> result.getResponse().getStatus())
+                .containsExactlyInAnyOrder(201, 409);
+            assertThat(completedResults)
+                .filteredOn(result -> result.getResponse().getStatus() == 409)
+                .singleElement()
+                .satisfies(result -> assertThat(result.getResponse().getContentAsString())
+                    .contains("DUPLICATE_LOGIN_IDENTIFIER"));
+            assertThat(appUserRepository.count()).isEqualTo(1);
+            assertThat(userRoleAssignmentRepository.count()).isEqualTo(1);
+        } finally {
+            start.countDown();
+            executorService.shutdownNow();
+            userRoleAssignmentRepository.deleteAllInBatch();
+            appUserRepository.deleteAllInBatch();
+        }
+    }
+
+    private Future<MvcResult> submitSignupRequest(
+        ExecutorService executorService,
+        CountDownLatch ready,
+        CountDownLatch start
+    ) {
+        return executorService.submit(() -> {
+            ready.countDown();
+            start.await();
+            return mockMvc.perform(post("/api/v1/auth/signup")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(VISITOR_SIGNUP_REQUEST))
+                .andReturn();
+        });
+    }
+
 }
