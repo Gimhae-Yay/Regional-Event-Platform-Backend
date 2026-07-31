@@ -8,6 +8,7 @@ import java.util.Map;
 
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.ChecksumMode;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
@@ -84,6 +85,7 @@ public class S3ImageStorageClient implements ImageStorageGateway {
             HeadObjectRequest request = HeadObjectRequest.builder()
                 .bucket(bucketName)
                 .key(objectKey)
+                .checksumMode(ChecksumMode.ENABLED)
                 .build();
             HeadObjectResponse response = s3Client.headObject(request);
             return new StoredObjectMetadata(

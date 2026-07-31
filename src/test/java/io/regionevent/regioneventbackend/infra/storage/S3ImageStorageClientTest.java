@@ -17,6 +17,7 @@ import org.mockito.ArgumentCaptor;
 
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.ChecksumMode;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
@@ -87,6 +88,7 @@ class S3ImageStorageClientTest {
         verify(s3Client).headObject(requestCaptor.capture());
         assertThat(requestCaptor.getValue().bucket()).isEqualTo(BUCKET_NAME);
         assertThat(requestCaptor.getValue().key()).isEqualTo("contents/image.webp");
+        assertThat(requestCaptor.getValue().checksumMode()).isEqualTo(ChecksumMode.ENABLED);
         assertThat(metadata.byteSize()).isEqualTo(123L);
         assertThat(metadata.checksum()).isEqualTo("checksum");
     }
