@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.global.error;
 
+import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -43,6 +44,17 @@ class GlobalExceptionHandlerTest {
             .andExpect(jsonPath("$.message").value("접근 권한이 없습니다."))
             .andExpect(jsonPath("$.data").isEmpty())
             .andExpect(jsonPath("$.requestId").doesNotExist());
+    }
+
+    @Test
+    void handleBusinessException_contentStateConflict_serializesDefinedErrorResponse() throws Exception {
+        mockMvc.perform(get("/test/business/content-state-conflict"))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.statusCode").value(409))
+            .andExpect(jsonPath("$.code").value("CONTENT_STATE_CONFLICT"))
+            .andExpect(jsonPath("$.message").value("콘텐츠 상태가 요청을 처리할 수 없습니다."))
+            .andExpect(jsonPath("$.data").isEmpty())
+            .andExpect(jsonPath("$.*").value(hasSize(4)));
     }
 
     @Test
@@ -114,6 +126,11 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/business")
         String business() {
             throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        @GetMapping("/business/content-state-conflict")
+        String contentStateConflict() {
+            throw new BusinessException(ErrorCode.CONTENT_STATE_CONFLICT);
         }
 
         @PostMapping("/validation")
