@@ -121,7 +121,7 @@ CREATE TABLE content (
                 WHEN status = 'PENDING' THEN TRUE
                 WHEN status = 'APPROVED' THEN TRUE
                 ELSE FALSE
-            END
+            END = TRUE
         )
 );
 
