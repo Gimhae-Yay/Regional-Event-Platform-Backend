@@ -280,7 +280,8 @@ class SessionRevisionRepositoryTest {
         Region region = saveRegion("GIMHAE");
         AppUser operator = saveUser("operator@example.com");
         Content content = saveContent(region, operator);
-        ContentSession targetSession = contentSessionRepository.saveAndFlush(new ContentSession(
+        AppUser reviewedBy = saveUser("reviewer@example.com");
+        ContentSession targetSession = new ContentSession(
             content,
             region,
             STARTS_AT,
@@ -288,9 +289,10 @@ class SessionRevisionRepositoryTest {
             CHECKIN_OPEN_AT,
             CHECKIN_CLOSE_AT,
             20
-        ));
+        );
+        targetSession.approve(reviewedBy, SUBMITTED_AT);
+        targetSession = contentSessionRepository.saveAndFlush(targetSession);
         AppUser requestedBy = saveUser("requester@example.com");
-        AppUser reviewedBy = saveUser("reviewer@example.com");
 
         return new SessionRevisionFixtures(region, content, targetSession, requestedBy, reviewedBy);
     }
