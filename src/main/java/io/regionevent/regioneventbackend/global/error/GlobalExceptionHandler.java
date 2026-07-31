@@ -16,6 +16,8 @@ import org.springframework.web.method.annotation.HandlerMethodValidationExceptio
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+import tools.jackson.databind.exc.MismatchedInputException;
+
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.response.ApiResponse;
 
@@ -41,6 +43,10 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResponse<Void>> handleInvalidJson(HttpMessageNotReadableException exception) {
+        if (exception.getCause() instanceof MismatchedInputException mismatchedInputException
+            && !mismatchedInputException.getPath().isEmpty()) {
+            return ApiResponse.fail(ErrorCode.INVALID_TYPE).toResponseEntity();
+        }
         return ApiResponse.fail(ErrorCode.INVALID_JSON).toResponseEntity();
     }
 
