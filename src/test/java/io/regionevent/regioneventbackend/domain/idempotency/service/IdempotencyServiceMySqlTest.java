@@ -71,6 +71,7 @@ import io.regionevent.regioneventbackend.domain.visit.repository.VisitRepository
 class IdempotencyServiceMySqlTest {
 
     private static final Instant NOW = Instant.parse("2037-08-02T00:00:00Z");
+    private static final Instant EXPIRED_AT = Instant.parse("2000-01-01T00:00:00Z");
 
     @Container
     static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.42");
@@ -283,7 +284,7 @@ class IdempotencyServiceMySqlTest {
         inTransaction(() -> {
             jdbcTemplate.update(
                 "UPDATE idempotency_record SET expires_at = ? WHERE actor_user_id = ? AND idempotency_key_hash = ?",
-                Timestamp.from(Instant.EPOCH),
+                Timestamp.from(EXPIRED_AT),
                 actor.getUserId(),
                 "expired-failed-key"
             );
