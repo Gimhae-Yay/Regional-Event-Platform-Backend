@@ -62,7 +62,7 @@
 
 ### 가설 1: `dev`의 반환 타입·결과값 변경을 로그아웃 테스트가 반영하지 못했다
 
-- 근거: CI 컴파일러가 `RotationCompletionResult` 타입을 보고하며 현재 브랜치는 최신 `dev`를 포함하지 않는다.
+- 근거: CI 컴파일러가 `RotationCompletionResult` 타입을 보고했으며, 병합 전 브랜치는 최신 `dev`를 포함하지 않았다.
 - 참일 때의 예측: `dev` 병합 후 실제 Redis 상태 전이에 맞춘 enum 값 단언을 하면 대상 테스트가 통과한다.
 - 반증 조건: Docker 기반 Redis 테스트에서 `CONFLICT` 단언이 실패한다.
 - 검증 방법: 병합 뒤 반환 타입 정의와 호출부를 확인하고 대상 Gradle 테스트를 실행한다.
