@@ -25,8 +25,7 @@ public class RedisRefreshTokenStore implements RefreshTokenStore {
     private static final String ROTATION_SUFFIX = ":rotation";
     private static final long ROTATION_TTL_MILLIS = 5_000L;
 
-    private static final long CREATED = 1L;
-    private static final long STARTED = 1L;
+    private static final long SUCCESS = 1L;
     private static final long CONFLICT = 2L;
 
     private static final DefaultRedisScript<Long> CREATE_FAMILY_SCRIPT = script("""
@@ -87,7 +86,7 @@ public class RedisRefreshTokenStore implements RefreshTokenStore {
             return 0
         end
         if redis.call('GET', KEYS[4]) ~= ARGV[5] then
-            return 0
+            return 2
         end
         local indexedExpiry = redis.call('ZSCORE', KEYS[5], ARGV[4])
         if not indexedExpiry or tonumber(indexedExpiry) ~= expiry then
@@ -175,7 +174,7 @@ public class RedisRefreshTokenStore implements RefreshTokenStore {
             refreshToken.tokenId().toString(),
             refreshToken.familyId().toString()
         );
-        if (result != CREATED) {
+        if (result != SUCCESS) {
             throw new RefreshTokenStoreUnavailableException(new IllegalStateException("Unable to create refresh token family"));
         }
     }
@@ -200,7 +199,7 @@ public class RedisRefreshTokenStore implements RefreshTokenStore {
             KEY_PREFIX + "token:",
             ROTATION_SUFFIX
         );
-        if (result == STARTED) {
+        if (result == SUCCESS) {
             return RotationStartResult.STARTED;
         }
         if (result == CONFLICT) {
@@ -210,7 +209,7 @@ public class RedisRefreshTokenStore implements RefreshTokenStore {
     }
 
     @Override
-    public boolean completeRotation(RefreshToken refreshToken, UUID nextTokenId, UUID attemptId) {
+    public RotationCompletionResult completeRotation(RefreshToken refreshToken, UUID nextTokenId, UUID attemptId) {
         long result = execute(
             COMPLETE_ROTATION_SCRIPT,
             List.of(
@@ -227,7 +226,13 @@ public class RedisRefreshTokenStore implements RefreshTokenStore {
             attemptId.toString(),
             nextTokenId.toString()
         );
-        return result == CREATED;
+        if (result == SUCCESS) {
+            return RotationCompletionResult.COMPLETED;
+        }
+        if (result == CONFLICT) {
+            return RotationCompletionResult.CONFLICT;
+        }
+        return RotationCompletionResult.INVALID;
     }
 
     @Override
