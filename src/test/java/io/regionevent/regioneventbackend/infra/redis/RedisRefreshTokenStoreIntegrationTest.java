@@ -158,6 +158,45 @@ class RedisRefreshTokenStoreIntegrationTest {
     }
 
     @Test
+    void revokeFamily_whenActiveStateIsMissing_doesNotChangeUserIndexOrSetRevocationMarker() {
+        RefreshToken current = refreshToken(1L);
+        refreshTokenStore.createFamily(current);
+        stringRedisTemplate.delete("auth:refresh:family:" + current.familyId() + ":active");
+
+        refreshTokenStore.revokeFamily(current);
+
+        assertThat(stringRedisTemplate.hasKey("auth:refresh:user:1:families")).isTrue();
+        assertThat(stringRedisTemplate.hasKey("auth:refresh:family:" + current.familyId() + ":revoked")).isFalse();
+    }
+
+    @Test
+    void revokeFamily_whenUserIndexIsMissing_doesNotChangeActiveStateOrSetRevocationMarker() {
+        RefreshToken current = refreshToken(1L);
+        refreshTokenStore.createFamily(current);
+        stringRedisTemplate.delete("auth:refresh:user:1:families");
+
+        refreshTokenStore.revokeFamily(current);
+
+        assertThat(stringRedisTemplate.opsForValue().get("auth:refresh:family:" + current.familyId() + ":active"))
+            .isEqualTo(current.tokenId().toString());
+        assertThat(stringRedisTemplate.hasKey("auth:refresh:family:" + current.familyId() + ":revoked")).isFalse();
+    }
+
+    @Test
+    void revokeFamily_whenRevocationMarkerExists_doesNotChangeFamilyState() {
+        RefreshToken current = refreshToken(1L);
+        refreshTokenStore.createFamily(current);
+        stringRedisTemplate.opsForValue().set("auth:refresh:family:" + current.familyId() + ":revoked", "1");
+
+        refreshTokenStore.revokeFamily(current);
+
+        assertThat(stringRedisTemplate.opsForValue().get("auth:refresh:family:" + current.familyId() + ":active"))
+            .isEqualTo(current.tokenId().toString());
+        assertThat(stringRedisTemplate.hasKey("auth:refresh:user:1:families")).isTrue();
+        assertThat(stringRedisTemplate.hasKey("auth:refresh:family:" + current.familyId() + ":revoked")).isTrue();
+    }
+
+    @Test
     void expiredFamilyState_isRemovedByRedisTtl() throws InterruptedException {
         RefreshToken current = refreshToken(1L, Duration.ofMillis(500));
         refreshTokenStore.createFamily(current);
