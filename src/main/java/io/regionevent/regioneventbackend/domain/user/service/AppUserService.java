@@ -53,7 +53,7 @@ public class AppUserService {
             .filter(user -> passwordEncoder.matches(password, user.getPasswordHash()))
             .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_CREDENTIALS));
     }
-  
+
     public AppUser findActiveUser(Long userId) {
         return appUserRepository.findById(userId)
             .filter(user -> user.getStatus() == AppUserStatus.ACTIVE)
