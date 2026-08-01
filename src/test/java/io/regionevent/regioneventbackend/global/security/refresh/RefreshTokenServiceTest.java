@@ -59,6 +59,32 @@ class RefreshTokenServiceTest {
     }
 
     @Test
+    void rotate_whenVerificationFailsAfterStartingRotation_cancelsRotation() {
+        Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+        RecordingRefreshTokenStore refreshTokenStore = new RecordingRefreshTokenStore();
+        RefreshTokenService refreshTokenService = new RefreshTokenService(createJwtService(clock), refreshTokenStore, clock);
+        String token = refreshTokenService.issue(1L);
+
+        assertThatThrownBy(() -> refreshTokenService.rotate(token, ignored -> {
+            throw new InvalidRefreshTokenException();
+        })).isInstanceOf(InvalidRefreshTokenException.class);
+
+        assertThat(refreshTokenStore.cancelledAttemptId).isNotNull();
+    }
+
+    @Test
+    void rotate_whenRotationCompletionConflicts_throwsRefreshTokenConflictException() {
+        Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+        RecordingRefreshTokenStore refreshTokenStore = new RecordingRefreshTokenStore();
+        refreshTokenStore.rotationCompletionResult = RefreshTokenStore.RotationCompletionResult.CONFLICT;
+        RefreshTokenService refreshTokenService = new RefreshTokenService(createJwtService(clock), refreshTokenStore, clock);
+        String token = refreshTokenService.issue(1L);
+
+        assertThatThrownBy(() -> refreshTokenService.rotate(token))
+            .isInstanceOf(RefreshTokenConflictException.class);
+    }
+
+    @Test
     void issue_whenRedisStoreIsUnavailable_throwsRefreshTokenStoreUnavailableException() {
         Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
         RecordingRefreshTokenStore refreshTokenStore = new RecordingRefreshTokenStore();
@@ -81,7 +107,9 @@ class RefreshTokenServiceTest {
     private static class RecordingRefreshTokenStore implements RefreshTokenStore {
 
         private RotationStartResult rotationStartResult = RotationStartResult.STARTED;
+        private RotationCompletionResult rotationCompletionResult = RotationCompletionResult.COMPLETED;
         private UUID completedTokenId;
+        private UUID cancelledAttemptId;
         private RuntimeException createFamilyException;
 
         @Override
@@ -97,13 +125,14 @@ class RefreshTokenServiceTest {
         }
 
         @Override
-        public boolean completeRotation(RefreshToken refreshToken, UUID nextTokenId, UUID attemptId) {
+        public RotationCompletionResult completeRotation(RefreshToken refreshToken, UUID nextTokenId, UUID attemptId) {
             completedTokenId = nextTokenId;
-            return true;
+            return rotationCompletionResult;
         }
 
         @Override
         public void cancelRotation(RefreshToken refreshToken, UUID attemptId) {
+            cancelledAttemptId = attemptId;
         }
 
         @Override

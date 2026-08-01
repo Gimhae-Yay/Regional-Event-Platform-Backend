@@ -6,11 +6,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.util.Optional;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
+import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
@@ -36,5 +39,18 @@ class AppUserServiceTest {
         )).isInstanceOfSatisfying(BusinessException.class, exception ->
             assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.DUPLICATE_LOGIN_IDENTIFIER)
         );
+    }
+
+    @Test
+    void findActiveUserForUpdate_whenUserIsWithdrawing_returnsEmpty() {
+        AppUserRepository appUserRepository = mock(AppUserRepository.class);
+        PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
+        AppUserService appUserService = new AppUserService(appUserRepository, passwordEncoder);
+        AppUser user = mock(AppUser.class);
+
+        when(appUserRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(user));
+        when(user.getStatus()).thenReturn(AppUserStatus.WITHDRAWING);
+
+        assertThat(appUserService.findActiveUserForUpdate(1L)).isEmpty();
     }
 }

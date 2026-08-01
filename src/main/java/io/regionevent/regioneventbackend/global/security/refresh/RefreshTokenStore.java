@@ -8,7 +8,7 @@ public interface RefreshTokenStore {
 
     RotationStartResult startRotation(RefreshToken refreshToken, UUID attemptId);
 
-    boolean completeRotation(RefreshToken refreshToken, UUID nextTokenId, UUID attemptId);
+    RotationCompletionResult completeRotation(RefreshToken refreshToken, UUID nextTokenId, UUID attemptId);
 
     void cancelRotation(RefreshToken refreshToken, UUID attemptId);
 
@@ -18,6 +18,12 @@ public interface RefreshTokenStore {
 
     enum RotationStartResult {
         STARTED,
+        CONFLICT,
+        INVALID
+    }
+
+    enum RotationCompletionResult {
+        COMPLETED,
         CONFLICT,
         INVALID
     }

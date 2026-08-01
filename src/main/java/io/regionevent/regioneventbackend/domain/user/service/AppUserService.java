@@ -1,5 +1,7 @@
 package io.regionevent.regioneventbackend.domain.user.service;
 
+import java.util.Optional;
+
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -56,6 +58,11 @@ public class AppUserService {
         return appUserRepository.findById(userId)
             .filter(user -> user.getStatus() == AppUserStatus.ACTIVE)
             .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+    }
+
+    public Optional<AppUser> findActiveUserForUpdate(Long userId) {
+        return appUserRepository.findByIdForUpdate(userId)
+            .filter(user -> user.getStatus() == AppUserStatus.ACTIVE);
     }
 
     private void validateLoginIdentifierAvailable(String email) {
