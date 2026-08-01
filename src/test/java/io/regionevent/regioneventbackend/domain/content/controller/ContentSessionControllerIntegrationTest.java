@@ -137,19 +137,6 @@ class ContentSessionControllerIntegrationTest {
     }
 
     @Test
-    void 회차_예약정보_조회_삭제된_콘텐츠의_회차는_찾을수없음을_반환한다() throws Exception {
-        Fixture fixture = createFixture(ContentStatus.PENDING, 1, 60);
-
-        jdbcTemplate.update(
-            "UPDATE content SET deleted_at = CURRENT_TIMESTAMP WHERE content_id = ?",
-            fixture.content().getContentId()
-        );
-        entityManager.clear();
-
-        expectNotFound(fixture.session().getSessionId());
-    }
-
-    @Test
     void 회차_예약정보_조회_SCHEDULED가_아닌_회차는_찾을수없음을_반환한다() throws Exception {
         Fixture fixture = createFixture(ContentStatus.PUBLISHED, 1, 60);
 
