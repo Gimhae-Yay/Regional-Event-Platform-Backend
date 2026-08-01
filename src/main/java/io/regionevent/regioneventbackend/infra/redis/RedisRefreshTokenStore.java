@@ -116,16 +116,22 @@ public class RedisRefreshTokenStore implements RefreshTokenStore {
     private static final DefaultRedisScript<Long> REVOKE_FAMILY_SCRIPT = script("""
         local expiry = tonumber(ARGV[1])
         local now = tonumber(ARGV[2])
-        local activeTokenId = redis.call('GET', KEYS[1])
-        if activeTokenId then
-            redis.call('DEL', ARGV[4] .. activeTokenId .. ARGV[5])
+        if expiry <= now or redis.call('EXISTS', KEYS[2]) == 1 then
+            return 0
         end
+        local activeTokenId = redis.call('GET', KEYS[1])
+        if not activeTokenId or activeTokenId ~= ARGV[4] then
+            return 0
+        end
+        local indexedExpiry = redis.call('ZSCORE', KEYS[3], ARGV[3])
+        if not indexedExpiry or tonumber(indexedExpiry) ~= expiry then
+            return 0
+        end
+        redis.call('DEL', ARGV[5] .. activeTokenId .. ARGV[6])
         redis.call('DEL', KEYS[1])
         redis.call('ZREM', KEYS[3], ARGV[3])
-        if expiry > now then
-            redis.call('SET', KEYS[2], '1')
-            redis.call('PEXPIREAT', KEYS[2], expiry)
-        end
+        redis.call('SET', KEYS[2], '1')
+        redis.call('PEXPIREAT', KEYS[2], expiry)
         local latest = redis.call('ZRANGE', KEYS[3], -1, -1, 'WITHSCORES')
         if #latest == 0 then
             redis.call('DEL', KEYS[3])
@@ -247,6 +253,7 @@ public class RedisRefreshTokenStore implements RefreshTokenStore {
             Long.toString(expiresAtMillis(refreshToken)),
             Long.toString(currentMillis()),
             refreshToken.familyId().toString(),
+            refreshToken.tokenId().toString(),
             KEY_PREFIX + "token:",
             ROTATION_SUFFIX
         );

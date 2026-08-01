@@ -125,7 +125,8 @@ class RedisRefreshTokenStoreIntegrationTest {
     void revokeFamily_removesCurrentRotationMarkerAndUserIndex() {
         RefreshToken current = refreshToken(1L);
         refreshTokenStore.createFamily(current);
-        assertThat(refreshTokenStore.startRotation(current, UUID.randomUUID()))
+        UUID attemptId = UUID.randomUUID();
+        assertThat(refreshTokenStore.startRotation(current, attemptId))
             .isEqualTo(RefreshTokenStore.RotationStartResult.STARTED);
 
         refreshTokenStore.revokeFamily(current);
@@ -133,6 +134,27 @@ class RedisRefreshTokenStoreIntegrationTest {
         assertThat(stringRedisTemplate.hasKey("auth:refresh:family:" + current.familyId() + ":active")).isFalse();
         assertThat(stringRedisTemplate.hasKey("auth:refresh:token:" + current.tokenId() + ":rotation")).isFalse();
         assertThat(stringRedisTemplate.hasKey("auth:refresh:user:1:families")).isFalse();
+        assertThat(refreshTokenStore.completeRotation(current, UUID.randomUUID(), attemptId)).isFalse();
+    }
+
+    @Test
+    void revokeFamily_whenPresentedTokenIsConsumed_keepsNewActiveToken() {
+        RefreshToken current = refreshToken(1L);
+        refreshTokenStore.createFamily(current);
+        UUID attemptId = UUID.randomUUID();
+        UUID nextTokenId = UUID.randomUUID();
+        assertThat(refreshTokenStore.startRotation(current, attemptId))
+            .isEqualTo(RefreshTokenStore.RotationStartResult.STARTED);
+        assertThat(refreshTokenStore.completeRotation(current, nextTokenId, attemptId)).isTrue();
+
+        RefreshToken next = nextToken(current, nextTokenId);
+        refreshTokenStore.revokeFamily(current);
+
+        assertThat(stringRedisTemplate.opsForValue().get("auth:refresh:family:" + current.familyId() + ":active"))
+            .isEqualTo(nextTokenId.toString());
+        assertThat(stringRedisTemplate.hasKey("auth:refresh:family:" + current.familyId() + ":revoked")).isFalse();
+        assertThat(refreshTokenStore.startRotation(next, UUID.randomUUID()))
+            .isEqualTo(RefreshTokenStore.RotationStartResult.STARTED);
     }
 
     @Test
