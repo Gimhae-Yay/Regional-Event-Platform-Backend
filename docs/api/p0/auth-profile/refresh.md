@@ -126,6 +126,9 @@ Refresh Token은 JSON 본문, `Authorization` 헤더 또는 다른 일반 응답
 | 409 | `REFRESH_TOKEN_CONFLICT` | 같은 Refresh Token의 다른 갱신 요청이 진행 중이다. 토큰을 발급하지 않고 쿠키를 변경하지 않으며, 클라이언트는 진행 중인 갱신 결과를 사용하거나 완료 뒤 다시 시도한다. |
 | 503 | `AUTH_SERVICE_UNAVAILABLE` | Redis를 사용할 수 없어 계열 폐기·소비 상태를 안전하게 확인할 수 없다. 토큰을 발급하지 않고 쿠키를 변경하지 않으며 잠시 뒤 재시도할 수 있다. |
 
+`REFRESH_TOKEN_CONFLICT`의 공개 메시지는 `토큰 갱신 요청이 이미 진행 중입니다.`다.
+`AUTH_SERVICE_UNAVAILABLE`의 공개 메시지는 `인증 서비스를 일시적으로 사용할 수 없습니다.`다.
+
 #### Error Response Body
 
 ```json

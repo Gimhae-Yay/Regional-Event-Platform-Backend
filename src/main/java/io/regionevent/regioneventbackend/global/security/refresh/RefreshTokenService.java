@@ -2,8 +2,10 @@ package io.regionevent.regioneventbackend.global.security.refresh;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 public class RefreshTokenService {
 
@@ -38,6 +40,13 @@ public class RefreshTokenService {
     }
 
     public String rotate(String token) {
+        return rotate(token, ignored -> {
+        });
+    }
+
+    public String rotate(String token, Consumer<RefreshToken> beforeCompletion) {
+        Objects.requireNonNull(beforeCompletion, "beforeCompletion must not be null");
+
         RefreshToken currentToken = jwtRefreshTokenService.authenticate(token);
         UUID attemptId = UUID.randomUUID();
         RefreshTokenStore.RotationStartResult result = refreshTokenStore.startRotation(currentToken, attemptId);
@@ -48,19 +57,27 @@ public class RefreshTokenService {
             throw new InvalidRefreshTokenException();
         }
 
-        RefreshToken nextToken = currentToken.rotate(UUID.randomUUID(), currentInstant());
-        String rotatedToken;
         try {
-            rotatedToken = jwtRefreshTokenService.issue(nextToken);
+            beforeCompletion.accept(currentToken);
+
+            RefreshToken nextToken = currentToken.rotate(UUID.randomUUID(), currentInstant());
+            String rotatedToken = jwtRefreshTokenService.issue(nextToken);
+            RefreshTokenStore.RotationCompletionResult completionResult = refreshTokenStore.completeRotation(
+                currentToken,
+                nextToken.tokenId(),
+                attemptId
+            );
+            if (completionResult == RefreshTokenStore.RotationCompletionResult.CONFLICT) {
+                throw new RefreshTokenConflictException();
+            }
+            if (completionResult == RefreshTokenStore.RotationCompletionResult.INVALID) {
+                throw new InvalidRefreshTokenException();
+            }
+            return rotatedToken;
         } catch (RuntimeException exception) {
             refreshTokenStore.cancelRotation(currentToken, attemptId);
             throw exception;
         }
-
-        if (!refreshTokenStore.completeRotation(currentToken, nextToken.tokenId(), attemptId)) {
-            throw new InvalidRefreshTokenException();
-        }
-        return rotatedToken;
     }
 
     public void revokeCurrentFamily(String token) {
@@ -77,7 +94,7 @@ public class RefreshTokenService {
     }
 
     private Instant currentInstant() {
-        return Instant.ofEpochMilli(clock.instant().toEpochMilli());
+        return clock.instant().truncatedTo(ChronoUnit.SECONDS);
     }
 
     private void validateUserId(Long userId) {
