@@ -370,6 +370,11 @@ class ImageObjectCleanupServiceTest {
         }
 
         @Override
+        public PresignedViewUrl createPresignedGetUrl(String objectKey) {
+            throw new UnsupportedOperationException("not used in cleanup tests");
+        }
+
+        @Override
         public void delete(String objectKey) {
             beforeDelete.run();
             deletedObjectKeys.add(objectKey);
