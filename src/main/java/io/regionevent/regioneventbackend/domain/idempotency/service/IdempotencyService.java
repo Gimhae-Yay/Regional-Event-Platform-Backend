@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.List;
 
 import org.springframework.dao.CannotAcquireLockException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -37,6 +38,17 @@ public class IdempotencyService {
         ON DUPLICATE KEY UPDATE
             idempotency_record_id = LAST_INSERT_ID(0) + idempotency_record_id
         """;
+    private static final String H2_CLAIM_SQL = """
+        INSERT INTO idempotency_record (
+            actor_user_id,
+            operation,
+            idempotency_key_hash,
+            request_hash,
+            status,
+            created_at,
+            expires_at
+        ) VALUES (?, ?, ?, ?, 'PROCESSING', ?, ?)
+        """;
     private static final List<IdempotencyRecordStatus> TERMINAL_STATUSES = List.of(
         IdempotencyRecordStatus.SUCCEEDED,
         IdempotencyRecordStatus.FAILED
@@ -64,16 +76,7 @@ public class IdempotencyService {
         Integer previousLockWaitTimeout = configureMySqlLockWaitTimeout();
         try {
             Instant now = clock.instant();
-            jdbcTemplate.update(
-                CLAIM_SQL,
-                command.actor().getUserId(),
-                command.operation().name(),
-                command.idempotencyKeyHash(),
-                command.requestHash(),
-                now,
-                now.plus(properties.retention())
-            );
-            Long insertedRecordId = jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+            boolean inserted = claim(command, now);
             IdempotencyRecord record = idempotencyRecordRepository
                 .findByActorUserIdAndOperationAndIdempotencyKeyHash(
                     command.actor().getUserId(),
@@ -82,7 +85,7 @@ public class IdempotencyService {
                 )
                 .orElseThrow(() -> new IllegalStateException("claimed idempotency record does not exist"));
 
-            if (insertedRecordId != null && insertedRecordId.equals(record.getIdempotencyRecordId())) {
+            if (inserted) {
                 return new IdempotencyAcquireResult.Acquired(record);
             }
             return toExistingResult(record, command.requestHash());
@@ -100,7 +103,7 @@ public class IdempotencyService {
         Reservation reservation
     ) {
         Instant completedAt = clock.instant();
-        record.completeWithReservation(
+        findManagedRecord(record).completeWithReservation(
             resultCode,
             reservation,
             completedAt,
@@ -111,7 +114,7 @@ public class IdempotencyService {
     @Transactional(propagation = Propagation.MANDATORY)
     public void completeWithVisit(IdempotencyRecord record, String resultCode, Visit visit) {
         Instant completedAt = clock.instant();
-        record.completeWithVisit(
+        findManagedRecord(record).completeWithVisit(
             resultCode,
             visit,
             completedAt,
@@ -122,7 +125,7 @@ public class IdempotencyService {
     @Transactional(propagation = Propagation.MANDATORY)
     public void completeWithFailure(IdempotencyRecord record, String resultCode) {
         Instant completedAt = clock.instant();
-        record.completeWithFailure(
+        findManagedRecord(record).completeWithFailure(
             resultCode,
             completedAt,
             completedAt.plus(properties.retention())
@@ -146,6 +149,55 @@ public class IdempotencyService {
             case SUCCEEDED -> new IdempotencyAcquireResult.Succeeded(record);
             case FAILED -> new IdempotencyAcquireResult.Failed(record);
         };
+    }
+
+    private IdempotencyRecord findManagedRecord(IdempotencyRecord record) {
+        return idempotencyRecordRepository.findById(record.getIdempotencyRecordId())
+            .orElseThrow(() -> new IllegalStateException("claimed idempotency record does not exist"));
+    }
+
+    private boolean claim(IdempotencyCommand command, Instant now) {
+        if (isMySql()) {
+            jdbcTemplate.update(
+                CLAIM_SQL,
+                command.actor().getUserId(),
+                command.operation().name(),
+                command.idempotencyKeyHash(),
+                command.requestHash(),
+                now,
+                now.plus(properties.retention())
+            );
+            Long insertedRecordId = jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+            IdempotencyRecord record = idempotencyRecordRepository
+                .findByActorUserIdAndOperationAndIdempotencyKeyHash(
+                    command.actor().getUserId(),
+                    command.operation(),
+                    command.idempotencyKeyHash()
+                )
+                .orElseThrow(() -> new IllegalStateException("claimed idempotency record does not exist"));
+            return insertedRecordId != null && insertedRecordId.equals(record.getIdempotencyRecordId());
+        }
+
+        try {
+            jdbcTemplate.update(
+                H2_CLAIM_SQL,
+                command.actor().getUserId(),
+                command.operation().name(),
+                command.idempotencyKeyHash(),
+                command.requestHash(),
+                now,
+                now.plus(properties.retention())
+            );
+            return true;
+        } catch (DuplicateKeyException exception) {
+            return false;
+        }
+    }
+
+    private boolean isMySql() {
+        return Boolean.TRUE.equals(jdbcTemplate.execute(
+            (Connection connection) -> "MySQL".equalsIgnoreCase(connection.getMetaData().getDatabaseProductName())
+        ));
     }
 
     private Integer configureMySqlLockWaitTimeout() {

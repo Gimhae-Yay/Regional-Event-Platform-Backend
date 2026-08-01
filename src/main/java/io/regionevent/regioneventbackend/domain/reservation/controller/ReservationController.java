@@ -36,4 +36,5 @@ public class ReservationController {
         CreateReservationHoldResponse response = createReservationHoldUseCase.create(userId, request);
         return ApiResponse.success(HttpStatus.CREATED, CREATE_HOLD_SUCCESS_MESSAGE, response).toResponseEntity();
     }
+
 }
