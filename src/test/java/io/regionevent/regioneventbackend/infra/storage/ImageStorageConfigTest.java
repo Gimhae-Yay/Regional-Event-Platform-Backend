@@ -3,6 +3,7 @@ package io.regionevent.regioneventbackend.infra.storage;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Clock;
+import java.time.Duration;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -42,5 +43,19 @@ class ImageStorageConfigTest {
             assertThat(context).doesNotHaveBean(S3Presigner.class);
             assertThat(context.getBean(ImageStorageGateway.class)).isNotInstanceOf(S3ImageStorageClient.class);
         });
+    }
+
+    @Test
+    void s3StorageProperties_whenUrlTtlsAreMissing_usesDefaults() {
+        ImageStorageConfig.S3StorageProperties properties = new ImageStorageConfig.S3StorageProperties(
+            true,
+            "bucket",
+            "ap-northeast-2",
+            null,
+            null
+        );
+
+        assertThat(properties.presignedPutUrlTtl()).isEqualTo(Duration.ofMinutes(10));
+        assertThat(properties.presignedGetUrlTtl()).isEqualTo(Duration.ofMinutes(5));
     }
 }
