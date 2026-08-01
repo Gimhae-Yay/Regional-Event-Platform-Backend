@@ -3,6 +3,7 @@ package io.regionevent.regioneventbackend.domain.user.service;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.user.dto.LoginRequest;
 import io.regionevent.regioneventbackend.domain.user.dto.LoginResponse;
@@ -31,6 +32,7 @@ public class LoginUseCase {
         this.refreshTokenService = refreshTokenService;
     }
 
+    @Transactional
     public LoginResult login(LoginRequest request) {
         AppUser user = appUserService.authenticate(request.email(), request.password());
         List<String> roles = userRoleAssignmentService.findRolesByUserId(user.getUserId())
