@@ -56,7 +56,10 @@ public class CapacityHoldService {
         return capacityHold;
     }
 
-    @Transactional(propagation = Propagation.MANDATORY)
+    @Transactional(
+        propagation = Propagation.MANDATORY,
+        noRollbackFor = ReservationConfirmationConflictException.class
+    )
     public CapacityHold consumeIfConfirmable(Long holdId, Long userId) {
         int updatedCount = capacityHoldRepository.consumeIfConfirmable(
             holdId,

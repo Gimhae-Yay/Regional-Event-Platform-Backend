@@ -78,7 +78,7 @@ public class IdempotencyService {
             Instant now = clock.instant();
             boolean inserted = claim(command, now);
             IdempotencyRecord record = idempotencyRecordRepository
-                .findByActorUserIdAndOperationAndIdempotencyKeyHash(
+                .findByActorUserIdAndOperationAndIdempotencyKeyHashForUpdate(
                     command.actor().getUserId(),
                     command.operation(),
                     command.idempotencyKeyHash()
@@ -169,7 +169,7 @@ public class IdempotencyService {
             );
             Long insertedRecordId = jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
             IdempotencyRecord record = idempotencyRecordRepository
-                .findByActorUserIdAndOperationAndIdempotencyKeyHash(
+                .findByActorUserIdAndOperationAndIdempotencyKeyHashForUpdate(
                     command.actor().getUserId(),
                     command.operation(),
                     command.idempotencyKeyHash()

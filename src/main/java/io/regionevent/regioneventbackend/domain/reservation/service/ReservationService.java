@@ -47,7 +47,7 @@ public class ReservationService {
 
     @Transactional(readOnly = true)
     public Reservation findById(Long reservationId) {
-        return reservationRepository.findById(reservationId)
+        return reservationRepository.findByReservationIdForUpdate(reservationId)
             .orElseThrow(() -> new IllegalStateException("idempotency result reservation does not exist"));
     }
 

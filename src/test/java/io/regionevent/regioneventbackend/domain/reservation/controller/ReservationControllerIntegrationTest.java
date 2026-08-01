@@ -25,6 +25,7 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentSessionRepository;
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
 import io.regionevent.regioneventbackend.domain.idempotency.entity.IdempotencyRecordStatus;
@@ -337,6 +338,14 @@ class ReservationControllerIntegrationTest {
         assertThat(capacityHoldRepository.findById(secondHold.getHoldId()))
             .hasValueSatisfying(hold -> assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.ACTIVE));
         assertThat(reservationRepository.count()).isOne();
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(event -> event.getResult() == AuditEventResult.FAILURE)
+            .singleElement()
+            .satisfies(event -> {
+                assertThat(event.getTargetType()).isEqualTo(AuditEventTargetType.CAPACITY_HOLD);
+                assertThat(event.getTargetId()).isEqualTo(secondHold.getHoldId());
+                assertThat(event.getReasonCode()).isEqualTo("IDEMPOTENCY_KEY_CONFLICT");
+            });
     }
 
     @Test
@@ -359,6 +368,14 @@ class ReservationControllerIntegrationTest {
             .filteredOn(record -> record.getStatus() == IdempotencyRecordStatus.FAILED)
             .singleElement()
             .satisfies(record -> assertThat(record.getResultCode()).isEqualTo("RESERVATION_CONFIRM_CONFLICT"));
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(event -> event.getResult() == AuditEventResult.FAILURE)
+            .singleElement()
+            .satisfies(event -> {
+                assertThat(event.getTargetType()).isEqualTo(AuditEventTargetType.CAPACITY_HOLD);
+                assertThat(event.getTargetId()).isEqualTo(capacityHold.getHoldId());
+                assertThat(event.getReasonCode()).isEqualTo("RESERVATION_CONFIRM_CONFLICT");
+            });
     }
 
     @Test
@@ -383,6 +400,14 @@ class ReservationControllerIntegrationTest {
             .satisfies(record -> {
                 assertThat(record.getStatus()).isEqualTo(IdempotencyRecordStatus.FAILED);
                 assertThat(record.getResultCode()).isEqualTo("RESERVATION_CONFIRM_CONFLICT");
+            });
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(event -> event.getResult() == AuditEventResult.FAILURE)
+            .singleElement()
+            .satisfies(event -> {
+                assertThat(event.getTargetType()).isEqualTo(AuditEventTargetType.CAPACITY_HOLD);
+                assertThat(event.getTargetId()).isEqualTo(capacityHold.getHoldId());
+                assertThat(event.getReasonCode()).isEqualTo("RESERVATION_CONFIRM_CONFLICT");
             });
     }
 

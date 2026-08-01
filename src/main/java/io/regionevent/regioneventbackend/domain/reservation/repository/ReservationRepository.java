@@ -3,6 +3,9 @@ package io.regionevent.regioneventbackend.domain.reservation.repository;
 import java.time.Instant;
 import java.util.Optional;
 
+import jakarta.persistence.LockModeType;
+
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -13,6 +16,14 @@ import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 public interface ReservationRepository extends JpaRepository<Reservation, Long> {
 
     Optional<Reservation> findByQrReference(String qrReference);
+
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("""
+        SELECT reservation
+        FROM Reservation reservation
+        WHERE reservation.reservationId = :reservationId
+        """)
+    Optional<Reservation> findByReservationIdForUpdate(@Param("reservationId") Long reservationId);
 
     @Modifying
     @Query(value = """

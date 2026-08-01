@@ -1,7 +1,10 @@
 package io.regionevent.regioneventbackend.domain.reservation.service;
 
+import java.time.Instant;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -10,10 +13,12 @@ import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetTyp
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventActor;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
+import io.regionevent.regioneventbackend.domain.audit.service.RecordFailureAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.idempotency.entity.IdempotencyOperation;
 import io.regionevent.regioneventbackend.domain.idempotency.service.IdempotencyAcquireResult;
 import io.regionevent.regioneventbackend.domain.idempotency.service.IdempotencyCommand;
 import io.regionevent.regioneventbackend.domain.idempotency.service.IdempotencyService;
+import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.reservation.dto.ConfirmReservationResponse;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
@@ -25,6 +30,7 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
 @Service
 public class ReservationConfirmationUseCase {
 
+    private static final Logger log = LoggerFactory.getLogger(ReservationConfirmationUseCase.class);
     private static final String SUCCESS_RESULT_CODE = "SUCCESS";
 
     private final AppUserService appUserService;
@@ -34,6 +40,7 @@ public class ReservationConfirmationUseCase {
     private final IdempotencyService idempotencyService;
     private final ReservationConfirmationHasher reservationConfirmationHasher;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
+    private final RecordFailureAuditEventUseCase recordFailureAuditEventUseCase;
 
     public ReservationConfirmationUseCase(
         AppUserService appUserService,
@@ -42,7 +49,8 @@ public class ReservationConfirmationUseCase {
         ReservationService reservationService,
         IdempotencyService idempotencyService,
         ReservationConfirmationHasher reservationConfirmationHasher,
-        RecordAuditEventUseCase recordAuditEventUseCase
+        RecordAuditEventUseCase recordAuditEventUseCase,
+        RecordFailureAuditEventUseCase recordFailureAuditEventUseCase
     ) {
         this.appUserService = appUserService;
         this.userRoleAssignmentService = userRoleAssignmentService;
@@ -51,6 +59,7 @@ public class ReservationConfirmationUseCase {
         this.idempotencyService = idempotencyService;
         this.reservationConfirmationHasher = reservationConfirmationHasher;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
+        this.recordFailureAuditEventUseCase = recordFailureAuditEventUseCase;
     }
 
     @Transactional
@@ -78,9 +87,11 @@ public class ReservationConfirmationUseCase {
             return ReservationConfirmationResult.failure(ErrorCode.fromCode(failed.record().getResultCode()));
         }
         if (acquireResult instanceof IdempotencyAcquireResult.KeyConflict) {
+            recordFailure(requestId, actor, holdId, null, null, ErrorCode.IDEMPOTENCY_KEY_CONFLICT);
             return ReservationConfirmationResult.failure(ErrorCode.IDEMPOTENCY_KEY_CONFLICT);
         }
         if (acquireResult instanceof IdempotencyAcquireResult.InProgress) {
+            recordFailure(requestId, actor, holdId, null, null, ErrorCode.IDEMPOTENCY_REQUEST_IN_PROGRESS);
             return ReservationConfirmationResult.failure(ErrorCode.IDEMPOTENCY_REQUEST_IN_PROGRESS);
         }
 
@@ -100,7 +111,7 @@ public class ReservationConfirmationUseCase {
         UUID requestId,
         AuditEventActor actor
     ) {
-        capacityHoldService.findOwnedHold(holdId, user);
+        CapacityHold capacityHold = capacityHoldService.findOwnedHold(holdId, user);
 
         try {
             CapacityHold consumedHold = capacityHoldService.consumeIfConfirmable(holdId, user.getUserId());
@@ -117,8 +128,45 @@ public class ReservationConfirmationUseCase {
                 acquired.record(),
                 ErrorCode.RESERVATION_CONFIRM_CONFLICT.code()
             );
+            recordFailure(
+                requestId,
+                actor,
+                holdId,
+                capacityHold.getRegion(),
+                "ACTIVE",
+                ErrorCode.RESERVATION_CONFIRM_CONFLICT
+            );
             return ReservationConfirmationResult.failure(ErrorCode.RESERVATION_CONFIRM_CONFLICT);
         }
+    }
+
+    private void recordFailure(
+        UUID requestId,
+        AuditEventActor actor,
+        Long holdId,
+        Region region,
+        String previousState,
+        ErrorCode errorCode
+    ) {
+        recordFailureAuditEventUseCase.record(new AuditEventCommand(
+            requestId,
+            region,
+            AuditEventTargetType.CAPACITY_HOLD,
+            holdId,
+            previousState,
+            null,
+            AuditEventResult.FAILURE,
+            errorCode.code(),
+            actor,
+            Instant.now()
+        ));
+        log.warn(
+            "Reservation confirmation rejected. requestId={}, userId={}, holdId={}, errorCode={}",
+            requestId,
+            actor.getAppUser().getUserId(),
+            holdId,
+            errorCode.code()
+        );
     }
 
     private void recordSuccessfulAuditEvents(
