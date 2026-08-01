@@ -11,6 +11,8 @@ import io.regionevent.regioneventbackend.domain.content.repository.ContentReposi
 import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 @Service
 public class ContentService {
@@ -45,6 +47,28 @@ public class ContentService {
             command.publishAt()
         );
         content.assignRepresentativeImage(representativeImageObject, representativeImageAssignedAt);
+        return contentRepository.saveAndFlush(content);
+    }
+
+    public Content findOwnedContentForRevisionCreation(
+        Long contentId,
+        Long operatorUserId,
+        Long regionId
+    ) {
+        Content content = contentRepository.findByContentIdAndDeletedAtIsNull(contentId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+        if (!content.getOperator().getUserId().equals(operatorUserId)
+            || !content.getRegion().getRegionId().equals(regionId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        return content;
+    }
+
+    public Content markPrePublicationRevisionPending(Content content) {
+        if (content.getStatus() != ContentStatus.APPROVED) {
+            throw new BusinessException(ErrorCode.CONTENT_STATE_CONFLICT);
+        }
+        content.requestPrePublicationRevision();
         return contentRepository.saveAndFlush(content);
     }
 

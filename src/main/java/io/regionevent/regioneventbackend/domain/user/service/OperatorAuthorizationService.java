@@ -35,12 +35,13 @@ public class OperatorAuthorizationService {
         if (assignedRegion == null || assignedRegion.getRegionId() == null) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        return new AuthorizedOperator(assignment.getAppUser(), assignedRegion);
+        return new AuthorizedOperator(assignment.getAppUser(), assignedRegion, assignment);
     }
 
     public record AuthorizedOperator(
         AppUser user,
-        Region region
+        Region region,
+        UserRoleAssignment roleAssignment
     ) {
 
         public AuthorizedOperator {
@@ -48,6 +49,9 @@ public class OperatorAuthorizationService {
                 throw new BusinessException(ErrorCode.FORBIDDEN);
             }
             if (region == null || region.getRegionId() == null) {
+                throw new BusinessException(ErrorCode.FORBIDDEN);
+            }
+            if (roleAssignment == null || roleAssignment.getId() == null) {
                 throw new BusinessException(ErrorCode.FORBIDDEN);
             }
         }
