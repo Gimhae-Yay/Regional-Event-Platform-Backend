@@ -149,7 +149,7 @@ Accept: application/json
 | --- | --- | --- |
 | `400` | `INVALID_INPUT` | 식별자 또는 요청 필드가 누락·공백이거나 시각 형식이 올바르지 않거나, 지정한 대표 이미지 객체 연결 검증에 실패한다. 콘텐츠를 변경하지 않는다. |
 | `400` | `INVALID_JSON` | 요청 본문을 역직렬화할 수 없다. 콘텐츠를 변경하지 않는다. |
-| `400` | `INVALID_TYPE` | `representativeImageObjectId`가 JSON 문자열이 아니다. 콘텐츠를 변경하지 않는다. |
+| `400` | `INVALID_TYPE` | `representativeImageObjectId`가 `null`이 아닌 숫자·객체·배열 등 JSON 문자열이 아니다. 콘텐츠를 변경하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 콘텐츠를 변경하지 않는다. |
 | `403` | `FORBIDDEN` | 운영자 역할, 담당 지역 또는 콘텐츠 소유 관계가 없다. 콘텐츠를 변경하지 않는다. |
 | `404` | `NOT_FOUND` | 콘텐츠가 없거나 소프트 삭제됐다. 콘텐츠를 변경하지 않는다. |
@@ -169,7 +169,10 @@ Accept: application/json
 ### 처리 규칙
 
 1. `REJECTED` 상태에서만 편집할 수 있다. `PENDING`, `APPROVED`, `PUBLISHED`를 포함한 다른 상태는 직접 편집할 수 없다.
-2. `contentId`, 소유자, 지역과 콘텐츠 유형은 이 API로 변경하지 않는다.
-3. `representativeImageObjectId`를 제공하면 서버는 [대표 이미지 S3 업로드 URL 발급](upload-representative-image.md)의 연결 검증 조건을 모두 만족하는 이미지 객체일 때만 현재 대표 이미지로 연결한다. 제공하지 않으면 기존 대표 이미지를 유지한다.
-4. 회차·정원·체크인 창은 이 API의 수정 범위가 아니다.
-5. 같은 유효 요청을 반복하면 같은 콘텐츠 필드와 이미지 연결이 유지된다.
+2. 서버는 수정 대상 `content` 행을 잠금 조회한 뒤 소프트 삭제 여부, 소유 운영자, 담당 지역, 상태를 같은 트랜잭션에서 검증하고 수정한다.
+3. `contentId`, 소유자, 지역과 콘텐츠 유형은 이 API로 변경하지 않는다.
+4. `representativeImageObjectId`를 제공하면 서버는 [대표 이미지 S3 업로드 URL 발급](upload-representative-image.md)의 연결 검증 조건을 모두 만족하는 이미지 객체일 때만 현재 대표 이미지로 연결한다.
+5. `representativeImageObjectId`를 생략하거나 `null`로 제공하면 기존 대표 이미지를 유지한다. 문자열이 아닌 숫자, 객체, 배열 등은 `INVALID_TYPE`으로 거부한다.
+6. 회차·정원·체크인 창은 이 API의 수정 범위가 아니다.
+7. 이 API는 콘텐츠 상태를 변경하지 않으므로 `content_log`와 `audit_event`를 생성하지 않는다.
+8. 같은 유효 요청을 반복하면 같은 콘텐츠 필드와 이미지 연결이 유지된다.
