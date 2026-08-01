@@ -75,7 +75,7 @@
 - 엔티티와 값 객체는 상태 변경 규칙과 도메인 불변식을 스스로 보호한다.
 - 요청 DTO에는 Bean Validation을 선언하고 Controller에서 `@Valid`로 검증한다. 형식 검증과 도메인 규칙
   검증을 구분하며, DTO는 가능한 한 불변으로 작성한다.
-- API 응답·오류·페이지네이션의 구조와 새 공개 계약은 [API 공통 계약](api/common/README.md)을 먼저 갱신한다.
+- API 응답·오류·페이지네이션의 구조는 [API 공통 계약](api/common/README.md)을 따른다. 문서 생성·수정은 `Docs` Task에서만 수행한다. 프로덕션 코드 구현 Task와 테스트 전용 Task는 이미 확정된 공개 계약만 사용하며, 계약 문서를 추가·갱신하지 않는다. 새 공개 계약이나 변경된 계약이 필요하면 관련 `Docs` Task를 선행 완료한 뒤 구현·테스트 Task를 시작한다.
 
 ## 4. JPA, Lombok, null
 
@@ -104,7 +104,7 @@
 ### 5.1 예외
 
 - 공개 오류 필드·상태·코드·메시지는 [응답·오류 공통 계약](api/common/response-and-error.md), 실패 판정은
-  [PRD 정책 카탈로그](local-stamp-platform-prd.md#8-정책-카탈로그)를 따른다. 새 공개 계약은 구현 전에 갱신한다.
+  [PRD 정책 카탈로그](local-stamp-platform-prd.md#8-정책-카탈로그)를 따른다. 프로덕션 코드 구현 또는 테스트 전용 Task에서 계약 오류나 불일치가 확인되면 계약 문서와 코드를 같은 Task에서 변경하지 않는다. 재현 근거가 확인된 구현·계약 불일치는 `issue-create` 절차로 Bug Issue 초안을 만들고, 사용자 승인 뒤 현재 스프린트에 생성·배정한다. 정책이 미확정이면 `adr`로 전환하고, 동작에 영향을 주지 않는 문서 오류는 `Docs` Task로 분리한다. 원인이 불명확하면 먼저 `troubleshooting` 절차를 따른다.
 - 예상 가능한 정책 위반은 전역 `ErrorCode`를 가진 `BusinessException`으로 표현하며, 오류 코드별 예외 하위 타입이나
   도메인별 오류 enum을 만들지 않는다.
 - 도메인 객체는 `ResponseEntity`, `HttpStatus`, 오류 응답 DTO를 직접 생성하지 않는다.
