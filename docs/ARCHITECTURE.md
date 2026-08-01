@@ -10,6 +10,11 @@ Java 코드 작성, JPA, 예외와 테스트의 세부 기준은 [코드 컨벤�
 유스케이스 경계의 도입·전환·롤백 기준은 [ADR-0008](adr/0008-evolve-clean-architecture-by-use-case.md)을 따르며,
 Service 간 직접 의존, Repository 의존성 범위, UseCase 명명과 컴포넌트 역할은
 [ADR-0042](adr/0042-prohibit-direct-service-dependencies-and-use-usecase-orchestrators.md)를 따른다.
+외부 기술 경계의 출력 Port 필요성과 배치는 각각
+[ADR-0008](adr/0008-evolve-clean-architecture-by-use-case.md#결정)과
+[ADR-0056](adr/0056-locate-output-ports-in-owning-domain.md)을 따른다.
+아직 `dev`에 없는 제공 Service와의 병렬 구현을 위한 입력 Port는
+[ADR-0057](adr/0057-use-domain-input-ports-for-parallel-implementation.md)을 따른다.
 
 ## 2. 기본 구조
 
@@ -23,6 +28,9 @@ io.regionevent.regioneventbackend
 │   │   ├── controller
 │   │   ├── dto
 │   │   ├── entity
+│   │   ├── port (필요 시)
+│   │   │   ├── in  (미구현 제공 Service와 병렬 구현 시)
+│   │   │   └── out (외부 기술 경계 시)
 │   │   ├── repository
 │   │   └── service
 │   ├── reservation
@@ -44,6 +52,11 @@ io.regionevent.regioneventbackend
 - 도메인별 코드는 `domain.<도메인>` 아래에 둔다.
 - 여러 도메인이 공유하는 기술 관심사만 `global`에 둔다.
 - 결제사, Redis, S3 등 외부 시스템 구현은 `infra`에 둔다.
+- 외부 기술 경계가 실제로 필요한 도메인은 역할 인터페이스를 `domain.<도메인>.port.out`에 둔다.
+- 아직 `dev`에 없는 제공 Service를 별도 Task와 병렬 구현해야 하는 경우, 제공 도메인은 확정된 행위 계약을
+  `domain.<도메인>.port.in`에 둔다. 이미 `dev`에 있는 Service는 이 계약을 새로 만들지 않고 UseCase가
+  직접 의존한다.
+- `port`와 그 하위 패키지는 모든 도메인에 미리 만들지 않으며, 각 조건이 실제로 충족될 때만 생성한다.
 - 특정 도메인에서만 쓰는 코드를 편의를 이유로 `global`에 올리지 않는다.
 - 순환 패키지 의존성을 만들지 않는다.
 
@@ -53,7 +66,7 @@ io.regionevent.regioneventbackend
 Controller → Service A
                        ├── Repository A (같은 도메인 또는 Aggregate, 최대 1)
                        ├── Entity / Value Object
-                       └── 기술 협력자 (예: TokenProvider, PasswordEncoder, Clock)
+                       └── 기술 협력자(PasswordEncoder, Clock) 또는 외부 연동 Port.out(TokenProvider)
 ```
 
 여기서 최대 하나로 제한하는 대상은 Service의 Repository 인터페이스 의존성이다. Service의 모든 의존성을
@@ -73,6 +86,11 @@ Controller → UseCase
 
 `UseCase`는 여러 Service를 의존할 수 있지만, Repository를 직접 의존하지 않는다.
 Service는 다른 Service를 직접 의존하지 않는다.
+
+복합 UseCase가 이미 `dev`에 있는 Service를 사용하면 해당 Service를 직접 의존한다. 제공 Service가 아직
+`dev`에 없고, 제공·소비 Task를 병렬로 구현해야 하면 제공 도메인이 먼저 확정한 `port.in` 행위 계약을
+UseCase가 의존할 수 있다. 이후 제공 Service가 그 계약을 구현한다. 이 예외는 병렬 Task 경계에만 적용하며,
+기존 Service를 인터페이스로 일괄 전환하거나 Service 간 직접 의존을 허용하는 규칙이 아니다.
 
 ## 3. 계층별 책임
 
@@ -160,6 +178,17 @@ Redis 또는 외부 시스템의 구체 구현은 `infra`와 같은 기술 경�
 | 입력 컴포넌트 | Scheduler, 메시지 Listener, 업무 흐름을 시작하는 Filter | Controller와 같은 입력 경계다. 단순 흐름에서는 Service 하나, 복합 흐름에서는 UseCase 하나를 호출한다. |
 | 외부 연동 Adapter | `PortOnePaymentAdapter`, S3 Adapter | 역할 인터페이스를 구현해 외부 시스템과 통신한다. 애플리케이션은 구현체가 아니라 역할 인터페이스에 의존한다. |
 
+외부 연동 역할 인터페이스는 그 업무 책임을 소유한 `domain.<도메인>.port.out`에 둔다. 예를 들어
+`PaymentGateway`는 `domain.payment.port.out`에 두고, `PortOnePaymentAdapter`는 `infra.payment`에서 이를
+구현한다. 단일 Service 또는 복합 UseCase는 이 역할 인터페이스에 의존할 수 있지만, Port가 Repository나
+Service를 감싸 여러 도메인 흐름을 우회해서는 안 된다.
+
+병렬 구현이 필요한 경우의 입력 Port는 제공 도메인이 `domain.<도메인>.port.in`에 둔다. 예를 들어
+`AuthorizePayment`를 `domain.payment.port.in`에 먼저 확정하면, 예약 확정 UseCase는 이를 의존해 구현하고
+결제 Service는 이후 이 계약을 구현할 수 있다. 이 계약은 제공 Service가 아직 `dev`에 없고 제공·소비 Task의
+범위와 행위가 확정된 경우에만 만든다. 기존 Service, 내부 정책 객체, 단순 기술 협력자, 전달 전용 계층 또는
+테스트 편의만으로 `port.in`을 만들지 않는다.
+
 따라서 `JwtTokenProvider`가 사용자 정보를 위해 `UserService`를 직접 호출해서는 안 된다. 필요한 사용자 식별자나
 클레임은 `AuthService` 또는 UseCase가 준비해 인자로 전달한다. 외부 콜백처럼 업무 흐름을 시작하는 경우에는
 기술 협력자의 역의존으로 처리하지 않고 입력 컴포넌트로 분류한다.
@@ -219,6 +248,12 @@ ReservationController → ReservationService → PaymentService
 - Repository와 Service를 조정하지 않는 순수 로직은 `<도메인>Policy`, `<도메인>Calculator`,
   `<도메인>Validator`처럼 역할을 드러내는 이름을 사용한다.
 - Repository는 `<도메인>Repository`로 이름 짓고 `repository` 패키지에 둔다.
+- 외부 기술 역할 인터페이스는 `<역할>` 이름으로 해당 도메인의 `port.out` 패키지에 둔다. `Port` 접미사를
+  강제하지 않으며 `PaymentGateway`, `TokenProvider`처럼 책임을 드러내는 이름을 사용한다. 구현체는
+  `infra.<기술>` 패키지에 둔다.
+- 병렬 구현 계약은 제공 도메인의 `port.in` 패키지에 `<행위>` 이름으로 둔다. `Interface`나 `Impl` 접미사를
+  사용하지 않으며 `AuthorizePayment`처럼 제공할 행위를 드러낸다. 제공 Service는 역할이 드러나는 이름으로
+  이 계약을 구현한다.
 - UseCase 전용 패키지가 기본 패키지 계층도와 달라지는 경우에는 코드 변경 전에
   이 문서의 패키지 계층도를 먼저 갱신하고 [ADR-0008](adr/0008-evolve-clean-architecture-by-use-case.md)의
   전환 절차에 따라 구조를 확정한다.
@@ -233,6 +268,8 @@ ReservationController → ReservationService → PaymentService
 - Service가 다른 Service를 직접 의존하지 않는가?
 - 여러 Repository 또는 Service의 협력이 필요할 때 책임별 Service와 이를 조정하는 UseCase로 분리했는가?
 - UseCase가 실질적인 실행 순서, 트랜잭션 또는 협력자 조정을 수행하는가?
+- `port.in`이 아직 `dev`에 없는 제공 Service와의 확정된 병렬 Task 경계에만 있고, 기존 Service나 테스트
+  편의를 위한 인터페이스가 아닌가?
 - 기술 협력자와 외부 연동 Adapter가 Service·UseCase를 역으로 참조하지 않고, 업무 흐름을 시작하는 컴포넌트가
   하나의 Service 또는 UseCase를 진입점으로 사용하는가?
 - Controller와 Service에 전달 전용 계층, 비즈니스 규칙 중복, 순환 의존성이 없는가?
