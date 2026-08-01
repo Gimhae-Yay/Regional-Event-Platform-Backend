@@ -149,7 +149,7 @@ Accept: application/json
 | --- | --- | --- |
 | `400` | `INVALID_INPUT` | 식별자 또는 요청 필드가 누락·공백이거나 시각 형식이 올바르지 않거나, 지정한 대표 이미지 객체 연결 검증에 실패한다. 콘텐츠를 변경하지 않는다. |
 | `400` | `INVALID_JSON` | 요청 본문을 역직렬화할 수 없다. 콘텐츠를 변경하지 않는다. |
-| `400` | `INVALID_TYPE` | `representativeImageObjectId`가 JSON 문자열이 아니다. 콘텐츠를 변경하지 않는다. |
+| `400` | `INVALID_TYPE` | `representativeImageObjectId`가 `null`이 아닌 숫자·객체·배열 등 JSON 문자열이 아니다. 콘텐츠를 변경하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 콘텐츠를 변경하지 않는다. |
 | `403` | `FORBIDDEN` | 운영자 역할, 담당 지역 또는 콘텐츠 소유 관계가 없다. 콘텐츠를 변경하지 않는다. |
 | `404` | `NOT_FOUND` | 콘텐츠가 없거나 소프트 삭제됐다. 콘텐츠를 변경하지 않는다. |
