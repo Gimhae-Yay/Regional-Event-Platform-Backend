@@ -25,6 +25,7 @@ import org.springframework.test.context.TestPropertySource;
 import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
 import io.regionevent.regioneventbackend.domain.image.repository.ImageObjectRepository;
 import io.regionevent.regioneventbackend.domain.image.service.ImageStorageGateway.PresignedUpload;
+import io.regionevent.regioneventbackend.domain.image.service.ImageStorageGateway.PresignedViewUrl;
 import io.regionevent.regioneventbackend.domain.image.service.ImageStorageGateway.StoredObjectMetadata;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
@@ -313,6 +314,11 @@ class RepresentativeImageConnectionServiceTest {
         @Override
         public StoredObjectMetadata findMetadata(String objectKey) {
             return metadataByObjectKey.get(objectKey);
+        }
+
+        @Override
+        public PresignedViewUrl createPresignedGetUrl(String objectKey) {
+            throw new UnsupportedOperationException();
         }
 
         @Override

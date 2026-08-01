@@ -14,6 +14,8 @@ public interface ImageStorageGateway {
 
     StoredObjectMetadata findMetadata(String objectKey);
 
+    PresignedViewUrl createPresignedGetUrl(String objectKey);
+
     void delete(String objectKey);
 
     record PresignedUpload(
@@ -26,6 +28,12 @@ public interface ImageStorageGateway {
     record StoredObjectMetadata(
         long byteSize,
         String checksum
+    ) {
+    }
+
+    record PresignedViewUrl(
+        String url,
+        Instant expiresAt
     ) {
     }
 }
