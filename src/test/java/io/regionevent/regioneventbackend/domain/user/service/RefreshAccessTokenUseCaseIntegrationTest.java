@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.domain.user.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -128,6 +129,40 @@ class RefreshAccessTokenUseCaseIntegrationTest {
         }
     }
 
+    @Test
+    @Timeout(15)
+    void 사용자_행_잠금으로_회전_표지가_만료되면_충돌로_처리한다() throws Exception {
+        AppUser user = createUser();
+        String refreshToken = refreshTokenService.issue(user.getUserId());
+        RefreshToken parsedToken = jwtRefreshTokenService.authenticate(refreshToken);
+        CountDownLatch userLocked = new CountDownLatch(1);
+        CountDownLatch releaseUserLock = new CountDownLatch(1);
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<?> lockHolder = executorService.submit(() -> transactionTemplate.executeWithoutResult(status -> {
+                appUserRepository.findByIdForUpdate(user.getUserId()).orElseThrow();
+                userLocked.countDown();
+                await(releaseUserLock, 10L);
+            }));
+            try {
+                assertThat(userLocked.await(3, TimeUnit.SECONDS)).isTrue();
+
+                Future<RefreshAccessTokenResult> firstRequest = executorService.submit(
+                    () -> refreshAccessTokenUseCase.reissue(refreshToken)
+                );
+                awaitRotationMarker(parsedToken, firstRequest);
+                awaitRotationMarkerExpiry(parsedToken);
+
+                releaseUserLock.countDown();
+                assertThatThrownBy(() -> firstRequest.get(3, TimeUnit.SECONDS))
+                    .hasCauseInstanceOf(RefreshTokenConflictException.class);
+            } finally {
+                releaseUserLock.countDown();
+            }
+            lockHolder.get(3, TimeUnit.SECONDS);
+        }
+    }
+
     private AppUser createUser() {
         return transactionTemplate.execute(status -> appUserRepository.saveAndFlush(new AppUser(
             "refresh-" + System.nanoTime() + "@example.com",
@@ -148,21 +183,41 @@ class RefreshAccessTokenUseCaseIntegrationTest {
             if (firstRequest.isDone()) {
                 firstRequest.get();
             }
-            try {
-                Thread.sleep(20L);
-            } catch (InterruptedException exception) {
-                Thread.currentThread().interrupt();
-                throw new IllegalStateException("concurrent test interrupted", exception);
-            }
+            sleep();
         }
         throw new IllegalStateException("refresh token rotation marker was not created");
     }
 
+    private void awaitRotationMarkerExpiry(RefreshToken refreshToken) {
+        String rotationKey = "auth:refresh:token:" + refreshToken.tokenId() + ":rotation";
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(7);
+        while (System.nanoTime() < deadline) {
+            if (Boolean.FALSE.equals(stringRedisTemplate.hasKey(rotationKey))) {
+                return;
+            }
+            sleep();
+        }
+        throw new IllegalStateException("refresh token rotation marker did not expire");
+    }
+
     private void await(CountDownLatch latch) {
+        await(latch, 5L);
+    }
+
+    private void await(CountDownLatch latch, long timeoutSeconds) {
         try {
-            if (!latch.await(5, TimeUnit.SECONDS)) {
+            if (!latch.await(timeoutSeconds, TimeUnit.SECONDS)) {
                 throw new IllegalStateException("concurrent test latch timed out");
             }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("concurrent test interrupted", exception);
+        }
+    }
+
+    private void sleep() {
+        try {
+            Thread.sleep(20L);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("concurrent test interrupted", exception);

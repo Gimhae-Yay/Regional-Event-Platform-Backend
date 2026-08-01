@@ -69,7 +69,8 @@ class RedisRefreshTokenStoreIntegrationTest {
             .isEqualTo(RefreshTokenStore.RotationStartResult.CONFLICT);
 
         UUID nextTokenId = UUID.randomUUID();
-        assertThat(refreshTokenStore.completeRotation(current, nextTokenId, firstAttemptId)).isTrue();
+        assertThat(refreshTokenStore.completeRotation(current, nextTokenId, firstAttemptId))
+            .isEqualTo(RefreshTokenStore.RotationCompletionResult.COMPLETED);
         assertThat(refreshTokenStore.startRotation(current, UUID.randomUUID()))
             .isEqualTo(RefreshTokenStore.RotationStartResult.INVALID);
 
@@ -112,7 +113,8 @@ class RedisRefreshTokenStoreIntegrationTest {
         UUID nextTokenId = UUID.randomUUID();
         assertThat(refreshTokenStore.startRotation(current, attemptId))
             .isEqualTo(RefreshTokenStore.RotationStartResult.STARTED);
-        assertThat(refreshTokenStore.completeRotation(current, nextTokenId, attemptId)).isTrue();
+        assertThat(refreshTokenStore.completeRotation(current, nextTokenId, attemptId))
+            .isEqualTo(RefreshTokenStore.RotationCompletionResult.COMPLETED);
         stringRedisTemplate.delete("auth:refresh:token:" + current.tokenId() + ":consumed");
 
         assertThat(refreshTokenStore.startRotation(current, UUID.randomUUID()))
@@ -133,6 +135,20 @@ class RedisRefreshTokenStoreIntegrationTest {
         assertThat(stringRedisTemplate.hasKey("auth:refresh:family:" + current.familyId() + ":active")).isFalse();
         assertThat(stringRedisTemplate.hasKey("auth:refresh:token:" + current.tokenId() + ":rotation")).isFalse();
         assertThat(stringRedisTemplate.hasKey("auth:refresh:user:1:families")).isFalse();
+    }
+
+    @Test
+    void completeRotation_whenRotationMarkerExpires_returnsConflict() {
+        RefreshToken current = refreshToken(1L);
+        refreshTokenStore.createFamily(current);
+        UUID attemptId = UUID.randomUUID();
+        refreshTokenStore.startRotation(current, attemptId);
+        stringRedisTemplate.delete("auth:refresh:token:" + current.tokenId() + ":rotation");
+
+        assertThat(refreshTokenStore.completeRotation(current, UUID.randomUUID(), attemptId))
+            .isEqualTo(RefreshTokenStore.RotationCompletionResult.CONFLICT);
+        assertThat(refreshTokenStore.startRotation(current, UUID.randomUUID()))
+            .isEqualTo(RefreshTokenStore.RotationStartResult.STARTED);
     }
 
     @Test

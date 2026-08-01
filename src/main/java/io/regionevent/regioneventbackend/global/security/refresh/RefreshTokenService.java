@@ -62,7 +62,15 @@ public class RefreshTokenService {
 
             RefreshToken nextToken = currentToken.rotate(UUID.randomUUID(), currentInstant());
             String rotatedToken = jwtRefreshTokenService.issue(nextToken);
-            if (!refreshTokenStore.completeRotation(currentToken, nextToken.tokenId(), attemptId)) {
+            RefreshTokenStore.RotationCompletionResult completionResult = refreshTokenStore.completeRotation(
+                currentToken,
+                nextToken.tokenId(),
+                attemptId
+            );
+            if (completionResult == RefreshTokenStore.RotationCompletionResult.CONFLICT) {
+                throw new RefreshTokenConflictException();
+            }
+            if (completionResult == RefreshTokenStore.RotationCompletionResult.INVALID) {
                 throw new InvalidRefreshTokenException();
             }
             return rotatedToken;
