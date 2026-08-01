@@ -83,8 +83,8 @@ description: GitHub Task Issue를 기준으로 문서, 프로덕션 코드, 테�
 - 현재 `dev`에 없는 의존성을 대신할 임시 인터페이스나 임시 프로덕션 구현체를 현재 Task에 추가하지 않는다.
 - 이미 제공된 의존성이 필요한 UseCase 단위 테스트에서는 Mockito mock을 사용할 수 있다.
 - 테스트 편의를 위해 내부 Service 인터페이스나 전달 전용 계층을 만들지 않는다.
-- 현재 Task가 외부 기술 기능을 필요로 하면, 소비 UseCase가 필요한 기능만 역할 인터페이스(Port)로 정의하거나 이미 확정된 Port를 사용한다. 실제 구현은 담당 Task의 Adapter가 해당 인터페이스를 구현한다. 현재 Task는 Port에만 의존하며, Adapter 구현을 새로 만들거나 변경하지 않는다.
-- 실제 Adapter 연동이 Task의 완료 조건이면, Adapter가 준비되기 전에는 해당 TODO를 완료로 표시하지 않는다. 현재 Task의 범위가 Port·소비 코드·단위 테스트라면 그 범위 안에서 완료할 수 있다. Port 계약 또는 Adapter 담당 Task가 불명확하면 새 Port를 만들어 진행하지 않고 중단한다.
+- 외부 기술 기능이 필요하다는 이유만으로 UseCase를 추가하거나 Adapter 구현을 별도 Task로 분리하지 않는다. 단일 Service 흐름은 해당 Service가 필요한 역할 인터페이스(Port)를 정의하거나 이미 확정된 Port를 사용하고, Task 범위에 포함되면 Adapter 구현과 검증까지 함께 변경할 수 있다. 여러 Service 또는 Repository의 실행 순서·권한·트랜잭션을 실제로 조정하는 복합 흐름에서만 UseCase가 역할 인터페이스를 사용하거나 정의한다.
+- 실제 Adapter 연동이 Task의 완료 조건이면, 현재 Task가 Adapter 구현을 포함하는지 또는 공식 `blocked by` 관계로 다른 담당 Task에 위임됐는지를 확인한다. 현재 Task 범위에 포함되면 연동 검증까지 완료한 뒤 TODO를 표시하고, 다른 담당 Task에 위임됐으면 Adapter가 준비되기 전에는 해당 TODO를 완료로 표시하지 않는다. Port 계약 또는 Adapter 담당 범위가 불명확하면 새 Port나 임시 구현을 만들어 진행하지 않고 중단한다.
 
 ### 3. 구현과 검증
 
