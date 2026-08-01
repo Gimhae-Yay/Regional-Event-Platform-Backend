@@ -311,7 +311,7 @@ class ContentControllerIntegrationTest {
             "image/webp",
             524_288L,
             CHECKSUM,
-            Instant.parse("2026-08-15T00:00:00Z")
+            Instant.now().plusSeconds(86_400)
         ));
     }
 
