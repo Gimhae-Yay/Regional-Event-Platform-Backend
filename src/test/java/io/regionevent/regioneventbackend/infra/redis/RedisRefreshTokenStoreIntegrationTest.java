@@ -137,7 +137,7 @@ class RedisRefreshTokenStoreIntegrationTest {
         assertThat(stringRedisTemplate.hasKey("auth:refresh:token:" + current.tokenId() + ":rotation")).isFalse();
         assertThat(stringRedisTemplate.hasKey("auth:refresh:user:1:families")).isFalse();
         assertThat(refreshTokenStore.completeRotation(current, UUID.randomUUID(), attemptId))
-            .isEqualTo(RefreshTokenStore.RotationCompletionResult.INVALID);
+            .isEqualTo(RefreshTokenStore.RotationCompletionResult.CONFLICT);
     }
 
     @Test
