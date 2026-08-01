@@ -59,6 +59,20 @@ class RefreshTokenServiceTest {
     }
 
     @Test
+    void rotate_whenVerificationFailsAfterStartingRotation_cancelsRotation() {
+        Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+        RecordingRefreshTokenStore refreshTokenStore = new RecordingRefreshTokenStore();
+        RefreshTokenService refreshTokenService = new RefreshTokenService(createJwtService(clock), refreshTokenStore, clock);
+        String token = refreshTokenService.issue(1L);
+
+        assertThatThrownBy(() -> refreshTokenService.rotate(token, ignored -> {
+            throw new InvalidRefreshTokenException();
+        })).isInstanceOf(InvalidRefreshTokenException.class);
+
+        assertThat(refreshTokenStore.cancelledAttemptId).isNotNull();
+    }
+
+    @Test
     void issue_whenRedisStoreIsUnavailable_throwsRefreshTokenStoreUnavailableException() {
         Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
         RecordingRefreshTokenStore refreshTokenStore = new RecordingRefreshTokenStore();
@@ -82,6 +96,7 @@ class RefreshTokenServiceTest {
 
         private RotationStartResult rotationStartResult = RotationStartResult.STARTED;
         private UUID completedTokenId;
+        private UUID cancelledAttemptId;
         private RuntimeException createFamilyException;
 
         @Override
@@ -104,6 +119,7 @@ class RefreshTokenServiceTest {
 
         @Override
         public void cancelRotation(RefreshToken refreshToken, UUID attemptId) {
+            cancelledAttemptId = attemptId;
         }
 
         @Override

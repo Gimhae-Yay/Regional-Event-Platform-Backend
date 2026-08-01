@@ -4,6 +4,7 @@ import jakarta.validation.ConstraintViolationException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -20,6 +21,10 @@ import tools.jackson.databind.exc.MismatchedInputException;
 
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.response.ApiResponse;
+import io.regionevent.regioneventbackend.global.security.refresh.InvalidRefreshTokenException;
+import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenConflictException;
+import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenCookie;
+import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStoreUnavailableException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -29,6 +34,26 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException exception) {
         return ApiResponse.fail(exception.getErrorCode()).toResponseEntity();
+    }
+
+    @ExceptionHandler(InvalidRefreshTokenException.class)
+    public ResponseEntity<ApiResponse<Void>> handleInvalidRefreshToken(InvalidRefreshTokenException exception) {
+        return ResponseEntity
+            .status(ErrorCode.UNAUTHENTICATED.httpStatus())
+            .header(HttpHeaders.SET_COOKIE, RefreshTokenCookie.expire())
+            .body(ApiResponse.fail(ErrorCode.UNAUTHENTICATED));
+    }
+
+    @ExceptionHandler(RefreshTokenConflictException.class)
+    public ResponseEntity<ApiResponse<Void>> handleRefreshTokenConflict(RefreshTokenConflictException exception) {
+        return ApiResponse.fail(ErrorCode.REFRESH_TOKEN_CONFLICT).toResponseEntity();
+    }
+
+    @ExceptionHandler(RefreshTokenStoreUnavailableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleRefreshTokenStoreUnavailable(
+        RefreshTokenStoreUnavailableException exception
+    ) {
+        return ApiResponse.fail(ErrorCode.AUTH_SERVICE_UNAVAILABLE).toResponseEntity();
     }
 
     @ExceptionHandler({
