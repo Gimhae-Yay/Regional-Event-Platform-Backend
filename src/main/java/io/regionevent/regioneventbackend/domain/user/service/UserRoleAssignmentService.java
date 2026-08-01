@@ -1,5 +1,7 @@
 package io.regionevent.regioneventbackend.domain.user.service;
 
+import java.util.List;
+
 import org.springframework.stereotype.Service;
 
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -18,5 +20,13 @@ public class UserRoleAssignmentService {
 
     public void assignVisitor(AppUser user) {
         userRoleAssignmentRepository.save(new UserRoleAssignment(user, UserRole.VISITOR, null));
+    }
+
+    public List<UserRole> findRolesByUserId(Long userId) {
+        return userRoleAssignmentRepository.findAllByIdUserId(userId)
+            .stream()
+            .map(UserRoleAssignment::getRole)
+            .sorted()
+            .toList();
     }
 }

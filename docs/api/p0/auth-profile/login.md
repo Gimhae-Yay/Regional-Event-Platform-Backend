@@ -13,8 +13,8 @@
 계약을 정의한다. Access Token은 응답 `Authorization` 헤더로, Refresh Token은 `HttpOnly` 쿠키로만 전달한다.
 
 `PENDING` 운영자 신청 계정도 활성 계정이면 로그인할 수 있지만, 승인 전에는 `OPERATOR` 역할이 없어 운영자 API를
-호출할 수 없다. 토큰에 포함된 역할은 권한 판정의 보조 정보이며, 지역·소유권·승인 상태의 최종 검증은 서버의 현재
-데이터를 따른다.
+호출할 수 없다. Access Token은 사용자 식별자만 포함하며, 로그인 응답의 역할 목록은 표시용 정보다. 역할·지역·소유권·
+승인 상태의 최종 검증은 서버의 현재 데이터를 따른다.
 
 ### 요구사항 추적
 
@@ -137,7 +137,7 @@ Refresh Token은 JSON 본문, `Authorization` 헤더 또는 다른 일반 응답
 | 400 | `INVALID_INPUT` | 필수 요청 값 누락 또는 `email`, `password`의 형식 위반이다. 토큰·계열을 발급하지 않으며 값을 수정한 뒤 재시도할 수 있다. |
 | 400 | `INVALID_JSON` | 요청 본문이 JSON 형식이 아니거나 역직렬화할 수 없다. 토큰·계열을 발급하지 않으며 본문을 수정한 뒤 재시도할 수 있다. |
 | 401 | `INVALID_CREDENTIALS` | 이메일·비밀번호가 일치하지 않거나 계정이 로그인할 수 없는 상태다. 계정 존재 여부를 공개하지 않으며 토큰·계열을 발급하지 않는다. |
-| 503 | `AUTH_SERVICE_UNAVAILABLE` | Redis를 사용할 수 없어 Refresh Token 계열을 안전하게 발급할 수 없다. 토큰·계열을 발급하지 않으며 잠시 뒤 재시도할 수 있다. |
+| 503 | `AUTH_SERVICE_UNAVAILABLE` | Redis를 사용할 수 없어 Refresh Token 계열을 안전하게 발급할 수 없다. 토큰·계열을 발급하지 않으며 잠시 뒤 재시도할 수 있다. 메시지는 `인증 서비스를 일시적으로 사용할 수 없습니다.`다. |
 
 #### Error Response Body
 

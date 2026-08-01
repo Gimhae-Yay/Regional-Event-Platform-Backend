@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
@@ -47,6 +48,16 @@ public class ContentSessionService {
             ))
             .toList();
         return contentSessionRepository.saveAllAndFlush(sessions);
+    }
+
+    @Transactional(readOnly = true)
+    public PublicSessionReservationInfo findPublicScheduledReservationInfo(Long sessionId) {
+        return contentSessionRepository.findPublicScheduledReservationInfo(
+            sessionId,
+            ContentStatus.PUBLISHED,
+            ContentSessionStatus.SCHEDULED
+        ).map(PublicSessionReservationInfo::from)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
     public void reserveCapacity(Long sessionId, int quantity) {

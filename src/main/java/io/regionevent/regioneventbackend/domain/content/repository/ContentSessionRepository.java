@@ -18,6 +18,25 @@ public interface ContentSessionRepository extends JpaRepository<ContentSession, 
         ContentStatus contentStatus
     );
 
+    @Query("""
+        SELECT contentSession.sessionId AS sessionId,
+            contentSession.content.contentId AS contentId,
+            contentSession.startsAt AS startsAt,
+            contentSession.endsAt AS endsAt,
+            contentSession.remainingCapacity AS remainingCapacity,
+            CASE WHEN contentSession.startsAt > CURRENT_TIMESTAMP THEN true ELSE false END AS startsBeforeNow
+        FROM ContentSession contentSession
+        WHERE contentSession.sessionId = :sessionId
+            AND contentSession.content.status = :contentStatus
+            AND contentSession.content.deletedAt IS NULL
+            AND contentSession.status = :sessionStatus
+        """)
+    Optional<PublicSessionReservationInfoProjection> findPublicScheduledReservationInfo(
+        @Param("sessionId") Long sessionId,
+        @Param("contentStatus") ContentStatus contentStatus,
+        @Param("sessionStatus") ContentSessionStatus sessionStatus
+    );
+
     @Modifying(flushAutomatically = true)
     @Query("""
         UPDATE ContentSession contentSession
