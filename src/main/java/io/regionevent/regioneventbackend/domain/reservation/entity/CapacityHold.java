@@ -242,6 +242,16 @@ public class CapacityHold {
         this.reservation = reservation;
     }
 
+    public void consume(Instant consumedAt) {
+        if (status != CapacityHoldStatus.ACTIVE) {
+            throw new IllegalStateException("only active capacity hold can be consumed");
+        }
+        this.status = CapacityHoldStatus.CONSUMED;
+        this.terminalAt = requireNotNull(consumedAt, "consumedAt");
+        this.invalidationReason = null;
+        this.capacityReleasedAt = null;
+    }
+
     private static <T> T requireNotNull(T value, String fieldName) {
         if (value == null) {
             throw new IllegalArgumentException(fieldName + " must not be null");
