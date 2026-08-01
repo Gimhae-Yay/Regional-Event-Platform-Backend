@@ -15,6 +15,9 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     boolean existsByLoginIdentifier(String loginIdentifier);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<AppUser> findByLoginIdentifier(String loginIdentifier);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select user from AppUser user where user.userId = ?1")
     Optional<AppUser> findByIdForUpdate(Long userId);
 }
