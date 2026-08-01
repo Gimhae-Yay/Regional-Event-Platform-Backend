@@ -127,7 +127,8 @@ class RedisRefreshTokenStoreIntegrationTest {
     void revokeFamily_removesCurrentRotationMarkerAndUserIndex() {
         RefreshToken current = refreshToken(1L);
         refreshTokenStore.createFamily(current);
-        assertThat(refreshTokenStore.startRotation(current, UUID.randomUUID()))
+        UUID attemptId = UUID.randomUUID();
+        assertThat(refreshTokenStore.startRotation(current, attemptId))
             .isEqualTo(RefreshTokenStore.RotationStartResult.STARTED);
 
         refreshTokenStore.revokeFamily(current);
@@ -135,6 +136,68 @@ class RedisRefreshTokenStoreIntegrationTest {
         assertThat(stringRedisTemplate.hasKey("auth:refresh:family:" + current.familyId() + ":active")).isFalse();
         assertThat(stringRedisTemplate.hasKey("auth:refresh:token:" + current.tokenId() + ":rotation")).isFalse();
         assertThat(stringRedisTemplate.hasKey("auth:refresh:user:1:families")).isFalse();
+        assertThat(refreshTokenStore.completeRotation(current, UUID.randomUUID(), attemptId))
+            .isEqualTo(RefreshTokenStore.RotationCompletionResult.CONFLICT);
+    }
+
+    @Test
+    void revokeFamily_whenPresentedTokenIsConsumed_keepsNewActiveToken() {
+        RefreshToken current = refreshToken(1L);
+        refreshTokenStore.createFamily(current);
+        UUID attemptId = UUID.randomUUID();
+        UUID nextTokenId = UUID.randomUUID();
+        assertThat(refreshTokenStore.startRotation(current, attemptId))
+            .isEqualTo(RefreshTokenStore.RotationStartResult.STARTED);
+        assertThat(refreshTokenStore.completeRotation(current, nextTokenId, attemptId))
+            .isEqualTo(RefreshTokenStore.RotationCompletionResult.COMPLETED);
+
+        RefreshToken next = nextToken(current, nextTokenId);
+        refreshTokenStore.revokeFamily(current);
+
+        assertThat(stringRedisTemplate.opsForValue().get("auth:refresh:family:" + current.familyId() + ":active"))
+            .isEqualTo(nextTokenId.toString());
+        assertThat(stringRedisTemplate.hasKey("auth:refresh:family:" + current.familyId() + ":revoked")).isFalse();
+        assertThat(refreshTokenStore.startRotation(next, UUID.randomUUID()))
+            .isEqualTo(RefreshTokenStore.RotationStartResult.STARTED);
+    }
+
+    @Test
+    void revokeFamily_whenActiveStateIsMissing_doesNotChangeUserIndexOrSetRevocationMarker() {
+        RefreshToken current = refreshToken(1L);
+        refreshTokenStore.createFamily(current);
+        stringRedisTemplate.delete("auth:refresh:family:" + current.familyId() + ":active");
+
+        refreshTokenStore.revokeFamily(current);
+
+        assertThat(stringRedisTemplate.hasKey("auth:refresh:user:1:families")).isTrue();
+        assertThat(stringRedisTemplate.hasKey("auth:refresh:family:" + current.familyId() + ":revoked")).isFalse();
+    }
+
+    @Test
+    void revokeFamily_whenUserIndexIsMissing_doesNotChangeActiveStateOrSetRevocationMarker() {
+        RefreshToken current = refreshToken(1L);
+        refreshTokenStore.createFamily(current);
+        stringRedisTemplate.delete("auth:refresh:user:1:families");
+
+        refreshTokenStore.revokeFamily(current);
+
+        assertThat(stringRedisTemplate.opsForValue().get("auth:refresh:family:" + current.familyId() + ":active"))
+            .isEqualTo(current.tokenId().toString());
+        assertThat(stringRedisTemplate.hasKey("auth:refresh:family:" + current.familyId() + ":revoked")).isFalse();
+    }
+
+    @Test
+    void revokeFamily_whenRevocationMarkerExists_doesNotChangeFamilyState() {
+        RefreshToken current = refreshToken(1L);
+        refreshTokenStore.createFamily(current);
+        stringRedisTemplate.opsForValue().set("auth:refresh:family:" + current.familyId() + ":revoked", "1");
+
+        refreshTokenStore.revokeFamily(current);
+
+        assertThat(stringRedisTemplate.opsForValue().get("auth:refresh:family:" + current.familyId() + ":active"))
+            .isEqualTo(current.tokenId().toString());
+        assertThat(stringRedisTemplate.hasKey("auth:refresh:user:1:families")).isTrue();
+        assertThat(stringRedisTemplate.hasKey("auth:refresh:family:" + current.familyId() + ":revoked")).isTrue();
     }
 
     @Test

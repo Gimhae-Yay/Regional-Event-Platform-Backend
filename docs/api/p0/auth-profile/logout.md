@@ -5,7 +5,7 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | [FR-01 인증·역할·지역 권한](../../../p0/auth-profile.md#fr-01-인증역할지역-권한) |
 | 소유 도메인 | 인증·프로필 |
-| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ADR-0005](../../../adr/0005-use-jwt-access-and-rotating-refresh-tokens.md), [ADR-0023](../../../adr/0023-manage-refresh-token-revocation-in-redis.md), [ADR-0027](../../../adr/0027-deliver-refresh-token-in-http-only-cookie.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ADR-0005](../../../adr/0005-use-jwt-access-and-rotating-refresh-tokens.md), [ADR-0023](../../../adr/0023-manage-refresh-token-revocation-in-redis.md), [ADR-0027](../../../adr/0027-deliver-refresh-token-in-http-only-cookie.md), [ADR-0052](../../../adr/0052-define-refresh-token-security-profile-and-fail-closed-redis-state.md), [ADR-0053](../../../adr/0053-serialize-logout-and-refresh-by-active-jti.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
@@ -39,8 +39,12 @@ Access Token은 개별 폐기하지 않는다. 로그아웃에 성공해도 이�
 만료시킨 뒤 성공으로 처리한다. 이는 클라이언트의 로컬 인증 상태를 안전하게 정리하는 멱등 계약이며, 토큰의 유효성이나
 계정 존재 여부를 공개하지 않는다.
 
-토큰 갱신과 로그아웃이 경합하면 Redis 원자 작업으로 순서를 직렬화한다. 로그아웃이 먼저 완료되면 해당 계열의 갱신은
-거부되며, 갱신이 먼저 완료되더라도 로그아웃은 같은 계열 전체를 폐기한다.
+토큰 갱신 완료와 로그아웃 계열 폐기는 Redis 원자 작업으로 순서를 직렬화한다. 로그아웃이 먼저 제출 토큰의 `jti`가
+활성 `jti`와 일치함을 확인해 폐기하면 해당 계열의 갱신 완료는 거부된다. 갱신 완료가 먼저 활성 `jti`를 새 값으로
+교체하면 이전 토큰을 담은 로그아웃은 이미 소비된 토큰으로 처리해 서버 상태를 변경하지 않고 Cookie만 만료한다.
+
+브라우저 클라이언트는 [인증·인가](../../common/authentication.md#인증-전달-방식)의 갱신·로그아웃 순서 계약에 따라
+진행 중인 갱신이 끝난 뒤 최신 Cookie로 로그아웃을 요청하고, 로그아웃이 끝날 때까지 새 갱신을 시작하지 않는다.
 
 ### Request
 

@@ -81,7 +81,11 @@ public class RefreshTokenService {
     }
 
     public void revokeCurrentFamily(String token) {
-        refreshTokenStore.revokeFamily(jwtRefreshTokenService.authenticate(token));
+        try {
+            refreshTokenStore.revokeFamily(jwtRefreshTokenService.authenticate(token));
+        } catch (InvalidRefreshTokenException exception) {
+            return;
+        }
     }
 
     public void revokeAllFamilies(Long userId) {
