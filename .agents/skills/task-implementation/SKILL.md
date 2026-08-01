@@ -20,14 +20,14 @@ description: GitHub Task Issue를 기준으로 코드, 테스트, migration을 �
 1. Task 구현 요청에는 정확한 Task Issue URL 또는 번호를, PR 피드백 요청에는 정확한 PR URL 또는 번호를 받는다. 현재 브랜치명으로 대상을 추론하지 않는다.
 2. Task 구현은 GitHub 이슈 유형이 `Task`이고 작업 성격 라벨이 정확히 하나일 때만 시작한다. 다음 라벨로 브랜치 type을 정한다.
 
-   | 라벨 | 브랜치 type |
-   | --- | --- |
-   | `New Feature` | `feature` |
-   | `Fix` | `fix` |
-   | `Refactor` | `refactor` |
-   | `Test` | `test` |
-   | `Docs` | `docs` |
-   | `Chore` | `chore` |
+   | 라벨            | 브랜치 type   |
+   |---------------|------------|
+   | `New Feature` | `feature`  |
+   | `Fix`         | `fix`      |
+   | `Refactor`    | `refactor` |
+   | `Test`        | `test`     |
+   | `Docs`        | `docs`     |
+   | `Chore`       | `chore`    |
 
    도메인·권한 등 분류 라벨은 이 판단에 사용하지 않는다. 이슈 유형·작업 성격 라벨이 없거나 작업 성격 라벨이 둘 이상이면 DoR 위반으로 보고하고 중단한다.
 3. Task에 연결된 PR 상태를 확인한다.
@@ -41,7 +41,7 @@ description: GitHub Task Issue를 기준으로 코드, 테스트, migration을 �
 
 ### 1. 계약과 범위 확인
 
-1. `docs/code-convention.md` 전체를 읽는다.
+1. `docs/code-convention.md`, `docs/ARCHITECTURE.md` 전체를 읽는다.
 2. Task의 목표, TODO, 상위 Feature/Bug 맥락, 공식 `blocked by` 관계와 관련 기준 문서를 확인한다. Task가 직접 PRD를 참조하지 않아도 요구하지 않는다.
 3. API 계약은 API 명세, 데이터 사실은 ERD, 기술 결정은 ADR, 구현 방식은 아키텍처와 코드 컨벤션에서 확인한다. Task는 범위와 완료 조건을 정한다.
 4. 기준이 서로 충돌하거나 필요한 정책·계약이 없으면 코드를 변경하지 않고 차이와 영향, 보완할 Task 또는 문서를 보고한다.
