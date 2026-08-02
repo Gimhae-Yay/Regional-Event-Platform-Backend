@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
@@ -101,6 +102,14 @@ public class ContentSessionService {
         );
         if (updatedCount == 0) {
             throw new BusinessException(ErrorCode.RESERVATION_HOLD_CONFLICT);
+        }
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void restoreCapacity(Long sessionId, int quantity) {
+        int updatedCount = contentSessionRepository.increaseRemainingCapacityIfWithinCapacity(sessionId, quantity);
+        if (updatedCount == 0) {
+            throw new IllegalStateException("failed to restore content session capacity");
         }
     }
 

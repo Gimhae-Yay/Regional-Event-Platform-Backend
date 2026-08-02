@@ -10,6 +10,9 @@ import org.springframework.transaction.annotation.Transactional;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationRepository;
+import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 @Service
 public class ReservationService {
@@ -49,6 +52,22 @@ public class ReservationService {
     public Reservation findById(Long reservationId) {
         return reservationRepository.findByReservationIdForUpdate(reservationId)
             .orElseThrow(() -> new IllegalStateException("idempotency result reservation does not exist"));
+    }
+
+    @Transactional(readOnly = true)
+    public Reservation findOwnedReservation(Long reservationId, AppUser user) {
+        Reservation reservation = reservationRepository.findWithDetailsByReservationId(reservationId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+        if (reservation.getUser() == null
+            || !reservation.getUser().getUserId().equals(user.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        return reservation;
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean cancelIfCancellable(Long reservationId, Long userId) {
+        return reservationRepository.cancelIfCancellable(reservationId, userId) == 1;
     }
 
     private boolean insertConfirmed(
