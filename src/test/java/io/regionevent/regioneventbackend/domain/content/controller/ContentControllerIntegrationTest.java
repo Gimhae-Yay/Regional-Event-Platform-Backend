@@ -565,6 +565,22 @@ class ContentControllerIntegrationTest {
     }
 
     @Test
+    void updateMyContent_whenContentIdPathIsNotPositiveDecimal_returnsInvalidInput() throws Exception {
+        AppUser operator = saveUser("update-invalid-path-operator@example.com");
+        Region region = saveRegion("UPDATE-INVALID-PATH");
+        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
+
+        for (String invalidContentId : List.of("001", "+1", "abc")) {
+            mockMvc.perform(put("/api/v1/operator/contents/{contentId}", invalidContentId)
+                    .header(HttpHeaders.AUTHORIZATION, bearerToken(operator))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(updateRequestWithoutRepresentativeImage()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        }
+    }
+
+    @Test
     void updateMyContent_whenContentIsSoftDeleted_returnsNotFoundWithoutUpdatingContent() throws Exception {
         AppUser operator = saveUser("update-soft-deleted-operator@example.com");
         Region region = saveRegion("UPDATE-SOFT-DELETED");

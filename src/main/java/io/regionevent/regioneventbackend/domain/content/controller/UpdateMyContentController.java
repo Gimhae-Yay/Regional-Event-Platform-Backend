@@ -1,5 +1,7 @@
 package io.regionevent.regioneventbackend.domain.content.controller;
 
+import java.util.regex.Pattern;
+
 import jakarta.validation.Valid;
 
 import org.springframework.http.HttpStatus;
@@ -24,6 +26,8 @@ public class UpdateMyContentController {
 
     private static final String UPDATE_MY_CONTENT_SUCCESS_MESSAGE = "내 콘텐츠 수정에 성공했습니다.";
 
+    private static final Pattern POSITIVE_DECIMAL_PATTERN = Pattern.compile("[1-9]\\d*");
+
     private final UpdateMyContentUseCase updateMyContentUseCase;
 
     public UpdateMyContentController(UpdateMyContentUseCase updateMyContentUseCase) {
@@ -33,12 +37,12 @@ public class UpdateMyContentController {
     @PutMapping("/{contentId}")
     public ResponseEntity<ApiResponse<UpdateMyContentResponse>> updateMyContent(
         Authentication authentication,
-        @PathVariable Long contentId,
+        @PathVariable String contentId,
         @Valid @RequestBody UpdateMyContentRequest request
     ) {
         UpdateMyContentResponse response = updateMyContentUseCase.updateContent(
             toAuthenticatedUserId(authentication),
-            contentId,
+            parsePositiveId(contentId),
             request
         );
         return ApiResponse
@@ -51,5 +55,16 @@ public class UpdateMyContentController {
             throw new BusinessException(ErrorCode.UNAUTHENTICATED);
         }
         return userId;
+    }
+
+    private Long parsePositiveId(String value) {
+        if (value == null || !POSITIVE_DECIMAL_PATTERN.matcher(value).matches()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        try {
+            return Long.valueOf(value);
+        } catch (NumberFormatException exception) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
     }
 }
