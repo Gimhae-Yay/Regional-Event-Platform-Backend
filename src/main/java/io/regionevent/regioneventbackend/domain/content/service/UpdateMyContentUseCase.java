@@ -16,6 +16,7 @@ import io.regionevent.regioneventbackend.domain.content.dto.UpdateMyContentRespo
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.service.ContentService.UpdateContentCommand;
 import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
+import io.regionevent.regioneventbackend.domain.image.service.ImageObjectService;
 import io.regionevent.regioneventbackend.domain.image.service.RepresentativeImageConnectionService;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService.AuthorizedOperator;
@@ -31,17 +32,20 @@ public class UpdateMyContentUseCase {
     private final OperatorAuthorizationService operatorAuthorizationService;
     private final RepresentativeImageConnectionService representativeImageConnectionService;
     private final ContentService contentService;
+    private final ImageObjectService imageObjectService;
     private final Clock clock;
 
     public UpdateMyContentUseCase(
         OperatorAuthorizationService operatorAuthorizationService,
         RepresentativeImageConnectionService representativeImageConnectionService,
         ContentService contentService,
+        ImageObjectService imageObjectService,
         Clock clock
     ) {
         this.operatorAuthorizationService = operatorAuthorizationService;
         this.representativeImageConnectionService = representativeImageConnectionService;
         this.contentService = contentService;
+        this.imageObjectService = imageObjectService;
         this.clock = clock;
     }
 
@@ -58,6 +62,7 @@ public class UpdateMyContentUseCase {
             operator.user().getUserId(),
             operator.region().getRegionId()
         );
+        ImageObject previousImageObject = content.getRepresentativeImageObject();
         Long replacementImageObjectId = parseOptionalPositiveImageObjectId(request.representativeImageObjectId());
         ImageObject replacementImageObject = findReplacementImageObject(
             content,
@@ -70,6 +75,9 @@ public class UpdateMyContentUseCase {
             replacementImageObject,
             clock.instant()
         );
+        if (replacementImageObject != null) {
+            imageObjectService.markDeletePendingIfUnreferenced(previousImageObject, replacementImageObject);
+        }
 
         return UpdateMyContentResponse.from(updatedContent);
     }
