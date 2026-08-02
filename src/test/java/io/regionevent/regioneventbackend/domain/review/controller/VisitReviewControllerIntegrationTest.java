@@ -260,6 +260,7 @@ class VisitReviewControllerIntegrationTest {
     @Test
     void createReview_whenSuccessAuditRecordingFails_rollsBackReview() throws Exception {
         Fixture fixture = createFixture(true);
+        long failureAuditCountBefore = countReviewFailureAudits();
         RecordAuditEventUseCase rejectingAuditEventUseCase = mock(RecordAuditEventUseCase.class);
         doThrow(new IllegalStateException("audit storage failure"))
             .when(rejectingAuditEventUseCase)
@@ -283,6 +284,7 @@ class VisitReviewControllerIntegrationTest {
         )).isInstanceOf(IllegalStateException.class);
 
         assertThat(countReviews(fixture.visit().getVisitId())).isZero();
+        assertThat(countReviewFailureAudits()).isEqualTo(failureAuditCountBefore + 1);
     }
 
     @Test
@@ -304,6 +306,56 @@ class VisitReviewControllerIntegrationTest {
         performCreate(fixture.user(), fixture.visit().getVisitId(), 0, "후기")
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        assertThat(countReviews(fixture.visit().getVisitId())).isZero();
+        assertThat(countReviewFailureAudits()).isEqualTo(failureAuditCountBefore);
+    }
+
+    @Test
+    void createReview_whenPathIdFormatIsInvalid_returnsInputErrorWithoutFailureAudit() throws Exception {
+        Fixture fixture = createFixture(true);
+        long failureAuditCountBefore = countReviewFailureAudits();
+
+        for (String invalidVisitId : List.of("01", "+1", "0", "-1")) {
+            performCreate(fixture.user(), invalidVisitId, 5, "후기")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        }
+        performCreate(fixture.user(), "9223372036854775808", 5, "후기")
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+
+        assertThat(countReviews(fixture.visit().getVisitId())).isZero();
+        assertThat(countReviewFailureAudits()).isEqualTo(failureAuditCountBefore);
+    }
+
+    @Test
+    void createReview_whenRequestBodyFieldTypeIsInvalid_returnsInvalidTypeWithoutFailureAudit() throws Exception {
+        Fixture fixture = createFixture(true);
+        long failureAuditCountBefore = countReviewFailureAudits();
+
+        mockMvc.perform(post("/api/v1/visits/{visitId}/reviews", fixture.visit().getVisitId())
+                .header("Authorization", "Bearer " + jwtAccessTokenService.issue(fixture.user().getUserId()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "rating": "5",
+                      "reviewText": "후기"
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+        mockMvc.perform(post("/api/v1/visits/{visitId}/reviews", fixture.visit().getVisitId())
+                .header("Authorization", "Bearer " + jwtAccessTokenService.issue(fixture.user().getUserId()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "rating": 5,
+                      "reviewText": 1
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
 
         assertThat(countReviews(fixture.visit().getVisitId())).isZero();
         assertThat(countReviewFailureAudits()).isEqualTo(failureAuditCountBefore);
@@ -375,6 +427,15 @@ class VisitReviewControllerIntegrationTest {
     private org.springframework.test.web.servlet.ResultActions performCreate(
         AppUser user,
         Long visitId,
+        int rating,
+        String reviewText
+    ) throws Exception {
+        return performCreate(user, visitId.toString(), rating, reviewText);
+    }
+
+    private org.springframework.test.web.servlet.ResultActions performCreate(
+        AppUser user,
+        String visitId,
         int rating,
         String reviewText
     ) throws Exception {

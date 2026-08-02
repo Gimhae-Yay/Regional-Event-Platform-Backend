@@ -75,6 +75,9 @@ public class CreateVisitReviewUseCase {
         } catch (BusinessException exception) {
             recordFailure(requestId, actor, visit, exception.getErrorCode());
             throw exception;
+        } catch (RuntimeException exception) {
+            recordFailure(requestId, actor, visit, ErrorCode.INTERNAL_SERVER_ERROR);
+            throw exception;
         }
     }
 
