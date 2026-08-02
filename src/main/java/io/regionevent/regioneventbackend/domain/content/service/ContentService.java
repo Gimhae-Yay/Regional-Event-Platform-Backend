@@ -11,6 +11,8 @@ import io.regionevent.regioneventbackend.domain.content.repository.ContentReposi
 import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 @Service
 public class ContentService {
@@ -45,6 +47,16 @@ public class ContentService {
             command.publishAt()
         );
         content.assignRepresentativeImage(representativeImageObject, representativeImageAssignedAt);
+        return contentRepository.saveAndFlush(content);
+    }
+
+    public Content findApprovalTargetForUpdate(Long contentId) {
+        return contentRepository.findApprovalTargetForUpdate(contentId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public Content approve(Content content) {
+        content.approve();
         return contentRepository.saveAndFlush(content);
     }
 

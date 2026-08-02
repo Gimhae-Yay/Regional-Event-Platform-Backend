@@ -12,6 +12,7 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionSta
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentSessionRepository;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
+import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
@@ -53,6 +54,25 @@ public class ContentSessionService {
             ))
             .toList();
         return contentSessionRepository.saveAllAndFlush(sessions);
+    }
+
+    public List<ContentSession> findApprovalTargetsForUpdate(Long contentId) {
+        return contentSessionRepository.findApprovalTargetsForUpdate(contentId);
+    }
+
+    public List<ContentSession> approveAll(
+        List<ContentSession> contentSessions,
+        AppUser reviewer,
+        Instant reviewedAt
+    ) {
+        if (contentSessions.isEmpty()
+            || contentSessions.stream().anyMatch(
+                contentSession -> contentSession.getStatus() != ContentSessionStatus.PENDING
+            )) {
+            throw new BusinessException(ErrorCode.CONTENT_STATE_CONFLICT);
+        }
+        contentSessions.forEach(contentSession -> contentSession.approve(reviewer, reviewedAt));
+        return contentSessionRepository.saveAllAndFlush(contentSessions);
     }
 
     @Transactional(readOnly = true)
