@@ -52,6 +52,19 @@ public class ContentSessionService {
         );
     }
 
+    public ContentSession findCancelTargetForUpdate(Long sessionId) {
+        return contentSessionRepository.findCancelTargetForUpdate(sessionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public boolean lockConfirmableReservationTarget(Long sessionId) {
+        return contentSessionRepository.findConfirmableReservationTargetForUpdate(
+            sessionId,
+            ContentStatus.PUBLISHED,
+            ContentSessionStatus.SCHEDULED
+        ).isPresent();
+    }
+
     public List<ContentSession> createPendingSessions(
         Content content,
         Region region,
@@ -110,6 +123,27 @@ public class ContentSessionService {
         if (updatedCount == 0) {
             throw new BusinessException(ErrorCode.RESERVATION_HOLD_CONFLICT);
         }
+    }
+
+    public ContentSession cancel(
+        ContentSession contentSession,
+        AppUser operator,
+        Instant cancelledAt,
+        String cancellationReason
+    ) {
+        if (contentSession.getStatus() != ContentSessionStatus.SCHEDULED) {
+            throw new BusinessException(ErrorCode.SESSION_NOT_CANCELLABLE);
+        }
+        contentSession.cancel(operator, cancelledAt, cancellationReason);
+        return contentSessionRepository.saveAndFlush(contentSession);
+    }
+
+    public ContentSession releaseCapacity(ContentSession contentSession, int quantity) {
+        if (quantity == 0) {
+            return contentSession;
+        }
+        contentSession.releaseCapacity(quantity);
+        return contentSessionRepository.saveAndFlush(contentSession);
     }
 
     public record CreateContentSessionCommand(

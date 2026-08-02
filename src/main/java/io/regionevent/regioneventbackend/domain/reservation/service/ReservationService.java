@@ -1,12 +1,14 @@
 package io.regionevent.regioneventbackend.domain.reservation.service;
 
 import java.time.Instant;
+import java.util.List;
 
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationRepository;
@@ -49,6 +51,29 @@ public class ReservationService {
     public Reservation findById(Long reservationId) {
         return reservationRepository.findByReservationIdForUpdate(reservationId)
             .orElseThrow(() -> new IllegalStateException("idempotency result reservation does not exist"));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public int cancelUncheckedInReservationsForSession(
+        ContentSession contentSession,
+        String cancellationReason,
+        Instant cancelledAt
+    ) {
+        List<Reservation> confirmedReservations = reservationRepository.findConfirmedBySessionIdForUpdate(
+            contentSession.getSessionId()
+        );
+        boolean shouldReleaseCapacity = cancelledAt.isBefore(contentSession.getStartsAt());
+        Instant capacityReleasedAt = shouldReleaseCapacity ? cancelledAt : null;
+        int releasedQuantity = shouldReleaseCapacity
+            ? confirmedReservations.stream()
+                .mapToInt(reservation -> reservation.getCapacityHold().getQuantity())
+                .sum()
+            : 0;
+        confirmedReservations.forEach(reservation ->
+            reservation.cancel(cancellationReason, cancelledAt, capacityReleasedAt)
+        );
+        reservationRepository.saveAllAndFlush(confirmedReservations);
+        return releasedQuantity;
     }
 
     private boolean insertConfirmed(

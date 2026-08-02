@@ -1,19 +1,32 @@
 package io.regionevent.regioneventbackend.domain.reservation.repository;
 
+import java.util.List;
 import java.util.Optional;
+
+import jakarta.persistence.LockModeType;
 
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
-
 public interface CapacityHoldRepository extends JpaRepository<CapacityHold, Long> {
 
     @EntityGraph(attributePaths = {"region", "contentSession", "contentSession.content", "user"})
     Optional<CapacityHold> findByHoldId(Long holdId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT capacityHold
+        FROM CapacityHold capacityHold
+        WHERE capacityHold.contentSession.sessionId = :sessionId
+            AND capacityHold.status = io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus.ACTIVE
+        ORDER BY capacityHold.holdId ASC
+        """)
+    List<CapacityHold> findActiveBySessionIdForUpdate(@Param("sessionId") Long sessionId);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
