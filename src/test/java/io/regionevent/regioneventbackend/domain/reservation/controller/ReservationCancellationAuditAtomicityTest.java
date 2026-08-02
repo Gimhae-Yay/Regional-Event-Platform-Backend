@@ -8,10 +8,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 import jakarta.persistence.EntityManager;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -20,6 +23,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
@@ -65,6 +69,12 @@ class ReservationCancellationAuditAtomicityTest {
     private final JdbcTemplate jdbcTemplate;
     private final JwtAccessTokenService jwtAccessTokenService;
     private final EntityManager entityManager;
+    private final List<Long> createdReservationIds = new ArrayList<>();
+    private final List<Long> createdCapacityHoldIds = new ArrayList<>();
+    private final List<Long> createdSessionIds = new ArrayList<>();
+    private final List<Long> createdContentIds = new ArrayList<>();
+    private final List<Long> createdUserIds = new ArrayList<>();
+    private final List<Long> createdRegionIds = new ArrayList<>();
 
     @MockitoBean
     private RecordAuditEventUseCase recordAuditEventUseCase;
@@ -98,6 +108,22 @@ class ReservationCancellationAuditAtomicityTest {
         this.entityManager = entityManager;
     }
 
+    @AfterEach
+    void cleanUpFixture() {
+        entityManager.clear();
+
+        deleteReservationAuditEvents();
+        deleteRows("DELETE FROM reservation WHERE reservation_id = ?", createdReservationIds);
+        deleteRows("DELETE FROM capacity_hold WHERE hold_id = ?", createdCapacityHoldIds);
+        deleteRows("DELETE FROM content_session WHERE session_id = ?", createdSessionIds);
+        deleteRows("DELETE FROM content WHERE content_id = ?", createdContentIds);
+        deleteRows("DELETE FROM user_role_assignment WHERE user_id = ?", createdUserIds);
+        deleteRows("DELETE FROM app_user WHERE user_id = ?", createdUserIds);
+        deleteRows("DELETE FROM region WHERE region_id = ?", createdRegionIds);
+
+        entityManager.clear();
+    }
+
     @Test
     void cancelReservation_whenAuditRecordingFails_rollsBackReservationAndCapacity() throws Exception {
         Fixture fixture = createFixture();
@@ -129,6 +155,7 @@ class ReservationCancellationAuditAtomicityTest {
         String suffix = Long.toUnsignedString(System.nanoTime());
         Instant now = Instant.now();
         Region region = regionRepository.saveAndFlush(new Region("R" + suffix, "김해시", true));
+        createdRegionIds.add(region.getRegionId());
         AppUser user = appUserRepository.saveAndFlush(new AppUser(
             "visitor-" + suffix + "@example.com",
             "hashed-password",
@@ -136,6 +163,7 @@ class ReservationCancellationAuditAtomicityTest {
             "010-1234-5678",
             AppUserStatus.ACTIVE
         ));
+        createdUserIds.add(user.getUserId());
         userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(user, UserRole.VISITOR, null));
         AppUser operator = appUserRepository.saveAndFlush(new AppUser(
             "operator-" + suffix + "@example.com",
@@ -144,6 +172,7 @@ class ReservationCancellationAuditAtomicityTest {
             "010-9876-5432",
             AppUserStatus.ACTIVE
         ));
+        createdUserIds.add(operator.getUserId());
         Content content = contentRepository.saveAndFlush(new Content(
             region,
             operator,
@@ -160,6 +189,7 @@ class ReservationCancellationAuditAtomicityTest {
             "시작 전까지 취소할 수 있습니다.",
             now
         ));
+        createdContentIds.add(content.getContentId());
         ContentSession session = new ContentSession(
             content,
             region,
@@ -171,6 +201,7 @@ class ReservationCancellationAuditAtomicityTest {
         );
         session.approve(operator, now);
         session = contentSessionRepository.saveAndFlush(session);
+        createdSessionIds.add(session.getSessionId());
         jdbcTemplate.update(
             "UPDATE content_session SET remaining_capacity = ? WHERE session_id = ?",
             RESERVED_REMAINING_CAPACITY,
@@ -188,6 +219,7 @@ class ReservationCancellationAuditAtomicityTest {
             null,
             now
         ));
+        createdCapacityHoldIds.add(capacityHold.getHoldId());
         Reservation reservation = reservationRepository.saveAndFlush(new Reservation(
             "R" + suffix,
             UUID.randomUUID().toString(),
@@ -202,7 +234,28 @@ class ReservationCancellationAuditAtomicityTest {
             null,
             null
         ));
+        createdReservationIds.add(reservation.getReservationId());
         return new Fixture(user, session, reservation);
+    }
+
+    private void deleteReservationAuditEvents() {
+        createdReservationIds.forEach(reservationId -> {
+            jdbcTemplate.update(
+                "DELETE FROM audit_event_actor_link WHERE audit_event_id IN "
+                    + "(SELECT audit_event_id FROM audit_event WHERE target_type = ? AND target_id = ?)",
+                AuditEventTargetType.RESERVATION.name(),
+                reservationId
+            );
+            jdbcTemplate.update(
+                "DELETE FROM audit_event WHERE target_type = ? AND target_id = ?",
+                AuditEventTargetType.RESERVATION.name(),
+                reservationId
+            );
+        });
+    }
+
+    private void deleteRows(String sql, List<Long> ids) {
+        ids.forEach(id -> jdbcTemplate.update(sql, id));
     }
 
     private record Fixture(AppUser user, ContentSession session, Reservation reservation) {
