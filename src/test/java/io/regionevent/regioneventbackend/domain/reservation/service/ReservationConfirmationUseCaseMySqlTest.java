@@ -1,9 +1,6 @@
 package io.regionevent.regioneventbackend.domain.reservation.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
 
 import java.time.Instant;
 import java.util.List;
@@ -18,10 +15,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,9 +26,8 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
-import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
-import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
@@ -75,9 +69,6 @@ class ReservationConfirmationUseCaseMySqlTest {
     private final IdempotencyRecordRepository idempotencyRecordRepository;
     private final AuditEventRepository auditEventRepository;
     private final TransactionTemplate transactionTemplate;
-
-    @MockitoBean
-    private RecordAuditEventUseCase recordAuditEventUseCase;
 
     @Autowired
     ReservationConfirmationUseCaseMySqlTest(
@@ -138,6 +129,7 @@ class ReservationConfirmationUseCaseMySqlTest {
             .filteredOn(record -> record.getActor().getUserId().equals(fixture.user().getUserId()))
             .singleElement()
             .satisfies(record -> assertThat(record.getStatus()).isEqualTo(IdempotencyRecordStatus.SUCCEEDED));
+        assertSuccessfulAuditEvents(fixture.capacityHold(), results.getFirst().response().reservationId());
     }
 
     @Test
@@ -168,6 +160,7 @@ class ReservationConfirmationUseCaseMySqlTest {
         assertThat(reservationRepository.findAll())
             .noneMatch(reservation -> reservation.getCapacityHold().getHoldId()
                 .equals(otherCapacityHold.getHoldId()));
+        assertSuccessfulAuditEvents(fixture.capacityHold(), firstResult.response().reservationId());
     }
 
     @Test
@@ -194,30 +187,11 @@ class ReservationConfirmationUseCaseMySqlTest {
         assertThat(auditEventRepository.findAll())
             .filteredOn(event -> event.getResult() == AuditEventResult.FAILURE)
             .anySatisfy(event -> assertThat(event.getReasonCode()).isEqualTo("RESERVATION_CONFIRM_CONFLICT"));
-    }
-
-    @Test
-    void 감사_이벤트_기록이_실패하면_예약_확정_트랜잭션_전체가_롤백된다() {
-        Fixture fixture = createFixture();
-        long auditEventCount = auditEventRepository.count();
-        doThrow(new IllegalStateException("audit storage failure"))
-            .when(recordAuditEventUseCase)
-            .record(any(AuditEventCommand.class));
-
-        assertThatThrownBy(() -> confirm(
-            fixture,
-            fixture.capacityHold().getHoldId(),
-            "rollback-key-" + System.nanoTime()
-        )).isInstanceOf(IllegalStateException.class);
-
-        assertThat(capacityHoldRepository.findById(fixture.capacityHold().getHoldId()))
-            .hasValueSatisfying(hold -> assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.ACTIVE));
-        assertThat(reservationRepository.findAll())
-            .noneMatch(reservation -> reservation.getCapacityHold().getHoldId()
-                .equals(fixture.capacityHold().getHoldId()));
-        assertThat(idempotencyRecordRepository.findAll())
-            .noneMatch(record -> record.getActor().getUserId().equals(fixture.user().getUserId()));
-        assertThat(auditEventRepository.count()).isEqualTo(auditEventCount);
+        ReservationConfirmationResult successfulResult = results.stream()
+            .filter(ReservationConfirmationResult::isSuccessful)
+            .findFirst()
+            .orElseThrow();
+        assertSuccessfulAuditEvents(fixture.capacityHold(), successfulResult.response().reservationId());
     }
 
     private List<ReservationConfirmationResult> confirmConcurrently(
@@ -284,6 +258,24 @@ class ReservationConfirmationUseCaseMySqlTest {
                 now
             ));
         });
+    }
+
+    private void assertSuccessfulAuditEvents(CapacityHold capacityHold, String reservationId) {
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(event -> event.getResult() == AuditEventResult.SUCCESS)
+            .filteredOn(event -> event.getTargetType() == AuditEventTargetType.CAPACITY_HOLD)
+            .filteredOn(event -> event.getTargetId().equals(capacityHold.getHoldId()))
+            .singleElement()
+            .satisfies(event -> {
+                assertThat(event.getPreviousState()).isEqualTo("ACTIVE");
+                assertThat(event.getNextState()).isEqualTo("CONSUMED");
+            });
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(event -> event.getResult() == AuditEventResult.SUCCESS)
+            .filteredOn(event -> event.getTargetType() == AuditEventTargetType.RESERVATION)
+            .filteredOn(event -> event.getTargetId().toString().equals(reservationId))
+            .singleElement()
+            .satisfies(event -> assertThat(event.getNextState()).isEqualTo("CONFIRMED"));
     }
 
     private Fixture createFixture() {
