@@ -25,6 +25,11 @@ idempotency:
   cleanup-initial-delay: PT1H
   lock-wait-timeout-seconds: 3
 
+reservation:
+  no-show-completion:
+    initial-delay: PT1M
+    fixed-delay: PT1M
+
 logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [requestId=%X{requestId:-}] %logger{36} - %msg%n"
