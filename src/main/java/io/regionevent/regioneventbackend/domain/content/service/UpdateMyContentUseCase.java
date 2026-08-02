@@ -8,6 +8,8 @@ import java.util.regex.Pattern;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import tools.jackson.databind.JsonNode;
 
@@ -16,7 +18,9 @@ import io.regionevent.regioneventbackend.domain.content.dto.UpdateMyContentRespo
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.service.ContentService.UpdateContentCommand;
 import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
+import io.regionevent.regioneventbackend.domain.image.service.ImageObjectCleanupService;
 import io.regionevent.regioneventbackend.domain.image.service.ImageObjectService;
+import io.regionevent.regioneventbackend.domain.image.service.ImageObjectService.DeletePendingImageObject;
 import io.regionevent.regioneventbackend.domain.image.service.RepresentativeImageConnectionService;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService.AuthorizedOperator;
@@ -33,6 +37,7 @@ public class UpdateMyContentUseCase {
     private final RepresentativeImageConnectionService representativeImageConnectionService;
     private final ContentService contentService;
     private final ImageObjectService imageObjectService;
+    private final ImageObjectCleanupService imageObjectCleanupService;
     private final Clock clock;
 
     public UpdateMyContentUseCase(
@@ -40,12 +45,14 @@ public class UpdateMyContentUseCase {
         RepresentativeImageConnectionService representativeImageConnectionService,
         ContentService contentService,
         ImageObjectService imageObjectService,
+        ImageObjectCleanupService imageObjectCleanupService,
         Clock clock
     ) {
         this.operatorAuthorizationService = operatorAuthorizationService;
         this.representativeImageConnectionService = representativeImageConnectionService;
         this.contentService = contentService;
         this.imageObjectService = imageObjectService;
+        this.imageObjectCleanupService = imageObjectCleanupService;
         this.clock = clock;
     }
 
@@ -76,10 +83,24 @@ public class UpdateMyContentUseCase {
             clock.instant()
         );
         if (replacementImageObject != null) {
-            imageObjectService.markDeletePendingIfUnreferenced(previousImageObject, replacementImageObject);
+            imageObjectService.markDeletePendingIfUnreferenced(previousImageObject, replacementImageObject)
+                .ifPresent(this::deleteImageObjectAfterCommit);
         }
 
         return UpdateMyContentResponse.from(updatedContent);
+    }
+
+    private void deleteImageObjectAfterCommit(DeletePendingImageObject deletePendingImageObject) {
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+
+            @Override
+            public void afterCommit() {
+                imageObjectCleanupService.deletePendingObject(
+                    deletePendingImageObject.imageObjectId(),
+                    deletePendingImageObject.objectKey()
+                );
+            }
+        });
     }
 
     private ImageObject findReplacementImageObject(

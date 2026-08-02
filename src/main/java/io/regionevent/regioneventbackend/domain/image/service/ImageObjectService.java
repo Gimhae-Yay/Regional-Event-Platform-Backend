@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.domain.image.service;
 
 import java.time.Instant;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 
@@ -39,16 +40,16 @@ public class ImageObjectService {
         ));
     }
 
-    public void markDeletePendingIfUnreferenced(
+    public Optional<DeletePendingImageObject> markDeletePendingIfUnreferenced(
         ImageObject previousImageObject,
         ImageObject replacementImageObject
     ) {
         if (previousImageObject == null) {
-            return;
+            return Optional.empty();
         }
         if (previousImageObject.getImageObjectId()
             .equals(replacementImageObject.getImageObjectId())) {
-            return;
+            return Optional.empty();
         }
         int updatedCount = imageObjectRepository.markActiveObjectDeletePendingWithoutDirectReferences(
             previousImageObject.getImageObjectId(),
@@ -57,6 +58,21 @@ public class ImageObjectService {
         );
         if (updatedCount > 0) {
             previousImageObject.markDeletePending();
+            return Optional.of(DeletePendingImageObject.from(previousImageObject));
+        }
+        return Optional.empty();
+    }
+
+    public record DeletePendingImageObject(
+        Long imageObjectId,
+        String objectKey
+    ) {
+
+        private static DeletePendingImageObject from(ImageObject imageObject) {
+            return new DeletePendingImageObject(
+                imageObject.getImageObjectId(),
+                imageObject.getObjectKey()
+            );
         }
     }
 }

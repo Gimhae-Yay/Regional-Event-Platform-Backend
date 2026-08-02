@@ -7,7 +7,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -23,6 +25,7 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
@@ -356,6 +359,48 @@ class ContentControllerIntegrationTest {
     }
 
     @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void updateMyContent_whenPreviousRepresentativeImageIsUnreferenced_deletesPreviousImageAfterCommit()
+        throws Exception {
+
+        try {
+            AppUser operator = saveUser("update-delete-operator@example.com");
+            Region region = saveRegion("UPDATE-DELETE-IMAGE");
+            userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
+            ImageObject currentImageObject = saveLinkedImageObject(
+                operator,
+                region,
+                "contents/test/current-delete.webp"
+            );
+            Long currentImageObjectId = currentImageObject.getImageObjectId();
+            String currentObjectKey = currentImageObject.getObjectKey();
+            Content content = saveContent(operator, region, currentImageObject, ContentStatus.REJECTED);
+            ImageObject replacementImageObject = saveImageObject(
+                operator,
+                region,
+                "contents/test/replacement-delete.webp"
+            );
+            imageStorageGateway.addMetadata(
+                replacementImageObject.getObjectKey(),
+                replacementImageObject.getByteSize(),
+                replacementImageObject.getChecksum()
+            );
+
+            mockMvc.perform(put("/api/v1/operator/contents/{contentId}", content.getContentId())
+                    .header(HttpHeaders.AUTHORIZATION, bearerToken(operator))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(updateRequest(replacementImageObject.getImageObjectId().toString())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("REJECTED"));
+
+            assertThat(imageObjectRepository.existsById(currentImageObjectId)).isFalse();
+            assertThat(imageStorageGateway.deletedObjectKeys()).containsExactly(currentObjectKey);
+        } finally {
+            deletePersistedTestData();
+        }
+    }
+
+    @Test
     void updateMyContent_whenPreviousRepresentativeImageIsStillReferenced_keepsPreviousImageActive()
         throws Exception {
 
@@ -667,6 +712,18 @@ class ContentControllerIntegrationTest {
         return "Bearer " + jwtAccessTokenService.issue(user.getUserId());
     }
 
+    private void deletePersistedTestData() {
+        contentSessionRepository.deleteAllInBatch();
+        contentLogRepository.deleteAllInBatch();
+        auditEventRepository.deleteAllInBatch();
+        contentRepository.deleteAllInBatch();
+        imageObjectRepository.deleteAllInBatch();
+        userRoleAssignmentRepository.deleteAllInBatch();
+        appUserRepository.deleteAllInBatch();
+        regionRepository.deleteAllInBatch();
+        imageStorageGateway.reset();
+    }
+
     private AppUser saveUser(String loginIdentifier) {
         return appUserRepository.saveAndFlush(new AppUser(
             loginIdentifier,
@@ -835,6 +892,7 @@ class ContentControllerIntegrationTest {
     static class FakeImageStorageGateway implements ImageStorageGateway {
 
         private final Map<String, StoredObjectMetadata> metadataByObjectKey = new HashMap<>();
+        private final List<String> deletedObjectKeys = new ArrayList<>();
 
         @Override
         public PresignedUpload createPresignedPutUpload(
@@ -858,15 +916,20 @@ class ContentControllerIntegrationTest {
 
         @Override
         public void delete(String objectKey) {
-            throw new UnsupportedOperationException("not used");
+            deletedObjectKeys.add(objectKey);
         }
 
         void addMetadata(String objectKey, long byteSize, String checksum) {
             metadataByObjectKey.put(objectKey, new StoredObjectMetadata(byteSize, checksum));
         }
 
+        List<String> deletedObjectKeys() {
+            return deletedObjectKeys;
+        }
+
         void reset() {
             metadataByObjectKey.clear();
+            deletedObjectKeys.clear();
         }
     }
 }
