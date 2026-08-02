@@ -343,9 +343,50 @@ class ContentControllerIntegrationTest {
             .satisfies(imageObject -> {
                 assertThat(imageObject.getCreatedByUser()).isNull();
                 assertThat(imageObject.getLinkedAt()).isNotNull();
+                assertThat(imageObject.getLifecycleStatus()).isEqualTo(ImageLifecycleStatus.ACTIVE);
+            });
+        assertThat(imageObjectRepository.findById(currentImageObject.getImageObjectId()))
+            .get()
+            .satisfies(imageObject -> {
+                assertThat(imageObject.getLinkedAt()).isNotNull();
+                assertThat(imageObject.getLifecycleStatus()).isEqualTo(ImageLifecycleStatus.DELETE_PENDING);
             });
         assertThat(contentLogRepository.count()).isZero();
         assertThat(auditEventRepository.count()).isZero();
+    }
+
+    @Test
+    void updateMyContent_whenPreviousRepresentativeImageIsStillReferenced_keepsPreviousImageActive()
+        throws Exception {
+
+        AppUser operator = saveUser("update-shared-image-operator@example.com");
+        Region region = saveRegion("UPDATE-SHARED-IMAGE");
+        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
+        ImageObject currentImageObject = saveLinkedImageObject(operator, region, "contents/test/current-shared.webp");
+        Content content = saveContent(operator, region, currentImageObject, ContentStatus.REJECTED);
+        Content otherContent = saveContent(operator, region, currentImageObject, ContentStatus.APPROVED);
+        ImageObject replacementImageObject = saveImageObject(operator, region, "contents/test/replacement-shared.webp");
+        imageStorageGateway.addMetadata(
+            replacementImageObject.getObjectKey(),
+            replacementImageObject.getByteSize(),
+            replacementImageObject.getChecksum()
+        );
+
+        mockMvc.perform(put("/api/v1/operator/contents/{contentId}", content.getContentId())
+                .header(HttpHeaders.AUTHORIZATION, bearerToken(operator))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(updateRequest(replacementImageObject.getImageObjectId().toString())))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("REJECTED"));
+
+        assertThat(contentRepository.findById(otherContent.getContentId()))
+            .get()
+            .satisfies(savedContent -> assertThat(savedContent.getRepresentativeImageObject().getImageObjectId())
+                .isEqualTo(currentImageObject.getImageObjectId()));
+        assertThat(imageObjectRepository.findById(currentImageObject.getImageObjectId()))
+            .get()
+            .satisfies(imageObject -> assertThat(imageObject.getLifecycleStatus())
+                .isEqualTo(ImageLifecycleStatus.ACTIVE));
     }
 
     @Test

@@ -8,7 +8,9 @@ import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
+import io.regionevent.regioneventbackend.domain.image.entity.ImageLifecycleStatus;
 import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
+import io.regionevent.regioneventbackend.domain.image.repository.ImageObjectRepository;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -18,9 +20,14 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
 public class ContentService {
 
     private final ContentRepository contentRepository;
+    private final ImageObjectRepository imageObjectRepository;
 
-    public ContentService(ContentRepository contentRepository) {
+    public ContentService(
+        ContentRepository contentRepository,
+        ImageObjectRepository imageObjectRepository
+    ) {
         this.contentRepository = contentRepository;
+        this.imageObjectRepository = imageObjectRepository;
     }
 
     public Content createPendingContent(
@@ -79,6 +86,7 @@ public class ContentService {
         if (content.getStatus() != ContentStatus.REJECTED) {
             throw new BusinessException(ErrorCode.CONTENT_STATE_CONFLICT);
         }
+        ImageObject previousRepresentativeImageObject = content.getRepresentativeImageObject();
         content.replaceEditableFields(
             command.title(),
             command.description(),
@@ -94,7 +102,35 @@ public class ContentService {
         if (replacementImageObject != null) {
             content.assignRepresentativeImage(replacementImageObject, representativeImageAssignedAt);
         }
-        return contentRepository.saveAndFlush(content);
+        Content updatedContent = contentRepository.saveAndFlush(content);
+        if (replacementImageObject != null) {
+            markPreviousRepresentativeImageDeletePending(
+                previousRepresentativeImageObject,
+                replacementImageObject
+            );
+        }
+        return updatedContent;
+    }
+
+    private void markPreviousRepresentativeImageDeletePending(
+        ImageObject previousRepresentativeImageObject,
+        ImageObject replacementImageObject
+    ) {
+        if (previousRepresentativeImageObject == null) {
+            return;
+        }
+        if (previousRepresentativeImageObject.getImageObjectId()
+            .equals(replacementImageObject.getImageObjectId())) {
+            return;
+        }
+        int updatedCount = imageObjectRepository.markActiveObjectDeletePendingWithoutDirectReferences(
+            previousRepresentativeImageObject.getImageObjectId(),
+            ImageLifecycleStatus.ACTIVE,
+            ImageLifecycleStatus.DELETE_PENDING
+        );
+        if (updatedCount > 0) {
+            previousRepresentativeImageObject.markDeletePending();
+        }
     }
 
     private void validateRequiredId(Long id) {
