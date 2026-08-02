@@ -1,7 +1,6 @@
 package io.regionevent.regioneventbackend.domain.user.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -90,9 +89,7 @@ class RegionAdminAuthorizationServiceTest {
         UserRoleAssignment assignment = assignmentInRegion(GIMHAE_REGION_ID);
         givenAuthorizationAssignment(Optional.of(assignment));
 
-        assertThatCode(
-            () -> authorizationService.authorize(USER_ID, GIMHAE_REGION_ID)
-        ).doesNotThrowAnyException();
+        assertThat(authorizationService.authorize(USER_ID, GIMHAE_REGION_ID)).isSameAs(assignment);
     }
 
     private void givenAuthorizationAssignment(Optional<UserRoleAssignment> assignment) {
