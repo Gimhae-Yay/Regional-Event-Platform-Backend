@@ -20,3 +20,7 @@ security:
       audience: regional-event-refresh
       active-key-id: refresh-test-key
       active-key: AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=
+  qr:
+    active-key-id: qr-test-key
+    active-key: AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM=
+    token-ttl: PT5M
