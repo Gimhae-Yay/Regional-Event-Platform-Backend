@@ -3,9 +3,12 @@ package io.regionevent.regioneventbackend.domain.content.repository;
 import java.util.List;
 import java.util.Optional;
 
+import jakarta.persistence.LockModeType;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.repository.query.Param;
 
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
@@ -15,6 +18,15 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 public interface ContentSessionRepository extends JpaRepository<ContentSession, Long> {
 
     List<ContentSession> findByContentContentIdOrderByStartsAtAscSessionIdAsc(Long contentId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT contentSession
+        FROM ContentSession contentSession
+        WHERE contentSession.content.contentId = :contentId
+        ORDER BY contentSession.startsAt ASC, contentSession.sessionId ASC
+        """)
+    List<ContentSession> findApprovalTargetsForUpdate(@Param("contentId") Long contentId);
 
     Optional<ContentSession> findBySessionIdAndContentStatus(
         Long sessionId,

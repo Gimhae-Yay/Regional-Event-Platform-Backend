@@ -165,6 +165,16 @@ public class Content {
         deletedAt = Instant.now();
     }
 
+    public void approve() {
+        if (deletedAt != null) {
+            throw new IllegalStateException("soft deleted content cannot be approved");
+        }
+        if (status != ContentStatus.PENDING) {
+            throw new IllegalStateException("content status must be PENDING but was " + status);
+        }
+        status = ContentStatus.APPROVED;
+    }
+
     public void assignRepresentativeImage(ImageObject imageObject, Instant assignedAt) {
         representativeImageObject = requireNotNull(imageObject, "imageObject");
         representativeImageAssignedAt = requireNotNull(assignedAt, "assignedAt");
