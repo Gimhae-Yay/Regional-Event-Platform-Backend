@@ -20,6 +20,8 @@ import jakarta.persistence.UniqueConstraint;
 
 import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 @Entity
 @Table(
@@ -223,6 +225,20 @@ public class ContentRevision {
     public void assignCandidateImage(ImageObject imageObject, Instant assignedAt) {
         candidateImageObject = requireNotNull(imageObject, "imageObject");
         candidateImageAssignedAt = requireNotNull(assignedAt, "assignedAt");
+    }
+
+    public void reject(AppUser reviewer, Instant reviewTime, String reason) {
+        AppUser validatedReviewer = requireNotNull(reviewer, "reviewer");
+        Instant validatedReviewTime = requireNotNull(reviewTime, "reviewTime");
+        String normalizedReason = requireNotBlank(reason, "reason").strip();
+        if (status != ContentRevisionStatus.EDIT_REQUESTED) {
+            throw new BusinessException(ErrorCode.CONTENT_STATE_CONFLICT);
+        }
+
+        status = ContentRevisionStatus.EDIT_REJECTED;
+        reviewedAt = validatedReviewTime;
+        reviewedBy = validatedReviewer;
+        reviewReason = normalizedReason;
     }
 
     public Long getContentRevisionId() {
