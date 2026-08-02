@@ -67,6 +67,7 @@ public class RejectContentUseCase {
         if (content.getStatus() != ContentStatus.PENDING) {
             throw new BusinessException(ErrorCode.CONTENT_STATE_CONFLICT);
         }
+        AuditEventActor reviewer = new AuditEventActor(reviewerAssignment);
 
         OriginalContentReviewTarget reviewTarget = originalContentReviewTargetService
             .findByContentId(contentId)
@@ -80,7 +81,7 @@ public class RejectContentUseCase {
         Content rejectedContent = contentService.reject(content, rejectedAt);
         contentLogService.recordRejected(
             rejectedContent,
-            reviewerAssignment.getAppUser(),
+            reviewer.getAppUser(),
             rejectedAt,
             normalizedReason
         );
@@ -93,7 +94,7 @@ public class RejectContentUseCase {
             ContentStatus.REJECTED.name(),
             AuditEventResult.SUCCESS,
             null,
-            new AuditEventActor(reviewerAssignment),
+            reviewer,
             rejectedAt
         ));
         return RejectContentResult.from(rejectedContent, rejectedAt);
