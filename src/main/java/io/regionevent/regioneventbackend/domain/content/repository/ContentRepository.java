@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.content.repository;
 
+import java.util.List;
 import java.util.Optional;
 
 import jakarta.persistence.LockModeType;
@@ -11,9 +12,69 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 
 public interface ContentRepository extends JpaRepository<Content, Long> {
+
+    @Query("""
+        SELECT new io.regionevent.regioneventbackend.domain.content.repository.PublicContentProjection(
+            content.contentId,
+            content.contentType,
+            content.title,
+            content.locationText,
+            representativeImageObject,
+            content.representativeImageAssignedAt,
+            CASE WHEN EXISTS (
+                SELECT contentSession.sessionId
+                FROM ContentSession contentSession
+                WHERE contentSession.content = content
+                    AND contentSession.status = :sessionStatus
+                    AND contentSession.startsAt > CURRENT_TIMESTAMP
+                    AND contentSession.remainingCapacity > 0
+            ) THEN true ELSE false END
+        )
+        FROM Content content
+        LEFT JOIN content.representativeImageObject representativeImageObject
+        WHERE content.region.regionId = :regionId
+            AND content.status = :contentStatus
+            AND content.deletedAt IS NULL
+            AND (:contentType IS NULL OR content.contentType = :contentType)
+            AND (
+                :reservationAvailable IS NULL
+                OR (
+                    :reservationAvailable = true
+                    AND EXISTS (
+                        SELECT contentSession.sessionId
+                        FROM ContentSession contentSession
+                        WHERE contentSession.content = content
+                            AND contentSession.status = :sessionStatus
+                            AND contentSession.startsAt > CURRENT_TIMESTAMP
+                            AND contentSession.remainingCapacity > 0
+                    )
+                )
+                OR (
+                    :reservationAvailable = false
+                    AND NOT EXISTS (
+                        SELECT contentSession.sessionId
+                        FROM ContentSession contentSession
+                        WHERE contentSession.content = content
+                            AND contentSession.status = :sessionStatus
+                            AND contentSession.startsAt > CURRENT_TIMESTAMP
+                            AND contentSession.remainingCapacity > 0
+                    )
+                )
+            )
+        ORDER BY content.publishAt DESC, content.contentId DESC
+        """)
+    List<PublicContentProjection> findPublicContents(
+        @Param("regionId") Long regionId,
+        @Param("contentType") ContentType contentType,
+        @Param("reservationAvailable") Boolean reservationAvailable,
+        @Param("contentStatus") ContentStatus contentStatus,
+        @Param("sessionStatus") ContentSessionStatus sessionStatus
+    );
 
     @EntityGraph(attributePaths = "region")
     Optional<Content> findByContentId(Long contentId);
