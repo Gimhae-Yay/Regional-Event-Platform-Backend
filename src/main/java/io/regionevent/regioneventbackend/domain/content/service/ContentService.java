@@ -48,6 +48,13 @@ public class ContentService {
         return contentRepository.saveAndFlush(content);
     }
 
+    public boolean existsPublishedAndNotDeletedById(Long contentId) {
+        return contentRepository.existsByContentIdAndStatusAndDeletedAtIsNull(
+            contentId,
+            ContentStatus.PUBLISHED
+        );
+    }
+
     public record CreateContentCommand(
         String title,
         String description,

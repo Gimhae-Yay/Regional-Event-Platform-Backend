@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
+import java.util.List;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceUnitUtil;
@@ -226,6 +227,55 @@ class ContentSessionRepositoryTest {
         )).isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
+    void 대상_콘텐츠의_SCHEDULED_회차를_시작_시각_오름차순으로_조회한다() {
+        Region region = saveRegion();
+        AppUser operator = saveUser("operator-public-session@example.com");
+        Content targetContent = saveContent(region, operator);
+        Content otherContent = saveContent(region, operator);
+        Instant reviewedAt = Instant.parse("2026-08-01T00:00:00Z");
+        ContentSession laterSession = createContentSession(
+            targetContent,
+            region,
+            Instant.parse("2026-08-03T01:00:00Z")
+        );
+        ContentSession earlierSession = createContentSession(
+            targetContent,
+            region,
+            Instant.parse("2026-08-02T01:00:00Z")
+        );
+        ContentSession pendingSession = createContentSession(
+            targetContent,
+            region,
+            Instant.parse("2026-08-04T01:00:00Z")
+        );
+        ContentSession otherContentSession = createContentSession(
+            otherContent,
+            region,
+            Instant.parse("2026-08-01T01:00:00Z")
+        );
+        laterSession.approve(operator, reviewedAt);
+        earlierSession.approve(operator, reviewedAt);
+        otherContentSession.approve(operator, reviewedAt);
+        contentSessionRepository.saveAllAndFlush(List.of(
+            laterSession,
+            earlierSession,
+            pendingSession,
+            otherContentSession
+        ));
+        entityManager.clear();
+
+        List<ContentSession> sessions = contentSessionRepository
+            .findByContentContentIdAndStatusOrderByStartsAtAsc(
+                targetContent.getContentId(),
+                ContentSessionStatus.SCHEDULED
+            );
+
+        assertThat(sessions)
+            .extracting(ContentSession::getSessionId)
+            .containsExactly(earlierSession.getSessionId(), laterSession.getSessionId());
+    }
+
     private Region saveRegion() {
         return regionRepository.saveAndFlush(new Region("GIMHAE", "김해시", true));
     }
@@ -274,6 +324,22 @@ class ContentSessionRepositoryTest {
             Instant.parse("2026-08-02T03:00:00Z"),
             Instant.parse("2026-08-02T00:30:00Z"),
             Instant.parse("2026-08-02T02:30:00Z"),
+            20
+        );
+    }
+
+    private ContentSession createContentSession(
+        Content content,
+        Region region,
+        Instant startsAt
+    ) {
+        return new ContentSession(
+            content,
+            region,
+            startsAt,
+            startsAt.plusSeconds(7_200),
+            startsAt.minusSeconds(1_800),
+            startsAt.plusSeconds(5_400),
             20
         );
     }

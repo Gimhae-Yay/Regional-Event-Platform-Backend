@@ -31,6 +31,13 @@ public class ContentSessionService {
         ).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
+    public List<ContentSession> findScheduledByContentId(Long contentId) {
+        return contentSessionRepository.findByContentContentIdAndStatusOrderByStartsAtAsc(
+            contentId,
+            ContentSessionStatus.SCHEDULED
+        );
+    }
+
     public List<ContentSession> createPendingSessions(
         Content content,
         Region region,
