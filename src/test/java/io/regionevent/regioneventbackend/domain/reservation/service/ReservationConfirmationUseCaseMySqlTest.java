@@ -1,6 +1,9 @@
 package io.regionevent.regioneventbackend.domain.reservation.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 
 import java.time.Instant;
 import java.util.List;
@@ -18,6 +21,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,6 +32,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
+import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
+import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
@@ -70,6 +76,9 @@ class ReservationConfirmationUseCaseMySqlTest {
     private final AuditEventRepository auditEventRepository;
     private final TransactionTemplate transactionTemplate;
 
+    @MockitoBean
+    private RecordAuditEventUseCase recordAuditEventUseCase;
+
     @Autowired
     ReservationConfirmationUseCaseMySqlTest(
         ReservationConfirmationUseCase reservationConfirmationUseCase,
@@ -103,7 +112,7 @@ class ReservationConfirmationUseCaseMySqlTest {
         registry.add("spring.datasource.username", MYSQL::getUsername);
         registry.add("spring.datasource.password", MYSQL::getPassword);
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
-        registry.add("idempotency.lock-wait-timeout-seconds", () -> "1");
+        registry.add("idempotency.lock-wait-timeout-seconds", () -> "3");
     }
 
     @Test
@@ -118,8 +127,10 @@ class ReservationConfirmationUseCaseMySqlTest {
             idempotencyKey
         );
 
-        assertThat(results).allSatisfy(result -> assertThat(result.errorCode())
-            .isIn(null, ErrorCode.IDEMPOTENCY_REQUEST_IN_PROGRESS));
+        assertThat(results).allSatisfy(result -> assertThat(result.isSuccessful()).isTrue());
+        assertThat(results)
+            .extracting(result -> result.response().reservationId())
+            .containsOnly(results.getFirst().response().reservationId());
         assertThat(reservationRepository.findAll())
             .filteredOn(reservation -> reservation.getCapacityHold().getHoldId().equals(fixture.capacityHold().getHoldId()))
             .hasSize(1);
@@ -127,6 +138,36 @@ class ReservationConfirmationUseCaseMySqlTest {
             .filteredOn(record -> record.getActor().getUserId().equals(fixture.user().getUserId()))
             .singleElement()
             .satisfies(record -> assertThat(record.getStatus()).isEqualTo(IdempotencyRecordStatus.SUCCEEDED));
+    }
+
+    @Test
+    void 동일_멱등_키로_다른_홀드를_확정하면_멱등_키_충돌이_반환된다() {
+        Fixture fixture = createFixture();
+        CapacityHold otherCapacityHold = createActiveHold(fixture);
+        String idempotencyKey = "conflict-key-" + System.nanoTime();
+
+        ReservationConfirmationResult firstResult = confirm(
+            fixture,
+            fixture.capacityHold().getHoldId(),
+            idempotencyKey
+        );
+        ReservationConfirmationResult conflictResult = confirm(
+            fixture,
+            otherCapacityHold.getHoldId(),
+            idempotencyKey
+        );
+
+        assertThat(firstResult.isSuccessful()).isTrue();
+        assertThat(conflictResult.errorCode()).isEqualTo(ErrorCode.IDEMPOTENCY_KEY_CONFLICT);
+        assertThat(capacityHoldRepository.findById(otherCapacityHold.getHoldId()))
+            .hasValueSatisfying(hold -> assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.ACTIVE));
+        assertThat(reservationRepository.findAll())
+            .filteredOn(reservation -> reservation.getCapacityHold().getHoldId()
+                .equals(fixture.capacityHold().getHoldId()))
+            .hasSize(1);
+        assertThat(reservationRepository.findAll())
+            .noneMatch(reservation -> reservation.getCapacityHold().getHoldId()
+                .equals(otherCapacityHold.getHoldId()));
     }
 
     @Test
@@ -153,6 +194,30 @@ class ReservationConfirmationUseCaseMySqlTest {
         assertThat(auditEventRepository.findAll())
             .filteredOn(event -> event.getResult() == AuditEventResult.FAILURE)
             .anySatisfy(event -> assertThat(event.getReasonCode()).isEqualTo("RESERVATION_CONFIRM_CONFLICT"));
+    }
+
+    @Test
+    void 감사_이벤트_기록이_실패하면_예약_확정_트랜잭션_전체가_롤백된다() {
+        Fixture fixture = createFixture();
+        long auditEventCount = auditEventRepository.count();
+        doThrow(new IllegalStateException("audit storage failure"))
+            .when(recordAuditEventUseCase)
+            .record(any(AuditEventCommand.class));
+
+        assertThatThrownBy(() -> confirm(
+            fixture,
+            fixture.capacityHold().getHoldId(),
+            "rollback-key-" + System.nanoTime()
+        )).isInstanceOf(IllegalStateException.class);
+
+        assertThat(capacityHoldRepository.findById(fixture.capacityHold().getHoldId()))
+            .hasValueSatisfying(hold -> assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.ACTIVE));
+        assertThat(reservationRepository.findAll())
+            .noneMatch(reservation -> reservation.getCapacityHold().getHoldId()
+                .equals(fixture.capacityHold().getHoldId()));
+        assertThat(idempotencyRecordRepository.findAll())
+            .noneMatch(record -> record.getActor().getUserId().equals(fixture.user().getUserId()));
+        assertThat(auditEventRepository.count()).isEqualTo(auditEventCount);
     }
 
     private List<ReservationConfirmationResult> confirmConcurrently(
@@ -190,6 +255,35 @@ class ReservationConfirmationUseCaseMySqlTest {
             idempotencyKey,
             UUID.randomUUID()
         );
+    }
+
+    private ReservationConfirmationResult confirm(Fixture fixture, Long holdId, String idempotencyKey) {
+        return reservationConfirmationUseCase.confirm(
+            fixture.user().getUserId(),
+            holdId.toString(),
+            idempotencyKey,
+            UUID.randomUUID()
+        );
+    }
+
+    private CapacityHold createActiveHold(Fixture fixture) {
+        return transactionTemplate.execute(status -> {
+            CapacityHold existingCapacityHold = capacityHoldRepository.findById(fixture.capacityHold().getHoldId())
+                .orElseThrow();
+            Instant now = Instant.now();
+            return capacityHoldRepository.save(new CapacityHold(
+                existingCapacityHold.getRegion(),
+                existingCapacityHold.getContentSession(),
+                existingCapacityHold.getUser(),
+                1,
+                CapacityHoldStatus.ACTIVE,
+                now.plusSeconds(600),
+                null,
+                null,
+                null,
+                now
+            ));
+        });
     }
 
     private Fixture createFixture() {
