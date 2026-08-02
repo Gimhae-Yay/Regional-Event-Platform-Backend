@@ -131,6 +131,54 @@ class ContentRevisionRepositoryTest {
     }
 
     @Test
+    void 심사_대상_조회는_수정본과_미삭제_원본_지역을_함께_조회한다() {
+        Content content = saveContent();
+        AppUser editor = saveUser("editor@example.com");
+        ContentRevision contentRevision = contentRevisionRepository.saveAndFlush(
+            newRevision(content, 1, editor, ContentRevisionStatus.EDIT_REQUESTED, null, null, null, null, null, null)
+        );
+        entityManager.clear();
+
+        ContentRevision foundRevision = contentRevisionRepository.findReviewTargetByIdForUpdate(
+            contentRevision.getContentRevisionId()
+        ).orElseThrow();
+        PersistenceUnitUtil persistenceUnitUtil = entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
+
+        assertThat(foundRevision.getContentRevisionId()).isEqualTo(contentRevision.getContentRevisionId());
+        assertThat(persistenceUnitUtil.isLoaded(foundRevision, "content")).isTrue();
+        assertThat(persistenceUnitUtil.isLoaded(foundRevision.getContent(), "region")).isTrue();
+        assertThat(foundRevision.getContent().getRegion().getRegionId()).isEqualTo(content.getRegion().getRegionId());
+    }
+
+    @Test
+    void 심사_대상_조회는_소프트_삭제된_원본의_수정본을_제외한다() {
+        Content content = saveContent();
+        AppUser editor = saveUser("editor@example.com");
+        ContentRevision contentRevision = contentRevisionRepository.saveAndFlush(
+            newRevision(
+                content,
+                1,
+                editor,
+                ContentRevisionStatus.EDIT_REQUESTED,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                CANDIDATE_PUBLISH_AT
+            )
+        );
+        content.softDelete();
+        contentRepository.flush();
+        entityManager.clear();
+
+        assertThat(contentRevisionRepository.findReviewTargetByIdForUpdate(
+            contentRevision.getContentRevisionId()
+        )).isEmpty();
+    }
+
+    @Test
     void 콘텐츠별_수정_번호는_유일하다() {
         Content content = saveContent();
         AppUser editor = saveUser("editor@example.com");
