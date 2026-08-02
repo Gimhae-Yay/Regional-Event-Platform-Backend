@@ -131,6 +131,27 @@ class ContentRepositoryTest {
     }
 
     @Test
+    void 공개되고_삭제되지_않은_콘텐츠만_존재로_판정한다() {
+        Region region = saveRegion();
+        AppUser operator = saveOperator();
+        Content publishedContent = contentRepository.saveAndFlush(
+            newContent(region, operator, ContentStatus.PUBLISHED, Instant.parse("2026-08-01T00:00:00Z"))
+        );
+        Content pendingContent = contentRepository.saveAndFlush(
+            newContent(region, operator, ContentStatus.PENDING, Instant.parse("2026-08-01T00:00:00Z"))
+        );
+
+        assertThat(contentRepository.existsByContentIdAndStatusAndDeletedAtIsNull(
+            publishedContent.getContentId(),
+            ContentStatus.PUBLISHED
+        )).isTrue();
+        assertThat(contentRepository.existsByContentIdAndStatusAndDeletedAtIsNull(
+            pendingContent.getContentId(),
+            ContentStatus.PUBLISHED
+        )).isFalse();
+    }
+
+    @Test
     void JDBC로_행사_체험_외_콘텐츠_유형을_저장할_수_없다() {
         Region region = saveRegion();
         AppUser operator = saveOperator();

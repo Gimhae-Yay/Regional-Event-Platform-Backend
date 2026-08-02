@@ -69,6 +69,29 @@ public interface ImageObjectRepository extends JpaRepository<ImageObject, Long> 
         @Param("deletePendingStatus") ImageLifecycleStatus deletePendingStatus
     );
 
+    @Modifying(flushAutomatically = true)
+    @Query("""
+        UPDATE ImageObject imageObject
+        SET imageObject.lifecycleStatus = :deletePendingStatus
+        WHERE imageObject.imageObjectId = :imageObjectId
+            AND imageObject.lifecycleStatus = :activeStatus
+            AND NOT EXISTS (
+                SELECT content.contentId
+                FROM Content content
+                WHERE content.representativeImageObject = imageObject
+            )
+            AND NOT EXISTS (
+                SELECT contentRevision.contentRevisionId
+                FROM ContentRevision contentRevision
+                WHERE contentRevision.candidateImageObject = imageObject
+            )
+        """)
+    int markActiveObjectDeletePendingWithoutDirectReferences(
+        @Param("imageObjectId") Long imageObjectId,
+        @Param("activeStatus") ImageLifecycleStatus activeStatus,
+        @Param("deletePendingStatus") ImageLifecycleStatus deletePendingStatus
+    );
+
     @Query("""
         SELECT imageObject
         FROM ImageObject imageObject

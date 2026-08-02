@@ -5,7 +5,7 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | [FR-01 인증·역할·지역 권한](../../../p0/auth-profile.md#fr-01-인증역할지역-권한) |
 | 소유 도메인 | 인증·프로필 |
-| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ERD](../../../erd.md), [ADR-0044](../../../adr/0044-use-delegating-bcrypt-password-encoder.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ERD](../../../erd.md), [ADR-0044](../../../adr/0044-use-delegating-bcrypt-password-encoder.md), [ADR-0055](../../../adr/0055-defer-business-information-encryption-until-after-operator-request.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
@@ -101,7 +101,7 @@ Accept: application/json
 | `phone` | String | Y | 숫자 10~11자리다. 하이픈은 입력 시 제거하고 숫자만 저장한다. `null`·빈 문자열은 허용하지 않는다. |
 | `requestedRole` | String | Y | `VISITOR` 또는 `OPERATOR`만 허용한다. `REGION_ADMIN`은 가입 요청에서 선택할 수 없다. |
 | `requestedRegionId` | String | 조건부 | `requestedRole`이 `OPERATOR`이면 양의 정수이며 공개 지역 식별자여야 한다. `VISITOR`이면 생략해야 한다. |
-| `businessInformation` | String | 조건부 | `requestedRole`이 `OPERATOR`이면 앞뒤 공백을 제거한 1~2,000자여야 한다. 수동 사업자 검증에 사용하며 `VISITOR`이면 생략해야 한다. 응답·로그에 포함하지 않는다. |
+| `businessInformation` | String | 조건부 | `requestedRole`이 `OPERATOR`이면 앞뒤 공백을 제거한 1~2,000자여야 한다. 수동 사업자 검증에 사용하며 `VISITOR`이면 생략해야 한다. 재신청 구현 단계에서는 기존 평문 텍스트로 저장하고, 회원가입 응답·로그에는 포함하지 않는다. 암호화 전환은 [#266](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/266)에서 처리한다. |
 
 ### Response
 
