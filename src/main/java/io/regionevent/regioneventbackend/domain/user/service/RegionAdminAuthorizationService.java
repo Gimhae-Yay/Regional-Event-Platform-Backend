@@ -21,29 +21,37 @@ public class RegionAdminAuthorizationService {
         this.userRoleAssignmentRepository = userRoleAssignmentRepository;
     }
 
-    public void authorize(
+    public UserRoleAssignment authorize(
         Long userId,
         Long targetRegionId
     ) {
-        Long authorizedRegionId = requireAuthorizedRegionId(userId);
-        if (!authorizedRegionId.equals(targetRegionId)) {
+        UserRoleAssignment assignment = requireAuthorizedAssignment(userId);
+        Region assignedRegion = requireAssignedRegion(assignment);
+        if (!assignedRegion.getRegionId().equals(targetRegionId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
+        return assignment;
     }
 
     public Long requireAuthorizedRegionId(Long userId) {
-        UserRoleAssignment assignment = userRoleAssignmentRepository
+        return requireAssignedRegion(requireAuthorizedAssignment(userId)).getRegionId();
+    }
+
+    private UserRoleAssignment requireAuthorizedAssignment(Long userId) {
+        return userRoleAssignmentRepository
             .findByIdUserIdAndIdRoleAndAppUserStatus(
                 userId,
                 UserRole.REGION_ADMIN,
                 AppUserStatus.ACTIVE
             )
             .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+    }
 
+    private Region requireAssignedRegion(UserRoleAssignment assignment) {
         Region assignedRegion = assignment.getRegion();
         if (assignedRegion == null || assignedRegion.getRegionId() == null) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        return assignedRegion.getRegionId();
+        return assignedRegion;
     }
 }

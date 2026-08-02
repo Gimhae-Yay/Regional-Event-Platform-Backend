@@ -13,6 +13,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentId
 
 public interface UserRoleAssignmentRepository extends JpaRepository<UserRoleAssignment, UserRoleAssignmentId> {
 
+    @EntityGraph(attributePaths = "region")
     List<UserRoleAssignment> findAllByIdUserId(Long userId);
 
     @EntityGraph(attributePaths = "region")
