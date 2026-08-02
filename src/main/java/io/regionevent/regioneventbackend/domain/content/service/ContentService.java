@@ -104,6 +104,16 @@ public class ContentService {
         );
     }
 
+    public Content findApprovalTargetForUpdate(Long contentId) {
+        return contentRepository.findApprovalTargetForUpdate(contentId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public Content approve(Content content) {
+        content.approve();
+        return contentRepository.saveAndFlush(content);
+    }
+
     private void validateRequiredId(Long id) {
         if (id == null || id <= 0) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);

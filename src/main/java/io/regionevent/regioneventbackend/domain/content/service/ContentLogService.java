@@ -28,4 +28,21 @@ public class ContentLogService {
             submittedAt
         ));
     }
+
+    public ContentLog recordApproved(Content content, AppUser actor, Instant approvedAt) {
+        return contentLogRepository.saveAndFlush(new ContentLog(
+            content,
+            actor,
+            ContentLogStatus.APPROVED,
+            null,
+            approvedAt
+        ));
+    }
+
+    public ContentLog findLatestApproved(Long contentId) {
+        return contentLogRepository.findTopByContentContentIdAndStatusOrderByDateDescIdDesc(
+            contentId,
+            ContentLogStatus.APPROVED
+        ).orElseThrow(() -> new IllegalStateException("approved content log must exist"));
+    }
 }
