@@ -180,6 +180,43 @@ public class Content {
         representativeImageAssignedAt = requireNotNull(assignedAt, "assignedAt");
     }
 
+    public void replaceEditableFields(
+        String title,
+        String description,
+        String locationText,
+        String operatingHoursText,
+        String contactText,
+        String precautions,
+        String ageRequirement,
+        String materials,
+        String cancellationPolicyText,
+        Instant publishAt
+    ) {
+        this.title = requireNotBlank(title, "title");
+        this.description = requireNotBlank(description, "description");
+        this.locationText = requireNotBlank(locationText, "locationText");
+        this.operatingHoursText = requireNotBlank(operatingHoursText, "operatingHoursText");
+        this.contactText = requireNotBlank(contactText, "contactText");
+        this.precautions = requireNotBlank(precautions, "precautions");
+        this.ageRequirement = requireNotBlank(ageRequirement, "ageRequirement");
+        this.materials = requireNotBlank(materials, "materials");
+        this.cancellationPolicyText = requireNotBlank(cancellationPolicyText, "cancellationPolicyText");
+        this.publishAt = requireNotNull(publishAt, "publishAt");
+    }
+
+    public boolean isOwnedBy(Long userId) {
+        return operator != null && operator.getUserId().equals(userId);
+    }
+
+    public boolean isScopedTo(Long regionId) {
+        return region != null && region.getRegionId().equals(regionId);
+    }
+
+    public boolean hasRepresentativeImage(Long imageObjectId) {
+        return representativeImageObject != null
+            && representativeImageObject.getImageObjectId().equals(imageObjectId);
+    }
+
     public Long getContentId() {
         return contentId;
     }

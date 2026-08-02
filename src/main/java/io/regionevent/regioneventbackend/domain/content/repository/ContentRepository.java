@@ -18,6 +18,10 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
     @EntityGraph(attributePaths = "region")
     Optional<Content> findByContentId(Long contentId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = {"operator", "region", "representativeImageObject"})
+    Optional<Content> findByContentIdAndDeletedAtIsNull(Long contentId);
+
     boolean existsByContentIdAndStatusAndDeletedAtIsNull(
         Long contentId,
         ContentStatus status
