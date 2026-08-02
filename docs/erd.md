@@ -248,7 +248,7 @@ erDiagram
         bigint operator_application_id PK
         bigint applicant_user_id FK "탈퇴 후 nullable"
         bigint requested_region_id FK
-        text business_information "탈퇴 후 nullable"
+        text business_information "평문 텍스트, 탈퇴 후 nullable; 암호화 전환은 ADR-0055 후속 작업"
         string status
         bigint inspected_user_id FK "심사 전 nullable"
         text rejected_reason "거절 전 nullable"
@@ -979,7 +979,6 @@ SQL의 단순 cascade가 아래 업무 순서를 대신해서는 안 된다.
 
 | 미확정 항목 | 필요한 결정 | 현재 ERD 처리 |
 | --- | --- | --- |
-| 사업자 정보 보호 | 세부 필드, 저장 암호화와 보관 방식 | 심사용 상세 조회에만 원문을 노출하며, 세부 구조·암호화·보관 정책은 별도 결정 전까지 텍스트 값으로 유지 |
 | 역할 중첩 | 한 사용자의 복수 역할 허용·금지 | 역할별 한 행은 허용하되 상호 배타 제약 없음 |
 | 승인된 `publish_at` 변경 요청 | 관리자 승인 시 직접 갱신할지, 요청·심사 상태를 저장할지 | 별도 엔티티 또는 후보 시각을 추정하지 않음 |
 | 전체 콘텐츠 철회 요청 | 운영자 요청의 보관, 승인·반려·재시도 모델 | 승인 후 현재 상태와 감사만 표현 |
