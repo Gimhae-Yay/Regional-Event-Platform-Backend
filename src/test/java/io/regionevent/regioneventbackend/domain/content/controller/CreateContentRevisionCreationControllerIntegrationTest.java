@@ -62,39 +62,44 @@ class CreateContentRevisionCreationControllerIntegrationTest {
 
     private static final String CHECKSUM = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
 
-    @Autowired
-    private MockMvc mockMvc;
+    private final MockMvc mockMvc;
+    private final JwtAccessTokenService jwtAccessTokenService;
+    private final AppUserRepository appUserRepository;
+    private final RegionRepository regionRepository;
+    private final UserRoleAssignmentRepository userRoleAssignmentRepository;
+    private final ImageObjectRepository imageObjectRepository;
+    private final ContentRepository contentRepository;
+    private final ContentRevisionRepository contentRevisionRepository;
+    private final ContentLogRepository contentLogRepository;
+    private final AuditEventRepository auditEventRepository;
+    private final FakeImageStorageGateway imageStorageGateway;
 
     @Autowired
-    private JwtAccessTokenService jwtAccessTokenService;
-
-    @Autowired
-    private AppUserRepository appUserRepository;
-
-    @Autowired
-    private RegionRepository regionRepository;
-
-    @Autowired
-    private UserRoleAssignmentRepository userRoleAssignmentRepository;
-
-    @Autowired
-    private ImageObjectRepository imageObjectRepository;
-
-    @Autowired
-    private ContentRepository contentRepository;
-
-    @Autowired
-    private ContentRevisionRepository contentRevisionRepository;
-
-
-    @Autowired
-    private ContentLogRepository contentLogRepository;
-
-    @Autowired
-    private AuditEventRepository auditEventRepository;
-
-    @Autowired
-    private FakeImageStorageGateway imageStorageGateway;
+    CreateContentRevisionCreationControllerIntegrationTest(
+        MockMvc mockMvc,
+        JwtAccessTokenService jwtAccessTokenService,
+        AppUserRepository appUserRepository,
+        RegionRepository regionRepository,
+        UserRoleAssignmentRepository userRoleAssignmentRepository,
+        ImageObjectRepository imageObjectRepository,
+        ContentRepository contentRepository,
+        ContentRevisionRepository contentRevisionRepository,
+        ContentLogRepository contentLogRepository,
+        AuditEventRepository auditEventRepository,
+        FakeImageStorageGateway imageStorageGateway
+    ) {
+        this.mockMvc = mockMvc;
+        this.jwtAccessTokenService = jwtAccessTokenService;
+        this.appUserRepository = appUserRepository;
+        this.regionRepository = regionRepository;
+        this.userRoleAssignmentRepository = userRoleAssignmentRepository;
+        this.imageObjectRepository = imageObjectRepository;
+        this.contentRepository = contentRepository;
+        this.contentRevisionRepository = contentRevisionRepository;
+        this.contentLogRepository = contentLogRepository;
+        this.auditEventRepository = auditEventRepository;
+        this.imageStorageGateway = imageStorageGateway;
+    }
 
     @BeforeEach
     void setUp() {
