@@ -157,7 +157,6 @@ public class ContentService {
     }
 
     public Content reject(Content content, Instant rejectedAt) {
-        content.reject();
         int updatedCount = contentRepository.rejectPendingByContentId(
             content.getContentId(),
             rejectedAt
@@ -165,6 +164,7 @@ public class ContentService {
         if (updatedCount != 1) {
             throw new BusinessException(ErrorCode.CONTENT_STATE_CONFLICT);
         }
+        content.reject();
         return content;
     }
 

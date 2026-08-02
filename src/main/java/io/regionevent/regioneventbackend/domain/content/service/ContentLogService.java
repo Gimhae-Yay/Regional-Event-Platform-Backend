@@ -54,10 +54,32 @@ public class ContentLogService {
         ));
     }
 
+    public ContentLog recordRejected(
+        Content content,
+        AppUser actor,
+        Instant rejectedAt,
+        String reason
+    ) {
+        return contentLogRepository.saveAndFlush(new ContentLog(
+            content,
+            actor,
+            ContentLogStatus.REJECTED,
+            reason,
+            rejectedAt
+        ));
+    }
+
     public ContentLog findLatestApproved(Long contentId) {
         return contentLogRepository.findTopByContentContentIdAndStatusOrderByDateDescIdDesc(
             contentId,
             ContentLogStatus.APPROVED
         ).orElseThrow(() -> new IllegalStateException("approved content log must exist"));
+    }
+
+    public ContentLog findLatestRejected(Long contentId) {
+        return contentLogRepository.findTopByContentContentIdAndStatusOrderByDateDescIdDesc(
+            contentId,
+            ContentLogStatus.REJECTED
+        ).orElseThrow(() -> new IllegalStateException("rejected content log must exist"));
     }
 }
