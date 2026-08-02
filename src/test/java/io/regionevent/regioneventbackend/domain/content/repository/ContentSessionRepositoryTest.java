@@ -257,6 +257,55 @@ class ContentSessionRepositoryTest {
             );
     }
 
+    @Test
+    void 대상_콘텐츠의_SCHEDULED_회차를_시작_시각_오름차순으로_조회한다() {
+        Region region = saveRegion();
+        AppUser operator = saveUser("operator-public-session@example.com");
+        Content targetContent = saveContent(region, operator);
+        Content otherContent = saveContent(region, operator);
+        Instant reviewedAt = Instant.parse("2026-08-01T00:00:00Z");
+        ContentSession laterSession = createContentSession(
+            targetContent,
+            region,
+            Instant.parse("2026-08-03T01:00:00Z")
+        );
+        ContentSession earlierSession = createContentSession(
+            targetContent,
+            region,
+            Instant.parse("2026-08-02T01:00:00Z")
+        );
+        ContentSession pendingSession = createContentSession(
+            targetContent,
+            region,
+            Instant.parse("2026-08-04T01:00:00Z")
+        );
+        ContentSession otherContentSession = createContentSession(
+            otherContent,
+            region,
+            Instant.parse("2026-08-01T01:00:00Z")
+        );
+        laterSession.approve(operator, reviewedAt);
+        earlierSession.approve(operator, reviewedAt);
+        otherContentSession.approve(operator, reviewedAt);
+        contentSessionRepository.saveAllAndFlush(List.of(
+            laterSession,
+            earlierSession,
+            pendingSession,
+            otherContentSession
+        ));
+        entityManager.clear();
+
+        List<ContentSession> sessions = contentSessionRepository
+            .findByContentContentIdAndStatusOrderByStartsAtAsc(
+                targetContent.getContentId(),
+                ContentSessionStatus.SCHEDULED
+            );
+
+        assertThat(sessions)
+            .extracting(ContentSession::getSessionId)
+            .containsExactly(earlierSession.getSessionId(), laterSession.getSessionId());
+    }
+
     private Region saveRegion() {
         return regionRepository.saveAndFlush(new Region("GIMHAE", "김해시", true));
     }

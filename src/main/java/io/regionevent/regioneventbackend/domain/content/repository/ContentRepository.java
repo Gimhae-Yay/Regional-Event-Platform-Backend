@@ -11,11 +11,17 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 
 public interface ContentRepository extends JpaRepository<Content, Long> {
 
     @EntityGraph(attributePaths = "region")
     Optional<Content> findByContentId(Long contentId);
+
+    boolean existsByContentIdAndStatusAndDeletedAtIsNull(
+        Long contentId,
+        ContentStatus status
+    );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @EntityGraph(attributePaths = "region")

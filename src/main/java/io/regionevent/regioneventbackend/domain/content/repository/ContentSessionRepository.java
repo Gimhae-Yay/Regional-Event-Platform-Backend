@@ -33,6 +33,11 @@ public interface ContentSessionRepository extends JpaRepository<ContentSession, 
         ContentStatus contentStatus
     );
 
+    List<ContentSession> findByContentContentIdAndStatusOrderByStartsAtAsc(
+        Long contentId,
+        ContentSessionStatus status
+    );
+
     @Query("""
         SELECT contentSession.sessionId AS sessionId,
             contentSession.content.contentId AS contentId,

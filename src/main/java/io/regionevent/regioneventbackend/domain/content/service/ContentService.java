@@ -50,6 +50,13 @@ public class ContentService {
         return contentRepository.saveAndFlush(content);
     }
 
+    public boolean existsPublishedAndNotDeletedById(Long contentId) {
+        return contentRepository.existsByContentIdAndStatusAndDeletedAtIsNull(
+            contentId,
+            ContentStatus.PUBLISHED
+        );
+    }
+
     public Content findApprovalTargetForUpdate(Long contentId) {
         return contentRepository.findApprovalTargetForUpdate(contentId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
