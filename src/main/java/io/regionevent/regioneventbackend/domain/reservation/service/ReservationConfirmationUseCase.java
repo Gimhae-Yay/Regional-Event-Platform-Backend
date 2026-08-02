@@ -73,6 +73,7 @@ public class ReservationConfirmationUseCase {
         String validatedIdempotencyKey = validateIdempotencyKey(idempotencyKey);
         AppUser user = appUserService.findActiveUser(userId);
         AuditEventActor actor = new AuditEventActor(userRoleAssignmentService.findActiveVisitor(userId));
+        CapacityHold capacityHold = capacityHoldService.findOwnedHold(holdId, user);
         IdempotencyAcquireResult acquireResult = idempotencyService.acquire(new IdempotencyCommand(
             user,
             IdempotencyOperation.RESERVATION_CONFIRM,
@@ -98,7 +99,7 @@ public class ReservationConfirmationUseCase {
         return confirmNewRequest(
             (IdempotencyAcquireResult.Acquired) acquireResult,
             user,
-            holdId,
+            capacityHold,
             requestId,
             actor
         );
@@ -107,14 +108,15 @@ public class ReservationConfirmationUseCase {
     private ReservationConfirmationResult confirmNewRequest(
         IdempotencyAcquireResult.Acquired acquired,
         AppUser user,
-        Long holdId,
+        CapacityHold capacityHold,
         UUID requestId,
         AuditEventActor actor
     ) {
-        CapacityHold capacityHold = capacityHoldService.findOwnedHold(holdId, user);
-
         try {
-            CapacityHold consumedHold = capacityHoldService.consumeIfConfirmable(holdId, user.getUserId());
+            CapacityHold consumedHold = capacityHoldService.consumeIfConfirmable(
+                capacityHold.getHoldId(),
+                user.getUserId()
+            );
             Reservation reservation = reservationService.createConfirmed(consumedHold);
             idempotencyService.completeWithReservation(
                 acquired.record(),
@@ -131,7 +133,7 @@ public class ReservationConfirmationUseCase {
             recordFailure(
                 requestId,
                 actor,
-                holdId,
+                capacityHold.getHoldId(),
                 capacityHold.getRegion(),
                 "ACTIVE",
                 ErrorCode.RESERVATION_CONFIRM_CONFLICT

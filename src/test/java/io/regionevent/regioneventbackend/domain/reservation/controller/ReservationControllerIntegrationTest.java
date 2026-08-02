@@ -371,6 +371,7 @@ class ReservationControllerIntegrationTest {
         assertThat(capacityHoldRepository.findById(capacityHold.getHoldId()))
             .hasValueSatisfying(hold -> assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.ACTIVE));
         assertThat(reservationRepository.count()).isZero();
+        assertThat(idempotencyRecordRepository.count()).isZero();
     }
 
     @Test
