@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
+import java.util.List;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceUnitUtil;
@@ -226,6 +227,36 @@ class ContentSessionRepositoryTest {
         )).isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
+    void 원본_콘텐츠의_현재_회차를_시작시각과_식별자_오름차순으로_조회한다() {
+        Region region = saveRegion();
+        AppUser operator = saveUser("session-detail-operator@example.com");
+        Content content = saveContent(region, operator);
+        Content otherContent = saveContent(region, operator);
+        Instant earlierStartsAt = Instant.parse("2026-08-02T01:00:00Z");
+        Instant laterStartsAt = Instant.parse("2026-08-03T01:00:00Z");
+        ContentSession firstAtSameTime = contentSessionRepository.saveAndFlush(
+            createContentSession(content, region, earlierStartsAt)
+        );
+        ContentSession secondAtSameTime = contentSessionRepository.saveAndFlush(
+            createContentSession(content, region, earlierStartsAt)
+        );
+        ContentSession laterSession = contentSessionRepository.saveAndFlush(
+            createContentSession(content, region, laterStartsAt)
+        );
+        contentSessionRepository.saveAndFlush(createContentSession(otherContent, region, earlierStartsAt));
+
+        List<ContentSession> sessions = contentSessionRepository
+            .findByContentContentIdOrderByStartsAtAscSessionIdAsc(content.getContentId());
+
+        assertThat(sessions).extracting(ContentSession::getSessionId)
+            .containsExactly(
+                firstAtSameTime.getSessionId(),
+                secondAtSameTime.getSessionId(),
+                laterSession.getSessionId()
+            );
+    }
+
     private Region saveRegion() {
         return regionRepository.saveAndFlush(new Region("GIMHAE", "김해시", true));
     }
@@ -267,13 +298,21 @@ class ContentSessionRepositoryTest {
         Content content,
         Region region
     ) {
+        return createContentSession(content, region, Instant.parse("2026-08-02T01:00:00Z"));
+    }
+
+    private ContentSession createContentSession(
+        Content content,
+        Region region,
+        Instant startsAt
+    ) {
         return new ContentSession(
             content,
             region,
-            Instant.parse("2026-08-02T01:00:00Z"),
-            Instant.parse("2026-08-02T03:00:00Z"),
-            Instant.parse("2026-08-02T00:30:00Z"),
-            Instant.parse("2026-08-02T02:30:00Z"),
+            startsAt,
+            startsAt.plusSeconds(7_200),
+            startsAt.minusSeconds(1_800),
+            startsAt.plusSeconds(5_400),
             20
         );
     }

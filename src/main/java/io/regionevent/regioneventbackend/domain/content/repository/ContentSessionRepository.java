@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.content.repository;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.Modifying;
@@ -12,6 +13,8 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionSta
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 
 public interface ContentSessionRepository extends JpaRepository<ContentSession, Long> {
+
+    List<ContentSession> findByContentContentIdOrderByStartsAtAscSessionIdAsc(Long contentId);
 
     Optional<ContentSession> findBySessionIdAndContentStatus(
         Long sessionId,

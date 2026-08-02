@@ -7,6 +7,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.content.entity.ContentRevisionStatus;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRevisionRepository;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 @Service
 public class ContentRevisionService {
@@ -15,6 +17,17 @@ public class ContentRevisionService {
 
     public ContentRevisionService(ContentRevisionRepository contentRevisionRepository) {
         this.contentRevisionRepository = contentRevisionRepository;
+    }
+
+    @Transactional(readOnly = true)
+    public ContentRevisionReviewCandidate findReviewCandidateById(Long contentRevisionId) {
+        return contentRevisionRepository
+            .findByContentRevisionIdAndStatusAndContentDeletedAtIsNull(
+                contentRevisionId,
+                ContentRevisionStatus.EDIT_REQUESTED
+            )
+            .map(ContentRevisionReviewCandidate::from)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
     @Transactional(readOnly = true)
