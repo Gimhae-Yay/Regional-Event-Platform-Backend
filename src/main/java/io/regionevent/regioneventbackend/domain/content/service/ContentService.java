@@ -1,13 +1,16 @@
 package io.regionevent.regioneventbackend.domain.content.service;
 
 import java.time.Instant;
+import java.util.List;
 
 import org.springframework.stereotype.Service;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
+import io.regionevent.regioneventbackend.domain.content.repository.PublicContentProjection;
 import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -101,6 +104,20 @@ public class ContentService {
         return contentRepository.existsByContentIdAndStatusAndDeletedAtIsNull(
             contentId,
             ContentStatus.PUBLISHED
+        );
+    }
+
+    public List<PublicContentProjection> findPublicContents(
+        Long regionId,
+        ContentType contentType,
+        Boolean reservationAvailable
+    ) {
+        return contentRepository.findPublicContents(
+            regionId,
+            contentType,
+            reservationAvailable,
+            ContentStatus.PUBLISHED,
+            ContentSessionStatus.SCHEDULED
         );
     }
 
