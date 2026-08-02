@@ -180,6 +180,13 @@ public class Content {
         representativeImageAssignedAt = requireNotNull(assignedAt, "assignedAt");
     }
 
+    public void requestPrePublicationRevision() {
+        if (status != ContentStatus.APPROVED) {
+            throw new IllegalStateException("only approved content can request pre-publication revision");
+        }
+        status = ContentStatus.PENDING;
+    }
+
     public void replaceEditableFields(
         String title,
         String description,

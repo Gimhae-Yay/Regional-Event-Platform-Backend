@@ -16,6 +16,15 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentRevisionSt
 
 public interface ContentRevisionRepository extends JpaRepository<ContentRevision, Long> {
 
+    boolean existsByContentContentIdAndStatus(Long contentId, ContentRevisionStatus status);
+
+    @Query("""
+        SELECT COALESCE(MAX(contentRevision.revisionNo), 0)
+        FROM ContentRevision contentRevision
+        WHERE contentRevision.content.contentId = :contentId
+        """)
+    int findMaxRevisionNoByContentId(@Param("contentId") Long contentId);
+
     @EntityGraph(attributePaths = {
         "content",
         "content.region",

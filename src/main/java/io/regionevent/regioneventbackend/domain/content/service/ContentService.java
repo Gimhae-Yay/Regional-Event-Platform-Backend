@@ -53,6 +53,31 @@ public class ContentService {
         return contentRepository.saveAndFlush(content);
     }
 
+    public Content findOwnedContentForRevisionCreation(
+        Long contentId,
+        Long operatorUserId,
+        Long regionId
+    ) {
+        validateRequiredId(contentId);
+        validateRequiredId(operatorUserId);
+        validateRequiredId(regionId);
+
+        Content content = contentRepository.findByContentIdAndDeletedAtIsNull(contentId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+        if (!content.isOwnedBy(operatorUserId) || !content.isScopedTo(regionId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        return content;
+    }
+
+    public Content markPrePublicationRevisionPending(Content content) {
+        if (content.getStatus() != ContentStatus.APPROVED) {
+            throw new BusinessException(ErrorCode.CONTENT_STATE_CONFLICT);
+        }
+        content.requestPrePublicationRevision();
+        return contentRepository.saveAndFlush(content);
+    }
+
     public Content findRejectedOwnedContentForUpdate(
         Long contentId,
         Long operatorUserId,
