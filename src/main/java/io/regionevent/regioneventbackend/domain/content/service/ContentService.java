@@ -156,6 +156,18 @@ public class ContentService {
         return contentRepository.saveAndFlush(content);
     }
 
+    public Content reject(Content content, Instant rejectedAt) {
+        content.reject();
+        int updatedCount = contentRepository.rejectPendingByContentId(
+            content.getContentId(),
+            rejectedAt
+        );
+        if (updatedCount != 1) {
+            throw new BusinessException(ErrorCode.CONTENT_STATE_CONFLICT);
+        }
+        return content;
+    }
+
     private void validateRequiredId(Long id) {
         if (id == null || id <= 0) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);

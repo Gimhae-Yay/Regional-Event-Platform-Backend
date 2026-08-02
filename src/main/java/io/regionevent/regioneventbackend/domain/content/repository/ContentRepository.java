@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.content.repository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -8,6 +9,7 @@ import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -97,4 +99,30 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
             AND content.deletedAt IS NULL
         """)
     Optional<Content> findApprovalTargetForUpdate(@Param("contentId") Long contentId);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+        UPDATE Content content
+        SET content.status = :nextStatus,
+            content.versionNo = content.versionNo + 1,
+            content.updatedAt = :updatedAt
+        WHERE content.contentId = :contentId
+            AND content.status = :expectedStatus
+            AND content.deletedAt IS NULL
+        """)
+    int updateStatusIfExpected(
+        @Param("contentId") Long contentId,
+        @Param("expectedStatus") ContentStatus expectedStatus,
+        @Param("nextStatus") ContentStatus nextStatus,
+        @Param("updatedAt") Instant updatedAt
+    );
+
+    default int rejectPendingByContentId(Long contentId, Instant rejectedAt) {
+        return updateStatusIfExpected(
+            contentId,
+            ContentStatus.PENDING,
+            ContentStatus.REJECTED,
+            rejectedAt
+        );
+    }
 }
