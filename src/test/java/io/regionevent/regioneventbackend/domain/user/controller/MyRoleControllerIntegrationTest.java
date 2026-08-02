@@ -14,6 +14,8 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -41,6 +43,7 @@ import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenSe
 class MyRoleControllerIntegrationTest {
 
     private static final String MY_ROLE_PATH = "/api/v1/me";
+    private static final long DELETED_USER_ID = 1L;
 
     @Autowired
     private MockMvc mockMvc;
@@ -79,16 +82,17 @@ class MyRoleControllerIntegrationTest {
             .andExpect(jsonPath("$.data.roleAssignments[0].regionName").isEmpty());
     }
 
-    @Test
-    void getMyRoles_withOperatorAssignment_returnsAssignedRegion() throws Exception {
+    @ParameterizedTest
+    @EnumSource(value = UserRole.class, names = {"OPERATOR", "REGION_ADMIN"})
+    void getMyRoles_withScopedRoleAssignment_returnsAssignedRegion(UserRole role) throws Exception {
         AppUser user = saveUser(AppUserStatus.ACTIVE);
         Region region = regionRepository.saveAndFlush(new Region("GIMHAE", "김해시", true));
-        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(user, UserRole.OPERATOR, region));
+        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(user, role, region));
 
         mockMvc.perform(get(MY_ROLE_PATH)
                 .header(HttpHeaders.AUTHORIZATION, bearerTokenFor(user)))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data.roleAssignments[0].role").value("OPERATOR"))
+            .andExpect(jsonPath("$.data.roleAssignments[0].role").value(role.name()))
             .andExpect(jsonPath("$.data.roleAssignments[0].regionId").value(region.getRegionId().toString()))
             .andExpect(jsonPath("$.data.roleAssignments[0].regionName").value("김해시"));
     }
@@ -119,6 +123,16 @@ class MyRoleControllerIntegrationTest {
 
         mockMvc.perform(get(MY_ROLE_PATH)
                 .header(HttpHeaders.AUTHORIZATION, bearerTokenFor(user)))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.statusCode").value(403))
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+            .andExpect(jsonPath("$.data").isEmpty());
+    }
+
+    @Test
+    void getMyRoles_withDeletedAccount_returnsForbidden() throws Exception {
+        mockMvc.perform(get(MY_ROLE_PATH)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(DELETED_USER_ID)))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.statusCode").value(403))
             .andExpect(jsonPath("$.code").value("FORBIDDEN"))
