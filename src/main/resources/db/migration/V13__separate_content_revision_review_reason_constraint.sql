@@ -1,6 +1,10 @@
 ALTER TABLE content_revision
     DROP CONSTRAINT ck_content_revision_reviewed;
 
+UPDATE content_revision
+SET review_reason = NULL
+WHERE status = 'EDIT_APPROVED';
+
 ALTER TABLE content_revision
     ADD CONSTRAINT ck_content_revision_reviewed
         CHECK (
