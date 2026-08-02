@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -212,6 +213,50 @@ class ContentRevisionServiceTest {
         ContentRevision revision,
         AppUser reviewer
     ) {
+    }
+
+    @Test
+    void 식별자로_심사_대기_수정본_상세_후보를_조회한다() {
+        ContentRevisionRepository repository = mock(ContentRevisionRepository.class);
+        ContentRevisionService service = new ContentRevisionService(repository);
+        Long contentRevisionId = 501L;
+        ContentRevision revision = mock(ContentRevision.class);
+        Content content = mock(Content.class);
+        AppUser operator = mock(AppUser.class);
+        ImageObject candidateImageObject = mock(ImageObject.class);
+        when(revision.getContent()).thenReturn(content);
+        when(revision.getCandidateImageObject()).thenReturn(candidateImageObject);
+        when(content.getOperator()).thenReturn(operator);
+        when(repository.findByContentRevisionIdAndStatusAndContentDeletedAtIsNull(
+            contentRevisionId,
+            ContentRevisionStatus.EDIT_REQUESTED
+        )).thenReturn(Optional.of(revision));
+
+        ContentRevisionReviewCandidate candidate = service
+            .findReviewCandidateById(contentRevisionId);
+
+        assertThat(candidate).isEqualTo(new ContentRevisionReviewCandidate(
+            revision,
+            content,
+            operator,
+            candidateImageObject
+        ));
+    }
+
+    @Test
+    void 심사_대기_수정본이_아니면_존재를_노출하지_않는다() {
+        ContentRevisionRepository repository = mock(ContentRevisionRepository.class);
+        ContentRevisionService service = new ContentRevisionService(repository);
+        Long contentRevisionId = 501L;
+        when(repository.findByContentRevisionIdAndStatusAndContentDeletedAtIsNull(
+            contentRevisionId,
+            ContentRevisionStatus.EDIT_REQUESTED
+        )).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.findReviewCandidateById(contentRevisionId))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.NOT_FOUND)
+            );
     }
 
     @Test

@@ -474,6 +474,73 @@ class ContentRevisionRepositoryTest {
         assertThat(candidate.getCandidateImageObject().getImageObjectId()).isEqualTo(candidateImage.getImageObjectId());
     }
 
+    @Test
+    void 심사_대기_수정본_상세와_인가와_이미지_검증에_필요한_연관을_함께_조회한다() {
+        Region region = regionRepository.saveAndFlush(new Region("DETAIL", "상세 조회 지역", true));
+        AppUser operator = saveUser("detail-operator@example.com");
+        AppUser editor = saveUser("detail-editor@example.com");
+        Content content = saveContent(region, operator, ContentStatus.PUBLISHED, "상세 조회 콘텐츠");
+        ImageObject candidateImage = saveImageObject("content/detail-review-candidate.webp");
+        ContentRevision revision = newRevision(
+            content,
+            1,
+            editor,
+            ContentRevisionStatus.EDIT_REQUESTED,
+            SUBMITTED_AT
+        );
+        revision.assignCandidateImage(candidateImage, SUBMITTED_AT);
+        contentRevisionRepository.saveAndFlush(revision);
+        entityManager.clear();
+
+        ContentRevision candidate = contentRevisionRepository
+            .findByContentRevisionIdAndStatusAndContentDeletedAtIsNull(
+                revision.getContentRevisionId(),
+                ContentRevisionStatus.EDIT_REQUESTED
+            )
+            .orElseThrow();
+        PersistenceUnitUtil persistenceUnitUtil = entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
+
+        assertThat(persistenceUnitUtil.isLoaded(candidate, "content")).isTrue();
+        assertThat(persistenceUnitUtil.isLoaded(candidate.getContent(), "region")).isTrue();
+        assertThat(persistenceUnitUtil.isLoaded(candidate.getContent(), "operator")).isTrue();
+        assertThat(persistenceUnitUtil.isLoaded(candidate, "candidateImageObject")).isTrue();
+        assertThat(persistenceUnitUtil.isLoaded(candidate.getCandidateImageObject(), "region")).isTrue();
+    }
+
+    @Test
+    void 종결_수정본과_소프트_삭제된_원본의_수정본은_상세_조회하지_않는다() {
+        Region region = regionRepository.saveAndFlush(new Region("HIDDEN", "비노출 지역", true));
+        AppUser operator = saveUser("hidden-operator@example.com");
+        AppUser editor = saveUser("hidden-editor@example.com");
+        AppUser reviewer = saveUser("hidden-reviewer@example.com");
+        Content reviewedContent = saveContent(region, operator, ContentStatus.PUBLISHED, "종결 수정본 콘텐츠");
+        Content deletedContent = saveContent(region, operator, ContentStatus.PENDING, "삭제 원본 콘텐츠");
+        ContentRevision reviewedRevision = contentRevisionRepository.saveAndFlush(newRevision(
+            reviewedContent,
+            1,
+            editor,
+            ContentRevisionStatus.EDIT_APPROVED,
+            SUBMITTED_AT,
+            REVIEWED_AT,
+            reviewer,
+            "승인합니다."
+        ));
+        ContentRevision deletedRevision = contentRevisionRepository.saveAndFlush(
+            newRevision(deletedContent, 1, editor, ContentRevisionStatus.EDIT_REQUESTED, SUBMITTED_AT)
+        );
+        deletedContent.softDelete();
+        contentRepository.flush();
+
+        assertThat(contentRevisionRepository.findByContentRevisionIdAndStatusAndContentDeletedAtIsNull(
+            reviewedRevision.getContentRevisionId(),
+            ContentRevisionStatus.EDIT_REQUESTED
+        )).isEmpty();
+        assertThat(contentRevisionRepository.findByContentRevisionIdAndStatusAndContentDeletedAtIsNull(
+            deletedRevision.getContentRevisionId(),
+            ContentRevisionStatus.EDIT_REQUESTED
+        )).isEmpty();
+    }
+
     private ContentRevision newRevision(
         Content content,
         int revisionNo,

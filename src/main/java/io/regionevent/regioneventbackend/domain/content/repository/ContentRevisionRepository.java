@@ -16,6 +16,18 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentRevisionSt
 
 public interface ContentRevisionRepository extends JpaRepository<ContentRevision, Long> {
 
+    @EntityGraph(attributePaths = {
+        "content",
+        "content.region",
+        "content.operator",
+        "candidateImageObject",
+        "candidateImageObject.region"
+    })
+    Optional<ContentRevision> findByContentRevisionIdAndStatusAndContentDeletedAtIsNull(
+        Long contentRevisionId,
+        ContentRevisionStatus status
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT revision
