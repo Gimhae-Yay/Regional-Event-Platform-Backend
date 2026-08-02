@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 
 public interface ContentRepository extends JpaRepository<Content, Long> {
 
@@ -18,4 +19,9 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @EntityGraph(attributePaths = {"operator", "region", "representativeImageObject"})
     Optional<Content> findByContentIdAndDeletedAtIsNull(Long contentId);
+
+    boolean existsByContentIdAndStatusAndDeletedAtIsNull(
+        Long contentId,
+        ContentStatus status
+    );
 }

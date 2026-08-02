@@ -97,6 +97,13 @@ public class ContentService {
         return contentRepository.saveAndFlush(content);
     }
 
+    public boolean existsPublishedAndNotDeletedById(Long contentId) {
+        return contentRepository.existsByContentIdAndStatusAndDeletedAtIsNull(
+            contentId,
+            ContentStatus.PUBLISHED
+        );
+    }
+
     private void validateRequiredId(Long id) {
         if (id == null || id <= 0) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);

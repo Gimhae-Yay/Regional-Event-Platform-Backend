@@ -31,6 +31,18 @@ public class ContentSessionService {
         ).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
+    @Transactional(readOnly = true)
+    public List<ContentSession> findCurrentSessionsByContentId(Long contentId) {
+        return contentSessionRepository.findByContentContentIdOrderByStartsAtAscSessionIdAsc(contentId);
+    }
+
+    public List<ContentSession> findScheduledByContentId(Long contentId) {
+        return contentSessionRepository.findByContentContentIdAndStatusOrderByStartsAtAsc(
+            contentId,
+            ContentSessionStatus.SCHEDULED
+        );
+    }
+
     public List<ContentSession> createPendingSessions(
         Content content,
         Region region,
