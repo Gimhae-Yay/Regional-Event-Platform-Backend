@@ -133,8 +133,8 @@ class ExpireNoShowsAndCompleteSessionUseCaseMySqlTest {
     @Test
     void 종료와_체크인마감이_지난_회차는_확정예약만_노쇼로_전환하고_회차를_완료한다() {
         Fixture fixture = createFixture(
-            Instant.now().minusSeconds(7_200),
             Instant.now().minusSeconds(3_600),
+            Instant.now().minusSeconds(5_400),
             List.of(ReservationStatus.CONFIRMED, ReservationStatus.CHECKED_IN, ReservationStatus.CANCELLED)
         );
 
@@ -165,8 +165,8 @@ class ExpireNoShowsAndCompleteSessionUseCaseMySqlTest {
     @Test
     void 체크인마감이_지나지_않으면_노쇼와_회차완료를_수행하지_않는다() {
         Fixture fixture = createFixture(
-            Instant.now().minusSeconds(3_600),
-            Instant.now().plusSeconds(3_600),
+            Instant.now().plusSeconds(7_200),
+            Instant.now().plusSeconds(5_400),
             List.of(ReservationStatus.CONFIRMED)
         );
 
@@ -190,8 +190,8 @@ class ExpireNoShowsAndCompleteSessionUseCaseMySqlTest {
     @Test
     void 예약이_없는_종료회차도_완료하고_감사를_남긴다() {
         Fixture fixture = createFixture(
-            Instant.now().minusSeconds(7_200),
             Instant.now().minusSeconds(3_600),
+            Instant.now().minusSeconds(5_400),
             List.of()
         );
 
@@ -215,8 +215,8 @@ class ExpireNoShowsAndCompleteSessionUseCaseMySqlTest {
     @Test
     void 감사기록에_실패하면_회차단위_노쇼전환과_완료를_함께_롤백한다() {
         Fixture fixture = createFixture(
-            Instant.now().minusSeconds(7_200),
             Instant.now().minusSeconds(3_600),
+            Instant.now().minusSeconds(5_400),
             List.of(ReservationStatus.CONFIRMED)
         );
         failingRecordAuditEventUseCase.failNextRecord();
@@ -243,8 +243,8 @@ class ExpireNoShowsAndCompleteSessionUseCaseMySqlTest {
     @Timeout(10)
     void 중복스케줄러실행에서도_노쇼와_회차완료감사는_각각_한번만_남긴다() throws Exception {
         Fixture fixture = createFixture(
-            Instant.now().minusSeconds(7_200),
             Instant.now().minusSeconds(3_600),
+            Instant.now().minusSeconds(5_400),
             List.of(ReservationStatus.CONFIRMED)
         );
         CountDownLatch ready = new CountDownLatch(2);
