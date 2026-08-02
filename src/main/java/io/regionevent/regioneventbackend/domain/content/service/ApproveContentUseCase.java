@@ -2,6 +2,7 @@ package io.regionevent.regioneventbackend.domain.content.service;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
@@ -79,7 +80,7 @@ public class ApproveContentUseCase {
             throw new IllegalStateException("review target content must match locked content");
         }
 
-        Instant approvedAt = clock.instant();
+        Instant approvedAt = clock.instant().truncatedTo(ChronoUnit.MICROS);
         List<ContentSession> sessions = contentSessionService.findApprovalTargetsForUpdate(contentId);
         contentSessionService.approveAll(
             sessions,
