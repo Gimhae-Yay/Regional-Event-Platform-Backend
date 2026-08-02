@@ -28,6 +28,12 @@ public class ContentRevisionService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
+    public Long findContentIdByRevisionId(Long revisionId) {
+        return contentRevisionRepository.findContentIdByContentRevisionId(revisionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
     public ContentRevision findReviewTargetForUpdate(Long revisionId) {
         return contentRevisionRepository.findReviewTargetByIdForUpdate(revisionId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));

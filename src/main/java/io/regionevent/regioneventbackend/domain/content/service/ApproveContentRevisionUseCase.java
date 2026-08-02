@@ -24,6 +24,7 @@ import io.regionevent.regioneventbackend.domain.user.service.RegionAdminAuthoriz
 public class ApproveContentRevisionUseCase {
 
     private final ContentRevisionService contentRevisionService;
+    private final ContentService contentService;
     private final OriginalContentReviewTargetService originalContentReviewTargetService;
     private final ContentLogService contentLogService;
     private final RegionAdminAuthorizationService regionAdminAuthorizationService;
@@ -32,6 +33,7 @@ public class ApproveContentRevisionUseCase {
 
     public ApproveContentRevisionUseCase(
         ContentRevisionService contentRevisionService,
+        ContentService contentService,
         OriginalContentReviewTargetService originalContentReviewTargetService,
         ContentLogService contentLogService,
         RegionAdminAuthorizationService regionAdminAuthorizationService,
@@ -39,6 +41,7 @@ public class ApproveContentRevisionUseCase {
         Clock clock
     ) {
         this.contentRevisionService = contentRevisionService;
+        this.contentService = contentService;
         this.originalContentReviewTargetService = originalContentReviewTargetService;
         this.contentLogService = contentLogService;
         this.regionAdminAuthorizationService = regionAdminAuthorizationService;
@@ -52,8 +55,9 @@ public class ApproveContentRevisionUseCase {
         Long revisionId,
         UUID requestId
     ) {
+        Long contentId = contentRevisionService.findContentIdByRevisionId(revisionId);
+        Content content = contentService.findApprovalTargetForUpdate(contentId);
         ContentRevision revision = contentRevisionService.findReviewTargetForUpdate(revisionId);
-        Content content = revision.getContent();
         UserRoleAssignment reviewerAssignment = regionAdminAuthorizationService.authorize(
             userId,
             content.getRegion().getRegionId()

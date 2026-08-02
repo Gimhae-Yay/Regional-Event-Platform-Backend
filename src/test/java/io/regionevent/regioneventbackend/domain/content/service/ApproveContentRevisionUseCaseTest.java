@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.domain.content.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -15,6 +16,7 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
@@ -42,6 +44,7 @@ class ApproveContentRevisionUseCaseTest {
     private static final Instant PUBLISH_AT = Instant.parse("2026-08-20T00:00:00Z");
 
     private final ContentRevisionService contentRevisionService = mock(ContentRevisionService.class);
+    private final ContentService contentService = mock(ContentService.class);
     private final OriginalContentReviewTargetService originalContentReviewTargetService =
         mock(OriginalContentReviewTargetService.class);
     private final ContentLogService contentLogService = mock(ContentLogService.class);
@@ -50,6 +53,7 @@ class ApproveContentRevisionUseCaseTest {
     private final RecordAuditEventUseCase recordAuditEventUseCase = mock(RecordAuditEventUseCase.class);
     private final ApproveContentRevisionUseCase useCase = new ApproveContentRevisionUseCase(
         contentRevisionService,
+        contentService,
         originalContentReviewTargetService,
         contentLogService,
         regionAdminAuthorizationService,
@@ -67,6 +71,10 @@ class ApproveContentRevisionUseCaseTest {
         assertThat(result.revisionStatus()).isEqualTo(ContentRevisionStatus.EDIT_APPROVED);
         assertThat(result.contentStatus()).isEqualTo(ContentStatus.PUBLISHED);
         assertThat(result.reviewedAt()).isEqualTo(REVIEWED_AT);
+        InOrder lockOrder = inOrder(contentRevisionService, contentService);
+        lockOrder.verify(contentRevisionService).findContentIdByRevisionId(REVISION_ID);
+        lockOrder.verify(contentService).findApprovalTargetForUpdate(CONTENT_ID);
+        lockOrder.verify(contentRevisionService).findReviewTargetForUpdate(REVISION_ID);
         verifyNoInteractions(originalContentReviewTargetService);
         verify(contentLogService, never()).recordApproved(fixture.content(), fixture.reviewer(), REVIEWED_AT);
         assertAuditCommand(fixture);
@@ -119,6 +127,10 @@ class ApproveContentRevisionUseCaseTest {
     }
 
     private void stubCommon(Fixture fixture, boolean isPrePublicationRevisionByHistory) {
+        when(contentRevisionService.findContentIdByRevisionId(REVISION_ID))
+            .thenReturn(CONTENT_ID);
+        when(contentService.findApprovalTargetForUpdate(CONTENT_ID))
+            .thenReturn(fixture.content());
         when(contentRevisionService.findReviewTargetForUpdate(REVISION_ID))
             .thenReturn(fixture.revision());
         when(regionAdminAuthorizationService.authorize(USER_ID, REGION_ID))

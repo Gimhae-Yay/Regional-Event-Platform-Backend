@@ -131,6 +131,20 @@ class ContentRevisionRepositoryTest {
     }
 
     @Test
+    void 수정본_식별자로_원본_콘텐츠_식별자를_조회한다() {
+        Content content = saveContent();
+        AppUser editor = saveUser("content-id-editor@example.com");
+        ContentRevision contentRevision = contentRevisionRepository.saveAndFlush(
+            newRevision(content, 1, editor, ContentRevisionStatus.EDIT_REQUESTED, null, null, null, null, null, null)
+        );
+        entityManager.clear();
+
+        assertThat(contentRevisionRepository.findContentIdByContentRevisionId(
+            contentRevision.getContentRevisionId()
+        )).contains(content.getContentId());
+    }
+
+    @Test
     void 심사_대상_조회는_수정본과_미삭제_원본_지역을_함께_조회한다() {
         Content content = saveContent();
         AppUser editor = saveUser("editor@example.com");

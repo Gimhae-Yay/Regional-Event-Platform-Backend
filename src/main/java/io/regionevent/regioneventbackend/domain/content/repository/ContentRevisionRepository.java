@@ -28,6 +28,13 @@ public interface ContentRevisionRepository extends JpaRepository<ContentRevision
         ContentRevisionStatus status
     );
 
+    @Query("""
+        SELECT revision.content.contentId
+        FROM ContentRevision revision
+        WHERE revision.contentRevisionId = :revisionId
+        """)
+    Optional<Long> findContentIdByContentRevisionId(@Param("revisionId") Long revisionId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT revision
