@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
+import java.util.List;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceUnitUtil;
@@ -375,6 +376,104 @@ class ContentRevisionRepositoryTest {
         assertThat(foundSecondRevision.getCandidateImageAssignedAt()).isEqualTo(secondRevisionAssignedAt);
     }
 
+    @Test
+    void 담당_지역의_심사_대기_수정본만_제출시각과_식별자_오름차순으로_조회한다() {
+        Region assignedRegion = regionRepository.saveAndFlush(new Region("ASSIGNED", "담당 지역", true));
+        Region otherRegion = regionRepository.saveAndFlush(new Region("OTHER", "다른 지역", true));
+        AppUser operator = saveUser("review-target-operator@example.com");
+        AppUser editor = saveUser("review-target-editor@example.com");
+        AppUser reviewer = saveUser("review-target-reviewer@example.com");
+        Instant earlier = SUBMITTED_AT.minusSeconds(1);
+        Instant later = SUBMITTED_AT.plusSeconds(1);
+
+        Content laterContent = saveContent(assignedRegion, operator, ContentStatus.PUBLISHED, "늦게 제출한 콘텐츠");
+        Content firstTieContent = saveContent(assignedRegion, operator, ContentStatus.PUBLISHED, "동률 첫 번째 콘텐츠");
+        Content secondTieContent = saveContent(assignedRegion, operator, ContentStatus.PUBLISHED, "동률 두 번째 콘텐츠");
+        Content earlierContent = saveContent(assignedRegion, operator, ContentStatus.PUBLISHED, "먼저 제출한 콘텐츠");
+        Content otherRegionContent = saveContent(otherRegion, operator, ContentStatus.PUBLISHED, "다른 지역 콘텐츠");
+        Content reviewedContent = saveContent(assignedRegion, operator, ContentStatus.PUBLISHED, "심사 완료 콘텐츠");
+        Content deletedContent = saveContent(assignedRegion, operator, ContentStatus.PENDING, "삭제 콘텐츠");
+
+        ContentRevision laterRevision = contentRevisionRepository.saveAndFlush(
+            newRevision(laterContent, 1, editor, ContentRevisionStatus.EDIT_REQUESTED, later)
+        );
+        ContentRevision firstAtSameTime = contentRevisionRepository.saveAndFlush(
+            newRevision(firstTieContent, 1, editor, ContentRevisionStatus.EDIT_REQUESTED, SUBMITTED_AT)
+        );
+        ContentRevision secondAtSameTime = contentRevisionRepository.saveAndFlush(
+            newRevision(secondTieContent, 1, editor, ContentRevisionStatus.EDIT_REQUESTED, SUBMITTED_AT)
+        );
+        ContentRevision earliestRevision = contentRevisionRepository.saveAndFlush(
+            newRevision(earlierContent, 1, editor, ContentRevisionStatus.EDIT_REQUESTED, earlier)
+        );
+        contentRevisionRepository.saveAndFlush(
+            newRevision(otherRegionContent, 1, editor, ContentRevisionStatus.EDIT_REQUESTED, earlier)
+        );
+        contentRevisionRepository.saveAndFlush(newRevision(
+            reviewedContent,
+            1,
+            editor,
+            ContentRevisionStatus.EDIT_APPROVED,
+            SUBMITTED_AT,
+            REVIEWED_AT,
+            reviewer,
+            "승인합니다."
+        ));
+        contentRevisionRepository.saveAndFlush(
+            newRevision(deletedContent, 1, editor, ContentRevisionStatus.EDIT_REQUESTED, earlier)
+        );
+        deletedContent.softDelete();
+        contentRepository.flush();
+        entityManager.clear();
+
+        List<ContentRevision> candidates = contentRevisionRepository
+            .findByContentRegionRegionIdAndStatusAndContentDeletedAtIsNullOrderBySubmittedAtAscContentRevisionIdAsc(
+                assignedRegion.getRegionId(),
+                ContentRevisionStatus.EDIT_REQUESTED
+            );
+
+        assertThat(candidates).extracting(ContentRevision::getContentRevisionId)
+            .containsExactly(
+                earliestRevision.getContentRevisionId(),
+                firstAtSameTime.getContentRevisionId(),
+                secondAtSameTime.getContentRevisionId(),
+                laterRevision.getContentRevisionId()
+            );
+    }
+
+    @Test
+    void 심사_후보의_원본과_운영자와_후보_대표_이미지를_함께_조회한다() {
+        Region region = regionRepository.saveAndFlush(new Region("REVIEW", "심사 지역", true));
+        AppUser operator = saveUser("loaded-operator@example.com");
+        AppUser editor = saveUser("loaded-editor@example.com");
+        Content content = saveContent(region, operator, ContentStatus.PUBLISHED, "연관 조회 콘텐츠");
+        ImageObject candidateImage = saveImageObject("content/loaded-review-candidate.webp");
+        ContentRevision revision = newRevision(
+            content,
+            1,
+            editor,
+            ContentRevisionStatus.EDIT_REQUESTED,
+            SUBMITTED_AT
+        );
+        revision.assignCandidateImage(candidateImage, SUBMITTED_AT);
+        contentRevisionRepository.saveAndFlush(revision);
+        entityManager.clear();
+
+        ContentRevision candidate = contentRevisionRepository
+            .findByContentRegionRegionIdAndStatusAndContentDeletedAtIsNullOrderBySubmittedAtAscContentRevisionIdAsc(
+                region.getRegionId(),
+                ContentRevisionStatus.EDIT_REQUESTED
+            )
+            .getFirst();
+        PersistenceUnitUtil persistenceUnitUtil = entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
+
+        assertThat(persistenceUnitUtil.isLoaded(candidate, "content")).isTrue();
+        assertThat(persistenceUnitUtil.isLoaded(candidate.getContent(), "operator")).isTrue();
+        assertThat(persistenceUnitUtil.isLoaded(candidate, "candidateImageObject")).isTrue();
+        assertThat(candidate.getContent().getOperator().getUserId()).isEqualTo(operator.getUserId());
+        assertThat(candidate.getCandidateImageObject().getImageObjectId()).isEqualTo(candidateImage.getImageObjectId());
+    }
+
     private ContentRevision newRevision(
         Content content,
         int revisionNo,
@@ -398,6 +497,52 @@ class ContentRevisionRepositoryTest {
             withdrawnAt,
             withdrawnBy,
             withdrawalReason,
+            null
+        );
+    }
+
+    private ContentRevision newRevision(
+        Content content,
+        int revisionNo,
+        AppUser editor,
+        ContentRevisionStatus status,
+        Instant submittedAt
+    ) {
+        return newRevision(content, revisionNo, editor, status, submittedAt, null, null, null);
+    }
+
+    private ContentRevision newRevision(
+        Content content,
+        int revisionNo,
+        AppUser editor,
+        ContentRevisionStatus status,
+        Instant submittedAt,
+        Instant reviewedAt,
+        AppUser reviewedBy,
+        String reviewReason
+    ) {
+        return new ContentRevision(
+            content,
+            revisionNo,
+            content.getVersionNo(),
+            editor,
+            status,
+            "김해 가야 문화 체험 수정본",
+            "김해 가야 문화를 체험하는 행사 수정 설명입니다.",
+            "김해문화의전당 대공연장",
+            "매일 11:00~19:00",
+            "055-987-6543",
+            "현장 안내를 따라주세요.",
+            "만 8세 이상",
+            "운동화",
+            "시작 이틀 전까지 취소할 수 있습니다.",
+            null,
+            submittedAt,
+            reviewedAt,
+            reviewedBy,
+            reviewReason,
+            null,
+            null,
             null
         );
     }
@@ -461,6 +606,32 @@ class ContentRevisionRepositoryTest {
                 "편한 복장",
                 "시작 하루 전까지 취소할 수 있습니다.",
                 Instant.parse("2026-08-01T00:00:00Z")
+            )
+        );
+    }
+
+    private Content saveContent(
+        Region region,
+        AppUser operator,
+        ContentStatus status,
+        String title
+    ) {
+        return contentRepository.saveAndFlush(
+            new Content(
+                region,
+                operator,
+                ContentType.EVENT_EXPERIENCE,
+                status,
+                title,
+                "심사 후보 조회를 검증하는 콘텐츠입니다.",
+                "김해문화의전당",
+                "매일 10:00~18:00",
+                "055-123-4567",
+                "안전요원의 안내를 따라주세요.",
+                "만 7세 이상",
+                "편한 복장",
+                "시작 하루 전까지 취소할 수 있습니다.",
+                Instant.parse("2026-08-10T00:00:00Z")
             )
         );
     }

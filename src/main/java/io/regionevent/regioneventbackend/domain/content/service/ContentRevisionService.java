@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.domain.content.service;
 
 import java.time.Instant;
+import java.util.List;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -8,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentRevision;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentRevisionStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRevisionRepository;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -40,6 +42,18 @@ public class ContentRevisionService {
         revision.reject(reviewer, reviewedAt, reason);
         contentRevisionRepository.flush();
         return revision;
+    }
+
+    @Transactional(readOnly = true)
+    public List<ContentRevisionReviewCandidate> findReviewCandidatesByRegionId(Long regionId) {
+        return contentRevisionRepository
+            .findByContentRegionRegionIdAndStatusAndContentDeletedAtIsNullOrderBySubmittedAtAscContentRevisionIdAsc(
+                regionId,
+                ContentRevisionStatus.EDIT_REQUESTED
+            )
+            .stream()
+            .map(ContentRevisionReviewCandidate::from)
+            .toList();
     }
 
     private void validateRejectableOriginal(ContentRevision revision) {

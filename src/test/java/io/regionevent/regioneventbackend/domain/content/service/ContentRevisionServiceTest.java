@@ -2,8 +2,12 @@ package io.regionevent.regioneventbackend.domain.content.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.time.Instant;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,6 +22,7 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRevisionRepository;
+import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -34,6 +39,7 @@ class ContentRevisionServiceTest {
     private static final Instant ORIGINAL_PUBLISH_AT = Instant.parse("2026-08-05T00:00:00Z");
     private static final Instant CANDIDATE_PUBLISH_AT = Instant.parse("2026-08-06T00:00:00Z");
     private static final Instant REVIEWED_AT = Instant.parse("2026-08-02T01:00:00Z");
+    private static final Long REGION_ID = 10L;
 
     private final ContentRevisionService contentRevisionService;
     private final ContentRevisionRepository contentRevisionRepository;
@@ -206,5 +212,57 @@ class ContentRevisionServiceTest {
         ContentRevision revision,
         AppUser reviewer
     ) {
+    }
+
+    @Test
+    void 담당_지역의_심사_후보에_원본과_운영자와_후보_대표_이미지를_제공한다() {
+        ContentRevisionRepository repository = mock(ContentRevisionRepository.class);
+        ContentRevisionService service = new ContentRevisionService(repository);
+        ContentRevision revision = mock(ContentRevision.class);
+        Content content = mock(Content.class);
+        AppUser operator = mock(AppUser.class);
+        ImageObject candidateImageObject = mock(ImageObject.class);
+        when(revision.getContent()).thenReturn(content);
+        when(revision.getCandidateImageObject()).thenReturn(candidateImageObject);
+        when(content.getOperator()).thenReturn(operator);
+        when(repository
+            .findByContentRegionRegionIdAndStatusAndContentDeletedAtIsNullOrderBySubmittedAtAscContentRevisionIdAsc(
+                REGION_ID,
+                ContentRevisionStatus.EDIT_REQUESTED
+            ))
+            .thenReturn(List.of(revision));
+
+        List<ContentRevisionReviewCandidate> candidates = service
+            .findReviewCandidatesByRegionId(REGION_ID);
+
+        assertThat(candidates).containsExactly(new ContentRevisionReviewCandidate(
+            revision,
+            content,
+            operator,
+            candidateImageObject
+        ));
+        verify(repository)
+            .findByContentRegionRegionIdAndStatusAndContentDeletedAtIsNullOrderBySubmittedAtAscContentRevisionIdAsc(
+                REGION_ID,
+                ContentRevisionStatus.EDIT_REQUESTED
+            );
+    }
+
+    @Test
+    void 후보_대표_이미지_연결이_없으면_정합성_오류로_처리한다() {
+        ContentRevisionRepository repository = mock(ContentRevisionRepository.class);
+        ContentRevisionService service = new ContentRevisionService(repository);
+        ContentRevision revision = mock(ContentRevision.class);
+        when(revision.getContent()).thenReturn(mock(Content.class));
+        when(repository
+            .findByContentRegionRegionIdAndStatusAndContentDeletedAtIsNullOrderBySubmittedAtAscContentRevisionIdAsc(
+                REGION_ID,
+                ContentRevisionStatus.EDIT_REQUESTED
+            ))
+            .thenReturn(List.of(revision));
+
+        assertThatThrownBy(() -> service.findReviewCandidatesByRegionId(REGION_ID))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("review candidate must have a candidate image object");
     }
 }
