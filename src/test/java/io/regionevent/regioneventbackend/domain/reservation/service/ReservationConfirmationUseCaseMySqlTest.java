@@ -15,7 +15,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -27,6 +26,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
@@ -103,7 +103,7 @@ class ReservationConfirmationUseCaseMySqlTest {
         registry.add("spring.datasource.username", MYSQL::getUsername);
         registry.add("spring.datasource.password", MYSQL::getPassword);
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
-        registry.add("idempotency.lock-wait-timeout-seconds", () -> "1");
+        registry.add("idempotency.lock-wait-timeout-seconds", () -> "3");
     }
 
     @Test
@@ -118,8 +118,10 @@ class ReservationConfirmationUseCaseMySqlTest {
             idempotencyKey
         );
 
-        assertThat(results).allSatisfy(result -> assertThat(result.errorCode())
-            .isIn(null, ErrorCode.IDEMPOTENCY_REQUEST_IN_PROGRESS));
+        assertThat(results).allSatisfy(result -> assertThat(result.isSuccessful()).isTrue());
+        assertThat(results)
+            .extracting(result -> result.response().reservationId())
+            .containsOnly(results.getFirst().response().reservationId());
         assertThat(reservationRepository.findAll())
             .filteredOn(reservation -> reservation.getCapacityHold().getHoldId().equals(fixture.capacityHold().getHoldId()))
             .hasSize(1);
@@ -127,6 +129,38 @@ class ReservationConfirmationUseCaseMySqlTest {
             .filteredOn(record -> record.getActor().getUserId().equals(fixture.user().getUserId()))
             .singleElement()
             .satisfies(record -> assertThat(record.getStatus()).isEqualTo(IdempotencyRecordStatus.SUCCEEDED));
+        assertSuccessfulAuditEvents(fixture.capacityHold(), results.getFirst().response().reservationId());
+    }
+
+    @Test
+    void 동일_멱등_키로_다른_홀드를_확정하면_멱등_키_충돌이_반환된다() {
+        Fixture fixture = createFixture();
+        CapacityHold otherCapacityHold = createActiveHold(fixture);
+        String idempotencyKey = "conflict-key-" + System.nanoTime();
+
+        ReservationConfirmationResult firstResult = confirm(
+            fixture,
+            fixture.capacityHold().getHoldId(),
+            idempotencyKey
+        );
+        ReservationConfirmationResult conflictResult = confirm(
+            fixture,
+            otherCapacityHold.getHoldId(),
+            idempotencyKey
+        );
+
+        assertThat(firstResult.isSuccessful()).isTrue();
+        assertThat(conflictResult.errorCode()).isEqualTo(ErrorCode.IDEMPOTENCY_KEY_CONFLICT);
+        assertThat(capacityHoldRepository.findById(otherCapacityHold.getHoldId()))
+            .hasValueSatisfying(hold -> assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.ACTIVE));
+        assertThat(reservationRepository.findAll())
+            .filteredOn(reservation -> reservation.getCapacityHold().getHoldId()
+                .equals(fixture.capacityHold().getHoldId()))
+            .hasSize(1);
+        assertThat(reservationRepository.findAll())
+            .noneMatch(reservation -> reservation.getCapacityHold().getHoldId()
+                .equals(otherCapacityHold.getHoldId()));
+        assertSuccessfulAuditEvents(fixture.capacityHold(), firstResult.response().reservationId());
     }
 
     @Test
@@ -153,6 +187,11 @@ class ReservationConfirmationUseCaseMySqlTest {
         assertThat(auditEventRepository.findAll())
             .filteredOn(event -> event.getResult() == AuditEventResult.FAILURE)
             .anySatisfy(event -> assertThat(event.getReasonCode()).isEqualTo("RESERVATION_CONFIRM_CONFLICT"));
+        ReservationConfirmationResult successfulResult = results.stream()
+            .filter(ReservationConfirmationResult::isSuccessful)
+            .findFirst()
+            .orElseThrow();
+        assertSuccessfulAuditEvents(fixture.capacityHold(), successfulResult.response().reservationId());
     }
 
     private List<ReservationConfirmationResult> confirmConcurrently(
@@ -190,6 +229,53 @@ class ReservationConfirmationUseCaseMySqlTest {
             idempotencyKey,
             UUID.randomUUID()
         );
+    }
+
+    private ReservationConfirmationResult confirm(Fixture fixture, Long holdId, String idempotencyKey) {
+        return reservationConfirmationUseCase.confirm(
+            fixture.user().getUserId(),
+            holdId.toString(),
+            idempotencyKey,
+            UUID.randomUUID()
+        );
+    }
+
+    private CapacityHold createActiveHold(Fixture fixture) {
+        return transactionTemplate.execute(status -> {
+            CapacityHold existingCapacityHold = capacityHoldRepository.findById(fixture.capacityHold().getHoldId())
+                .orElseThrow();
+            Instant now = Instant.now();
+            return capacityHoldRepository.save(new CapacityHold(
+                existingCapacityHold.getRegion(),
+                existingCapacityHold.getContentSession(),
+                existingCapacityHold.getUser(),
+                1,
+                CapacityHoldStatus.ACTIVE,
+                now.plusSeconds(600),
+                null,
+                null,
+                null,
+                now
+            ));
+        });
+    }
+
+    private void assertSuccessfulAuditEvents(CapacityHold capacityHold, String reservationId) {
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(event -> event.getResult() == AuditEventResult.SUCCESS)
+            .filteredOn(event -> event.getTargetType() == AuditEventTargetType.CAPACITY_HOLD)
+            .filteredOn(event -> event.getTargetId().equals(capacityHold.getHoldId()))
+            .singleElement()
+            .satisfies(event -> {
+                assertThat(event.getPreviousState()).isEqualTo("ACTIVE");
+                assertThat(event.getNextState()).isEqualTo("CONSUMED");
+            });
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(event -> event.getResult() == AuditEventResult.SUCCESS)
+            .filteredOn(event -> event.getTargetType() == AuditEventTargetType.RESERVATION)
+            .filteredOn(event -> event.getTargetId().toString().equals(reservationId))
+            .singleElement()
+            .satisfies(event -> assertThat(event.getNextState()).isEqualTo("CONFIRMED"));
     }
 
     private Fixture createFixture() {
