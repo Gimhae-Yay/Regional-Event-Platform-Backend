@@ -2,7 +2,6 @@ package io.regionevent.regioneventbackend.domain.review.service;
 
 import java.time.Instant;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,8 +30,6 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
 public class CreateVisitReviewUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(CreateVisitReviewUseCase.class);
-    private static final Pattern POSITIVE_DECIMAL_PATTERN = Pattern.compile("^[1-9][0-9]*$");
-
     private final AppUserService appUserService;
     private final UserRoleAssignmentService userRoleAssignmentService;
     private final VisitService visitService;
@@ -59,36 +56,24 @@ public class CreateVisitReviewUseCase {
     @Transactional
     public CreateVisitReviewResponse create(
         Long userId,
-        String visitIdValue,
+        Long visitId,
         CreateVisitReviewRequest request,
         UUID requestId
     ) {
-        Long visitId = toPositiveVisitId(visitIdValue);
-        AppUser user = appUserService.findActiveUserForUpdate(userId)
-            .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
-        AuditEventActor actor = new AuditEventActor(userRoleAssignmentService.findActiveVisitor(userId));
-        Visit visit = findVisitOrRecordFailure(requestId, actor, visitId);
+        AuditEventActor actor = null;
+        Visit visit = null;
 
         try {
+            AppUser user = appUserService.findActiveUserForUpdate(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+            actor = new AuditEventActor(userRoleAssignmentService.findActiveVisitor(userId));
+            visit = visitService.findById(visitId);
             validateOwner(visit, user);
             Review review = reviewService.createPublished(visit, user, request.rating(), request.reviewText());
             recordSuccessfulAuditEvent(requestId, actor, review);
             return CreateVisitReviewResponse.from(review);
         } catch (BusinessException exception) {
             recordFailure(requestId, actor, visit, exception.getErrorCode());
-            throw exception;
-        }
-    }
-
-    private Visit findVisitOrRecordFailure(
-        UUID requestId,
-        AuditEventActor actor,
-        Long visitId
-    ) {
-        try {
-            return visitService.findById(visitId);
-        } catch (BusinessException exception) {
-            recordFailure(requestId, actor, null, exception.getErrorCode());
             throw exception;
         }
     }
@@ -144,16 +129,4 @@ public class CreateVisitReviewUseCase {
         );
     }
 
-    private Long toPositiveVisitId(String value) {
-        Long visitId;
-        try {
-            visitId = Long.valueOf(value);
-        } catch (NumberFormatException exception) {
-            throw new BusinessException(ErrorCode.INVALID_TYPE);
-        }
-        if (!POSITIVE_DECIMAL_PATTERN.matcher(value).matches()) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT);
-        }
-        return visitId;
-    }
 }

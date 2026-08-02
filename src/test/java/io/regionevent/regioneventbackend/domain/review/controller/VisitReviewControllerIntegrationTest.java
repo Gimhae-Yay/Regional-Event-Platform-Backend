@@ -135,23 +135,27 @@ class VisitReviewControllerIntegrationTest {
     @Test
     void createReview_whenUserHasNoVisitorRole_returnsForbidden() throws Exception {
         Fixture fixture = createFixture(false);
+        long failureAuditCountBefore = countReviewFailureAudits();
 
         performCreate(fixture.user(), fixture.visit().getVisitId(), 5, "후기")
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.code").value("FORBIDDEN"));
 
         assertThat(countReviews(fixture.visit().getVisitId())).isZero();
+        assertThat(countReviewFailureAudits()).isEqualTo(failureAuditCountBefore + 1);
     }
 
     @Test
     void createReview_whenMemberIsNotActive_returnsForbidden() throws Exception {
         Fixture fixture = createFixture(AppUserStatus.WITHDRAWING, true);
+        long failureAuditCountBefore = countReviewFailureAudits();
 
         performCreate(fixture.user(), fixture.visit().getVisitId(), 5, "후기")
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.code").value("FORBIDDEN"));
 
         assertThat(countReviews(fixture.visit().getVisitId())).isZero();
+        assertThat(countReviewFailureAudits()).isEqualTo(failureAuditCountBefore + 1);
     }
 
     @Test
@@ -277,7 +281,7 @@ class VisitReviewControllerIntegrationTest {
             try {
                 createVisitReviewUseCase.create(
                     fixture.user().getUserId(),
-                    fixture.visit().getVisitId().toString(),
+                    fixture.visit().getVisitId(),
                     new CreateVisitReviewRequest(5, "동시 후기"),
                     UUID.randomUUID()
                 );

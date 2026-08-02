@@ -3,10 +3,11 @@ package io.regionevent.regioneventbackend.domain.review.controller;
 import java.util.UUID;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
@@ -18,8 +19,6 @@ import io.regionevent.regioneventbackend.domain.review.dto.CreateVisitReviewRequ
 import io.regionevent.regioneventbackend.domain.review.dto.CreateVisitReviewResponse;
 import io.regionevent.regioneventbackend.domain.review.service.CreateVisitReviewUseCase;
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
-import io.regionevent.regioneventbackend.global.error.BusinessException;
-import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.global.response.ApiResponse;
 
 @RestController
@@ -36,13 +35,13 @@ public class VisitReviewController {
 
     @PostMapping("/{visitId}/reviews")
     public ResponseEntity<ApiResponse<CreateVisitReviewResponse>> createReview(
-        Authentication authentication,
-        @PathVariable String visitId,
+        @AuthenticationPrincipal Long userId,
+        @Positive @PathVariable Long visitId,
         @Valid @RequestBody CreateVisitReviewRequest request,
         @RequestAttribute(RequestIdFilter.REQUEST_ID_ATTRIBUTE) String requestId
     ) {
         CreateVisitReviewResponse response = createVisitReviewUseCase.create(
-            toAuthenticatedUserId(authentication),
+            userId,
             visitId,
             request,
             UUID.fromString(requestId)
@@ -50,10 +49,4 @@ public class VisitReviewController {
         return ApiResponse.success(HttpStatus.CREATED, CREATE_REVIEW_SUCCESS_MESSAGE, response).toResponseEntity();
     }
 
-    private Long toAuthenticatedUserId(Authentication authentication) {
-        if (authentication == null || !(authentication.getPrincipal() instanceof Long userId)) {
-            throw new BusinessException(ErrorCode.UNAUTHENTICATED);
-        }
-        return userId;
-    }
 }
