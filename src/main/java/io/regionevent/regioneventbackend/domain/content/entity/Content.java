@@ -175,6 +175,16 @@ public class Content {
         status = ContentStatus.APPROVED;
     }
 
+    public void reject() {
+        if (deletedAt != null) {
+            throw new IllegalStateException("soft deleted content cannot be rejected");
+        }
+        if (status != ContentStatus.PENDING) {
+            throw new IllegalStateException("content status must be PENDING but was " + status);
+        }
+        status = ContentStatus.REJECTED;
+    }
+
     public void assignRepresentativeImage(ImageObject imageObject, Instant assignedAt) {
         representativeImageObject = requireNotNull(imageObject, "imageObject");
         representativeImageAssignedAt = requireNotNull(assignedAt, "assignedAt");

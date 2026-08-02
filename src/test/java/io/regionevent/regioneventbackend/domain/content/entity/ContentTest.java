@@ -41,6 +41,34 @@ class ContentTest {
         assertThat(content.getStatus()).isEqualTo(ContentStatus.PENDING);
     }
 
+    @Test
+    void reject_whenPendingAndActive_changesStatusToRejected() {
+        Content content = createContent(ContentStatus.PENDING);
+
+        content.reject();
+
+        assertThat(content.getStatus()).isEqualTo(ContentStatus.REJECTED);
+    }
+
+    @Test
+    void reject_whenStatusIsNotPending_throwsExceptionWithoutChanges() {
+        Content content = createContent(ContentStatus.APPROVED);
+
+        assertThatThrownBy(content::reject)
+            .isInstanceOf(IllegalStateException.class);
+        assertThat(content.getStatus()).isEqualTo(ContentStatus.APPROVED);
+    }
+
+    @Test
+    void reject_whenSoftDeleted_throwsExceptionWithoutChanges() {
+        Content content = createContent(ContentStatus.PENDING);
+        content.softDelete();
+
+        assertThatThrownBy(content::reject)
+            .isInstanceOf(IllegalStateException.class);
+        assertThat(content.getStatus()).isEqualTo(ContentStatus.PENDING);
+    }
+
     private Content createContent(ContentStatus status) {
         Region region = new Region("GIMHAE", "김해시", true);
         AppUser operator = new AppUser(
