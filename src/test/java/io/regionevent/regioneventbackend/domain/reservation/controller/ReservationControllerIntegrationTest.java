@@ -304,6 +304,77 @@ class ReservationControllerIntegrationTest {
     }
 
     @Test
+    void confirmReservation_withoutAuthentication_returnsUnauthenticatedWithoutChanges() throws Exception {
+        Fixture fixture = createFixture(ContentStatus.PUBLISHED, AppUserStatus.ACTIVE, 2, 20);
+        performCreate(fixture, 1).andExpect(status().isCreated());
+        CapacityHold capacityHold = capacityHoldRepository.findAll().getFirst();
+
+        mockMvc.perform(post("/api/v1/reservation-holds/{holdId}/confirm", capacityHold.getHoldId())
+                .header("Idempotency-Key", "missing-authentication-key"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.statusCode").value(401))
+            .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+
+        assertThat(capacityHoldRepository.findById(capacityHold.getHoldId()))
+            .hasValueSatisfying(hold -> assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.ACTIVE));
+        assertThat(reservationRepository.count()).isZero();
+        assertThat(idempotencyRecordRepository.count()).isZero();
+    }
+
+    @Test
+    void confirmReservation_withInvalidAccessToken_returnsUnauthenticatedWithoutChanges() throws Exception {
+        Fixture fixture = createFixture(ContentStatus.PUBLISHED, AppUserStatus.ACTIVE, 2, 20);
+        performCreate(fixture, 1).andExpect(status().isCreated());
+        CapacityHold capacityHold = capacityHoldRepository.findAll().getFirst();
+
+        mockMvc.perform(post("/api/v1/reservation-holds/{holdId}/confirm", capacityHold.getHoldId())
+                .header("Authorization", "Bearer invalid-access-token")
+                .header("Idempotency-Key", "invalid-access-token-key"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.statusCode").value(401))
+            .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+
+        assertThat(capacityHoldRepository.findById(capacityHold.getHoldId()))
+            .hasValueSatisfying(hold -> assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.ACTIVE));
+        assertThat(reservationRepository.count()).isZero();
+        assertThat(idempotencyRecordRepository.count()).isZero();
+    }
+
+    @Test
+    void confirmReservation_whenMemberIsNotActive_returnsForbiddenWithoutChanges() throws Exception {
+        Fixture fixture = createFixture(ContentStatus.PUBLISHED, AppUserStatus.WITHDRAWING, 2, 20);
+        CapacityHold capacityHold = createActiveHold(fixture);
+
+        performConfirm(fixture, capacityHold.getHoldId(), "inactive-member-key")
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.statusCode").value(403))
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        assertThat(capacityHoldRepository.findById(capacityHold.getHoldId()))
+            .hasValueSatisfying(hold -> assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.ACTIVE));
+        assertThat(reservationRepository.count()).isZero();
+        assertThat(idempotencyRecordRepository.count()).isZero();
+    }
+
+    @Test
+    void confirmReservation_whenHoldIsOwnedByAnotherMember_returnsForbiddenWithoutChanges() throws Exception {
+        Fixture fixture = createFixture(ContentStatus.PUBLISHED, AppUserStatus.ACTIVE, 2, 20);
+        performCreate(fixture, 1).andExpect(status().isCreated());
+        CapacityHold capacityHold = capacityHoldRepository.findAll().getFirst();
+        AppUser anotherUser = saveUser("another-visitor-" + System.nanoTime() + "@example.com", AppUserStatus.ACTIVE);
+
+        performConfirm(anotherUser, capacityHold.getHoldId(), "another-member-key")
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.statusCode").value(403))
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        assertThat(capacityHoldRepository.findById(capacityHold.getHoldId()))
+            .hasValueSatisfying(hold -> assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.ACTIVE));
+        assertThat(reservationRepository.count()).isZero();
+        assertThat(idempotencyRecordRepository.count()).isZero();
+    }
+
+    @Test
     void confirmReservation_withSameKey_returnsStoredResultWithoutAdditionalChanges() throws Exception {
         Fixture fixture = createFixture(ContentStatus.PUBLISHED, AppUserStatus.ACTIVE, 2, 20);
         performCreate(fixture, 1).andExpect(status().isCreated());
@@ -428,9 +499,31 @@ class ReservationControllerIntegrationTest {
         Long holdId,
         String idempotencyKey
     ) throws Exception {
+        return performConfirm(fixture.user(), holdId, idempotencyKey);
+    }
+
+    private org.springframework.test.web.servlet.ResultActions performConfirm(
+        AppUser user,
+        Long holdId,
+        String idempotencyKey
+    ) throws Exception {
         return mockMvc.perform(post("/api/v1/reservation-holds/{holdId}/confirm", holdId)
-            .header("Authorization", bearerToken(fixture.user()))
+            .header("Authorization", bearerToken(user))
             .header("Idempotency-Key", idempotencyKey));
+    }
+
+    private CapacityHold createActiveHold(Fixture fixture) {
+        return capacityHoldRepository.saveAndFlush(new CapacityHold(
+            fixture.session().getRegion(),
+            fixture.session(),
+            fixture.user(),
+            1,
+            CapacityHoldStatus.ACTIVE,
+            Instant.now().plusSeconds(600),
+            null,
+            null,
+            null
+        ));
     }
 
     private Fixture createFixture(
