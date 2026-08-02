@@ -216,6 +216,18 @@ class ContentSessionControllerIntegrationTest {
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
 
+        mockMvc.perform(get("/api/v1/contents/01/sessions"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        mockMvc.perform(get("/api/v1/contents/+1/sessions"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        mockMvc.perform(get("/api/v1/contents/9223372036854775808/sessions"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+
         mockMvc.perform(get("/api/v1/contents/not-a-number/sessions"))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
