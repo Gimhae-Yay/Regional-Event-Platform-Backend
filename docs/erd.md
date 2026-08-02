@@ -853,7 +853,8 @@ MySQL 복합 FK를 사용하려면 상위 테이블에 대응하는 `UNIQUE` 후
 | 시스템 처리 `content_log` | `actor_id IS NULL`                                                               |
 | `content_log`의 `REJECTED`, `SUSPENDED`, `WITHDRAWN`, `DELETED` | `reason` 존재                                                                      |
 | 소프트 삭제된 `content` | `deleted_at` 존재하고 상태는 `PENDING` 또는 `APPROVED`; 사유를 가진 `DELETED` 로그가 정확히 한 건 존재   |
-| `content_revision`의 `EDIT_APPROVED`, `EDIT_REJECTED` | `reviewed_at`, `reviewed_by_user_id`, `review_reason` 존재                         |
+| `content_revision.EDIT_APPROVED` | `reviewed_at`, `reviewed_by_user_id` 존재, `review_reason IS NULL`                         |
+| `content_revision.EDIT_REJECTED` | `reviewed_at`, `reviewed_by_user_id`, 비어 있지 않은 `review_reason` 존재                         |
 | `content_revision.EDIT_WITHDRAWN` | `withdrawn_at`, `withdrawn_by_user_id`, `withdrawal_reason` 존재                   |
 | `content_session.REJECTED` | `reviewed_at`, `reviewed_by_user_id`, `reject_reason` 존재 |
 | 모든 `session_revision` | `target_session_id`, `base_session_version`, 후보 일정·체크인 창·정원 존재 |
