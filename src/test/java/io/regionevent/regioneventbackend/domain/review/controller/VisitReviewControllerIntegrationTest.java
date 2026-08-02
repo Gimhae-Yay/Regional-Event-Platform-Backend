@@ -1,6 +1,10 @@
 package io.regionevent.regioneventbackend.domain.review.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -23,10 +27,15 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
+import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
+import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
+import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
@@ -46,15 +55,19 @@ import io.regionevent.regioneventbackend.domain.review.entity.Review;
 import io.regionevent.regioneventbackend.domain.review.entity.ReviewStatus;
 import io.regionevent.regioneventbackend.domain.review.repository.ReviewRepository;
 import io.regionevent.regioneventbackend.domain.review.service.CreateVisitReviewUseCase;
+import io.regionevent.regioneventbackend.domain.review.service.ReviewService;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
+import io.regionevent.regioneventbackend.domain.user.service.UserRoleAssignmentService;
 import io.regionevent.regioneventbackend.domain.visit.entity.CheckinMethod;
 import io.regionevent.regioneventbackend.domain.visit.entity.Visit;
 import io.regionevent.regioneventbackend.domain.visit.repository.VisitRepository;
+import io.regionevent.regioneventbackend.domain.visit.service.VisitService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
@@ -77,6 +90,12 @@ class VisitReviewControllerIntegrationTest {
     private final AuditEventRepository auditEventRepository;
     private final JwtAccessTokenService jwtAccessTokenService;
     private final JdbcTemplate jdbcTemplate;
+    private final AppUserService appUserService;
+    private final UserRoleAssignmentService userRoleAssignmentService;
+    private final VisitService visitService;
+    private final ReviewService reviewService;
+    private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase;
+    private final TransactionTemplate transactionTemplate;
 
     @Autowired
     VisitReviewControllerIntegrationTest(
@@ -93,7 +112,13 @@ class VisitReviewControllerIntegrationTest {
         ReviewRepository reviewRepository,
         AuditEventRepository auditEventRepository,
         JwtAccessTokenService jwtAccessTokenService,
-        JdbcTemplate jdbcTemplate
+        JdbcTemplate jdbcTemplate,
+        AppUserService appUserService,
+        UserRoleAssignmentService userRoleAssignmentService,
+        VisitService visitService,
+        ReviewService reviewService,
+        RecordFailedAuditEventUseCase recordFailedAuditEventUseCase,
+        PlatformTransactionManager transactionManager
     ) {
         this.mockMvc = mockMvc;
         this.createVisitReviewUseCase = createVisitReviewUseCase;
@@ -109,6 +134,12 @@ class VisitReviewControllerIntegrationTest {
         this.auditEventRepository = auditEventRepository;
         this.jwtAccessTokenService = jwtAccessTokenService;
         this.jdbcTemplate = jdbcTemplate;
+        this.appUserService = appUserService;
+        this.userRoleAssignmentService = userRoleAssignmentService;
+        this.visitService = visitService;
+        this.reviewService = reviewService;
+        this.recordFailedAuditEventUseCase = recordFailedAuditEventUseCase;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     @Test
@@ -203,6 +234,55 @@ class VisitReviewControllerIntegrationTest {
             .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
 
         assertThat(countReviews(fixture.visit().getVisitId())).isOne();
+    }
+
+    @Test
+    void createReview_whenDeletedReviewOriginalIsPurged_rejectsRecreation() throws Exception {
+        Fixture fixture = createFixture(true);
+        reviewRepository.saveAndFlush(new Review(
+            fixture.region(),
+            fixture.visit(),
+            fixture.user(),
+            fixture.content(),
+            null,
+            null,
+            ReviewStatus.DELETED,
+            Instant.now()
+        ));
+
+        performCreate(fixture.user(), fixture.visit().getVisitId(), 5, "새 후기")
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        assertThat(countReviews(fixture.visit().getVisitId())).isOne();
+    }
+
+    @Test
+    void createReview_whenSuccessAuditRecordingFails_rollsBackReview() throws Exception {
+        Fixture fixture = createFixture(true);
+        RecordAuditEventUseCase rejectingAuditEventUseCase = mock(RecordAuditEventUseCase.class);
+        doThrow(new IllegalStateException("audit storage failure"))
+            .when(rejectingAuditEventUseCase)
+            .record(any(AuditEventCommand.class));
+        CreateVisitReviewUseCase useCase = new CreateVisitReviewUseCase(
+            appUserService,
+            userRoleAssignmentService,
+            visitService,
+            reviewService,
+            rejectingAuditEventUseCase,
+            recordFailedAuditEventUseCase
+        );
+
+        assertThatThrownBy(() -> transactionTemplate.executeWithoutResult(transactionStatus ->
+            useCase.create(
+                fixture.user().getUserId(),
+                fixture.visit().getVisitId(),
+                new CreateVisitReviewRequest(5, "후기"),
+                UUID.randomUUID()
+            )
+        )).isInstanceOf(IllegalStateException.class);
+
+        assertThat(countReviews(fixture.visit().getVisitId())).isZero();
     }
 
     @Test
