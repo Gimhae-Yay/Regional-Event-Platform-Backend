@@ -131,6 +131,20 @@ class ContentRevisionRepositoryTest {
     }
 
     @Test
+    void 수정본_식별자로_원본_콘텐츠_식별자를_조회한다() {
+        Content content = saveContent();
+        AppUser editor = saveUser("content-id-editor@example.com");
+        ContentRevision contentRevision = contentRevisionRepository.saveAndFlush(
+            newRevision(content, 1, editor, ContentRevisionStatus.EDIT_REQUESTED, null, null, null, null, null, null)
+        );
+        entityManager.clear();
+
+        assertThat(contentRevisionRepository.findContentIdByContentRevisionId(
+            contentRevision.getContentRevisionId()
+        )).contains(content.getContentId());
+    }
+
+    @Test
     void 심사_대상_조회는_수정본과_미삭제_원본_지역을_함께_조회한다() {
         Content content = saveContent();
         AppUser editor = saveUser("editor@example.com");
@@ -192,7 +206,7 @@ class ContentRevisionRepositoryTest {
                 ContentRevisionStatus.EDIT_APPROVED,
                 REVIEWED_AT,
                 reviewer,
-                "승인합니다.",
+                null,
                 null,
                 null,
                 null
@@ -230,7 +244,35 @@ class ContentRevisionRepositoryTest {
     }
 
     @Test
-    void 심사와_철회_상태는_처리_정보가_필수다() {
+    void 승인_상태는_처리자와_시각만_저장하고_사유를_저장하지_않는다() {
+        Content content = saveContent();
+        AppUser editor = saveUser("editor@example.com");
+        AppUser reviewer = saveUser("reviewer@example.com");
+
+        ContentRevision approvedRevision = contentRevisionRepository.saveAndFlush(newRevision(
+            content,
+            1,
+            editor,
+            ContentRevisionStatus.EDIT_APPROVED,
+            REVIEWED_AT,
+            reviewer,
+            null,
+            null,
+            null,
+            null
+        ));
+        entityManager.clear();
+
+        ContentRevision foundRevision = contentRevisionRepository.findById(
+            approvedRevision.getContentRevisionId()
+        ).orElseThrow();
+        assertThat(foundRevision.getReviewedAt()).isEqualTo(REVIEWED_AT);
+        assertThat(foundRevision.getReviewedBy().getUserId()).isEqualTo(reviewer.getUserId());
+        assertThat(foundRevision.getReviewReason()).isNull();
+    }
+
+    @Test
+    void 심사와_철회_상태는_상태별_처리_정보가_필수다() {
         Content content = saveContent();
         AppUser editor = saveUser("editor@example.com");
 
@@ -289,7 +331,7 @@ class ContentRevisionRepositoryTest {
                 ContentRevisionStatus.EDIT_APPROVED,
                 REVIEWED_AT,
                 reviewer,
-                "승인합니다.",
+                null,
                 null,
                 null,
                 null
@@ -334,7 +376,7 @@ class ContentRevisionRepositoryTest {
                 ContentRevisionStatus.EDIT_APPROVED,
                 REVIEWED_AT,
                 reviewer,
-                "승인합니다.",
+                null,
                 null,
                 null,
                 null
@@ -417,7 +459,7 @@ class ContentRevisionRepositoryTest {
             SUBMITTED_AT,
             REVIEWED_AT,
             reviewer,
-            "승인합니다."
+            null
         ));
         contentRevisionRepository.saveAndFlush(
             newRevision(deletedContent, 1, editor, ContentRevisionStatus.EDIT_REQUESTED, earlier)
@@ -523,7 +565,7 @@ class ContentRevisionRepositoryTest {
             SUBMITTED_AT,
             REVIEWED_AT,
             reviewer,
-            "승인합니다."
+            null
         ));
         ContentRevision deletedRevision = contentRevisionRepository.saveAndFlush(
             newRevision(deletedContent, 1, editor, ContentRevisionStatus.EDIT_REQUESTED, SUBMITTED_AT)

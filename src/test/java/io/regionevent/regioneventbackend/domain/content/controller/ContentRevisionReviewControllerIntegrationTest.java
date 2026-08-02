@@ -425,7 +425,7 @@ class ContentRevisionReviewControllerIntegrationTest {
             SUBMITTED_AT,
             revisionStatus == ContentRevisionStatus.EDIT_REQUESTED ? null : SUBMITTED_AT.plusSeconds(60),
             reviewer,
-            revisionStatus == ContentRevisionStatus.EDIT_REQUESTED ? null : "승인합니다.",
+            revisionStatus == ContentRevisionStatus.EDIT_REJECTED ? "반려 사유" : null,
             null,
             null,
             null

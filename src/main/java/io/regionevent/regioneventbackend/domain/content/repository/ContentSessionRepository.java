@@ -85,4 +85,63 @@ public interface ContentSessionRepository extends JpaRepository<ContentSession, 
         @Param("sessionId") Long sessionId,
         @Param("quantity") int quantity
     );
+
+    @Query("""
+        SELECT contentSession.sessionId
+        FROM ContentSession contentSession
+        WHERE contentSession.status = :scheduledStatus
+            AND contentSession.endsAt <= CURRENT_TIMESTAMP
+            AND contentSession.checkinCloseAt <= CURRENT_TIMESTAMP
+        ORDER BY contentSession.sessionId ASC
+        """)
+    List<Long> findNoShowProcessingTargetSessionIds(
+        @Param("scheduledStatus") ContentSessionStatus scheduledStatus
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT contentSession
+        FROM ContentSession contentSession
+        WHERE contentSession.sessionId = :sessionId
+            AND contentSession.status = :scheduledStatus
+            AND contentSession.endsAt <= CURRENT_TIMESTAMP
+            AND contentSession.checkinCloseAt <= CURRENT_TIMESTAMP
+        """)
+    Optional<ContentSession> findNoShowProcessingTargetForUpdate(
+        @Param("sessionId") Long sessionId,
+        @Param("scheduledStatus") ContentSessionStatus scheduledStatus
+    );
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+        UPDATE content_session
+        SET status = 'COMPLETED',
+            completed_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP,
+            version_no = version_no + 1
+        WHERE session_id = :sessionId
+            AND status = 'SCHEDULED'
+            AND ends_at <= CURRENT_TIMESTAMP
+            AND checkin_close_at <= CURRENT_TIMESTAMP
+            AND NOT EXISTS (
+                SELECT 1
+                FROM reservation
+                WHERE reservation.session_id = content_session.session_id
+                    AND reservation.status = 'CONFIRMED'
+            )
+        """, nativeQuery = true)
+    int completeIfNoConfirmedReservation(@Param("sessionId") Long sessionId);
+
+    @Query("""
+        SELECT contentSession
+        FROM ContentSession contentSession
+        JOIN FETCH contentSession.region
+        JOIN FETCH contentSession.content
+        WHERE contentSession.sessionId = :sessionId
+            AND contentSession.status = :completedStatus
+        """)
+    Optional<ContentSession> findCompletedSessionForNoShowAudit(
+        @Param("sessionId") Long sessionId,
+        @Param("completedStatus") ContentSessionStatus completedStatus
+    );
 }

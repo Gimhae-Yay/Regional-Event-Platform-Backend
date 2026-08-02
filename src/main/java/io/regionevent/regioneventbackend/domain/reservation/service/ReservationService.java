@@ -1,6 +1,8 @@
 package io.regionevent.regioneventbackend.domain.reservation.service;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
 
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -9,10 +11,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
+import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationRepository;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
+import io.regionevent.regioneventbackend.domain.region.entity.Region;
 
 @Service
 public class ReservationService {
@@ -70,6 +74,17 @@ public class ReservationService {
         return reservationRepository.cancelIfCancellable(reservationId, userId) == 1;
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public List<NoShowReservationAuditTarget> expireNoShowReservations(Long sessionId) {
+        return reservationRepository.findConfirmedReservationIdsBySessionId(
+            sessionId,
+            ReservationStatus.CONFIRMED
+        ).stream()
+            .map(this::expireIfNoShowEligible)
+            .flatMap(Optional::stream)
+            .toList();
+    }
+
     private boolean insertConfirmed(
         CapacityHold capacityHold,
         ReservationIdentifierGenerator.ReservationIdentifiers identifiers,
@@ -87,6 +102,32 @@ public class ReservationService {
             ) == 1;
         } catch (DuplicateKeyException exception) {
             return false;
+        }
+    }
+
+    private Optional<NoShowReservationAuditTarget> expireIfNoShowEligible(Long reservationId) {
+        if (reservationRepository.expireIfNoShowEligible(reservationId) == 0) {
+            return Optional.empty();
+        }
+        Reservation reservation = reservationRepository.findByReservationIdAndStatus(
+            reservationId,
+            ReservationStatus.EXPIRED
+        ).orElseThrow(() -> new IllegalStateException("expired reservation does not exist"));
+        return Optional.of(NoShowReservationAuditTarget.from(reservation));
+    }
+
+    public record NoShowReservationAuditTarget(
+        Long reservationId,
+        Region region,
+        Instant expiredAt
+    ) {
+
+        private static NoShowReservationAuditTarget from(Reservation reservation) {
+            return new NoShowReservationAuditTarget(
+                reservation.getReservationId(),
+                reservation.getRegion(),
+                reservation.getExpiredAt()
+            );
         }
     }
 }
