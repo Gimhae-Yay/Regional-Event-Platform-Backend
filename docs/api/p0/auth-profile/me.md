@@ -90,7 +90,7 @@ Accept: application/json
     "roleAssignments": [
       {
         "role": "REGION_ADMIN",
-        "regionId": 1,
+        "regionId": "1",
         "regionName": "김해시"
       }
     ]
@@ -109,7 +109,7 @@ Accept: application/json
 | `message` | String | 성공 메시지 `내 역할과 담당 지역 조회에 성공했습니다.` |
 | `data.roleAssignments` | Array | 현재 부여된 역할·담당 지역 연결. 역할이 없으면 빈 배열이다. |
 | `data.roleAssignments[].role` | String | `VISITOR`, `OPERATOR`, `REGION_ADMIN` 중 하나 |
-| `data.roleAssignments[].regionId` | Long 또는 null | `VISITOR`이면 `null`, `OPERATOR` 또는 `REGION_ADMIN`이면 담당 지역 식별자 |
+| `data.roleAssignments[].regionId` | String 또는 null | `VISITOR`이면 `null`, `OPERATOR` 또는 `REGION_ADMIN`이면 담당 지역 식별자. 양의 10진 문자열이다. |
 | `data.roleAssignments[].regionName` | String 또는 null | `VISITOR`이면 `null`, `OPERATOR` 또는 `REGION_ADMIN`이면 담당 지역 이름 |
 
 ### Error Code
@@ -117,6 +117,7 @@ Accept: application/json
 | HTTP Status | Code | Description |
 | --- | --- | --- |
 | 401 | `UNAUTHENTICATED` | Access Token이 없거나 만료·변조되었다. 조회 상태는 변경되지 않으며, 유효한 Token으로 다시 요청할 수 있다. |
+| 403 | `FORBIDDEN` | Access Token은 유효하지만 회원이 활성 상태가 아니거나 계정이 없다. 조회 상태는 변경되지 않는다. |
 
 #### Error Response Body
 
