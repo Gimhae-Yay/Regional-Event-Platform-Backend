@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.user.service;
 
+import java.util.Comparator;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -26,10 +27,16 @@ public class UserRoleAssignmentService {
     }
 
     public List<UserRole> findRolesByUserId(Long userId) {
-        return userRoleAssignmentRepository.findAllByIdUserId(userId)
+        return findRoleAssignmentsByUserId(userId)
             .stream()
             .map(UserRoleAssignment::getRole)
-            .sorted()
+            .toList();
+    }
+
+    public List<UserRoleAssignment> findRoleAssignmentsByUserId(Long userId) {
+        return userRoleAssignmentRepository.findAllByIdUserId(userId)
+            .stream()
+            .sorted(Comparator.comparing(UserRoleAssignment::getRole))
             .toList();
     }
 
