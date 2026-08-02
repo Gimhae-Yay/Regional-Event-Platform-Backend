@@ -36,6 +36,13 @@ public class ContentSessionService {
         return contentSessionRepository.findByContentContentIdOrderByStartsAtAscSessionIdAsc(contentId);
     }
 
+    public List<ContentSession> findScheduledByContentId(Long contentId) {
+        return contentSessionRepository.findByContentContentIdAndStatusOrderByStartsAtAsc(
+            contentId,
+            ContentSessionStatus.SCHEDULED
+        );
+    }
+
     public List<ContentSession> createPendingSessions(
         Content content,
         Region region,
