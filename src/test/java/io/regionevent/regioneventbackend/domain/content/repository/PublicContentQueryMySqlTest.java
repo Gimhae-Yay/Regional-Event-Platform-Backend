@@ -3,6 +3,7 @@ package io.regionevent.regioneventbackend.domain.content.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
@@ -17,6 +18,8 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
@@ -34,6 +37,7 @@ class PublicContentQueryMySqlTest {
     static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.42");
 
     private final ContentRepository contentRepository;
+    private final ContentSessionRepository contentSessionRepository;
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
     private final JdbcTemplate jdbcTemplate;
@@ -41,11 +45,13 @@ class PublicContentQueryMySqlTest {
     @Autowired
     PublicContentQueryMySqlTest(
         ContentRepository contentRepository,
+        ContentSessionRepository contentSessionRepository,
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
         JdbcTemplate jdbcTemplate
     ) {
         this.contentRepository = contentRepository;
+        this.contentSessionRepository = contentSessionRepository;
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
         this.jdbcTemplate = jdbcTemplate;
@@ -76,6 +82,48 @@ class PublicContentQueryMySqlTest {
         assertThat(exists).isFalse();
     }
 
+    @Test
+    void 예약_가능_여부는_MySQL_현재시각과_잔여_정원으로_계산한다() {
+        String suffix = Long.toUnsignedString(System.nanoTime());
+        Region region = regionRepository.saveAndFlush(new Region("R" + suffix, "김해시", true));
+        AppUser operator = appUserRepository.saveAndFlush(new AppUser(
+            "operator-" + suffix + "@example.com",
+            "hashed-password",
+            "운영자",
+            "010-1234-5678",
+            AppUserStatus.ACTIVE
+        ));
+        Content reservable = savePublishedContent(region, operator, "예약 가능 콘텐츠");
+        Content unavailable = savePublishedContent(region, operator, "예약 불가 콘텐츠");
+        saveScheduledSession(reservable, region, operator, Instant.now().plusSeconds(3_600), 1);
+        ContentSession unavailableSession = saveScheduledSession(
+            unavailable,
+            region,
+            operator,
+            Instant.now().plusSeconds(3_600),
+            1
+        );
+        jdbcTemplate.update(
+            "UPDATE content_session SET remaining_capacity = 0 WHERE session_id = ?",
+            unavailableSession.getSessionId()
+        );
+
+        List<PublicContentProjection> results = contentRepository.findPublicContents(
+            region.getRegionId(),
+            ContentType.EVENT_EXPERIENCE,
+            null,
+            ContentStatus.PUBLISHED,
+            ContentSessionStatus.SCHEDULED
+        );
+
+        assertThat(results)
+            .extracting(PublicContentProjection::contentId)
+            .containsExactly(unavailable.getContentId(), reservable.getContentId());
+        assertThat(results)
+            .extracting(PublicContentProjection::reservationAvailable)
+            .containsExactly(false, true);
+    }
+
     private Content savePublishedContent() {
         String suffix = Long.toUnsignedString(System.nanoTime());
         Region region = regionRepository.saveAndFlush(new Region("R" + suffix, "김해시", true));
@@ -86,12 +134,16 @@ class PublicContentQueryMySqlTest {
             "010-1234-5678",
             AppUserStatus.ACTIVE
         ));
+        return savePublishedContent(region, operator, "김해 가야 문화 체험");
+    }
+
+    private Content savePublishedContent(Region region, AppUser operator, String title) {
         return contentRepository.saveAndFlush(new Content(
             region,
             operator,
             ContentType.EVENT_EXPERIENCE,
             ContentStatus.PUBLISHED,
-            "김해 가야 문화 체험",
+            title,
             "김해 가야 문화를 체험하는 행사입니다.",
             "김해문화의전당",
             "매일 10:00~18:00",
@@ -102,5 +154,25 @@ class PublicContentQueryMySqlTest {
             "시작 하루 전까지 취소할 수 있습니다.",
             Instant.parse("2026-08-01T00:00:00Z")
         ));
+    }
+
+    private ContentSession saveScheduledSession(
+        Content content,
+        Region region,
+        AppUser reviewer,
+        Instant startsAt,
+        int capacity
+    ) {
+        ContentSession contentSession = new ContentSession(
+            content,
+            region,
+            startsAt,
+            startsAt.plusSeconds(3_600),
+            startsAt.minusSeconds(1_800),
+            startsAt.plusSeconds(1_800),
+            capacity
+        );
+        contentSession.approve(reviewer, Instant.now());
+        return contentSessionRepository.saveAndFlush(contentSession);
     }
 }
