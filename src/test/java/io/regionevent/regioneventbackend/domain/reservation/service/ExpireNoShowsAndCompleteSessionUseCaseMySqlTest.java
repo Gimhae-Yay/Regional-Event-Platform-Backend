@@ -270,11 +270,17 @@ class ExpireNoShowsAndCompleteSessionUseCaseMySqlTest {
         assertThat(results.stream().mapToInt(NoShowAndSessionCompletionResult::completedSessionCount).sum())
             .isOne();
         assertThat(auditEventRepository.findAll())
-            .filteredOn(auditEvent -> auditEvent.getTargetId().equals(fixture.reservationIds().getFirst()))
+            .filteredOn(auditEvent ->
+                auditEvent.getTargetType() == AuditEventTargetType.RESERVATION
+                    && auditEvent.getTargetId().equals(fixture.reservationIds().getFirst())
+            )
             .singleElement()
             .satisfies(auditEvent -> assertThat(auditEvent.getTargetType()).isEqualTo(AuditEventTargetType.RESERVATION));
         assertThat(auditEventRepository.findAll())
-            .filteredOn(auditEvent -> auditEvent.getTargetId().equals(fixture.sessionId()))
+            .filteredOn(auditEvent ->
+                auditEvent.getTargetType() == AuditEventTargetType.CONTENT_SESSION
+                    && auditEvent.getTargetId().equals(fixture.sessionId())
+            )
             .singleElement()
             .satisfies(auditEvent -> assertThat(auditEvent.getTargetType()).isEqualTo(AuditEventTargetType.CONTENT_SESSION));
     }
@@ -403,7 +409,10 @@ class ExpireNoShowsAndCompleteSessionUseCaseMySqlTest {
         List<AuditEvent> auditEvents = auditEventRepository.findAll();
 
         assertThat(auditEvents)
-            .filteredOn(auditEvent -> auditEvent.getTargetId().equals(expiredReservation.getReservationId()))
+            .filteredOn(auditEvent ->
+                auditEvent.getTargetType() == AuditEventTargetType.RESERVATION
+                    && auditEvent.getTargetId().equals(expiredReservation.getReservationId())
+            )
             .singleElement()
             .satisfies(auditEvent -> {
                 assertThat(auditEvent.getTargetType()).isEqualTo(AuditEventTargetType.RESERVATION);
@@ -416,7 +425,10 @@ class ExpireNoShowsAndCompleteSessionUseCaseMySqlTest {
                 assertThat(auditEvent.getOccurredAt()).isEqualTo(expiredReservation.getExpiredAt());
             });
         assertThat(auditEvents)
-            .filteredOn(auditEvent -> auditEvent.getTargetId().equals(fixture.sessionId()))
+            .filteredOn(auditEvent ->
+                auditEvent.getTargetType() == AuditEventTargetType.CONTENT_SESSION
+                    && auditEvent.getTargetId().equals(fixture.sessionId())
+            )
             .singleElement()
             .satisfies(auditEvent -> {
                 assertThat(auditEvent.getTargetType()).isEqualTo(AuditEventTargetType.CONTENT_SESSION);
