@@ -228,6 +228,36 @@ class ContentSessionRepositoryTest {
     }
 
     @Test
+    void 원본_콘텐츠의_현재_회차를_시작시각과_식별자_오름차순으로_조회한다() {
+        Region region = saveRegion();
+        AppUser operator = saveUser("session-detail-operator@example.com");
+        Content content = saveContent(region, operator);
+        Content otherContent = saveContent(region, operator);
+        Instant earlierStartsAt = Instant.parse("2026-08-02T01:00:00Z");
+        Instant laterStartsAt = Instant.parse("2026-08-03T01:00:00Z");
+        ContentSession firstAtSameTime = contentSessionRepository.saveAndFlush(
+            createContentSession(content, region, earlierStartsAt)
+        );
+        ContentSession secondAtSameTime = contentSessionRepository.saveAndFlush(
+            createContentSession(content, region, earlierStartsAt)
+        );
+        ContentSession laterSession = contentSessionRepository.saveAndFlush(
+            createContentSession(content, region, laterStartsAt)
+        );
+        contentSessionRepository.saveAndFlush(createContentSession(otherContent, region, earlierStartsAt));
+
+        List<ContentSession> sessions = contentSessionRepository
+            .findByContentContentIdOrderByStartsAtAscSessionIdAsc(content.getContentId());
+
+        assertThat(sessions).extracting(ContentSession::getSessionId)
+            .containsExactly(
+                firstAtSameTime.getSessionId(),
+                secondAtSameTime.getSessionId(),
+                laterSession.getSessionId()
+            );
+    }
+
+    @Test
     void 대상_콘텐츠의_SCHEDULED_회차를_시작_시각_오름차순으로_조회한다() {
         Region region = saveRegion();
         AppUser operator = saveUser("operator-public-session@example.com");
@@ -317,15 +347,7 @@ class ContentSessionRepositoryTest {
         Content content,
         Region region
     ) {
-        return new ContentSession(
-            content,
-            region,
-            Instant.parse("2026-08-02T01:00:00Z"),
-            Instant.parse("2026-08-02T03:00:00Z"),
-            Instant.parse("2026-08-02T00:30:00Z"),
-            Instant.parse("2026-08-02T02:30:00Z"),
-            20
-        );
+        return createContentSession(content, region, Instant.parse("2026-08-02T01:00:00Z"));
     }
 
     private ContentSession createContentSession(

@@ -14,6 +14,8 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 
 public interface ContentSessionRepository extends JpaRepository<ContentSession, Long> {
 
+    List<ContentSession> findByContentContentIdOrderByStartsAtAscSessionIdAsc(Long contentId);
+
     Optional<ContentSession> findBySessionIdAndContentStatus(
         Long sessionId,
         ContentStatus contentStatus

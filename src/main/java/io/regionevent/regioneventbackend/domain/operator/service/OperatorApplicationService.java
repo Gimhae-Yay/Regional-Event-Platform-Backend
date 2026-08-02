@@ -17,12 +17,12 @@ public class OperatorApplicationService {
         this.operatorApplicationRepository = operatorApplicationRepository;
     }
 
-    public void createPendingApplication(
+    public OperatorApplication createPendingApplication(
         AppUser user,
         Region region,
         String businessInformation
     ) {
-        operatorApplicationRepository.save(new OperatorApplication(
+        return operatorApplicationRepository.save(new OperatorApplication(
             user,
             region,
             businessInformation,
@@ -30,5 +30,13 @@ public class OperatorApplicationService {
             null,
             null
         ));
+    }
+
+    public boolean hasPendingApplication(AppUser user) {
+        return operatorApplicationRepository.existsByApplicantAndStatus(user, OperatorApplicationStatus.PENDING);
+    }
+
+    public boolean hasRejectedApplication(AppUser user) {
+        return operatorApplicationRepository.existsByApplicantAndStatus(user, OperatorApplicationStatus.REJECTED);
     }
 }

@@ -5,7 +5,7 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | FR-01, AUTH-02 |
 | 소유 도메인 | 인증·프로필 |
-| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ERD](../../../erd.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ADR-0036](../../../adr/0036-expose-business-information-only-in-protected-review-detail.md), [ADR-0055](../../../adr/0055-defer-business-information-encryption-until-after-operator-request.md), [ERD](../../../erd.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
@@ -33,7 +33,8 @@
 ## 3. 운영자 권한 신청
 
 이전에 `REJECTED`된 신청이 있는 활성 회원이 공개 지역을 선택하고 사업자 정보를 제출해 운영자 권한 심사를 다시
-요청한다. 최초 신청은 회원가입에서 처리한다. 사업자 정보는 수동 심사에만 사용하며 응답과 로그에 포함하지 않는다.
+요청한다. 최초 신청은 회원가입에서 처리한다. 재신청 구현 단계에서는 기존 평문 저장을 사용하되 이 신청 응답과 로그에 포함하지 않으며,
+담당 지역 관리자 전용 심사용 상세 조회에서만 원문을 제공한다. 암호화 전환은 [#266](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/266)에서 처리한다.
 
 ### Request
 
@@ -85,7 +86,7 @@ Accept: application/json
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
 | `requestedRegionId` | Long | Y | 양의 정수이며 공개 지역 식별자여야 한다. |
-| `businessInformation` | String | Y | 앞뒤 공백을 제거한 1~2,000자 텍스트다. `null`, 빈 문자열, 공백만으로 된 값은 허용하지 않으며 응답·로그에 포함하지 않는다. |
+| `businessInformation` | String | Y | 앞뒤 공백을 제거한 1~2,000자 텍스트다. `null`, 빈 문자열, 공백만으로 된 값은 허용하지 않으며 재신청 구현 단계에서는 기존 평문 텍스트로 저장한다. 이 신청 응답·로그에는 포함하지 않고, 담당 지역 관리자 전용 심사용 상세 조회에서만 원문을 제공한다. 암호화 전환은 [#266](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/266)에서 처리한다. |
 
 ### Response
 

@@ -45,6 +45,17 @@ public class ContentRevisionService {
     }
 
     @Transactional(readOnly = true)
+    public ContentRevisionReviewCandidate findReviewCandidateById(Long contentRevisionId) {
+        return contentRevisionRepository
+            .findByContentRevisionIdAndStatusAndContentDeletedAtIsNull(
+                contentRevisionId,
+                ContentRevisionStatus.EDIT_REQUESTED
+            )
+            .map(ContentRevisionReviewCandidate::from)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    @Transactional(readOnly = true)
     public List<ContentRevisionReviewCandidate> findReviewCandidatesByRegionId(Long regionId) {
         return contentRevisionRepository
             .findByContentRegionRegionIdAndStatusAndContentDeletedAtIsNullOrderBySubmittedAtAscContentRevisionIdAsc(

@@ -107,6 +107,18 @@ class ApiResponseTest {
                 "예약 대기를 생성할 수 없는 상태입니다."
             ),
             Arguments.of(
+                ErrorCode.OPERATOR_APPLICATION_PENDING,
+                HttpStatus.CONFLICT,
+                "OPERATOR_APPLICATION_PENDING",
+                "처리 중인 운영자 권한 신청이 있습니다."
+            ),
+            Arguments.of(
+                ErrorCode.OPERATOR_APPLICATION_REAPPLICATION_NOT_ALLOWED,
+                HttpStatus.CONFLICT,
+                "OPERATOR_APPLICATION_REAPPLICATION_NOT_ALLOWED",
+                "운영자 권한 재신청을 할 수 없습니다."
+            ),
+            Arguments.of(
                 ErrorCode.INVALID_INPUT,
                 HttpStatus.BAD_REQUEST,
                 "INVALID_INPUT",
