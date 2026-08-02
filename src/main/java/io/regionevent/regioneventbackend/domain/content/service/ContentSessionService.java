@@ -39,6 +39,14 @@ public class ContentSessionService {
         return contentSessionRepository.findByContentContentIdOrderByStartsAtAscSessionIdAsc(contentId);
     }
 
+    @Transactional(readOnly = true)
+    public List<ContentSession> findPendingByContentId(Long contentId) {
+        return contentSessionRepository.findByContentContentIdAndStatusOrderByStartsAtAsc(
+            contentId,
+            ContentSessionStatus.PENDING
+        );
+    }
+
     public List<ContentSession> findScheduledByContentId(Long contentId) {
         return contentSessionRepository.findByContentContentIdAndStatusOrderByStartsAtAsc(
             contentId,
