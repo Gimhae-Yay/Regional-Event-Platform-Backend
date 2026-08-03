@@ -132,7 +132,7 @@ Accept: application/json
 6. 같은 멱등 키에 다른 `holdId`를 요청하면 `409 IDEMPOTENCY_KEY_CONFLICT`로 거부한다.
 7. 같은 멱등 키와 같은 `holdId`의 최초 요청이 `PROCESSING`이면 `409 IDEMPOTENCY_REQUEST_IN_PROGRESS`로 응답한다. DB 대기 제한은 운영 설정으로 짧게 관리하며, 제한을 넘긴 뒤에도 새 도메인 작업을 실행하거나 `PROCESSING` 기록을 자동 탈취하지 않는다.
 8. 대상 홀드는 유효한 `ACTIVE` 상태여야 하고 `expires_at`이 MySQL 기준 현재 시각보다 미래여야 한다.
-9. 대상 콘텐츠는 `PUBLISHED`, 회차는 `SCHEDULED` 상태여야 하며 MySQL 기준 현재 시각이 회차 시작 전이어야 한다.
+9. 예약 확정은 콘텐츠·회차·홀드 상태 전이와 관련된 잠금 및 조건부 전이를 `content → content_session → capacity_hold` 순서로 수행한다. `content`와 `content_session` 잠금을 획득한 뒤 대상 콘텐츠가 `PUBLISHED`, 회차가 `SCHEDULED`이고 MySQL 기준 현재 시각이 회차 시작 전인지 다시 확인한다.
 10. 유효한 홀드는 `ACTIVE → CONSUMED`으로 조건부 전이하고, 같은 트랜잭션에서 `CONFIRMED` 예약을 한 건 생성한다.
 11. 예약은 홀드의 `region_id`, `session_id`, `user_id`와 일치시킨다. `reservation.hold_id`의 유일 제약으로 한 홀드당 예약을 최대 한 건만 허용한다.
 12. 예약 확정은 홀드 생성 시 이미 확보한 정원을 소비하므로 `content_session.remaining_capacity`를 추가로 차감하거나 복구하지 않는다.
@@ -145,6 +145,7 @@ Accept: application/json
 ### 감사 및 정합성
 
 - 멱등 키 점유, `capacity_hold`의 `ACTIVE → CONSUMED` 전이, `reservation` 생성, 성공 `idempotency_record` 기록과 성공 감사 이벤트는 하나의 MySQL 트랜잭션에서 커밋한다.
+- 콘텐츠·회차·홀드 상태 전이와 관련된 잠금 및 조건부 전이는 `content → content_session → capacity_hold` 순서를 따르며, 각 행의 잠금 또는 전이 시점에 현재 상태와 시간 조건을 다시 확인한다.
 - 성공 멱등 기록의 `operation`은 `RESERVATION_CONFIRM`, `status`는 `SUCCEEDED`, `result_reservation_id`는 생성한 예약 식별자로 기록한다. `result_visit_id`는 `null`이다.
 - `request_hash`는 `holdId`를 포함한 정규화된 명령 의미로 계산하며 개인정보 원문을 포함하지 않는다.
 - `capacity_hold.terminal_at`과 예약의 `confirmed_at`은 확정 처리 시각으로 기록한다.

@@ -175,6 +175,10 @@ public class ContentService {
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
+    public boolean lockPublishedReservationTarget(Long contentId) {
+        return contentRepository.findPublishedReservationTargetIdForUpdate(contentId).isPresent();
+    }
+
     public Content approve(Content content) {
         content.approve();
         return contentRepository.saveAndFlush(content);
