@@ -93,6 +93,21 @@ public class ContentLogService {
         ));
     }
 
+    public ContentLog recordSuspended(
+        Content content,
+        AppUser actor,
+        Instant suspendedAt,
+        String reason
+    ) {
+        return contentLogRepository.saveAndFlush(new ContentLog(
+            content,
+            actor,
+            ContentLogStatus.SUSPENDED,
+            reason,
+            suspendedAt
+        ));
+    }
+
     public ContentLog findLatestEnded(Long contentId) {
         return contentLogRepository.findLatestEnded(contentId)
             .orElseThrow(() -> new IllegalStateException("ended content log must exist"));
