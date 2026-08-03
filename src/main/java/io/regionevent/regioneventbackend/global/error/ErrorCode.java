@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 public enum ErrorCode {
 
     CONTENT_STATE_CONFLICT(HttpStatus.CONFLICT, "CONTENT_STATE_CONFLICT", "콘텐츠 상태가 요청을 처리할 수 없습니다."),
+    CONTENT_DELETE_CONFLICT(HttpStatus.CONFLICT, "CONTENT_DELETE_CONFLICT", "콘텐츠를 삭제할 수 없는 상태입니다."),
     CONTENT_END_CONFLICT(HttpStatus.CONFLICT, "CONTENT_END_CONFLICT", "콘텐츠를 종료할 수 없는 상태입니다."),
     CONTENT_SUSPEND_CONFLICT(HttpStatus.CONFLICT, "CONTENT_SUSPEND_CONFLICT", "콘텐츠를 운영 중단할 수 없는 상태입니다."),
     SESSION_NOT_CANCELLABLE(HttpStatus.CONFLICT, "SESSION_NOT_CANCELLABLE", "취소할 수 없는 회차 상태입니다."),
