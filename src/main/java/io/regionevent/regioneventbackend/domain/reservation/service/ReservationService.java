@@ -107,6 +107,8 @@ public class ReservationService {
     private Instant toInstant(BigDecimal epochSeconds) {
         long seconds = epochSeconds.longValue();
         return Instant.ofEpochSecond(seconds, epochSeconds.remainder(BigDecimal.ONE).movePointRight(9).longValue());
+    }
+
     public Reservation findOwnedReservation(Long reservationId, AppUser user) {
         Reservation reservation = reservationRepository.findWithDetailsByReservationId(reservationId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
