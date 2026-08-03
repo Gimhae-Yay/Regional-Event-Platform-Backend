@@ -61,21 +61,18 @@ public interface ContentSessionRepository extends JpaRepository<ContentSession, 
         """)
     Optional<ContentSession> findCancelTargetForUpdate(@Param("sessionId") Long sessionId);
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("""
-        SELECT contentSession
-        FROM ContentSession contentSession
-        WHERE contentSession.sessionId = :sessionId
-            AND contentSession.content.status = :contentStatus
-            AND contentSession.content.deletedAt IS NULL
-            AND contentSession.status = :sessionStatus
-            AND contentSession.startsAt > CURRENT_TIMESTAMP
-        """)
-    Optional<ContentSession> findConfirmableReservationTargetForUpdate(
-        @Param("sessionId") Long sessionId,
-        @Param("contentStatus") ContentStatus contentStatus,
-        @Param("sessionStatus") ContentSessionStatus sessionStatus
-    );
+    @Query(value = """
+        SELECT content_session.session_id
+        FROM content_session
+        JOIN content ON content.content_id = content_session.content_id
+        WHERE content_session.session_id = :sessionId
+            AND content.status = 'PUBLISHED'
+            AND content.deleted_at IS NULL
+            AND content_session.status = 'SCHEDULED'
+            AND content_session.starts_at > CURRENT_TIMESTAMP
+        FOR UPDATE
+        """, nativeQuery = true)
+    Optional<Long> findConfirmableReservationTargetIdForUpdate(@Param("sessionId") Long sessionId);
 
     List<ContentSession> findByContentContentIdAndStatusOrderByStartsAtAsc(
         Long contentId,
