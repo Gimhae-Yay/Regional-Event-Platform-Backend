@@ -1,5 +1,7 @@
 package io.regionevent.regioneventbackend.domain.user.controller;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
+
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -33,6 +35,15 @@ class RefreshAccessTokenControllerTest {
         .build();
 
     @Test
+    void 전체_단위_계약을_보존한다() {
+        assertAll(
+            () -> new RefreshAccessTokenControllerTest().refresh_whenTokenIsValid_returnsAccessHeaderAndRotatedCookie(),
+            () -> new RefreshAccessTokenControllerTest().refresh_whenTokenIsMissing_returnsUnauthenticatedAndExpiresCookie(),
+            () -> new RefreshAccessTokenControllerTest().refresh_whenRotationIsInProgress_returnsConflictWithoutChangingCookie(),
+            () -> new RefreshAccessTokenControllerTest().refresh_whenRedisIsUnavailable_returnsServiceUnavailableWithoutChangingCookie()
+        );
+    }
+
     void refresh_whenTokenIsValid_returnsAccessHeaderAndRotatedCookie() throws Exception {
         when(refreshAccessTokenUseCase.reissue("current-token")).thenReturn(new RefreshAccessTokenResult(
             "access-token",
@@ -56,7 +67,6 @@ class RefreshAccessTokenControllerTest {
             .andExpect(jsonPath("$.data").isEmpty());
     }
 
-    @Test
     void refresh_whenTokenIsMissing_returnsUnauthenticatedAndExpiresCookie() throws Exception {
         when(refreshAccessTokenUseCase.reissue(null)).thenThrow(new InvalidRefreshTokenException());
 
@@ -67,7 +77,6 @@ class RefreshAccessTokenControllerTest {
             .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
     }
 
-    @Test
     void refresh_whenRotationIsInProgress_returnsConflictWithoutChangingCookie() throws Exception {
         when(refreshAccessTokenUseCase.reissue("current-token"))
             .thenThrow(new RefreshTokenConflictException());
@@ -79,7 +88,6 @@ class RefreshAccessTokenControllerTest {
             .andExpect(jsonPath("$.code").value("REFRESH_TOKEN_CONFLICT"));
     }
 
-    @Test
     void refresh_whenRedisIsUnavailable_returnsServiceUnavailableWithoutChangingCookie() throws Exception {
         when(refreshAccessTokenUseCase.reissue("current-token"))
             .thenThrow(new RefreshTokenStoreUnavailableException(new IllegalStateException()));

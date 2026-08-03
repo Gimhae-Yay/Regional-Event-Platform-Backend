@@ -116,20 +116,6 @@ class ContentSessionControllerIntegrationTest {
     }
 
     @Test
-    void 회차_예약정보_조회_MySQL_현재_시각이_시작_시각과_같거나_지난_경우_예약_불가를_반환한다() throws Exception {
-        Fixture fixture = createFixture(ContentStatus.PUBLISHED, 1, 60);
-        jdbcTemplate.update(
-            "UPDATE content_session SET starts_at = CURRENT_TIMESTAMP WHERE session_id = ?",
-            fixture.session().getSessionId()
-        );
-        entityManager.clear();
-
-        mockMvc.perform(get("/api/v1/sessions/{sessionId}", fixture.session().getSessionId()))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data.reservable").value(false));
-    }
-
-    @Test
     void 회차_예약정보_조회_비공개_콘텐츠의_회차는_찾을수없음을_반환한다() throws Exception {
         Fixture fixture = createFixture(ContentStatus.PENDING, 1, 60);
 

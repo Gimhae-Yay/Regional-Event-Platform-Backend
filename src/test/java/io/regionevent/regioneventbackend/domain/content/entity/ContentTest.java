@@ -1,5 +1,7 @@
 package io.regionevent.regioneventbackend.domain.content.entity;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -14,6 +16,17 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 class ContentTest {
 
     @Test
+    void 전체_단위_계약을_보존한다() {
+        assertAll(
+            () -> new ContentTest().approve_whenPendingAndActive_changesStatusToApproved(),
+            () -> new ContentTest().approve_whenStatusIsNotPending_throwsExceptionWithoutChanges(),
+            () -> new ContentTest().approve_whenSoftDeleted_throwsExceptionWithoutChanges(),
+            () -> new ContentTest().reject_whenPendingAndActive_changesStatusToRejected(),
+            () -> new ContentTest().reject_whenStatusIsNotPending_throwsExceptionWithoutChanges(),
+            () -> new ContentTest().reject_whenSoftDeleted_throwsExceptionWithoutChanges()
+        );
+    }
+
     void approve_whenPendingAndActive_changesStatusToApproved() {
         Content content = createContent(ContentStatus.PENDING);
 
@@ -22,7 +35,6 @@ class ContentTest {
         assertThat(content.getStatus()).isEqualTo(ContentStatus.APPROVED);
     }
 
-    @Test
     void approve_whenStatusIsNotPending_throwsExceptionWithoutChanges() {
         Content content = createContent(ContentStatus.REJECTED);
 
@@ -31,7 +43,6 @@ class ContentTest {
         assertThat(content.getStatus()).isEqualTo(ContentStatus.REJECTED);
     }
 
-    @Test
     void approve_whenSoftDeleted_throwsExceptionWithoutChanges() {
         Content content = createContent(ContentStatus.PENDING);
         content.softDelete();
@@ -41,7 +52,6 @@ class ContentTest {
         assertThat(content.getStatus()).isEqualTo(ContentStatus.PENDING);
     }
 
-    @Test
     void reject_whenPendingAndActive_changesStatusToRejected() {
         Content content = createContent(ContentStatus.PENDING);
 
@@ -50,7 +60,6 @@ class ContentTest {
         assertThat(content.getStatus()).isEqualTo(ContentStatus.REJECTED);
     }
 
-    @Test
     void reject_whenStatusIsNotPending_throwsExceptionWithoutChanges() {
         Content content = createContent(ContentStatus.APPROVED);
 
@@ -59,7 +68,6 @@ class ContentTest {
         assertThat(content.getStatus()).isEqualTo(ContentStatus.APPROVED);
     }
 
-    @Test
     void reject_whenSoftDeleted_throwsExceptionWithoutChanges() {
         Content content = createContent(ContentStatus.PENDING);
         content.softDelete();

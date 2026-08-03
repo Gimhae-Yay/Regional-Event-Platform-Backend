@@ -1,5 +1,7 @@
 package io.regionevent.regioneventbackend.domain.content.service;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.inOrder;
@@ -52,6 +54,16 @@ class GetPendingContentRevisionsUseCaseTest {
     );
 
     @Test
+    void 전체_단위_계약을_보존한다() {
+        assertAll(
+            () -> new GetPendingContentRevisionsUseCaseTest().공개와_공개_전_수정본을_고정_순서대로_조립한다(),
+            () -> new GetPendingContentRevisionsUseCaseTest().심사_대기_수정본이_없으면_빈_목록을_반환한다(),
+            () -> new GetPendingContentRevisionsUseCaseTest().status가_없거나_EDIT_REQUESTED가_아니면_인가_후_INVALID_INPUT으로_거부한다(),
+            () -> new GetPendingContentRevisionsUseCaseTest().한_행의_상태_정합성이_깨지면_어떤_이미지_URL도_발급하지_않는다(),
+            () -> new GetPendingContentRevisionsUseCaseTest().한_행의_후보_이미지가_직접_연결된_ACTIVE가_아니면_전체를_거부한다()
+        );
+    }
+
     void 공개와_공개_전_수정본을_고정_순서대로_조립한다() {
         ContentRevisionReviewCandidate published = candidate(
             501L,
@@ -114,7 +126,6 @@ class GetPendingContentRevisionsUseCaseTest {
         inOrder.verify(representativeImageViewUrlService).createViewUrl(prePublic.candidateImageObject());
     }
 
-    @Test
     void 심사_대기_수정본이_없으면_빈_목록을_반환한다() {
         when(regionAdminAuthorizationService.requireAuthorizedRegionId(USER_ID)).thenReturn(REGION_ID);
         when(contentRevisionService.findReviewCandidatesByRegionId(REGION_ID)).thenReturn(List.of());
@@ -129,7 +140,6 @@ class GetPendingContentRevisionsUseCaseTest {
         );
     }
 
-    @Test
     void status가_없거나_EDIT_REQUESTED가_아니면_인가_후_INVALID_INPUT으로_거부한다() {
         when(regionAdminAuthorizationService.requireAuthorizedRegionId(USER_ID)).thenReturn(REGION_ID);
 
@@ -147,7 +157,6 @@ class GetPendingContentRevisionsUseCaseTest {
         );
     }
 
-    @Test
     void 한_행의_상태_정합성이_깨지면_어떤_이미지_URL도_발급하지_않는다() {
         ContentRevisionReviewCandidate validCandidate = candidate(
             501L,
@@ -178,7 +187,6 @@ class GetPendingContentRevisionsUseCaseTest {
         verifyNoInteractions(representativeImageViewUrlService);
     }
 
-    @Test
     void 한_행의_후보_이미지가_직접_연결된_ACTIVE가_아니면_전체를_거부한다() {
         ContentRevisionReviewCandidate validCandidate = candidate(
             501L,

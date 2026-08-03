@@ -84,12 +84,12 @@ Accept: application/json
   "code": "SUCCESS",
   "message": "QR 체크인에 성공했습니다.",
   "data": {
-    "visitId": 321,
-    "reservationId": 123,
-    "sessionId": 456,
+    "visitId": "321",
+    "reservationId": "123",
+    "sessionId": "456",
     "reservationStatus": "CHECKED_IN",
     "checkInMethod": "QR",
-    "checkedAt": "2026-08-01T10:05:00+09:00"
+    "checkedAt": "2026-08-01T01:05:00Z"
   }
 }
 ```
@@ -101,12 +101,12 @@ Accept: application/json
 | `statusCode` | Number | HTTP 상태 코드. 항상 `200` |
 | `code` | String | 성공 코드. 항상 `SUCCESS` |
 | `message` | String | 공개 성공 메시지 |
-| `data.visitId` | Long | 생성했거나 재사용한 방문 식별자 |
-| `data.reservationId` | Long | 체크인된 예약 식별자 |
-| `data.sessionId` | Long | 체크인된 회차 식별자 |
+| `data.visitId` | String | 생성했거나 재사용한 방문 식별자 |
+| `data.reservationId` | String | 체크인된 예약 식별자 |
+| `data.sessionId` | String | 체크인된 회차 식별자 |
 | `data.reservationStatus` | String | 항상 `CHECKED_IN` |
 | `data.checkInMethod` | String | 새 방문을 생성하면 `QR`. 유효한 새 스캔이 기존 방문을 재사용하면 기존 방문의 `QR` 또는 `RESERVATION_NUMBER` |
-| `data.checkedAt` | String | 최초 방문의 MySQL 기준 체크인 처리 시각 |
+| `data.checkedAt` | String | 최초 방문의 MySQL 기준 체크인 처리 시각. API 공통 규칙에 따른 UTC ISO 8601 사건 시각이다. |
 
 ### Error Code
 
