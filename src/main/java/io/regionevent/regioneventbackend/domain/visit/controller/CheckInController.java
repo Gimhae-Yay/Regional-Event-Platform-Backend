@@ -11,7 +11,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import io.regionevent.regioneventbackend.domain.visit.dto.CheckInResponse;
@@ -24,7 +23,6 @@ import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.response.ApiResponse;
 
 @RestController
-@RequestMapping("/api/v1/operator/check-ins")
 public class CheckInController {
 
     private static final String QR_CHECK_IN_SUCCESS_MESSAGE = "QR 체크인에 성공했습니다.";
@@ -36,7 +34,7 @@ public class CheckInController {
         this.checkInUseCase = checkInUseCase;
     }
 
-    @PostMapping
+    @PostMapping({"/api/v1/operator/check-ins", "/operator/check-ins"})
     public ResponseEntity<ApiResponse<CheckInResponse>> checkInByQr(
         Authentication authentication,
         @Valid @RequestBody QrCheckInRequest request,
@@ -60,7 +58,7 @@ public class CheckInController {
         ).toResponseEntity();
     }
 
-    @PostMapping("/manual")
+    @PostMapping("/api/v1/operator/check-ins/manual")
     public ResponseEntity<ApiResponse<CheckInResponse>> checkInManually(
         Authentication authentication,
         @Valid @RequestBody ManualCheckInRequest request,

@@ -122,7 +122,7 @@ public class CheckInUseCase {
                 acquired,
                 requestId,
                 actor,
-                null,
+                fallbackAuditRegion(actor),
                 null,
                 null,
                 qrFailureReasonCode(rejected.failure()),
@@ -139,7 +139,7 @@ public class CheckInUseCase {
                 acquired,
                 requestId,
                 actor,
-                null,
+                fallbackAuditRegion(actor),
                 null,
                 null,
                 "QR_CHECK_IN_REFERENCE_INVALID",
@@ -655,6 +655,10 @@ public class CheckInUseCase {
             case SIGNATURE_INVALID -> "QR_CHECK_IN_SIGNATURE_INVALID";
             case EXPIRED -> "QR_CHECK_IN_EXPIRED";
         };
+    }
+
+    private Region fallbackAuditRegion(AuditEventActor actor) {
+        return actor.roleAssignment().getRegion();
     }
 
     private boolean sameId(Long expected, Long actual) {

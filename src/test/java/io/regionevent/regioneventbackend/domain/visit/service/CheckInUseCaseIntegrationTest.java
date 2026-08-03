@@ -183,12 +183,13 @@ public class CheckInUseCaseIntegrationTest {
     void qrCheckIn_whenTokenIsInvalid_storesFailedIdempotencyResult() {
         Fixture fixture = createFixture();
         QrCheckInRequest request = new QrCheckInRequest("invalid-token");
+        UUID requestId = UUID.randomUUID();
 
         CheckInResult firstResult = checkInUseCase.checkInByQr(
             fixture.operator().getUserId(),
             request,
             "qr-failure-key",
-            UUID.randomUUID()
+            requestId
         );
         CheckInResult retryResult = checkInUseCase.checkInByQr(
             fixture.operator().getUserId(),
@@ -207,6 +208,15 @@ public class CheckInUseCaseIntegrationTest {
             .satisfies(record -> {
                 assertThat(record.getStatus()).isEqualTo(IdempotencyRecordStatus.FAILED);
                 assertThat(record.getResultCode()).isEqualTo(ErrorCode.QR_VERIFICATION_FAILED.code());
+            });
+        assertThat(auditEventsByRequestId(requestId))
+            .singleElement()
+            .satisfies(auditEvent -> {
+                assertThat(auditEvent.getRegion().getRegionId())
+                    .isEqualTo(fixture.reservation().getRegion().getRegionId());
+                assertThat(auditEvent.getTargetType()).isEqualTo(AuditEventTargetType.RESERVATION);
+                assertThat(auditEvent.getTargetId()).isNull();
+                assertThat(auditEvent.getReasonCode()).isEqualTo("QR_CHECK_IN_MALFORMED");
             });
     }
 
