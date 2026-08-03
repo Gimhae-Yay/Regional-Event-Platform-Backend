@@ -35,10 +35,12 @@ import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetTyp
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentSessionRepository;
+import io.regionevent.regioneventbackend.domain.content.service.CancelContentSessionUseCase;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
 import io.regionevent.regioneventbackend.domain.reservation.dto.CancelReservationResponse;
@@ -67,6 +69,7 @@ class ReservationCancellationUseCaseMySqlTest {
     static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.42");
 
     private final ReservationCancellationUseCase reservationCancellationUseCase;
+    private final CancelContentSessionUseCase cancelContentSessionUseCase;
     private final BlockingReservationService blockingReservationService;
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
@@ -82,6 +85,7 @@ class ReservationCancellationUseCaseMySqlTest {
     @Autowired
     ReservationCancellationUseCaseMySqlTest(
         ReservationCancellationUseCase reservationCancellationUseCase,
+        CancelContentSessionUseCase cancelContentSessionUseCase,
         BlockingReservationService blockingReservationService,
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
@@ -95,6 +99,7 @@ class ReservationCancellationUseCaseMySqlTest {
         PlatformTransactionManager transactionManager
     ) {
         this.reservationCancellationUseCase = reservationCancellationUseCase;
+        this.cancelContentSessionUseCase = cancelContentSessionUseCase;
         this.blockingReservationService = blockingReservationService;
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
@@ -144,6 +149,42 @@ class ReservationCancellationUseCaseMySqlTest {
             .satisfies(event -> assertThat(event.getResult()).isEqualTo(AuditEventResult.SUCCESS));
     }
 
+    @Test
+    @Timeout(10)
+    void cancelSessionAndCancelReservationConcurrently_terminalizesWithoutDeadlock() throws Exception {
+        Fixture fixture = createFixture();
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<CancellationResult> reservationCancellation = executorService.submit(
+                () -> cancelAfterStart(fixture, ready, start)
+            );
+            Future<ErrorCode> sessionCancellation = executorService.submit(
+                () -> cancelSessionAfterStart(fixture, ready, start)
+            );
+
+            assertThat(ready.await(3, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            CancellationResult reservationResult = reservationCancellation.get(5, TimeUnit.SECONDS);
+            ErrorCode sessionCancellationErrorCode = sessionCancellation.get(5, TimeUnit.SECONDS);
+            assertThat(reservationResult.errorCode()).isNull();
+            assertThat(sessionCancellationErrorCode).isNull();
+            assertThat(reservationResult.response().status()).isEqualTo(ReservationStatus.CANCELLED.name());
+        }
+
+        assertThat(reservationRepository.findById(fixture.reservationId()))
+            .hasValueSatisfying(reservation ->
+                assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.CANCELLED)
+            );
+        assertThat(contentSessionRepository.findById(fixture.sessionId()))
+            .hasValueSatisfying(session -> {
+                assertThat(session.getStatus()).isEqualTo(ContentSessionStatus.CANCELLED);
+                assertThat(session.getRemainingCapacity()).isEqualTo(1);
+            });
+    }
+
     private List<CancellationResult> cancelConcurrently(Fixture fixture) throws Exception {
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
@@ -161,6 +202,26 @@ class ReservationCancellationUseCaseMySqlTest {
             return List.of(first.get(5, TimeUnit.SECONDS), second.get(5, TimeUnit.SECONDS));
         } finally {
             blockingReservationService.resetInitialReadBlock();
+        }
+    }
+
+    private ErrorCode cancelSessionAfterStart(
+        Fixture fixture,
+        CountDownLatch ready,
+        CountDownLatch start
+    ) {
+        ready.countDown();
+        await(start);
+        try {
+            cancelContentSessionUseCase.cancel(
+                fixture.operatorId(),
+                fixture.sessionId(),
+                "Session cancelled",
+                UUID.randomUUID()
+            );
+            return null;
+        } catch (BusinessException exception) {
+            return exception.getErrorCode();
         }
     }
 
@@ -202,6 +263,7 @@ class ReservationCancellationUseCaseMySqlTest {
                 "010-9876-5432",
                 AppUserStatus.ACTIVE
             ));
+            userRoleAssignmentRepository.save(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
             Content content = contentRepository.save(new Content(
                 region,
                 operator,
@@ -259,7 +321,12 @@ class ReservationCancellationUseCaseMySqlTest {
                 null,
                 null
             ));
-            return new Fixture(user.getUserId(), reservation.getReservationId(), session.getSessionId());
+            return new Fixture(
+                user.getUserId(),
+                operator.getUserId(),
+                reservation.getReservationId(),
+                session.getSessionId()
+            );
         });
     }
 
@@ -304,14 +371,14 @@ class ReservationCancellationUseCaseMySqlTest {
         }
 
         @Override
-        public Reservation findOwnedReservation(Long reservationId, AppUser user) {
-            Reservation reservation = super.findOwnedReservation(reservationId, user);
+        public ReservationCancellationLockTarget findCancellationLockTarget(Long reservationId, AppUser user) {
+            ReservationCancellationLockTarget lockTarget = super.findCancellationLockTarget(reservationId, user);
             CountDownLatch barrier = initialReadBarrier;
             if (barrier != null) {
                 barrier.countDown();
                 await(barrier);
             }
-            return reservation;
+            return lockTarget;
         }
 
         void blockInitialReads(int requestCount) {
@@ -334,7 +401,7 @@ class ReservationCancellationUseCaseMySqlTest {
         }
     }
 
-    private record Fixture(Long userId, Long reservationId, Long sessionId) {
+    private record Fixture(Long userId, Long operatorId, Long reservationId, Long sessionId) {
     }
 
     private record CancellationResult(CancelReservationResponse response, ErrorCode errorCode) {

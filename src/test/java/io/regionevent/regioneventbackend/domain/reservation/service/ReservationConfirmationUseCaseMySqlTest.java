@@ -30,16 +30,19 @@ import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetTyp
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentSessionRepository;
+import io.regionevent.regioneventbackend.domain.content.service.CancelContentSessionUseCase;
 import io.regionevent.regioneventbackend.domain.idempotency.entity.IdempotencyRecordStatus;
 import io.regionevent.regioneventbackend.domain.idempotency.repository.IdempotencyRecordRepository;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus;
+import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.reservation.repository.CapacityHoldRepository;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationRepository;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -59,6 +62,7 @@ class ReservationConfirmationUseCaseMySqlTest {
     static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.42");
 
     private final ReservationConfirmationUseCase reservationConfirmationUseCase;
+    private final CancelContentSessionUseCase cancelContentSessionUseCase;
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
@@ -73,6 +77,7 @@ class ReservationConfirmationUseCaseMySqlTest {
     @Autowired
     ReservationConfirmationUseCaseMySqlTest(
         ReservationConfirmationUseCase reservationConfirmationUseCase,
+        CancelContentSessionUseCase cancelContentSessionUseCase,
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
         UserRoleAssignmentRepository userRoleAssignmentRepository,
@@ -85,6 +90,7 @@ class ReservationConfirmationUseCaseMySqlTest {
         PlatformTransactionManager transactionManager
     ) {
         this.reservationConfirmationUseCase = reservationConfirmationUseCase;
+        this.cancelContentSessionUseCase = cancelContentSessionUseCase;
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
         this.userRoleAssignmentRepository = userRoleAssignmentRepository;
@@ -194,6 +200,32 @@ class ReservationConfirmationUseCaseMySqlTest {
         assertSuccessfulAuditEvents(fixture.capacityHold(), successfulResult.response().reservationId());
     }
 
+    @Test
+    @Timeout(10)
+    void cancelSessionAndConfirmReservationConcurrently_terminalizesMutableReservationState() throws Exception {
+        Fixture fixture = createFixture();
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<?> cancel = executorService.submit(() -> cancelAfterStart(fixture, ready, start));
+            Future<ReservationConfirmationResult> confirmation = executorService.submit(
+                () -> confirmAfterStart(fixture, "cancel-race-key-" + System.nanoTime(), ready, start)
+            );
+
+            assertThat(ready.await(3, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            cancel.get(5, TimeUnit.SECONDS);
+            ReservationConfirmationResult confirmationResult = confirmation.get(5, TimeUnit.SECONDS);
+            if (!confirmationResult.isSuccessful()) {
+                assertThat(confirmationResult.errorCode()).isEqualTo(ErrorCode.RESERVATION_CONFIRM_CONFLICT);
+            }
+        }
+
+        assertSessionCancellationTerminalState(fixture);
+    }
+
     private List<ReservationConfirmationResult> confirmConcurrently(
         Fixture fixture,
         String firstIdempotencyKey,
@@ -231,6 +263,22 @@ class ReservationConfirmationUseCaseMySqlTest {
         );
     }
 
+    private Void cancelAfterStart(
+        Fixture fixture,
+        CountDownLatch ready,
+        CountDownLatch start
+    ) {
+        ready.countDown();
+        await(start);
+        cancelContentSessionUseCase.cancel(
+            fixture.operator().getUserId(),
+            fixture.contentSession().getSessionId(),
+            "Session cancelled",
+            UUID.randomUUID()
+        );
+        return null;
+    }
+
     private ReservationConfirmationResult confirm(Fixture fixture, Long holdId, String idempotencyKey) {
         return reservationConfirmationUseCase.confirm(
             fixture.user().getUserId(),
@@ -257,6 +305,21 @@ class ReservationConfirmationUseCaseMySqlTest {
                 null,
                 now
             ));
+        });
+    }
+
+    private void assertSessionCancellationTerminalState(Fixture fixture) {
+        transactionTemplate.executeWithoutResult(status -> {
+            ContentSession session = contentSessionRepository.findById(fixture.contentSession().getSessionId())
+                .orElseThrow();
+            assertThat(session.getStatus()).isEqualTo(ContentSessionStatus.CANCELLED);
+            assertThat(session.getRemainingCapacity()).isEqualTo(1);
+            assertThat(capacityHoldRepository.findAll())
+                .filteredOn(hold -> hold.getContentSession().getSessionId().equals(session.getSessionId()))
+                .noneMatch(hold -> hold.getStatus() == CapacityHoldStatus.ACTIVE);
+            assertThat(reservationRepository.findAll())
+                .filteredOn(reservation -> reservation.getContentSession().getSessionId().equals(session.getSessionId()))
+                .noneMatch(reservation -> reservation.getStatus() == ReservationStatus.CONFIRMED);
         });
     }
 
@@ -298,6 +361,7 @@ class ReservationConfirmationUseCaseMySqlTest {
                 "010-9876-5432",
                 AppUserStatus.ACTIVE
             ));
+            userRoleAssignmentRepository.save(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
             Content content = contentRepository.save(new Content(
                 region,
                 operator,
@@ -324,10 +388,16 @@ class ReservationConfirmationUseCaseMySqlTest {
                 1
             );
             session.approve(operator, now);
-            contentSessionRepository.save(session);
+            ContentSession savedSession = contentSessionRepository.saveAndFlush(session);
+            contentSessionRepository.decreaseRemainingCapacityIfReservable(
+                savedSession.getSessionId(),
+                1,
+                ContentStatus.PUBLISHED,
+                ContentSessionStatus.SCHEDULED
+            );
             CapacityHold capacityHold = capacityHoldRepository.save(new CapacityHold(
                 region,
-                session,
+                savedSession,
                 user,
                 1,
                 CapacityHoldStatus.ACTIVE,
@@ -337,7 +407,7 @@ class ReservationConfirmationUseCaseMySqlTest {
                 null,
                 now
             ));
-            return new Fixture(user, capacityHold);
+            return new Fixture(user, operator, savedSession, capacityHold);
         });
     }
 
@@ -357,6 +427,6 @@ class ReservationConfirmationUseCaseMySqlTest {
         return jdbcUrl + parameterPrefix + "useAffectedRows=true";
     }
 
-    private record Fixture(AppUser user, CapacityHold capacityHold) {
+    private record Fixture(AppUser user, AppUser operator, ContentSession contentSession, CapacityHold capacityHold) {
     }
 }
