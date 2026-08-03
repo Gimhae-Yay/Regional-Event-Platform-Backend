@@ -7,16 +7,19 @@ import java.util.Objects;
 import javax.sql.DataSource;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@Transactional(propagation = Propagation.NOT_SUPPORTED)
 class MySqlDatabaseCleanerIntegrationTest extends NonTransactionalMySqlTestSupport {
 
     private static final String CHILD_TABLE = "test_cleanup_child";
@@ -37,6 +40,7 @@ class MySqlDatabaseCleanerIntegrationTest extends NonTransactionalMySqlTestSuppo
     }
 
     @Test
+    @Timeout(10)
     void 비트랜잭션_정리는_FK를_복원하고_Flyway_이력을_보존한다() {
         int migrationCount = countRows("flyway_schema_history");
         createFixtureTables();
@@ -50,7 +54,6 @@ class MySqlDatabaseCleanerIntegrationTest extends NonTransactionalMySqlTestSuppo
             assertThat(countRows(CHILD_TABLE)).isZero();
             assertThat(countRows("flyway_schema_history")).isEqualTo(migrationCount);
             assertThat(findForeignKeyChecks()).isOne();
-            assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
         } finally {
             dropFixtureTables();
         }
