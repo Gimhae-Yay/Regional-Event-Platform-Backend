@@ -371,14 +371,14 @@ class ReservationCancellationUseCaseMySqlTest {
         }
 
         @Override
-        public Reservation findOwnedReservation(Long reservationId, AppUser user) {
-            Reservation reservation = super.findOwnedReservation(reservationId, user);
+        public ReservationCancellationLockTarget findCancellationLockTarget(Long reservationId, AppUser user) {
+            ReservationCancellationLockTarget lockTarget = super.findCancellationLockTarget(reservationId, user);
             CountDownLatch barrier = initialReadBarrier;
             if (barrier != null) {
                 barrier.countDown();
                 await(barrier);
             }
-            return reservation;
+            return lockTarget;
         }
 
         void blockInitialReads(int requestCount) {
