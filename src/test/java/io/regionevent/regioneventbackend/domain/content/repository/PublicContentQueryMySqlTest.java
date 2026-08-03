@@ -12,9 +12,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.transaction.AfterTransaction;
+import org.springframework.test.context.transaction.BeforeTransaction;
 import org.springframework.transaction.annotation.Transactional;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
@@ -27,14 +27,12 @@ import io.regionevent.regioneventbackend.domain.region.repository.RegionReposito
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
+import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 
 @SpringBootTest
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional
 class PublicContentQueryMySqlTest {
-
-    @Container
-    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.42");
 
     private final ContentRepository contentRepository;
     private final ContentSessionRepository contentSessionRepository;
@@ -59,15 +57,32 @@ class PublicContentQueryMySqlTest {
 
     @DynamicPropertySource
     static void configureDataSource(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
+        SharedMySqlTestContainer.registerDataSourceProperties(registry);
+    }
+
+    @BeforeTransaction
+    void removeContentSoftDeleteStatusConstraint() {
+        jdbcTemplate.execute("ALTER TABLE content DROP CHECK ck_content_soft_delete_status");
+    }
+
+    @AfterTransaction
+    void restoreContentSoftDeleteStatusConstraint() {
+        jdbcTemplate.execute("""
+            ALTER TABLE content
+            ADD CONSTRAINT ck_content_soft_delete_status
+            CHECK (
+                CASE
+                    WHEN deleted_at IS NULL THEN TRUE
+                    WHEN status = 'PENDING' THEN TRUE
+                    WHEN status = 'APPROVED' THEN TRUE
+                    ELSE FALSE
+                END = TRUE
+            )
+            """);
     }
 
     @Test
     void 소프트_삭제된_PUBLISHED_콘텐츠는_공개_콘텐츠로_판정하지_않는다() {
-        jdbcTemplate.execute("ALTER TABLE content DROP CHECK ck_content_soft_delete_status");
         Content content = savePublishedContent();
         jdbcTemplate.update(
             "UPDATE content SET deleted_at = CURRENT_TIMESTAMP WHERE content_id = ?",
