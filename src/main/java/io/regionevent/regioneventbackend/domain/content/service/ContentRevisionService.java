@@ -83,6 +83,37 @@ public class ContentRevisionService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
+    public ContentRevision findRejectedRevisionForUpdate(Long revisionId) {
+        ContentRevision contentRevision = contentRevisionRepository.findByContentRevisionId(revisionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+        if (contentRevision.getStatus() != ContentRevisionStatus.EDIT_REJECTED) {
+            throw new BusinessException(ErrorCode.CONTENT_STATE_CONFLICT);
+        }
+        return contentRevision;
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ContentRevision updateRejectedRevision(
+        ContentRevision contentRevision,
+        UpdateContentRevisionCommand command
+    ) {
+        contentRevision.replaceRejectedCandidateFields(
+            command.title(),
+            command.description(),
+            command.locationText(),
+            command.operatingHoursText(),
+            command.contactText(),
+            command.precautions(),
+            command.ageRequirement(),
+            command.materials(),
+            command.cancellationPolicyText(),
+            command.publishAt()
+        );
+        contentRevisionRepository.flush();
+        return contentRevision;
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
     public ContentRevision reject(
         ContentRevision revision,
         AppUser reviewer,
@@ -210,6 +241,20 @@ public class ContentRevisionService {
     }
 
     public record CreateContentRevisionCommand(
+        String title,
+        String description,
+        String locationText,
+        String operatingHoursText,
+        String contactText,
+        String precautions,
+        String ageRequirement,
+        String materials,
+        String cancellationPolicyText,
+        Instant publishAt
+    ) {
+    }
+
+    public record UpdateContentRevisionCommand(
         String title,
         String description,
         String locationText,
