@@ -132,6 +132,14 @@ public class ContentService {
         );
     }
 
+    public Content findPublicContent(Long contentId) {
+        validateRequiredId(contentId);
+        return contentRepository.findByContentIdAndStatusAndDeletedAtIsNull(
+            contentId,
+            ContentStatus.PUBLISHED
+        ).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
     public List<PublicContentProjection> findPublicContents(
         Long regionId,
         ContentType contentType,
