@@ -1,15 +1,24 @@
 package io.regionevent.regioneventbackend.domain.reservation.service;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
 
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
+import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
+import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
+import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationCancellationLockTargetProjection;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationRepository;
+import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 @Service
 public class ReservationService {
@@ -51,6 +60,80 @@ public class ReservationService {
             .orElseThrow(() -> new IllegalStateException("idempotency result reservation does not exist"));
     }
 
+    @Transactional(readOnly = true)
+    public Reservation findOwnedReservation(Long reservationId, AppUser user) {
+        Reservation reservation = reservationRepository.findWithDetailsByReservationId(reservationId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+        return validateOwnership(reservation, user);
+    }
+
+    @Transactional(readOnly = true)
+    public ReservationCancellationLockTarget findCancellationLockTarget(Long reservationId, AppUser user) {
+        ReservationCancellationLockTargetProjection target = reservationRepository
+            .findCancellationLockTargetByReservationId(reservationId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+        if (target.getUserId() == null || !target.getUserId().equals(user.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        return new ReservationCancellationLockTarget(target.getSessionId());
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Reservation findOwnedReservationForUpdate(Long reservationId, AppUser user) {
+        Reservation reservation = reservationRepository.findByReservationIdForUpdate(reservationId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+        return validateOwnership(reservation, user);
+    }
+
+    private Reservation validateOwnership(Reservation reservation, AppUser user) {
+        if (reservation.getUser() == null
+            || !reservation.getUser().getUserId().equals(user.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        return reservation;
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean cancelIfCancellable(Long reservationId, Long userId) {
+        return reservationRepository.cancelIfCancellable(reservationId, userId) == 1;
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public int cancelUncheckedInReservationsForSession(
+        ContentSession contentSession,
+        String cancellationReason,
+        Instant cancelledAt
+    ) {
+        List<Reservation> confirmedReservations = reservationRepository.findConfirmedBySessionIdForUpdate(
+            contentSession.getSessionId()
+        );
+        boolean shouldReleaseCapacity = reservationRepository.isSessionBeforeStartByDatabaseTime(
+            contentSession.getSessionId()
+        );
+        Instant capacityReleasedAt = shouldReleaseCapacity ? cancelledAt : null;
+        int releasedQuantity = shouldReleaseCapacity
+            ? confirmedReservations.stream()
+                .mapToInt(reservation -> reservation.getCapacityHold().getQuantity())
+                .sum()
+            : 0;
+        confirmedReservations.forEach(reservation ->
+            reservation.cancel(cancellationReason, cancelledAt, capacityReleasedAt)
+        );
+        reservationRepository.saveAllAndFlush(confirmedReservations);
+        return releasedQuantity;
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public List<NoShowReservationAuditTarget> expireNoShowReservations(Long sessionId) {
+        return reservationRepository.findConfirmedReservationIdsBySessionId(
+            sessionId,
+            ReservationStatus.CONFIRMED
+        ).stream()
+            .map(this::expireIfNoShowEligible)
+            .flatMap(Optional::stream)
+            .toList();
+    }
+
     private boolean insertConfirmed(
         CapacityHold capacityHold,
         ReservationIdentifierGenerator.ReservationIdentifiers identifiers,
@@ -69,5 +152,34 @@ public class ReservationService {
         } catch (DuplicateKeyException exception) {
             return false;
         }
+    }
+
+    private Optional<NoShowReservationAuditTarget> expireIfNoShowEligible(Long reservationId) {
+        if (reservationRepository.expireIfNoShowEligible(reservationId) == 0) {
+            return Optional.empty();
+        }
+        Reservation reservation = reservationRepository.findByReservationIdAndStatus(
+            reservationId,
+            ReservationStatus.EXPIRED
+        ).orElseThrow(() -> new IllegalStateException("expired reservation does not exist"));
+        return Optional.of(NoShowReservationAuditTarget.from(reservation));
+    }
+
+    public record NoShowReservationAuditTarget(
+        Long reservationId,
+        Region region,
+        Instant expiredAt
+    ) {
+
+        private static NoShowReservationAuditTarget from(Reservation reservation) {
+            return new NoShowReservationAuditTarget(
+                reservation.getReservationId(),
+                reservation.getRegion(),
+                reservation.getExpiredAt()
+            );
+        }
+    }
+
+    public record ReservationCancellationLockTarget(Long sessionId) {
     }
 }

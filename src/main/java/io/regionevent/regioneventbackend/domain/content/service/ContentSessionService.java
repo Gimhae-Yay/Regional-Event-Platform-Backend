@@ -2,8 +2,10 @@ package io.regionevent.regioneventbackend.domain.content.service;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
@@ -50,6 +52,25 @@ public class ContentSessionService {
             contentId,
             ContentSessionStatus.SCHEDULED
         );
+    }
+
+    public ContentSession findCancelTargetForUpdate(Long sessionId) {
+        return contentSessionRepository.findCancelTargetForUpdate(sessionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public boolean lockConfirmableReservationTarget(Long sessionId) {
+        return contentSessionRepository.findConfirmableReservationTargetForUpdate(
+            sessionId,
+            ContentStatus.PUBLISHED,
+            ContentSessionStatus.SCHEDULED
+        ).isPresent();
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void lockForUpdate(Long sessionId) {
+        contentSessionRepository.findBySessionIdForUpdate(sessionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
     public List<ContentSession> createPendingSessions(
@@ -110,6 +131,61 @@ public class ContentSessionService {
         if (updatedCount == 0) {
             throw new BusinessException(ErrorCode.RESERVATION_HOLD_CONFLICT);
         }
+    }
+
+    public ContentSession cancel(
+        ContentSession contentSession,
+        AppUser operator,
+        Instant cancelledAt,
+        String cancellationReason
+    ) {
+        if (contentSession.getStatus() != ContentSessionStatus.SCHEDULED) {
+            throw new BusinessException(ErrorCode.SESSION_NOT_CANCELLABLE);
+        }
+        contentSession.cancel(operator, cancelledAt, cancellationReason);
+        return contentSessionRepository.saveAndFlush(contentSession);
+    }
+
+    public ContentSession releaseCapacity(ContentSession contentSession, int quantity) {
+        if (quantity == 0) {
+            return contentSession;
+        }
+        contentSession.releaseCapacity(quantity);
+        return contentSessionRepository.saveAndFlush(contentSession);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void restoreCapacity(Long sessionId, int quantity) {
+        int updatedCount = contentSessionRepository.increaseRemainingCapacityIfWithinCapacity(sessionId, quantity);
+        if (updatedCount == 0) {
+            throw new IllegalStateException("failed to restore content session capacity");
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public List<Long> findNoShowProcessingTargetSessionIds() {
+        return contentSessionRepository.findNoShowProcessingTargetSessionIds(ContentSessionStatus.SCHEDULED);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<ContentSession> findNoShowProcessingTargetForUpdate(Long sessionId) {
+        return contentSessionRepository.findNoShowProcessingTargetForUpdate(
+            sessionId,
+            ContentSessionStatus.SCHEDULED
+        );
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean completeIfNoConfirmedReservation(Long sessionId) {
+        return contentSessionRepository.completeIfNoConfirmedReservation(sessionId) == 1;
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public ContentSession findCompletedSessionForNoShowAudit(Long sessionId) {
+        return contentSessionRepository.findCompletedSessionForNoShowAudit(
+            sessionId,
+            ContentSessionStatus.COMPLETED
+        ).orElseThrow(() -> new IllegalStateException("completed content session does not exist"));
     }
 
     public record CreateContentSessionCommand(

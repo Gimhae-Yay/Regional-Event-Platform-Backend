@@ -27,13 +27,19 @@ import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenPr
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.common.ApiResponseAccessDeniedHandler;
 import io.regionevent.regioneventbackend.global.security.common.ApiResponseAuthenticationEntryPoint;
+import io.regionevent.regioneventbackend.global.security.qr.QrTokenProperties;
+import io.regionevent.regioneventbackend.global.security.qr.QrTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.JwtRefreshTokenProperties;
 import io.regionevent.regioneventbackend.global.security.refresh.JwtRefreshTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
 @Configuration
-@EnableConfigurationProperties({JwtAccessTokenProperties.class, JwtRefreshTokenProperties.class})
+@EnableConfigurationProperties({
+    JwtAccessTokenProperties.class,
+    JwtRefreshTokenProperties.class,
+    QrTokenProperties.class
+})
 public class SecurityConfig {
 
     private static final int BCRYPT_STRENGTH = 12;
@@ -64,6 +70,14 @@ public class SecurityConfig {
         Clock clock
     ) {
         return new JwtRefreshTokenService(jwtRefreshTokenProperties, clock);
+    }
+
+    @Bean
+    public QrTokenService qrTokenService(
+        QrTokenProperties qrTokenProperties,
+        Clock clock
+    ) {
+        return new QrTokenService(qrTokenProperties, clock);
     }
 
     @Bean
