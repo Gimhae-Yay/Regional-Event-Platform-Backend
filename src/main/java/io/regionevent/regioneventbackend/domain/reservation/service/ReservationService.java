@@ -13,6 +13,9 @@ import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationRepository;
+import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 
 @Service
@@ -53,6 +56,33 @@ public class ReservationService {
     public Reservation findById(Long reservationId) {
         return reservationRepository.findByReservationIdForUpdate(reservationId)
             .orElseThrow(() -> new IllegalStateException("idempotency result reservation does not exist"));
+    }
+
+    @Transactional(readOnly = true)
+    public Reservation findOwnedReservation(Long reservationId, AppUser user) {
+        Reservation reservation = reservationRepository.findWithDetailsByReservationId(reservationId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+        return validateOwnership(reservation, user);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Reservation findOwnedReservationForUpdate(Long reservationId, AppUser user) {
+        Reservation reservation = reservationRepository.findByReservationIdForUpdate(reservationId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+        return validateOwnership(reservation, user);
+    }
+
+    private Reservation validateOwnership(Reservation reservation, AppUser user) {
+        if (reservation.getUser() == null
+            || !reservation.getUser().getUserId().equals(user.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        return reservation;
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean cancelIfCancellable(Long reservationId, Long userId) {
+        return reservationRepository.cancelIfCancellable(reservationId, userId) == 1;
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
