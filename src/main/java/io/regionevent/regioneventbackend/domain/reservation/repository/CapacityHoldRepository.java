@@ -19,6 +19,16 @@ public interface CapacityHoldRepository extends JpaRepository<CapacityHold, Long
     @EntityGraph(attributePaths = {"region", "contentSession", "contentSession.content", "user"})
     Optional<CapacityHold> findByHoldId(Long holdId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT capacityHold
+        FROM CapacityHold capacityHold
+        WHERE capacityHold.contentSession.sessionId = :sessionId
+            AND capacityHold.status = io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus.ACTIVE
+        ORDER BY capacityHold.holdId ASC
+        """)
+    List<CapacityHold> findActiveBySessionIdForUpdate(@Param("sessionId") Long sessionId);
+
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
         UPDATE capacity_hold

@@ -192,6 +192,20 @@ public class ContentSession {
         this.cancellationReason = validatedCancellationReason;
     }
 
+    public void releaseCapacity(int quantity) {
+        if (quantity < 0) {
+            throw new IllegalArgumentException("quantity must not be negative");
+        }
+        if (quantity == 0) {
+            return;
+        }
+        int releasedCapacity = remainingCapacity + quantity;
+        if (releasedCapacity > capacity) {
+            throw new IllegalStateException("remainingCapacity must not exceed capacity");
+        }
+        remainingCapacity = releasedCapacity;
+    }
+
     public Long getSessionId() {
         return sessionId;
     }

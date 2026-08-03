@@ -234,6 +234,20 @@ public class Reservation {
         return updatedAt;
     }
 
+    public void cancel(
+        String cancellationReason,
+        Instant cancelledAt,
+        Instant capacityReleasedAt
+    ) {
+        if (status != ReservationStatus.CONFIRMED) {
+            throw new IllegalStateException("only confirmed reservation can be cancelled");
+        }
+        this.status = ReservationStatus.CANCELLED;
+        this.cancelledAt = requireNotNull(cancelledAt, "cancelledAt");
+        this.cancellationReason = requireNonBlank(cancellationReason, "cancellationReason");
+        this.capacityReleasedAt = capacityReleasedAt;
+    }
+
     private static <T> T requireNotNull(T value, String fieldName) {
         if (value == null) {
             throw new IllegalArgumentException(fieldName + " must not be null");

@@ -14,6 +14,7 @@ import io.regionevent.regioneventbackend.domain.audit.service.AuditEventActor;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordFailureAuditEventUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.ContentSessionService;
 import io.regionevent.regioneventbackend.domain.idempotency.entity.IdempotencyOperation;
 import io.regionevent.regioneventbackend.domain.idempotency.service.IdempotencyAcquireResult;
 import io.regionevent.regioneventbackend.domain.idempotency.service.IdempotencyCommand;
@@ -35,6 +36,7 @@ public class ReservationConfirmationUseCase {
 
     private final AppUserService appUserService;
     private final UserRoleAssignmentService userRoleAssignmentService;
+    private final ContentSessionService contentSessionService;
     private final CapacityHoldService capacityHoldService;
     private final ReservationService reservationService;
     private final IdempotencyService idempotencyService;
@@ -45,6 +47,7 @@ public class ReservationConfirmationUseCase {
     public ReservationConfirmationUseCase(
         AppUserService appUserService,
         UserRoleAssignmentService userRoleAssignmentService,
+        ContentSessionService contentSessionService,
         CapacityHoldService capacityHoldService,
         ReservationService reservationService,
         IdempotencyService idempotencyService,
@@ -54,6 +57,7 @@ public class ReservationConfirmationUseCase {
     ) {
         this.appUserService = appUserService;
         this.userRoleAssignmentService = userRoleAssignmentService;
+        this.contentSessionService = contentSessionService;
         this.capacityHoldService = capacityHoldService;
         this.reservationService = reservationService;
         this.idempotencyService = idempotencyService;
@@ -113,6 +117,11 @@ public class ReservationConfirmationUseCase {
         AuditEventActor actor
     ) {
         try {
+            if (!contentSessionService.lockConfirmableReservationTarget(
+                capacityHold.getContentSession().getSessionId()
+            )) {
+                throw new ReservationConfirmationConflictException();
+            }
             CapacityHold consumedHold = capacityHoldService.consumeIfConfirmable(
                 capacityHold.getHoldId(),
                 user.getUserId()

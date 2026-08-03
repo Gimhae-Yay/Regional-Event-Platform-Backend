@@ -91,6 +91,21 @@ class ContentSessionTest {
     }
 
     @Test
+    void releaseCapacity_whenQuantityIsValid_increasesRemainingCapacity() {
+        ContentSession contentSession = createContentSession();
+
+        contentSession.releaseCapacity(0);
+
+        assertThat(contentSession.getRemainingCapacity()).isEqualTo(20);
+        assertThatThrownBy(
+            () -> contentSession.releaseCapacity(-1)
+        ).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(
+            () -> contentSession.releaseCapacity(1)
+        ).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
     void transitions_whenCurrentStatusIsNotAllowed_throwException() {
         ContentSession pendingSession = createContentSession();
         ContentSession rejectedSession = createContentSession();

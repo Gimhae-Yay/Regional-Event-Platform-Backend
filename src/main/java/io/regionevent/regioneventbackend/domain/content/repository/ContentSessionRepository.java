@@ -5,6 +5,7 @@ import java.util.Optional;
 
 import jakarta.persistence.LockModeType;
 
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
@@ -31,6 +32,40 @@ public interface ContentSessionRepository extends JpaRepository<ContentSession, 
     Optional<ContentSession> findBySessionIdAndContentStatus(
         Long sessionId,
         ContentStatus contentStatus
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT contentSession
+        FROM ContentSession contentSession
+        WHERE contentSession.sessionId = :sessionId
+        """)
+    Optional<ContentSession> findBySessionIdForUpdate(@Param("sessionId") Long sessionId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = {"content", "content.operator", "region"})
+    @Query("""
+        SELECT contentSession
+        FROM ContentSession contentSession
+        WHERE contentSession.sessionId = :sessionId
+            AND contentSession.content.deletedAt IS NULL
+        """)
+    Optional<ContentSession> findCancelTargetForUpdate(@Param("sessionId") Long sessionId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT contentSession
+        FROM ContentSession contentSession
+        WHERE contentSession.sessionId = :sessionId
+            AND contentSession.content.status = :contentStatus
+            AND contentSession.content.deletedAt IS NULL
+            AND contentSession.status = :sessionStatus
+            AND contentSession.startsAt > CURRENT_TIMESTAMP
+        """)
+    Optional<ContentSession> findConfirmableReservationTargetForUpdate(
+        @Param("sessionId") Long sessionId,
+        @Param("contentStatus") ContentStatus contentStatus,
+        @Param("sessionStatus") ContentSessionStatus sessionStatus
     );
 
     List<ContentSession> findByContentContentIdAndStatusOrderByStartsAtAsc(
