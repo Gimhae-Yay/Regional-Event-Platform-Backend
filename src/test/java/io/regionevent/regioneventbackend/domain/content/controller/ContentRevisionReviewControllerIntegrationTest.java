@@ -2,6 +2,7 @@ package io.regionevent.regioneventbackend.domain.content.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -16,10 +17,13 @@ import jakarta.persistence.EntityManager;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
@@ -64,6 +68,7 @@ import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenSe
 @AutoConfigureMockMvc
 @Import(ContentRevisionReviewControllerIntegrationTest.TestImageStorageConfig.class)
 @Transactional
+@ExtendWith(OutputCaptureExtension.class)
 class ContentRevisionReviewControllerIntegrationTest {
 
     private static final Instant SUBMITTED_AT = Instant.parse("2026-08-01T00:00:00Z");
@@ -341,6 +346,293 @@ class ContentRevisionReviewControllerIntegrationTest {
         assertThat(imageStorageGateway.requestedObjectKeys()).isEmpty();
     }
 
+    @Test
+    void 담당_지역의_공개와_공개_전_수정본_목록을_고정_정렬하고_데이터를_변경하지_않는다()
+        throws Exception {
+
+        Region region = saveRegion("PENDING-REVISION-LIST");
+        Region otherRegion = saveRegion("PENDING-REVISION-LIST-OTHER");
+        AppUser regionAdmin = saveRegionAdmin(
+            "pending-list-admin@example.com",
+            region,
+            AppUserStatus.ACTIVE
+        );
+        ReviewFixture later = saveReviewFixture(
+            region,
+            ContentStatus.PUBLISHED,
+            null,
+            true,
+            "pending-list-later",
+            SUBMITTED_AT.plusSeconds(60)
+        );
+        ReviewFixture firstTie = saveReviewFixture(
+            region,
+            ContentStatus.PENDING,
+            CANDIDATE_PUBLISH_AT,
+            true,
+            "pending-list-first-tie",
+            SUBMITTED_AT
+        );
+        savePrePublicationHistory(firstTie.contentId());
+        ReviewFixture secondTie = saveReviewFixture(
+            region,
+            ContentStatus.PUBLISHED,
+            null,
+            true,
+            "pending-list-second-tie",
+            SUBMITTED_AT
+        );
+        ReviewFixture otherRegionFixture = saveReviewFixture(
+            otherRegion,
+            ContentStatus.PUBLISHED,
+            null,
+            true,
+            "pending-list-other-region",
+            SUBMITTED_AT.minusSeconds(60)
+        );
+        DatabaseSnapshot before = snapshot();
+
+        mockMvc.perform(get("/api/v1/region-admin/content-revisions")
+                .queryParam("status", "EDIT_REQUESTED")
+                .header(HttpHeaders.AUTHORIZATION, bearerToken(regionAdmin)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.statusCode").value(200))
+            .andExpect(jsonPath("$.code").value("SUCCESS"))
+            .andExpect(jsonPath("$.message")
+                .value("담당 지역 심사 대기 수정본 목록 조회에 성공했습니다."))
+            .andExpect(jsonPath("$.data.revisions.length()").value(3))
+            .andExpect(jsonPath("$.data.revisions[0].revisionId")
+                .value(firstTie.revisionId().toString()))
+            .andExpect(jsonPath("$.data.revisions[0].contentId")
+                .value(firstTie.contentId().toString()))
+            .andExpect(jsonPath("$.data.revisions[0].reviewType").value("PRE_PUBLIC_REVISION"))
+            .andExpect(jsonPath("$.data.revisions[0].contentStatus").value("PENDING"))
+            .andExpect(jsonPath("$.data.revisions[0].title")
+                .value("김해 가야문화 체험 일정 변경"))
+            .andExpect(jsonPath("$.data.revisions[0].candidatePublishAt")
+                .value("2026-08-20T09:00:00+09:00"))
+            .andExpect(jsonPath("$.data.revisions[0].submittedAt").value("2026-08-01T00:00:00Z"))
+            .andExpect(jsonPath("$.data.revisions[0].operator.operatorId")
+                .value(firstTie.operatorId().toString()))
+            .andExpect(jsonPath("$.data.revisions[0].operator.name").value("테스트 사용자"))
+            .andExpect(jsonPath("$.data.revisions[0].representativeImageUrl")
+                .value("https://example.invalid/view/1"))
+            .andExpect(jsonPath("$.data.revisions[0].representativeImageUrlExpiresAt")
+                .value("2026-08-01T00:05:01Z"))
+            .andExpect(jsonPath("$.data.revisions[1].revisionId")
+                .value(secondTie.revisionId().toString()))
+            .andExpect(jsonPath("$.data.revisions[1].reviewType").value("PUBLISHED_REVISION"))
+            .andExpect(jsonPath("$.data.revisions[1].contentStatus").value("PUBLISHED"))
+            .andExpect(jsonPath("$.data.revisions[1].candidatePublishAt").doesNotExist())
+            .andExpect(jsonPath("$.data.revisions[2].revisionId")
+                .value(later.revisionId().toString()))
+            .andExpect(jsonPath("$.data.revisions[*].revisionId")
+                .value(not(hasItem(otherRegionFixture.revisionId().toString()))))
+            .andExpect(jsonPath("$.data.revisions[0].imageObjectId").doesNotExist())
+            .andExpect(jsonPath("$.data.revisions[0].editorUserId").doesNotExist())
+            .andExpect(content().string(not(containsString(firstTie.objectKey()))))
+            .andExpect(content().string(not(containsString("pending-list-first-tie-operator@example.com"))))
+            .andExpect(content().string(not(containsString("010-1234-5678"))));
+
+        assertThat(imageStorageGateway.requestedObjectKeys()).containsExactly(
+            firstTie.objectKey(),
+            secondTie.objectKey(),
+            later.objectKey()
+        );
+        assertThat(snapshot()).isEqualTo(before);
+        assertDatabaseUnchanged(before, firstTie);
+        assertDatabaseUnchanged(before, secondTie);
+        assertDatabaseUnchanged(before, later);
+        assertDatabaseUnchanged(before, otherRegionFixture);
+    }
+
+    @Test
+    void 심사_대기_수정본이_없으면_200과_빈_배열을_반환한다() throws Exception {
+        Region region = saveRegion("EMPTY-PENDING-REVISION-LIST");
+        AppUser regionAdmin = saveRegionAdmin(
+            "empty-pending-list-admin@example.com",
+            region,
+            AppUserStatus.ACTIVE
+        );
+
+        mockMvc.perform(get("/api/v1/region-admin/content-revisions")
+                .queryParam("status", "EDIT_REQUESTED")
+                .header(HttpHeaders.AUTHORIZATION, bearerToken(regionAdmin)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.revisions").isArray())
+            .andExpect(jsonPath("$.data.revisions").isEmpty());
+
+        assertThat(imageStorageGateway.requestedObjectKeys()).isEmpty();
+    }
+
+    @Test
+    void 목록_조회는_인증과_활성_지역_관리자_담당_지역을_요구한다() throws Exception {
+        Region region = saveRegion("PENDING-LIST-AUTHORIZATION");
+        AppUser visitor = saveUser("pending-list-visitor@example.com", AppUserStatus.ACTIVE);
+        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(visitor, UserRole.VISITOR, null));
+        AppUser inactiveAdmin = saveRegionAdmin(
+            "pending-list-inactive-admin@example.com",
+            region,
+            AppUserStatus.WITHDRAWING
+        );
+        AppUser userWithoutAssignedRegion = saveUser(
+            "pending-list-no-region@example.com",
+            AppUserStatus.ACTIVE
+        );
+
+        mockMvc.perform(get("/api/v1/region-admin/content-revisions")
+                .queryParam("status", "EDIT_REQUESTED"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+        for (AppUser unauthorizedUser : List.of(visitor, inactiveAdmin, userWithoutAssignedRegion)) {
+            mockMvc.perform(get("/api/v1/region-admin/content-revisions")
+                    .queryParam("status", "EDIT_REQUESTED")
+                    .header(HttpHeaders.AUTHORIZATION, bearerToken(unauthorizedUser)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+        }
+
+        assertThat(imageStorageGateway.requestedObjectKeys()).isEmpty();
+    }
+
+    @Test
+    void status가_없거나_EDIT_REQUESTED가_아니면_INVALID_INPUT으로_거부한다() throws Exception {
+        Region region = saveRegion("PENDING-LIST-INVALID-STATUS");
+        AppUser regionAdmin = saveRegionAdmin(
+            "pending-list-invalid-status-admin@example.com",
+            region,
+            AppUserStatus.ACTIVE
+        );
+
+        mockMvc.perform(get("/api/v1/region-admin/content-revisions")
+                .header(HttpHeaders.AUTHORIZATION, bearerToken(regionAdmin)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        for (String invalidStatus : List.of("PENDING", "edit_requested", "EDIT_REQUESTED ")) {
+            mockMvc.perform(get("/api/v1/region-admin/content-revisions")
+                    .queryParam("status", invalidStatus)
+                    .header(HttpHeaders.AUTHORIZATION, bearerToken(regionAdmin)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        }
+
+        assertThat(imageStorageGateway.requestedObjectKeys()).isEmpty();
+    }
+
+    @Test
+    void 목록의_한_수정본이라도_상태_정합성이_깨지면_일부_결과를_반환하지_않는다()
+        throws Exception {
+
+        Region region = saveRegion("PENDING-LIST-INVALID-STATE");
+        AppUser regionAdmin = saveRegionAdmin(
+            "pending-list-invalid-state-admin@example.com",
+            region,
+            AppUserStatus.ACTIVE
+        );
+        saveReviewFixture(
+            region,
+            ContentStatus.PUBLISHED,
+            null,
+            true,
+            "pending-list-valid-state",
+            SUBMITTED_AT
+        );
+        saveReviewFixture(
+            region,
+            ContentStatus.PUBLISHED,
+            CANDIDATE_PUBLISH_AT,
+            true,
+            "pending-list-invalid-state",
+            SUBMITTED_AT.plusSeconds(1)
+        );
+
+        mockMvc.perform(get("/api/v1/region-admin/content-revisions")
+                .queryParam("status", "EDIT_REQUESTED")
+                .header(HttpHeaders.AUTHORIZATION, bearerToken(regionAdmin)))
+            .andExpect(status().isInternalServerError())
+            .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"))
+            .andExpect(jsonPath("$.data").doesNotExist());
+
+        assertThat(imageStorageGateway.requestedObjectKeys()).isEmpty();
+    }
+
+    @Test
+    void 목록의_한_후보_이미지라도_ACTIVE_직접_연결이_아니면_전체를_거부한다()
+        throws Exception {
+
+        Region region = saveRegion("PENDING-LIST-INVALID-IMAGE");
+        AppUser regionAdmin = saveRegionAdmin(
+            "pending-list-invalid-image-admin@example.com",
+            region,
+            AppUserStatus.ACTIVE
+        );
+        saveReviewFixture(
+            region,
+            ContentStatus.PUBLISHED,
+            null,
+            true,
+            "pending-list-valid-image",
+            SUBMITTED_AT
+        );
+        saveReviewFixture(
+            region,
+            ContentStatus.PUBLISHED,
+            null,
+            false,
+            "pending-list-invalid-image",
+            SUBMITTED_AT.plusSeconds(1)
+        );
+
+        mockMvc.perform(get("/api/v1/region-admin/content-revisions")
+                .queryParam("status", "EDIT_REQUESTED")
+                .header(HttpHeaders.AUTHORIZATION, bearerToken(regionAdmin)))
+            .andExpect(status().isInternalServerError())
+            .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
+
+        assertThat(imageStorageGateway.requestedObjectKeys()).isEmpty();
+    }
+
+    @Test
+    void 목록_조회_로그에는_requestId_담당_지역_결과_건수와_결과_코드만_남긴다(
+        CapturedOutput output
+    ) throws Exception {
+        Region region = saveRegion("PENDING-LIST-LOG");
+        AppUser regionAdmin = saveRegionAdmin(
+            "pending-list-log-admin@example.com",
+            region,
+            AppUserStatus.ACTIVE
+        );
+        ReviewFixture fixture = saveReviewFixture(
+            region,
+            ContentStatus.PUBLISHED,
+            null,
+            true,
+            "pending-list-log",
+            SUBMITTED_AT
+        );
+
+        mockMvc.perform(get("/api/v1/region-admin/content-revisions")
+                .queryParam("status", "EDIT_REQUESTED")
+                .header(HttpHeaders.AUTHORIZATION, bearerToken(regionAdmin)))
+            .andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/region-admin/content-revisions")
+                .queryParam("status", "PENDING")
+                .header(HttpHeaders.AUTHORIZATION, bearerToken(regionAdmin)))
+            .andExpect(status().isBadRequest());
+
+        assertThat(output.getOut())
+            .contains("Pending content revisions queried. requestId=")
+            .contains(
+                "regionId=" + region.getRegionId() + ", resultCount=1, resultCode=SUCCESS",
+                "regionId=" + region.getRegionId() + ", resultCount=0, resultCode=INVALID_INPUT"
+            )
+            .doesNotContain(
+                fixture.objectKey(),
+                "pending-list-log-operator@example.com",
+                "010-1234-5678"
+            );
+    }
+
     private ReviewFixture saveReviewFixture(
         Region region,
         ContentStatus contentStatus,
@@ -352,7 +644,28 @@ class ContentRevisionReviewControllerIntegrationTest {
             contentStatus,
             candidatePublishAt,
             activeImage,
-            ContentRevisionStatus.EDIT_REQUESTED
+            ContentRevisionStatus.EDIT_REQUESTED,
+            contentStatus.name().toLowerCase(),
+            SUBMITTED_AT
+        );
+    }
+
+    private ReviewFixture saveReviewFixture(
+        Region region,
+        ContentStatus contentStatus,
+        Instant candidatePublishAt,
+        boolean activeImage,
+        String suffix,
+        Instant submittedAt
+    ) {
+        return saveReviewFixture(
+            region,
+            contentStatus,
+            candidatePublishAt,
+            activeImage,
+            ContentRevisionStatus.EDIT_REQUESTED,
+            suffix,
+            submittedAt
         );
     }
 
@@ -363,12 +676,32 @@ class ContentRevisionReviewControllerIntegrationTest {
         boolean activeImage,
         ContentRevisionStatus revisionStatus
     ) {
+        return saveReviewFixture(
+            region,
+            contentStatus,
+            candidatePublishAt,
+            activeImage,
+            revisionStatus,
+            contentStatus.name().toLowerCase(),
+            SUBMITTED_AT
+        );
+    }
+
+    private ReviewFixture saveReviewFixture(
+        Region region,
+        ContentStatus contentStatus,
+        Instant candidatePublishAt,
+        boolean activeImage,
+        ContentRevisionStatus revisionStatus,
+        String suffix,
+        Instant submittedAt
+    ) {
         AppUser operator = saveUser(
-            contentStatus.name().toLowerCase() + "-operator@example.com",
+            suffix + "-operator@example.com",
             AppUserStatus.ACTIVE
         );
         AppUser editor = saveUser(
-            contentStatus.name().toLowerCase() + "-editor@example.com",
+            suffix + "-editor@example.com",
             AppUserStatus.ACTIVE
         );
         Content content = contentRepository.saveAndFlush(new Content(
@@ -387,7 +720,7 @@ class ContentRevisionReviewControllerIntegrationTest {
             "원본 취소 안내",
             Instant.parse("2026-08-15T00:00:00Z")
         ));
-        String objectKey = IMAGE_OBJECT_KEY + "-" + (imageObjectRepository.count() + 1);
+        String objectKey = IMAGE_OBJECT_KEY + "-" + suffix;
         ImageObject imageObject = imageObjectRepository.saveAndFlush(ImageObject.createUploadCandidate(
             objectKey,
             editor,
@@ -405,7 +738,7 @@ class ContentRevisionReviewControllerIntegrationTest {
 
         AppUser reviewer = revisionStatus == ContentRevisionStatus.EDIT_REQUESTED
             ? null
-            : saveUser("reviewer-" + contentStatus.name().toLowerCase() + "@example.com", AppUserStatus.ACTIVE);
+            : saveUser("reviewer-" + suffix + "@example.com", AppUserStatus.ACTIVE);
         ContentRevision revision = new ContentRevision(
             content,
             1,
@@ -422,8 +755,8 @@ class ContentRevisionReviewControllerIntegrationTest {
             "필기도구",
             "회차 시작 전까지 예약 전체 취소가 가능합니다.",
             candidatePublishAt,
-            SUBMITTED_AT,
-            revisionStatus == ContentRevisionStatus.EDIT_REQUESTED ? null : SUBMITTED_AT.plusSeconds(60),
+            submittedAt,
+            revisionStatus == ContentRevisionStatus.EDIT_REQUESTED ? null : submittedAt.plusSeconds(60),
             reviewer,
             revisionStatus == ContentRevisionStatus.EDIT_REJECTED ? "반려 사유" : null,
             null,
@@ -454,6 +787,7 @@ class ContentRevisionReviewControllerIntegrationTest {
             revision.getContentRevisionId(),
             session.getSessionId(),
             imageObject.getImageObjectId(),
+            operator.getUserId(),
             objectKey,
             contentStatus,
             revisionStatus
@@ -560,6 +894,7 @@ class ContentRevisionReviewControllerIntegrationTest {
         Long revisionId,
         Long sessionId,
         Long imageObjectId,
+        Long operatorId,
         String objectKey,
         ContentStatus contentStatus,
         ContentRevisionStatus revisionStatus
