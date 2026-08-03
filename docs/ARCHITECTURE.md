@@ -12,9 +12,9 @@ Service 간 직접 의존, Repository 의존성 범위, UseCase 명명과 컴포
 [ADR-0042](adr/0042-prohibit-direct-service-dependencies-and-use-usecase-orchestrators.md)를 따른다.
 외부 기술 경계의 출력 Port 필요성과 배치는 각각
 [ADR-0008](adr/0008-evolve-clean-architecture-by-use-case.md#결정)과
-[ADR-0056](adr/0056-locate-output-ports-in-owning-domain.md)을 따른다.
+[ADR-0061](adr/0061-locate-output-ports-in-owning-domain.md)을 따른다.
 아직 `dev`에 없는 제공 Service와의 병렬 구현을 위한 입력 Port는
-[ADR-0057](adr/0057-use-domain-input-ports-for-parallel-implementation.md)을 따른다.
+[ADR-0062](adr/0062-use-domain-input-ports-for-parallel-implementation.md)을 따른다.
 
 ## 2. 기본 구조
 

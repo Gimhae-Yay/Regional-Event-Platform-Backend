@@ -1,10 +1,10 @@
-# ADR-0057: 병렬 구현 경계에 선택적으로 도메인 입력 Port를 사용한다
+# ADR-0062: 병렬 구현 경계에 선택적으로 도메인 입력 Port를 사용한다
 
 - 상태: 채택됨
 - 기록 유형: 신규
 - 기록일: 2026-08-02
 - 결정일: 2026-08-02
-- 관련 요구사항: [아키텍처의 복합 유스케이스 규칙](../ARCHITECTURE.md#42-복합-유스케이스), [출력 Port 배치](0056-locate-output-ports-in-owning-domain.md#결정), [Task 구현의 선행 의존성과 병렬 구현](../../.agents/skills/task-implementation/SKILL.md#2-선행-의존성과-병렬-구현)
+- 관련 요구사항: [아키텍처의 복합 유스케이스 규칙](../ARCHITECTURE.md#42-복합-유스케이스), [출력 Port 배치](0061-locate-output-ports-in-owning-domain.md#결정), [Task 구현의 선행 의존성과 병렬 구현](../../.agents/skills/task-implementation/SKILL.md#2-선행-의존성과-병렬-구현)
 - 관련 단계: 단계 1. MVP 구현·검증
 - 관련 이슈: 없음
 - 대체 대상: 없음
@@ -50,7 +50,7 @@ ADR·정책으로 확정된 메서드, 오류·권한·트랜잭션 의미를 �
 추가하지 않는다. `port.in`은 외부 기술 구현체를 위한 `port.out`과 다르며, 기존 Service 일괄 전환·테스트 편의·
 미확정 메서드 가정·전달 전용 계층을 위한 도구로 사용하지 않는다.
 
-이 결정은 ADR-0008의 점진적 경계 도입, ADR-0042의 Service 간 직접 의존 금지, ADR-0056의 출력 Port 배치를
+이 결정은 ADR-0008의 점진적 경계 도입, ADR-0042의 Service 간 직접 의존 금지, ADR-0061의 출력 Port 배치를
 대체하지 않는다. 이 결정은 그 규칙을 유지하면서 병렬 Task의 미구현 제공 Service 경계에만 입력 Port를 추가한다.
 
 ## 결과와 트레이드오프
