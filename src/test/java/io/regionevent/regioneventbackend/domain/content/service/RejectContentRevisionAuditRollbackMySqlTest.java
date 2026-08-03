@@ -3,7 +3,7 @@ package io.regionevent.regioneventbackend.domain.content.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.doAnswer;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -13,7 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,8 +24,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventActorLinkRepository;
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
-import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
-import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
+import io.regionevent.regioneventbackend.domain.audit.service.AuditEventActorLinkService;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentRevision;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentRevisionStatus;
@@ -63,8 +62,8 @@ class RejectContentRevisionAuditRollbackMySqlTest {
     private final AuditEventActorLinkRepository auditEventActorLinkRepository;
     private final TransactionTemplate transactionTemplate;
 
-    @MockitoBean
-    private RecordAuditEventUseCase recordAuditEventUseCase;
+    @MockitoSpyBean
+    private AuditEventActorLinkService auditEventActorLinkService;
 
     @Autowired
     RejectContentRevisionAuditRollbackMySqlTest(
@@ -98,20 +97,22 @@ class RejectContentRevisionAuditRollbackMySqlTest {
     }
 
     @Test
-    void 감사_기록이_실패하면_수정본_반려와_원본_변경이_함께_롤백된다() {
+    void 감사_이벤트_저장_뒤_처리자_연결_실패하면_수정본_반려와_원본_변경이_함께_롤백된다() {
         Fixture fixture = createFixture();
         long auditEventCount = auditEventRepository.count();
         long actorLinkCount = auditEventActorLinkRepository.count();
-        doThrow(new IllegalStateException("audit storage failure"))
-            .when(recordAuditEventUseCase)
-            .record(any(AuditEventCommand.class));
+        doAnswer(invocation -> {
+            invocation.callRealMethod();
+            throw new IllegalStateException("audit actor link storage failure");
+        }).when(auditEventActorLinkService).record(any(), any());
 
         assertThatThrownBy(() -> rejectContentRevisionUseCase.reject(
             fixture.adminId(),
             fixture.revisionId(),
             "감사 실패 반려 사유",
             UUID.randomUUID()
-        )).isInstanceOf(IllegalStateException.class);
+        )).isInstanceOf(IllegalStateException.class)
+            .hasMessage("audit actor link storage failure");
 
         ContentRevision revision = contentRevisionRepository.findById(fixture.revisionId()).orElseThrow();
         Content content = contentRepository.findById(fixture.contentId()).orElseThrow();
