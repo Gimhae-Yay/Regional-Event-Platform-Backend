@@ -30,8 +30,6 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
@@ -52,15 +50,14 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
+import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
+import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 
 @SpringBootTest
 @Import(CreateReservationHoldUseCaseMySqlTest.FailingCapacityHoldServiceConfig.class)
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-class CreateReservationHoldUseCaseMySqlTest {
-
-    @Container
-    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.42");
+class CreateReservationHoldUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
 
     private final CreateReservationHoldUseCase createReservationHoldUseCase;
     private final FailingCapacityHoldService failingCapacityHoldService;
@@ -97,10 +94,10 @@ class CreateReservationHoldUseCaseMySqlTest {
 
     @DynamicPropertySource
     static void configureDataSource(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", () -> withUseAffectedRows(MYSQL.getJdbcUrl()));
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
+        SharedMySqlTestContainer.registerDataSourceProperties(
+            registry,
+            CreateReservationHoldUseCaseMySqlTest::withUseAffectedRows
+        );
     }
 
     @AfterEach

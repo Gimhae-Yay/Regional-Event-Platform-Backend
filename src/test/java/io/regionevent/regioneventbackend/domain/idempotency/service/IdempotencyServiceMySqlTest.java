@@ -30,8 +30,6 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
@@ -58,6 +56,8 @@ import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepositor
 import io.regionevent.regioneventbackend.domain.visit.entity.CheckinMethod;
 import io.regionevent.regioneventbackend.domain.visit.entity.Visit;
 import io.regionevent.regioneventbackend.domain.visit.repository.VisitRepository;
+import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
+import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -68,13 +68,10 @@ import io.regionevent.regioneventbackend.domain.visit.repository.VisitRepository
 })
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-class IdempotencyServiceMySqlTest {
+class IdempotencyServiceMySqlTest extends NonTransactionalMySqlTestSupport {
 
     private static final Instant NOW = Instant.parse("2037-08-02T00:00:00Z");
     private static final Instant EXPIRED_AT = Instant.parse("2000-01-01T00:00:00Z");
-
-    @Container
-    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.42");
 
     private final IdempotencyService idempotencyService;
     private final IdempotencyRecordRepository idempotencyRecordRepository;
@@ -117,10 +114,10 @@ class IdempotencyServiceMySqlTest {
 
     @DynamicPropertySource
     static void configureDataSource(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", () -> withUseAffectedRows(MYSQL.getJdbcUrl()));
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
+        SharedMySqlTestContainer.registerDataSourceProperties(
+            registry,
+            IdempotencyServiceMySqlTest::withUseAffectedRows
+        );
         registry.add("idempotency.retention", () -> "PT24H");
         registry.add("idempotency.cleanup-fixed-delay", () -> "PT1H");
         registry.add("idempotency.cleanup-initial-delay", () -> "PT1H");
