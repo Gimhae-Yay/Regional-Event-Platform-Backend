@@ -189,6 +189,75 @@ class ContentRevisionServiceTest {
     }
 
     @Test
+    void withdraw_whenPublishedRevisionIsValid_withdrawsRevisionWithoutChangingOriginal() {
+        Fixture fixture = createFixture(ContentStatus.PUBLISHED, null);
+        int originalVersion = fixture.content().getVersionNo();
+
+        ContentRevision withdrawnRevision = contentRevisionService.withdraw(
+            contentRevisionService.findReviewTargetForUpdate(fixture.revision().getContentRevisionId()),
+            fixture.content().getOperator(),
+            REVIEWED_AT,
+            "  operator withdrawal reason  "
+        );
+
+        assertThat(withdrawnRevision.getStatus()).isEqualTo(ContentRevisionStatus.EDIT_WITHDRAWN);
+        assertThat(withdrawnRevision.getWithdrawalReason()).isEqualTo("operator withdrawal reason");
+        assertThat(withdrawnRevision.getWithdrawnBy()).isEqualTo(fixture.content().getOperator());
+        assertThat(withdrawnRevision.getWithdrawnAt()).isEqualTo(REVIEWED_AT);
+        assertThat(fixture.content().getStatus()).isEqualTo(ContentStatus.PUBLISHED);
+        assertThat(fixture.content().getPublishAt()).isEqualTo(ORIGINAL_PUBLISH_AT);
+        assertThat(fixture.content().getVersionNo()).isEqualTo(originalVersion);
+    }
+
+    @Test
+    void withdraw_whenPrePublicationRevisionIsValid_keepsOriginalPendingAndWithdrawsRevision() {
+        Fixture fixture = createFixture(ContentStatus.PENDING, CANDIDATE_PUBLISH_AT);
+        int originalVersion = fixture.content().getVersionNo();
+
+        ContentRevision withdrawnRevision = contentRevisionService.withdraw(
+            contentRevisionService.findReviewTargetForUpdate(fixture.revision().getContentRevisionId()),
+            fixture.content().getOperator(),
+            REVIEWED_AT,
+            "pre publication withdrawal reason"
+        );
+
+        assertThat(withdrawnRevision.getStatus()).isEqualTo(ContentRevisionStatus.EDIT_WITHDRAWN);
+        assertThat(fixture.content().getStatus()).isEqualTo(ContentStatus.PENDING);
+        assertThat(fixture.content().getPublishAt()).isEqualTo(ORIGINAL_PUBLISH_AT);
+        assertThat(fixture.content().getVersionNo()).isEqualTo(originalVersion);
+    }
+
+    @Test
+    void withdraw_whenOriginalStateAndCandidatePublishAtDoNotMatch_throwsContentStateConflict() {
+        Fixture publishedWithCandidate = createFixture(ContentStatus.PUBLISHED, CANDIDATE_PUBLISH_AT);
+
+        assertContentStateConflict(() -> contentRevisionService.withdraw(
+            contentRevisionService.findReviewTargetForUpdate(
+                publishedWithCandidate.revision().getContentRevisionId()
+            ),
+            publishedWithCandidate.content().getOperator(),
+            REVIEWED_AT,
+            "withdrawal reason"
+        ));
+        assertThat(publishedWithCandidate.revision().getStatus())
+            .isEqualTo(ContentRevisionStatus.EDIT_REQUESTED);
+    }
+
+    @Test
+    void withdraw_whenRevisionIsAlreadyTerminal_throwsContentStateConflict() {
+        Fixture fixture = createFixture(ContentStatus.PUBLISHED, null);
+        fixture.revision().reject(fixture.reviewer(), REVIEWED_AT, "이미 처리된 사유");
+        contentRevisionRepository.flush();
+
+        assertContentStateConflict(() -> contentRevisionService.withdraw(
+            contentRevisionService.findReviewTargetForUpdate(fixture.revision().getContentRevisionId()),
+            fixture.content().getOperator(),
+            REVIEWED_AT.plusSeconds(60),
+            "withdrawal reason"
+        ));
+    }
+
+    @Test
     void reject_whenOriginalStateAndCandidatePublishAtDoNotMatch_throwsContentStateConflict() {
         Fixture publishedWithCandidate = createFixture(ContentStatus.PUBLISHED, CANDIDATE_PUBLISH_AT);
 

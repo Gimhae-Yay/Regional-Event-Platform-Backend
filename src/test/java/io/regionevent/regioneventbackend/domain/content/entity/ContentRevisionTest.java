@@ -27,6 +27,11 @@ class ContentRevisionTest {
             () -> new ContentRevisionTest()
                 .reject_whenRevisionIsAlreadyTerminal_throwsContentStateConflictWithoutOverwritingState(),
             () -> new ContentRevisionTest().reject_whenReviewDetailsAreMissing_rejectsTransitionWithoutChangingStatus(),
+            () -> new ContentRevisionTest().withdraw_whenEditIsRequested_recordsNormalizedWithdrawalDetails(),
+            () -> new ContentRevisionTest()
+                .withdraw_whenRevisionIsAlreadyTerminal_throwsContentStateConflictWithoutOverwritingState(),
+            () -> new ContentRevisionTest()
+                .withdraw_whenWithdrawalDetailsAreMissing_rejectsTransitionWithoutChangingStatus(),
             () -> new ContentRevisionTest().approve_whenEditIsRequested_recordsReviewerWithoutReason(),
             () -> new ContentRevisionTest().approve_whenRevisionIsAlreadyTerminal_throwsContentStateConflict(),
             () -> new ContentRevisionTest().constructor_whenApprovedRevisionHasReason_rejectsInvalidState()
@@ -53,6 +58,8 @@ class ContentRevisionTest {
         ).map(terminalStatus -> () -> {
             AppUser firstReviewer = newUser("first-reviewer@example.com");
             ContentRevision revision = newRevision(terminalStatus, firstReviewer);
+            AppUser existingWithdrawer = revision.getWithdrawnBy();
+            String existingWithdrawalReason = revision.getWithdrawalReason();
 
             assertThatThrownBy(() -> revision.reject(
                 newUser("second-reviewer@example.com"),
@@ -63,8 +70,8 @@ class ContentRevisionTest {
             );
             assertThat(revision.getStatus()).isEqualTo(terminalStatus);
             if (terminalStatus == ContentRevisionStatus.EDIT_WITHDRAWN) {
-                assertThat(revision.getWithdrawnBy()).isSameAs(firstReviewer);
-                assertThat(revision.getWithdrawalReason()).isEqualTo("기존 철회 사유");
+                assertThat(revision.getWithdrawnBy()).isSameAs(existingWithdrawer);
+                assertThat(revision.getWithdrawalReason()).isEqualTo(existingWithdrawalReason);
             } else {
                 assertThat(revision.getReviewedBy()).isSameAs(firstReviewer);
                 if (terminalStatus == ContentRevisionStatus.EDIT_APPROVED) {
@@ -87,6 +94,59 @@ class ContentRevisionTest {
         assertThat(revision.getReviewedBy()).isNull();
         assertThat(revision.getReviewedAt()).isNull();
         assertThat(revision.getReviewReason()).isNull();
+    }
+
+    void withdraw_whenEditIsRequested_recordsNormalizedWithdrawalDetails() {
+        AppUser withdrawer = newUser("withdrawer@example.com");
+        ContentRevision revision = newRevision();
+
+        revision.withdraw(withdrawer, REVIEWED_AT, "  owner requested cancellation  ");
+
+        assertThat(revision.getStatus()).isEqualTo(ContentRevisionStatus.EDIT_WITHDRAWN);
+        assertThat(revision.getWithdrawnBy()).isSameAs(withdrawer);
+        assertThat(revision.getWithdrawnAt()).isEqualTo(REVIEWED_AT);
+        assertThat(revision.getWithdrawalReason()).isEqualTo("owner requested cancellation");
+    }
+
+    void withdraw_whenRevisionIsAlreadyTerminal_throwsContentStateConflictWithoutOverwritingState() {
+        Stream<Executable> contracts = Stream.of(
+            ContentRevisionStatus.EDIT_APPROVED,
+            ContentRevisionStatus.EDIT_REJECTED,
+            ContentRevisionStatus.EDIT_WITHDRAWN
+        ).map(terminalStatus -> () -> {
+            AppUser firstReviewer = newUser("first-reviewer@example.com");
+            ContentRevision revision = newRevision(terminalStatus, firstReviewer);
+            AppUser existingWithdrawer = revision.getWithdrawnBy();
+            String existingWithdrawalReason = revision.getWithdrawalReason();
+
+            assertThatThrownBy(() -> revision.withdraw(
+                newUser("second-reviewer@example.com"),
+                REVIEWED_AT.plusSeconds(60),
+                "second withdrawal reason"
+            )).isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.CONTENT_STATE_CONFLICT)
+            );
+            assertThat(revision.getStatus()).isEqualTo(terminalStatus);
+            if (terminalStatus == ContentRevisionStatus.EDIT_WITHDRAWN) {
+                assertThat(revision.getWithdrawnBy()).isSameAs(existingWithdrawer);
+                assertThat(revision.getWithdrawalReason()).isEqualTo(existingWithdrawalReason);
+            } else {
+                assertThat(revision.getReviewedBy()).isSameAs(firstReviewer);
+            }
+        });
+
+        assertAll(contracts);
+    }
+
+    void withdraw_whenWithdrawalDetailsAreMissing_rejectsTransitionWithoutChangingStatus() {
+        ContentRevision revision = newRevision();
+
+        assertThatThrownBy(() -> revision.withdraw(newUser("withdrawer@example.com"), REVIEWED_AT, "  "))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThat(revision.getStatus()).isEqualTo(ContentRevisionStatus.EDIT_REQUESTED);
+        assertThat(revision.getWithdrawnBy()).isNull();
+        assertThat(revision.getWithdrawnAt()).isNull();
+        assertThat(revision.getWithdrawalReason()).isNull();
     }
 
     void approve_whenEditIsRequested_recordsReviewerWithoutReason() {

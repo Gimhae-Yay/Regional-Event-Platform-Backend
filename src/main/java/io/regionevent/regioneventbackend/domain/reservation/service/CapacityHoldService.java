@@ -115,6 +115,11 @@ public class CapacityHoldService {
             .forEach(holdId -> invalidateAndReleaseCapacityIfActive(holdId, invalidationReason));
     }
 
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public Optional<Long> findContentSessionId(Long holdId) {
+        return capacityHoldRepository.findContentSessionIdByHoldId(holdId);
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean expireAndReleaseCapacityIfActive(Long holdId) {
         if (capacityHoldRepository.findExpiredActiveHoldIdForUpdate(holdId).isEmpty()) {

@@ -58,21 +58,21 @@ public class OperatorApplicationService {
         ).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
-    public OperatorApplicationStatus findApprovalStatus(Long operatorApplicationId, Long regionId) {
+    public OperatorApplicationStatus findReviewStatus(Long operatorApplicationId, Long regionId) {
         return operatorApplicationRepository.findStatusByOperatorApplicationIdAndRequestedRegionId(
             operatorApplicationId,
             regionId
         ).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
-    public Long findApprovalApplicantUserId(Long operatorApplicationId, Long regionId) {
+    public Long findReviewApplicantUserId(Long operatorApplicationId, Long regionId) {
         return operatorApplicationRepository.findApplicantUserIdByOperatorApplicationIdAndRequestedRegionId(
             operatorApplicationId,
             regionId
         ).orElseThrow(() -> new BusinessException(ErrorCode.OPERATOR_APPLICATION_STATE_CONFLICT));
     }
 
-    public OperatorApplication findApprovalTargetForUpdate(Long operatorApplicationId, Long regionId) {
+    public OperatorApplication findReviewTargetForUpdate(Long operatorApplicationId, Long regionId) {
         return operatorApplicationRepository.findByOperatorApplicationIdAndRequestedRegionIdForUpdate(
             operatorApplicationId,
             regionId
