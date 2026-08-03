@@ -106,7 +106,11 @@ class UpdateContentRevisionControllerIntegrationTest {
         userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
         Content content = saveContent(region, operator, ContentStatus.PUBLISHED);
         ContentSession contentSession = saveSession(content, region);
-        ImageObject candidateImageObject = saveImageObject("content/revision-existing-image.webp");
+        ImageObject candidateImageObject = saveLinkedCandidateImageObject(
+            operator,
+            region,
+            "content/revision-existing-image.webp"
+        );
         ContentRevision contentRevision = saveRejectedRevision(content, operator, reviewer, null, candidateImageObject);
         int originalContentVersion = content.getVersionNo();
         int originalSessionCapacity = contentSession.getCapacity();
@@ -238,7 +242,11 @@ class UpdateContentRevisionControllerIntegrationTest {
         AppUser reviewer = saveUser("update-image-valid-reviewer@example.com");
         userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
         Content content = saveContent(region, operator, ContentStatus.PUBLISHED);
-        ImageObject originalCandidateImageObject = saveImageObject("content/revision-original-candidate.webp");
+        ImageObject originalCandidateImageObject = saveLinkedCandidateImageObject(
+            operator,
+            region,
+            "content/revision-original-candidate.webp"
+        );
         ImageObject replacementCandidateImageObject = saveUploadCandidateImageObject(
             operator,
             region,
@@ -276,6 +284,13 @@ class UpdateContentRevisionControllerIntegrationTest {
             .satisfies(imageObject -> {
                 assertThat(imageObject.getCreatedByUser()).isNull();
                 assertThat(imageObject.getLinkedAt()).isEqualTo(updatedRevision.getCandidateImageAssignedAt());
+                assertThat(imageObject.getLifecycleStatus()).isEqualTo(ImageLifecycleStatus.ACTIVE);
+            });
+        assertThat(imageObjectRepository.findById(originalCandidateImageObject.getImageObjectId()))
+            .get()
+            .satisfies(imageObject -> {
+                assertThat(imageObject.getLinkedAt()).isNotNull();
+                assertThat(imageObject.getLifecycleStatus()).isEqualTo(ImageLifecycleStatus.DELETE_PENDING);
             });
     }
 
@@ -475,18 +490,6 @@ class UpdateContentRevisionControllerIntegrationTest {
             Instant.parse("2026-08-16T00:30:00Z"),
             Instant.parse("2026-08-16T01:30:00Z"),
             20
-        ));
-    }
-
-    private ImageObject saveImageObject(String objectKey) {
-        return imageObjectRepository.saveAndFlush(new ImageObject(
-            objectKey,
-            "image/webp",
-            1L,
-            "sha256:" + objectKey,
-            ImageLifecycleStatus.ACTIVE,
-            0,
-            null
         ));
     }
 
