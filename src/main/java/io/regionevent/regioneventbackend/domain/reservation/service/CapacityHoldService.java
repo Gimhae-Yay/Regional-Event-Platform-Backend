@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.domain.reservation.service;
 
 import java.time.Instant;
+import java.util.List;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -70,5 +71,46 @@ public class CapacityHoldService {
         }
         return capacityHoldRepository.findByHoldId(holdId)
             .orElseThrow(() -> new IllegalStateException("consumed capacity hold does not exist"));
+    }
+
+    @Transactional(readOnly = true)
+    public List<Long> findExpiredActiveHoldIds() {
+        return capacityHoldRepository.findExpiredActiveHoldIds();
+    }
+
+    @Transactional(readOnly = true)
+    public List<Long> findActiveHoldIdsForStartedSessions() {
+        return capacityHoldRepository.findActiveHoldIdsForStartedSessions();
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean expireAndReleaseCapacityIfActive(Long holdId) {
+        if (capacityHoldRepository.findExpiredActiveHoldIdForUpdate(holdId).isEmpty()) {
+            return false;
+        }
+        capacityHoldRepository.expireAndReleaseCapacityIfActive(holdId);
+        return true;
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean invalidateAndReleaseCapacityIfActive(
+        Long holdId,
+        String invalidationReason
+    ) {
+        validateInvalidationReason(invalidationReason);
+        if (capacityHoldRepository.findActiveByHoldIdForUpdate(holdId).isEmpty()) {
+            return false;
+        }
+        capacityHoldRepository.invalidateAndReleaseCapacityIfActive(
+            holdId,
+            invalidationReason
+        );
+        return true;
+    }
+
+    private void validateInvalidationReason(String invalidationReason) {
+        if (invalidationReason == null || invalidationReason.isBlank()) {
+            throw new IllegalArgumentException("invalidationReason must not be null or blank");
+        }
     }
 }
