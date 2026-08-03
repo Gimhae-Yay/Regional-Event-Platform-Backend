@@ -1,5 +1,7 @@
 package io.regionevent.regioneventbackend.global.security.qr;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -18,6 +20,21 @@ class QrTokenServiceTest {
     private static final String QR_REFERENCE = "550e8400-e29b-41d4-a716-446655440000";
 
     @Test
+    void 전체_단위_계약을_보존한다() {
+        assertAll(
+            () -> new QrTokenServiceTest().issueAndVerify_whenTokenIsValid_returnsSignedClaims(),
+            () -> new QrTokenServiceTest().issue_whenCheckinClosesBeforeTokenTtl_usesCheckinCloseAt(),
+            () -> new QrTokenServiceTest().verify_whenTokenVersionIsUnsupported_returnsVersionFailure(),
+            () -> new QrTokenServiceTest().verify_whenTokenIsMalformed_returnsMalformedFailure(),
+            () -> new QrTokenServiceTest().verify_whenKeyIsUnknown_returnsKeyFailure(),
+            () -> new QrTokenServiceTest().verify_whenSignatureIsModified_returnsSignatureFailure(),
+            () -> new QrTokenServiceTest().verify_whenTokenIsExpired_returnsExpiredFailure(),
+            () -> new QrTokenServiceTest().verify_whenTokenUsesPreviousKeyBeforeVerificationEnd_returnsSignedClaims(),
+            () -> new QrTokenServiceTest().verify_whenPreviousKeyVerificationHasEnded_returnsKeyFailure(),
+            () -> new QrTokenServiceTest().createService_whenTtlExceedsFiveMinutes_throwsIllegalStateException()
+        );
+    }
+
     void issueAndVerify_whenTokenIsValid_returnsSignedClaims() {
         QrTokenService qrTokenService = createService("current-key", key(1), Duration.ofMinutes(5), List.of());
 
@@ -38,7 +55,6 @@ class QrTokenServiceTest {
             )));
     }
 
-    @Test
     void issue_whenCheckinClosesBeforeTokenTtl_usesCheckinCloseAt() {
         QrTokenService qrTokenService = createService("current-key", key(1), Duration.ofMinutes(5), List.of());
         Instant checkinClosesAt = ISSUED_AT.plusMillis(1_234);
@@ -53,7 +69,6 @@ class QrTokenServiceTest {
         assertThat(issuedToken.expiresAt()).isEqualTo(checkinClosesAt);
     }
 
-    @Test
     void verify_whenTokenVersionIsUnsupported_returnsVersionFailure() {
         QrTokenService qrTokenService = createService("current-key", key(1), Duration.ofMinutes(5), List.of());
         String token = issue(qrTokenService);
@@ -62,7 +77,6 @@ class QrTokenServiceTest {
             .isEqualTo(new QrTokenService.Rejected(QrTokenService.VerificationFailure.VERSION_UNSUPPORTED));
     }
 
-    @Test
     void verify_whenTokenIsMalformed_returnsMalformedFailure() {
         QrTokenService qrTokenService = createService("current-key", key(1), Duration.ofMinutes(5), List.of());
 
@@ -70,7 +84,6 @@ class QrTokenServiceTest {
             .isEqualTo(new QrTokenService.Rejected(QrTokenService.VerificationFailure.MALFORMED));
     }
 
-    @Test
     void verify_whenKeyIsUnknown_returnsKeyFailure() {
         QrTokenService qrTokenService = createService("current-key", key(1), Duration.ofMinutes(5), List.of());
         String token = issue(qrTokenService);
@@ -79,7 +92,6 @@ class QrTokenServiceTest {
             .isEqualTo(new QrTokenService.Rejected(QrTokenService.VerificationFailure.KEY_UNKNOWN));
     }
 
-    @Test
     void verify_whenSignatureIsModified_returnsSignatureFailure() {
         QrTokenService qrTokenService = createService("current-key", key(1), Duration.ofMinutes(5), List.of());
         String token = issue(qrTokenService);
@@ -90,7 +102,6 @@ class QrTokenServiceTest {
             .isEqualTo(new QrTokenService.Rejected(QrTokenService.VerificationFailure.SIGNATURE_INVALID));
     }
 
-    @Test
     void verify_whenTokenIsExpired_returnsExpiredFailure() {
         QrTokenService qrTokenService = createService("current-key", key(1), Duration.ofMinutes(5), List.of());
         QrTokenService.IssuedQrToken issuedToken = qrTokenService.issue(
@@ -104,7 +115,6 @@ class QrTokenServiceTest {
             .isEqualTo(new QrTokenService.Rejected(QrTokenService.VerificationFailure.EXPIRED));
     }
 
-    @Test
     void verify_whenTokenUsesPreviousKeyBeforeVerificationEnd_returnsSignedClaims() {
         QrTokenService oldKeyService = createService("old-key", key(1), Duration.ofMinutes(5), List.of());
         QrTokenProperties.VerificationKey previousKey = verificationKey(
@@ -124,7 +134,6 @@ class QrTokenServiceTest {
             .isInstanceOf(QrTokenService.Verified.class);
     }
 
-    @Test
     void verify_whenPreviousKeyVerificationHasEnded_returnsKeyFailure() {
         QrTokenService oldKeyService = createService("old-key", key(1), Duration.ofMinutes(5), List.of());
         Instant verificationEndsAt = ISSUED_AT.plus(Duration.ofMinutes(5));
@@ -139,7 +148,6 @@ class QrTokenServiceTest {
             .isEqualTo(new QrTokenService.Rejected(QrTokenService.VerificationFailure.KEY_UNKNOWN));
     }
 
-    @Test
     void createService_whenTtlExceedsFiveMinutes_throwsIllegalStateException() {
         assertThatThrownBy(() -> createService("current-key", key(1), Duration.ofMinutes(5).plusMillis(1), List.of()))
             .isInstanceOf(IllegalStateException.class);
