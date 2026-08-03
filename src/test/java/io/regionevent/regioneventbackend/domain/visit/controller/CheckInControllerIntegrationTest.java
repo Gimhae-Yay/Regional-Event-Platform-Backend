@@ -118,6 +118,34 @@ public class CheckInControllerIntegrationTest {
     }
 
     @Test
+    void checkInByQr_whenUnversionedPathIsUsed_returnsSuccessResponse() throws Exception {
+        Fixture fixture = createFixture();
+        QrTokenService.IssuedQrToken issuedQrToken = qrTokenService.issue(
+            fixture.reservation().getQrReference(),
+            fixture.session().getSessionId(),
+            Instant.now(),
+            fixture.session().getCheckinCloseAt()
+        );
+
+        mockMvc.perform(post("/operator/check-ins")
+                .header("Authorization", bearerToken(fixture.operator()))
+                .header("Idempotency-Key", "qr-controller-unversioned-path-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "qrToken": "%s"
+                    }
+                    """.formatted(issuedQrToken.token())))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.statusCode").value(200))
+            .andExpect(jsonPath("$.code").value("SUCCESS"))
+            .andExpect(jsonPath("$.data.reservationId").value(fixture.reservation().getReservationId().toString()))
+            .andExpect(jsonPath("$.data.sessionId").value(fixture.session().getSessionId().toString()))
+            .andExpect(jsonPath("$.data.reservationStatus").value("CHECKED_IN"))
+            .andExpect(jsonPath("$.data.checkInMethod").value("QR"));
+    }
+
+    @Test
     void checkInByQr_whenTokenIsInvalid_returnsQrVerificationFailedResponse() throws Exception {
         Fixture fixture = createFixture();
 
@@ -133,6 +161,49 @@ public class CheckInControllerIntegrationTest {
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.statusCode").value(400))
             .andExpect(jsonPath("$.code").value("QR_VERIFICATION_FAILED"))
+            .andExpect(jsonPath("$.data").isEmpty());
+    }
+
+    @Test
+    void checkInByQr_whenIdempotencyKeyIsMissing_returnsInvalidInputResponse() throws Exception {
+        Fixture fixture = createFixture();
+        QrTokenService.IssuedQrToken issuedQrToken = qrTokenService.issue(
+            fixture.reservation().getQrReference(),
+            fixture.session().getSessionId(),
+            Instant.now(),
+            fixture.session().getCheckinCloseAt()
+        );
+
+        mockMvc.perform(post("/api/v1/operator/check-ins")
+                .header("Authorization", bearerToken(fixture.operator()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "qrToken": "%s"
+                    }
+                    """.formatted(issuedQrToken.token())))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.statusCode").value(400))
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+            .andExpect(jsonPath("$.data").isEmpty());
+    }
+
+    @Test
+    void checkInByQr_whenQrTokenIsBlank_returnsInvalidInputResponse() throws Exception {
+        Fixture fixture = createFixture();
+
+        mockMvc.perform(post("/api/v1/operator/check-ins")
+                .header("Authorization", bearerToken(fixture.operator()))
+                .header("Idempotency-Key", "qr-controller-blank-token-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "qrToken": " "
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.statusCode").value(400))
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
             .andExpect(jsonPath("$.data").isEmpty());
     }
 
@@ -160,6 +231,23 @@ public class CheckInControllerIntegrationTest {
             .andExpect(jsonPath("$.data.reservationStatus").value("CHECKED_IN"))
             .andExpect(jsonPath("$.data.checkInMethod").value("RESERVATION_NUMBER"))
             .andExpect(jsonPath("$.data.checkedAt").value(Matchers.endsWith("Z")));
+    }
+
+    @Test
+    void checkInManually_whenUnversionedPathIsUsed_returnsNotFound() throws Exception {
+        Fixture fixture = createFixture();
+
+        mockMvc.perform(post("/operator/check-ins/manual")
+                .header("Authorization", bearerToken(fixture.operator()))
+                .header("Idempotency-Key", "manual-controller-unversioned-path-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "reservationNo": "%s",
+                      "reason": "QR_SCAN_FAILED"
+                    }
+                    """.formatted(fixture.reservation().getReservationNo())))
+            .andExpect(status().isNotFound());
     }
 
     @Test
