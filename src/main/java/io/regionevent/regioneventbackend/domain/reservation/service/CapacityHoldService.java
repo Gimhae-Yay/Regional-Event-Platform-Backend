@@ -2,6 +2,7 @@ package io.regionevent.regioneventbackend.domain.reservation.service;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -90,6 +91,24 @@ public class CapacityHoldService {
         }
         capacityHoldRepository.expireAndReleaseCapacityIfActive(holdId);
         return true;
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<CapacityHoldStatus> expireOrInvalidateExpiredHoldIfActive(
+        Long holdId,
+        String invalidationReason
+    ) {
+        validateInvalidationReason(invalidationReason);
+        if (capacityHoldRepository.findExpiredActiveHoldIdForUpdate(holdId).isEmpty()) {
+            return Optional.empty();
+        }
+        capacityHoldRepository.expireOrInvalidateExpiredHoldAndReleaseCapacityIfActive(
+            holdId,
+            invalidationReason
+        );
+        CapacityHold capacityHold = capacityHoldRepository.findByHoldId(holdId)
+            .orElseThrow(() -> new IllegalStateException("terminated capacity hold does not exist"));
+        return Optional.of(capacityHold.getStatus());
     }
 
     @Transactional(propagation = Propagation.MANDATORY)

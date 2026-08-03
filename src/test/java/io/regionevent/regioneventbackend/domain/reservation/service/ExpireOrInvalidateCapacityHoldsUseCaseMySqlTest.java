@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -170,6 +171,23 @@ class ExpireOrInvalidateCapacityHoldsUseCaseMySqlTest {
         assertThat(retryResult.expiredHoldCount()).isZero();
         assertThat(retryResult.invalidatedHoldCount()).isZero();
         assertThat(state.status()).isEqualTo(CapacityHoldStatus.EXPIRED);
+        assertThat(state.remainingCapacity()).isEqualTo(fixture.capacity());
+    }
+
+    @Test
+    void 회차시작_후_만료후보로_처리되어도_무효화한다() {
+        Instant startedAt = Instant.now().minusSeconds(60);
+        Fixture fixture = createFixture(startedAt, startedAt, 10, 3);
+        capacityHoldService.skipNextStartedSessionCandidateLookup();
+
+        HoldTerminationResult result = useCase.execute();
+        CapacityState state = readCapacityState(fixture);
+
+        assertThat(result.expiredHoldCount()).isZero();
+        assertThat(result.invalidatedHoldCount()).isOne();
+        assertThat(result.failedHoldCount()).isZero();
+        assertThat(state.status()).isEqualTo(CapacityHoldStatus.INVALIDATED);
+        assertThat(state.invalidationReason()).isEqualTo("SESSION_STARTED");
         assertThat(state.remainingCapacity()).isEqualTo(fixture.capacity());
     }
 
@@ -379,6 +397,7 @@ class ExpireOrInvalidateCapacityHoldsUseCaseMySqlTest {
     static class FailingCapacityHoldService extends CapacityHoldService {
 
         private final AtomicBoolean failNextExpiration = new AtomicBoolean();
+        private final AtomicBoolean skipNextStartedSessionCandidateLookup = new AtomicBoolean();
 
         FailingCapacityHoldService(CapacityHoldRepository capacityHoldRepository) {
             super(capacityHoldRepository);
@@ -386,20 +405,42 @@ class ExpireOrInvalidateCapacityHoldsUseCaseMySqlTest {
 
         @Override
         @Transactional(propagation = Propagation.MANDATORY)
-        public boolean expireAndReleaseCapacityIfActive(Long holdId) {
-            boolean expired = super.expireAndReleaseCapacityIfActive(holdId);
-            if (expired && failNextExpiration.compareAndSet(true, false)) {
+        public Optional<CapacityHoldStatus> expireOrInvalidateExpiredHoldIfActive(
+            Long holdId,
+            String invalidationReason
+        ) {
+            Optional<CapacityHoldStatus> terminatedStatus = super.expireOrInvalidateExpiredHoldIfActive(
+                holdId,
+                invalidationReason
+            );
+            if (terminatedStatus.filter(CapacityHoldStatus.EXPIRED::equals).isPresent()
+                && failNextExpiration.compareAndSet(true, false)) {
                 throw new IllegalStateException("capacity hold termination failure");
             }
-            return expired;
+            return terminatedStatus;
+        }
+
+        @Override
+        @Transactional(readOnly = true)
+        public List<Long> findActiveHoldIdsForStartedSessions() {
+            List<Long> holdIds = super.findActiveHoldIdsForStartedSessions();
+            if (skipNextStartedSessionCandidateLookup.compareAndSet(true, false)) {
+                return List.of();
+            }
+            return holdIds;
         }
 
         void failNextExpiration() {
             failNextExpiration.set(true);
         }
 
+        void skipNextStartedSessionCandidateLookup() {
+            skipNextStartedSessionCandidateLookup.set(true);
+        }
+
         void resetFailureInjection() {
             failNextExpiration.set(false);
+            skipNextStartedSessionCandidateLookup.set(false);
         }
     }
 

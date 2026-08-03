@@ -9,6 +9,8 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus;
+
 @Service
 public class ExpireOrInvalidateCapacityHoldsUseCase {
 
@@ -50,12 +52,12 @@ public class ExpireOrInvalidateCapacityHoldsUseCase {
             HoldTerminationProcessingResult result = processHold(
                 holdId,
                 requestId,
-                () -> capacityHoldService.invalidateAndReleaseCapacityIfActive(
+                () -> toProcessingResult(capacityHoldService.invalidateAndReleaseCapacityIfActive(
                     holdId,
                     SESSION_STARTED_INVALIDATION_REASON
-                )
+                ))
             );
-            counts.recordInvalidation(result);
+            counts.record(result);
         });
     }
 
@@ -67,9 +69,14 @@ public class ExpireOrInvalidateCapacityHoldsUseCase {
             HoldTerminationProcessingResult result = processHold(
                 holdId,
                 requestId,
-                () -> capacityHoldService.expireAndReleaseCapacityIfActive(holdId)
+                () -> capacityHoldService.expireOrInvalidateExpiredHoldIfActive(
+                    holdId,
+                    SESSION_STARTED_INVALIDATION_REASON
+                )
+                    .map(this::toProcessingResult)
+                    .orElse(HoldTerminationProcessingResult.SKIPPED)
             );
-            counts.recordExpiration(result);
+            counts.record(result);
         });
     }
 
@@ -79,10 +86,12 @@ public class ExpireOrInvalidateCapacityHoldsUseCase {
         HoldTerminationOperation operation
     ) {
         try {
-            Boolean terminated = holdTransactionTemplate.execute(status -> operation.execute());
-            return Boolean.TRUE.equals(terminated)
-                ? HoldTerminationProcessingResult.TERMINATED
-                : HoldTerminationProcessingResult.SKIPPED;
+            HoldTerminationProcessingResult result = holdTransactionTemplate.execute(
+                status -> operation.execute()
+            );
+            return result == null
+                ? HoldTerminationProcessingResult.SKIPPED
+                : result;
         } catch (RuntimeException exception) {
             log.error(
                 "Capacity hold termination failed. requestId={}, holdId={}",
@@ -94,14 +103,31 @@ public class ExpireOrInvalidateCapacityHoldsUseCase {
         }
     }
 
+    private HoldTerminationProcessingResult toProcessingResult(boolean invalidated) {
+        return invalidated
+            ? HoldTerminationProcessingResult.INVALIDATED
+            : HoldTerminationProcessingResult.SKIPPED;
+    }
+
+    private HoldTerminationProcessingResult toProcessingResult(CapacityHoldStatus capacityHoldStatus) {
+        return switch (capacityHoldStatus) {
+            case EXPIRED -> HoldTerminationProcessingResult.EXPIRED;
+            case INVALIDATED -> HoldTerminationProcessingResult.INVALIDATED;
+            default -> throw new IllegalStateException(
+                "expired capacity hold must be terminated"
+            );
+        };
+    }
+
     @FunctionalInterface
     private interface HoldTerminationOperation {
 
-        boolean execute();
+        HoldTerminationProcessingResult execute();
     }
 
     private enum HoldTerminationProcessingResult {
-        TERMINATED,
+        EXPIRED,
+        INVALIDATED,
         SKIPPED,
         FAILED
     }
@@ -112,21 +138,13 @@ public class ExpireOrInvalidateCapacityHoldsUseCase {
         private int invalidatedHoldCount;
         private int failedHoldCount;
 
-        private void recordExpiration(HoldTerminationProcessingResult result) {
-            if (result == HoldTerminationProcessingResult.TERMINATED) {
-                expiredHoldCount++;
-            }
-            if (result == HoldTerminationProcessingResult.FAILED) {
-                failedHoldCount++;
-            }
-        }
-
-        private void recordInvalidation(HoldTerminationProcessingResult result) {
-            if (result == HoldTerminationProcessingResult.TERMINATED) {
-                invalidatedHoldCount++;
-            }
-            if (result == HoldTerminationProcessingResult.FAILED) {
-                failedHoldCount++;
+        private void record(HoldTerminationProcessingResult result) {
+            switch (result) {
+                case EXPIRED -> expiredHoldCount++;
+                case INVALIDATED -> invalidatedHoldCount++;
+                case FAILED -> failedHoldCount++;
+                case SKIPPED -> {
+                }
             }
         }
     }

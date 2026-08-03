@@ -105,6 +105,33 @@ public interface CapacityHoldRepository extends JpaRepository<CapacityHold, Long
         UPDATE capacity_hold
         JOIN content_session ON content_session.session_id = capacity_hold.session_id
             AND content_session.region_id = capacity_hold.region_id
+        SET capacity_hold.status = CASE
+                WHEN content_session.starts_at <= CURRENT_TIMESTAMP THEN 'INVALIDATED'
+                ELSE 'EXPIRED'
+            END,
+            capacity_hold.terminal_at = CURRENT_TIMESTAMP,
+            capacity_hold.invalidation_reason = CASE
+                WHEN content_session.starts_at <= CURRENT_TIMESTAMP THEN :invalidationReason
+                ELSE NULL
+            END,
+            capacity_hold.capacity_released_at = CURRENT_TIMESTAMP,
+            content_session.remaining_capacity = content_session.remaining_capacity + capacity_hold.quantity,
+            content_session.version_no = content_session.version_no + 1,
+            content_session.updated_at = CURRENT_TIMESTAMP
+        WHERE capacity_hold.hold_id = :holdId
+            AND capacity_hold.status = 'ACTIVE'
+            AND capacity_hold.expires_at <= CURRENT_TIMESTAMP
+        """, nativeQuery = true)
+    int expireOrInvalidateExpiredHoldAndReleaseCapacityIfActive(
+        @Param("holdId") Long holdId,
+        @Param("invalidationReason") String invalidationReason
+    );
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+        UPDATE capacity_hold
+        JOIN content_session ON content_session.session_id = capacity_hold.session_id
+            AND content_session.region_id = capacity_hold.region_id
         SET capacity_hold.status = 'INVALIDATED',
             capacity_hold.terminal_at = CURRENT_TIMESTAMP,
             capacity_hold.invalidation_reason = :invalidationReason,
