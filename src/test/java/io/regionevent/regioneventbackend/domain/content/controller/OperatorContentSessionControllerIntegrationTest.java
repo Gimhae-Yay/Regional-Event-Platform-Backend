@@ -308,7 +308,7 @@ class OperatorContentSessionControllerIntegrationTest {
             assertThat(auditEvent.getPreviousState()).isEqualTo("SCHEDULED");
             assertThat(auditEvent.getNextState()).isEqualTo("CANCELLED");
             assertThat(auditEvent.getResult()).isEqualTo(AuditEventResult.SUCCESS);
-            assertThat(auditEvent.getReasonCode()).isNull();
+            assertThat(auditEvent.getReasonCode()).isEqualTo("OPERATOR_SESSION_CANCEL");
             assertThat(auditEvent.getActorRole()).isEqualTo("OPERATOR");
             assertThat(auditEvent.getOccurredAt()).isEqualTo(cancelledAt);
             assertThat(auditEventActorLinkRepository.findById(auditEvent.getAuditEventId()))

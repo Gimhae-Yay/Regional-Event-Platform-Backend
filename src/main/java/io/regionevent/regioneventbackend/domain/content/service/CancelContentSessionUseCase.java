@@ -24,6 +24,7 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
 public class CancelContentSessionUseCase {
 
     private static final int MAX_CANCELLATION_REASON_LENGTH = 500;
+    private static final String OPERATOR_SESSION_CANCEL_REASON = "OPERATOR_SESSION_CANCEL";
 
     private final OperatorAuthorizationService operatorAuthorizationService;
     private final ContentSessionService contentSessionService;
@@ -123,7 +124,7 @@ public class CancelContentSessionUseCase {
             "SCHEDULED",
             "CANCELLED",
             AuditEventResult.SUCCESS,
-            null,
+            OPERATOR_SESSION_CANCEL_REASON,
             new AuditEventActor(operator.roleAssignment()),
             cancelledAt
         ));

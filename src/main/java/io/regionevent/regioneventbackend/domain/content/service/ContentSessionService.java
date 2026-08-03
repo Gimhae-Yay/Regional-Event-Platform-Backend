@@ -67,6 +67,12 @@ public class ContentSessionService {
         ).isPresent();
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void lockForUpdate(Long sessionId) {
+        contentSessionRepository.findBySessionIdForUpdate(sessionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
     public List<ContentSession> createPendingSessions(
         Content content,
         Region region,

@@ -66,6 +66,7 @@ public class ReservationCancellationUseCase {
         if (reservation.getStatus() != ReservationStatus.CONFIRMED) {
             throwCancellationConflict(requestId, actor, reservation);
         }
+        contentSessionService.lockForUpdate(reservation.getContentSession().getSessionId());
         if (!reservationService.cancelIfCancellable(reservationId, userId)) {
             Reservation currentReservation = reservationService.findOwnedReservationForUpdate(reservationId, user);
             if (currentReservation.getStatus() == ReservationStatus.CANCELLED) {

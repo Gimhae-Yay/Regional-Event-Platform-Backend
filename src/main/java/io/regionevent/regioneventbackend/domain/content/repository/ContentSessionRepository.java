@@ -35,6 +35,14 @@ public interface ContentSessionRepository extends JpaRepository<ContentSession, 
     );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT contentSession
+        FROM ContentSession contentSession
+        WHERE contentSession.sessionId = :sessionId
+        """)
+    Optional<ContentSession> findBySessionIdForUpdate(@Param("sessionId") Long sessionId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @EntityGraph(attributePaths = {"content", "content.operator", "region"})
     @Query("""
         SELECT contentSession
