@@ -187,6 +187,34 @@ public class ContentService {
         return content;
     }
 
+    public void validateSubmitRequirements(Content content) {
+        if (content.getRepresentativeImageObject() == null
+            || isBlank(content.getTitle())
+            || isBlank(content.getDescription())
+            || isBlank(content.getLocationText())
+            || isBlank(content.getOperatingHoursText())
+            || isBlank(content.getContactText())
+            || isBlank(content.getPrecautions())
+            || isBlank(content.getAgeRequirement())
+            || isBlank(content.getMaterials())
+            || isBlank(content.getCancellationPolicyText())
+            || content.getPublishAt() == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+    }
+
+    public Content submitForReview(Content content, Instant submittedAt) {
+        int updatedCount = contentRepository.submitRejectedByContentId(
+            content.getContentId(),
+            submittedAt
+        );
+        if (updatedCount != 1) {
+            throw new BusinessException(ErrorCode.CONTENT_STATE_CONFLICT);
+        }
+        content.submitForReview();
+        return content;
+    }
+
     public Content end(Content content, Instant endedAt) {
         int updatedCount = contentRepository.endPublishedByContentId(
             content.getContentId(),
@@ -218,6 +246,10 @@ public class ContentService {
         if (id == null || id <= 0) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     public record CreateContentCommand(

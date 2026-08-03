@@ -151,6 +151,15 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
         );
     }
 
+    default int submitRejectedByContentId(Long contentId, Instant submittedAt) {
+        return updateStatusIfExpected(
+            contentId,
+            ContentStatus.REJECTED,
+            ContentStatus.PENDING,
+            submittedAt
+        );
+    }
+
     default int endPublishedByContentId(Long contentId, Instant endedAt) {
         return updateStatusIfExpected(
             contentId,

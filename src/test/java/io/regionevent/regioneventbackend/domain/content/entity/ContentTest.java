@@ -23,7 +23,9 @@ class ContentTest {
             () -> new ContentTest().approve_whenSoftDeleted_throwsExceptionWithoutChanges(),
             () -> new ContentTest().reject_whenPendingAndActive_changesStatusToRejected(),
             () -> new ContentTest().reject_whenStatusIsNotPending_throwsExceptionWithoutChanges(),
-            () -> new ContentTest().reject_whenSoftDeleted_throwsExceptionWithoutChanges()
+            () -> new ContentTest().reject_whenSoftDeleted_throwsExceptionWithoutChanges(),
+            () -> new ContentTest().submitForReview_whenRejectedAndActive_changesStatusToPending(),
+            () -> new ContentTest().submitForReview_whenStatusIsNotRejected_throwsExceptionWithoutChanges()
         );
     }
 
@@ -73,6 +75,22 @@ class ContentTest {
         content.softDelete();
 
         assertThatThrownBy(content::reject)
+            .isInstanceOf(IllegalStateException.class);
+        assertThat(content.getStatus()).isEqualTo(ContentStatus.PENDING);
+    }
+
+    void submitForReview_whenRejectedAndActive_changesStatusToPending() {
+        Content content = createContent(ContentStatus.REJECTED);
+
+        content.submitForReview();
+
+        assertThat(content.getStatus()).isEqualTo(ContentStatus.PENDING);
+    }
+
+    void submitForReview_whenStatusIsNotRejected_throwsExceptionWithoutChanges() {
+        Content content = createContent(ContentStatus.PENDING);
+
+        assertThatThrownBy(content::submitForReview)
             .isInstanceOf(IllegalStateException.class);
         assertThat(content.getStatus()).isEqualTo(ContentStatus.PENDING);
     }
