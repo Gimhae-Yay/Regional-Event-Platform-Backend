@@ -75,6 +75,23 @@ public class CapacityHoldService {
             .orElseThrow(() -> new IllegalStateException("consumed capacity hold does not exist"));
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public int invalidateActiveHoldsForSession(
+        ContentSession contentSession,
+        String invalidationReason,
+        Instant invalidatedAt
+    ) {
+        List<CapacityHold> activeHolds = capacityHoldRepository.findActiveBySessionIdForUpdate(
+            contentSession.getSessionId()
+        );
+        int releasedQuantity = activeHolds.stream()
+            .mapToInt(CapacityHold::getQuantity)
+            .sum();
+        activeHolds.forEach(capacityHold -> capacityHold.invalidate(invalidationReason, invalidatedAt));
+        capacityHoldRepository.saveAllAndFlush(activeHolds);
+        return releasedQuantity;
+    }
+
     @Transactional(readOnly = true)
     public List<Long> findExpiredActiveHoldIds() {
         return capacityHoldRepository.findExpiredActiveHoldIds();
