@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.operator.repository;
 
+import java.util.List;
 import java.util.Optional;
 
 import jakarta.persistence.LockModeType;
@@ -16,6 +17,12 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 public interface OperatorApplicationRepository extends JpaRepository<OperatorApplication, Long> {
 
     boolean existsByApplicantAndStatus(AppUser applicant, OperatorApplicationStatus status);
+
+    @EntityGraph(attributePaths = {"requestedRegion", "applicant"})
+    List<OperatorApplication> findByRequestedRegionRegionIdAndStatusOrderByCreatedAtAscOperatorApplicationIdAsc(
+        Long regionId,
+        OperatorApplicationStatus status
+    );
 
     @EntityGraph(attributePaths = {"requestedRegion", "applicant", "inspectedUser"})
     @Query("""

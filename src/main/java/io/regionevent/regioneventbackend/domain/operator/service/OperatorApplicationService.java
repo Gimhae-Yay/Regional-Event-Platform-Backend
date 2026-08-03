@@ -1,5 +1,7 @@
 package io.regionevent.regioneventbackend.domain.operator.service;
 
+import java.util.List;
+
 import org.springframework.stereotype.Service;
 
 import io.regionevent.regioneventbackend.domain.operator.entity.OperatorApplication;
@@ -40,6 +42,13 @@ public class OperatorApplicationService {
 
     public boolean hasRejectedApplication(AppUser user) {
         return operatorApplicationRepository.existsByApplicantAndStatus(user, OperatorApplicationStatus.REJECTED);
+    }
+
+    public List<OperatorApplication> findPendingApplications(Long regionId) {
+        return operatorApplicationRepository.findByRequestedRegionRegionIdAndStatusOrderByCreatedAtAscOperatorApplicationIdAsc(
+            regionId,
+            OperatorApplicationStatus.PENDING
+        );
     }
 
     public OperatorApplication findDetail(Long operatorApplicationId, Long regionId) {
