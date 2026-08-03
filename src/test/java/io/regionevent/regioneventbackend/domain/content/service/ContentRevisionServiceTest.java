@@ -246,7 +246,7 @@ class ContentRevisionServiceTest {
     @Test
     void withdraw_whenRevisionIsAlreadyTerminal_throwsContentStateConflict() {
         Fixture fixture = createFixture(ContentStatus.PUBLISHED, null);
-        fixture.revision().reject(fixture.reviewer(), REVIEWED_AT, "?대? 泥섎━???ъ쑀");
+        fixture.revision().reject(fixture.reviewer(), REVIEWED_AT, "이미 처리된 사유");
         contentRevisionRepository.flush();
 
         assertContentStateConflict(() -> contentRevisionService.withdraw(
