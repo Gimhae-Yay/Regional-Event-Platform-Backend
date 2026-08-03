@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEvent;
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventActorLinkRepository;
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
@@ -137,6 +138,14 @@ public class CheckInUseCaseIntegrationTest {
                 assertThat(record.getStatus()).isEqualTo(IdempotencyRecordStatus.SUCCEEDED);
                 assertThat(record.getResultVisit().getVisitId().toString()).isEqualTo(firstResult.response().visitId());
             });
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent -> auditEvent.getResult() == AuditEventResult.SUCCESS)
+            .filteredOn(auditEvent -> auditEvent.getTargetType() == AuditEventTargetType.VISIT)
+            .singleElement()
+            .satisfies(auditEvent -> {
+                assertThat(auditEvent.getPreviousState()).isEqualTo(ReservationStatus.CONFIRMED.name());
+                assertThat(auditEvent.getNextState()).isEqualTo(ReservationStatus.CHECKED_IN.name());
+            });
     }
 
     @Test
@@ -198,6 +207,30 @@ public class CheckInUseCaseIntegrationTest {
             .satisfies(record -> {
                 assertThat(record.getStatus()).isEqualTo(IdempotencyRecordStatus.FAILED);
                 assertThat(record.getResultCode()).isEqualTo(ErrorCode.QR_VERIFICATION_FAILED.code());
+            });
+    }
+
+    @Test
+    void qrCheckIn_succeedsAndRecordsSuccessAuditTransition() {
+        Fixture fixture = createFixture();
+        QrTokenService.IssuedQrToken qrToken = issueQrToken(fixture);
+        UUID requestId = UUID.randomUUID();
+
+        CheckInResult result = checkInUseCase.checkInByQr(
+            fixture.operator().getUserId(),
+            new QrCheckInRequest(qrToken.token()),
+            "qr-success-audit-key",
+            requestId
+        );
+
+        assertThat(result.isSuccessful()).isTrue();
+        assertThat(auditEventsByRequestId(requestId))
+            .singleElement()
+            .satisfies(auditEvent -> {
+                assertThat(auditEvent.getResult()).isEqualTo(AuditEventResult.SUCCESS);
+                assertThat(auditEvent.getTargetType()).isEqualTo(AuditEventTargetType.VISIT);
+                assertThat(auditEvent.getPreviousState()).isEqualTo(ReservationStatus.CONFIRMED.name());
+                assertThat(auditEvent.getNextState()).isEqualTo(ReservationStatus.CHECKED_IN.name());
             });
     }
 

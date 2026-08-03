@@ -315,7 +315,7 @@ public class CheckInUseCase {
                         rescanConflictReasonCode
                     );
                 }
-                return completeSuccess(acquired, requestId, actor, existingVisit, successReasonCode);
+                return completeSuccess(acquired, requestId, actor, existingVisit, null, successReasonCode);
             }
             return completeConflict(
                 acquired,
@@ -372,7 +372,14 @@ public class CheckInUseCase {
             method,
             checkedAt
         ));
-        return completeSuccess(acquired, requestId, actor, visit, successReasonCode);
+        return completeSuccess(
+            acquired,
+            requestId,
+            actor,
+            visit,
+            ReservationStatus.CONFIRMED.name(),
+            successReasonCode
+        );
     }
 
     private CheckInResult completeSuccess(
@@ -380,6 +387,7 @@ public class CheckInUseCase {
         UUID requestId,
         AuditEventActor actor,
         Visit visit,
+        String previousState,
         String reasonCode
     ) {
         idempotencyService.completeWithVisit(acquired.record(), SUCCESS_RESULT_CODE, visit);
@@ -388,7 +396,7 @@ public class CheckInUseCase {
             visit.getRegion(),
             AuditEventTargetType.VISIT,
             visit.getVisitId(),
-            null,
+            previousState,
             "CHECKED_IN",
             AuditEventResult.SUCCESS,
             reasonCode,
