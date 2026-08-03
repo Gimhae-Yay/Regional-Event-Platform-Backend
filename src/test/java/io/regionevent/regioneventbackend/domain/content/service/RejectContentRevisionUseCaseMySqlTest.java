@@ -119,6 +119,7 @@ class RejectContentRevisionUseCaseMySqlTest {
     @Timeout(15)
     void 같은_공개_수정본의_동시_반려는_한_건만_성공하고_반려_정보와_감사가_한_번만_저장된다() throws Exception {
         Fixture fixture = createFixture(ContentStatus.PUBLISHED, null, false);
+        OriginalContent original = findOriginalContent(fixture.contentId());
         List<Attempt> attempts = race(
             () -> reject(fixture, FIRST_REASON),
             () -> reject(fixture, SECOND_REASON)
@@ -146,9 +147,7 @@ class RejectContentRevisionUseCaseMySqlTest {
             ContentRevisionStatus.EDIT_REQUESTED
         )).isFalse();
         Content content = contentRepository.findById(fixture.contentId()).orElseThrow();
-        assertThat(content.getStatus()).isEqualTo(ContentStatus.PUBLISHED);
-        assertThat(content.getTitle()).isEqualTo("원본 제목");
-        assertThat(content.getPublishAt()).isEqualTo(ORIGINAL_PUBLISH_AT);
+        assertOriginalContentIsUnchanged(content, original);
         assertSingleSuccessAudit(fixture);
     }
 
@@ -368,7 +367,16 @@ class RejectContentRevisionUseCaseMySqlTest {
         return new OriginalContent(
             content.getStatus(),
             content.getTitle(),
+            content.getDescription(),
+            content.getLocationText(),
+            content.getOperatingHoursText(),
+            content.getContactText(),
+            content.getPrecautions(),
+            content.getAgeRequirement(),
+            content.getMaterials(),
+            content.getCancellationPolicyText(),
             content.getPublishAt(),
+            content.getRepresentativeImageObject().getImageObjectId(),
             content.getVersionNo()
         );
     }
@@ -383,7 +391,17 @@ class RejectContentRevisionUseCaseMySqlTest {
     private void assertOriginalContentIsUnchanged(Content content, OriginalContent original) {
         assertThat(content.getStatus()).isEqualTo(original.status());
         assertThat(content.getTitle()).isEqualTo(original.title());
+        assertThat(content.getDescription()).isEqualTo(original.description());
+        assertThat(content.getLocationText()).isEqualTo(original.locationText());
+        assertThat(content.getOperatingHoursText()).isEqualTo(original.operatingHoursText());
+        assertThat(content.getContactText()).isEqualTo(original.contactText());
+        assertThat(content.getPrecautions()).isEqualTo(original.precautions());
+        assertThat(content.getAgeRequirement()).isEqualTo(original.ageRequirement());
+        assertThat(content.getMaterials()).isEqualTo(original.materials());
+        assertThat(content.getCancellationPolicyText()).isEqualTo(original.cancellationPolicyText());
         assertThat(content.getPublishAt()).isEqualTo(original.publishAt());
+        assertThat(content.getRepresentativeImageObject().getImageObjectId())
+            .isEqualTo(original.representativeImageObjectId());
         assertThat(content.getVersionNo()).isEqualTo(original.versionNo());
     }
 
@@ -431,7 +449,16 @@ class RejectContentRevisionUseCaseMySqlTest {
     private record OriginalContent(
         ContentStatus status,
         String title,
+        String description,
+        String locationText,
+        String operatingHoursText,
+        String contactText,
+        String precautions,
+        String ageRequirement,
+        String materials,
+        String cancellationPolicyText,
         Instant publishAt,
+        Long representativeImageObjectId,
         int versionNo
     ) {
     }
