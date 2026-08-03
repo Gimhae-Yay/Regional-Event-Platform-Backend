@@ -52,6 +52,13 @@ public class ContentSessionService {
         );
     }
 
+    @Transactional(readOnly = true)
+    public void validatePendingSessionExists(Long contentId) {
+        if (findPendingByContentId(contentId).isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+    }
+
     public List<ContentSession> findScheduledByContentId(Long contentId) {
         return contentSessionRepository.findByContentContentIdAndStatusOrderByStartsAtAsc(
             contentId,

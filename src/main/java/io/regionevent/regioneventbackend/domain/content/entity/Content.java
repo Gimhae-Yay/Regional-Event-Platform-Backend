@@ -196,6 +196,16 @@ public class Content {
         status = ContentStatus.REJECTED;
     }
 
+    public void submitForReview() {
+        if (deletedAt != null) {
+            throw new IllegalStateException("soft deleted content cannot be submitted");
+        }
+        if (status != ContentStatus.REJECTED) {
+            throw new IllegalStateException("content status must be REJECTED but was " + status);
+        }
+        status = ContentStatus.PENDING;
+    }
+
     public void end() {
         if (deletedAt != null) {
             throw new IllegalStateException("soft deleted content cannot be ended");
