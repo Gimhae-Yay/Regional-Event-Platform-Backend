@@ -24,17 +24,20 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
 public class WithdrawContentRevisionUseCase {
 
     private final ContentRevisionService contentRevisionService;
+    private final ContentService contentService;
     private final OperatorAuthorizationService operatorAuthorizationService;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final Clock clock;
 
     public WithdrawContentRevisionUseCase(
         ContentRevisionService contentRevisionService,
+        ContentService contentService,
         OperatorAuthorizationService operatorAuthorizationService,
         RecordAuditEventUseCase recordAuditEventUseCase,
         Clock clock
     ) {
         this.contentRevisionService = contentRevisionService;
+        this.contentService = contentService;
         this.operatorAuthorizationService = operatorAuthorizationService;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
         this.clock = clock;
@@ -48,8 +51,9 @@ public class WithdrawContentRevisionUseCase {
         UUID requestId
     ) {
         AuthorizedOperator operator = operatorAuthorizationService.requireAuthorizedOperator(userId);
+        Long contentId = contentRevisionService.findContentIdByRevisionId(revisionId);
+        Content content = contentService.findApprovalTargetForUpdate(contentId);
         ContentRevision revision = contentRevisionService.findReviewTargetForUpdate(revisionId);
-        Content content = revision.getContent();
         validateOperatorScope(operator, content);
 
         if (revision.getStatus() == ContentRevisionStatus.EDIT_WITHDRAWN) {

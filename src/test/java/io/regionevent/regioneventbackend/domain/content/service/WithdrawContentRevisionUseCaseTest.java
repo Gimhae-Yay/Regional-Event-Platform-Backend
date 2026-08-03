@@ -2,6 +2,7 @@ package io.regionevent.regioneventbackend.domain.content.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -15,6 +16,7 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
@@ -44,11 +46,13 @@ class WithdrawContentRevisionUseCaseTest {
     private static final Instant WITHDRAWN_AT = Instant.parse("2026-08-02T10:56:14Z");
 
     private final ContentRevisionService contentRevisionService = mock(ContentRevisionService.class);
+    private final ContentService contentService = mock(ContentService.class);
     private final OperatorAuthorizationService operatorAuthorizationService =
         mock(OperatorAuthorizationService.class);
     private final RecordAuditEventUseCase recordAuditEventUseCase = mock(RecordAuditEventUseCase.class);
     private final WithdrawContentRevisionUseCase useCase = new WithdrawContentRevisionUseCase(
         contentRevisionService,
+        contentService,
         operatorAuthorizationService,
         recordAuditEventUseCase,
         Clock.fixed(WITHDRAWN_AT, ZoneOffset.UTC)
@@ -80,6 +84,10 @@ class WithdrawContentRevisionUseCaseTest {
         assertThat(result.revisionId()).isEqualTo(REVISION_ID);
         assertThat(result.contentId()).isEqualTo(CONTENT_ID);
         assertThat(result.status()).isEqualTo(ContentRevisionStatus.EDIT_WITHDRAWN);
+        InOrder lockOrder = inOrder(contentRevisionService, contentService);
+        lockOrder.verify(contentRevisionService).findContentIdByRevisionId(REVISION_ID);
+        lockOrder.verify(contentService).findApprovalTargetForUpdate(CONTENT_ID);
+        lockOrder.verify(contentRevisionService).findReviewTargetForUpdate(REVISION_ID);
         verify(contentRevisionService).withdraw(
             fixture.revision(),
             fixture.operator(),
@@ -135,6 +143,8 @@ class WithdrawContentRevisionUseCaseTest {
         when(fixture.content().isOwnedBy(USER_ID)).thenReturn(false);
         when(fixture.content().isScopedTo(REGION_ID)).thenReturn(true);
         when(operatorAuthorizationService.requireAuthorizedOperator(USER_ID)).thenReturn(fixture.authorizedOperator());
+        when(contentRevisionService.findContentIdByRevisionId(REVISION_ID)).thenReturn(CONTENT_ID);
+        when(contentService.findApprovalTargetForUpdate(CONTENT_ID)).thenReturn(fixture.content());
         when(contentRevisionService.findReviewTargetForUpdate(REVISION_ID)).thenReturn(fixture.revision());
 
         assertThatThrownBy(() -> useCase.withdraw(USER_ID, REVISION_ID, "withdrawal reason", REQUEST_ID))
@@ -170,6 +180,8 @@ class WithdrawContentRevisionUseCaseTest {
 
     private void stubCommon(Fixture fixture) {
         when(operatorAuthorizationService.requireAuthorizedOperator(USER_ID)).thenReturn(fixture.authorizedOperator());
+        when(contentRevisionService.findContentIdByRevisionId(REVISION_ID)).thenReturn(CONTENT_ID);
+        when(contentService.findApprovalTargetForUpdate(CONTENT_ID)).thenReturn(fixture.content());
         when(contentRevisionService.findReviewTargetForUpdate(REVISION_ID)).thenReturn(fixture.revision());
     }
 

@@ -190,6 +190,37 @@ class ContentRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestS
         }
     }
 
+    @Test
+    @Timeout(15)
+    void approve_and_withdraw_whenApprovalHoldsContentLock_thenWithdrawReturnsConflict() throws Exception {
+        Fixture fixture = createFixture(ContentStatus.PUBLISHED, null, false);
+        CountDownLatch contentLocked = new CountDownLatch(1);
+        CountDownLatch continueApproval = new CountDownLatch(1);
+        CountDownLatch withdrawalStarted = new CountDownLatch(1);
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<String> approval = executorService.submit(() ->
+                approveAfterHoldingContentLock(fixture, contentLocked, continueApproval)
+            );
+            await(contentLocked);
+
+            Future<String> withdrawal = executorService.submit(() -> {
+                withdrawalStarted.countDown();
+                return executeCapturingConflict(() -> withdraw(fixture));
+            });
+            await(withdrawalStarted);
+            continueApproval.countDown();
+
+            assertThat(approval.get(10, TimeUnit.SECONDS)).isEqualTo("APPROVED");
+            assertThat(withdrawal.get(10, TimeUnit.SECONDS)).isEqualTo("CONFLICT");
+        }
+
+        ContentRevision revision = contentRevisionRepository.findById(fixture.revisionId()).orElseThrow();
+        Content content = contentRepository.findById(fixture.contentId()).orElseThrow();
+        assertThat(revision.getStatus()).isEqualTo(ContentRevisionStatus.EDIT_APPROVED);
+        assertThat(content.getTitle()).isEqualTo("?꾨낫 ?쒕ぉ");
+        assertThat(successAuditCount(fixture)).isEqualTo(1);
+    }
+
     private ConcurrentOutcomes race(
         ConcurrentAction firstAction,
         ConcurrentAction secondAction
@@ -215,6 +246,10 @@ class ContentRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestS
     ) {
         ready.countDown();
         await(start);
+        return executeCapturingConflict(action);
+    }
+
+    private String executeCapturingConflict(ConcurrentAction action) {
         try {
             return action.execute();
         } catch (BusinessException exception) {
@@ -252,6 +287,19 @@ class ContentRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestS
             UUID.randomUUID()
         );
         return "WITHDRAWN";
+    }
+
+    private String approveAfterHoldingContentLock(
+        Fixture fixture,
+        CountDownLatch contentLocked,
+        CountDownLatch continueApproval
+    ) {
+        return transactionTemplate.execute(status -> {
+            contentRepository.findApprovalTargetForUpdate(fixture.contentId()).orElseThrow();
+            contentLocked.countDown();
+            await(continueApproval);
+            return approve(fixture);
+        });
     }
 
     private String autoPublish(Fixture fixture) {
