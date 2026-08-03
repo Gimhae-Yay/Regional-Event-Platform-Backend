@@ -63,6 +63,15 @@ public interface CapacityHoldRepository extends JpaRepository<CapacityHold, Long
         """, nativeQuery = true)
     List<Long> findActiveHoldIdsForStartedSessions();
 
+    @Query("""
+        SELECT capacityHold.holdId
+        FROM CapacityHold capacityHold
+        WHERE capacityHold.contentSession.content.contentId = :contentId
+            AND capacityHold.status = io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus.ACTIVE
+        ORDER BY capacityHold.holdId ASC
+        """)
+    List<Long> findActiveHoldIdsByContentId(@Param("contentId") Long contentId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT capacityHold

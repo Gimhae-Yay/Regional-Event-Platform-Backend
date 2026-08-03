@@ -100,6 +100,16 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
         """)
     Optional<Content> findApprovalTargetForUpdate(@Param("contentId") Long contentId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = "region")
+    @Query("""
+        SELECT content
+        FROM Content content
+        WHERE content.contentId = :contentId
+            AND content.deletedAt IS NULL
+        """)
+    Optional<Content> findEndTargetForUpdate(@Param("contentId") Long contentId);
+
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("""
         UPDATE Content content
@@ -123,6 +133,15 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
             ContentStatus.PENDING,
             ContentStatus.REJECTED,
             rejectedAt
+        );
+    }
+
+    default int endPublishedByContentId(Long contentId, Instant endedAt) {
+        return updateStatusIfExpected(
+            contentId,
+            ContentStatus.PUBLISHED,
+            ContentStatus.ENDED,
+            endedAt
         );
     }
 }

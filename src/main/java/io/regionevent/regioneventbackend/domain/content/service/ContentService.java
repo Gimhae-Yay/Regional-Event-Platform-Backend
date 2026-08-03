@@ -151,6 +151,11 @@ public class ContentService {
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
+    public Content findEndTargetForUpdate(Long contentId) {
+        return contentRepository.findEndTargetForUpdate(contentId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
     public Content approve(Content content) {
         content.approve();
         return contentRepository.saveAndFlush(content);
@@ -165,6 +170,18 @@ public class ContentService {
             throw new BusinessException(ErrorCode.CONTENT_STATE_CONFLICT);
         }
         content.reject();
+        return content;
+    }
+
+    public Content end(Content content, Instant endedAt) {
+        int updatedCount = contentRepository.endPublishedByContentId(
+            content.getContentId(),
+            endedAt
+        );
+        if (updatedCount != 1) {
+            throw new BusinessException(ErrorCode.CONTENT_END_CONFLICT);
+        }
+        content.end();
         return content;
     }
 
