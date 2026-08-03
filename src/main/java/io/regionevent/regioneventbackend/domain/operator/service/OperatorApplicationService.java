@@ -7,6 +7,8 @@ import io.regionevent.regioneventbackend.domain.operator.entity.OperatorApplicat
 import io.regionevent.regioneventbackend.domain.operator.repository.OperatorApplicationRepository;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 @Service
 public class OperatorApplicationService {
@@ -39,4 +41,26 @@ public class OperatorApplicationService {
     public boolean hasRejectedApplication(AppUser user) {
         return operatorApplicationRepository.existsByApplicantAndStatus(user, OperatorApplicationStatus.REJECTED);
     }
+
+    public OperatorApplicationStatus findApprovalStatus(Long operatorApplicationId, Long regionId) {
+        return operatorApplicationRepository.findStatusByOperatorApplicationIdAndRequestedRegionId(
+            operatorApplicationId,
+            regionId
+        ).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public Long findApprovalApplicantUserId(Long operatorApplicationId, Long regionId) {
+        return operatorApplicationRepository.findApplicantUserIdByOperatorApplicationIdAndRequestedRegionId(
+            operatorApplicationId,
+            regionId
+        ).orElseThrow(() -> new BusinessException(ErrorCode.OPERATOR_APPLICATION_STATE_CONFLICT));
+    }
+
+    public OperatorApplication findApprovalTargetForUpdate(Long operatorApplicationId, Long regionId) {
+        return operatorApplicationRepository.findByOperatorApplicationIdAndRequestedRegionIdForUpdate(
+            operatorApplicationId,
+            regionId
+        ).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
 }
