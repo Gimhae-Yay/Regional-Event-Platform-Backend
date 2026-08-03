@@ -164,6 +164,12 @@ public class ContentService {
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
+    public Content findDeletionTargetForUpdate(Long contentId) {
+        validateRequiredId(contentId);
+        return contentRepository.findDeletionTargetForUpdate(contentId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
     public Content approve(Content content) {
         content.approve();
         return contentRepository.saveAndFlush(content);
@@ -191,6 +197,21 @@ public class ContentService {
         }
         content.end();
         return content;
+    }
+
+    public ImageObject softDelete(Content content, Instant deletedAt) {
+        if ((content.getStatus() != ContentStatus.PENDING
+            && content.getStatus() != ContentStatus.APPROVED)
+            || content.getDeletedAt() != null) {
+            throw new BusinessException(ErrorCode.CONTENT_DELETE_CONFLICT);
+        }
+        content.softDelete(deletedAt);
+        ImageObject detachedImageObject = content.detachRepresentativeImage();
+        if (detachedImageObject == null) {
+            throw new IllegalStateException("content representative image must exist before deletion");
+        }
+        contentRepository.saveAndFlush(content);
+        return detachedImageObject;
     }
 
     private void validateRequiredId(Long id) {

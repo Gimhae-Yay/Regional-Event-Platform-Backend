@@ -63,6 +63,30 @@ public class ImageObjectService {
         return Optional.empty();
     }
 
+    public ImageObject findActiveForUpdate(Long imageObjectId) {
+        ImageObject imageObject = imageObjectRepository.findByImageObjectId(imageObjectId)
+            .orElseThrow(() -> new IllegalStateException("representative image object must exist"));
+        if (imageObject.getLifecycleStatus() != ImageLifecycleStatus.ACTIVE) {
+            throw new IllegalStateException("representative image object must be active");
+        }
+        return imageObject;
+    }
+
+    public Optional<DeletePendingImageObject> markDeletePendingIfUnreferenced(
+        ImageObject imageObject
+    ) {
+        int updatedCount = imageObjectRepository.markActiveObjectDeletePendingWithoutDirectReferences(
+            imageObject.getImageObjectId(),
+            ImageLifecycleStatus.ACTIVE,
+            ImageLifecycleStatus.DELETE_PENDING
+        );
+        if (updatedCount == 0) {
+            return Optional.empty();
+        }
+        imageObject.markDeletePending();
+        return Optional.of(DeletePendingImageObject.from(imageObject));
+    }
+
     public record DeletePendingImageObject(
         Long imageObjectId,
         String objectKey
