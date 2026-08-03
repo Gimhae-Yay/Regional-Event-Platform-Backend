@@ -221,7 +221,6 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
         Fixture fixture = createFixture();
         CountDownLatch stateTransitionApplied = new CountDownLatch(1);
         CountDownLatch allowStateTransitionCommit = new CountDownLatch(1);
-        CountDownLatch endRequestStarted = new CountDownLatch(1);
 
         try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
             Future<Integer> stateTransition = executorService.submit(
@@ -233,10 +232,13 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
             );
             assertThat(stateTransitionApplied.await(3, TimeUnit.SECONDS)).isTrue();
             Future<Attempt> endAttempt = executorService.submit(
-                () -> endAfterStart(fixture, endRequestStarted)
+                () -> endExpectingConflict(fixture)
             );
-            assertThat(endRequestStarted.await(3, TimeUnit.SECONDS)).isTrue();
-            allowStateTransitionCommit.countDown();
+            try {
+                assertThat(awaitEndRequestLockWait()).isTrue();
+            } finally {
+                allowStateTransitionCommit.countDown();
+            }
 
             assertThat(stateTransition.get(5, TimeUnit.SECONDS)).isEqualTo(1);
             assertThat(endAttempt.get(5, TimeUnit.SECONDS).errorCode())
@@ -265,8 +267,7 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
         );
     }
 
-    private Attempt endAfterStart(Fixture fixture, CountDownLatch started) {
-        started.countDown();
+    private Attempt endExpectingConflict(Fixture fixture) {
         try {
             endContentReservationsUseCase.end(
                 fixture.adminId(),
@@ -295,6 +296,36 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
             await(allowCommit);
             return updatedCount;
         });
+    }
+
+    private boolean awaitEndRequestLockWait() {
+        for (int attempt = 0; attempt < 30; attempt++) {
+            Integer waitingEndRequestCount = jdbcTemplate.queryForObject(
+                """
+                    SELECT COUNT(*)
+                    FROM information_schema.processlist
+                    WHERE id <> CONNECTION_ID()
+                        AND db = DATABASE()
+                        AND command = 'Query'
+                        AND LOWER(info) LIKE '%for update%'
+                    """,
+                Integer.class
+            );
+            if (waitingEndRequestCount != null && waitingEndRequestCount > 0) {
+                return true;
+            }
+            awaitLockWaitInterval();
+        }
+        return false;
+    }
+
+    private void awaitLockWaitInterval() {
+        try {
+            TimeUnit.MILLISECONDS.sleep(100);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("lock wait confirmation was interrupted", exception);
+        }
     }
 
     private Fixture createFixture() {
