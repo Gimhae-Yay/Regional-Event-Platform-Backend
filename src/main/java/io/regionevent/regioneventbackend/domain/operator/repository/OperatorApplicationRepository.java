@@ -4,6 +4,7 @@ import java.util.Optional;
 
 import jakarta.persistence.LockModeType;
 
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -15,6 +16,18 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 public interface OperatorApplicationRepository extends JpaRepository<OperatorApplication, Long> {
 
     boolean existsByApplicantAndStatus(AppUser applicant, OperatorApplicationStatus status);
+
+    @EntityGraph(attributePaths = {"requestedRegion", "applicant", "inspectedUser"})
+    @Query("""
+        select application
+        from OperatorApplication application
+        where application.operatorApplicationId = :operatorApplicationId
+          and application.requestedRegion.regionId = :regionId
+        """)
+    Optional<OperatorApplication> findDetailByOperatorApplicationIdAndRequestedRegionId(
+        Long operatorApplicationId,
+        Long regionId
+    );
 
     @Query("""
         select application.status
