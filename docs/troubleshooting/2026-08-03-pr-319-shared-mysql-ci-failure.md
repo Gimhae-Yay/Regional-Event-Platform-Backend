@@ -4,8 +4,8 @@
 
 | 항목 | 내용 |
 | --- | --- |
-| 상태 | 원인 확인 |
-| 영향 | Issue #299 구현의 PR CI가 실패해 회귀 검증과 성능 판정을 완료하지 못함 |
+| 상태 | 해결 |
+| 영향 | Issue #299 구현의 PR CI가 일시 실패해 회귀 검증과 성능 판정이 지연됨 |
 | 최초 확인 시각·시간대 | 2026-08-03 13:41 KST |
 | 관련 요구사항·이슈 | Issue #299, PRD FR-01~FR-11 및 AC-01~AC-18 |
 | revision·브랜치 | `e0deca4dc2fcc4e778c1b7c3234c8302104de021`, `test/299-shared-mysql-containers` |
@@ -60,6 +60,9 @@ GitHub Actions run 30784997559의 `빌드 및 테스트` 단계가 약 2분 22�
 | 2026-08-03 13:41 KST | 관찰 | PR CI 빌드 단계 실패 | JUnit artifact와 로그에 실패 테스트·예외가 존재함 | 4개 클래스 6개 테스트 실패 | 채택 |
 | 2026-08-03 13:43 KST | 검증 | 공유 DB 상태 전파 가설 | fixture·제약 관련 예외가 발생함 | 모든 실패의 직접 원인은 `Too many connections` | 기각 |
 | 2026-08-03 13:44 KST | 가설 | 테스트 컨텍스트별 Hikari 풀이 공유 MySQL 연결 한도를 소진함 | 풀 제한 부재, 다수 pool, 후반 테스트부터 연결 거부 | 풀 제한 없음, HikariPool-33 관찰, 후반 4개 클래스 실패 | 채택 |
+| 2026-08-03 13:44 KST | 변경 | 공통 테스트 datasource 최대 풀 크기를 4로 제한 | 연결 수 초과 없이 최대 worker 3개 테스트를 유지함 | `SharedMySqlTestContainer`에 테스트 전용 상한 적용 | 채택 |
+| 2026-08-03 13:47 KST | 검증 | 원래 CI 절차 재실행 | 전체 테스트 성공, 연결 수 초과 미발생 | run 30785254416 attempt 1 성공, 700개 테스트 성공 | 채택 |
+| 2026-08-03 13:51 KST | 검증 | 동일 SHA 전체 CI 반복 | 순서 오염과 간헐 실패 없이 재성공 | run 30785254416 attempt 2 성공, 700개 테스트 성공 | 채택 |
 
 ## 가설과 검증
 
@@ -99,24 +102,31 @@ GitHub Actions run 30784997559의 `빌드 및 테스트` 단계가 약 2분 22�
 
 | 검증 항목 | Before | After | 판정 |
 | --- | --- | --- | --- |
-| 원래 재현 절차 | run 30784997559 실패 | 검증 전 | 조사 중 |
+| 원래 재현 절차 | run 30784997559 실패 | run 30785254416 attempt 1·2 성공 | 해결 |
 
 ## 회귀 테스트
 
 | 테스트·명령 | 결과 | 비고 |
 | --- | --- | --- |
 | `./gradlew --no-daemon clean build` | 로컬 성공, MySQL 테스트 skip | 로컬 Docker 데몬 부재 |
+| GitHub Actions `./gradlew --no-daemon clean build` attempt 1 | 성공, 700개·skip 0·failure 0·error 0 | MySQL 시작 1회 |
+| GitHub Actions `./gradlew --no-daemon clean build` attempt 2 | 성공, 700개·skip 0·failure 0·error 0 | MySQL 시작 1회 |
 
 ## 재발 방지와 문서 반영
 
-조사 후 기록한다.
+공통 MySQL 테스트 datasource가 컨텍스트 수와 무관하게 서버 연결 한도를 소진하지 않도록 최대 풀
+크기를 공통 등록한다. 전체 MySQL 테스트를 같은 서버에 연결하는 변경은 단일 클래스 성공만으로
+판정하지 않고 전체 CI 반복 결과로 검증한다.
 
 ## 잔여 위험과 후속 작업
 
-- 로컬 Docker 데몬 부재로 MySQL 재현은 GitHub Actions에서 수행해야 한다.
+- 로컬 Docker 데몬 부재로 로컬 MySQL 재현은 수행하지 못했고 GitHub Actions 2회 성공으로 대체했다.
+- 풀 크기 4는 현재 최대 worker 3개를 기준으로 하며 동시성 테스트 worker 수가 늘면 함께 재검토해야 한다.
 
 ## 관련 자료
 
 - [GitHub Actions run 30784997559](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/actions/runs/30784997559)
+- [해결 검증 attempt 1](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/actions/runs/30785254416/attempts/1)
+- [반복 검증 attempt 2](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/actions/runs/30785254416/attempts/2)
 - [PR #319](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/pull/319)
 - [Issue #299](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/299)
