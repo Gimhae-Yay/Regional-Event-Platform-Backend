@@ -2,8 +2,10 @@ package io.regionevent.regioneventbackend.domain.content.service;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
@@ -144,6 +146,32 @@ public class ContentSessionService {
         }
         contentSession.releaseCapacity(quantity);
         return contentSessionRepository.saveAndFlush(contentSession);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Long> findNoShowProcessingTargetSessionIds() {
+        return contentSessionRepository.findNoShowProcessingTargetSessionIds(ContentSessionStatus.SCHEDULED);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<ContentSession> findNoShowProcessingTargetForUpdate(Long sessionId) {
+        return contentSessionRepository.findNoShowProcessingTargetForUpdate(
+            sessionId,
+            ContentSessionStatus.SCHEDULED
+        );
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean completeIfNoConfirmedReservation(Long sessionId) {
+        return contentSessionRepository.completeIfNoConfirmedReservation(sessionId) == 1;
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public ContentSession findCompletedSessionForNoShowAudit(Long sessionId) {
+        return contentSessionRepository.findCompletedSessionForNoShowAudit(
+            sessionId,
+            ContentSessionStatus.COMPLETED
+        ).orElseThrow(() -> new IllegalStateException("completed content session does not exist"));
     }
 
     public record CreateContentSessionCommand(

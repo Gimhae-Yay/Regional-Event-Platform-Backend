@@ -12,6 +12,7 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentRevision;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentRevisionStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRevisionRepository;
+import io.regionevent.regioneventbackend.domain.image.entity.ImageLifecycleStatus;
 import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -70,6 +71,12 @@ public class ContentRevisionService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
+    public Long findContentIdByRevisionId(Long revisionId) {
+        return contentRevisionRepository.findContentIdByContentRevisionId(revisionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
     public ContentRevision findReviewTargetForUpdate(Long revisionId) {
         return contentRevisionRepository.findReviewTargetByIdForUpdate(revisionId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
@@ -84,6 +91,24 @@ public class ContentRevisionService {
     ) {
         validateRejectableOriginal(revision);
         revision.reject(reviewer, reviewedAt, reason);
+        contentRevisionRepository.flush();
+        return revision;
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ContentRevision approve(
+        ContentRevision revision,
+        AppUser reviewer,
+        Instant reviewedAt,
+        boolean isPrePublicationRevisionByHistory
+    ) {
+        Content content = revision.getContent();
+        validateApprovable(revision, content, isPrePublicationRevisionByHistory);
+        applyCandidateFields(revision, content, reviewedAt);
+        if (content.getStatus() == ContentStatus.PENDING) {
+            content.approve();
+        }
+        revision.approve(reviewer, reviewedAt);
         contentRevisionRepository.flush();
         return revision;
     }
@@ -124,6 +149,64 @@ public class ContentRevisionService {
         if (!publishedRevision && !prePublicationRevision) {
             throw new BusinessException(ErrorCode.CONTENT_STATE_CONFLICT);
         }
+    }
+
+    private void validateApprovable(
+        ContentRevision revision,
+        Content content,
+        boolean isPrePublicationRevisionByHistory
+    ) {
+        if (content.getDeletedAt() != null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+        if (revision.getStatus() != ContentRevisionStatus.EDIT_REQUESTED
+            || revision.getBaseContentVersion() != content.getVersionNo()) {
+            throw new BusinessException(ErrorCode.CONTENT_STATE_CONFLICT);
+        }
+
+        boolean publishedRevision = content.getStatus() == ContentStatus.PUBLISHED
+            && revision.getPublishAt() == null;
+        boolean prePublicationRevision = content.getStatus() == ContentStatus.PENDING
+            && revision.getPublishAt() != null
+            && isPrePublicationRevisionByHistory;
+        if (!publishedRevision && !prePublicationRevision) {
+            throw new BusinessException(ErrorCode.CONTENT_STATE_CONFLICT);
+        }
+        validateCandidateImage(revision, content);
+    }
+
+    private void validateCandidateImage(ContentRevision revision, Content content) {
+        ImageObject candidateImage = revision.getCandidateImageObject();
+        if (candidateImage == null
+            || revision.getCandidateImageAssignedAt() == null
+            || candidateImage.getLifecycleStatus() != ImageLifecycleStatus.ACTIVE
+            || candidateImage.getLinkedAt() == null
+            || !candidateImage.isScopedTo(content.getRegion().getRegionId())) {
+            throw new IllegalStateException("content revision candidate image must be active and linked");
+        }
+    }
+
+    private void applyCandidateFields(
+        ContentRevision revision,
+        Content content,
+        Instant appliedAt
+    ) {
+        Instant publishAt = revision.getPublishAt() == null
+            ? content.getPublishAt()
+            : revision.getPublishAt();
+        content.replaceEditableFields(
+            revision.getTitle(),
+            revision.getDescription(),
+            revision.getLocationText(),
+            revision.getOperatingHoursText(),
+            revision.getContactText(),
+            revision.getPrecautions(),
+            revision.getAgeRequirement(),
+            revision.getMaterials(),
+            revision.getCancellationPolicyText(),
+            publishAt
+        );
+        content.assignRepresentativeImage(revision.getCandidateImageObject(), appliedAt);
     }
 
     public record CreateContentRevisionCommand(

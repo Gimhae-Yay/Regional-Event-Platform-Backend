@@ -156,6 +156,20 @@ class OperatorContentSessionControllerIntegrationTest {
     }
 
     @Test
+    void cancelSession_whenTrimmedReasonIs500Characters_cancelsSession() throws Exception {
+        Fixture fixture = createFixture();
+        String cancellationReason = "a".repeat(500);
+
+        performCancel(
+            fixture.operator(),
+            fixture.contentSession().getSessionId().toString(),
+            requestBody(" " + cancellationReason + " ")
+        )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.cancellationReason").value(cancellationReason));
+    }
+
+    @Test
     void cancelSession_whenSessionAlreadyStarted_cancelsConfirmedReservationWithoutCapacityRelease()
         throws Exception {
 

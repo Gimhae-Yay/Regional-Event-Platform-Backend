@@ -8,4 +8,9 @@ public record CancelContentSessionRequest(
     @Size(max = 500)
     String cancellationReason
 ) {
+    public CancelContentSessionRequest {
+        if (cancellationReason != null) {
+            cancellationReason = cancellationReason.trim();
+        }
+    }
 }

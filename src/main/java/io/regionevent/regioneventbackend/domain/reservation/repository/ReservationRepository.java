@@ -6,6 +6,7 @@ import java.util.Optional;
 
 import jakarta.persistence.LockModeType;
 
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -13,6 +14,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
+import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
+
 public interface ReservationRepository extends JpaRepository<Reservation, Long> {
 
     Optional<Reservation> findByQrReference(String qrReference);
@@ -68,5 +71,38 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
         @Param("sessionId") Long sessionId,
         @Param("userId") Long userId,
         @Param("confirmedAt") Instant confirmedAt
+    );
+
+    @Query("""
+        SELECT reservation.reservationId
+        FROM Reservation reservation
+        WHERE reservation.contentSession.sessionId = :sessionId
+            AND reservation.status = :confirmedStatus
+        ORDER BY reservation.reservationId ASC
+        """)
+    List<Long> findConfirmedReservationIdsBySessionId(
+        @Param("sessionId") Long sessionId,
+        @Param("confirmedStatus") ReservationStatus confirmedStatus
+    );
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+        UPDATE reservation
+        JOIN content_session ON content_session.session_id = reservation.session_id
+        SET reservation.status = 'EXPIRED',
+            reservation.expired_at = CURRENT_TIMESTAMP,
+            reservation.updated_at = CURRENT_TIMESTAMP
+        WHERE reservation.reservation_id = :reservationId
+            AND reservation.status = 'CONFIRMED'
+            AND content_session.status = 'SCHEDULED'
+            AND content_session.ends_at <= CURRENT_TIMESTAMP
+            AND content_session.checkin_close_at <= CURRENT_TIMESTAMP
+        """, nativeQuery = true)
+    int expireIfNoShowEligible(@Param("reservationId") Long reservationId);
+
+    @EntityGraph(attributePaths = "region")
+    Optional<Reservation> findByReservationIdAndStatus(
+        Long reservationId,
+        ReservationStatus status
     );
 }

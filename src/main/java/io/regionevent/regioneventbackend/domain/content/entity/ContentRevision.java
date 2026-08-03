@@ -44,8 +44,16 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
         @CheckConstraint(
             name = "ck_content_revision_reviewed",
             constraint = """
-                status NOT IN ('EDIT_APPROVED', 'EDIT_REJECTED')
-                OR (reviewed_at IS NOT NULL AND reviewed_by_user_id IS NOT NULL AND review_reason IS NOT NULL)
+                (status <> 'EDIT_APPROVED' AND status <> 'EDIT_REJECTED')
+                OR (status = 'EDIT_APPROVED'
+                    AND reviewed_at IS NOT NULL
+                    AND reviewed_by_user_id IS NOT NULL
+                    AND review_reason IS NULL)
+                OR (status = 'EDIT_REJECTED'
+                    AND reviewed_at IS NOT NULL
+                    AND reviewed_by_user_id IS NOT NULL
+                    AND review_reason IS NOT NULL
+                    AND CHAR_LENGTH(TRIM(review_reason)) > 0)
                 """
         ),
         @CheckConstraint(
@@ -241,6 +249,19 @@ public class ContentRevision {
         reviewReason = normalizedReason;
     }
 
+    public void approve(AppUser reviewer, Instant reviewTime) {
+        AppUser validatedReviewer = requireNotNull(reviewer, "reviewer");
+        Instant validatedReviewTime = requireNotNull(reviewTime, "reviewTime");
+        if (status != ContentRevisionStatus.EDIT_REQUESTED) {
+            throw new BusinessException(ErrorCode.CONTENT_STATE_CONFLICT);
+        }
+
+        status = ContentRevisionStatus.EDIT_APPROVED;
+        reviewedAt = validatedReviewTime;
+        reviewedBy = validatedReviewer;
+        reviewReason = null;
+    }
+
     public Long getContentRevisionId() {
         return contentRevisionId;
     }
@@ -346,7 +367,15 @@ public class ContentRevision {
     }
 
     private void validateStatusDetails() {
-        if (status == ContentRevisionStatus.EDIT_APPROVED || status == ContentRevisionStatus.EDIT_REJECTED) {
+        if (status == ContentRevisionStatus.EDIT_APPROVED) {
+            requireNotNull(reviewedAt, "reviewedAt");
+            requireNotNull(reviewedBy, "reviewedBy");
+            if (reviewReason != null) {
+                throw new IllegalArgumentException("reviewReason must be null for approved revision");
+            }
+        }
+
+        if (status == ContentRevisionStatus.EDIT_REJECTED) {
             requireNotNull(reviewedAt, "reviewedAt");
             requireNotNull(reviewedBy, "reviewedBy");
             requireNotBlank(reviewReason, "reviewReason");

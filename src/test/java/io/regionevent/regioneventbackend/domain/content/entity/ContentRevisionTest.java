@@ -56,7 +56,11 @@ class ContentRevisionTest {
             assertThat(revision.getWithdrawalReason()).isEqualTo("기존 철회 사유");
         } else {
             assertThat(revision.getReviewedBy()).isSameAs(firstReviewer);
-            assertThat(revision.getReviewReason()).isEqualTo("기존 심사 사유");
+            if (terminalStatus == ContentRevisionStatus.EDIT_APPROVED) {
+                assertThat(revision.getReviewReason()).isNull();
+            } else {
+                assertThat(revision.getReviewReason()).isEqualTo("기존 심사 사유");
+            }
         }
     }
 
@@ -72,11 +76,67 @@ class ContentRevisionTest {
         assertThat(revision.getReviewReason()).isNull();
     }
 
+    @Test
+    void approve_whenEditIsRequested_recordsReviewerWithoutReason() {
+        AppUser reviewer = newUser("reviewer@example.com");
+        ContentRevision revision = newRevision();
+
+        revision.approve(reviewer, REVIEWED_AT);
+
+        assertThat(revision.getStatus()).isEqualTo(ContentRevisionStatus.EDIT_APPROVED);
+        assertThat(revision.getReviewedBy()).isSameAs(reviewer);
+        assertThat(revision.getReviewedAt()).isEqualTo(REVIEWED_AT);
+        assertThat(revision.getReviewReason()).isNull();
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+        value = ContentRevisionStatus.class,
+        names = {"EDIT_APPROVED", "EDIT_REJECTED", "EDIT_WITHDRAWN"}
+    )
+    void approve_whenRevisionIsAlreadyTerminal_throwsContentStateConflict(
+        ContentRevisionStatus terminalStatus
+    ) {
+        ContentRevision revision = newRevision(
+            terminalStatus,
+            newUser("first-reviewer@example.com")
+        );
+
+        assertThatThrownBy(() -> revision.approve(
+            newUser("second-reviewer@example.com"),
+            REVIEWED_AT.plusSeconds(60)
+        )).isInstanceOfSatisfying(BusinessException.class, exception ->
+            assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.CONTENT_STATE_CONFLICT)
+        );
+        assertThat(revision.getStatus()).isEqualTo(terminalStatus);
+    }
+
+    @Test
+    void constructor_whenApprovedRevisionHasReason_rejectsInvalidState() {
+        assertThatThrownBy(() -> newRevision(
+            ContentRevisionStatus.EDIT_APPROVED,
+            newUser("reviewer@example.com"),
+            "승인 사유"
+        )).isInstanceOf(IllegalArgumentException.class);
+    }
+
     private ContentRevision newRevision() {
         return newRevision(ContentRevisionStatus.EDIT_REQUESTED, null);
     }
 
     private ContentRevision newRevision(ContentRevisionStatus status, AppUser reviewer) {
+        return newRevision(
+            status,
+            reviewer,
+            status == ContentRevisionStatus.EDIT_REJECTED ? "기존 심사 사유" : null
+        );
+    }
+
+    private ContentRevision newRevision(
+        ContentRevisionStatus status,
+        AppUser reviewer,
+        String reviewReason
+    ) {
         Region region = new Region("GIMHAE", "김해시", true);
         AppUser operator = newUser("operator@example.com");
         Content content = new Content(
@@ -114,7 +174,7 @@ class ContentRevisionTest {
             Instant.parse("2026-08-01T00:00:00Z"),
             isReviewed(status) ? REVIEWED_AT : null,
             isReviewed(status) ? reviewer : null,
-            isReviewed(status) ? "기존 심사 사유" : null,
+            reviewReason,
             status == ContentRevisionStatus.EDIT_WITHDRAWN ? REVIEWED_AT : null,
             status == ContentRevisionStatus.EDIT_WITHDRAWN ? reviewer : null,
             status == ContentRevisionStatus.EDIT_WITHDRAWN ? "기존 철회 사유" : null
