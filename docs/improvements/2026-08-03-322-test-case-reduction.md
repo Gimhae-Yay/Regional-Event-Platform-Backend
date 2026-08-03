@@ -44,8 +44,6 @@
 - MySQL·Redis 실제 동작, 동시성·락, 트랜잭션 원자성·롤백, DB 제약, 인증·인가,
   멱등성·재시도 테스트를 유지한다.
 - 실패한 실행도 다음 시나리오 실행을 막지 않도록 `assertAll`을 사용한다.
-- JaCoCo는 CI 또는 `-PjacocoEnabled=true`를 지정한 공식 커버리지 측정에서만 활성화한다.
-- 로컬 기본 테스트는 실행·리포트 파일 충돌을 피하기 위해 JaCoCo 산출물을 생성하지 않는다.
 
 ### 지표와 합격 기준
 
@@ -72,11 +70,7 @@
 - 동시성·요청 비율: 기존 테스트에 선언된 스레드·요청 수를 변경하지 않는다.
 - 준비·warm-up: 매 반복에서 Gradle `clean`과 단일-use daemon을 사용한다.
 - 측정 시간·반복 횟수: Before 1회, After 2회. 각 반복은 독립 `clean build`다.
-- 로컬 기본 검증 명령: `./gradlew --no-daemon clean build`
-- 공식 커버리지 측정 명령:
-  `/usr/bin/time -p ./gradlew --no-daemon -PjacocoEnabled=true clean build`
-- 아래 Before/After 원시 측정은 초기 JaCoCo 설정이 모든 테스트에서 활성화됐을 때 수집했으므로
-  명령 표기에는 당시 실행한 `./gradlew --no-daemon clean build`를 유지한다.
+- 명령: `/usr/bin/time -p ./gradlew --no-daemon clean build`
 
 ## Before
 
@@ -183,7 +177,6 @@
 ## 한계와 잔여 위험
 
 - GitHub-hosted runner와 cache 상태를 고정하지 못한 단일 CI 실행 비교이므로 성능 개선 근거로 사용하지 않는다.
-- 로컬 기본 테스트에서는 JaCoCo가 비활성화되므로 커버리지 확인에는 `-PjacocoEnabled=true`가 필요하다.
 - 계약 테스트 하나 안의 여러 실패는 `assertAll`로 모두 보고되지만 Gradle의 최상위 테스트 수에는 1개로 집계된다.
 - JaCoCo는 커버한 분기의 의미적 assertion 강도를 증명하지 않으므로 기존 assertion을 삭제하지 않았다.
 
