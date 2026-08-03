@@ -42,6 +42,13 @@ public class OperatorApplicationService {
         return operatorApplicationRepository.existsByApplicantAndStatus(user, OperatorApplicationStatus.REJECTED);
     }
 
+    public OperatorApplication findDetail(Long operatorApplicationId, Long regionId) {
+        return operatorApplicationRepository.findDetailByOperatorApplicationIdAndRequestedRegionId(
+            operatorApplicationId,
+            regionId
+        ).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
     public OperatorApplicationStatus findApprovalStatus(Long operatorApplicationId, Long regionId) {
         return operatorApplicationRepository.findStatusByOperatorApplicationIdAndRequestedRegionId(
             operatorApplicationId,
