@@ -9,14 +9,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
+import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
+import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationCancellationLockTargetProjection;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationRepository;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
-import io.regionevent.regioneventbackend.domain.region.entity.Region;
 
 @Service
 public class ReservationService {
@@ -65,6 +67,17 @@ public class ReservationService {
         return validateOwnership(reservation, user);
     }
 
+    @Transactional(readOnly = true)
+    public ReservationCancellationLockTarget findCancellationLockTarget(Long reservationId, AppUser user) {
+        ReservationCancellationLockTargetProjection target = reservationRepository
+            .findCancellationLockTargetByReservationId(reservationId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+        if (target.getUserId() == null || !target.getUserId().equals(user.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        return new ReservationCancellationLockTarget(target.getSessionId());
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
     public Reservation findOwnedReservationForUpdate(Long reservationId, AppUser user) {
         Reservation reservation = reservationRepository.findByReservationIdForUpdate(reservationId)
@@ -83,6 +96,31 @@ public class ReservationService {
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean cancelIfCancellable(Long reservationId, Long userId) {
         return reservationRepository.cancelIfCancellable(reservationId, userId) == 1;
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public int cancelUncheckedInReservationsForSession(
+        ContentSession contentSession,
+        String cancellationReason,
+        Instant cancelledAt
+    ) {
+        List<Reservation> confirmedReservations = reservationRepository.findConfirmedBySessionIdForUpdate(
+            contentSession.getSessionId()
+        );
+        boolean shouldReleaseCapacity = reservationRepository.isSessionBeforeStartByDatabaseTime(
+            contentSession.getSessionId()
+        );
+        Instant capacityReleasedAt = shouldReleaseCapacity ? cancelledAt : null;
+        int releasedQuantity = shouldReleaseCapacity
+            ? confirmedReservations.stream()
+                .mapToInt(reservation -> reservation.getCapacityHold().getQuantity())
+                .sum()
+            : 0;
+        confirmedReservations.forEach(reservation ->
+            reservation.cancel(cancellationReason, cancelledAt, capacityReleasedAt)
+        );
+        reservationRepository.saveAllAndFlush(confirmedReservations);
+        return releasedQuantity;
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -140,5 +178,8 @@ public class ReservationService {
                 reservation.getExpiredAt()
             );
         }
+    }
+
+    public record ReservationCancellationLockTarget(Long sessionId) {
     }
 }
