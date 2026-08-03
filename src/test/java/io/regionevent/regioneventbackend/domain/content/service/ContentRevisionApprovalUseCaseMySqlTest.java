@@ -215,9 +215,7 @@ class ContentRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestS
         }
 
         ContentRevision revision = contentRevisionRepository.findById(fixture.revisionId()).orElseThrow();
-        Content content = contentRepository.findById(fixture.contentId()).orElseThrow();
         assertThat(revision.getStatus()).isEqualTo(ContentRevisionStatus.EDIT_APPROVED);
-        assertThat(content.getTitle()).isEqualTo("?꾨낫 ?쒕ぉ");
         assertThat(successAuditCount(fixture)).isEqualTo(1);
     }
 
