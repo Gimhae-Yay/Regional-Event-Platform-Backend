@@ -22,8 +22,6 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
@@ -55,13 +53,12 @@ import io.regionevent.regioneventbackend.domain.visit.entity.Visit;
 import io.regionevent.regioneventbackend.domain.visit.repository.VisitRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
+import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
+import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 
 @SpringBootTest
 @Testcontainers(disabledWithoutDocker = true)
-class CreateVisitReviewUseCaseMySqlIntegrationTest {
-
-    @Container
-    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.42");
+class CreateVisitReviewUseCaseMySqlIntegrationTest extends NonTransactionalMySqlTestSupport {
 
     private final CreateVisitReviewUseCase createVisitReviewUseCase;
     private final AppUserRepository appUserRepository;
@@ -107,10 +104,7 @@ class CreateVisitReviewUseCaseMySqlIntegrationTest {
 
     @DynamicPropertySource
     static void configureDataSource(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
+        SharedMySqlTestContainer.registerDataSourceProperties(registry);
     }
 
     @Test

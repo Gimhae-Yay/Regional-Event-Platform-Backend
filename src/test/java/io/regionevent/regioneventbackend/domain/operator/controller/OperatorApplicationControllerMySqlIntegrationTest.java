@@ -22,8 +22,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import io.regionevent.regioneventbackend.domain.operator.entity.OperatorApplication;
@@ -35,17 +33,16 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
+import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
+import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-class OperatorApplicationControllerMySqlIntegrationTest {
+class OperatorApplicationControllerMySqlIntegrationTest extends NonTransactionalMySqlTestSupport {
 
     private static final String OPERATOR_REQUEST_PATH = "/api/v1/operator/operator-requests";
-
-    @Container
-    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.42");
 
     private final MockMvc mockMvc;
     private final AppUserRepository appUserRepository;
@@ -70,10 +67,7 @@ class OperatorApplicationControllerMySqlIntegrationTest {
 
     @DynamicPropertySource
     static void configureDataSource(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
+        SharedMySqlTestContainer.registerDataSourceProperties(registry);
     }
 
     @Test
