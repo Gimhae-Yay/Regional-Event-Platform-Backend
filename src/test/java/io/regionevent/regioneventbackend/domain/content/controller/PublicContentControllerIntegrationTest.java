@@ -29,11 +29,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentRevision;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentRevisionStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
+import io.regionevent.regioneventbackend.domain.content.repository.ContentRevisionRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentSessionRepository;
 import io.regionevent.regioneventbackend.domain.image.entity.ImageLifecycleStatus;
 import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
@@ -65,6 +68,9 @@ class PublicContentControllerIntegrationTest {
 
     @Autowired
     private ContentSessionRepository contentSessionRepository;
+
+    @Autowired
+    private ContentRevisionRepository contentRevisionRepository;
 
     @Autowired
     private ImageObjectRepository imageObjectRepository;
@@ -288,6 +294,166 @@ class PublicContentControllerIntegrationTest {
             .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
 
         assertThat(imageObject.getLifecycleStatus()).isEqualTo(ImageLifecycleStatus.DELETE_PENDING);
+        assertThat(imageStorageGateway.requestedObjectKeys()).isEmpty();
+    }
+
+    @Test
+    void getPublicContent_returnsCurrentContentAndShortLivedImageUrlWithoutPersistingIt() throws Exception {
+        Region region = saveRegion("DETAIL", true);
+        AppUser operator = saveOperator();
+        Content content = saveContent(region, operator, "current title", PUBLISH_AT, true);
+        long contentCount = contentRepository.count();
+        long imageCount = imageObjectRepository.count();
+        long auditEventCount = auditEventRepository.count();
+
+        mockMvc.perform(get("/api/v1/contents/" + content.getContentId()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.statusCode").value(200))
+            .andExpect(jsonPath("$.code").value("SUCCESS"))
+            .andExpect(jsonPath("$.data.contentId").value(content.getContentId().toString()))
+            .andExpect(jsonPath("$.data.contentType").value("EVENT_EXPERIENCE"))
+            .andExpect(jsonPath("$.data.title").value("current title"))
+            .andExpect(jsonPath("$.data.description").exists())
+            .andExpect(jsonPath("$.data.locationText").exists())
+            .andExpect(jsonPath("$.data.operatingHoursText").exists())
+            .andExpect(jsonPath("$.data.contactText").exists())
+            .andExpect(jsonPath("$.data.precautions").exists())
+            .andExpect(jsonPath("$.data.ageRequirement").exists())
+            .andExpect(jsonPath("$.data.materials").exists())
+            .andExpect(jsonPath("$.data.cancellationPolicyText").exists())
+            .andExpect(jsonPath("$.data.representativeImageUrl")
+                .value("https://example.invalid/view/1"))
+            .andExpect(jsonPath("$.data.representativeImageUrlExpiresAt")
+                .value("2026-08-01T00:05:01Z"))
+            .andExpect(jsonPath("$.data.imageObjectId").doesNotExist())
+            .andExpect(jsonPath("$.data.objectKey").doesNotExist())
+            .andExpect(jsonPath("$.data.originalFileName").doesNotExist())
+            .andExpect(content().string(not(containsString("contents/"))));
+
+        entityManager.clear();
+        assertThat(imageStorageGateway.requestedObjectKeys())
+            .containsExactly(content.getRepresentativeImageObject().getObjectKey());
+        assertThat(contentRepository.count()).isEqualTo(contentCount);
+        assertThat(imageObjectRepository.count()).isEqualTo(imageCount);
+        assertThat(auditEventRepository.count()).isEqualTo(auditEventCount);
+        assertThat(contentRepository.findById(content.getContentId()))
+            .get()
+            .satisfies(foundContent -> {
+                assertThat(foundContent.getStatus()).isEqualTo(ContentStatus.PUBLISHED);
+                assertThat(foundContent.getDeletedAt()).isNull();
+                assertThat(foundContent.getTitle()).isEqualTo("current title");
+            });
+    }
+
+    @Test
+    void getPublicContent_rejectsInvalidContentIdAsInvalidInput() throws Exception {
+        for (String invalidContentId : List.of("0", "01", "-1", "content", "12345678901")) {
+            mockMvc.perform(get("/api/v1/contents/" + invalidContentId))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        }
+
+        assertThat(imageStorageGateway.requestedObjectKeys()).isEmpty();
+    }
+
+    @Test
+    void getPublicContent_hidesMissingNonPublishedAndDeletedContentWithNotFound() throws Exception {
+        Region region = saveRegion("DETAIL-HIDDEN", true);
+        AppUser operator = saveOperator();
+        Content nonPublished = saveContent(
+            region,
+            operator,
+            "non-published",
+            PUBLISH_AT,
+            true,
+            ContentStatus.PENDING
+        );
+        Content deleted = saveContent(
+            region,
+            operator,
+            "deleted",
+            PUBLISH_AT,
+            true,
+            ContentStatus.PENDING
+        );
+        deleted.softDelete();
+        contentRepository.saveAndFlush(deleted);
+
+        for (String contentId : List.of(
+            "999999",
+            nonPublished.getContentId().toString(),
+            deleted.getContentId().toString()
+        )) {
+            mockMvc.perform(get("/api/v1/contents/" + contentId))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+        }
+
+        assertThat(imageStorageGateway.requestedObjectKeys()).isEmpty();
+    }
+
+    @Test
+    void getPublicContent_usesCurrentContentInsteadOfPendingRevisionCandidates() throws Exception {
+        Region region = saveRegion("DETAIL-REVISION", true);
+        AppUser operator = saveOperator();
+        Content content = saveContent(region, operator, "current title", PUBLISH_AT, true);
+        ContentRevision revision = new ContentRevision(
+            content,
+            1,
+            content.getVersionNo(),
+            operator,
+            ContentRevisionStatus.EDIT_REQUESTED,
+            "candidate title",
+            "candidate description",
+            "candidate location",
+            "candidate hours",
+            "candidate contact",
+            "candidate precautions",
+            "candidate age",
+            "candidate materials",
+            "candidate cancellation policy",
+            PUBLISH_AT.plusSeconds(3_600),
+            Instant.now(),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+        );
+        revision.assignCandidateImage(saveLinkedImageObject(region, operator), Instant.now());
+        contentRevisionRepository.saveAndFlush(revision);
+
+        mockMvc.perform(get("/api/v1/contents/" + content.getContentId()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.title").value("current title"))
+            .andExpect(jsonPath("$.data.representativeImageUrl")
+                .value("https://example.invalid/view/1"))
+            .andExpect(content().string(not(containsString("candidate title"))));
+
+        assertThat(imageStorageGateway.requestedObjectKeys())
+            .containsExactly(content.getRepresentativeImageObject().getObjectKey());
+    }
+
+    @Test
+    void getPublicContent_rejectsMissingOrInactiveRepresentativeImageWithoutIssuingUrl() throws Exception {
+        Region region = saveRegion("DETAIL-IMAGE", true);
+        AppUser operator = saveOperator();
+        Content missingImage = saveContentWithoutImage(region, operator, "missing image", PUBLISH_AT);
+
+        mockMvc.perform(get("/api/v1/contents/" + missingImage.getContentId()))
+            .andExpect(status().isInternalServerError())
+            .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
+
+        Content inactiveImage = saveContent(region, operator, "inactive image", PUBLISH_AT, true);
+        ImageObject imageObject = inactiveImage.getRepresentativeImageObject();
+        imageObject.markDeletePending();
+        imageObjectRepository.saveAndFlush(imageObject);
+
+        mockMvc.perform(get("/api/v1/contents/" + inactiveImage.getContentId()))
+            .andExpect(status().isInternalServerError())
+            .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
+
         assertThat(imageStorageGateway.requestedObjectKeys()).isEmpty();
     }
 
