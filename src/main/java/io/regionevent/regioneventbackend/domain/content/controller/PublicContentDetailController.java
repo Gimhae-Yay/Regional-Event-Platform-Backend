@@ -21,7 +21,7 @@ import io.regionevent.regioneventbackend.global.response.ApiResponse;
 public class PublicContentDetailController {
 
     private static final String SUCCESS_MESSAGE = "공개 콘텐츠 상세 조회에 성공했습니다.";
-    private static final Pattern CONTENT_ID_PATTERN = Pattern.compile("^[1-9][0-9]{0,9}$");
+    private static final Pattern CONTENT_ID_PATTERN = Pattern.compile("^[1-9][0-9]*$");
 
     private final GetPublicContentUseCase getPublicContentUseCase;
 
@@ -45,6 +45,10 @@ public class PublicContentDetailController {
         if (!CONTENT_ID_PATTERN.matcher(value).matches()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
-        return Long.valueOf(value);
+        try {
+            return Long.valueOf(value);
+        } catch (NumberFormatException exception) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
     }
 }

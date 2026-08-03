@@ -347,11 +347,15 @@ class PublicContentControllerIntegrationTest {
 
     @Test
     void getPublicContent_rejectsInvalidContentIdAsInvalidInput() throws Exception {
-        for (String invalidContentId : List.of("0", "01", "-1", "content", "12345678901")) {
+        for (String invalidContentId : List.of("0", "01", "-1", "content", "9223372036854775808")) {
             mockMvc.perform(get("/api/v1/contents/" + invalidContentId))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
         }
+
+        mockMvc.perform(get("/api/v1/contents/10000000000"))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.code").value("NOT_FOUND"));
 
         assertThat(imageStorageGateway.requestedObjectKeys()).isEmpty();
     }
