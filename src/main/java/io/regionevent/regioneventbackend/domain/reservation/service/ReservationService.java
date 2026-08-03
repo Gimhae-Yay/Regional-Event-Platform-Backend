@@ -12,14 +12,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
+import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationRepository;
-import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
-import io.regionevent.regioneventbackend.global.error.BusinessException;
-import io.regionevent.regioneventbackend.global.error.ErrorCode;
-import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
