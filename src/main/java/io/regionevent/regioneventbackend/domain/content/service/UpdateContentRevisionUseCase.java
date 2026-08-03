@@ -7,6 +7,8 @@ import java.util.regex.Pattern;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import tools.jackson.databind.JsonNode;
 
@@ -16,6 +18,9 @@ import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentRevision;
 import io.regionevent.regioneventbackend.domain.content.service.ContentRevisionService.UpdateContentRevisionCommand;
 import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
+import io.regionevent.regioneventbackend.domain.image.service.ImageObjectCleanupService;
+import io.regionevent.regioneventbackend.domain.image.service.ImageObjectService;
+import io.regionevent.regioneventbackend.domain.image.service.ImageObjectService.DeletePendingImageObject;
 import io.regionevent.regioneventbackend.domain.image.service.RepresentativeImageConnectionService;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService.AuthorizedOperator;
@@ -31,15 +36,21 @@ public class UpdateContentRevisionUseCase {
     private final OperatorAuthorizationService operatorAuthorizationService;
     private final RepresentativeImageConnectionService representativeImageConnectionService;
     private final ContentRevisionService contentRevisionService;
+    private final ImageObjectService imageObjectService;
+    private final ImageObjectCleanupService imageObjectCleanupService;
 
     public UpdateContentRevisionUseCase(
         OperatorAuthorizationService operatorAuthorizationService,
         RepresentativeImageConnectionService representativeImageConnectionService,
-        ContentRevisionService contentRevisionService
+        ContentRevisionService contentRevisionService,
+        ImageObjectService imageObjectService,
+        ImageObjectCleanupService imageObjectCleanupService
     ) {
         this.operatorAuthorizationService = operatorAuthorizationService;
         this.representativeImageConnectionService = representativeImageConnectionService;
         this.contentRevisionService = contentRevisionService;
+        this.imageObjectService = imageObjectService;
+        this.imageObjectCleanupService = imageObjectCleanupService;
     }
 
     @Transactional
@@ -52,6 +63,7 @@ public class UpdateContentRevisionUseCase {
         AuthorizedOperator operator = operatorAuthorizationService.requireAuthorizedOperator(authenticatedUserId);
         ContentRevision contentRevision = contentRevisionService.findRejectedRevisionForUpdate(revisionId);
         validateOwnership(contentRevision, operator);
+        ImageObject previousCandidateImageObject = contentRevision.getCandidateImageObject();
         ImageObject candidateImageObject = resolveCandidateImage(request.representativeImageObjectId(), operator);
 
         Instant publishAt = resolvePublishAt(contentRevision, request.publishAt());
@@ -59,7 +71,26 @@ public class UpdateContentRevisionUseCase {
             contentRevision,
             toCommand(request, publishAt, candidateImageObject)
         );
+        if (candidateImageObject != null) {
+            imageObjectService.markDeletePendingIfUnreferenced(
+                previousCandidateImageObject,
+                candidateImageObject
+            ).ifPresent(this::deleteImageObjectAfterCommit);
+        }
         return UpdateContentRevisionResponse.from(updatedContentRevision);
+    }
+
+    private void deleteImageObjectAfterCommit(DeletePendingImageObject deletePendingImageObject) {
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+
+            @Override
+            public void afterCommit() {
+                imageObjectCleanupService.deletePendingObject(
+                    deletePendingImageObject.imageObjectId(),
+                    deletePendingImageObject.objectKey()
+                );
+            }
+        });
     }
 
     private void validateRequest(UpdateContentRevisionRequest request) {

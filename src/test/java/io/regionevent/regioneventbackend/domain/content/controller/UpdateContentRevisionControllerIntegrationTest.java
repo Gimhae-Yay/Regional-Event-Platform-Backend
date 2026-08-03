@@ -6,7 +6,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -21,6 +23,7 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
@@ -277,6 +280,118 @@ class UpdateContentRevisionControllerIntegrationTest {
     }
 
     @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void updateContentRevision_whenPreviousCandidateImageIsUnreferenced_deletesPreviousImageAfterCommit()
+        throws Exception {
+
+        try {
+            Region region = saveRegion("UPDATE-IMAGE-DELETE");
+            AppUser operator = saveUser("update-image-delete-operator@example.com");
+            AppUser reviewer = saveUser("update-image-delete-reviewer@example.com");
+            userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
+            Content content = saveContent(region, operator, ContentStatus.PUBLISHED);
+            ImageObject previousCandidateImageObject = saveLinkedCandidateImageObject(
+                operator,
+                region,
+                "content/revision-previous-delete.webp"
+            );
+            Long previousImageObjectId = previousCandidateImageObject.getImageObjectId();
+            String previousObjectKey = previousCandidateImageObject.getObjectKey();
+            ImageObject replacementCandidateImageObject = saveUploadCandidateImageObject(
+                operator,
+                region,
+                "content/revision-replacement-delete.webp"
+            );
+            imageStorageGateway.addMetadata(
+                replacementCandidateImageObject.getObjectKey(),
+                replacementCandidateImageObject.getByteSize(),
+                replacementCandidateImageObject.getChecksum()
+            );
+            ContentRevision contentRevision = saveRejectedRevision(
+                content,
+                operator,
+                reviewer,
+                null,
+                previousCandidateImageObject
+            );
+
+            Long revisionId = contentRevision.getContentRevisionId();
+            mockMvc.perform(put("/api/v1/operator/content-revisions/{revisionId}", revisionId)
+                    .header(HttpHeaders.AUTHORIZATION, bearerToken(operator))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(validRequestWithRepresentativeImage(
+                        replacementCandidateImageObject.getImageObjectId().toString()
+                    )))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("EDIT_REJECTED"));
+
+            assertThat(imageObjectRepository.existsById(previousImageObjectId)).isFalse();
+            assertThat(imageStorageGateway.deletedObjectKeys()).containsExactly(previousObjectKey);
+        } finally {
+            deletePersistedTestData();
+        }
+    }
+
+    @Test
+    void updateContentRevision_whenPreviousCandidateImageIsStillReferenced_keepsPreviousImageActive()
+        throws Exception {
+
+        Region region = saveRegion("UPDATE-IMAGE-SHARED");
+        AppUser operator = saveUser("update-image-shared-operator@example.com");
+        AppUser reviewer = saveUser("update-image-shared-reviewer@example.com");
+        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
+        ImageObject sharedCandidateImageObject = saveLinkedCandidateImageObject(
+            operator,
+            region,
+            "content/revision-shared-candidate.webp"
+        );
+        Content content = saveContent(region, operator, ContentStatus.PUBLISHED);
+        ContentRevision contentRevision = saveRejectedRevision(
+            content,
+            operator,
+            reviewer,
+            null,
+            sharedCandidateImageObject
+        );
+        Content otherContent = saveContent(region, operator, ContentStatus.PUBLISHED);
+        ContentRevision otherContentRevision = saveRejectedRevision(
+            otherContent,
+            operator,
+            reviewer,
+            null,
+            sharedCandidateImageObject
+        );
+        ImageObject replacementCandidateImageObject = saveUploadCandidateImageObject(
+            operator,
+            region,
+            "content/revision-replacement-shared.webp"
+        );
+        imageStorageGateway.addMetadata(
+            replacementCandidateImageObject.getObjectKey(),
+            replacementCandidateImageObject.getByteSize(),
+            replacementCandidateImageObject.getChecksum()
+        );
+
+        mockMvc.perform(put("/api/v1/operator/content-revisions/{revisionId}", contentRevision.getContentRevisionId())
+                .header(HttpHeaders.AUTHORIZATION, bearerToken(operator))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(validRequestWithRepresentativeImage(
+                    replacementCandidateImageObject.getImageObjectId().toString()
+                )))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("EDIT_REJECTED"));
+
+        assertThat(contentRevisionRepository.findById(otherContentRevision.getContentRevisionId()))
+            .get()
+            .satisfies(revision -> assertThat(revision.getCandidateImageObject().getImageObjectId())
+                .isEqualTo(sharedCandidateImageObject.getImageObjectId()));
+        assertThat(imageObjectRepository.findById(sharedCandidateImageObject.getImageObjectId()))
+            .get()
+            .satisfies(imageObject -> assertThat(imageObject.getLifecycleStatus())
+                .isEqualTo(ImageLifecycleStatus.ACTIVE));
+    }
+
+    @Test
     void updateContentRevision_whenRepresentativeImageObjectIdIsInvalid_returnsContractError() throws Exception {
         Region region = saveRegion("UPDATE-IMAGE-INVALID");
         AppUser operator = saveUser("update-image-invalid-operator@example.com");
@@ -375,6 +490,25 @@ class UpdateContentRevisionControllerIntegrationTest {
         ));
     }
 
+    private ImageObject saveLinkedCandidateImageObject(
+        AppUser operator,
+        Region region,
+        String objectKey
+    ) {
+        ImageObject imageObject = imageObjectRepository.saveAndFlush(ImageObject.createUploadCandidate(
+            objectKey,
+            operator,
+            region,
+            "image/webp",
+            1L,
+            "sha256:" + objectKey,
+            Instant.parse("2027-01-01T00:00:00Z")
+        ));
+        imageObject.markLinked(CANDIDATE_IMAGE_ASSIGNED_AT);
+        imageObjectRepository.flush();
+        return imageObject;
+    }
+
     private ImageObject saveUploadCandidateImageObject(
         AppUser operator,
         Region region,
@@ -408,7 +542,7 @@ class UpdateContentRevisionControllerIntegrationTest {
         );
         if (candidateImageObject != null) {
             contentRevision.assignCandidateImage(candidateImageObject, CANDIDATE_IMAGE_ASSIGNED_AT);
-            contentRevisionRepository.flush();
+            contentRevisionRepository.saveAndFlush(contentRevision);
         }
         return contentRevision;
     }
@@ -492,6 +626,17 @@ class UpdateContentRevisionControllerIntegrationTest {
         return appendFieldToRequest("\"representativeImageObjectId\": null");
     }
 
+    private void deletePersistedTestData() {
+        contentSessionRepository.deleteAllInBatch();
+        contentRevisionRepository.deleteAllInBatch();
+        contentRepository.deleteAllInBatch();
+        imageObjectRepository.deleteAllInBatch();
+        userRoleAssignmentRepository.deleteAllInBatch();
+        appUserRepository.deleteAllInBatch();
+        regionRepository.deleteAllInBatch();
+        imageStorageGateway.reset();
+    }
+
     private String appendFieldToRequest(String field) {
         String request = validRequestWithoutPublishAt();
         int closingBraceIndex = request.lastIndexOf('}');
@@ -515,6 +660,7 @@ class UpdateContentRevisionControllerIntegrationTest {
     static class FakeImageStorageGateway implements ImageStorageGateway {
 
         private final Map<String, StoredObjectMetadata> metadataByObjectKey = new HashMap<>();
+        private final List<String> deletedObjectKeys = new ArrayList<>();
 
         @Override
         public PresignedUpload createPresignedPutUpload(
@@ -538,7 +684,7 @@ class UpdateContentRevisionControllerIntegrationTest {
 
         @Override
         public void delete(String objectKey) {
-            throw new UnsupportedOperationException("not used");
+            deletedObjectKeys.add(objectKey);
         }
 
         void addMetadata(String objectKey, long byteSize, String checksum) {
@@ -547,6 +693,11 @@ class UpdateContentRevisionControllerIntegrationTest {
 
         void reset() {
             metadataByObjectKey.clear();
+            deletedObjectKeys.clear();
+        }
+
+        List<String> deletedObjectKeys() {
+            return deletedObjectKeys;
         }
     }
 }
