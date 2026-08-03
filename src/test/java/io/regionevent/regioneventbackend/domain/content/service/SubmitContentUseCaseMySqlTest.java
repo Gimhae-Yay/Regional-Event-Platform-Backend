@@ -135,14 +135,20 @@ class SubmitContentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         assertThat(contentLogRepository.findByContentContentIdOrderByDateAscIdAsc(fixture.contentId()))
             .extracting(ContentLog::getStatus)
             .containsExactly(ContentLogStatus.PENDING, ContentLogStatus.REJECTED, ContentLogStatus.PENDING);
-        List<AuditEvent> auditEvents = auditEventRepository.findAll()
-            .stream()
-            .filter(auditEvent -> fixture.contentId().equals(auditEvent.getTargetId()))
-            .toList();
+        List<AuditEvent> auditEvents = auditEventRepository.findAll();
 
         assertThat(auditEvents)
             .extracting(AuditEvent::getResult)
             .containsExactlyInAnyOrder(AuditEventResult.SUCCESS, AuditEventResult.FAILURE);
+        assertThat(auditEvents)
+            .filteredOn(auditEvent -> auditEvent.getResult() == AuditEventResult.SUCCESS)
+            .singleElement()
+            .satisfies(auditEvent -> assertThat(auditEvent.getTargetId()).isEqualTo(fixture.contentId()));
+        assertThat(auditEvents)
+            .filteredOn(auditEvent -> auditEvent.getResult() == AuditEventResult.FAILURE)
+            .singleElement()
+            .satisfies(auditEvent -> assertThat(auditEvent.getReasonCode())
+                .isEqualTo(ErrorCode.CONTENT_STATE_CONFLICT.code()));
         assertThat(auditEvents)
             .allSatisfy(auditEvent ->
                 assertThat(auditEventActorLinkRepository.findById(auditEvent.getAuditEventId()))
