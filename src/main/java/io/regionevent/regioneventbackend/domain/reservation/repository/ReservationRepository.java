@@ -21,6 +21,51 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
 
     Optional<Reservation> findByQrReference(String qrReference);
 
+    @EntityGraph(attributePaths = {
+        "region",
+        "contentSession",
+        "contentSession.region",
+        "contentSession.content",
+        "contentSession.content.region",
+        "contentSession.content.operator",
+        "user"
+    })
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT reservation
+        FROM Reservation reservation
+        WHERE reservation.qrReference = :qrReference
+        """)
+    Optional<Reservation> findByQrReferenceForCheckIn(@Param("qrReference") String qrReference);
+
+    @EntityGraph(attributePaths = {
+        "region",
+        "contentSession",
+        "contentSession.region",
+        "contentSession.content",
+        "contentSession.content.region",
+        "contentSession.content.operator",
+        "user"
+    })
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<Reservation> findByReservationNo(String reservationNo);
+
+    @EntityGraph(attributePaths = {
+        "region",
+        "contentSession",
+        "contentSession.region",
+        "contentSession.content",
+        "contentSession.content.region",
+        "contentSession.content.operator",
+        "user"
+    })
+    @Query("""
+        SELECT reservation
+        FROM Reservation reservation
+        WHERE reservation.reservationId = :reservationId
+        """)
+    Optional<Reservation> findWithCheckInDetailsByReservationId(@Param("reservationId") Long reservationId);
+
     @Query("""
         SELECT reservation
         FROM Reservation reservation
@@ -128,6 +173,16 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
         @Param("reservationId") Long reservationId,
         @Param("userId") Long userId
     );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+        UPDATE reservation
+        SET status = 'CHECKED_IN',
+            updated_at = CURRENT_TIMESTAMP
+        WHERE reservation_id = :reservationId
+            AND status = 'CONFIRMED'
+        """, nativeQuery = true)
+    int checkInIfConfirmed(@Param("reservationId") Long reservationId);
 
     @Query("""
         SELECT reservation.reservationId
