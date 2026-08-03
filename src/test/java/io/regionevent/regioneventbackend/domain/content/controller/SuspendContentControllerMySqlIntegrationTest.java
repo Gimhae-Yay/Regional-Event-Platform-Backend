@@ -7,7 +7,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -58,7 +57,6 @@ import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.reservation.repository.CapacityHoldRepository;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationRepository;
-import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHoldService;
 import io.regionevent.regioneventbackend.domain.reservation.service.ExpireOrInvalidateCapacityHoldsUseCase;
 import io.regionevent.regioneventbackend.domain.reservation.service.HoldTerminationResult;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -97,7 +95,6 @@ class SuspendContentControllerMySqlIntegrationTest extends NonTransactionalMySql
     private final SuspendContentUseCase suspendContentUseCase;
     private final ExpireOrInvalidateCapacityHoldsUseCase expireOrInvalidateCapacityHoldsUseCase;
     private final BlockingContentSessionService blockingContentSessionService;
-    private final BlockingCapacityHoldService blockingCapacityHoldService;
 
     @Autowired
     SuspendContentControllerMySqlIntegrationTest(
@@ -116,8 +113,7 @@ class SuspendContentControllerMySqlIntegrationTest extends NonTransactionalMySql
         JdbcTemplate jdbcTemplate,
         SuspendContentUseCase suspendContentUseCase,
         ExpireOrInvalidateCapacityHoldsUseCase expireOrInvalidateCapacityHoldsUseCase,
-        BlockingContentSessionService blockingContentSessionService,
-        BlockingCapacityHoldService blockingCapacityHoldService
+        BlockingContentSessionService blockingContentSessionService
     ) {
         this.mockMvc = mockMvc;
         this.regionRepository = regionRepository;
@@ -135,7 +131,6 @@ class SuspendContentControllerMySqlIntegrationTest extends NonTransactionalMySql
         this.suspendContentUseCase = suspendContentUseCase;
         this.expireOrInvalidateCapacityHoldsUseCase = expireOrInvalidateCapacityHoldsUseCase;
         this.blockingContentSessionService = blockingContentSessionService;
-        this.blockingCapacityHoldService = blockingCapacityHoldService;
     }
 
     @DynamicPropertySource
@@ -299,7 +294,7 @@ class SuspendContentControllerMySqlIntegrationTest extends NonTransactionalMySql
             fixture.activeHoldId()
         );
         blockingContentSessionService.prepareSuspensionBlock();
-        blockingCapacityHoldService.prepareTerminationTargetRead();
+        blockingContentSessionService.prepareTerminationSessionLockWait(fixture.sessionId());
 
         try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
             Future<SuspendContentResult> suspension = executorService.submit(() -> suspendContentUseCase.suspend(
@@ -313,13 +308,15 @@ class SuspendContentControllerMySqlIntegrationTest extends NonTransactionalMySql
             Future<HoldTerminationResult> termination = executorService.submit(
                 expireOrInvalidateCapacityHoldsUseCase::execute
             );
-            assertThat(blockingCapacityHoldService.awaitTerminationTargetRead()).isTrue();
+            assertThat(blockingContentSessionService.awaitTerminationSessionLockAttempt()).isTrue();
+            assertThat(blockingContentSessionService.awaitTerminationSessionLockWait()).isTrue();
             blockingContentSessionService.releaseSuspension();
 
             assertThat(suspension.get(5, TimeUnit.SECONDS).status()).isEqualTo(ContentStatus.SUSPENDED);
             assertThat(termination.get(5, TimeUnit.SECONDS).failedHoldCount()).isZero();
         } finally {
             blockingContentSessionService.releaseSuspension();
+            blockingContentSessionService.stopTerminationSessionLockTracking();
         }
 
         assertThat(capacityHoldRepository.findById(fixture.activeHoldId()))
@@ -513,34 +510,46 @@ class SuspendContentControllerMySqlIntegrationTest extends NonTransactionalMySql
         @Bean
         @Primary
         BlockingContentSessionService blockingContentSessionService(
-            ContentSessionRepository contentSessionRepository
+            ContentSessionRepository contentSessionRepository,
+            JdbcTemplate jdbcTemplate
         ) {
-            return new BlockingContentSessionService(contentSessionRepository);
-        }
-
-        @Bean
-        @Primary
-        BlockingCapacityHoldService blockingCapacityHoldService(
-            CapacityHoldRepository capacityHoldRepository
-        ) {
-            return new BlockingCapacityHoldService(capacityHoldRepository);
+            return new BlockingContentSessionService(contentSessionRepository, jdbcTemplate);
         }
     }
 
     static class BlockingContentSessionService extends ContentSessionService {
 
+        private static final int LOCK_WAIT_CONFIRMATION_ATTEMPTS = 30;
+        private static final long LOCK_WAIT_CONFIRMATION_INTERVAL_MILLIS = 100;
+
+        private final JdbcTemplate jdbcTemplate;
         private volatile boolean blockSuspension;
         private volatile CountDownLatch suspensionSessionLocked = new CountDownLatch(1);
         private volatile CountDownLatch continueSuspension = new CountDownLatch(1);
+        private volatile Long suspensionConnectionId;
+        private volatile Long terminationTargetSessionId;
+        private volatile Long terminationConnectionId;
+        private volatile CountDownLatch terminationSessionLockAttempted = new CountDownLatch(1);
 
-        BlockingContentSessionService(ContentSessionRepository contentSessionRepository) {
+        BlockingContentSessionService(
+            ContentSessionRepository contentSessionRepository,
+            JdbcTemplate jdbcTemplate
+        ) {
             super(contentSessionRepository);
+            this.jdbcTemplate = jdbcTemplate;
         }
 
         void prepareSuspensionBlock() {
             blockSuspension = true;
             suspensionSessionLocked = new CountDownLatch(1);
             continueSuspension = new CountDownLatch(1);
+            suspensionConnectionId = null;
+        }
+
+        void prepareTerminationSessionLockWait(Long sessionId) {
+            terminationTargetSessionId = sessionId;
+            terminationConnectionId = null;
+            terminationSessionLockAttempted = new CountDownLatch(1);
         }
 
         boolean awaitSuspensionSessionLock() throws InterruptedException {
@@ -552,6 +561,24 @@ class SuspendContentControllerMySqlIntegrationTest extends NonTransactionalMySql
             continueSuspension.countDown();
         }
 
+        void stopTerminationSessionLockTracking() {
+            terminationTargetSessionId = null;
+        }
+
+        boolean awaitTerminationSessionLockAttempt() throws InterruptedException {
+            return terminationSessionLockAttempted.await(3, TimeUnit.SECONDS);
+        }
+
+        boolean awaitTerminationSessionLockWait() {
+            for (int attempt = 0; attempt < LOCK_WAIT_CONFIRMATION_ATTEMPTS; attempt++) {
+                if (isTerminationSessionLockWaitingForSuspension()) {
+                    return true;
+                }
+                awaitLockWaitConfirmationInterval();
+            }
+            return false;
+        }
+
         @Override
         @Transactional(propagation = Propagation.MANDATORY)
         public void lockSuspendTargetsForUpdate(Long contentId) {
@@ -559,33 +586,68 @@ class SuspendContentControllerMySqlIntegrationTest extends NonTransactionalMySql
             if (!blockSuspension) {
                 return;
             }
+            suspensionConnectionId = findCurrentConnectionId();
             suspensionSessionLocked.countDown();
             await(continueSuspension);
         }
-    }
-
-    static class BlockingCapacityHoldService extends CapacityHoldService {
-
-        private volatile CountDownLatch terminationTargetRead = new CountDownLatch(1);
-
-        BlockingCapacityHoldService(CapacityHoldRepository capacityHoldRepository) {
-            super(capacityHoldRepository);
-        }
-
-        void prepareTerminationTargetRead() {
-            terminationTargetRead = new CountDownLatch(1);
-        }
-
-        boolean awaitTerminationTargetRead() throws InterruptedException {
-            return terminationTargetRead.await(3, TimeUnit.SECONDS);
-        }
 
         @Override
-        @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
-        public Optional<Long> findContentSessionId(Long holdId) {
-            Optional<Long> sessionId = super.findContentSessionId(holdId);
-            terminationTargetRead.countDown();
-            return sessionId;
+        @Transactional(propagation = Propagation.MANDATORY)
+        public void lockForUpdate(Long sessionId) {
+            if (sessionId.equals(terminationTargetSessionId)) {
+                terminationConnectionId = findCurrentConnectionId();
+                terminationSessionLockAttempted.countDown();
+            }
+            super.lockForUpdate(sessionId);
+        }
+
+        private boolean isTerminationSessionLockWaitingForSuspension() {
+            Long currentTerminationConnectionId = terminationConnectionId;
+            Long currentSuspensionConnectionId = suspensionConnectionId;
+            if (currentTerminationConnectionId == null || currentSuspensionConnectionId == null) {
+                return false;
+            }
+            Integer waitingLockCount = jdbcTemplate.queryForObject(
+                """
+                    SELECT COUNT(*)
+                    FROM performance_schema.data_lock_waits AS lock_wait
+                    JOIN performance_schema.threads AS requesting_thread
+                        ON requesting_thread.thread_id = lock_wait.requesting_thread_id
+                    JOIN performance_schema.threads AS blocking_thread
+                        ON blocking_thread.thread_id = lock_wait.blocking_thread_id
+                    JOIN performance_schema.data_locks AS requested_lock
+                        ON requested_lock.engine = lock_wait.engine
+                        AND requested_lock.engine_lock_id = lock_wait.requesting_engine_lock_id
+                    WHERE requesting_thread.processlist_id = ?
+                        AND blocking_thread.processlist_id = ?
+                        AND requested_lock.object_schema = DATABASE()
+                        AND requested_lock.object_name = 'content_session'
+                        AND requested_lock.index_name = 'PRIMARY'
+                        AND requested_lock.lock_type = 'RECORD'
+                        AND requested_lock.lock_status = 'WAITING'
+                    """,
+                Integer.class,
+                currentTerminationConnectionId,
+                currentSuspensionConnectionId
+            );
+            return waitingLockCount != null && waitingLockCount > 0;
+        }
+
+        private Long findCurrentConnectionId() {
+            Long connectionId = jdbcTemplate.queryForObject("SELECT CONNECTION_ID()", Long.class);
+            if (connectionId == null) {
+                throw new IllegalStateException("MySQL connection id does not exist");
+            }
+            return connectionId;
+        }
+
+        private void awaitLockWaitConfirmationInterval() {
+            try {
+                TimeUnit.MILLISECONDS.sleep(LOCK_WAIT_CONFIRMATION_INTERVAL_MILLIS);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("lock wait confirmation was interrupted", exception);
+            }
         }
     }
 
