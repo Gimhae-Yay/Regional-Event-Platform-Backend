@@ -176,6 +176,21 @@ public class OperatorApplication {
         updatedAtExplicitlySet = true;
     }
 
+    public void reject(
+        AppUser reviewer,
+        String rejectedReason,
+        Instant rejectedAt
+    ) {
+        if (status != OperatorApplicationStatus.PENDING) {
+            throw new IllegalStateException("only pending application can be rejected");
+        }
+        status = OperatorApplicationStatus.REJECTED;
+        inspectedUser = requireNotNull(reviewer, "reviewer");
+        this.rejectedReason = requireNotBlank(rejectedReason, "rejectedReason");
+        updatedAt = requireNotNull(rejectedAt, "rejectedAt").truncatedTo(ChronoUnit.MICROS);
+        updatedAtExplicitlySet = true;
+    }
+
     private void validateReviewResult() {
         if (status == OperatorApplicationStatus.APPROVED) {
             requireNotNull(inspectedUser, "inspectedUser");

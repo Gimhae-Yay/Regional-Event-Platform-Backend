@@ -3,6 +3,7 @@ package io.regionevent.regioneventbackend.support.mysql;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.Objects;
 import java.util.function.UnaryOperator;
 
@@ -42,6 +43,24 @@ public final class SharedMySqlTestContainer {
 
     public static String getJdbcUrl() {
         return container().getJdbcUrl();
+    }
+
+    public static void grantLockMonitoringPrivileges() {
+        MySQLContainer mysql = container();
+        try (
+            Connection connection = DriverManager.getConnection(
+                mysql.getJdbcUrl(),
+                "root",
+                mysql.getPassword()
+            );
+            Statement statement = connection.createStatement()
+        ) {
+            statement.execute("GRANT SELECT ON performance_schema.data_lock_waits TO 'test'@'%'");
+            statement.execute("GRANT SELECT ON performance_schema.data_locks TO 'test'@'%'");
+            statement.execute("GRANT SELECT ON performance_schema.threads TO 'test'@'%'");
+        } catch (SQLException exception) {
+            throw new IllegalStateException("failed to grant MySQL lock monitoring privileges", exception);
+        }
     }
 
     static Connection openConnection() throws SQLException {
