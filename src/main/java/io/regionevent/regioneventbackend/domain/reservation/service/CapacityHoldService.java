@@ -103,6 +103,19 @@ public class CapacityHoldService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
+    public void invalidateAllActiveHoldsForContent(
+        Long contentId,
+        String invalidationReason
+    ) {
+        if (contentId == null || contentId <= 0) {
+            throw new IllegalArgumentException("contentId must be positive");
+        }
+        validateInvalidationReason(invalidationReason);
+        capacityHoldRepository.findActiveHoldIdsByContentId(contentId)
+            .forEach(holdId -> invalidateAndReleaseCapacityIfActive(holdId, invalidationReason));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
     public boolean expireAndReleaseCapacityIfActive(Long holdId) {
         if (capacityHoldRepository.findExpiredActiveHoldIdForUpdate(holdId).isEmpty()) {
             return false;
