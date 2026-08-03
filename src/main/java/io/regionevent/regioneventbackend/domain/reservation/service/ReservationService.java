@@ -67,6 +67,32 @@ public class ReservationService {
     }
 
     @Transactional(readOnly = true)
+    public Reservation findByIdForCheckInResult(Long reservationId) {
+        return reservationRepository.findWithCheckInDetailsByReservationId(reservationId)
+            .orElseThrow(() -> new IllegalStateException("check-in result reservation does not exist"));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<Reservation> findByQrReferenceForCheckIn(String qrReference) {
+        return reservationRepository.findByQrReferenceForCheckIn(qrReference);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<Reservation> findByReservationNoForCheckIn(String reservationNo) {
+        return reservationRepository.findByReservationNo(reservationNo);
+    }
+
+    @Transactional(readOnly = true)
+    public Instant findCurrentDatabaseInstant() {
+        return toInstant(reservationRepository.findCurrentEpochSeconds());
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean checkInIfConfirmed(Long reservationId) {
+        return reservationRepository.checkInIfConfirmed(reservationId) == 1;
+    }
+
+    @Transactional(readOnly = true)
     public MyReservationQrResult issueQr(Long reservationId, AppUser user) {
         Reservation reservation = reservationRepository.findByReservationIdForQrIssue(reservationId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
