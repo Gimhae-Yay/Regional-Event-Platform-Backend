@@ -1,5 +1,7 @@
 package io.regionevent.regioneventbackend.domain.content.service;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.inOrder;
@@ -51,6 +53,15 @@ class GetOriginalContentReviewDetailUseCaseTest {
     );
 
     @Test
+    void 전체_단위_계약을_보존한다() {
+        assertAll(
+            () -> new GetOriginalContentReviewDetailUseCaseTest().최초_심사_대기_콘텐츠_상세와_PENDING_회차를_조립하고_인가_후에만_이미지_URL을_발급한다(),
+            () -> new GetOriginalContentReviewDetailUseCaseTest().다른_담당_지역의_원본_심사_대기_콘텐츠는_URL을_발급하지_않고_거부한다(),
+            () -> new GetOriginalContentReviewDetailUseCaseTest().공개_전_수정_심사_대기_콘텐츠는_NOT_FOUND로_비노출한다(),
+            () -> new GetOriginalContentReviewDetailUseCaseTest().현재_대표_이미지가_지역과_일치하지_않으면_URL을_발급하지_않는다()
+        );
+    }
+
     void 최초_심사_대기_콘텐츠_상세와_PENDING_회차를_조립하고_인가_후에만_이미지_URL을_발급한다() {
         Content content = content(REGION_ID);
         ContentSession session = session();
@@ -88,7 +99,6 @@ class GetOriginalContentReviewDetailUseCaseTest {
         inOrder.verify(representativeImageViewUrlService).createViewUrl(content.getRepresentativeImageObject());
     }
 
-    @Test
     void 다른_담당_지역의_원본_심사_대기_콘텐츠는_URL을_발급하지_않고_거부한다() {
         Content content = content(20L);
         when(regionAdminAuthorizationService.requireAuthorizedRegionId(USER_ID)).thenReturn(REGION_ID);
@@ -103,7 +113,6 @@ class GetOriginalContentReviewDetailUseCaseTest {
         verifyNoInteractions(contentSessionService, representativeImageViewUrlService);
     }
 
-    @Test
     void 공개_전_수정_심사_대기_콘텐츠는_NOT_FOUND로_비노출한다() {
         Content content = content(REGION_ID);
         when(regionAdminAuthorizationService.requireAuthorizedRegionId(USER_ID)).thenReturn(REGION_ID);
@@ -118,7 +127,6 @@ class GetOriginalContentReviewDetailUseCaseTest {
         verifyNoInteractions(contentSessionService, representativeImageViewUrlService);
     }
 
-    @Test
     void 현재_대표_이미지가_지역과_일치하지_않으면_URL을_발급하지_않는다() {
         Content content = content(REGION_ID);
         when(content.getRepresentativeImageObject().isScopedTo(REGION_ID)).thenReturn(false);

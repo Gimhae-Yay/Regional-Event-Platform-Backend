@@ -1,5 +1,7 @@
 package io.regionevent.regioneventbackend.global.security.refresh;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -15,6 +17,17 @@ class RefreshTokenServiceTest {
     private static final Instant NOW = Instant.parse("2026-07-31T00:00:00Z");
 
     @Test
+    void 전체_단위_계약을_보존한다() {
+        assertAll(
+            () -> new RefreshTokenServiceTest().rotate_whenStoreStartsRotation_preservesFamilyAndExpiry(),
+            () -> new RefreshTokenServiceTest().rotate_whenStoreReportsConflict_throwsRefreshTokenConflictException(),
+            () -> new RefreshTokenServiceTest().rotate_whenStoreReportsInvalid_throwsInvalidRefreshTokenException(),
+            () -> new RefreshTokenServiceTest().rotate_whenVerificationFailsAfterStartingRotation_cancelsRotation(),
+            () -> new RefreshTokenServiceTest().rotate_whenRotationCompletionConflicts_throwsRefreshTokenConflictException(),
+            () -> new RefreshTokenServiceTest().issue_whenRedisStoreIsUnavailable_throwsRefreshTokenStoreUnavailableException()
+        );
+    }
+
     void rotate_whenStoreStartsRotation_preservesFamilyAndExpiry() {
         Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
         RecordingRefreshTokenStore refreshTokenStore = new RecordingRefreshTokenStore();
@@ -32,7 +45,6 @@ class RefreshTokenServiceTest {
         assertThat(refreshTokenStore.completedTokenId).isEqualTo(rotated.tokenId());
     }
 
-    @Test
     void rotate_whenStoreReportsConflict_throwsRefreshTokenConflictException() {
         Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
         RecordingRefreshTokenStore refreshTokenStore = new RecordingRefreshTokenStore();
@@ -45,7 +57,6 @@ class RefreshTokenServiceTest {
             .isInstanceOf(RefreshTokenConflictException.class);
     }
 
-    @Test
     void rotate_whenStoreReportsInvalid_throwsInvalidRefreshTokenException() {
         Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
         RecordingRefreshTokenStore refreshTokenStore = new RecordingRefreshTokenStore();
@@ -58,7 +69,6 @@ class RefreshTokenServiceTest {
             .isInstanceOf(InvalidRefreshTokenException.class);
     }
 
-    @Test
     void rotate_whenVerificationFailsAfterStartingRotation_cancelsRotation() {
         Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
         RecordingRefreshTokenStore refreshTokenStore = new RecordingRefreshTokenStore();
@@ -72,7 +82,6 @@ class RefreshTokenServiceTest {
         assertThat(refreshTokenStore.cancelledAttemptId).isNotNull();
     }
 
-    @Test
     void rotate_whenRotationCompletionConflicts_throwsRefreshTokenConflictException() {
         Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
         RecordingRefreshTokenStore refreshTokenStore = new RecordingRefreshTokenStore();
@@ -84,7 +93,6 @@ class RefreshTokenServiceTest {
             .isInstanceOf(RefreshTokenConflictException.class);
     }
 
-    @Test
     void issue_whenRedisStoreIsUnavailable_throwsRefreshTokenStoreUnavailableException() {
         Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
         RecordingRefreshTokenStore refreshTokenStore = new RecordingRefreshTokenStore();
