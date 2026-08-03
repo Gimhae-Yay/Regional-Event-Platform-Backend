@@ -6,12 +6,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -29,6 +35,10 @@ import io.regionevent.regioneventbackend.domain.content.repository.ContentSessio
 import io.regionevent.regioneventbackend.domain.image.entity.ImageLifecycleStatus;
 import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
 import io.regionevent.regioneventbackend.domain.image.repository.ImageObjectRepository;
+import io.regionevent.regioneventbackend.domain.image.service.ImageStorageGateway;
+import io.regionevent.regioneventbackend.domain.image.service.ImageStorageGateway.PresignedUpload;
+import io.regionevent.regioneventbackend.domain.image.service.ImageStorageGateway.PresignedViewUrl;
+import io.regionevent.regioneventbackend.domain.image.service.ImageStorageGateway.StoredObjectMetadata;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -76,6 +86,14 @@ class UpdateContentRevisionControllerIntegrationTest {
 
     @Autowired
     private ImageObjectRepository imageObjectRepository;
+
+    @Autowired
+    private FakeImageStorageGateway imageStorageGateway;
+
+    @BeforeEach
+    void setUp() {
+        imageStorageGateway.reset();
+    }
 
     @Test
     void updateContentRevision_whenRejectedRevisionRequestsValidFields_updatesOnlyRevision() throws Exception {
@@ -211,6 +229,54 @@ class UpdateContentRevisionControllerIntegrationTest {
     }
 
     @Test
+    void updateContentRevision_whenRepresentativeImageObjectIdIsValid_replacesCandidateImage() throws Exception {
+        Region region = saveRegion("UPDATE-IMAGE-VALID");
+        AppUser operator = saveUser("update-image-valid-operator@example.com");
+        AppUser reviewer = saveUser("update-image-valid-reviewer@example.com");
+        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
+        Content content = saveContent(region, operator, ContentStatus.PUBLISHED);
+        ImageObject originalCandidateImageObject = saveImageObject("content/revision-original-candidate.webp");
+        ImageObject replacementCandidateImageObject = saveUploadCandidateImageObject(
+            operator,
+            region,
+            "content/revision-replacement-candidate.webp"
+        );
+        imageStorageGateway.addMetadata(
+            replacementCandidateImageObject.getObjectKey(),
+            replacementCandidateImageObject.getByteSize(),
+            replacementCandidateImageObject.getChecksum()
+        );
+        ContentRevision contentRevision = saveRejectedRevision(
+            content,
+            operator,
+            reviewer,
+            null,
+            originalCandidateImageObject
+        );
+        String replacementImageObjectId = replacementCandidateImageObject.getImageObjectId().toString();
+
+        mockMvc.perform(put("/api/v1/operator/content-revisions/{revisionId}", contentRevision.getContentRevisionId())
+                .header(HttpHeaders.AUTHORIZATION, bearerToken(operator))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(validRequestWithRepresentativeImage(replacementImageObjectId)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("EDIT_REJECTED"));
+
+        ContentRevision updatedRevision = contentRevisionRepository.findById(
+            contentRevision.getContentRevisionId()
+        ).orElseThrow();
+        assertThat(updatedRevision.getCandidateImageObject().getImageObjectId())
+            .isEqualTo(replacementCandidateImageObject.getImageObjectId());
+        assertThat(updatedRevision.getCandidateImageAssignedAt()).isNotNull();
+        assertThat(imageObjectRepository.findById(replacementCandidateImageObject.getImageObjectId()))
+            .get()
+            .satisfies(imageObject -> {
+                assertThat(imageObject.getCreatedByUser()).isNull();
+                assertThat(imageObject.getLinkedAt()).isEqualTo(updatedRevision.getCandidateImageAssignedAt());
+            });
+    }
+
+    @Test
     void updateContentRevision_whenRepresentativeImageObjectIdIsInvalid_returnsContractError() throws Exception {
         Region region = saveRegion("UPDATE-IMAGE-INVALID");
         AppUser operator = saveUser("update-image-invalid-operator@example.com");
@@ -222,7 +288,7 @@ class UpdateContentRevisionControllerIntegrationTest {
         mockMvc.perform(put("/api/v1/operator/content-revisions/{revisionId}", contentRevision.getContentRevisionId())
                 .header(HttpHeaders.AUTHORIZATION, bearerToken(operator))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(validRequestWithRepresentativeImage("1")))
+                .content(validRequestWithRepresentativeImage("0")))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
 
@@ -299,6 +365,22 @@ class UpdateContentRevisionControllerIntegrationTest {
             ImageLifecycleStatus.ACTIVE,
             0,
             null
+        ));
+    }
+
+    private ImageObject saveUploadCandidateImageObject(
+        AppUser operator,
+        Region region,
+        String objectKey
+    ) {
+        return imageObjectRepository.saveAndFlush(ImageObject.createUploadCandidate(
+            objectKey,
+            operator,
+            region,
+            "image/webp",
+            1L,
+            "sha256:" + objectKey,
+            Instant.parse("2027-01-01T00:00:00Z")
         ));
     }
 
@@ -407,5 +489,53 @@ class UpdateContentRevisionControllerIntegrationTest {
             + field
             + "\n"
             + request.substring(closingBraceIndex);
+    }
+
+    @TestConfiguration
+    static class TestImageStorageConfig {
+
+        @Bean
+        @Primary
+        FakeImageStorageGateway fakeImageStorageGateway() {
+            return new FakeImageStorageGateway();
+        }
+    }
+
+    static class FakeImageStorageGateway implements ImageStorageGateway {
+
+        private final Map<String, StoredObjectMetadata> metadataByObjectKey = new HashMap<>();
+
+        @Override
+        public PresignedUpload createPresignedPutUpload(
+            String objectKey,
+            String mediaType,
+            long byteSize,
+            String checksum
+        ) {
+            throw new UnsupportedOperationException("not used");
+        }
+
+        @Override
+        public StoredObjectMetadata findMetadata(String objectKey) {
+            return metadataByObjectKey.get(objectKey);
+        }
+
+        @Override
+        public PresignedViewUrl createPresignedGetUrl(String objectKey) {
+            throw new UnsupportedOperationException("not used");
+        }
+
+        @Override
+        public void delete(String objectKey) {
+            throw new UnsupportedOperationException("not used");
+        }
+
+        void addMetadata(String objectKey, long byteSize, String checksum) {
+            metadataByObjectKey.put(objectKey, new StoredObjectMetadata(byteSize, checksum));
+        }
+
+        void reset() {
+            metadataByObjectKey.clear();
+        }
     }
 }

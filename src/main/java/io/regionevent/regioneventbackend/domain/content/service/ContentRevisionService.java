@@ -109,6 +109,12 @@ public class ContentRevisionService {
             command.cancellationPolicyText(),
             command.publishAt()
         );
+        if (command.candidateImageObject() != null) {
+            contentRevision.assignCandidateImage(
+                command.candidateImageObject(),
+                command.candidateImageAssignedAt()
+            );
+        }
         contentRevisionRepository.flush();
         return contentRevision;
     }
@@ -264,7 +270,9 @@ public class ContentRevisionService {
         String ageRequirement,
         String materials,
         String cancellationPolicyText,
-        Instant publishAt
+        Instant publishAt,
+        ImageObject candidateImageObject,
+        Instant candidateImageAssignedAt
     ) {
     }
 }

@@ -3,6 +3,7 @@ package io.regionevent.regioneventbackend.domain.content.service;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.regex.Pattern;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,6 +15,8 @@ import io.regionevent.regioneventbackend.domain.content.dto.UpdateContentRevisio
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentRevision;
 import io.regionevent.regioneventbackend.domain.content.service.ContentRevisionService.UpdateContentRevisionCommand;
+import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
+import io.regionevent.regioneventbackend.domain.image.service.RepresentativeImageConnectionService;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService.AuthorizedOperator;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -23,15 +26,19 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
 public class UpdateContentRevisionUseCase {
 
     private static final ZoneOffset REQUIRED_OFFSET = ZoneOffset.ofHours(9);
+    private static final Pattern POSITIVE_DECIMAL_PATTERN = Pattern.compile("[1-9]\\d*");
 
     private final OperatorAuthorizationService operatorAuthorizationService;
+    private final RepresentativeImageConnectionService representativeImageConnectionService;
     private final ContentRevisionService contentRevisionService;
 
     public UpdateContentRevisionUseCase(
         OperatorAuthorizationService operatorAuthorizationService,
+        RepresentativeImageConnectionService representativeImageConnectionService,
         ContentRevisionService contentRevisionService
     ) {
         this.operatorAuthorizationService = operatorAuthorizationService;
+        this.representativeImageConnectionService = representativeImageConnectionService;
         this.contentRevisionService = contentRevisionService;
     }
 
@@ -45,12 +52,12 @@ public class UpdateContentRevisionUseCase {
         AuthorizedOperator operator = operatorAuthorizationService.requireAuthorizedOperator(authenticatedUserId);
         ContentRevision contentRevision = contentRevisionService.findRejectedRevisionForUpdate(revisionId);
         validateOwnership(contentRevision, operator);
-        validateRepresentativeImagePolicy(request.representativeImageObjectId());
+        ImageObject candidateImageObject = resolveCandidateImage(request.representativeImageObjectId(), operator);
 
         Instant publishAt = resolvePublishAt(contentRevision, request.publishAt());
         ContentRevision updatedContentRevision = contentRevisionService.updateRejectedRevision(
             contentRevision,
-            toCommand(request, publishAt)
+            toCommand(request, publishAt, candidateImageObject)
         );
         return UpdateContentRevisionResponse.from(updatedContentRevision);
     }
@@ -75,14 +82,37 @@ public class UpdateContentRevisionUseCase {
         }
     }
 
-    private void validateRepresentativeImagePolicy(JsonNode representativeImageObjectId) {
-        if (representativeImageObjectId == null || representativeImageObjectId.isNull()) {
-            return;
+    private ImageObject resolveCandidateImage(
+        JsonNode representativeImageObjectId,
+        AuthorizedOperator operator
+    ) {
+        Long imageObjectId = parseOptionalPositiveImageObjectId(representativeImageObjectId);
+        if (imageObjectId == null) {
+            return null;
         }
-        if (!representativeImageObjectId.isString()) {
+        return representativeImageConnectionService.validateAndMarkConnected(
+            imageObjectId,
+            operator.user().getUserId(),
+            operator.region().getRegionId()
+        );
+    }
+
+    private Long parseOptionalPositiveImageObjectId(JsonNode value) {
+        if (value == null || value.isNull()) {
+            return null;
+        }
+        if (!value.isString()) {
             throw new BusinessException(ErrorCode.INVALID_TYPE);
         }
-        throw invalidInput();
+        String imageObjectId = value.stringValue();
+        if (!POSITIVE_DECIMAL_PATTERN.matcher(imageObjectId).matches()) {
+            throw invalidInput();
+        }
+        try {
+            return Long.valueOf(imageObjectId);
+        } catch (NumberFormatException exception) {
+            throw invalidInput();
+        }
     }
 
     private Instant resolvePublishAt(
@@ -107,7 +137,8 @@ public class UpdateContentRevisionUseCase {
 
     private UpdateContentRevisionCommand toCommand(
         UpdateContentRevisionRequest request,
-        Instant publishAt
+        Instant publishAt,
+        ImageObject candidateImageObject
     ) {
         return new UpdateContentRevisionCommand(
             request.title(),
@@ -119,7 +150,9 @@ public class UpdateContentRevisionUseCase {
             request.ageRequirement(),
             request.materials(),
             request.cancellationPolicyText(),
-            publishAt
+            publishAt,
+            candidateImageObject,
+            candidateImageObject == null ? null : candidateImageObject.getLinkedAt()
         );
     }
 
