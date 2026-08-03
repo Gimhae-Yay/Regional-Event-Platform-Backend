@@ -72,11 +72,7 @@ public class ContentSessionService {
     }
 
     public boolean lockConfirmableReservationTarget(Long sessionId) {
-        return contentSessionRepository.findConfirmableReservationTargetForUpdate(
-            sessionId,
-            ContentStatus.PUBLISHED,
-            ContentSessionStatus.SCHEDULED
-        ).isPresent();
+        return contentSessionRepository.findConfirmableReservationTargetIdForUpdate(sessionId).isPresent();
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
