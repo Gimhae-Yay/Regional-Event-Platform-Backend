@@ -5,7 +5,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 
 import jakarta.persistence.EntityManager;
 
@@ -13,7 +15,11 @@ import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -49,6 +55,7 @@ import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenSe
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@Import(OperatorContentSessionControllerIntegrationTest.FixedClockTestConfiguration.class)
 @Transactional
 class OperatorContentSessionControllerIntegrationTest {
 
@@ -199,6 +206,33 @@ class OperatorContentSessionControllerIntegrationTest {
             .orElseThrow();
         assertThat(cancelledSession.getStatus()).isEqualTo(ContentSessionStatus.CANCELLED);
         assertThat(cancelledSession.getRemainingCapacity()).isEqualTo(10);
+        assertThat(cancelledReservation.getStatus()).isEqualTo(ReservationStatus.CANCELLED);
+        assertThat(cancelledReservation.getCapacityReleasedAt()).isNull();
+    }
+
+    @Test
+    void cancelSession_whenDatabaseTimeIsAfterSessionStart_doesNotReleaseReservationCapacity() throws Exception {
+        Fixture fixture = createFixture(Instant.parse("2026-08-01T01:00:00Z"));
+        Reservation confirmedReservation = saveReservation(fixture, 2, ReservationStatus.CONFIRMED);
+        updateRemainingCapacity(fixture.contentSession().getSessionId(), 8);
+        entityManager.flush();
+        entityManager.clear();
+
+        performCancel(fixture.operator(), fixture.contentSession().getSessionId().toString(), requestBody(
+            CANCELLATION_REASON
+        ))
+            .andExpect(status().isOk());
+
+        entityManager.flush();
+        entityManager.clear();
+        ContentSession cancelledSession = contentSessionRepository
+            .findById(fixture.contentSession().getSessionId())
+            .orElseThrow();
+        Reservation cancelledReservation = reservationRepository
+            .findById(confirmedReservation.getReservationId())
+            .orElseThrow();
+        assertThat(cancelledSession.getStatus()).isEqualTo(ContentSessionStatus.CANCELLED);
+        assertThat(cancelledSession.getRemainingCapacity()).isEqualTo(8);
         assertThat(cancelledReservation.getStatus()).isEqualTo(ReservationStatus.CANCELLED);
         assertThat(cancelledReservation.getCapacityReleasedAt()).isNull();
     }
@@ -372,6 +406,17 @@ class OperatorContentSessionControllerIntegrationTest {
         ));
     }
 
+    private void updateRemainingCapacity(Long sessionId, int remainingCapacity) {
+        entityManager.createNativeQuery("""
+            UPDATE content_session
+            SET remaining_capacity = ?
+            WHERE session_id = ?
+            """)
+            .setParameter(1, remainingCapacity)
+            .setParameter(2, sessionId)
+            .executeUpdate();
+    }
+
     private ContentSession saveScheduledSession(
         Content content,
         Region region,
@@ -429,5 +474,15 @@ class OperatorContentSessionControllerIntegrationTest {
         AppUser operator,
         ContentSession contentSession
     ) {
+    }
+
+    @TestConfiguration
+    static class FixedClockTestConfiguration {
+
+        @Bean
+        @Primary
+        Clock fixedClock() {
+            return Clock.fixed(REVIEWED_AT, ZoneOffset.UTC);
+        }
     }
 }

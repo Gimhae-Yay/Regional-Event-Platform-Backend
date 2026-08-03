@@ -18,6 +18,10 @@ security:
       audience: regional-event-refresh
       active-key-id: ${JWT_REFRESH_ACTIVE_KEY_ID}
       active-key: ${JWT_REFRESH_ACTIVE_KEY}
+  qr:
+    active-key-id: ${QR_ACTIVE_KEY_ID}
+    active-key: ${QR_ACTIVE_KEY}
+    token-ttl: ${QR_TOKEN_TTL}
 
 idempotency:
   retention: PT24H

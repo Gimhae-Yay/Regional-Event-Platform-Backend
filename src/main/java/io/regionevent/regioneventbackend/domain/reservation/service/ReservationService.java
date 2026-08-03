@@ -10,11 +10,14 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
+import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationRepository;
-import io.regionevent.regioneventbackend.domain.region.entity.Region;
+import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 @Service
 public class ReservationService {
@@ -56,6 +59,33 @@ public class ReservationService {
             .orElseThrow(() -> new IllegalStateException("idempotency result reservation does not exist"));
     }
 
+    @Transactional(readOnly = true)
+    public Reservation findOwnedReservation(Long reservationId, AppUser user) {
+        Reservation reservation = reservationRepository.findWithDetailsByReservationId(reservationId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+        return validateOwnership(reservation, user);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Reservation findOwnedReservationForUpdate(Long reservationId, AppUser user) {
+        Reservation reservation = reservationRepository.findByReservationIdForUpdate(reservationId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+        return validateOwnership(reservation, user);
+    }
+
+    private Reservation validateOwnership(Reservation reservation, AppUser user) {
+        if (reservation.getUser() == null
+            || !reservation.getUser().getUserId().equals(user.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        return reservation;
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean cancelIfCancellable(Long reservationId, Long userId) {
+        return reservationRepository.cancelIfCancellable(reservationId, userId) == 1;
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
     public int cancelUncheckedInReservationsForSession(
         ContentSession contentSession,
@@ -65,7 +95,9 @@ public class ReservationService {
         List<Reservation> confirmedReservations = reservationRepository.findConfirmedBySessionIdForUpdate(
             contentSession.getSessionId()
         );
-        boolean shouldReleaseCapacity = cancelledAt.isBefore(contentSession.getStartsAt());
+        boolean shouldReleaseCapacity = reservationRepository.isSessionBeforeStartByDatabaseTime(
+            contentSession.getSessionId()
+        );
         Instant capacityReleasedAt = shouldReleaseCapacity ? cancelledAt : null;
         int releasedQuantity = shouldReleaseCapacity
             ? confirmedReservations.stream()

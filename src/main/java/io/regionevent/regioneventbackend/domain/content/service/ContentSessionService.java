@@ -148,6 +148,14 @@ public class ContentSessionService {
         return contentSessionRepository.saveAndFlush(contentSession);
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void restoreCapacity(Long sessionId, int quantity) {
+        int updatedCount = contentSessionRepository.increaseRemainingCapacityIfWithinCapacity(sessionId, quantity);
+        if (updatedCount == 0) {
+            throw new IllegalStateException("failed to restore content session capacity");
+        }
+    }
+
     @Transactional(readOnly = true)
     public List<Long> findNoShowProcessingTargetSessionIds() {
         return contentSessionRepository.findNoShowProcessingTargetSessionIds(ContentSessionStatus.SCHEDULED);

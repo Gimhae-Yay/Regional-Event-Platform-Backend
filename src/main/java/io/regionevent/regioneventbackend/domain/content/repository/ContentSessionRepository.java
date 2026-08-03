@@ -101,6 +101,18 @@ public interface ContentSessionRepository extends JpaRepository<ContentSession, 
         @Param("sessionStatus") ContentSessionStatus sessionStatus
     );
 
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        UPDATE ContentSession contentSession
+        SET contentSession.remainingCapacity = contentSession.remainingCapacity + :quantity
+        WHERE contentSession.sessionId = :sessionId
+            AND contentSession.remainingCapacity + :quantity <= contentSession.capacity
+        """)
+    int increaseRemainingCapacityIfWithinCapacity(
+        @Param("sessionId") Long sessionId,
+        @Param("quantity") int quantity
+    );
+
     @Query("""
         SELECT contentSession.sessionId
         FROM ContentSession contentSession
