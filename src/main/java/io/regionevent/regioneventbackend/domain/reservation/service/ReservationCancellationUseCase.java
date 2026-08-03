@@ -63,9 +63,15 @@ public class ReservationCancellationUseCase {
         if (reservation.getStatus() == ReservationStatus.CANCELLED) {
             return CancelReservationResponse.from(reservation);
         }
-        if (reservation.getStatus() != ReservationStatus.CONFIRMED
-            || !reservationService.cancelIfCancellable(reservationId, userId)) {
+        if (reservation.getStatus() != ReservationStatus.CONFIRMED) {
             throwCancellationConflict(requestId, actor, reservation);
+        }
+        if (!reservationService.cancelIfCancellable(reservationId, userId)) {
+            Reservation currentReservation = reservationService.findOwnedReservationForUpdate(reservationId, user);
+            if (currentReservation.getStatus() == ReservationStatus.CANCELLED) {
+                return CancelReservationResponse.from(currentReservation);
+            }
+            throwCancellationConflict(requestId, actor, currentReservation);
         }
 
         contentSessionService.restoreCapacity(

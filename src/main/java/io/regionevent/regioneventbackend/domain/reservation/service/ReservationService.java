@@ -62,6 +62,17 @@ public class ReservationService {
     public Reservation findOwnedReservation(Long reservationId, AppUser user) {
         Reservation reservation = reservationRepository.findWithDetailsByReservationId(reservationId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+        return validateOwnership(reservation, user);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Reservation findOwnedReservationForUpdate(Long reservationId, AppUser user) {
+        Reservation reservation = reservationRepository.findByReservationIdForUpdate(reservationId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+        return validateOwnership(reservation, user);
+    }
+
+    private Reservation validateOwnership(Reservation reservation, AppUser user) {
         if (reservation.getUser() == null
             || !reservation.getUser().getUserId().equals(user.getUserId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN);

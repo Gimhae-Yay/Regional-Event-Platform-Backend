@@ -194,6 +194,18 @@ class ReservationCancellationControllerIntegrationTest {
                 .header("Authorization", bearerToken(fixture.user())))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+        mockMvc.perform(post("/api/v1/me/reservations/{reservationId}/cancel", "001")
+                .header("Authorization", bearerToken(fixture.user())))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        mockMvc.perform(post("/api/v1/me/reservations/{reservationId}/cancel", "+1")
+                .header("Authorization", bearerToken(fixture.user())))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        mockMvc.perform(post("/api/v1/me/reservations/{reservationId}/cancel", "9223372036854775808")
+                .header("Authorization", bearerToken(fixture.user())))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
 
         assertReservationUnchanged(fixture);
     }
