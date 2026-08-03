@@ -60,6 +60,11 @@ Accept: application/json
 | --- | --- | --- | --- |
 | `qrToken` | String | Y | 방문자가 제시한 비어 있지 않은 단기 HMAC QR 토큰 |
 
+#### QR 토큰 프로필
+
+`qrToken`의 직렬화·payload·서명·TTL·키 회전 계약은 [내 예약 QR 조회·발급의 QR 토큰 프로필](get-my-reservation-qr.md#qr-토큰-프로필)을 따른다.
+체크인 API는 QR 원문을 변경하지 않고, MySQL 기준 현재 시각으로 해당 프로필의 서명·만료를 검증한다.
+
 ### Response
 
 #### Status
