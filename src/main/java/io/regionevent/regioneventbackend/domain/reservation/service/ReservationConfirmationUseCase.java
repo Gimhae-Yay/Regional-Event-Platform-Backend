@@ -14,6 +14,7 @@ import io.regionevent.regioneventbackend.domain.audit.service.AuditEventActor;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordFailureAuditEventUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.ContentService;
 import io.regionevent.regioneventbackend.domain.content.service.ContentSessionService;
 import io.regionevent.regioneventbackend.domain.idempotency.entity.IdempotencyOperation;
 import io.regionevent.regioneventbackend.domain.idempotency.service.IdempotencyAcquireResult;
@@ -36,6 +37,7 @@ public class ReservationConfirmationUseCase {
 
     private final AppUserService appUserService;
     private final UserRoleAssignmentService userRoleAssignmentService;
+    private final ContentService contentService;
     private final ContentSessionService contentSessionService;
     private final CapacityHoldService capacityHoldService;
     private final ReservationService reservationService;
@@ -47,6 +49,7 @@ public class ReservationConfirmationUseCase {
     public ReservationConfirmationUseCase(
         AppUserService appUserService,
         UserRoleAssignmentService userRoleAssignmentService,
+        ContentService contentService,
         ContentSessionService contentSessionService,
         CapacityHoldService capacityHoldService,
         ReservationService reservationService,
@@ -57,6 +60,7 @@ public class ReservationConfirmationUseCase {
     ) {
         this.appUserService = appUserService;
         this.userRoleAssignmentService = userRoleAssignmentService;
+        this.contentService = contentService;
         this.contentSessionService = contentSessionService;
         this.capacityHoldService = capacityHoldService;
         this.reservationService = reservationService;
@@ -117,9 +121,10 @@ public class ReservationConfirmationUseCase {
         AuditEventActor actor
     ) {
         try {
-            if (!contentSessionService.lockConfirmableReservationTarget(
-                capacityHold.getContentSession().getSessionId()
-            )) {
+            Long sessionId = capacityHold.getContentSession().getSessionId();
+            Long contentId = capacityHold.getContentSession().getContent().getContentId();
+            if (!contentService.lockPublishedReservationTarget(contentId)
+                || !contentSessionService.lockConfirmableReservationTarget(sessionId)) {
                 throw new ReservationConfirmationConflictException();
             }
             CapacityHold consumedHold = capacityHoldService.consumeIfConfirmable(
