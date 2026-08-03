@@ -13,6 +13,7 @@ import org.testcontainers.utility.DockerImageName;
 public final class SharedMySqlTestContainer {
 
     public static final String IMAGE_NAME = "mysql:8.0.42";
+    private static final int MAXIMUM_POOL_SIZE = 4;
 
     private SharedMySqlTestContainer() {
     }
@@ -32,6 +33,7 @@ public final class SharedMySqlTestContainer {
         registry.add("spring.datasource.username", () -> container().getUsername());
         registry.add("spring.datasource.password", () -> container().getPassword());
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
+        registry.add("spring.datasource.hikari.maximum-pool-size", () -> MAXIMUM_POOL_SIZE);
     }
 
     public static String getContainerId() {
