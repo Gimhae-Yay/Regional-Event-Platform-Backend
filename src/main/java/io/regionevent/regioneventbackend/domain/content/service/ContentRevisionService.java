@@ -133,6 +133,19 @@ public class ContentRevisionService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
+    public ContentRevision withdraw(
+        ContentRevision revision,
+        AppUser withdrawer,
+        Instant withdrawnAt,
+        String reason
+    ) {
+        validateRejectableOriginal(revision);
+        revision.withdraw(withdrawer, withdrawnAt, reason);
+        contentRevisionRepository.flush();
+        return revision;
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
     public ContentRevision approve(
         ContentRevision revision,
         AppUser reviewer,

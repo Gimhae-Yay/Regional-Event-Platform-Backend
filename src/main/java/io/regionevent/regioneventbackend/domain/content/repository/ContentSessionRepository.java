@@ -29,6 +29,15 @@ public interface ContentSessionRepository extends JpaRepository<ContentSession, 
         """)
     List<ContentSession> findApprovalTargetsForUpdate(@Param("contentId") Long contentId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT contentSession
+        FROM ContentSession contentSession
+        WHERE contentSession.content.contentId = :contentId
+        ORDER BY contentSession.sessionId ASC
+        """)
+    List<ContentSession> findSuspendTargetsForUpdate(@Param("contentId") Long contentId);
+
     Optional<ContentSession> findBySessionIdAndContentStatus(
         Long sessionId,
         ContentStatus contentStatus

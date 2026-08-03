@@ -115,6 +115,11 @@ public class ContentSessionService {
         return contentSessionRepository.findApprovalTargetsForUpdate(contentId);
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void lockSuspendTargetsForUpdate(Long contentId) {
+        contentSessionRepository.findSuspendTargetsForUpdate(contentId);
+    }
+
     public List<ContentSession> approveAll(
         List<ContentSession> contentSessions,
         AppUser reviewer,
