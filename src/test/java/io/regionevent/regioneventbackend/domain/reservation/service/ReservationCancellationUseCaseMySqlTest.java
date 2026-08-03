@@ -56,6 +56,7 @@ import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepositor
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
+import io.regionevent.regioneventbackend.global.security.qr.QrTokenService;
 
 @SpringBootTest
 @Import(ReservationCancellationUseCaseMySqlTest.BlockingReservationServiceConfig.class)
@@ -286,9 +287,10 @@ class ReservationCancellationUseCaseMySqlTest {
         @Primary
         BlockingReservationService blockingReservationService(
             ReservationRepository reservationRepository,
-            ReservationIdentifierGenerator reservationIdentifierGenerator
+            ReservationIdentifierGenerator reservationIdentifierGenerator,
+            QrTokenService qrTokenService
         ) {
-            return new BlockingReservationService(reservationRepository, reservationIdentifierGenerator);
+            return new BlockingReservationService(reservationRepository, reservationIdentifierGenerator, qrTokenService);
         }
     }
 
@@ -298,9 +300,10 @@ class ReservationCancellationUseCaseMySqlTest {
 
         BlockingReservationService(
             ReservationRepository reservationRepository,
-            ReservationIdentifierGenerator reservationIdentifierGenerator
+            ReservationIdentifierGenerator reservationIdentifierGenerator,
+            QrTokenService qrTokenService
         ) {
-            super(reservationRepository, reservationIdentifierGenerator);
+            super(reservationRepository, reservationIdentifierGenerator, qrTokenService);
         }
 
         @Override
