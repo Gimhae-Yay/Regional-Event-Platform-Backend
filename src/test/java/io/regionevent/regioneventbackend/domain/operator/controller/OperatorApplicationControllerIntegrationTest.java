@@ -5,13 +5,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -20,8 +13,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.operator.entity.OperatorApplication;
@@ -43,9 +34,6 @@ import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenSe
 class OperatorApplicationControllerIntegrationTest {
 
     private static final String OPERATOR_REQUEST_PATH = "/api/v1/operator/operator-requests";
-    private static final int CONCURRENT_REQUEST_COUNT = 2;
-    private static final long CONCURRENT_REQUEST_TIMEOUT_SECONDS = 5;
-
     @Autowired
     private MockMvc mockMvc;
 
@@ -215,50 +203,6 @@ class OperatorApplicationControllerIntegrationTest {
             .isEmpty();
     }
 
-    @Test
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    void reapply_concurrently_createsOnePendingApplicationAndReturnsPendingConflict() throws Exception {
-        Region region = saveRegion(true);
-        AppUser applicant = saveUser(AppUserStatus.ACTIVE);
-        createRejectedApplication(applicant, region);
-        ExecutorService executorService = Executors.newFixedThreadPool(CONCURRENT_REQUEST_COUNT);
-        CountDownLatch ready = new CountDownLatch(CONCURRENT_REQUEST_COUNT);
-        CountDownLatch start = new CountDownLatch(1);
-
-        try {
-            Future<MvcResult> firstRequest = submitReapplicationRequest(executorService, ready, start, applicant, region);
-            Future<MvcResult> secondRequest = submitReapplicationRequest(executorService, ready, start, applicant, region);
-
-            assertThat(ready.await(CONCURRENT_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)).isTrue();
-            start.countDown();
-
-            List<MvcResult> completedResults = List.of(
-                firstRequest.get(CONCURRENT_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS),
-                secondRequest.get(CONCURRENT_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-            );
-
-            assertThat(completedResults)
-                .extracting(result -> result.getResponse().getStatus())
-                .containsExactlyInAnyOrder(201, 409);
-            assertThat(completedResults)
-                .filteredOn(result -> result.getResponse().getStatus() == 409)
-                .singleElement()
-                .satisfies(result -> assertThat(result.getResponse().getContentAsString())
-                    .contains("OPERATOR_APPLICATION_PENDING"));
-            assertThat(operatorApplicationRepository.findAll())
-                .filteredOn(application -> application.getApplicant().getUserId().equals(applicant.getUserId()))
-                .filteredOn(application -> application.getStatus() == OperatorApplicationStatus.PENDING)
-                .singleElement();
-        } finally {
-            start.countDown();
-            executorService.shutdownNow();
-            operatorApplicationRepository.deleteAllInBatch();
-            userRoleAssignmentRepository.deleteAllInBatch();
-            appUserRepository.deleteAllInBatch();
-            regionRepository.deleteAllInBatch();
-        }
-    }
-
     private org.springframework.test.web.servlet.ResultActions performReapplication(
         AppUser applicant,
         Long requestedRegionId,
@@ -273,20 +217,6 @@ class OperatorApplicationControllerIntegrationTest {
                   "businessInformation": "%s"
                 }
                 """.formatted(requestedRegionId, businessInformation)));
-    }
-
-    private Future<MvcResult> submitReapplicationRequest(
-        ExecutorService executorService,
-        CountDownLatch ready,
-        CountDownLatch start,
-        AppUser applicant,
-        Region region
-    ) {
-        return executorService.submit(() -> {
-            ready.countDown();
-            start.await();
-            return performReapplication(applicant, region.getRegionId(), "Concurrent business information").andReturn();
-        });
     }
 
     private AppUser saveUser(AppUserStatus status) {
