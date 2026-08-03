@@ -1,0 +1,26 @@
+spring:
+  cloud:
+    aws:
+      s3:
+        enabled: false
+
+security:
+  jwt:
+    access:
+      issuer: regional-event-platform
+      audience: regional-event-api
+      active-key-id: test-key
+      active-key: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      previous-keys:
+        - key-id: expired-previous-key
+          key: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+          verification-ends-at: 2026-01-01T00:00:00Z
+    refresh:
+      issuer: regional-event-platform
+      audience: regional-event-refresh
+      active-key-id: refresh-test-key
+      active-key: AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=
+  qr:
+    active-key-id: qr-test-key
+    active-key: AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM=
+    token-ttl: PT5M

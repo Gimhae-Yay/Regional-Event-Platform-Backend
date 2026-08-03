@@ -13,6 +13,7 @@
 4. **선택지 비교 후 결정**: 설계 방향이 갈리면 추천안을 첫 번째에 둔 장단점 비교표를 제시한다. 사용자가 선택한 안을 정책으로 확정하고 문서에 반영한다.
 5. **문서 임의 수정/생성 금지** : `docs/adr`에 기록하는 경우를 제외하고 모든 문서에 대해 사용자 요청 및 지시 외의 문서의 임의 수정·생성은 금지한다.
 6. **`docs-ref` 접근 금지** : `docs-ref`내에 있는 파일들은 접근을 금지한다.
+7. **필요 시점에만 문서 확인**: 저장소 문서를 사전에 전체 탐색하거나 일괄 열람하지 않는다. 작업 중 요구사항·설계·구현 판단에 특정 개념이나 기준이 필요해진 경우에만, 문서 라우팅에 따라 해당 문서를 확인한다. 단, 필수 절차 2번에 따라 `docs/code-convention.md` 전체를 읽는 경우는 예외로 한다.
 
 ## 필수 절차
 
@@ -23,6 +24,7 @@
 5. 구현 단계는 전용 스킬 없이 진행한다. 연결된 GitHub 이슈의 완료 조건을 구현 계약으로 삼고, `docs/code-convention.md`와 이 문서의 작업 원칙을 벗어나지 않는다.
 6. 코드, 테스트, migration, 설정과 의존성의 현재 상태를 확인한 뒤 문서에 확정된 범위만 변경한다.
 7. 깃허브 Task 타입의 TODO 체크리스트를 사용해 구현 완료를 표시한다.
+8. 브랜치를 생성하거나 커밋·PR 작업을 시작하기 전에 `docs/git-convention.md`를 확인한다.
 
 ## 스킬 라우팅
 
@@ -42,16 +44,19 @@
 
 ## 문서 라우팅
 
-| 확인할 내용                                        | 기준 문서                                                         |
-|-----------------------------------------------|---------------------------------------------------------------|
-| 확정된 기술 결정·설계 근거                               | `docs/adr/`                                                   |
-| 기술 스택·설계 원칙                                   | `docs/local-stamp-platform-tech-stack.md`                     |
-| 제품 범위, 보안·동시성·정합성·Redis 정책                    | `docs/local-stamp-platform-prd.md`                            |
-| API 요청·응답, validation, status, 에러 코드          | `docs/api-specification.md`                                   |
-| 엔티티, 테이블, 관계, 컬럼, DB 제약·인덱스                   | `docs/erd.md`                                                 |
-| 도메인 규칙, 패키지 구조, 구현, 코드 스타일, 트랜잭션, 테스트, Git·PR | `docs/code-convention.md`                                     |
-| 실제 버전·의존성·설정                                  | `build.gradle`, `settings.gradle`, `src/**/application*.yaml` |
+| 확인할 내용                                                                                 | 기준 문서                                                         |
+|----------------------------------------------------------------------------------------|---------------------------------------------------------------|
+| 확정된 기술 결정·설계 근거                                                                        | `docs/adr/`                                                   |
+| 기술 스택·설계 원칙                                                                            | `docs/local-stamp-platform-tech-stack.md`                     |
+| 제품 범위, 보안·동시성·정합성·Redis 정책                                                             | `docs/local-stamp-platform-prd.md`                            |
+| API 요청·응답, validation, status, 에러 코드                                                   | `docs/api/common/README.md`, `docs/api/<도메인>.md`              |
+| 엔티티, 테이블, 관계, 컬럼, DB 제약·인덱스                                                            | `docs/erd.md`                                                 |
+| 패키지 구조, 계층별 책임, Controller·Service·UseCase·Repository 의존성, Service 간 직접 의존, UseCase 명명 | `docs/ARCHITECTURE.md`                                        |
+| Java 코드 스타일, 명명, 소스 구성, Java·Spring·JPA, 트랜잭션, null, 예외·로깅, 테스트                        | `docs/code-convention.md`                                     |
+| 실제 버전·의존성·설정                                                                           | `build.gradle`, `settings.gradle`, `src/**/application*.yaml` |
+| 브랜치명·커밋·PR 규칙                                                                          | `docs/git-convention.md`                                      |
 
 - 충돌 시 담당 영역의 기준 문서를 따르며, 제품·API·DB·성능·컨벤션 순으로 판단한다.
+- `docs/ARCHITECTURE.md`와 `docs/code-convention.md`가 충돌하면 아키텍처 문서를 우선한다.
 - 코드가 문서와 다르다는 이유만으로 코드를 기준 삼지 않는다.
 - 모호하거나 기준 문서가 없으면 추측하지 말고 차이와 필요한 결정을 밝힌다.

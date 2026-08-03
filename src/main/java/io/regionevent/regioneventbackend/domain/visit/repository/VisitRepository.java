@@ -1,0 +1,38 @@
+package io.regionevent.regioneventbackend.domain.visit.repository;
+
+import java.util.Optional;
+
+import jakarta.persistence.LockModeType;
+
+import org.springframework.data.jpa.repository.EntityGraph;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+
+import io.regionevent.regioneventbackend.domain.visit.entity.Visit;
+
+public interface VisitRepository extends JpaRepository<Visit, Long> {
+
+    @EntityGraph(attributePaths = {
+        "region",
+        "reservation",
+        "reservation.contentSession",
+        "content",
+        "contentSession",
+        "checkedInByUser",
+        "user"
+    })
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    Optional<Visit> findByVisitId(Long visitId);
+
+    @EntityGraph(attributePaths = {
+        "region",
+        "reservation",
+        "reservation.contentSession",
+        "content",
+        "contentSession",
+        "checkedInByUser",
+        "user"
+    })
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    Optional<Visit> findByReservationReservationId(Long reservationId);
+}

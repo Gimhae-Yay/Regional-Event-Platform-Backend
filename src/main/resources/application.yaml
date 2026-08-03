@@ -1,3 +1,42 @@
 spring:
   application:
     name: region-event-backend
+  data:
+    redis:
+      host: ${AUTH_REDIS_HOST:localhost}
+      port: ${AUTH_REDIS_PORT:6379}
+
+security:
+  jwt:
+    access:
+      issuer: regional-event-platform
+      audience: regional-event-api
+      active-key-id: ${JWT_ACCESS_ACTIVE_KEY_ID}
+      active-key: ${JWT_ACCESS_ACTIVE_KEY}
+    refresh:
+      issuer: regional-event-platform
+      audience: regional-event-refresh
+      active-key-id: ${JWT_REFRESH_ACTIVE_KEY_ID}
+      active-key: ${JWT_REFRESH_ACTIVE_KEY}
+  qr:
+    active-key-id: ${QR_ACTIVE_KEY_ID}
+    active-key: ${QR_ACTIVE_KEY}
+    token-ttl: ${QR_TOKEN_TTL}
+
+idempotency:
+  retention: PT24H
+  cleanup-fixed-delay: PT1H
+  cleanup-initial-delay: PT1H
+  lock-wait-timeout-seconds: 3
+
+reservation:
+  hold-termination:
+    initial-delay: PT1M
+    fixed-delay: PT1M
+  no-show-completion:
+    initial-delay: PT1M
+    fixed-delay: PT1M
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [requestId=%X{requestId:-}] %logger{36} - %msg%n"

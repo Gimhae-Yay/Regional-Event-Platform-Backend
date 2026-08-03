@@ -1,0 +1,94 @@
+package io.regionevent.regioneventbackend.domain.content.controller;
+
+import jakarta.validation.Valid;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestAttribute;
+import org.springframework.web.bind.annotation.RestController;
+
+import io.regionevent.regioneventbackend.domain.content.dto.CreateContentRequest;
+import io.regionevent.regioneventbackend.domain.content.dto.CreateContentResponse;
+import io.regionevent.regioneventbackend.domain.content.dto.CreateContentRevisionRequest;
+import io.regionevent.regioneventbackend.domain.content.dto.CreateContentRevisionResponse;
+import io.regionevent.regioneventbackend.domain.content.service.CreateContentUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.CreateContentRevisionUseCase;
+import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
+import io.regionevent.regioneventbackend.global.response.ApiResponse;
+
+@RestController
+@RequestMapping("/api/v1/operator/contents")
+public class ContentController {
+
+    private static final String CREATE_CONTENT_SUCCESS_MESSAGE = "콘텐츠 생성과 승인 요청에 성공했습니다.";
+
+    private static final String CREATE_CONTENT_REVISION_SUCCESS_MESSAGE = "콘텐츠 수정본 생성과 승인 요청에 성공했습니다.";
+
+    private final CreateContentUseCase createContentUseCase;
+    private final CreateContentRevisionUseCase createContentRevisionUseCase;
+
+    public ContentController(
+        CreateContentUseCase createContentUseCase,
+        CreateContentRevisionUseCase createContentRevisionUseCase
+    ) {
+        this.createContentUseCase = createContentUseCase;
+        this.createContentRevisionUseCase = createContentRevisionUseCase;
+    }
+
+    @PostMapping
+    public ResponseEntity<ApiResponse<CreateContentResponse>> createContent(
+        Authentication authentication,
+        @Valid @RequestBody CreateContentRequest request
+    ) {
+        CreateContentResponse response = createContentUseCase.createContent(
+            toAuthenticatedUserId(authentication),
+            request
+        );
+        return ApiResponse
+            .success(HttpStatus.CREATED, CREATE_CONTENT_SUCCESS_MESSAGE, response)
+            .toResponseEntity();
+    }
+
+    @PostMapping("/{contentId}/revisions")
+    public ResponseEntity<ApiResponse<CreateContentRevisionResponse>> createContentRevision(
+        Authentication authentication,
+        @PathVariable String contentId,
+        @Valid @RequestBody CreateContentRevisionRequest request,
+        @RequestAttribute(RequestIdFilter.REQUEST_ID_ATTRIBUTE) String requestId
+    ) {
+        CreateContentRevisionResponse response = createContentRevisionUseCase.createRevision(
+            toAuthenticatedUserId(authentication),
+            parsePositiveId(contentId),
+            request,
+            requestId
+        );
+        return ApiResponse
+            .success(HttpStatus.CREATED, CREATE_CONTENT_REVISION_SUCCESS_MESSAGE, response)
+            .toResponseEntity();
+    }
+
+    private Long toAuthenticatedUserId(Authentication authentication) {
+        if (authentication == null || !(authentication.getPrincipal() instanceof Long userId)) {
+            throw new BusinessException(ErrorCode.UNAUTHENTICATED);
+        }
+        return userId;
+    }
+
+    private Long parsePositiveId(String value) {
+        if (value == null || !value.matches("[1-9]\\d*")) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        try {
+            return Long.valueOf(value);
+        } catch (NumberFormatException exception) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+    }
+}
