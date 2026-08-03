@@ -2,7 +2,6 @@ package io.regionevent.regioneventbackend.domain.content.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -62,6 +61,7 @@ class ContentRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestS
 
     private final ApproveContentRevisionUseCase approveContentRevisionUseCase;
     private final RejectContentRevisionUseCase rejectContentRevisionUseCase;
+    private final WithdrawContentRevisionUseCase withdrawContentRevisionUseCase;
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
@@ -77,6 +77,7 @@ class ContentRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestS
     ContentRevisionApprovalUseCaseMySqlTest(
         ApproveContentRevisionUseCase approveContentRevisionUseCase,
         RejectContentRevisionUseCase rejectContentRevisionUseCase,
+        WithdrawContentRevisionUseCase withdrawContentRevisionUseCase,
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
         UserRoleAssignmentRepository userRoleAssignmentRepository,
@@ -90,6 +91,7 @@ class ContentRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestS
     ) {
         this.approveContentRevisionUseCase = approveContentRevisionUseCase;
         this.rejectContentRevisionUseCase = rejectContentRevisionUseCase;
+        this.withdrawContentRevisionUseCase = withdrawContentRevisionUseCase;
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
         this.userRoleAssignmentRepository = userRoleAssignmentRepository;
@@ -155,7 +157,7 @@ class ContentRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestS
             assertThat(revision.getStatus()).isEqualTo(ContentRevisionStatus.EDIT_WITHDRAWN);
             assertThat(revision.getWithdrawalReason()).isEqualTo("경합 철회 사유");
             assertThat(content.getTitle()).isEqualTo("원본 제목");
-            assertThat(successAuditCount(fixture)).isZero();
+            assertThat(successAuditCount(fixture)).isEqualTo(1);
         }
     }
 
@@ -243,22 +245,13 @@ class ContentRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestS
     }
 
     private String withdraw(Fixture fixture) {
-        int updated = transactionTemplate.execute(status -> jdbcTemplate.update(
-            """
-                UPDATE content_revision
-                SET status = 'EDIT_WITHDRAWN',
-                    withdrawn_at = ?,
-                    withdrawn_by_user_id = ?,
-                    withdrawal_reason = ?
-                WHERE content_revision_id = ?
-                  AND status = 'EDIT_REQUESTED'
-                """,
-            Timestamp.from(SUBMITTED_AT.plusSeconds(120)),
+        withdrawContentRevisionUseCase.withdraw(
             fixture.operatorId(),
+            fixture.revisionId(),
             "경합 철회 사유",
-            fixture.revisionId()
-        ));
-        return updated == 1 ? "WITHDRAWN" : "CONFLICT";
+            UUID.randomUUID()
+        );
+        return "WITHDRAWN";
     }
 
     private String autoPublish(Fixture fixture) {
@@ -302,6 +295,11 @@ class ContentRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestS
                 "운영자",
                 "010-1234-5678",
                 AppUserStatus.ACTIVE
+            ));
+            userRoleAssignmentRepository.save(new UserRoleAssignment(
+                operator,
+                UserRole.OPERATOR,
+                region
             ));
             ImageObject originalImage = saveLinkedImage("original-" + suffix, operator, region);
             Content content = new Content(
