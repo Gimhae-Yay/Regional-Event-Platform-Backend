@@ -63,8 +63,10 @@ public class SubmitContentUseCase {
     ) {
         Content content = null;
         ContentStatus failurePreviousState = null;
+        AuditEventActor actor = null;
         try {
             AuthorizedOperator operator = operatorAuthorizationService.requireAuthorizedOperator(userId);
+            actor = new AuditEventActor(operator.roleAssignment());
             content = contentService.findRejectedOwnedContentForUpdate(
                 contentId,
                 operator.user().getUserId(),
@@ -86,15 +88,15 @@ public class SubmitContentUseCase {
                 ContentStatus.PENDING.name(),
                 AuditEventResult.SUCCESS,
                 null,
-                new AuditEventActor(operator.roleAssignment()),
+                actor,
                 submittedAt
             ));
             return SubmitContentResult.from(submittedContent, submittedAt);
         } catch (BusinessException exception) {
-            recordFailure(requestId, content, failurePreviousState, exception.getErrorCode());
+            recordFailure(requestId, content, failurePreviousState, actor, exception.getErrorCode());
             throw exception;
         } catch (RuntimeException exception) {
-            recordFailure(requestId, content, failurePreviousState, ErrorCode.INTERNAL_SERVER_ERROR);
+            recordFailure(requestId, content, failurePreviousState, actor, ErrorCode.INTERNAL_SERVER_ERROR);
             throw exception;
         }
     }
@@ -103,6 +105,7 @@ public class SubmitContentUseCase {
         UUID requestId,
         Content content,
         ContentStatus previousState,
+        AuditEventActor actor,
         ErrorCode errorCode
     ) {
         recordFailedAuditEventUseCase.record(new AuditEventCommand(
@@ -114,7 +117,7 @@ public class SubmitContentUseCase {
             null,
             AuditEventResult.FAILURE,
             errorCode.code(),
-            null,
+            actor,
             clock.instant().truncatedTo(ChronoUnit.MICROS)
         ));
         log.warn(

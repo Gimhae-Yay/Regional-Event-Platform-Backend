@@ -166,7 +166,7 @@ class SubmitContentControllerIntegrationTest {
             .andExpect(jsonPath("$.code").value("FORBIDDEN"));
 
         assertUnchanged(fixture.content().getContentId(), ContentStatus.REJECTED, 2);
-        assertFailureAudits(ErrorCode.FORBIDDEN);
+        assertFailureAuditsWithoutActor(ErrorCode.FORBIDDEN);
     }
 
     @Test
@@ -180,7 +180,7 @@ class SubmitContentControllerIntegrationTest {
             .andExpect(jsonPath("$.code").value("FORBIDDEN"));
 
         assertUnchanged(fixture.content().getContentId(), ContentStatus.REJECTED, 2);
-        assertFailureAudits(ErrorCode.FORBIDDEN);
+        assertFailureAuditsWithActors(new ExpectedFailureAudit(otherOperator, ErrorCode.FORBIDDEN));
     }
 
     @Test
@@ -194,7 +194,7 @@ class SubmitContentControllerIntegrationTest {
             .andExpect(jsonPath("$.code").value("FORBIDDEN"));
 
         assertUnchanged(fixture.content().getContentId(), ContentStatus.REJECTED, 2);
-        assertFailureAudits(ErrorCode.FORBIDDEN);
+        assertFailureAuditsWithActors(new ExpectedFailureAudit(otherOperator, ErrorCode.FORBIDDEN));
     }
 
     @Test
@@ -206,7 +206,7 @@ class SubmitContentControllerIntegrationTest {
             .andExpect(jsonPath("$.code").value("CONTENT_STATE_CONFLICT"));
 
         assertUnchanged(fixture.content().getContentId(), ContentStatus.PENDING, 1);
-        assertFailureAudits(ErrorCode.CONTENT_STATE_CONFLICT);
+        assertFailureAuditsWithActors(new ExpectedFailureAudit(fixture.operator(), ErrorCode.CONTENT_STATE_CONFLICT));
     }
 
     @Test
@@ -240,7 +240,10 @@ class SubmitContentControllerIntegrationTest {
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.code").value("NOT_FOUND"));
 
-        assertFailureAudits(ErrorCode.NOT_FOUND, ErrorCode.NOT_FOUND);
+        assertFailureAuditsWithActors(
+            new ExpectedFailureAudit(fixture.operator(), ErrorCode.NOT_FOUND),
+            new ExpectedFailureAudit(fixture.operator(), ErrorCode.NOT_FOUND)
+        );
     }
 
     @Test
@@ -257,7 +260,10 @@ class SubmitContentControllerIntegrationTest {
 
         assertUnchanged(withoutImage.content().getContentId(), ContentStatus.REJECTED, 2);
         assertUnchanged(withoutPendingSession.content().getContentId(), ContentStatus.REJECTED, 2);
-        assertFailureAudits(ErrorCode.INVALID_INPUT, ErrorCode.INVALID_INPUT);
+        assertFailureAuditsWithActors(
+            new ExpectedFailureAudit(withoutImage.operator(), ErrorCode.INVALID_INPUT),
+            new ExpectedFailureAudit(withoutPendingSession.operator(), ErrorCode.INVALID_INPUT)
+        );
     }
 
     @Test
@@ -322,7 +328,7 @@ class SubmitContentControllerIntegrationTest {
             .hasSize(expectedLogCount);
     }
 
-    private void assertFailureAudits(ErrorCode... errorCodes) {
+    private void assertFailureAuditsWithoutActor(ErrorCode... errorCodes) {
         List<String> expectedReasonCodes = Arrays.stream(errorCodes)
             .map(ErrorCode::code)
             .toList();
@@ -339,6 +345,30 @@ class SubmitContentControllerIntegrationTest {
         assertThat(auditEvents)
             .extracting(AuditEvent::getReasonCode)
             .containsExactlyInAnyOrderElementsOf(expectedReasonCodes);
+    }
+
+    private void assertFailureAuditsWithActors(ExpectedFailureAudit... expectedAudits) {
+        List<String> expectedReasonCodesAndActorIds = Arrays.stream(expectedAudits)
+            .map(expectedAudit -> expectedAudit.errorCode().code() + ":" + expectedAudit.actor().getUserId())
+            .toList();
+        List<AuditEvent> auditEvents = currentAuditEvents();
+
+        assertThat(auditEvents)
+            .hasSize(expectedAudits.length)
+            .allSatisfy(auditEvent -> {
+                assertThat(auditEvent.getResult()).isEqualTo(AuditEventResult.FAILURE);
+                assertThat(auditEvent.getNextState()).isNull();
+                assertThat(auditEvent.getActorKind()).isEqualTo("USER");
+                assertThat(auditEvent.getActorRole()).isEqualTo("OPERATOR");
+                assertThat(auditEventActorLinkRepository.findById(auditEvent.getAuditEventId())).isPresent();
+            });
+        assertThat(auditEvents)
+            .map(auditEvent -> auditEvent.getReasonCode() + ":"
+                + auditEventActorLinkRepository.findById(auditEvent.getAuditEventId())
+                    .orElseThrow()
+                    .getActor()
+                    .getUserId())
+            .containsExactlyInAnyOrderElementsOf(expectedReasonCodesAndActorIds);
     }
 
     private ResultActions performSubmit(AppUser user, String contentId) throws Exception {
@@ -463,6 +493,12 @@ class SubmitContentControllerIntegrationTest {
         Region region,
         AppUser operator,
         Content content
+    ) {
+    }
+
+    private record ExpectedFailureAudit(
+        AppUser actor,
+        ErrorCode errorCode
     ) {
     }
 }
