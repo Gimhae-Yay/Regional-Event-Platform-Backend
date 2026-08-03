@@ -26,6 +26,9 @@ import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenSto
 @Testcontainers(disabledWithoutDocker = true)
 class RedisRefreshTokenStoreIntegrationTest {
 
+    private static final Duration TTL_TEST_DURATION = Duration.ofSeconds(2);
+    private static final long EXPIRY_WAIT_BUFFER_MILLIS = 100L;
+
     @Container
     static final GenericContainer<?> redis = new GenericContainer<>("redis:7.4-alpine")
         .withCommand("redis-server", "--maxmemory", "64mb", "--maxmemory-policy", "noeviction")
@@ -216,16 +219,16 @@ class RedisRefreshTokenStoreIntegrationTest {
 
     @Test
     void expiredFamilyState_isRemovedByRedisTtl() throws InterruptedException {
-        RefreshToken current = refreshToken(1L, Duration.ofMillis(500));
+        RefreshToken current = refreshToken(1L, TTL_TEST_DURATION);
         refreshTokenStore.createFamily(current);
 
         Long remainingTtl = stringRedisTemplate.getExpire(
             "auth:refresh:family:" + current.familyId() + ":active",
             TimeUnit.MILLISECONDS
         );
-        assertThat(remainingTtl).isPositive().isLessThanOrEqualTo(500L);
+        assertThat(remainingTtl).isPositive().isLessThanOrEqualTo(TTL_TEST_DURATION.toMillis());
 
-        Thread.sleep(700L);
+        Thread.sleep(remainingTtl + EXPIRY_WAIT_BUFFER_MILLIS);
 
         assertThat(stringRedisTemplate.hasKey("auth:refresh:family:" + current.familyId() + ":active")).isFalse();
         assertThat(stringRedisTemplate.hasKey("auth:refresh:user:1:families")).isFalse();

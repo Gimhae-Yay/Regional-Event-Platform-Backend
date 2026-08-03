@@ -1,5 +1,7 @@
 package io.regionevent.regioneventbackend.global.security.refresh;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -24,6 +26,15 @@ class JwtRefreshTokenServiceTest {
     private static final Instant ISSUED_AT = Instant.parse("2026-07-31T00:00:00Z");
 
     @Test
+    void 전체_단위_계약을_보존한다() {
+        assertAll(
+            () -> new JwtRefreshTokenServiceTest().issueAndAuthenticate_withValidRefreshToken_returnsRefreshToken(),
+            () -> new JwtRefreshTokenServiceTest().authenticate_whenTokenUsesAccessProfile_throwsInvalidRefreshTokenException(),
+            () -> new JwtRefreshTokenServiceTest().authenticate_whenTokenLifetimeExceeds14Days_throwsInvalidRefreshTokenException(),
+            () -> new JwtRefreshTokenServiceTest().authenticate_whenTokenUsesPreviousRefreshKey_throwsInvalidRefreshTokenException()
+        );
+    }
+
     void issueAndAuthenticate_withValidRefreshToken_returnsRefreshToken() {
         JwtRefreshTokenService jwtRefreshTokenService = createService(Clock.fixed(ISSUED_AT, ZoneOffset.UTC));
         RefreshToken refreshToken = refreshToken();
@@ -45,7 +56,6 @@ class JwtRefreshTokenServiceTest {
         assertThat(claims.get("token_type", String.class)).isEqualTo("REFRESH");
     }
 
-    @Test
     void authenticate_whenTokenUsesAccessProfile_throwsInvalidRefreshTokenException() {
         JwtRefreshTokenService jwtRefreshTokenService = createService(Clock.fixed(ISSUED_AT, ZoneOffset.UTC));
         String accessToken = createToken(
@@ -59,7 +69,6 @@ class JwtRefreshTokenServiceTest {
             .isInstanceOf(InvalidRefreshTokenException.class);
     }
 
-    @Test
     void authenticate_whenTokenLifetimeExceeds14Days_throwsInvalidRefreshTokenException() {
         JwtRefreshTokenService jwtRefreshTokenService = createService(Clock.fixed(ISSUED_AT, ZoneOffset.UTC));
         String longLivedToken = createToken(
@@ -73,7 +82,6 @@ class JwtRefreshTokenServiceTest {
             .isInstanceOf(InvalidRefreshTokenException.class);
     }
 
-    @Test
     void authenticate_whenTokenUsesPreviousRefreshKey_throwsInvalidRefreshTokenException() {
         JwtRefreshTokenService jwtRefreshTokenService = createService(Clock.fixed(ISSUED_AT, ZoneOffset.UTC));
         String previousKeyToken = createToken(

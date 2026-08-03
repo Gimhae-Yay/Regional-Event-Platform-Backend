@@ -32,8 +32,6 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEvent;
@@ -59,6 +57,8 @@ import io.regionevent.regioneventbackend.domain.reservation.repository.CapacityH
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
+import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
+import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 
 @SpringBootTest(properties = {
     "reservation.hold-termination.initial-delay=PT24H",
@@ -67,10 +67,7 @@ import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepositor
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 @Import(ExpireOrInvalidateCapacityHoldsUseCaseMySqlTest.FailingCapacityHoldServiceConfig.class)
-class ExpireOrInvalidateCapacityHoldsUseCaseMySqlTest {
-
-    @Container
-    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.42");
+class ExpireOrInvalidateCapacityHoldsUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
 
     private final ExpireOrInvalidateCapacityHoldsUseCase useCase;
     private final FailingCapacityHoldService capacityHoldService;
@@ -116,10 +113,7 @@ class ExpireOrInvalidateCapacityHoldsUseCaseMySqlTest {
 
     @DynamicPropertySource
     static void configureDataSource(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
+        SharedMySqlTestContainer.registerDataSourceProperties(registry);
     }
 
     @AfterEach

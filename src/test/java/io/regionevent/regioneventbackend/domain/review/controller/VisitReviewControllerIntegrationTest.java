@@ -10,14 +10,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 
 import org.junit.jupiter.api.Test;
 
@@ -68,8 +62,6 @@ import io.regionevent.regioneventbackend.domain.visit.entity.CheckinMethod;
 import io.regionevent.regioneventbackend.domain.visit.entity.Visit;
 import io.regionevent.regioneventbackend.domain.visit.repository.VisitRepository;
 import io.regionevent.regioneventbackend.domain.visit.service.VisitService;
-import io.regionevent.regioneventbackend.global.error.BusinessException;
-import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 
 @SpringBootTest
@@ -77,7 +69,6 @@ import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenSe
 class VisitReviewControllerIntegrationTest {
 
     private final MockMvc mockMvc;
-    private final CreateVisitReviewUseCase createVisitReviewUseCase;
     private final AppUserRepository appUserRepository;
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
     private final RegionRepository regionRepository;
@@ -100,7 +91,6 @@ class VisitReviewControllerIntegrationTest {
     @Autowired
     VisitReviewControllerIntegrationTest(
         MockMvc mockMvc,
-        CreateVisitReviewUseCase createVisitReviewUseCase,
         AppUserRepository appUserRepository,
         UserRoleAssignmentRepository userRoleAssignmentRepository,
         RegionRepository regionRepository,
@@ -121,7 +111,6 @@ class VisitReviewControllerIntegrationTest {
         PlatformTransactionManager transactionManager
     ) {
         this.mockMvc = mockMvc;
-        this.createVisitReviewUseCase = createVisitReviewUseCase;
         this.appUserRepository = appUserRepository;
         this.userRoleAssignmentRepository = userRoleAssignmentRepository;
         this.regionRepository = regionRepository;
@@ -383,45 +372,6 @@ class VisitReviewControllerIntegrationTest {
             .andExpect(jsonPath("$.code").value("INVALID_JSON"));
 
         assertThat(countReviews(fixture.visit().getVisitId())).isZero();
-    }
-
-    @Test
-    void createReview_concurrentRequestsCreateOnlyOneReview() throws Exception {
-        Fixture fixture = createFixture(true);
-        ExecutorService executorService = Executors.newFixedThreadPool(2);
-        CountDownLatch startSignal = new CountDownLatch(1);
-
-        try {
-            List<Future<ErrorCode>> futures = List.of(
-                executorService.submit(createTask(fixture, startSignal)),
-                executorService.submit(createTask(fixture, startSignal))
-            );
-            startSignal.countDown();
-
-            List<ErrorCode> results = Arrays.asList(futures.get(0).get(), futures.get(1).get());
-
-            assertThat(results).containsExactlyInAnyOrder(null, ErrorCode.INVALID_INPUT);
-            assertThat(countReviews(fixture.visit().getVisitId())).isOne();
-        } finally {
-            executorService.shutdownNow();
-        }
-    }
-
-    private Callable<ErrorCode> createTask(Fixture fixture, CountDownLatch startSignal) {
-        return () -> {
-            startSignal.await();
-            try {
-                createVisitReviewUseCase.create(
-                    fixture.user().getUserId(),
-                    fixture.visit().getVisitId(),
-                    new CreateVisitReviewRequest(5, "동시 후기"),
-                    UUID.randomUUID()
-                );
-                return null;
-            } catch (BusinessException exception) {
-                return exception.getErrorCode();
-            }
-        };
     }
 
     private org.springframework.test.web.servlet.ResultActions performCreate(

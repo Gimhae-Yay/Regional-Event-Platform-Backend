@@ -1,5 +1,7 @@
 package io.regionevent.regioneventbackend.domain.content.service;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.inOrder;
@@ -57,6 +59,15 @@ class GetContentRevisionReviewDetailUseCaseTest {
     );
 
     @Test
+    void 전체_단위_계약을_보존한다() {
+        assertAll(
+            () -> new GetContentRevisionReviewDetailUseCaseTest().공개_콘텐츠_수정본_상세를_조립하고_인가_후에만_이미지_URL을_발급한다(),
+            () -> new GetContentRevisionReviewDetailUseCaseTest().다른_담당_지역의_수정본은_URL을_발급하지_않고_거부한다(),
+            () -> new GetContentRevisionReviewDetailUseCaseTest().후보_이미지_지역_연결이_일치하지_않으면_URL을_발급하지_않는다(),
+            () -> new GetContentRevisionReviewDetailUseCaseTest().원본과_후보_공개시각과_이력_상태_조합이_잘못되면_URL을_발급하지_않는다()
+        );
+    }
+
     void 공개_콘텐츠_수정본_상세를_조립하고_인가_후에만_이미지_URL을_발급한다() {
         ContentRevisionReviewCandidate candidate = candidate(REGION_ID);
         ContentSession session = session();
@@ -94,7 +105,6 @@ class GetContentRevisionReviewDetailUseCaseTest {
         inOrder.verify(representativeImageViewUrlService).createViewUrl(candidate.candidateImageObject());
     }
 
-    @Test
     void 다른_담당_지역의_수정본은_URL을_발급하지_않고_거부한다() {
         ContentRevisionReviewCandidate candidate = candidate(20L);
         when(regionAdminAuthorizationService.requireAuthorizedRegionId(USER_ID)).thenReturn(REGION_ID);
@@ -112,7 +122,6 @@ class GetContentRevisionReviewDetailUseCaseTest {
         );
     }
 
-    @Test
     void 후보_이미지_지역_연결이_일치하지_않으면_URL을_발급하지_않는다() {
         ContentRevisionReviewCandidate candidate = candidate(REGION_ID);
         when(candidate.candidateImageObject().isScopedTo(REGION_ID)).thenReturn(false);
@@ -129,7 +138,6 @@ class GetContentRevisionReviewDetailUseCaseTest {
         verifyNoInteractions(contentSessionService, representativeImageViewUrlService);
     }
 
-    @Test
     void 원본과_후보_공개시각과_이력_상태_조합이_잘못되면_URL을_발급하지_않는다() {
         ContentRevisionReviewCandidate candidate = candidate(REGION_ID);
         when(regionAdminAuthorizationService.requireAuthorizedRegionId(USER_ID)).thenReturn(REGION_ID);

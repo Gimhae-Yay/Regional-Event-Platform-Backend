@@ -1,5 +1,7 @@
 package io.regionevent.regioneventbackend.global.security.access;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -23,6 +25,22 @@ class JwtAccessTokenServiceTest {
     private static final Instant ISSUED_AT = Instant.parse("2026-07-30T00:00:00Z");
 
     @Test
+    void 전체_단위_계약을_보존한다() {
+        assertAll(
+            () -> new JwtAccessTokenServiceTest().issueAndAuthenticate_withValidAccessToken_returnsAuthenticatedUser(),
+            () -> new JwtAccessTokenServiceTest().authenticate_whenTokenIsExpired_throwsInvalidAccessTokenException(),
+            () -> new JwtAccessTokenServiceTest().authenticate_whenAccessTokenLifetimeExceeds15Minutes_throwsInvalidAccessTokenException(),
+            () -> new JwtAccessTokenServiceTest().authenticate_whenTokenTypeIsRefresh_throwsInvalidAccessTokenException(),
+            () -> new JwtAccessTokenServiceTest().authenticate_whenIssuerOrAudienceDoesNotMatch_throwsInvalidAccessTokenException(),
+            () -> new JwtAccessTokenServiceTest().authenticate_whenSignatureOrKeyIdOrAlgorithmIsInvalid_throwsInvalidAccessTokenException(),
+            () -> new JwtAccessTokenServiceTest().authenticate_whenTokenUsesPreviousKey_returnsAuthenticatedUser(),
+            () -> new JwtAccessTokenServiceTest().authenticate_whenPreviousKeyVerificationHasEnded_throwsInvalidAccessTokenException(),
+            () -> new JwtAccessTokenServiceTest().createService_whenMoreThanOnePreviousKeyIsConfigured_throwsIllegalStateException(),
+            () -> new JwtAccessTokenServiceTest().issue_whenUserIdIsNotPositive_throwsIllegalArgumentException(),
+            () -> new JwtAccessTokenServiceTest().createService_whenPreviousKeyVerificationEndExceedsAccessTokenLifetime_throwsIllegalStateException()
+        );
+    }
+
     void issueAndAuthenticate_withValidAccessToken_returnsAuthenticatedUser() {
         JwtAccessTokenService jwtAccessTokenService = createService(Clock.fixed(ISSUED_AT, ZoneOffset.UTC));
 
@@ -43,7 +61,6 @@ class JwtAccessTokenServiceTest {
         assertThat(claims).doesNotContainKeys("role", "region_id", "family_id", "jti");
     }
 
-    @Test
     void authenticate_whenTokenIsExpired_throwsInvalidAccessTokenException() {
         JwtAccessTokenService issuer = createService(Clock.fixed(ISSUED_AT, ZoneOffset.UTC));
         JwtAccessTokenService verifier = createService(Clock.fixed(ISSUED_AT.plusSeconds(900), ZoneOffset.UTC));
@@ -52,7 +69,6 @@ class JwtAccessTokenServiceTest {
             .isInstanceOf(InvalidAccessTokenException.class);
     }
 
-    @Test
     void authenticate_whenAccessTokenLifetimeExceeds15Minutes_throwsInvalidAccessTokenException() {
         JwtAccessTokenService jwtAccessTokenService = createService(Clock.fixed(ISSUED_AT, ZoneOffset.UTC));
         String longLivedToken = createToken(
@@ -67,7 +83,6 @@ class JwtAccessTokenServiceTest {
             .isInstanceOf(InvalidAccessTokenException.class);
     }
 
-    @Test
     void authenticate_whenTokenTypeIsRefresh_throwsInvalidAccessTokenException() {
         JwtAccessTokenService jwtAccessTokenService = createService(Clock.fixed(ISSUED_AT, ZoneOffset.UTC));
         String refreshToken = createToken(
@@ -82,7 +97,6 @@ class JwtAccessTokenServiceTest {
             .isInstanceOf(InvalidAccessTokenException.class);
     }
 
-    @Test
     void authenticate_whenIssuerOrAudienceDoesNotMatch_throwsInvalidAccessTokenException() {
         JwtAccessTokenService jwtAccessTokenService = createService(Clock.fixed(ISSUED_AT, ZoneOffset.UTC));
         String wrongIssuerToken = createToken(
@@ -106,7 +120,6 @@ class JwtAccessTokenServiceTest {
             .isInstanceOf(InvalidAccessTokenException.class);
     }
 
-    @Test
     void authenticate_whenSignatureOrKeyIdOrAlgorithmIsInvalid_throwsInvalidAccessTokenException() {
         JwtAccessTokenService jwtAccessTokenService = createService(Clock.fixed(ISSUED_AT, ZoneOffset.UTC));
         String forgedToken = createToken(
@@ -148,7 +161,6 @@ class JwtAccessTokenServiceTest {
             .isInstanceOf(InvalidAccessTokenException.class);
     }
 
-    @Test
     void authenticate_whenTokenUsesPreviousKey_returnsAuthenticatedUser() {
         JwtAccessTokenService oldKeyService = createService(Clock.fixed(ISSUED_AT, ZoneOffset.UTC));
         JwtAccessTokenService rotatedKeyService = createRotatedKeyService(Clock.fixed(ISSUED_AT, ZoneOffset.UTC));
@@ -156,7 +168,6 @@ class JwtAccessTokenServiceTest {
         assertThat(rotatedKeyService.authenticate(oldKeyService.issue(1L)).userId()).isEqualTo(1L);
     }
 
-    @Test
     void authenticate_whenPreviousKeyVerificationHasEnded_throwsInvalidAccessTokenException() {
         Clock verificationEndTime = Clock.fixed(ISSUED_AT.plus(Duration.ofMinutes(15)), ZoneOffset.UTC);
         JwtAccessTokenService oldKeyService = createService(verificationEndTime);
@@ -166,7 +177,6 @@ class JwtAccessTokenServiceTest {
             .isInstanceOf(InvalidAccessTokenException.class);
     }
 
-    @Test
     void createService_whenMoreThanOnePreviousKeyIsConfigured_throwsIllegalStateException() {
         JwtAccessTokenProperties properties = new JwtAccessTokenProperties();
         properties.setIssuer("regional-event-platform");
@@ -182,7 +192,6 @@ class JwtAccessTokenServiceTest {
             .isInstanceOf(IllegalStateException.class);
     }
 
-    @Test
     void issue_whenUserIdIsNotPositive_throwsIllegalArgumentException() {
         JwtAccessTokenService jwtAccessTokenService = createService(Clock.fixed(ISSUED_AT, ZoneOffset.UTC));
 
@@ -190,7 +199,6 @@ class JwtAccessTokenServiceTest {
             .isInstanceOf(IllegalArgumentException.class);
     }
 
-    @Test
     void createService_whenPreviousKeyVerificationEndExceedsAccessTokenLifetime_throwsIllegalStateException() {
         JwtAccessTokenProperties properties = new JwtAccessTokenProperties();
         properties.setIssuer("regional-event-platform");

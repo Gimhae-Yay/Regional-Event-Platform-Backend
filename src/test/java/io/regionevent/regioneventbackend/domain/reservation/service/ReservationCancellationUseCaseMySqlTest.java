@@ -26,8 +26,6 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
@@ -58,15 +56,15 @@ import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepositor
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
+import io.regionevent.regioneventbackend.global.security.qr.QrTokenService;
+import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
+import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 
 @SpringBootTest
 @Import(ReservationCancellationUseCaseMySqlTest.BlockingReservationServiceConfig.class)
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-class ReservationCancellationUseCaseMySqlTest {
-
-    @Container
-    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.42");
+class ReservationCancellationUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
 
     private final ReservationCancellationUseCase reservationCancellationUseCase;
     private final CancelContentSessionUseCase cancelContentSessionUseCase;
@@ -115,10 +113,10 @@ class ReservationCancellationUseCaseMySqlTest {
 
     @DynamicPropertySource
     static void configureDataSource(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", () -> withUseAffectedRows(MYSQL.getJdbcUrl()));
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
+        SharedMySqlTestContainer.registerDataSourceProperties(
+            registry,
+            ReservationCancellationUseCaseMySqlTest::withUseAffectedRows
+        );
     }
 
     @Test
@@ -353,9 +351,10 @@ class ReservationCancellationUseCaseMySqlTest {
         @Primary
         BlockingReservationService blockingReservationService(
             ReservationRepository reservationRepository,
-            ReservationIdentifierGenerator reservationIdentifierGenerator
+            ReservationIdentifierGenerator reservationIdentifierGenerator,
+            QrTokenService qrTokenService
         ) {
-            return new BlockingReservationService(reservationRepository, reservationIdentifierGenerator);
+            return new BlockingReservationService(reservationRepository, reservationIdentifierGenerator, qrTokenService);
         }
     }
 
@@ -365,9 +364,10 @@ class ReservationCancellationUseCaseMySqlTest {
 
         BlockingReservationService(
             ReservationRepository reservationRepository,
-            ReservationIdentifierGenerator reservationIdentifierGenerator
+            ReservationIdentifierGenerator reservationIdentifierGenerator,
+            QrTokenService qrTokenService
         ) {
-            super(reservationRepository, reservationIdentifierGenerator);
+            super(reservationRepository, reservationIdentifierGenerator, qrTokenService);
         }
 
         @Override
