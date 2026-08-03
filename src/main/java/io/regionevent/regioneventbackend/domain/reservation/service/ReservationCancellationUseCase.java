@@ -58,15 +58,18 @@ public class ReservationCancellationUseCase {
         validatePositiveReservationId(reservationId);
         AppUser user = appUserService.findActiveUser(userId);
         AuditEventActor actor = new AuditEventActor(userRoleAssignmentService.findActiveVisitor(userId));
-        Reservation reservation = reservationService.findOwnedReservation(reservationId, user);
+        ReservationService.ReservationCancellationLockTarget lockTarget = reservationService
+            .findCancellationLockTarget(reservationId, user);
+        contentSessionService.lockForUpdate(lockTarget.sessionId());
 
+        Reservation reservation = reservationService.findOwnedReservationForUpdate(reservationId, user);
         if (reservation.getStatus() == ReservationStatus.CANCELLED) {
             return CancelReservationResponse.from(reservation);
         }
         if (reservation.getStatus() != ReservationStatus.CONFIRMED) {
             throwCancellationConflict(requestId, actor, reservation);
         }
-        contentSessionService.lockForUpdate(reservation.getContentSession().getSessionId());
+        int quantity = reservation.getCapacityHold().getQuantity();
         if (!reservationService.cancelIfCancellable(reservationId, userId)) {
             Reservation currentReservation = reservationService.findOwnedReservationForUpdate(reservationId, user);
             if (currentReservation.getStatus() == ReservationStatus.CANCELLED) {
@@ -76,8 +79,8 @@ public class ReservationCancellationUseCase {
         }
 
         contentSessionService.restoreCapacity(
-            reservation.getContentSession().getSessionId(),
-            reservation.getCapacityHold().getQuantity()
+            lockTarget.sessionId(),
+            quantity
         );
         Reservation cancelledReservation = reservationService.findOwnedReservation(reservationId, user);
         recordSuccessfulAuditEvent(requestId, actor, cancelledReservation);

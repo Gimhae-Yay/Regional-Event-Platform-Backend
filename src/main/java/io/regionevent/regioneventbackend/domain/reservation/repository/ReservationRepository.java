@@ -23,6 +23,16 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     @EntityGraph(attributePaths = {"region", "capacityHold", "contentSession", "user"})
     Optional<Reservation> findWithDetailsByReservationId(Long reservationId);
 
+    @Query("""
+        SELECT reservation.user.userId AS userId,
+            reservation.contentSession.sessionId AS sessionId
+        FROM Reservation reservation
+        WHERE reservation.reservationId = :reservationId
+        """)
+    Optional<ReservationCancellationLockTargetProjection> findCancellationLockTargetByReservationId(
+        @Param("reservationId") Long reservationId
+    );
+
     @Lock(LockModeType.PESSIMISTIC_READ)
     @Query("""
         SELECT reservation
