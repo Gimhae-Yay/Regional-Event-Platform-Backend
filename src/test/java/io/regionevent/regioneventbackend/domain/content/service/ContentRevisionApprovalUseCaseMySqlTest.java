@@ -58,8 +58,8 @@ class ContentRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestS
     private static final Instant ORIGINAL_PUBLISH_AT = Instant.parse("2026-08-05T00:00:00Z");
     private static final Instant CANDIDATE_PUBLISH_AT = Instant.parse("2026-08-20T00:00:00Z");
     private static final Instant SUBMITTED_AT = Instant.parse("2026-08-01T00:00:00Z");
-    private static final long LOCK_WAIT_TIMEOUT_SECONDS = 3;
-    private static final long LOCK_WAIT_POLL_INTERVAL_MILLIS = 50;
+    private static final int LOCK_WAIT_CONFIRM_ATTEMPTS = 30;
+    private static final long LOCK_WAIT_POLL_INTERVAL_MILLIS = 100;
 
     private final ApproveContentRevisionUseCase approveContentRevisionUseCase;
     private final RejectContentRevisionUseCase rejectContentRevisionUseCase;
@@ -207,8 +207,11 @@ class ContentRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestS
             Future<String> withdrawal = executorService.submit(() ->
                 executeCapturingConflict(() -> withdraw(fixture))
             );
-            awaitContentLockWait();
-            continueApproval.countDown();
+            try {
+                assertThat(awaitContentLockWait()).isTrue();
+            } finally {
+                continueApproval.countDown();
+            }
 
             assertThat(approval.get(10, TimeUnit.SECONDS)).isEqualTo("APPROVED");
             assertThat(withdrawal.get(10, TimeUnit.SECONDS)).isEqualTo("CONFLICT");
@@ -454,39 +457,33 @@ class ContentRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestS
         }
     }
 
-    private void awaitContentLockWait() {
-        long deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(LOCK_WAIT_TIMEOUT_SECONDS);
-        while (System.nanoTime() < deadlineNanos) {
-            if (isContentLockWaitObserved()) {
-                return;
+    private boolean awaitContentLockWait() {
+        for (int attempt = 0; attempt < LOCK_WAIT_CONFIRM_ATTEMPTS; attempt++) {
+            Integer waitingWithdrawalCount = jdbcTemplate.queryForObject(
+                """
+                    SELECT COUNT(*)
+                    FROM information_schema.processlist
+                    WHERE id <> CONNECTION_ID()
+                        AND db = DATABASE()
+                        AND command = 'Query'
+                        AND LOWER(info) LIKE '%for update%'
+                    """,
+                Integer.class
+            );
+            if (waitingWithdrawalCount != null && waitingWithdrawalCount > 0) {
+                return true;
             }
-            sleepBeforeNextLockWaitCheck();
+            awaitLockWaitInterval();
         }
-        throw new AssertionError("withdrawal did not wait for content row lock");
+        return false;
     }
 
-    private boolean isContentLockWaitObserved() {
-        Integer lockWaitCount = jdbcTemplate.queryForObject(
-            """
-                SELECT COUNT(*)
-                FROM information_schema.processlist
-                WHERE ID <> CONNECTION_ID()
-                  AND USER = SUBSTRING_INDEX(CURRENT_USER(), '@', 1)
-                  AND STATE LIKE '%lock%'
-                  AND INFO IS NOT NULL
-                  AND LOWER(INFO) LIKE '%content%'
-                """,
-            Integer.class
-        );
-        return lockWaitCount != null && lockWaitCount > 0;
-    }
-
-    private void sleepBeforeNextLockWaitCheck() {
+    private void awaitLockWaitInterval() {
         try {
             TimeUnit.MILLISECONDS.sleep(LOCK_WAIT_POLL_INTERVAL_MILLIS);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("content lock wait check was interrupted", exception);
+            throw new IllegalStateException("lock wait confirmation was interrupted", exception);
         }
     }
 
