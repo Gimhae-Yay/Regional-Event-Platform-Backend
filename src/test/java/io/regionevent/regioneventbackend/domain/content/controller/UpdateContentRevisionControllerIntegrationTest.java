@@ -298,6 +298,13 @@ class UpdateContentRevisionControllerIntegrationTest {
                 .content(validRequestWithNumericRepresentativeImage()))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+
+        mockMvc.perform(put("/api/v1/operator/content-revisions/{revisionId}", contentRevision.getContentRevisionId())
+                .header(HttpHeaders.AUTHORIZATION, bearerToken(operator))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(validRequestWithNullRepresentativeImage()))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
     }
 
     private String bearerToken(AppUser user) {
@@ -479,6 +486,10 @@ class UpdateContentRevisionControllerIntegrationTest {
 
     private String validRequestWithNumericRepresentativeImage() {
         return appendFieldToRequest("\"representativeImageObjectId\": 1");
+    }
+
+    private String validRequestWithNullRepresentativeImage() {
+        return appendFieldToRequest("\"representativeImageObjectId\": null");
     }
 
     private String appendFieldToRequest(String field) {

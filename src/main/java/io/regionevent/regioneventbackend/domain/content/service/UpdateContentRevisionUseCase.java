@@ -98,7 +98,7 @@ public class UpdateContentRevisionUseCase {
     }
 
     private Long parseOptionalPositiveImageObjectId(JsonNode value) {
-        if (value == null || value.isNull()) {
+        if (value == null) {
             return null;
         }
         if (!value.isString()) {
