@@ -135,6 +135,7 @@ class SuspendContentControllerMySqlIntegrationTest extends NonTransactionalMySql
 
     @DynamicPropertySource
     static void configureDataSource(DynamicPropertyRegistry registry) {
+        SharedMySqlTestContainer.grantLockMonitoringPrivileges();
         SharedMySqlTestContainer.registerDataSourceProperties(registry);
     }
 
