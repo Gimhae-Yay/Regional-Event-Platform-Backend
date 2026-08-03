@@ -32,6 +32,8 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
 
     @Query(value = "SELECT UNIX_TIMESTAMP(CURRENT_TIMESTAMP(6))", nativeQuery = true)
     BigDecimal findCurrentEpochSeconds();
+    @EntityGraph(attributePaths = {"region", "capacityHold", "contentSession", "user"})
+    Optional<Reservation> findWithDetailsByReservationId(Long reservationId);
 
     @Lock(LockModeType.PESSIMISTIC_READ)
     @Query("""
@@ -73,6 +75,29 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
         @Param("sessionId") Long sessionId,
         @Param("userId") Long userId,
         @Param("confirmedAt") Instant confirmedAt
+    );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+        UPDATE reservation
+        SET status = 'CANCELLED',
+            cancelled_at = CURRENT_TIMESTAMP,
+            cancellation_reason = 'USER_REQUEST',
+            capacity_released_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE reservation_id = :reservationId
+            AND user_id = :userId
+            AND status = 'CONFIRMED'
+            AND EXISTS (
+                SELECT 1
+                FROM content_session
+                WHERE content_session.session_id = reservation.session_id
+                    AND content_session.starts_at > CURRENT_TIMESTAMP
+            )
+        """, nativeQuery = true)
+    int cancelIfCancellable(
+        @Param("reservationId") Long reservationId,
+        @Param("userId") Long userId
     );
 
     @Query("""
