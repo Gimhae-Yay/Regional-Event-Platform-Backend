@@ -58,6 +58,8 @@ class ContentRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestS
     private static final Instant ORIGINAL_PUBLISH_AT = Instant.parse("2026-08-05T00:00:00Z");
     private static final Instant CANDIDATE_PUBLISH_AT = Instant.parse("2026-08-20T00:00:00Z");
     private static final Instant SUBMITTED_AT = Instant.parse("2026-08-01T00:00:00Z");
+    private static final long LOCK_WAIT_TIMEOUT_SECONDS = 3;
+    private static final long LOCK_WAIT_POLL_INTERVAL_MILLIS = 50;
 
     private final ApproveContentRevisionUseCase approveContentRevisionUseCase;
     private final RejectContentRevisionUseCase rejectContentRevisionUseCase;
@@ -196,18 +198,16 @@ class ContentRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestS
         Fixture fixture = createFixture(ContentStatus.PUBLISHED, null, false);
         CountDownLatch contentLocked = new CountDownLatch(1);
         CountDownLatch continueApproval = new CountDownLatch(1);
-        CountDownLatch withdrawalStarted = new CountDownLatch(1);
         try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
             Future<String> approval = executorService.submit(() ->
                 approveAfterHoldingContentLock(fixture, contentLocked, continueApproval)
             );
             await(contentLocked);
 
-            Future<String> withdrawal = executorService.submit(() -> {
-                withdrawalStarted.countDown();
-                return executeCapturingConflict(() -> withdraw(fixture));
-            });
-            await(withdrawalStarted);
+            Future<String> withdrawal = executorService.submit(() ->
+                executeCapturingConflict(() -> withdraw(fixture))
+            );
+            awaitContentLockWait();
             continueApproval.countDown();
 
             assertThat(approval.get(10, TimeUnit.SECONDS)).isEqualTo("APPROVED");
@@ -451,6 +451,42 @@ class ContentRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestS
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("concurrent transition was interrupted", exception);
+        }
+    }
+
+    private void awaitContentLockWait() {
+        long deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(LOCK_WAIT_TIMEOUT_SECONDS);
+        while (System.nanoTime() < deadlineNanos) {
+            if (isContentLockWaitObserved()) {
+                return;
+            }
+            sleepBeforeNextLockWaitCheck();
+        }
+        throw new AssertionError("withdrawal did not wait for content row lock");
+    }
+
+    private boolean isContentLockWaitObserved() {
+        Integer lockWaitCount = jdbcTemplate.queryForObject(
+            """
+                SELECT COUNT(*)
+                FROM information_schema.processlist
+                WHERE ID <> CONNECTION_ID()
+                  AND USER = SUBSTRING_INDEX(CURRENT_USER(), '@', 1)
+                  AND STATE LIKE '%lock%'
+                  AND INFO IS NOT NULL
+                  AND LOWER(INFO) LIKE '%content%'
+                """,
+            Integer.class
+        );
+        return lockWaitCount != null && lockWaitCount > 0;
+    }
+
+    private void sleepBeforeNextLockWaitCheck() {
+        try {
+            TimeUnit.MILLISECONDS.sleep(LOCK_WAIT_POLL_INTERVAL_MILLIS);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("content lock wait check was interrupted", exception);
         }
     }
 
