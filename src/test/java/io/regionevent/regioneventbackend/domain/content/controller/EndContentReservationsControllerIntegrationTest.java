@@ -201,15 +201,17 @@ class EndContentReservationsControllerIntegrationTest {
         performEnd(fixture.admin(), "999999999")
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.code").value("NOT_FOUND"));
-        for (String invalidContentId : new String[]{"0", "-1", "01", "+1"}) {
+        for (String invalidContentId : new String[]{
+            "0",
+            "-1",
+            "01",
+            "+1",
+            "not-a-number",
+            "9223372036854775808"
+        }) {
             performEnd(fixture.admin(), invalidContentId)
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
-        }
-        for (String invalidTypeContentId : new String[]{"not-a-number", "9223372036854775808"}) {
-            performEnd(fixture.admin(), invalidTypeContentId)
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
         }
         mockMvc.perform(post("/api/v1/region-admin/contents/{contentId}/end", fixture.content().getContentId()))
             .andExpect(status().isUnauthorized())

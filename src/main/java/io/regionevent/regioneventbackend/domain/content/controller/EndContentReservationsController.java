@@ -59,7 +59,7 @@ public class EndContentReservationsController {
         try {
             contentId = Long.valueOf(value);
         } catch (NumberFormatException exception) {
-            throw new BusinessException(ErrorCode.INVALID_TYPE, exception);
+            throw new BusinessException(ErrorCode.INVALID_INPUT, exception);
         }
         if (!POSITIVE_DECIMAL_PATTERN.matcher(value).matches()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
