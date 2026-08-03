@@ -93,6 +93,21 @@ public class ContentLogService {
         ));
     }
 
+    public ContentLog recordDeleted(
+        Content content,
+        AppUser actor,
+        Instant deletedAt,
+        String reason
+    ) {
+        return contentLogRepository.saveAndFlush(new ContentLog(
+            content,
+            actor,
+            ContentLogStatus.DELETED,
+            reason,
+            deletedAt
+        ));
+    }
+
     public ContentLog findLatestEnded(Long contentId) {
         return contentLogRepository.findLatestEnded(contentId)
             .orElseThrow(() -> new IllegalStateException("ended content log must exist"));
