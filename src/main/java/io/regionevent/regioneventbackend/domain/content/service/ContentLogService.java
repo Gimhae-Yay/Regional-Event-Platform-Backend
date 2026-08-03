@@ -82,4 +82,19 @@ public class ContentLogService {
             ContentLogStatus.REJECTED
         ).orElseThrow(() -> new IllegalStateException("rejected content log must exist"));
     }
+
+    public ContentLog recordEnded(Content content, AppUser actor, Instant endedAt) {
+        return contentLogRepository.saveAndFlush(new ContentLog(
+            content,
+            actor,
+            ContentLogStatus.ENDED,
+            null,
+            endedAt
+        ));
+    }
+
+    public ContentLog findLatestEnded(Long contentId) {
+        return contentLogRepository.findLatestEnded(contentId)
+            .orElseThrow(() -> new IllegalStateException("ended content log must exist"));
+    }
 }

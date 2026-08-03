@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.reservation.service;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -10,6 +11,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
@@ -19,6 +21,7 @@ import io.regionevent.regioneventbackend.domain.reservation.repository.Reservati
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
+import io.regionevent.regioneventbackend.global.security.qr.QrTokenService;
 
 @Service
 public class ReservationService {
@@ -27,13 +30,16 @@ public class ReservationService {
 
     private final ReservationRepository reservationRepository;
     private final ReservationIdentifierGenerator reservationIdentifierGenerator;
+    private final QrTokenService qrTokenService;
 
     public ReservationService(
         ReservationRepository reservationRepository,
-        ReservationIdentifierGenerator reservationIdentifierGenerator
+        ReservationIdentifierGenerator reservationIdentifierGenerator,
+        QrTokenService qrTokenService
     ) {
         this.reservationRepository = reservationRepository;
         this.reservationIdentifierGenerator = reservationIdentifierGenerator;
+        this.qrTokenService = qrTokenService;
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -61,6 +67,46 @@ public class ReservationService {
     }
 
     @Transactional(readOnly = true)
+    public MyReservationQrResult issueQr(Long reservationId, AppUser user) {
+        Reservation reservation = reservationRepository.findByReservationIdForQrIssue(reservationId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+        if (reservation.getUser() == null) {
+            throw new BusinessException(ErrorCode.QR_ISSUE_CONFLICT);
+        }
+        if (!reservation.getUser().getUserId().equals(user.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        ContentSession contentSession = reservation.getContentSession();
+        Instant issuedAt = toInstant(reservationRepository.findCurrentEpochSeconds());
+        if (reservation.getStatus() != ReservationStatus.CONFIRMED
+            || contentSession.getStatus() != ContentSessionStatus.SCHEDULED
+            || issuedAt.isBefore(contentSession.getCheckinOpenAt())
+            || !issuedAt.isBefore(contentSession.getCheckinCloseAt())) {
+            throw new BusinessException(ErrorCode.QR_ISSUE_CONFLICT);
+        }
+
+        QrTokenService.IssuedQrToken issuedToken = qrTokenService.issue(
+            reservation.getQrReference(),
+            contentSession.getSessionId(),
+            issuedAt,
+            contentSession.getCheckinCloseAt()
+        );
+        return new MyReservationQrResult(
+            reservation.getReservationId(),
+            contentSession.getSessionId(),
+            issuedToken.token(),
+            issuedAt,
+            issuedToken.expiresAt(),
+            contentSession.getCheckinCloseAt()
+        );
+    }
+
+    private Instant toInstant(BigDecimal epochSeconds) {
+        long seconds = epochSeconds.longValue();
+        return Instant.ofEpochSecond(seconds, epochSeconds.remainder(BigDecimal.ONE).movePointRight(9).longValue());
+    }
+
     public Reservation findOwnedReservation(Long reservationId, AppUser user) {
         Reservation reservation = reservationRepository.findWithDetailsByReservationId(reservationId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));

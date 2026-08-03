@@ -7,11 +7,13 @@ import org.springframework.http.HttpStatus;
 public enum ErrorCode {
 
     CONTENT_STATE_CONFLICT(HttpStatus.CONFLICT, "CONTENT_STATE_CONFLICT", "콘텐츠 상태가 요청을 처리할 수 없습니다."),
+    CONTENT_END_CONFLICT(HttpStatus.CONFLICT, "CONTENT_END_CONFLICT", "콘텐츠를 종료할 수 없는 상태입니다."),
     SESSION_NOT_CANCELLABLE(HttpStatus.CONFLICT, "SESSION_NOT_CANCELLABLE", "취소할 수 없는 회차 상태입니다."),
     RESERVATION_HOLD_CONFLICT(HttpStatus.CONFLICT, "RESERVATION_HOLD_CONFLICT", "예약 대기를 생성할 수 없는 상태입니다."),
     IDEMPOTENCY_KEY_CONFLICT(HttpStatus.CONFLICT, "IDEMPOTENCY_KEY_CONFLICT", "멱등 키가 다른 요청에 이미 사용되었습니다."),
     IDEMPOTENCY_REQUEST_IN_PROGRESS(HttpStatus.CONFLICT, "IDEMPOTENCY_REQUEST_IN_PROGRESS", "동일한 요청이 처리 중입니다."),
     RESERVATION_CONFIRM_CONFLICT(HttpStatus.CONFLICT, "RESERVATION_CONFIRM_CONFLICT", "예약을 확정할 수 없는 상태입니다."),
+    QR_ISSUE_CONFLICT(HttpStatus.CONFLICT, "QR_ISSUE_CONFLICT", "QR을 발급할 수 없는 상태입니다."),
     RESERVATION_CANCEL_CONFLICT(HttpStatus.CONFLICT, "RESERVATION_CANCEL_CONFLICT", "예약을 취소할 수 없는 상태입니다."),
     REFRESH_TOKEN_CONFLICT(HttpStatus.CONFLICT, "REFRESH_TOKEN_CONFLICT", "토큰 갱신 요청이 이미 진행 중입니다."),
     OPERATOR_APPLICATION_PENDING(HttpStatus.CONFLICT, "OPERATOR_APPLICATION_PENDING", "처리 중인 운영자 권한 신청이 있습니다."),

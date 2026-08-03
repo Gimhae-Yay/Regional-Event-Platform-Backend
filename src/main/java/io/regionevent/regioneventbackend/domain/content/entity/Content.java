@@ -185,6 +185,16 @@ public class Content {
         status = ContentStatus.REJECTED;
     }
 
+    public void end() {
+        if (deletedAt != null) {
+            throw new IllegalStateException("soft deleted content cannot be ended");
+        }
+        if (status != ContentStatus.PUBLISHED) {
+            throw new IllegalStateException("content status must be PUBLISHED but was " + status);
+        }
+        status = ContentStatus.ENDED;
+    }
+
     public void assignRepresentativeImage(ImageObject imageObject, Instant assignedAt) {
         representativeImageObject = requireNotNull(imageObject, "imageObject");
         representativeImageAssignedAt = requireNotNull(assignedAt, "assignedAt");
