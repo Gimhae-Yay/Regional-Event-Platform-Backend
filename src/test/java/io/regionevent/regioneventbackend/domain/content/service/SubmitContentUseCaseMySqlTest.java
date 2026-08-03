@@ -23,6 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEvent;
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventActorLinkRepository;
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
@@ -133,10 +135,21 @@ class SubmitContentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         assertThat(contentLogRepository.findByContentContentIdOrderByDateAscIdAsc(fixture.contentId()))
             .extracting(ContentLog::getStatus)
             .containsExactly(ContentLogStatus.PENDING, ContentLogStatus.REJECTED, ContentLogStatus.PENDING);
-        assertThat(auditEventRepository.findAll())
-            .filteredOn(auditEvent -> fixture.contentId().equals(auditEvent.getTargetId()))
-            .hasSize(1);
-        assertThat(auditEventActorLinkRepository.count()).isEqualTo(1);
+        List<AuditEvent> auditEvents = auditEventRepository.findAll()
+            .stream()
+            .filter(auditEvent -> fixture.contentId().equals(auditEvent.getTargetId()))
+            .toList();
+
+        assertThat(auditEvents)
+            .extracting(AuditEvent::getResult)
+            .containsExactlyInAnyOrder(AuditEventResult.SUCCESS, AuditEventResult.FAILURE);
+        assertThat(auditEvents)
+            .allSatisfy(auditEvent ->
+                assertThat(auditEventActorLinkRepository.findById(auditEvent.getAuditEventId()))
+                    .hasValueSatisfying(actorLink ->
+                        assertThat(actorLink.getActor().getUserId()).isEqualTo(fixture.operatorId())
+                    )
+            );
     }
 
     private SubmitAttempt submitAfterStart(
