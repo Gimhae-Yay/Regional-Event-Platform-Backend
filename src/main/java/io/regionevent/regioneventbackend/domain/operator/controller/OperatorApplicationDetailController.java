@@ -1,6 +1,6 @@
 package io.regionevent.regioneventbackend.domain.operator.controller;
 
-import java.util.regex.Pattern;
+import static io.regionevent.regioneventbackend.domain.operator.controller.OperatorApplicationIdParser.toOperatorApplicationId;
 
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
@@ -13,8 +13,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import io.regionevent.regioneventbackend.domain.operator.dto.OperatorApplicationDetailResponse;
 import io.regionevent.regioneventbackend.domain.operator.service.GetOperatorApplicationDetailUseCase;
-import io.regionevent.regioneventbackend.global.error.BusinessException;
-import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.global.response.ApiResponse;
 
 @RestController
@@ -22,7 +20,6 @@ import io.regionevent.regioneventbackend.global.response.ApiResponse;
 public class OperatorApplicationDetailController {
 
     private static final String SUCCESS_MESSAGE = "운영자 승인 요청 상세 조회에 성공했습니다.";
-    private static final Pattern POSITIVE_DECIMAL_PATTERN = Pattern.compile("^[1-9][0-9]*$");
 
     private final GetOperatorApplicationDetailUseCase getOperatorApplicationDetailUseCase;
 
@@ -44,18 +41,5 @@ public class OperatorApplicationDetailController {
         return ResponseEntity.ok()
             .cacheControl(CacheControl.noStore())
             .body(ApiResponse.success(HttpStatus.OK, SUCCESS_MESSAGE, response));
-    }
-
-    private Long toOperatorApplicationId(String value) {
-        Long operatorApplicationId;
-        try {
-            operatorApplicationId = Long.valueOf(value);
-        } catch (NumberFormatException exception) {
-            throw new BusinessException(ErrorCode.INVALID_TYPE, exception);
-        }
-        if (!POSITIVE_DECIMAL_PATTERN.matcher(value).matches()) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT);
-        }
-        return operatorApplicationId;
     }
 }

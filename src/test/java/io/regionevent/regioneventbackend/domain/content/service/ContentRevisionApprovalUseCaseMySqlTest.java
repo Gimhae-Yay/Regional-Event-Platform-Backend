@@ -2,7 +2,6 @@ package io.regionevent.regioneventbackend.domain.content.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -59,9 +58,12 @@ class ContentRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestS
     private static final Instant ORIGINAL_PUBLISH_AT = Instant.parse("2026-08-05T00:00:00Z");
     private static final Instant CANDIDATE_PUBLISH_AT = Instant.parse("2026-08-20T00:00:00Z");
     private static final Instant SUBMITTED_AT = Instant.parse("2026-08-01T00:00:00Z");
+    private static final int LOCK_WAIT_CONFIRM_ATTEMPTS = 30;
+    private static final long LOCK_WAIT_POLL_INTERVAL_MILLIS = 100;
 
     private final ApproveContentRevisionUseCase approveContentRevisionUseCase;
     private final RejectContentRevisionUseCase rejectContentRevisionUseCase;
+    private final WithdrawContentRevisionUseCase withdrawContentRevisionUseCase;
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
@@ -77,6 +79,7 @@ class ContentRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestS
     ContentRevisionApprovalUseCaseMySqlTest(
         ApproveContentRevisionUseCase approveContentRevisionUseCase,
         RejectContentRevisionUseCase rejectContentRevisionUseCase,
+        WithdrawContentRevisionUseCase withdrawContentRevisionUseCase,
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
         UserRoleAssignmentRepository userRoleAssignmentRepository,
@@ -90,6 +93,7 @@ class ContentRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestS
     ) {
         this.approveContentRevisionUseCase = approveContentRevisionUseCase;
         this.rejectContentRevisionUseCase = rejectContentRevisionUseCase;
+        this.withdrawContentRevisionUseCase = withdrawContentRevisionUseCase;
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
         this.userRoleAssignmentRepository = userRoleAssignmentRepository;
@@ -155,7 +159,7 @@ class ContentRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestS
             assertThat(revision.getStatus()).isEqualTo(ContentRevisionStatus.EDIT_WITHDRAWN);
             assertThat(revision.getWithdrawalReason()).isEqualTo("경합 철회 사유");
             assertThat(content.getTitle()).isEqualTo("원본 제목");
-            assertThat(successAuditCount(fixture)).isZero();
+            assertThat(successAuditCount(fixture)).isEqualTo(1);
         }
     }
 
@@ -188,6 +192,36 @@ class ContentRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestS
         }
     }
 
+    @Test
+    @Timeout(15)
+    void approve_and_withdraw_whenApprovalHoldsContentLock_thenWithdrawReturnsConflict() throws Exception {
+        Fixture fixture = createFixture(ContentStatus.PUBLISHED, null, false);
+        CountDownLatch contentLocked = new CountDownLatch(1);
+        CountDownLatch continueApproval = new CountDownLatch(1);
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<String> approval = executorService.submit(() ->
+                approveAfterHoldingContentLock(fixture, contentLocked, continueApproval)
+            );
+            await(contentLocked);
+
+            Future<String> withdrawal = executorService.submit(() ->
+                executeCapturingConflict(() -> withdraw(fixture))
+            );
+            try {
+                assertThat(awaitContentLockWait()).isTrue();
+            } finally {
+                continueApproval.countDown();
+            }
+
+            assertThat(approval.get(10, TimeUnit.SECONDS)).isEqualTo("APPROVED");
+            assertThat(withdrawal.get(10, TimeUnit.SECONDS)).isEqualTo("CONFLICT");
+        }
+
+        ContentRevision revision = contentRevisionRepository.findById(fixture.revisionId()).orElseThrow();
+        assertThat(revision.getStatus()).isEqualTo(ContentRevisionStatus.EDIT_APPROVED);
+        assertThat(successAuditCount(fixture)).isEqualTo(1);
+    }
+
     private ConcurrentOutcomes race(
         ConcurrentAction firstAction,
         ConcurrentAction secondAction
@@ -213,6 +247,10 @@ class ContentRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestS
     ) {
         ready.countDown();
         await(start);
+        return executeCapturingConflict(action);
+    }
+
+    private String executeCapturingConflict(ConcurrentAction action) {
         try {
             return action.execute();
         } catch (BusinessException exception) {
@@ -243,22 +281,26 @@ class ContentRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestS
     }
 
     private String withdraw(Fixture fixture) {
-        int updated = transactionTemplate.execute(status -> jdbcTemplate.update(
-            """
-                UPDATE content_revision
-                SET status = 'EDIT_WITHDRAWN',
-                    withdrawn_at = ?,
-                    withdrawn_by_user_id = ?,
-                    withdrawal_reason = ?
-                WHERE content_revision_id = ?
-                  AND status = 'EDIT_REQUESTED'
-                """,
-            Timestamp.from(SUBMITTED_AT.plusSeconds(120)),
+        withdrawContentRevisionUseCase.withdraw(
             fixture.operatorId(),
+            fixture.revisionId(),
             "경합 철회 사유",
-            fixture.revisionId()
-        ));
-        return updated == 1 ? "WITHDRAWN" : "CONFLICT";
+            UUID.randomUUID()
+        );
+        return "WITHDRAWN";
+    }
+
+    private String approveAfterHoldingContentLock(
+        Fixture fixture,
+        CountDownLatch contentLocked,
+        CountDownLatch continueApproval
+    ) {
+        return transactionTemplate.execute(status -> {
+            contentRepository.findApprovalTargetForUpdate(fixture.contentId()).orElseThrow();
+            contentLocked.countDown();
+            await(continueApproval);
+            return approve(fixture);
+        });
     }
 
     private String autoPublish(Fixture fixture) {
@@ -302,6 +344,11 @@ class ContentRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestS
                 "운영자",
                 "010-1234-5678",
                 AppUserStatus.ACTIVE
+            ));
+            userRoleAssignmentRepository.save(new UserRoleAssignment(
+                operator,
+                UserRole.OPERATOR,
+                region
             ));
             ImageObject originalImage = saveLinkedImage("original-" + suffix, operator, region);
             Content content = new Content(
@@ -407,6 +454,36 @@ class ContentRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestS
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("concurrent transition was interrupted", exception);
+        }
+    }
+
+    private boolean awaitContentLockWait() {
+        for (int attempt = 0; attempt < LOCK_WAIT_CONFIRM_ATTEMPTS; attempt++) {
+            Integer waitingWithdrawalCount = jdbcTemplate.queryForObject(
+                """
+                    SELECT COUNT(*)
+                    FROM information_schema.processlist
+                    WHERE id <> CONNECTION_ID()
+                        AND db = DATABASE()
+                        AND command = 'Query'
+                        AND LOWER(info) LIKE '%for update%'
+                    """,
+                Integer.class
+            );
+            if (waitingWithdrawalCount != null && waitingWithdrawalCount > 0) {
+                return true;
+            }
+            awaitLockWaitInterval();
+        }
+        return false;
+    }
+
+    private void awaitLockWaitInterval() {
+        try {
+            TimeUnit.MILLISECONDS.sleep(LOCK_WAIT_POLL_INTERVAL_MILLIS);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("lock wait confirmation was interrupted", exception);
         }
     }
 

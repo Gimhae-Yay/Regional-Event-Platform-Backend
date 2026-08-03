@@ -249,6 +249,20 @@ public class ContentRevision {
         reviewReason = normalizedReason;
     }
 
+    public void withdraw(AppUser withdrawer, Instant withdrawalTime, String reason) {
+        AppUser validatedWithdrawer = requireNotNull(withdrawer, "withdrawer");
+        Instant validatedWithdrawalTime = requireNotNull(withdrawalTime, "withdrawalTime");
+        String normalizedReason = requireNotBlank(reason, "reason").strip();
+        if (status != ContentRevisionStatus.EDIT_REQUESTED) {
+            throw new BusinessException(ErrorCode.CONTENT_STATE_CONFLICT);
+        }
+
+        status = ContentRevisionStatus.EDIT_WITHDRAWN;
+        withdrawnAt = validatedWithdrawalTime;
+        withdrawnBy = validatedWithdrawer;
+        withdrawalReason = normalizedReason;
+    }
+
     public void approve(AppUser reviewer, Instant reviewTime) {
         AppUser validatedReviewer = requireNotNull(reviewer, "reviewer");
         Instant validatedReviewTime = requireNotNull(reviewTime, "reviewTime");

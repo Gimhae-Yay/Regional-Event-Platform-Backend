@@ -25,6 +25,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentRevision;
@@ -92,6 +93,9 @@ class UpdateContentRevisionControllerIntegrationTest {
 
     @Autowired
     private FakeImageStorageGateway imageStorageGateway;
+
+    @Autowired
+    private TransactionTemplate transactionTemplate;
 
     @BeforeEach
     void setUp() {
@@ -292,6 +296,284 @@ class UpdateContentRevisionControllerIntegrationTest {
                 assertThat(imageObject.getLinkedAt()).isNotNull();
                 assertThat(imageObject.getLifecycleStatus()).isEqualTo(ImageLifecycleStatus.DELETE_PENDING);
             });
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void updateContentRevision_whenImageBelongsToOtherOperator_returnsInvalidInputWithoutChangingState()
+        throws Exception {
+
+        try {
+            Region region = saveRegion("UPDATE-IMAGE-OTHER-OPERATOR");
+            AppUser operator = saveUser("update-image-other-operator-owner@example.com");
+            AppUser otherOperator = saveUser("update-image-other-operator-uploader@example.com");
+            AppUser reviewer = saveUser("update-image-other-operator-reviewer@example.com");
+            userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
+            Content content = saveContent(region, operator, ContentStatus.PUBLISHED);
+            ImageObject originalCandidateImageObject = saveLinkedCandidateImageObject(
+                operator,
+                region,
+                "content/revision-original-other-operator.webp"
+            );
+            ContentRevision contentRevision = saveRejectedRevision(
+                content,
+                operator,
+                reviewer,
+                null,
+                originalCandidateImageObject
+            );
+            ImageObject replacementCandidateImageObject = saveUploadCandidateImageObject(
+                otherOperator,
+                region,
+                "content/revision-replacement-other-operator.webp"
+            );
+            imageStorageGateway.addMetadata(
+                replacementCandidateImageObject.getObjectKey(),
+                replacementCandidateImageObject.getByteSize(),
+                replacementCandidateImageObject.getChecksum()
+            );
+
+            assertRepresentativeImageConnectionRejectedWithoutChanges(
+                operator,
+                content,
+                contentRevision,
+                originalCandidateImageObject,
+                replacementCandidateImageObject
+            );
+        } finally {
+            deletePersistedTestData();
+        }
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void updateContentRevision_whenImageBelongsToOtherRegion_returnsInvalidInputWithoutChangingState()
+        throws Exception {
+
+        try {
+            Region region = saveRegion("UPDATE-IMAGE-REGION");
+            Region otherRegion = saveRegion("UPDATE-IMAGE-OTHER-REGION");
+            AppUser operator = saveUser("update-image-other-region-operator@example.com");
+            AppUser reviewer = saveUser("update-image-other-region-reviewer@example.com");
+            userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
+            Content content = saveContent(region, operator, ContentStatus.PUBLISHED);
+            ImageObject originalCandidateImageObject = saveLinkedCandidateImageObject(
+                operator,
+                region,
+                "content/revision-original-other-region.webp"
+            );
+            ContentRevision contentRevision = saveRejectedRevision(
+                content,
+                operator,
+                reviewer,
+                null,
+                originalCandidateImageObject
+            );
+            ImageObject replacementCandidateImageObject = saveUploadCandidateImageObject(
+                operator,
+                otherRegion,
+                "content/revision-replacement-other-region.webp"
+            );
+            imageStorageGateway.addMetadata(
+                replacementCandidateImageObject.getObjectKey(),
+                replacementCandidateImageObject.getByteSize(),
+                replacementCandidateImageObject.getChecksum()
+            );
+
+            assertRepresentativeImageConnectionRejectedWithoutChanges(
+                operator,
+                content,
+                contentRevision,
+                originalCandidateImageObject,
+                replacementCandidateImageObject
+            );
+        } finally {
+            deletePersistedTestData();
+        }
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void updateContentRevision_whenImageUploadIsExpired_returnsInvalidInputWithoutChangingState()
+        throws Exception {
+
+        try {
+            Region region = saveRegion("UPDATE-IMAGE-EXPIRED");
+            AppUser operator = saveUser("update-image-expired-operator@example.com");
+            AppUser reviewer = saveUser("update-image-expired-reviewer@example.com");
+            userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
+            Content content = saveContent(region, operator, ContentStatus.PUBLISHED);
+            ImageObject originalCandidateImageObject = saveLinkedCandidateImageObject(
+                operator,
+                region,
+                "content/revision-original-expired.webp"
+            );
+            ContentRevision contentRevision = saveRejectedRevision(
+                content,
+                operator,
+                reviewer,
+                null,
+                originalCandidateImageObject
+            );
+            ImageObject replacementCandidateImageObject = saveExpiredUploadCandidateImageObject(
+                operator,
+                region,
+                "content/revision-replacement-expired.webp"
+            );
+            imageStorageGateway.addMetadata(
+                replacementCandidateImageObject.getObjectKey(),
+                replacementCandidateImageObject.getByteSize(),
+                replacementCandidateImageObject.getChecksum()
+            );
+
+            assertRepresentativeImageConnectionRejectedWithoutChanges(
+                operator,
+                content,
+                contentRevision,
+                originalCandidateImageObject,
+                replacementCandidateImageObject
+            );
+        } finally {
+            deletePersistedTestData();
+        }
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void updateContentRevision_whenImageIsAlreadyLinked_returnsInvalidInputWithoutChangingState()
+        throws Exception {
+
+        try {
+            Region region = saveRegion("UPDATE-IMAGE-LINKED");
+            AppUser operator = saveUser("update-image-linked-operator@example.com");
+            AppUser reviewer = saveUser("update-image-linked-reviewer@example.com");
+            userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
+            Content content = saveContent(region, operator, ContentStatus.PUBLISHED);
+            ImageObject originalCandidateImageObject = saveLinkedCandidateImageObject(
+                operator,
+                region,
+                "content/revision-original-linked.webp"
+            );
+            ContentRevision contentRevision = saveRejectedRevision(
+                content,
+                operator,
+                reviewer,
+                null,
+                originalCandidateImageObject
+            );
+            ImageObject replacementCandidateImageObject = saveLinkedCandidateImageObject(
+                operator,
+                region,
+                "content/revision-replacement-linked.webp"
+            );
+            imageStorageGateway.addMetadata(
+                replacementCandidateImageObject.getObjectKey(),
+                replacementCandidateImageObject.getByteSize(),
+                replacementCandidateImageObject.getChecksum()
+            );
+
+            assertRepresentativeImageConnectionRejectedWithoutChanges(
+                operator,
+                content,
+                contentRevision,
+                originalCandidateImageObject,
+                replacementCandidateImageObject
+            );
+        } finally {
+            deletePersistedTestData();
+        }
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void updateContentRevision_whenImageStoredByteSizeDiffers_returnsInvalidInputWithoutChangingState()
+        throws Exception {
+
+        try {
+            Region region = saveRegion("UPDATE-IMAGE-BYTE-SIZE");
+            AppUser operator = saveUser("update-image-byte-size-operator@example.com");
+            AppUser reviewer = saveUser("update-image-byte-size-reviewer@example.com");
+            userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
+            Content content = saveContent(region, operator, ContentStatus.PUBLISHED);
+            ImageObject originalCandidateImageObject = saveLinkedCandidateImageObject(
+                operator,
+                region,
+                "content/revision-original-byte-size.webp"
+            );
+            ContentRevision contentRevision = saveRejectedRevision(
+                content,
+                operator,
+                reviewer,
+                null,
+                originalCandidateImageObject
+            );
+            ImageObject replacementCandidateImageObject = saveUploadCandidateImageObject(
+                operator,
+                region,
+                "content/revision-replacement-byte-size.webp"
+            );
+            imageStorageGateway.addMetadata(
+                replacementCandidateImageObject.getObjectKey(),
+                replacementCandidateImageObject.getByteSize() + 1,
+                replacementCandidateImageObject.getChecksum()
+            );
+
+            assertRepresentativeImageConnectionRejectedWithoutChanges(
+                operator,
+                content,
+                contentRevision,
+                originalCandidateImageObject,
+                replacementCandidateImageObject
+            );
+        } finally {
+            deletePersistedTestData();
+        }
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void updateContentRevision_whenImageStoredChecksumDiffers_returnsInvalidInputWithoutChangingState()
+        throws Exception {
+
+        try {
+            Region region = saveRegion("UPDATE-IMAGE-CHECKSUM");
+            AppUser operator = saveUser("update-image-checksum-operator@example.com");
+            AppUser reviewer = saveUser("update-image-checksum-reviewer@example.com");
+            userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
+            Content content = saveContent(region, operator, ContentStatus.PUBLISHED);
+            ImageObject originalCandidateImageObject = saveLinkedCandidateImageObject(
+                operator,
+                region,
+                "content/revision-original-checksum.webp"
+            );
+            ContentRevision contentRevision = saveRejectedRevision(
+                content,
+                operator,
+                reviewer,
+                null,
+                originalCandidateImageObject
+            );
+            ImageObject replacementCandidateImageObject = saveUploadCandidateImageObject(
+                operator,
+                region,
+                "content/revision-replacement-checksum.webp"
+            );
+            imageStorageGateway.addMetadata(
+                replacementCandidateImageObject.getObjectKey(),
+                replacementCandidateImageObject.getByteSize(),
+                replacementCandidateImageObject.getChecksum() + "-different"
+            );
+
+            assertRepresentativeImageConnectionRejectedWithoutChanges(
+                operator,
+                content,
+                contentRevision,
+                originalCandidateImageObject,
+                replacementCandidateImageObject
+            );
+        } finally {
+            deletePersistedTestData();
+        }
     }
 
     @Test
@@ -508,8 +790,7 @@ class UpdateContentRevisionControllerIntegrationTest {
             Instant.parse("2027-01-01T00:00:00Z")
         ));
         imageObject.markLinked(CANDIDATE_IMAGE_ASSIGNED_AT);
-        imageObjectRepository.flush();
-        return imageObject;
+        return imageObjectRepository.saveAndFlush(imageObject);
     }
 
     private ImageObject saveUploadCandidateImageObject(
@@ -525,6 +806,22 @@ class UpdateContentRevisionControllerIntegrationTest {
             1L,
             "sha256:" + objectKey,
             Instant.parse("2027-01-01T00:00:00Z")
+        ));
+    }
+
+    private ImageObject saveExpiredUploadCandidateImageObject(
+        AppUser operator,
+        Region region,
+        String objectKey
+    ) {
+        return imageObjectRepository.saveAndFlush(ImageObject.createUploadCandidate(
+            objectKey,
+            operator,
+            region,
+            "image/webp",
+            1L,
+            "sha256:" + objectKey,
+            Instant.parse("2026-01-01T00:00:00Z")
         ));
     }
 
@@ -582,6 +879,95 @@ class UpdateContentRevisionControllerIntegrationTest {
             null,
             null
         ));
+    }
+
+    private void assertRepresentativeImageConnectionRejectedWithoutChanges(
+        AppUser operator,
+        Content content,
+        ContentRevision contentRevision,
+        ImageObject originalCandidateImageObject,
+        ImageObject replacementCandidateImageObject
+    ) throws Exception {
+        ContentSnapshot contentSnapshot = ContentSnapshot.from(content);
+        RevisionSnapshot revisionSnapshot = RevisionSnapshot.from(contentRevision);
+        ImageObjectSnapshot originalImageSnapshot = ImageObjectSnapshot.from(originalCandidateImageObject);
+        ImageObjectSnapshot replacementImageSnapshot = ImageObjectSnapshot.from(replacementCandidateImageObject);
+
+        mockMvc.perform(put("/api/v1/operator/content-revisions/{revisionId}", contentRevision.getContentRevisionId())
+                .header(HttpHeaders.AUTHORIZATION, bearerToken(operator))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(validRequestWithRepresentativeImage(
+                    replacementCandidateImageObject.getImageObjectId().toString()
+                )))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        assertContentSnapshot(contentSnapshot);
+        assertRevisionSnapshot(revisionSnapshot);
+        assertImageObjectSnapshot(originalImageSnapshot);
+        assertImageObjectSnapshot(replacementImageSnapshot);
+    }
+
+    private void assertContentSnapshot(ContentSnapshot snapshot) {
+        transactionTemplate.executeWithoutResult(status -> assertThat(contentRepository.findById(snapshot.contentId()))
+            .get()
+            .satisfies(content -> {
+                assertThat(content.getStatus()).isEqualTo(snapshot.status());
+                assertThat(content.getTitle()).isEqualTo(snapshot.title());
+                assertThat(content.getVersionNo()).isEqualTo(snapshot.versionNo());
+                assertThat(toImageObjectId(content.getRepresentativeImageObject()))
+                    .isEqualTo(snapshot.representativeImageObjectId());
+                assertThat(content.getRepresentativeImageAssignedAt()).isEqualTo(snapshot.representativeImageAssignedAt());
+            }));
+    }
+
+    private void assertRevisionSnapshot(RevisionSnapshot snapshot) {
+        transactionTemplate.executeWithoutResult(status -> assertThat(contentRevisionRepository.findById(
+            snapshot.contentRevisionId()
+        ))
+            .get()
+            .satisfies(contentRevision -> {
+                assertThat(contentRevision.getStatus()).isEqualTo(snapshot.status());
+                assertThat(contentRevision.getTitle()).isEqualTo(snapshot.title());
+                assertThat(contentRevision.getDescription()).isEqualTo(snapshot.description());
+                assertThat(contentRevision.getLocationText()).isEqualTo(snapshot.locationText());
+                assertThat(contentRevision.getOperatingHoursText()).isEqualTo(snapshot.operatingHoursText());
+                assertThat(contentRevision.getContactText()).isEqualTo(snapshot.contactText());
+                assertThat(contentRevision.getPrecautions()).isEqualTo(snapshot.precautions());
+                assertThat(contentRevision.getAgeRequirement()).isEqualTo(snapshot.ageRequirement());
+                assertThat(contentRevision.getMaterials()).isEqualTo(snapshot.materials());
+                assertThat(contentRevision.getCancellationPolicyText()).isEqualTo(snapshot.cancellationPolicyText());
+                assertThat(contentRevision.getPublishAt()).isEqualTo(snapshot.publishAt());
+                assertThat(toImageObjectId(contentRevision.getCandidateImageObject()))
+                    .isEqualTo(snapshot.candidateImageObjectId());
+                assertThat(contentRevision.getCandidateImageAssignedAt()).isEqualTo(snapshot.candidateImageAssignedAt());
+            }));
+    }
+
+    private void assertImageObjectSnapshot(ImageObjectSnapshot snapshot) {
+        transactionTemplate.executeWithoutResult(status -> assertThat(imageObjectRepository.findById(
+            snapshot.imageObjectId()
+        ))
+            .get()
+            .satisfies(imageObject -> {
+                assertThat(toUserId(imageObject.getCreatedByUser())).isEqualTo(snapshot.createdByUserId());
+                assertThat(toRegionId(imageObject.getRegion())).isEqualTo(snapshot.regionId());
+                assertThat(imageObject.getUploadExpiresAt()).isEqualTo(snapshot.uploadExpiresAt());
+                assertThat(imageObject.getLinkedAt()).isEqualTo(snapshot.linkedAt());
+                assertThat(imageObject.getLifecycleStatus()).isEqualTo(snapshot.lifecycleStatus());
+            }));
+    }
+
+    private Long toImageObjectId(ImageObject imageObject) {
+        return imageObject == null ? null : imageObject.getImageObjectId();
+    }
+
+    private Long toUserId(AppUser user) {
+        return user == null ? null : user.getUserId();
+    }
+
+    private Long toRegionId(Region region) {
+        return region == null ? null : region.getRegionId();
     }
 
     private String validRequestWithoutPublishAt() {
@@ -701,6 +1087,89 @@ class UpdateContentRevisionControllerIntegrationTest {
 
         List<String> deletedObjectKeys() {
             return deletedObjectKeys;
+        }
+    }
+
+    private record ContentSnapshot(
+        Long contentId,
+        ContentStatus status,
+        String title,
+        int versionNo,
+        Long representativeImageObjectId,
+        Instant representativeImageAssignedAt
+    ) {
+
+        private static ContentSnapshot from(Content content) {
+            return new ContentSnapshot(
+                content.getContentId(),
+                content.getStatus(),
+                content.getTitle(),
+                content.getVersionNo(),
+                content.getRepresentativeImageObject() == null
+                    ? null
+                    : content.getRepresentativeImageObject().getImageObjectId(),
+                content.getRepresentativeImageAssignedAt()
+            );
+        }
+    }
+
+    private record RevisionSnapshot(
+        Long contentRevisionId,
+        ContentRevisionStatus status,
+        String title,
+        String description,
+        String locationText,
+        String operatingHoursText,
+        String contactText,
+        String precautions,
+        String ageRequirement,
+        String materials,
+        String cancellationPolicyText,
+        Instant publishAt,
+        Long candidateImageObjectId,
+        Instant candidateImageAssignedAt
+    ) {
+
+        private static RevisionSnapshot from(ContentRevision contentRevision) {
+            return new RevisionSnapshot(
+                contentRevision.getContentRevisionId(),
+                contentRevision.getStatus(),
+                contentRevision.getTitle(),
+                contentRevision.getDescription(),
+                contentRevision.getLocationText(),
+                contentRevision.getOperatingHoursText(),
+                contentRevision.getContactText(),
+                contentRevision.getPrecautions(),
+                contentRevision.getAgeRequirement(),
+                contentRevision.getMaterials(),
+                contentRevision.getCancellationPolicyText(),
+                contentRevision.getPublishAt(),
+                contentRevision.getCandidateImageObject() == null
+                    ? null
+                    : contentRevision.getCandidateImageObject().getImageObjectId(),
+                contentRevision.getCandidateImageAssignedAt()
+            );
+        }
+    }
+
+    private record ImageObjectSnapshot(
+        Long imageObjectId,
+        Long createdByUserId,
+        Long regionId,
+        Instant uploadExpiresAt,
+        Instant linkedAt,
+        ImageLifecycleStatus lifecycleStatus
+    ) {
+
+        private static ImageObjectSnapshot from(ImageObject imageObject) {
+            return new ImageObjectSnapshot(
+                imageObject.getImageObjectId(),
+                imageObject.getCreatedByUser() == null ? null : imageObject.getCreatedByUser().getUserId(),
+                imageObject.getRegion() == null ? null : imageObject.getRegion().getRegionId(),
+                imageObject.getUploadExpiresAt(),
+                imageObject.getLinkedAt(),
+                imageObject.getLifecycleStatus()
+            );
         }
     }
 }
