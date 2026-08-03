@@ -22,7 +22,6 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -34,14 +33,13 @@ import io.regionevent.regioneventbackend.global.security.refresh.JwtRefreshToken
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshToken;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenConflictException;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenService;
+import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
+import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 
 @SpringBootTest
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-class RefreshAccessTokenUseCaseIntegrationTest {
-
-    @Container
-    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.42");
+class RefreshAccessTokenUseCaseIntegrationTest extends NonTransactionalMySqlTestSupport {
 
     @Container
     static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7.4-alpine")
@@ -74,10 +72,7 @@ class RefreshAccessTokenUseCaseIntegrationTest {
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
+        SharedMySqlTestContainer.registerDataSourceProperties(registry);
         registry.add("spring.data.redis.host", REDIS::getHost);
         registry.add("spring.data.redis.port", REDIS::getFirstMappedPort);
     }

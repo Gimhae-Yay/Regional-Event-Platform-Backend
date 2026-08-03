@@ -35,6 +35,16 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     @EntityGraph(attributePaths = {"region", "capacityHold", "contentSession", "user"})
     Optional<Reservation> findWithDetailsByReservationId(Long reservationId);
 
+    @Query("""
+        SELECT reservation.user.userId AS userId,
+            reservation.contentSession.sessionId AS sessionId
+        FROM Reservation reservation
+        WHERE reservation.reservationId = :reservationId
+        """)
+    Optional<ReservationCancellationLockTargetProjection> findCancellationLockTargetByReservationId(
+        @Param("reservationId") Long reservationId
+    );
+
     @Lock(LockModeType.PESSIMISTIC_READ)
     @Query("""
         SELECT reservation
@@ -42,6 +52,25 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
         WHERE reservation.reservationId = :reservationId
         """)
     Optional<Reservation> findByReservationIdForUpdate(@Param("reservationId") Long reservationId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT reservation
+        FROM Reservation reservation
+        JOIN FETCH reservation.capacityHold
+        WHERE reservation.contentSession.sessionId = :sessionId
+            AND reservation.status = io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus.CONFIRMED
+        ORDER BY reservation.reservationId ASC
+        """)
+    List<Reservation> findConfirmedBySessionIdForUpdate(@Param("sessionId") Long sessionId);
+
+    @Query("""
+        SELECT CASE WHEN COUNT(contentSession) > 0 THEN true ELSE false END
+        FROM ContentSession contentSession
+        WHERE contentSession.sessionId = :sessionId
+            AND contentSession.startsAt > CURRENT_TIMESTAMP
+        """)
+    boolean isSessionBeforeStartByDatabaseTime(@Param("sessionId") Long sessionId);
 
     @Modifying
     @Query(value = """

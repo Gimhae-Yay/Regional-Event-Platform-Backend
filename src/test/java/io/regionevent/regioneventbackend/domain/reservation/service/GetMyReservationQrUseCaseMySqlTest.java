@@ -12,9 +12,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
@@ -34,14 +33,13 @@ import io.regionevent.regioneventbackend.domain.reservation.repository.Reservati
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
+import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
+import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 
 @SpringBootTest
 @Testcontainers(disabledWithoutDocker = true)
-@Transactional
-class GetMyReservationQrUseCaseMySqlTest {
-
-    @Container
-    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.42");
+@Transactional(propagation = Propagation.NOT_SUPPORTED)
+class GetMyReservationQrUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
 
     private final GetMyReservationQrUseCase getMyReservationQrUseCase;
     private final RegionRepository regionRepository;
@@ -75,15 +73,15 @@ class GetMyReservationQrUseCaseMySqlTest {
 
     @DynamicPropertySource
     static void configureDataSource(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
+        SharedMySqlTestContainer.registerDataSourceProperties(registry);
     }
 
     @Test
     void QR_발급_시각은_MySQL_현재_시각을_사용한다() {
         Fixture fixture = createFixture();
+        Instant checkinCloseAt = contentSessionRepository.findById(fixture.session().getSessionId())
+            .orElseThrow()
+            .getCheckinCloseAt();
         Instant before = currentTimestamp();
 
         MyReservationQrResult result = getMyReservationQrUseCase.get(
@@ -93,7 +91,7 @@ class GetMyReservationQrUseCaseMySqlTest {
 
         Instant after = currentTimestamp();
         assertThat(result.issuedAt()).isBetween(before, after);
-        assertThat(result.expiresAt()).isEqualTo(fixture.session().getCheckinCloseAt());
+        assertThat(result.expiresAt()).isEqualTo(checkinCloseAt);
         assertThat(result.qrToken()).startsWith("v1.qr-test-key.");
     }
 
