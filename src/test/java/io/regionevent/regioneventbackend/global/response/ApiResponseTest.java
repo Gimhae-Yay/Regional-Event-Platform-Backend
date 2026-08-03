@@ -119,6 +119,12 @@ class ApiResponseTest {
                 "운영자 권한 재신청을 할 수 없습니다."
             ),
             Arguments.of(
+                ErrorCode.OPERATOR_APPLICATION_STATE_CONFLICT,
+                HttpStatus.CONFLICT,
+                "OPERATOR_APPLICATION_STATE_CONFLICT",
+                "운영자 신청 상태가 요청과 일치하지 않습니다."
+            ),
+            Arguments.of(
                 ErrorCode.INVALID_INPUT,
                 HttpStatus.BAD_REQUEST,
                 "INVALID_INPUT",
