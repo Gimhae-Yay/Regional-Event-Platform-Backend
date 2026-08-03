@@ -47,6 +47,8 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
 import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 
@@ -181,6 +183,74 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
             .hasValueSatisfying(session -> assertThat(session.getRemainingCapacity()).isEqualTo(SESSION_CAPACITY));
     }
 
+    @Test
+    void 종료된_콘텐츠를_순차_재시도하면_기존_종료_결과만_반환하고_종료_부수_효과를_중복_생성하지_않는다() {
+        Fixture fixture = createFixture();
+
+        EndContentReservationsResult firstResult = endContentReservationsUseCase.end(
+            fixture.adminId(),
+            fixture.contentId(),
+            UUID.randomUUID()
+        );
+        EndContentReservationsResult retryResult = endContentReservationsUseCase.end(
+            fixture.adminId(),
+            fixture.contentId(),
+            UUID.randomUUID()
+        );
+
+        assertThat(retryResult).isEqualTo(firstResult);
+        assertThat(contentLogRepository.findByContentContentIdOrderByDateAscIdAsc(fixture.contentId()))
+            .extracting(ContentLog::getStatus)
+            .containsExactly(ContentLogStatus.PUBLISHED, ContentLogStatus.ENDED);
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent -> fixture.contentId().equals(auditEvent.getTargetId()))
+            .hasSize(1);
+        assertThat(capacityHoldRepository.findById(fixture.firstHoldId()))
+            .hasValueSatisfying(this::assertInvalidated);
+        assertThat(capacityHoldRepository.findById(fixture.secondHoldId()))
+            .hasValueSatisfying(this::assertInvalidated);
+        assertThat(contentSessionRepository.findById(fixture.firstSessionId()))
+            .hasValueSatisfying(session -> assertThat(session.getRemainingCapacity()).isEqualTo(SESSION_CAPACITY));
+        assertThat(contentSessionRepository.findById(fixture.secondSessionId()))
+            .hasValueSatisfying(session -> assertThat(session.getRemainingCapacity()).isEqualTo(SESSION_CAPACITY));
+    }
+
+    @Test
+    @Timeout(10)
+    void 다른_상태_전이가_먼저_커밋되면_종료_요청은_충돌하고_종료_부수_효과를_생성하지_않는다() throws Exception {
+        Fixture fixture = createFixture();
+        CountDownLatch stateTransitionApplied = new CountDownLatch(1);
+        CountDownLatch allowStateTransitionCommit = new CountDownLatch(1);
+        CountDownLatch endRequestStarted = new CountDownLatch(1);
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<Integer> stateTransition = executorService.submit(
+                () -> suspendAfterStart(
+                    fixture.contentId(),
+                    stateTransitionApplied,
+                    allowStateTransitionCommit
+                )
+            );
+            assertThat(stateTransitionApplied.await(3, TimeUnit.SECONDS)).isTrue();
+            Future<Attempt> endAttempt = executorService.submit(
+                () -> endAfterStart(fixture, endRequestStarted)
+            );
+            assertThat(endRequestStarted.await(3, TimeUnit.SECONDS)).isTrue();
+            allowStateTransitionCommit.countDown();
+
+            assertThat(stateTransition.get(5, TimeUnit.SECONDS)).isEqualTo(1);
+            assertThat(endAttempt.get(5, TimeUnit.SECONDS).errorCode())
+                .isEqualTo(ErrorCode.CONTENT_END_CONFLICT);
+        }
+
+        assertThat(contentRepository.findById(fixture.contentId()))
+            .hasValueSatisfying(content -> assertThat(content.getStatus()).isEqualTo(ContentStatus.SUSPENDED));
+        assertThat(contentLogRepository.findByContentContentIdOrderByDateAscIdAsc(fixture.contentId()))
+            .extracting(ContentLog::getStatus)
+            .containsExactly(ContentLogStatus.PUBLISHED);
+        assertNoEndSideEffects(fixture);
+    }
+
     private EndContentReservationsResult endAfterStart(
         Fixture fixture,
         CountDownLatch ready,
@@ -193,6 +263,38 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
             fixture.contentId(),
             UUID.randomUUID()
         );
+    }
+
+    private Attempt endAfterStart(Fixture fixture, CountDownLatch started) {
+        started.countDown();
+        try {
+            endContentReservationsUseCase.end(
+                fixture.adminId(),
+                fixture.contentId(),
+                UUID.randomUUID()
+            );
+            return new Attempt(null);
+        } catch (BusinessException exception) {
+            return new Attempt(exception.getErrorCode());
+        }
+    }
+
+    private int suspendAfterStart(
+        Long contentId,
+        CountDownLatch applied,
+        CountDownLatch allowCommit
+    ) {
+        return transactionTemplate.execute(status -> {
+            int updatedCount = contentRepository.updateStatusIfExpected(
+                contentId,
+                ContentStatus.PUBLISHED,
+                ContentStatus.SUSPENDED,
+                Instant.now()
+            );
+            applied.countDown();
+            await(allowCommit);
+            return updatedCount;
+        });
     }
 
     private Fixture createFixture() {
@@ -325,6 +427,26 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
         assertThat(capacityHold.getCapacityReleasedAt()).isNotNull();
     }
 
+    private void assertNoEndSideEffects(Fixture fixture) {
+        assertThat(auditEventRepository.findAll())
+            .noneMatch(auditEvent -> fixture.contentId().equals(auditEvent.getTargetId()));
+        assertThat(capacityHoldRepository.findById(fixture.firstHoldId()))
+            .hasValueSatisfying(this::assertActive);
+        assertThat(capacityHoldRepository.findById(fixture.secondHoldId()))
+            .hasValueSatisfying(this::assertActive);
+        assertThat(contentSessionRepository.findById(fixture.firstSessionId()))
+            .hasValueSatisfying(session -> assertThat(session.getRemainingCapacity()).isEqualTo(8));
+        assertThat(contentSessionRepository.findById(fixture.secondSessionId()))
+            .hasValueSatisfying(session -> assertThat(session.getRemainingCapacity()).isEqualTo(9));
+    }
+
+    private void assertActive(CapacityHold capacityHold) {
+        assertThat(capacityHold.getStatus()).isEqualTo(CapacityHoldStatus.ACTIVE);
+        assertThat(capacityHold.getInvalidationReason()).isNull();
+        assertThat(capacityHold.getTerminalAt()).isNull();
+        assertThat(capacityHold.getCapacityReleasedAt()).isNull();
+    }
+
     private void await(CountDownLatch latch) {
         try {
             if (!latch.await(3, TimeUnit.SECONDS)) {
@@ -344,5 +466,8 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
         Long firstHoldId,
         Long secondHoldId
     ) {
+    }
+
+    private record Attempt(ErrorCode errorCode) {
     }
 }
