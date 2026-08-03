@@ -61,4 +61,13 @@ public interface ContentRevisionRepository extends JpaRepository<ContentRevision
             Long regionId,
             ContentRevisionStatus status
         );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = {
+        "content",
+        "content.operator",
+        "content.region",
+        "candidateImageObject"
+    })
+    Optional<ContentRevision> findByContentRevisionId(Long contentRevisionId);
 }

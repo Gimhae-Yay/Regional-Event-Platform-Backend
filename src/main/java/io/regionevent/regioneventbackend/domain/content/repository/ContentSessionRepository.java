@@ -74,6 +74,17 @@ public interface ContentSessionRepository extends JpaRepository<ContentSession, 
     );
 
     @Query("""
+        SELECT CASE WHEN COUNT(contentSession) > 0 THEN true ELSE false END
+        FROM ContentSession contentSession
+        WHERE contentSession.content.contentId = :contentId
+            AND contentSession.status NOT IN :terminalStatuses
+        """)
+    boolean existsNonTerminalSessionForEnd(
+        @Param("contentId") Long contentId,
+        @Param("terminalStatuses") List<ContentSessionStatus> terminalStatuses
+    );
+
+    @Query("""
         SELECT contentSession.sessionId AS sessionId,
             contentSession.content.contentId AS contentId,
             contentSession.startsAt AS startsAt,

@@ -21,6 +21,11 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
 @Service
 public class ContentSessionService {
 
+    private static final List<ContentSessionStatus> END_TERMINAL_STATUSES = List.of(
+        ContentSessionStatus.COMPLETED,
+        ContentSessionStatus.CANCELLED
+    );
+
     private final ContentSessionRepository contentSessionRepository;
 
     public ContentSessionService(ContentSessionRepository contentSessionRepository) {
@@ -51,6 +56,13 @@ public class ContentSessionService {
         return contentSessionRepository.findByContentContentIdAndStatusOrderByStartsAtAsc(
             contentId,
             ContentSessionStatus.SCHEDULED
+        );
+    }
+
+    public boolean hasNonTerminalSessionForEnd(Long contentId) {
+        return contentSessionRepository.existsNonTerminalSessionForEnd(
+            contentId,
+            END_TERMINAL_STATUSES
         );
     }
 
