@@ -262,6 +262,33 @@ public class ContentRevision {
         reviewReason = null;
     }
 
+    public void replaceRejectedCandidateFields(
+        String title,
+        String description,
+        String locationText,
+        String operatingHoursText,
+        String contactText,
+        String precautions,
+        String ageRequirement,
+        String materials,
+        String cancellationPolicyText,
+        Instant publishAt
+    ) {
+        if (status != ContentRevisionStatus.EDIT_REJECTED) {
+            throw new IllegalStateException("only rejected content revision can be edited");
+        }
+        this.title = requireNotBlank(title, "title");
+        this.description = requireNotBlank(description, "description");
+        this.locationText = requireNotBlank(locationText, "locationText");
+        this.operatingHoursText = requireNotBlank(operatingHoursText, "operatingHoursText");
+        this.contactText = requireNotBlank(contactText, "contactText");
+        this.precautions = requireNotBlank(precautions, "precautions");
+        this.ageRequirement = requireNotBlank(ageRequirement, "ageRequirement");
+        this.materials = requireNotBlank(materials, "materials");
+        this.cancellationPolicyText = requireNotBlank(cancellationPolicyText, "cancellationPolicyText");
+        this.publishAt = publishAt;
+    }
+
     public Long getContentRevisionId() {
         return contentRevisionId;
     }
@@ -364,6 +391,10 @@ public class ContentRevision {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public boolean hasCandidatePublishAt() {
+        return publishAt != null;
     }
 
     private void validateStatusDetails() {
