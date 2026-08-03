@@ -56,6 +56,7 @@ import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepositor
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
+import io.regionevent.regioneventbackend.global.security.qr.QrTokenService;
 import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
 import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 
@@ -350,9 +351,10 @@ class ReservationCancellationUseCaseMySqlTest extends NonTransactionalMySqlTestS
         @Primary
         BlockingReservationService blockingReservationService(
             ReservationRepository reservationRepository,
-            ReservationIdentifierGenerator reservationIdentifierGenerator
+            ReservationIdentifierGenerator reservationIdentifierGenerator,
+            QrTokenService qrTokenService
         ) {
-            return new BlockingReservationService(reservationRepository, reservationIdentifierGenerator);
+            return new BlockingReservationService(reservationRepository, reservationIdentifierGenerator, qrTokenService);
         }
     }
 
@@ -362,9 +364,10 @@ class ReservationCancellationUseCaseMySqlTest extends NonTransactionalMySqlTestS
 
         BlockingReservationService(
             ReservationRepository reservationRepository,
-            ReservationIdentifierGenerator reservationIdentifierGenerator
+            ReservationIdentifierGenerator reservationIdentifierGenerator,
+            QrTokenService qrTokenService
         ) {
-            super(reservationRepository, reservationIdentifierGenerator);
+            super(reservationRepository, reservationIdentifierGenerator, qrTokenService);
         }
 
         @Override
