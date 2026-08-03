@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.reservation.repository;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -19,6 +20,18 @@ import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationSt
 public interface ReservationRepository extends JpaRepository<Reservation, Long> {
 
     Optional<Reservation> findByQrReference(String qrReference);
+
+    @Query("""
+        SELECT reservation
+        FROM Reservation reservation
+        LEFT JOIN FETCH reservation.user
+        JOIN FETCH reservation.contentSession
+        WHERE reservation.reservationId = :reservationId
+        """)
+    Optional<Reservation> findByReservationIdForQrIssue(@Param("reservationId") Long reservationId);
+
+    @Query(value = "SELECT UNIX_TIMESTAMP(CURRENT_TIMESTAMP(6))", nativeQuery = true)
+    BigDecimal findCurrentEpochSeconds();
 
     @Lock(LockModeType.PESSIMISTIC_READ)
     @Query("""
