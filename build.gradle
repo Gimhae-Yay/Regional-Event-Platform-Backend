@@ -23,6 +23,14 @@ ext {
     springCloudAwsVersion = '4.1.0'
 }
 
+def jacocoEnabledInCi = providers.environmentVariable('CI')
+        .map { it.toBoolean() }
+        .getOrElse(false)
+def jacocoEnabledByProperty = providers.gradleProperty('jacocoEnabled')
+        .map { it.toBoolean() }
+        .getOrElse(false)
+def jacocoEnabled = jacocoEnabledInCi || jacocoEnabledByProperty
+
 dependencies {
     implementation 'org.springframework.boot:spring-boot-h2console'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
@@ -60,10 +68,16 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform()
-    finalizedBy tasks.named('jacocoTestReport')
+    jacoco {
+        enabled = jacocoEnabled
+    }
+    if (jacocoEnabled) {
+        finalizedBy tasks.named('jacocoTestReport')
+    }
 }
 
 tasks.named('jacocoTestReport') {
+    dependsOn tasks.named('test')
     reports {
         xml.required = true
         csv.required = true
