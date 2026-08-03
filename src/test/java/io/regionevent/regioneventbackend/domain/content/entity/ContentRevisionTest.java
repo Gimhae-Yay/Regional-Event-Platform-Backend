@@ -2,12 +2,13 @@ package io.regionevent.regioneventbackend.domain.content.entity;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertAll;
 
 import java.time.Instant;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.api.function.Executable;
 
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -20,6 +21,18 @@ class ContentRevisionTest {
     private static final Instant REVIEWED_AT = Instant.parse("2026-08-02T01:00:00Z");
 
     @Test
+    void 콘텐츠_수정본_심사_계약을_보존한다() {
+        assertAll(
+            () -> new ContentRevisionTest().reject_whenEditIsRequested_recordsNormalizedReviewDetails(),
+            () -> new ContentRevisionTest()
+                .reject_whenRevisionIsAlreadyTerminal_throwsContentStateConflictWithoutOverwritingState(),
+            () -> new ContentRevisionTest().reject_whenReviewDetailsAreMissing_rejectsTransitionWithoutChangingStatus(),
+            () -> new ContentRevisionTest().approve_whenEditIsRequested_recordsReviewerWithoutReason(),
+            () -> new ContentRevisionTest().approve_whenRevisionIsAlreadyTerminal_throwsContentStateConflict(),
+            () -> new ContentRevisionTest().constructor_whenApprovedRevisionHasReason_rejectsInvalidState()
+        );
+    }
+
     void reject_whenEditIsRequested_recordsNormalizedReviewDetails() {
         AppUser reviewer = newUser("reviewer@example.com");
         ContentRevision revision = newRevision();
@@ -32,39 +45,39 @@ class ContentRevisionTest {
         assertThat(revision.getReviewReason()).isEqualTo("공개 일정의 정합성을 보완해 주세요.");
     }
 
-    @ParameterizedTest
-    @EnumSource(
-        value = ContentRevisionStatus.class,
-        names = {"EDIT_APPROVED", "EDIT_REJECTED", "EDIT_WITHDRAWN"}
-    )
-    void reject_whenRevisionIsAlreadyTerminal_throwsContentStateConflictWithoutOverwritingState(
-        ContentRevisionStatus terminalStatus
-    ) {
-        AppUser firstReviewer = newUser("first-reviewer@example.com");
-        ContentRevision revision = newRevision(terminalStatus, firstReviewer);
+    void reject_whenRevisionIsAlreadyTerminal_throwsContentStateConflictWithoutOverwritingState() {
+        Stream<Executable> contracts = Stream.of(
+            ContentRevisionStatus.EDIT_APPROVED,
+            ContentRevisionStatus.EDIT_REJECTED,
+            ContentRevisionStatus.EDIT_WITHDRAWN
+        ).map(terminalStatus -> () -> {
+            AppUser firstReviewer = newUser("first-reviewer@example.com");
+            ContentRevision revision = newRevision(terminalStatus, firstReviewer);
 
-        assertThatThrownBy(() -> revision.reject(
-            newUser("second-reviewer@example.com"),
-            REVIEWED_AT.plusSeconds(60),
-            "두 번째 반려 사유"
-        )).isInstanceOfSatisfying(BusinessException.class, exception ->
-            assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.CONTENT_STATE_CONFLICT)
-        );
-        assertThat(revision.getStatus()).isEqualTo(terminalStatus);
-        if (terminalStatus == ContentRevisionStatus.EDIT_WITHDRAWN) {
-            assertThat(revision.getWithdrawnBy()).isSameAs(firstReviewer);
-            assertThat(revision.getWithdrawalReason()).isEqualTo("기존 철회 사유");
-        } else {
-            assertThat(revision.getReviewedBy()).isSameAs(firstReviewer);
-            if (terminalStatus == ContentRevisionStatus.EDIT_APPROVED) {
-                assertThat(revision.getReviewReason()).isNull();
+            assertThatThrownBy(() -> revision.reject(
+                newUser("second-reviewer@example.com"),
+                REVIEWED_AT.plusSeconds(60),
+                "두 번째 반려 사유"
+            )).isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.CONTENT_STATE_CONFLICT)
+            );
+            assertThat(revision.getStatus()).isEqualTo(terminalStatus);
+            if (terminalStatus == ContentRevisionStatus.EDIT_WITHDRAWN) {
+                assertThat(revision.getWithdrawnBy()).isSameAs(firstReviewer);
+                assertThat(revision.getWithdrawalReason()).isEqualTo("기존 철회 사유");
             } else {
-                assertThat(revision.getReviewReason()).isEqualTo("기존 심사 사유");
+                assertThat(revision.getReviewedBy()).isSameAs(firstReviewer);
+                if (terminalStatus == ContentRevisionStatus.EDIT_APPROVED) {
+                    assertThat(revision.getReviewReason()).isNull();
+                } else {
+                    assertThat(revision.getReviewReason()).isEqualTo("기존 심사 사유");
+                }
             }
-        }
+        });
+
+        assertAll(contracts);
     }
 
-    @Test
     void reject_whenReviewDetailsAreMissing_rejectsTransitionWithoutChangingStatus() {
         ContentRevision revision = newRevision();
 
@@ -76,7 +89,6 @@ class ContentRevisionTest {
         assertThat(revision.getReviewReason()).isNull();
     }
 
-    @Test
     void approve_whenEditIsRequested_recordsReviewerWithoutReason() {
         AppUser reviewer = newUser("reviewer@example.com");
         ContentRevision revision = newRevision();
@@ -89,29 +101,29 @@ class ContentRevisionTest {
         assertThat(revision.getReviewReason()).isNull();
     }
 
-    @ParameterizedTest
-    @EnumSource(
-        value = ContentRevisionStatus.class,
-        names = {"EDIT_APPROVED", "EDIT_REJECTED", "EDIT_WITHDRAWN"}
-    )
-    void approve_whenRevisionIsAlreadyTerminal_throwsContentStateConflict(
-        ContentRevisionStatus terminalStatus
-    ) {
-        ContentRevision revision = newRevision(
-            terminalStatus,
-            newUser("first-reviewer@example.com")
-        );
+    void approve_whenRevisionIsAlreadyTerminal_throwsContentStateConflict() {
+        Stream<Executable> contracts = Stream.of(
+            ContentRevisionStatus.EDIT_APPROVED,
+            ContentRevisionStatus.EDIT_REJECTED,
+            ContentRevisionStatus.EDIT_WITHDRAWN
+        ).map(terminalStatus -> () -> {
+            ContentRevision revision = newRevision(
+                terminalStatus,
+                newUser("first-reviewer@example.com")
+            );
 
-        assertThatThrownBy(() -> revision.approve(
-            newUser("second-reviewer@example.com"),
-            REVIEWED_AT.plusSeconds(60)
-        )).isInstanceOfSatisfying(BusinessException.class, exception ->
-            assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.CONTENT_STATE_CONFLICT)
-        );
-        assertThat(revision.getStatus()).isEqualTo(terminalStatus);
+            assertThatThrownBy(() -> revision.approve(
+                newUser("second-reviewer@example.com"),
+                REVIEWED_AT.plusSeconds(60)
+            )).isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.CONTENT_STATE_CONFLICT)
+            );
+            assertThat(revision.getStatus()).isEqualTo(terminalStatus);
+        });
+
+        assertAll(contracts);
     }
 
-    @Test
     void constructor_whenApprovedRevisionHasReason_rejectsInvalidState() {
         assertThatThrownBy(() -> newRevision(
             ContentRevisionStatus.EDIT_APPROVED,
