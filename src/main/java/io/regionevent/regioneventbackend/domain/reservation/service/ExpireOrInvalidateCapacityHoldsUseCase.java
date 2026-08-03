@@ -13,6 +13,7 @@ import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.ContentSessionService;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus;
 
 @Service
@@ -22,15 +23,18 @@ public class ExpireOrInvalidateCapacityHoldsUseCase {
     private static final String SESSION_STARTED_INVALIDATION_REASON = "SESSION_STARTED";
 
     private final CapacityHoldService capacityHoldService;
+    private final ContentSessionService contentSessionService;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final TransactionTemplate holdTransactionTemplate;
 
     public ExpireOrInvalidateCapacityHoldsUseCase(
         CapacityHoldService capacityHoldService,
+        ContentSessionService contentSessionService,
         RecordAuditEventUseCase recordAuditEventUseCase,
         PlatformTransactionManager transactionManager
     ) {
         this.capacityHoldService = capacityHoldService;
+        this.contentSessionService = contentSessionService;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
         holdTransactionTemplate = new TransactionTemplate(transactionManager);
         holdTransactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -102,7 +106,12 @@ public class ExpireOrInvalidateCapacityHoldsUseCase {
     ) {
         try {
             HoldTerminationProcessingResult result = holdTransactionTemplate.execute(
-                status -> operation.execute()
+                status -> {
+                    if (!lockContentSessionBeforeHold(holdId)) {
+                        return HoldTerminationProcessingResult.SKIPPED;
+                    }
+                    return operation.execute();
+                }
             );
             return result == null
                 ? HoldTerminationProcessingResult.SKIPPED
@@ -116,6 +125,15 @@ public class ExpireOrInvalidateCapacityHoldsUseCase {
             );
             return HoldTerminationProcessingResult.FAILED;
         }
+    }
+
+    private boolean lockContentSessionBeforeHold(Long holdId) {
+        return capacityHoldService.findContentSessionId(holdId)
+            .map(sessionId -> {
+                contentSessionService.lockForUpdate(sessionId);
+                return true;
+            })
+            .orElse(false);
     }
 
     private void recordTerminationAuditEvent(

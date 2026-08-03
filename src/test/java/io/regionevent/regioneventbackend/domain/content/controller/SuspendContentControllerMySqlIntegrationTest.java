@@ -7,11 +7,23 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -35,6 +47,9 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentLogRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentSessionRepository;
+import io.regionevent.regioneventbackend.domain.content.service.ContentSessionService;
+import io.regionevent.regioneventbackend.domain.content.service.SuspendContentResult;
+import io.regionevent.regioneventbackend.domain.content.service.SuspendContentUseCase;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
@@ -43,6 +58,9 @@ import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.reservation.repository.CapacityHoldRepository;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationRepository;
+import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHoldService;
+import io.regionevent.regioneventbackend.domain.reservation.service.ExpireOrInvalidateCapacityHoldsUseCase;
+import io.regionevent.regioneventbackend.domain.reservation.service.HoldTerminationResult;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
@@ -57,6 +75,7 @@ import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 @AutoConfigureMockMvc
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
+@Import(SuspendContentControllerMySqlIntegrationTest.HoldTerminationContentSuspensionConcurrencyConfig.class)
 class SuspendContentControllerMySqlIntegrationTest extends NonTransactionalMySqlTestSupport {
 
     private static final String SUSPEND_PATH = "/api/v1/region-admin/contents/{contentId}/suspend";
@@ -75,6 +94,10 @@ class SuspendContentControllerMySqlIntegrationTest extends NonTransactionalMySql
     private final AuditEventActorLinkRepository auditEventActorLinkRepository;
     private final JwtAccessTokenService jwtAccessTokenService;
     private final JdbcTemplate jdbcTemplate;
+    private final SuspendContentUseCase suspendContentUseCase;
+    private final ExpireOrInvalidateCapacityHoldsUseCase expireOrInvalidateCapacityHoldsUseCase;
+    private final BlockingContentSessionService blockingContentSessionService;
+    private final BlockingCapacityHoldService blockingCapacityHoldService;
 
     @Autowired
     SuspendContentControllerMySqlIntegrationTest(
@@ -90,7 +113,11 @@ class SuspendContentControllerMySqlIntegrationTest extends NonTransactionalMySql
         AuditEventRepository auditEventRepository,
         AuditEventActorLinkRepository auditEventActorLinkRepository,
         JwtAccessTokenService jwtAccessTokenService,
-        JdbcTemplate jdbcTemplate
+        JdbcTemplate jdbcTemplate,
+        SuspendContentUseCase suspendContentUseCase,
+        ExpireOrInvalidateCapacityHoldsUseCase expireOrInvalidateCapacityHoldsUseCase,
+        BlockingContentSessionService blockingContentSessionService,
+        BlockingCapacityHoldService blockingCapacityHoldService
     ) {
         this.mockMvc = mockMvc;
         this.regionRepository = regionRepository;
@@ -105,6 +132,10 @@ class SuspendContentControllerMySqlIntegrationTest extends NonTransactionalMySql
         this.auditEventActorLinkRepository = auditEventActorLinkRepository;
         this.jwtAccessTokenService = jwtAccessTokenService;
         this.jdbcTemplate = jdbcTemplate;
+        this.suspendContentUseCase = suspendContentUseCase;
+        this.expireOrInvalidateCapacityHoldsUseCase = expireOrInvalidateCapacityHoldsUseCase;
+        this.blockingContentSessionService = blockingContentSessionService;
+        this.blockingCapacityHoldService = blockingCapacityHoldService;
     }
 
     @DynamicPropertySource
@@ -257,6 +288,46 @@ class SuspendContentControllerMySqlIntegrationTest extends NonTransactionalMySql
             assertThat(auditEvent.getReasonCode()).isEqualTo("CONTENT_SUSPEND_CONFLICT");
             assertThat(auditEventActorLinkRepository.findById(auditEvent.getAuditEventId())).isEmpty();
         });
+    }
+
+    @Test
+    @Timeout(10)
+    void 중단과_홀드만료가_경합해도_교착없이_홀드를_한번만_종결한다() throws Exception {
+        Fixture fixture = createPublishedFixture(true, false);
+        jdbcTemplate.update(
+            "UPDATE capacity_hold SET expires_at = CURRENT_TIMESTAMP - INTERVAL 1 SECOND WHERE hold_id = ?",
+            fixture.activeHoldId()
+        );
+        blockingContentSessionService.prepareSuspensionBlock();
+        blockingCapacityHoldService.prepareTerminationTargetRead();
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<SuspendContentResult> suspension = executorService.submit(() -> suspendContentUseCase.suspend(
+                fixture.admin().getUserId(),
+                fixture.content().getContentId(),
+                "기상 악화",
+                UUID.randomUUID()
+            ));
+            assertThat(blockingContentSessionService.awaitSuspensionSessionLock()).isTrue();
+
+            Future<HoldTerminationResult> termination = executorService.submit(
+                expireOrInvalidateCapacityHoldsUseCase::execute
+            );
+            assertThat(blockingCapacityHoldService.awaitTerminationTargetRead()).isTrue();
+            blockingContentSessionService.releaseSuspension();
+
+            assertThat(suspension.get(5, TimeUnit.SECONDS).status()).isEqualTo(ContentStatus.SUSPENDED);
+            assertThat(termination.get(5, TimeUnit.SECONDS).failedHoldCount()).isZero();
+        } finally {
+            blockingContentSessionService.releaseSuspension();
+        }
+
+        assertThat(capacityHoldRepository.findById(fixture.activeHoldId()))
+            .hasValueSatisfying(hold -> assertThat(hold.getStatus())
+                .isIn(CapacityHoldStatus.EXPIRED, CapacityHoldStatus.INVALIDATED));
+        assertThat(contentSessionRepository.findById(fixture.sessionId()))
+            .hasValueSatisfying(session -> assertThat(session.getRemainingCapacity()).isEqualTo(SESSION_CAPACITY));
+        assertContentState(fixture.content().getContentId(), ContentStatus.SUSPENDED);
     }
 
     private ResultActions performSuspend(
@@ -434,5 +505,98 @@ class SuspendContentControllerMySqlIntegrationTest extends NonTransactionalMySql
         Long consumedHoldId,
         Long reservationId
     ) {
+    }
+
+    @TestConfiguration
+    static class HoldTerminationContentSuspensionConcurrencyConfig {
+
+        @Bean
+        @Primary
+        BlockingContentSessionService blockingContentSessionService(
+            ContentSessionRepository contentSessionRepository
+        ) {
+            return new BlockingContentSessionService(contentSessionRepository);
+        }
+
+        @Bean
+        @Primary
+        BlockingCapacityHoldService blockingCapacityHoldService(
+            CapacityHoldRepository capacityHoldRepository
+        ) {
+            return new BlockingCapacityHoldService(capacityHoldRepository);
+        }
+    }
+
+    static class BlockingContentSessionService extends ContentSessionService {
+
+        private volatile boolean blockSuspension;
+        private volatile CountDownLatch suspensionSessionLocked = new CountDownLatch(1);
+        private volatile CountDownLatch continueSuspension = new CountDownLatch(1);
+
+        BlockingContentSessionService(ContentSessionRepository contentSessionRepository) {
+            super(contentSessionRepository);
+        }
+
+        void prepareSuspensionBlock() {
+            blockSuspension = true;
+            suspensionSessionLocked = new CountDownLatch(1);
+            continueSuspension = new CountDownLatch(1);
+        }
+
+        boolean awaitSuspensionSessionLock() throws InterruptedException {
+            return suspensionSessionLocked.await(3, TimeUnit.SECONDS);
+        }
+
+        void releaseSuspension() {
+            blockSuspension = false;
+            continueSuspension.countDown();
+        }
+
+        @Override
+        @Transactional(propagation = Propagation.MANDATORY)
+        public void lockSuspendTargetsForUpdate(Long contentId) {
+            super.lockSuspendTargetsForUpdate(contentId);
+            if (!blockSuspension) {
+                return;
+            }
+            suspensionSessionLocked.countDown();
+            await(continueSuspension);
+        }
+    }
+
+    static class BlockingCapacityHoldService extends CapacityHoldService {
+
+        private volatile CountDownLatch terminationTargetRead = new CountDownLatch(1);
+
+        BlockingCapacityHoldService(CapacityHoldRepository capacityHoldRepository) {
+            super(capacityHoldRepository);
+        }
+
+        void prepareTerminationTargetRead() {
+            terminationTargetRead = new CountDownLatch(1);
+        }
+
+        boolean awaitTerminationTargetRead() throws InterruptedException {
+            return terminationTargetRead.await(3, TimeUnit.SECONDS);
+        }
+
+        @Override
+        @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+        public Optional<Long> findContentSessionId(Long holdId) {
+            Optional<Long> sessionId = super.findContentSessionId(holdId);
+            terminationTargetRead.countDown();
+            return sessionId;
+        }
+    }
+
+    private static void await(CountDownLatch latch) {
+        try {
+            if (!latch.await(5, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("concurrency test synchronization timed out");
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("concurrency test synchronization interrupted", exception);
+        }
     }
 }
