@@ -23,7 +23,7 @@ class InitialP0SchemaMigrationTest {
     }
 
     @Test
-    void 빈_데이터베이스에_V1부터_V13까지_현재_P0_스키마를_생성한다() {
+    void 빈_데이터베이스에_V1부터_V14까지_현재_P0_스키마를_생성한다() {
         List<String> appliedVersions = jdbcTemplate.queryForList(
             "SELECT \"version\" FROM \"flyway_schema_history\" WHERE \"version\" IS NOT NULL AND \"success\" = TRUE",
             String.class
@@ -81,6 +81,15 @@ class InitialP0SchemaMigrationTest {
                 """,
             String.class
         );
+        List<String> capacityHoldIndexNames = jdbcTemplate.queryForList(
+            """
+                SELECT index_name
+                FROM information_schema.indexes
+                WHERE table_schema = 'PUBLIC'
+                  AND table_name = 'CAPACITY_HOLD'
+                """,
+            String.class
+        );
 
         assertThat(appliedVersions).containsExactly(
             "1",
@@ -95,7 +104,8 @@ class InitialP0SchemaMigrationTest {
             "10",
             "11",
             "12",
-            "13"
+            "13",
+            "14"
         );
         assertThat(tableNames).contains(
             "REGION",
@@ -159,6 +169,7 @@ class InitialP0SchemaMigrationTest {
             "REVIEWED_BY_USER_ID",
             "REJECT_REASON"
         );
+        assertThat(capacityHoldIndexNames).contains("IDX_CAPACITY_HOLD_STATUS_EXPIRES_AT");
         assertThat(imageObjectColumnNames).contains(
             "CREATED_BY_USER_ID",
             "REGION_ID",
