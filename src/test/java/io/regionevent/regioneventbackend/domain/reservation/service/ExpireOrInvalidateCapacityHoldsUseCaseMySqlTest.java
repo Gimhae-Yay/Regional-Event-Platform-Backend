@@ -36,6 +36,15 @@ import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEvent;
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
+import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventActorLinkRepository;
+import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
+import io.regionevent.regioneventbackend.domain.audit.service.AuditEventActorLinkService;
+import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
+import io.regionevent.regioneventbackend.domain.audit.service.AuditEventService;
+import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
@@ -65,7 +74,10 @@ class ExpireOrInvalidateCapacityHoldsUseCaseMySqlTest {
 
     private final ExpireOrInvalidateCapacityHoldsUseCase useCase;
     private final FailingCapacityHoldService capacityHoldService;
+    private final FailingRecordAuditEventUseCase recordAuditEventUseCase;
     private final CapacityHoldRepository capacityHoldRepository;
+    private final AuditEventRepository auditEventRepository;
+    private final AuditEventActorLinkRepository auditEventActorLinkRepository;
     private final ContentSessionRepository contentSessionRepository;
     private final ContentRepository contentRepository;
     private final AppUserRepository appUserRepository;
@@ -77,7 +89,10 @@ class ExpireOrInvalidateCapacityHoldsUseCaseMySqlTest {
     ExpireOrInvalidateCapacityHoldsUseCaseMySqlTest(
         ExpireOrInvalidateCapacityHoldsUseCase useCase,
         FailingCapacityHoldService capacityHoldService,
+        FailingRecordAuditEventUseCase recordAuditEventUseCase,
         CapacityHoldRepository capacityHoldRepository,
+        AuditEventRepository auditEventRepository,
+        AuditEventActorLinkRepository auditEventActorLinkRepository,
         ContentSessionRepository contentSessionRepository,
         ContentRepository contentRepository,
         AppUserRepository appUserRepository,
@@ -87,7 +102,10 @@ class ExpireOrInvalidateCapacityHoldsUseCaseMySqlTest {
     ) {
         this.useCase = useCase;
         this.capacityHoldService = capacityHoldService;
+        this.recordAuditEventUseCase = recordAuditEventUseCase;
         this.capacityHoldRepository = capacityHoldRepository;
+        this.auditEventRepository = auditEventRepository;
+        this.auditEventActorLinkRepository = auditEventActorLinkRepository;
         this.contentSessionRepository = contentSessionRepository;
         this.contentRepository = contentRepository;
         this.appUserRepository = appUserRepository;
@@ -107,6 +125,9 @@ class ExpireOrInvalidateCapacityHoldsUseCaseMySqlTest {
     @AfterEach
     void cleanUp() {
         capacityHoldService.resetFailureInjection();
+        recordAuditEventUseCase.resetFailureInjection();
+        auditEventActorLinkRepository.deleteAllInBatch();
+        auditEventRepository.deleteAllInBatch();
         capacityHoldRepository.deleteAllInBatch();
         contentSessionRepository.deleteAllInBatch();
         contentRepository.deleteAllInBatch();
@@ -134,6 +155,7 @@ class ExpireOrInvalidateCapacityHoldsUseCaseMySqlTest {
         assertThat(state.capacityReleasedAt()).isNotNull();
         assertThat(state.invalidationReason()).isNull();
         assertThat(state.remainingCapacity()).isEqualTo(fixture.capacity());
+        assertCapacityHoldAuditEvent(fixture, state);
     }
 
     @Test
@@ -152,6 +174,7 @@ class ExpireOrInvalidateCapacityHoldsUseCaseMySqlTest {
         assertThat(state.capacityReleasedAt()).isNotNull();
         assertThat(state.invalidationReason()).isEqualTo("SESSION_STARTED");
         assertThat(state.remainingCapacity()).isEqualTo(fixture.capacity());
+        assertCapacityHoldAuditEvent(fixture, state);
     }
 
     @Test
@@ -172,6 +195,7 @@ class ExpireOrInvalidateCapacityHoldsUseCaseMySqlTest {
         assertThat(retryResult.invalidatedHoldCount()).isZero();
         assertThat(state.status()).isEqualTo(CapacityHoldStatus.EXPIRED);
         assertThat(state.remainingCapacity()).isEqualTo(fixture.capacity());
+        assertCapacityHoldAuditEvent(fixture, state);
     }
 
     @Test
@@ -189,6 +213,7 @@ class ExpireOrInvalidateCapacityHoldsUseCaseMySqlTest {
         assertThat(state.status()).isEqualTo(CapacityHoldStatus.INVALIDATED);
         assertThat(state.invalidationReason()).isEqualTo("SESSION_STARTED");
         assertThat(state.remainingCapacity()).isEqualTo(fixture.capacity());
+        assertCapacityHoldAuditEvent(fixture, state);
     }
 
     @Test
@@ -219,6 +244,9 @@ class ExpireOrInvalidateCapacityHoldsUseCaseMySqlTest {
         assertThat(results).extracting(HoldTerminationResult::failedHoldCount).containsOnly(0);
         assertThat(results.stream().mapToInt(HoldTerminationResult::expiredHoldCount).sum()).isOne();
         assertThat(readCapacityState(fixture).remainingCapacity()).isEqualTo(fixture.capacity());
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent -> auditEvent.getTargetId().equals(fixture.holdId()))
+            .singleElement();
     }
 
     @Test
@@ -238,6 +266,7 @@ class ExpireOrInvalidateCapacityHoldsUseCaseMySqlTest {
         assertThat(failedResult.failedHoldCount()).isOne();
         assertThat(failedState.status()).isEqualTo(CapacityHoldStatus.ACTIVE);
         assertThat(failedState.remainingCapacity()).isEqualTo(fixture.capacity() - fixture.quantity());
+        assertThat(auditEventRepository.count()).isZero();
 
         HoldTerminationResult retryResult = useCase.execute();
         CapacityState retryState = readCapacityState(fixture);
@@ -246,6 +275,36 @@ class ExpireOrInvalidateCapacityHoldsUseCaseMySqlTest {
         assertThat(retryResult.failedHoldCount()).isZero();
         assertThat(retryState.status()).isEqualTo(CapacityHoldStatus.EXPIRED);
         assertThat(retryState.remainingCapacity()).isEqualTo(fixture.capacity());
+        assertCapacityHoldAuditEvent(fixture, retryState);
+    }
+
+    @Test
+    void 감사기록에_실패하면_홀드종결과_정원복구를_함께_롤백하고_재시도한다() {
+        Fixture fixture = createFixture(
+            Instant.now().plusSeconds(3_600),
+            Instant.now().minusSeconds(60),
+            10,
+            3
+        );
+        recordAuditEventUseCase.failNextRecord();
+
+        HoldTerminationResult failedResult = useCase.execute();
+        CapacityState failedState = readCapacityState(fixture);
+
+        assertThat(failedResult.expiredHoldCount()).isZero();
+        assertThat(failedResult.failedHoldCount()).isOne();
+        assertThat(failedState.status()).isEqualTo(CapacityHoldStatus.ACTIVE);
+        assertThat(failedState.remainingCapacity()).isEqualTo(fixture.capacity() - fixture.quantity());
+        assertThat(auditEventRepository.count()).isZero();
+
+        HoldTerminationResult retryResult = useCase.execute();
+        CapacityState retryState = readCapacityState(fixture);
+
+        assertThat(retryResult.expiredHoldCount()).isOne();
+        assertThat(retryResult.failedHoldCount()).isZero();
+        assertThat(retryState.status()).isEqualTo(CapacityHoldStatus.EXPIRED);
+        assertThat(retryState.remainingCapacity()).isEqualTo(fixture.capacity());
+        assertCapacityHoldAuditEvent(fixture, retryState);
     }
 
     @Test
@@ -371,6 +430,28 @@ class ExpireOrInvalidateCapacityHoldsUseCaseMySqlTest {
         });
     }
 
+    private void assertCapacityHoldAuditEvent(
+        Fixture fixture,
+        CapacityState capacityState
+    ) {
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent ->
+                auditEvent.getTargetType() == AuditEventTargetType.CAPACITY_HOLD
+                    && auditEvent.getTargetId().equals(fixture.holdId())
+            )
+            .singleElement()
+            .satisfies(auditEvent -> {
+                assertThat(auditEvent.getPreviousState()).isEqualTo(CapacityHoldStatus.ACTIVE.name());
+                assertThat(auditEvent.getNextState()).isEqualTo(capacityState.status().name());
+                assertThat(auditEvent.getResult()).isEqualTo(AuditEventResult.SUCCESS);
+                assertThat(auditEvent.getReasonCode()).isEqualTo(capacityState.invalidationReason());
+                assertThat(auditEvent.getActorKind()).isEqualTo("SYSTEM");
+                assertThat(auditEvent.getActorRole()).isNull();
+                assertThat(auditEvent.getOccurredAt()).isEqualTo(capacityState.terminalAt());
+            });
+        assertThat(auditEventActorLinkRepository.count()).isZero();
+    }
+
     private void await(CountDownLatch latch) {
         try {
             if (!latch.await(3, TimeUnit.SECONDS)) {
@@ -392,6 +473,18 @@ class ExpireOrInvalidateCapacityHoldsUseCaseMySqlTest {
         ) {
             return new FailingCapacityHoldService(capacityHoldRepository);
         }
+
+        @Bean
+        @Primary
+        FailingRecordAuditEventUseCase failingRecordAuditEventUseCase(
+            AuditEventService auditEventService,
+            AuditEventActorLinkService auditEventActorLinkService
+        ) {
+            return new FailingRecordAuditEventUseCase(
+                auditEventService,
+                auditEventActorLinkService
+            );
+        }
     }
 
     static class FailingCapacityHoldService extends CapacityHoldService {
@@ -405,19 +498,22 @@ class ExpireOrInvalidateCapacityHoldsUseCaseMySqlTest {
 
         @Override
         @Transactional(propagation = Propagation.MANDATORY)
-        public Optional<CapacityHoldStatus> expireOrInvalidateExpiredHoldIfActive(
+        public Optional<TerminatedCapacityHold> expireOrInvalidateExpiredHoldIfActive(
             Long holdId,
             String invalidationReason
         ) {
-            Optional<CapacityHoldStatus> terminatedStatus = super.expireOrInvalidateExpiredHoldIfActive(
-                holdId,
-                invalidationReason
-            );
-            if (terminatedStatus.filter(CapacityHoldStatus.EXPIRED::equals).isPresent()
+            Optional<TerminatedCapacityHold> terminatedCapacityHold =
+                super.expireOrInvalidateExpiredHoldIfActive(
+                    holdId,
+                    invalidationReason
+                );
+            if (terminatedCapacityHold
+                .filter(capacityHold -> capacityHold.nextStatus() == CapacityHoldStatus.EXPIRED)
+                .isPresent()
                 && failNextExpiration.compareAndSet(true, false)) {
                 throw new IllegalStateException("capacity hold termination failure");
             }
-            return terminatedStatus;
+            return terminatedCapacityHold;
         }
 
         @Override
@@ -441,6 +537,34 @@ class ExpireOrInvalidateCapacityHoldsUseCaseMySqlTest {
         void resetFailureInjection() {
             failNextExpiration.set(false);
             skipNextStartedSessionCandidateLookup.set(false);
+        }
+    }
+
+    static class FailingRecordAuditEventUseCase extends RecordAuditEventUseCase {
+
+        private final AtomicBoolean failNextRecord = new AtomicBoolean();
+
+        FailingRecordAuditEventUseCase(
+            AuditEventService auditEventService,
+            AuditEventActorLinkService auditEventActorLinkService
+        ) {
+            super(auditEventService, auditEventActorLinkService);
+        }
+
+        @Override
+        public AuditEvent record(AuditEventCommand command) {
+            if (failNextRecord.compareAndSet(true, false)) {
+                throw new IllegalStateException("audit event storage failure");
+            }
+            return super.record(command);
+        }
+
+        void failNextRecord() {
+            failNextRecord.set(true);
+        }
+
+        void resetFailureInjection() {
+            failNextRecord.set(false);
         }
     }
 

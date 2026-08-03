@@ -9,6 +9,10 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
+import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
+import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus;
 
 @Service
@@ -18,13 +22,16 @@ public class ExpireOrInvalidateCapacityHoldsUseCase {
     private static final String SESSION_STARTED_INVALIDATION_REASON = "SESSION_STARTED";
 
     private final CapacityHoldService capacityHoldService;
+    private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final TransactionTemplate holdTransactionTemplate;
 
     public ExpireOrInvalidateCapacityHoldsUseCase(
         CapacityHoldService capacityHoldService,
+        RecordAuditEventUseCase recordAuditEventUseCase,
         PlatformTransactionManager transactionManager
     ) {
         this.capacityHoldService = capacityHoldService;
+        this.recordAuditEventUseCase = recordAuditEventUseCase;
         holdTransactionTemplate = new TransactionTemplate(transactionManager);
         holdTransactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -52,10 +59,15 @@ public class ExpireOrInvalidateCapacityHoldsUseCase {
             HoldTerminationProcessingResult result = processHold(
                 holdId,
                 requestId,
-                () -> toProcessingResult(capacityHoldService.invalidateAndReleaseCapacityIfActive(
+                () -> capacityHoldService.invalidateAndReleaseCapacityIfActive(
                     holdId,
                     SESSION_STARTED_INVALIDATION_REASON
-                ))
+                )
+                    .map(capacityHold -> {
+                        recordTerminationAuditEvent(requestId, capacityHold);
+                        return toProcessingResult(capacityHold.nextStatus());
+                    })
+                    .orElse(HoldTerminationProcessingResult.SKIPPED)
             );
             counts.record(result);
         });
@@ -73,7 +85,10 @@ public class ExpireOrInvalidateCapacityHoldsUseCase {
                     holdId,
                     SESSION_STARTED_INVALIDATION_REASON
                 )
-                    .map(this::toProcessingResult)
+                    .map(capacityHold -> {
+                        recordTerminationAuditEvent(requestId, capacityHold);
+                        return toProcessingResult(capacityHold.nextStatus());
+                    })
                     .orElse(HoldTerminationProcessingResult.SKIPPED)
             );
             counts.record(result);
@@ -103,10 +118,22 @@ public class ExpireOrInvalidateCapacityHoldsUseCase {
         }
     }
 
-    private HoldTerminationProcessingResult toProcessingResult(boolean invalidated) {
-        return invalidated
-            ? HoldTerminationProcessingResult.INVALIDATED
-            : HoldTerminationProcessingResult.SKIPPED;
+    private void recordTerminationAuditEvent(
+        UUID requestId,
+        CapacityHoldService.TerminatedCapacityHold capacityHold
+    ) {
+        recordAuditEventUseCase.record(new AuditEventCommand(
+            requestId,
+            capacityHold.region(),
+            AuditEventTargetType.CAPACITY_HOLD,
+            capacityHold.holdId(),
+            CapacityHoldStatus.ACTIVE.name(),
+            capacityHold.nextStatus().name(),
+            AuditEventResult.SUCCESS,
+            capacityHold.reasonCode(),
+            null,
+            capacityHold.occurredAt()
+        ));
     }
 
     private HoldTerminationProcessingResult toProcessingResult(CapacityHoldStatus capacityHoldStatus) {

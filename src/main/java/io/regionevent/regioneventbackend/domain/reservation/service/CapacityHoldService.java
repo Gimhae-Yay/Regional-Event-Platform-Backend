@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
+import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus;
 import io.regionevent.regioneventbackend.domain.reservation.repository.CapacityHoldRepository;
@@ -94,7 +95,7 @@ public class CapacityHoldService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public Optional<CapacityHoldStatus> expireOrInvalidateExpiredHoldIfActive(
+    public Optional<TerminatedCapacityHold> expireOrInvalidateExpiredHoldIfActive(
         Long holdId,
         String invalidationReason
     ) {
@@ -108,28 +109,56 @@ public class CapacityHoldService {
         );
         CapacityHold capacityHold = capacityHoldRepository.findByHoldId(holdId)
             .orElseThrow(() -> new IllegalStateException("terminated capacity hold does not exist"));
-        return Optional.of(capacityHold.getStatus());
+        return Optional.of(TerminatedCapacityHold.from(capacityHold));
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public boolean invalidateAndReleaseCapacityIfActive(
+    public Optional<TerminatedCapacityHold> invalidateAndReleaseCapacityIfActive(
         Long holdId,
         String invalidationReason
     ) {
         validateInvalidationReason(invalidationReason);
         if (capacityHoldRepository.findActiveByHoldIdForUpdate(holdId).isEmpty()) {
-            return false;
+            return Optional.empty();
         }
         capacityHoldRepository.invalidateAndReleaseCapacityIfActive(
             holdId,
             invalidationReason
         );
-        return true;
+        CapacityHold capacityHold = capacityHoldRepository.findByHoldId(holdId)
+            .orElseThrow(() -> new IllegalStateException("invalidated capacity hold does not exist"));
+        return Optional.of(TerminatedCapacityHold.from(capacityHold));
     }
 
     private void validateInvalidationReason(String invalidationReason) {
         if (invalidationReason == null || invalidationReason.isBlank()) {
             throw new IllegalArgumentException("invalidationReason must not be null or blank");
+        }
+    }
+
+    public record TerminatedCapacityHold(
+        Long holdId,
+        Region region,
+        CapacityHoldStatus nextStatus,
+        String reasonCode,
+        Instant occurredAt
+    ) {
+
+        private static TerminatedCapacityHold from(CapacityHold capacityHold) {
+            if (capacityHold.getStatus() != CapacityHoldStatus.EXPIRED
+                && capacityHold.getStatus() != CapacityHoldStatus.INVALIDATED) {
+                throw new IllegalStateException("capacity hold must be expired or invalidated");
+            }
+            if (capacityHold.getTerminalAt() == null) {
+                throw new IllegalStateException("terminated capacity hold must have terminalAt");
+            }
+            return new TerminatedCapacityHold(
+                capacityHold.getHoldId(),
+                capacityHold.getRegion(),
+                capacityHold.getStatus(),
+                capacityHold.getInvalidationReason(),
+                capacityHold.getTerminalAt()
+            );
         }
     }
 }
