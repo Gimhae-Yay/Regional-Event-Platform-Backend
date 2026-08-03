@@ -52,4 +52,12 @@ public class UserRoleAssignmentService {
             AppUserStatus.ACTIVE
         ).orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
     }
+
+    public UserRoleAssignment findActiveOperator(Long userId) {
+        return userRoleAssignmentRepository.findByIdUserIdAndIdRoleAndAppUserStatus(
+            userId,
+            UserRole.OPERATOR,
+            AppUserStatus.ACTIVE
+        ).orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+    }
 }
