@@ -7,10 +7,16 @@ import static org.mockito.Mockito.doThrow;
 
 import java.time.Instant;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -38,6 +44,7 @@ import io.regionevent.regioneventbackend.domain.region.repository.RegionReposito
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus;
 import io.regionevent.regioneventbackend.domain.reservation.repository.CapacityHoldRepository;
+import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHoldService;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
@@ -48,6 +55,7 @@ import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTest
 import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 
 @SpringBootTest
+@Import(SuspendContentFailureAuditMySqlTest.FailingSuspensionServicesConfig.class)
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class SuspendContentFailureAuditMySqlTest extends NonTransactionalMySqlTestSupport {
@@ -63,6 +71,9 @@ class SuspendContentFailureAuditMySqlTest extends NonTransactionalMySqlTestSuppo
     private final AuditEventRepository auditEventRepository;
     private final AuditEventActorLinkRepository auditEventActorLinkRepository;
     private final JdbcTemplate jdbcTemplate;
+    private final FailingContentService failingContentService;
+    private final FailingContentLogService failingContentLogService;
+    private final FailingCapacityHoldService failingCapacityHoldService;
 
     @MockitoBean
     private RecordAuditEventUseCase recordAuditEventUseCase;
@@ -79,7 +90,10 @@ class SuspendContentFailureAuditMySqlTest extends NonTransactionalMySqlTestSuppo
         CapacityHoldRepository capacityHoldRepository,
         AuditEventRepository auditEventRepository,
         AuditEventActorLinkRepository auditEventActorLinkRepository,
-        JdbcTemplate jdbcTemplate
+        JdbcTemplate jdbcTemplate,
+        FailingContentService failingContentService,
+        FailingContentLogService failingContentLogService,
+        FailingCapacityHoldService failingCapacityHoldService
     ) {
         this.suspendContentUseCase = suspendContentUseCase;
         this.regionRepository = regionRepository;
@@ -92,11 +106,45 @@ class SuspendContentFailureAuditMySqlTest extends NonTransactionalMySqlTestSuppo
         this.auditEventRepository = auditEventRepository;
         this.auditEventActorLinkRepository = auditEventActorLinkRepository;
         this.jdbcTemplate = jdbcTemplate;
+        this.failingContentService = failingContentService;
+        this.failingContentLogService = failingContentLogService;
+        this.failingCapacityHoldService = failingCapacityHoldService;
     }
 
     @DynamicPropertySource
     static void configureDataSource(DynamicPropertyRegistry registry) {
         SharedMySqlTestContainer.registerDataSourceProperties(registry);
+    }
+
+    @AfterEach
+    void resetFailureInjection() {
+        failingContentService.resetFailureInjection();
+        failingContentLogService.resetFailureInjection();
+        failingCapacityHoldService.resetFailureInjection();
+    }
+
+    @Test
+    void 콘텐츠_전이_직후_실패하면_업무변경을_롤백하고_비개인_실패감사를_기록한다() {
+        Fixture fixture = createFixture();
+        failingContentService.failNextSuspend();
+
+        assertAtomicRollback(fixture, "content transition failure");
+    }
+
+    @Test
+    void 중단로그_저장_직후_실패하면_업무변경을_롤백하고_비개인_실패감사를_기록한다() {
+        Fixture fixture = createFixture();
+        failingContentLogService.failNextSuspendedLog();
+
+        assertAtomicRollback(fixture, "content log storage failure");
+    }
+
+    @Test
+    void 홀드_무효화와_정원복구_직후_실패하면_업무변경을_롤백하고_비개인_실패감사를_기록한다() {
+        Fixture fixture = createFixture();
+        failingCapacityHoldService.failNextInvalidation();
+
+        assertAtomicRollback(fixture, "capacity hold invalidation failure");
     }
 
     @Test
@@ -106,12 +154,17 @@ class SuspendContentFailureAuditMySqlTest extends NonTransactionalMySqlTestSuppo
             .when(recordAuditEventUseCase)
             .record(any(AuditEventCommand.class));
 
+        assertAtomicRollback(fixture, "audit storage failure");
+    }
+
+    private void assertAtomicRollback(Fixture fixture, String failureMessage) {
         assertThatThrownBy(() -> suspendContentUseCase.suspend(
             fixture.adminId(),
             fixture.contentId(),
             "기상 악화",
             UUID.randomUUID()
-        )).isInstanceOf(IllegalStateException.class);
+        )).isInstanceOf(IllegalStateException.class)
+            .hasMessage(failureMessage);
 
         assertThat(contentRepository.findById(fixture.contentId()))
             .hasValueSatisfying(content -> assertThat(content.getStatus()).isEqualTo(ContentStatus.PUBLISHED));
@@ -202,6 +255,114 @@ class SuspendContentFailureAuditMySqlTest extends NonTransactionalMySqlTestSuppo
             "010-1234-5678",
             AppUserStatus.ACTIVE
         ));
+    }
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class FailingSuspensionServicesConfig {
+
+        @Bean
+        @Primary
+        FailingContentService failingContentService(ContentRepository contentRepository) {
+            return new FailingContentService(contentRepository);
+        }
+
+        @Bean
+        @Primary
+        FailingContentLogService failingContentLogService(ContentLogRepository contentLogRepository) {
+            return new FailingContentLogService(contentLogRepository);
+        }
+
+        @Bean
+        @Primary
+        FailingCapacityHoldService failingCapacityHoldService(CapacityHoldRepository capacityHoldRepository) {
+            return new FailingCapacityHoldService(capacityHoldRepository);
+        }
+    }
+
+    static class FailingContentService extends ContentService {
+
+        private final AtomicBoolean failNextSuspend = new AtomicBoolean();
+
+        FailingContentService(ContentRepository contentRepository) {
+            super(contentRepository);
+        }
+
+        @Override
+        public Content suspend(Content content, Instant suspendedAt) {
+            Content suspendedContent = super.suspend(content, suspendedAt);
+            if (failNextSuspend.compareAndSet(true, false)) {
+                throw new IllegalStateException("content transition failure");
+            }
+            return suspendedContent;
+        }
+
+        void failNextSuspend() {
+            failNextSuspend.set(true);
+        }
+
+        void resetFailureInjection() {
+            failNextSuspend.set(false);
+        }
+    }
+
+    static class FailingContentLogService extends ContentLogService {
+
+        private final AtomicBoolean failNextSuspendedLog = new AtomicBoolean();
+
+        FailingContentLogService(ContentLogRepository contentLogRepository) {
+            super(contentLogRepository);
+        }
+
+        @Override
+        public ContentLog recordSuspended(
+            Content content,
+            AppUser actor,
+            Instant suspendedAt,
+            String reason
+        ) {
+            ContentLog contentLog = super.recordSuspended(content, actor, suspendedAt, reason);
+            if (failNextSuspendedLog.compareAndSet(true, false)) {
+                throw new IllegalStateException("content log storage failure");
+            }
+            return contentLog;
+        }
+
+        void failNextSuspendedLog() {
+            failNextSuspendedLog.set(true);
+        }
+
+        void resetFailureInjection() {
+            failNextSuspendedLog.set(false);
+        }
+    }
+
+    static class FailingCapacityHoldService extends CapacityHoldService {
+
+        private final AtomicBoolean failNextInvalidation = new AtomicBoolean();
+
+        FailingCapacityHoldService(CapacityHoldRepository capacityHoldRepository) {
+            super(capacityHoldRepository);
+        }
+
+        @Override
+        @Transactional(propagation = Propagation.MANDATORY)
+        public void invalidateAllActiveHoldsForContent(
+            Long contentId,
+            String invalidationReason
+        ) {
+            super.invalidateAllActiveHoldsForContent(contentId, invalidationReason);
+            if (failNextInvalidation.compareAndSet(true, false)) {
+                throw new IllegalStateException("capacity hold invalidation failure");
+            }
+        }
+
+        void failNextInvalidation() {
+            failNextInvalidation.set(true);
+        }
+
+        void resetFailureInjection() {
+            failNextInvalidation.set(false);
+        }
     }
 
     private record Fixture(Long adminId, Long contentId, Long sessionId, Long holdId) {
