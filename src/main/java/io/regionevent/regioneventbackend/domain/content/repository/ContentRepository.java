@@ -116,6 +116,16 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
         """)
     Optional<Content> findEndTargetForUpdate(@Param("contentId") Long contentId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = "region")
+    @Query("""
+        SELECT content
+        FROM Content content
+        WHERE content.contentId = :contentId
+            AND content.deletedAt IS NULL
+        """)
+    Optional<Content> findSuspendTargetForUpdate(@Param("contentId") Long contentId);
+
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("""
         UPDATE Content content
@@ -148,6 +158,15 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
             ContentStatus.PUBLISHED,
             ContentStatus.ENDED,
             endedAt
+        );
+    }
+
+    default int suspendPublishedByContentId(Long contentId, Instant suspendedAt) {
+        return updateStatusIfExpected(
+            contentId,
+            ContentStatus.PUBLISHED,
+            ContentStatus.SUSPENDED,
+            suspendedAt
         );
     }
 }
