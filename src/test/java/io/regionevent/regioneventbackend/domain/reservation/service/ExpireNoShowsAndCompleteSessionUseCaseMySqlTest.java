@@ -18,13 +18,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,14 +55,12 @@ import io.regionevent.regioneventbackend.domain.reservation.repository.Reservati
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
-import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
-import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
+import io.regionevent.regioneventbackend.support.mysql.DelayedNoShowSchedulerMySqlTestSupport;
 
-@SpringBootTest(properties = "reservation.no-show-completion.initial-delay=PT24H")
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 @Import(ExpireNoShowsAndCompleteSessionUseCaseMySqlTest.FailingAuditEventUseCaseConfig.class)
-class ExpireNoShowsAndCompleteSessionUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
+class ExpireNoShowsAndCompleteSessionUseCaseMySqlTest extends DelayedNoShowSchedulerMySqlTestSupport {
 
     private final ExpireNoShowsAndCompleteSessionUseCase useCase;
     private final ReservationRepository reservationRepository;
@@ -104,11 +99,6 @@ class ExpireNoShowsAndCompleteSessionUseCaseMySqlTest extends NonTransactionalMy
         this.regionRepository = regionRepository;
         transactionTemplate = new TransactionTemplate(transactionManager);
         this.failingRecordAuditEventUseCase = failingRecordAuditEventUseCase;
-    }
-
-    @DynamicPropertySource
-    static void configureDataSource(DynamicPropertyRegistry registry) {
-        SharedMySqlTestContainer.registerDataSourceProperties(registry);
     }
 
     @AfterEach

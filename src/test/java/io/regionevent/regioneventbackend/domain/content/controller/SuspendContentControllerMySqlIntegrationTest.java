@@ -25,8 +25,6 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.annotation.Propagation;
@@ -66,15 +64,14 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
-import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
-import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
+import io.regionevent.regioneventbackend.support.mysql.LockMonitoringMySqlTestSupport;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 @Import(SuspendContentControllerMySqlIntegrationTest.HoldTerminationContentSuspensionConcurrencyConfig.class)
-class SuspendContentControllerMySqlIntegrationTest extends NonTransactionalMySqlTestSupport {
+class SuspendContentControllerMySqlIntegrationTest extends LockMonitoringMySqlTestSupport {
 
     private static final String SUSPEND_PATH = "/api/v1/region-admin/contents/{contentId}/suspend";
     private static final int SESSION_CAPACITY = 10;
@@ -131,12 +128,6 @@ class SuspendContentControllerMySqlIntegrationTest extends NonTransactionalMySql
         this.suspendContentUseCase = suspendContentUseCase;
         this.expireOrInvalidateCapacityHoldsUseCase = expireOrInvalidateCapacityHoldsUseCase;
         this.blockingContentSessionService = blockingContentSessionService;
-    }
-
-    @DynamicPropertySource
-    static void configureDataSource(DynamicPropertyRegistry registry) {
-        SharedMySqlTestContainer.grantLockMonitoringPrivileges();
-        SharedMySqlTestContainer.registerDataSourceProperties(registry);
     }
 
     @Test

@@ -17,8 +17,6 @@ import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,13 +56,12 @@ import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepositor
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
-import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
-import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
+import io.regionevent.regioneventbackend.support.mysql.LockMonitoringLockTimeoutThreeMySqlTestSupport;
 
 @SpringBootTest
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-class SuspendContentConcurrencyMySqlTest extends NonTransactionalMySqlTestSupport {
+class SuspendContentConcurrencyMySqlTest extends LockMonitoringLockTimeoutThreeMySqlTestSupport {
 
     private static final int FIRST_SESSION_CAPACITY = 10;
     private static final int SECOND_SESSION_CAPACITY = 8;
@@ -122,13 +119,6 @@ class SuspendContentConcurrencyMySqlTest extends NonTransactionalMySqlTestSuppor
         this.auditEventActorLinkRepository = auditEventActorLinkRepository;
         this.jdbcTemplate = jdbcTemplate;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
-    }
-
-    @DynamicPropertySource
-    static void configureDataSource(DynamicPropertyRegistry registry) {
-        SharedMySqlTestContainer.grantLockMonitoringPrivileges();
-        SharedMySqlTestContainer.registerDataSourceProperties(registry);
-        registry.add("idempotency.lock-wait-timeout-seconds", () -> "3");
     }
 
     @Test

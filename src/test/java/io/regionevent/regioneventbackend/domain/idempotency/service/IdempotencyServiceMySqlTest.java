@@ -23,8 +23,6 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
@@ -56,8 +54,7 @@ import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepositor
 import io.regionevent.regioneventbackend.domain.visit.entity.CheckinMethod;
 import io.regionevent.regioneventbackend.domain.visit.entity.Visit;
 import io.regionevent.regioneventbackend.domain.visit.repository.VisitRepository;
-import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
-import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
+import io.regionevent.regioneventbackend.support.mysql.IdempotencyMySqlTestSupport;
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -68,7 +65,7 @@ import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 })
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-class IdempotencyServiceMySqlTest extends NonTransactionalMySqlTestSupport {
+class IdempotencyServiceMySqlTest extends IdempotencyMySqlTestSupport {
 
     private static final Instant NOW = Instant.parse("2037-08-02T00:00:00Z");
     private static final Instant EXPIRED_AT = Instant.parse("2000-01-01T00:00:00Z");
@@ -110,23 +107,6 @@ class IdempotencyServiceMySqlTest extends NonTransactionalMySqlTestSupport {
         this.visitRepository = visitRepository;
         this.jdbcTemplate = jdbcTemplate;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
-    }
-
-    @DynamicPropertySource
-    static void configureDataSource(DynamicPropertyRegistry registry) {
-        SharedMySqlTestContainer.registerDataSourceProperties(
-            registry,
-            IdempotencyServiceMySqlTest::withUseAffectedRows
-        );
-        registry.add("idempotency.retention", () -> "PT24H");
-        registry.add("idempotency.cleanup-fixed-delay", () -> "PT1H");
-        registry.add("idempotency.cleanup-initial-delay", () -> "PT1H");
-        registry.add("idempotency.lock-wait-timeout-seconds", () -> "1");
-    }
-
-    private static String withUseAffectedRows(String jdbcUrl) {
-        String parameterPrefix = jdbcUrl.contains("?") ? "&" : "?";
-        return jdbcUrl + parameterPrefix + "useAffectedRows=true";
     }
 
     @Test

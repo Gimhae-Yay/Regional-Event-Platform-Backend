@@ -9,6 +9,6 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Execution(ExecutionMode.SAME_THREAD)
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-public abstract class NonTransactionalMySqlTestSupport extends MySqlTestSupport
+public abstract class NonTransactionalMySqlProfileTestSupport
     implements NonTransactionalMySqlTestIsolation {
 }

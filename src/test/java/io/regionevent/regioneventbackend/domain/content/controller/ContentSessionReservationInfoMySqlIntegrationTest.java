@@ -15,8 +15,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.transaction.AfterTransaction;
 import org.springframework.test.context.transaction.BeforeTransaction;
 import org.springframework.test.web.servlet.MockMvc;
@@ -34,13 +32,13 @@ import io.regionevent.regioneventbackend.domain.region.repository.RegionReposito
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
-import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
+import io.regionevent.regioneventbackend.support.mysql.MySqlTestSupport;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional
-class ContentSessionReservationInfoMySqlIntegrationTest {
+class ContentSessionReservationInfoMySqlIntegrationTest extends MySqlTestSupport {
 
     private static final Instant FIXED_NOW = Instant.parse("2037-08-02T00:00:00Z");
     private static final long SESSION_STARTS_IN_SECONDS = 3_600;
@@ -73,11 +71,6 @@ class ContentSessionReservationInfoMySqlIntegrationTest {
         this.contentSessionRepository = contentSessionRepository;
         this.jdbcTemplate = jdbcTemplate;
         this.entityManager = entityManager;
-    }
-
-    @DynamicPropertySource
-    static void configureDataSource(DynamicPropertyRegistry registry) {
-        SharedMySqlTestContainer.registerDataSourceProperties(registry);
     }
 
     @BeforeTransaction

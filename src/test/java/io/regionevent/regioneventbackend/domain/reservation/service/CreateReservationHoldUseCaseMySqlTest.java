@@ -24,8 +24,6 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Import;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,14 +48,13 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
-import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
-import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
+import io.regionevent.regioneventbackend.support.mysql.AffectedRowsMySqlTestSupport;
 
 @SpringBootTest
 @Import(CreateReservationHoldUseCaseMySqlTest.FailingCapacityHoldServiceConfig.class)
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-class CreateReservationHoldUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
+class CreateReservationHoldUseCaseMySqlTest extends AffectedRowsMySqlTestSupport {
 
     private final CreateReservationHoldUseCase createReservationHoldUseCase;
     private final FailingCapacityHoldService failingCapacityHoldService;
@@ -90,14 +87,6 @@ class CreateReservationHoldUseCaseMySqlTest extends NonTransactionalMySqlTestSup
         this.capacityHoldRepository = capacityHoldRepository;
         this.entityManager = entityManager;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
-    }
-
-    @DynamicPropertySource
-    static void configureDataSource(DynamicPropertyRegistry registry) {
-        SharedMySqlTestContainer.registerDataSourceProperties(
-            registry,
-            CreateReservationHoldUseCaseMySqlTest::withUseAffectedRows
-        );
     }
 
     @AfterEach
@@ -310,11 +299,6 @@ class CreateReservationHoldUseCaseMySqlTest extends NonTransactionalMySqlTestSup
             Thread.currentThread().interrupt();
             throw new IllegalStateException("concurrent hold creation was interrupted", exception);
         }
-    }
-
-    private static String withUseAffectedRows(String jdbcUrl) {
-        String parameterPrefix = jdbcUrl.contains("?") ? "&" : "?";
-        return jdbcUrl + parameterPrefix + "useAffectedRows=true";
     }
 
     @TestConfiguration(proxyBeanMethods = false)

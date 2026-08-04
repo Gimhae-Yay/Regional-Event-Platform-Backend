@@ -10,8 +10,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.transaction.AfterTransaction;
 import org.springframework.test.context.transaction.BeforeTransaction;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,12 +25,12 @@ import io.regionevent.regioneventbackend.domain.region.repository.RegionReposito
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
-import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
+import io.regionevent.regioneventbackend.support.mysql.MySqlTestSupport;
 
 @SpringBootTest
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional
-class PublicContentQueryMySqlTest {
+class PublicContentQueryMySqlTest extends MySqlTestSupport {
 
     private final ContentRepository contentRepository;
     private final ContentSessionRepository contentSessionRepository;
@@ -53,11 +51,6 @@ class PublicContentQueryMySqlTest {
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
         this.jdbcTemplate = jdbcTemplate;
-    }
-
-    @DynamicPropertySource
-    static void configureDataSource(DynamicPropertyRegistry registry) {
-        SharedMySqlTestContainer.registerDataSourceProperties(registry);
     }
 
     @BeforeTransaction

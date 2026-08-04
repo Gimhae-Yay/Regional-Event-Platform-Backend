@@ -20,13 +20,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
@@ -57,17 +54,12 @@ import io.regionevent.regioneventbackend.domain.reservation.repository.CapacityH
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
-import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
-import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
+import io.regionevent.regioneventbackend.support.mysql.DelayedSchedulersMySqlTestSupport;
 
-@SpringBootTest(properties = {
-    "reservation.hold-termination.initial-delay=PT24H",
-    "reservation.no-show-completion.initial-delay=PT24H"
-})
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 @Import(ExpireOrInvalidateCapacityHoldsUseCaseMySqlTest.FailingCapacityHoldServiceConfig.class)
-class ExpireOrInvalidateCapacityHoldsUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
+class ExpireOrInvalidateCapacityHoldsUseCaseMySqlTest extends DelayedSchedulersMySqlTestSupport {
 
     private final ExpireOrInvalidateCapacityHoldsUseCase useCase;
     private final FailingCapacityHoldService capacityHoldService;
@@ -109,11 +101,6 @@ class ExpireOrInvalidateCapacityHoldsUseCaseMySqlTest extends NonTransactionalMy
         this.regionRepository = regionRepository;
         this.entityManager = entityManager;
         transactionTemplate = new TransactionTemplate(transactionManager);
-    }
-
-    @DynamicPropertySource
-    static void configureDataSource(DynamicPropertyRegistry registry) {
-        SharedMySqlTestContainer.registerDataSourceProperties(registry);
     }
 
     @AfterEach

@@ -15,8 +15,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,13 +48,12 @@ import io.regionevent.regioneventbackend.domain.visit.dto.QrCheckInRequest;
 import io.regionevent.regioneventbackend.domain.visit.repository.VisitRepository;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.global.security.qr.QrTokenService;
-import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
-import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
+import io.regionevent.regioneventbackend.support.mysql.AffectedRowsLockTimeoutOneMySqlTestSupport;
 
 @SpringBootTest
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-class CheckInUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
+class CheckInUseCaseMySqlTest extends AffectedRowsLockTimeoutOneMySqlTestSupport {
 
     private final CheckInUseCase checkInUseCase;
     private final RegionRepository regionRepository;
@@ -98,15 +95,6 @@ class CheckInUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         this.idempotencyRecordRepository = idempotencyRecordRepository;
         this.qrTokenService = qrTokenService;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
-    }
-
-    @DynamicPropertySource
-    static void configureDataSource(DynamicPropertyRegistry registry) {
-        SharedMySqlTestContainer.registerDataSourceProperties(
-            registry,
-            CheckInUseCaseMySqlTest::withUseAffectedRows
-        );
-        registry.add("idempotency.lock-wait-timeout-seconds", () -> "1");
     }
 
     @Test
@@ -440,11 +428,6 @@ class CheckInUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("concurrent test interrupted", exception);
         }
-    }
-
-    private static String withUseAffectedRows(String jdbcUrl) {
-        String parameterPrefix = jdbcUrl.contains("?") ? "&" : "?";
-        return jdbcUrl + parameterPrefix + "useAffectedRows=true";
     }
 
     @FunctionalInterface

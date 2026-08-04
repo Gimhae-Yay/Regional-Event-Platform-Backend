@@ -16,8 +16,6 @@ import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,13 +50,12 @@ import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepositor
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
-import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
-import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
+import io.regionevent.regioneventbackend.support.mysql.AffectedRowsMySqlTestSupport;
 
 @SpringBootTest
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-class ReservationCancellationUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
+class ReservationCancellationUseCaseMySqlTest extends AffectedRowsMySqlTestSupport {
 
     private final ReservationCancellationUseCase reservationCancellationUseCase;
     private final CancelContentSessionUseCase cancelContentSessionUseCase;
@@ -100,14 +97,6 @@ class ReservationCancellationUseCaseMySqlTest extends NonTransactionalMySqlTestS
         this.auditEventRepository = auditEventRepository;
         this.jdbcTemplate = jdbcTemplate;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
-    }
-
-    @DynamicPropertySource
-    static void configureDataSource(DynamicPropertyRegistry registry) {
-        SharedMySqlTestContainer.registerDataSourceProperties(
-            registry,
-            ReservationCancellationUseCaseMySqlTest::withUseAffectedRows
-        );
     }
 
     @Test
@@ -325,11 +314,6 @@ class ReservationCancellationUseCaseMySqlTest extends NonTransactionalMySqlTestS
             Thread.currentThread().interrupt();
             throw new IllegalStateException("concurrent cancellation was interrupted", exception);
         }
-    }
-
-    private static String withUseAffectedRows(String jdbcUrl) {
-        String parameterPrefix = jdbcUrl.contains("?") ? "&" : "?";
-        return jdbcUrl + parameterPrefix + "useAffectedRows=true";
     }
 
     private record Fixture(Long userId, Long operatorId, Long reservationId, Long sessionId) {

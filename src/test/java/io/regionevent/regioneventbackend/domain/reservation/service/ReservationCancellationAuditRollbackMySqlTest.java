@@ -12,8 +12,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
@@ -44,13 +42,12 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
-import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
-import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
+import io.regionevent.regioneventbackend.support.mysql.AffectedRowsMySqlTestSupport;
 
 @SpringBootTest
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-class ReservationCancellationAuditRollbackMySqlTest extends NonTransactionalMySqlTestSupport {
+class ReservationCancellationAuditRollbackMySqlTest extends AffectedRowsMySqlTestSupport {
 
     private final ReservationCancellationUseCase reservationCancellationUseCase;
     private final RegionRepository regionRepository;
@@ -92,14 +89,6 @@ class ReservationCancellationAuditRollbackMySqlTest extends NonTransactionalMySq
         this.auditEventRepository = auditEventRepository;
         this.jdbcTemplate = jdbcTemplate;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
-    }
-
-    @DynamicPropertySource
-    static void configureDataSource(DynamicPropertyRegistry registry) {
-        SharedMySqlTestContainer.registerDataSourceProperties(
-            registry,
-            ReservationCancellationAuditRollbackMySqlTest::withUseAffectedRows
-        );
     }
 
     @Test
@@ -208,11 +197,6 @@ class ReservationCancellationAuditRollbackMySqlTest extends NonTransactionalMySq
             ));
             return new Fixture(user.getUserId(), reservation.getReservationId(), session.getSessionId());
         });
-    }
-
-    private static String withUseAffectedRows(String jdbcUrl) {
-        String parameterPrefix = jdbcUrl.contains("?") ? "&" : "?";
-        return jdbcUrl + parameterPrefix + "useAffectedRows=true";
     }
 
     private record Fixture(Long userId, Long reservationId, Long sessionId) {

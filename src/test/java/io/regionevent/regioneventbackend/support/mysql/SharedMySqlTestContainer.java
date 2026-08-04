@@ -23,6 +23,10 @@ public final class SharedMySqlTestContainer {
         registerDataSourceProperties(registry, UnaryOperator.identity());
     }
 
+    public static void registerAffectedRowsDataSourceProperties(DynamicPropertyRegistry registry) {
+        registerDataSourceProperties(registry, SharedMySqlTestContainer::withUseAffectedRows);
+    }
+
     public static void registerDataSourceProperties(
         DynamicPropertyRegistry registry,
         UnaryOperator<String> jdbcUrlCustomizer
@@ -66,6 +70,11 @@ public final class SharedMySqlTestContainer {
     static Connection openConnection() throws SQLException {
         MySQLContainer mysql = container();
         return DriverManager.getConnection(mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword());
+    }
+
+    private static String withUseAffectedRows(String jdbcUrl) {
+        String parameterPrefix = jdbcUrl.contains("?") ? "&" : "?";
+        return jdbcUrl + parameterPrefix + "useAffectedRows=true";
     }
 
     private static MySQLContainer container() {
