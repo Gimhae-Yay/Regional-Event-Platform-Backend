@@ -50,6 +50,50 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<Reservation> findByReservationNo(String reservationNo);
 
+    @Query("""
+        SELECT new io.regionevent.regioneventbackend.domain.reservation.repository.ReservationReadProjection(
+            reservation.reservationId,
+            reservation.reservationNo,
+            reservation.status,
+            reservation.confirmedAt,
+            reservation.cancelledAt,
+            reservation.cancellationReason,
+            reservation.expiredAt,
+            reservation.region.regionId,
+            contentSession.sessionId,
+            contentSession.status,
+            contentSession.startsAt,
+            contentSession.endsAt,
+            contentSession.checkinOpenAt,
+            contentSession.checkinCloseAt,
+            contentSession.region.regionId,
+            content.contentId,
+            content.title,
+            content.region.regionId,
+            participant.userId,
+            participant.name,
+            participant.phone,
+            visit.visitId,
+            visit.reservation.reservationId,
+            visit.region.regionId,
+            visit.contentSession.sessionId,
+            visit.content.contentId,
+            visitParticipant.userId,
+            visit.checkedAt
+        )
+        FROM Reservation reservation
+        JOIN reservation.contentSession contentSession
+        JOIN contentSession.content content
+        LEFT JOIN reservation.user participant
+        LEFT JOIN Visit visit ON visit.reservation = reservation
+        LEFT JOIN visit.user visitParticipant
+        WHERE reservation.reservationNo = :reservationNo
+        ORDER BY visit.visitId ASC
+        """)
+    List<ReservationReadProjection> findReadProjectionsByReservationNo(
+        @Param("reservationNo") String reservationNo
+    );
+
     @EntityGraph(attributePaths = {
         "region",
         "contentSession",
