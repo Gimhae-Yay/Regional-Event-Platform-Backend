@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.Instant;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
@@ -51,18 +52,97 @@ class CapacityHoldTest {
         ).isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
+    void 생성_시_수량과_상태별_종결_필드와_무효화_사유를_검증한다() {
+        assertThatThrownBy(() -> newCapacityHold(
+            region,
+            0,
+            CapacityHoldStatus.ACTIVE,
+            null,
+            null,
+            null
+        )).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> newCapacityHold(
+            region,
+            1,
+            CapacityHoldStatus.INVALIDATED,
+            TERMINAL_AT,
+            TERMINAL_AT,
+            null
+        )).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> newCapacityHold(
+            region,
+            1,
+            CapacityHoldStatus.INVALIDATED,
+            TERMINAL_AT,
+            TERMINAL_AT,
+            " "
+        )).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> newCapacityHold(
+            region,
+            1,
+            CapacityHoldStatus.EXPIRED,
+            TERMINAL_AT,
+            TERMINAL_AT,
+            "회차가 취소되었습니다."
+        )).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> newCapacityHold(
+            region,
+            1,
+            CapacityHoldStatus.CONSUMED,
+            null,
+            null,
+            null
+        )).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> newCapacityHold(
+            region,
+            1,
+            CapacityHoldStatus.EXPIRED,
+            TERMINAL_AT,
+            null,
+            null
+        )).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void 생성_시_홀드_지역과_회차_지역이_일치해야_한다() {
+        Region busan = new Region("BUSAN", "Busan", true);
+        assignId(region, "regionId", 1L);
+        assignId(busan, "regionId", 2L);
+
+        assertThatThrownBy(() -> newCapacityHold(
+            busan,
+            1,
+            CapacityHoldStatus.ACTIVE,
+            null,
+            null,
+            null
+        )).isInstanceOf(IllegalArgumentException.class);
+    }
+
     private CapacityHold createCapacityHold(CapacityHoldStatus status) {
         Instant terminalAt = status == CapacityHoldStatus.CONSUMED ? TERMINAL_AT : null;
+        return newCapacityHold(region, 2, status, terminalAt, null, null);
+    }
+
+    private CapacityHold newCapacityHold(
+        Region holdRegion,
+        int quantity,
+        CapacityHoldStatus status,
+        Instant terminalAt,
+        Instant capacityReleasedAt,
+        String invalidationReason
+    ) {
         return new CapacityHold(
-            region,
+            holdRegion,
             contentSession,
             visitor,
-            2,
+            quantity,
             status,
             EXPIRES_AT,
             terminalAt,
-            null,
-            null
+            invalidationReason,
+            capacityReleasedAt
         );
     }
 
@@ -105,5 +185,9 @@ class CapacityHoldTest {
             "01012345678",
             AppUserStatus.ACTIVE
         );
+    }
+
+    private void assignId(Object entity, String fieldName, long identifier) {
+        ReflectionTestUtils.setField(entity, fieldName, identifier);
     }
 }

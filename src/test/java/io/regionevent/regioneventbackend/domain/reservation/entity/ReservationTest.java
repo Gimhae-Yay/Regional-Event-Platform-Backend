@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.Instant;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
@@ -51,7 +52,85 @@ class ReservationTest {
         ).isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
+    void 생성_시_예약과_홀드의_지역과_회차가_일치해야_한다() {
+        Region busan = new Region("BUSAN", "Busan", true);
+        ContentSession anotherContentSession = new ContentSession(
+            content,
+            region,
+            Instant.parse("2026-08-04T01:00:00Z"),
+            Instant.parse("2026-08-04T03:00:00Z"),
+            Instant.parse("2026-08-04T00:30:00Z"),
+            Instant.parse("2026-08-04T02:30:00Z"),
+            20
+        );
+        assignId(region, "regionId", 1L);
+        assignId(busan, "regionId", 2L);
+        assignId(contentSession, "sessionId", 1L);
+        assignId(anotherContentSession, "sessionId", 2L);
+
+        assertThatThrownBy(() -> new Reservation(
+            "R-20260802-REGION",
+            "qr-reference-region",
+            busan,
+            createConsumedHold(),
+            contentSession,
+            visitor,
+            ReservationStatus.CONFIRMED,
+            CONFIRMED_AT,
+            null,
+            null,
+            null,
+            null
+        )).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new Reservation(
+            "R-20260802-SESSION",
+            "qr-reference-session",
+            region,
+            createConsumedHold(),
+            anotherContentSession,
+            visitor,
+            ReservationStatus.CONFIRMED,
+            CONFIRMED_AT,
+            null,
+            null,
+            null,
+            null
+        )).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void 생성_시_상태에_맞는_취소와_만료_필드가_필요하다() {
+        assertThatThrownBy(() -> newReservation(
+            ReservationStatus.CANCELLED,
+            null,
+            null,
+            null
+        )).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> newReservation(
+            ReservationStatus.EXPIRED,
+            null,
+            null,
+            null
+        )).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> newReservation(
+            ReservationStatus.CONFIRMED,
+            CANCELLED_AT,
+            "개인 사정",
+            null
+        )).isInstanceOf(IllegalArgumentException.class);
+    }
+
     private Reservation createReservation(ReservationStatus status) {
+        return newReservation(status, null, null, null);
+    }
+
+    private Reservation newReservation(
+        ReservationStatus status,
+        Instant cancelledAt,
+        String cancellationReason,
+        Instant expiredAt
+    ) {
         return new Reservation(
             "R-20260802-" + status.name(),
             "qr-reference-" + status.name(),
@@ -61,9 +140,9 @@ class ReservationTest {
             visitor,
             status,
             CONFIRMED_AT,
-            null,
-            null,
-            null,
+            cancelledAt,
+            cancellationReason,
+            expiredAt,
             null
         );
     }
@@ -121,5 +200,9 @@ class ReservationTest {
             "01012345678",
             AppUserStatus.ACTIVE
         );
+    }
+
+    private void assignId(Object entity, String fieldName, long identifier) {
+        ReflectionTestUtils.setField(entity, fieldName, identifier);
     }
 }
