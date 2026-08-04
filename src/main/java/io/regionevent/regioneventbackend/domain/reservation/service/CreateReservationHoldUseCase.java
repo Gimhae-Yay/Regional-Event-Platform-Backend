@@ -43,7 +43,8 @@ public class CreateReservationHoldUseCase {
     @Transactional
     public CreateReservationHoldResponse create(Long userId, CreateReservationHoldRequest request) {
         Long sessionId = toPositiveSessionId(request.sessionId());
-        AppUser user = appUserService.findActiveUser(userId);
+        AppUser user = appUserService.findActiveUserForUpdate(userId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
         ContentSession contentSession = contentSessionService.findPublicSession(sessionId);
         Instant createdAt = clock.instant().truncatedTo(ChronoUnit.MICROS);
 

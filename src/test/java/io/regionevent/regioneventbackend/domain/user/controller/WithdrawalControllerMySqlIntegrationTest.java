@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -40,12 +41,17 @@ import io.regionevent.regioneventbackend.domain.content.repository.ContentReposi
 import io.regionevent.regioneventbackend.domain.content.repository.ContentSessionRepository;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
+import io.regionevent.regioneventbackend.domain.reservation.dto.CreateReservationHoldRequest;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.reservation.repository.CapacityHoldRepository;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationRepository;
+import io.regionevent.regioneventbackend.domain.reservation.service.CreateReservationHoldUseCase;
+import io.regionevent.regioneventbackend.domain.reservation.service.GetMyReservationQrUseCase;
+import io.regionevent.regioneventbackend.domain.reservation.service.ReservationCancellationUseCase;
+import io.regionevent.regioneventbackend.domain.reservation.service.ReservationConfirmationUseCase;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
@@ -79,6 +85,10 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
     private final JdbcTemplate jdbcTemplate;
     private final WithdrawUserUseCase withdrawUserUseCase;
     private final RefreshTokenStore refreshTokenStore;
+    private final CreateReservationHoldUseCase createReservationHoldUseCase;
+    private final ReservationConfirmationUseCase reservationConfirmationUseCase;
+    private final ReservationCancellationUseCase reservationCancellationUseCase;
+    private final GetMyReservationQrUseCase getMyReservationQrUseCase;
 
     @Autowired
     WithdrawalControllerMySqlIntegrationTest(
@@ -93,7 +103,11 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         JwtAccessTokenService jwtAccessTokenService,
         JdbcTemplate jdbcTemplate,
         WithdrawUserUseCase withdrawUserUseCase,
-        RefreshTokenStore refreshTokenStore
+        RefreshTokenStore refreshTokenStore,
+        CreateReservationHoldUseCase createReservationHoldUseCase,
+        ReservationConfirmationUseCase reservationConfirmationUseCase,
+        ReservationCancellationUseCase reservationCancellationUseCase,
+        GetMyReservationQrUseCase getMyReservationQrUseCase
     ) {
         this.mockMvc = mockMvc;
         this.appUserRepository = appUserRepository;
@@ -107,6 +121,10 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         this.jdbcTemplate = jdbcTemplate;
         this.withdrawUserUseCase = withdrawUserUseCase;
         this.refreshTokenStore = refreshTokenStore;
+        this.createReservationHoldUseCase = createReservationHoldUseCase;
+        this.reservationConfirmationUseCase = reservationConfirmationUseCase;
+        this.reservationCancellationUseCase = reservationCancellationUseCase;
+        this.getMyReservationQrUseCase = getMyReservationQrUseCase;
     }
 
     @DynamicPropertySource
@@ -169,6 +187,65 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
             firstRequest.get(3, TimeUnit.SECONDS);
             assertThat(secondRequest.get(3, TimeUnit.SECONDS)).isEqualTo(ErrorCode.UNAUTHENTICATED);
         }
+    }
+
+    @Test
+    @Timeout(10)
+    void withdraw_blocksReservationHoldCreationUntilAccountDeletion() throws Exception {
+        Fixture fixture = createFixture();
+
+        assertUserCommandWaitsForWithdrawalAndIsRejected(
+            fixture.user().getUserId(),
+            () -> createReservationHoldUseCase.create(
+                fixture.user().getUserId(),
+                new CreateReservationHoldRequest(fixture.session().getSessionId().toString(), 1)
+            )
+        );
+    }
+
+    @Test
+    @Timeout(10)
+    void withdraw_blocksReservationConfirmationUntilAccountDeletion() throws Exception {
+        Fixture fixture = createFixture();
+
+        assertUserCommandWaitsForWithdrawalAndIsRejected(
+            fixture.user().getUserId(),
+            () -> reservationConfirmationUseCase.confirm(
+                fixture.user().getUserId(),
+                fixture.activeHold().getHoldId().toString(),
+                "withdrawal-confirm-" + fixture.user().getUserId(),
+                UUID.randomUUID()
+            )
+        );
+    }
+
+    @Test
+    @Timeout(10)
+    void withdraw_blocksReservationCancellationUntilAccountDeletion() throws Exception {
+        Fixture fixture = createFixture();
+
+        assertUserCommandWaitsForWithdrawalAndIsRejected(
+            fixture.user().getUserId(),
+            () -> reservationCancellationUseCase.cancel(
+                fixture.user().getUserId(),
+                fixture.reservation().getReservationId(),
+                UUID.randomUUID()
+            )
+        );
+    }
+
+    @Test
+    @Timeout(10)
+    void withdraw_blocksReservationQrIssuanceUntilAccountDeletion() throws Exception {
+        Fixture fixture = createFixture();
+
+        assertUserCommandWaitsForWithdrawalAndIsRejected(
+            fixture.user().getUserId(),
+            () -> getMyReservationQrUseCase.get(
+                fixture.user().getUserId(),
+                fixture.reservation().getReservationId()
+            )
+        );
     }
 
     private Fixture createFixture() {
@@ -263,6 +340,45 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
     private ErrorCode withdraw(Long userId) {
         try {
             withdrawUserUseCase.withdraw(userId);
+            return null;
+        } catch (BusinessException exception) {
+            return exception.getErrorCode();
+        }
+    }
+
+    private void assertUserCommandWaitsForWithdrawalAndIsRejected(
+        Long userId,
+        Runnable userCommand
+    ) throws Exception {
+        CountDownLatch withdrawalEnteredRedis = new CountDownLatch(1);
+        CountDownLatch releaseWithdrawal = new CountDownLatch(1);
+        CountDownLatch commandStarted = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            withdrawalEnteredRedis.countDown();
+            await(releaseWithdrawal);
+            return null;
+        }).when(refreshTokenStore).revokeAllFamilies(userId);
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<?> withdrawal = executorService.submit(() -> withdrawUserUseCase.withdraw(userId));
+            assertThat(withdrawalEnteredRedis.await(3, TimeUnit.SECONDS)).isTrue();
+
+            Future<ErrorCode> command = executorService.submit(() -> {
+                commandStarted.countDown();
+                return execute(userCommand);
+            });
+            assertThat(commandStarted.await(3, TimeUnit.SECONDS)).isTrue();
+            assertThat(command.isDone()).isFalse();
+
+            releaseWithdrawal.countDown();
+            withdrawal.get(3, TimeUnit.SECONDS);
+            assertThat(command.get(3, TimeUnit.SECONDS)).isEqualTo(ErrorCode.FORBIDDEN);
+        }
+    }
+
+    private ErrorCode execute(Runnable userCommand) {
+        try {
+            userCommand.run();
             return null;
         } catch (BusinessException exception) {
             return exception.getErrorCode();
