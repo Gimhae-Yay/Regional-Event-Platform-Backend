@@ -39,7 +39,7 @@ class ReservationReadServiceTest {
         assertThat(result.snapshot().content().title()).isEqualTo("김해 가야문화 체험");
         assertThat(result.snapshot().participant().name()).isEqualTo("김민수");
         assertThat(result.checkIn()).isEqualTo(
-            new ReservationReadIntegrityValidator.CheckInInfo(true, CHECKED_AT)
+            new ReservationReadIntegrityValidator.CheckInInfo(17L, true, CHECKED_AT)
         );
     }
 
@@ -90,7 +90,7 @@ class ReservationReadServiceTest {
 
         assertThat(result.snapshot().reservation().reservationId()).isEqualTo(10L);
         assertThat(result.checkIn()).isEqualTo(
-            new ReservationReadIntegrityValidator.CheckInInfo(true, CHECKED_AT)
+            new ReservationReadIntegrityValidator.CheckInInfo(17L, true, CHECKED_AT)
         );
         verify(reservationRepository).findReadProjectionsByReservationId(10L);
         verifyNoMoreInteractions(reservationRepository);
@@ -136,10 +136,10 @@ class ReservationReadServiceTest {
         assertThat(results).extracting(result -> result.snapshot().reservation().reservationId())
             .containsExactly(11L, 10L);
         assertThat(results.get(0).checkIn()).isEqualTo(
-            new ReservationReadIntegrityValidator.CheckInInfo(true, CHECKED_AT)
+            new ReservationReadIntegrityValidator.CheckInInfo(17L, true, CHECKED_AT)
         );
         assertThat(results.get(1).checkIn()).isEqualTo(
-            new ReservationReadIntegrityValidator.CheckInInfo(false, null)
+            new ReservationReadIntegrityValidator.CheckInInfo(null, false, null)
         );
         verify(reservationRepository).findReadProjectionsByUserId(USER_ID);
         verifyNoMoreInteractions(reservationRepository);

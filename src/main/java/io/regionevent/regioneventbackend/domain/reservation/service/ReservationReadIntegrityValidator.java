@@ -31,7 +31,7 @@ public class ReservationReadIntegrityValidator {
 
         ReservationReadSnapshot.VisitInfo visit = visits.get(0);
         validateVisit(snapshot, visit);
-        return CheckInInfo.checkedIn(visit.checkedAt());
+        return CheckInInfo.checkedIn(visit.visitId(), visit.checkedAt());
     }
 
     private void validateSnapshot(ReservationReadSnapshot snapshot) {
@@ -108,16 +108,17 @@ public class ReservationReadIntegrityValidator {
     }
 
     public record CheckInInfo(
+        Long visitId,
         boolean checkedIn,
         Instant checkedAt
     ) {
 
         private static CheckInInfo notCheckedIn() {
-            return new CheckInInfo(false, null);
+            return new CheckInInfo(null, false, null);
         }
 
-        private static CheckInInfo checkedIn(Instant checkedAt) {
-            return new CheckInInfo(true, checkedAt);
+        private static CheckInInfo checkedIn(Long visitId, Instant checkedAt) {
+            return new CheckInInfo(visitId, true, checkedAt);
         }
     }
 }
