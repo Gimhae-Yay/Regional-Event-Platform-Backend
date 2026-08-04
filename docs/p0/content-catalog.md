@@ -131,7 +131,7 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 | [정원 홀드·무료 예약](reservation.md#rsv-06) | 회차 취소 시 활성 홀드·확정 예약 처리 |
 | [P0 명세](../p0-spec.md#88-감사-및-운영-로그) | 승인·자동 공개·종료 처리자와 상태 이력 감사 |
 | [ADR-0021](../adr/0021-record-content-reasons-in-content-log.md#결정) | 콘텐츠 사유를 상태 로그에 기록하고 현재 상태와 분리하는 모델 |
-| [ADR-0057](../adr/0057-automatically-end-content-after-all-sessions-terminate.md#결정) | 모든 회차 종결을 기준으로 한 콘텐츠 자동 종료와 조정 스케줄러 |
+| [ADR-0059](../adr/0059-automatically-end-content-after-all-sessions-terminate.md#결정) | 모든 회차 종결을 기준으로 한 콘텐츠 자동 종료와 조정 스케줄러 |
 
 ### 기능 범위
 
