@@ -62,11 +62,11 @@ public class DeleteReviewUseCase {
         try {
             AppUser user = appUserService.findActiveUserForUpdate(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+            actor = new AuditEventActor(userRoleAssignmentService.findActiveVisitor(userId));
             review = reviewService.findByIdForUpdate(reviewId);
             previousStatus = review.getStatus();
             validatePublished(review);
             validateOwner(review, user);
-            actor = new AuditEventActor(userRoleAssignmentService.findActiveVisitor(userId));
             Instant deletedAt = clock.instant().truncatedTo(ChronoUnit.MICROS);
             review.delete(deletedAt);
             recordSuccess(requestId, review, actor, deletedAt);

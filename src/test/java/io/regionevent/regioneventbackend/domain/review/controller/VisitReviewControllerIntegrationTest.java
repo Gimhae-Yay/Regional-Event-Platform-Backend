@@ -542,7 +542,7 @@ class VisitReviewControllerIntegrationTest {
     }
 
     @Test
-    void deleteReview_whenUnauthenticatedOrNotAuthor_returnsForbiddenWithoutDeleting() throws Exception {
+    void deleteReview_whenUnauthenticatedOrNotAuthor_returnsForbiddenWithoutDeletingAndRecordsActorLink() throws Exception {
         Fixture fixture = createFixture(true);
         Review review = savePublishedReview(fixture);
         AppUser anotherUser = saveUser("another-visitor-" + System.nanoTime() + "@example.com", true);
@@ -556,6 +556,20 @@ class VisitReviewControllerIntegrationTest {
 
         assertThat(reviewRepository.findById(review.getReviewId()))
             .hasValueSatisfying(savedReview -> assertThat(savedReview.getStatus()).isEqualTo(ReviewStatus.PUBLISHED));
+        Long failureAuditEventId = auditEventRepository.findAll()
+            .stream()
+            .filter(event -> event.getTargetType() == AuditEventTargetType.REVIEW)
+            .filter(event -> review.getReviewId().equals(event.getTargetId()))
+            .filter(event -> event.getResult() == AuditEventResult.FAILURE)
+            .findFirst()
+            .orElseThrow()
+            .getAuditEventId();
+
+        assertThat(jdbcTemplate.queryForObject(
+            "SELECT user_id FROM audit_event_actor_link WHERE audit_event_id = ?",
+            Long.class,
+            failureAuditEventId
+        )).isEqualTo(anotherUser.getUserId());
     }
 
     @Test
