@@ -132,6 +132,7 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 | [P0 명세](../p0-spec.md#88-감사-및-운영-로그) | 승인·자동 공개·종료 처리자와 상태 이력 감사 |
 | [ADR-0021](../adr/0021-record-content-reasons-in-content-log.md#결정) | 콘텐츠 사유를 상태 로그에 기록하고 현재 상태와 분리하는 모델 |
 | [ADR-0059](../adr/0059-automatically-end-content-after-all-sessions-terminate.md#결정) | 모든 회차 종결을 기준으로 한 콘텐츠 자동 종료와 조정 스케줄러 |
+| [ADR-0060](../adr/0060-serialize-content-ending-and-session-creation-with-content-lock.md#결정) | 자동·수동 종료와 추가 회차 생성을 같은 콘텐츠 행 잠금으로 처리하는 규칙 |
 
 ### 기능 범위
 
@@ -161,6 +162,9 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 모든 회차가 `COMPLETED` 또는 `CANCELLED`가 되면 시스템이 콘텐츠를 한 번만 `ENDED`로 전환하고 신규 예약
 접수와 노출을 종료한다. 지역 관리자의 정상 종료 요청은 같은 조건에서 스케줄러 실행을 기다리지 않고 동일 전이를
 수행한다. 기존 `CONFIRMED` 예약을 취소해야 하면 먼저 명시적으로 회차를 취소한다.
+
+자동·수동 종료와 추가 회차 생성은 같은 `content` 행을 먼저 잠그고, 잠금을 얻은 뒤 콘텐츠와 전체 회차 상태를
+다시 확인한다. 따라서 `ENDED` 콘텐츠와 새 `PENDING` 회차를 함께 커밋할 수 없다.
 
 ### 완료 기준
 

@@ -114,7 +114,7 @@ Accept: application/json
 2. 대상 콘텐츠의 `region_id`가 인증 주체의 담당 지역과 일치해야 한다.
 3. 콘텐츠가 존재하지 않으면 `404 NOT_FOUND`로 응답한다.
 4. 담당 지역이 일치하지 않으면 `403 FORBIDDEN`으로 응답한다.
-5. 콘텐츠의 현재 상태가 `PUBLISHED`이고 모든 회차가 `COMPLETED` 또는 `CANCELLED`인 경우에만 `PUBLISHED → ENDED` 전이를 적용한다.
+5. 종료 쓰기 트랜잭션에서 대상 `content` 행을 `PESSIMISTIC_WRITE`(`SELECT ... FOR UPDATE`)로 먼저 잠근다. 잠금을 얻은 뒤 현재 상태가 `PUBLISHED`이고 연결된 회차가 하나 이상이며 모든 회차가 `COMPLETED` 또는 `CANCELLED`인지 다시 확인하고, 조건을 만족할 때만 `PUBLISHED → ENDED` 전이를 적용한다.
 6. `SCHEDULED` 회차가 하나라도 남아 있으면 종료할 수 없다.
 7. 기존 `CONFIRMED` 예약을 취소해야 하면 이 API 호출 전에 해당 회차를 명시적으로 취소해야 한다.
 8. 종료 성공 후 신규 홀드 생성과 예약 확정을 차단한다.
@@ -123,7 +123,7 @@ Accept: application/json
 11. 기존 `CONFIRMED`·`CHECKED_IN` 예약, 방문 기록과 후기는 유지한다.
 12. 이미 `ENDED`인 콘텐츠에 대한 종료 재요청은 기존 종료 결과를 반환한다.
 13. 종료 재요청은 상태 로그, 감사 로그, 정원 복구를 중복 생성하지 않는다.
-14. 다른 상태 전이와 경합하면 먼저 성공한 조건부 전이만 반영하고 나중 요청은 `409 CONTENT_END_CONFLICT`로 응답한다.
+14. 자동 종료와 추가 회차 생성도 같은 `content` 행을 먼저 잠근다. 회차 생성이 잠금을 먼저 얻으면 새 `PENDING` 회차를 확인하고 `409 CONTENT_END_CONFLICT`로 응답한다. 이 종료가 먼저 `ENDED`를 커밋하면 뒤의 회차 생성은 `ENDED`를 확인하고 회차를 만들지 않는다. 다른 상태 전이와 경합해도 먼저 성공한 조건부 전이만 반영한다.
 15. 오류가 발생하면 콘텐츠 상태, 콘텐츠 로그, 감사 로그, 홀드 상태와 정원을 변경하지 않는다.
 
 ### 감사 및 정합성
