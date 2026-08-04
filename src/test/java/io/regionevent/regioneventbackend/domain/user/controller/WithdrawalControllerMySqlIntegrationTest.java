@@ -67,8 +67,6 @@ import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTestSupport {
 
     private static final String WITHDRAWAL_PATH = "/api/v1/auth/delete";
-    private static final Instant NOW = Instant.parse("2026-08-04T00:00:00Z");
-
     private final MockMvc mockMvc;
     private final AppUserRepository appUserRepository;
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
@@ -174,6 +172,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
     }
 
     private Fixture createFixture() {
+        Instant now = Instant.now();
         String suffix = Long.toUnsignedString(System.nanoTime());
         AppUser user = saveUser("visitor-" + suffix + "@example.com");
         AppUser owner = saveUser("owner-" + suffix + "@example.com");
@@ -195,18 +194,18 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
             "전체 이용가",
             "준비물 없음",
             "취소 정책",
-            NOW
+            now
         ));
         ContentSession session = new ContentSession(
             content,
             region,
-            NOW.plusSeconds(86_400),
-            NOW.plusSeconds(90_000),
-            NOW.plusSeconds(85_200),
-            NOW.plusSeconds(89_000),
+            now.plusSeconds(86_400),
+            now.plusSeconds(90_000),
+            now.plusSeconds(85_200),
+            now.plusSeconds(89_000),
             10
         );
-        session.approve(reviewer, NOW);
+        session.approve(reviewer, now);
         session = contentSessionRepository.saveAndFlush(session);
 
         CapacityHold activeHold = capacityHoldRepository.saveAndFlush(new CapacityHold(
@@ -215,11 +214,11 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
             user,
             1,
             CapacityHoldStatus.ACTIVE,
-            NOW.plusSeconds(3_600),
+            now.plusSeconds(3_600),
             null,
             null,
             null,
-            NOW
+            now
         ));
         CapacityHold consumedHold = capacityHoldRepository.saveAndFlush(new CapacityHold(
             region,
@@ -227,11 +226,11 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
             user,
             1,
             CapacityHoldStatus.CONSUMED,
-            NOW.plusSeconds(3_600),
-            NOW,
+            now.plusSeconds(3_600),
+            now,
             null,
             null,
-            NOW
+            now
         ));
         Reservation reservation = reservationRepository.saveAndFlush(new Reservation(
             "reservation-" + suffix,
@@ -241,7 +240,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
             session,
             user,
             ReservationStatus.CONFIRMED,
-            NOW,
+            now,
             null,
             null,
             null,
