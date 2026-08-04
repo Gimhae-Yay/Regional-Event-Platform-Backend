@@ -8,6 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.sql.Timestamp;
 import java.time.Instant;
 
+import jakarta.persistence.EntityManager;
+
 import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,6 +51,7 @@ class PendingContentSessionControllerIntegrationTest {
     private final ContentSessionRepository contentSessionRepository;
     private final AuditEventRepository auditEventRepository;
     private final JdbcTemplate jdbcTemplate;
+    private final EntityManager entityManager;
 
     @Autowired
     PendingContentSessionControllerIntegrationTest(
@@ -60,7 +63,8 @@ class PendingContentSessionControllerIntegrationTest {
         ContentRepository contentRepository,
         ContentSessionRepository contentSessionRepository,
         AuditEventRepository auditEventRepository,
-        JdbcTemplate jdbcTemplate
+        JdbcTemplate jdbcTemplate,
+        EntityManager entityManager
     ) {
         this.mockMvc = mockMvc;
         this.jwtAccessTokenService = jwtAccessTokenService;
@@ -71,6 +75,7 @@ class PendingContentSessionControllerIntegrationTest {
         this.contentSessionRepository = contentSessionRepository;
         this.auditEventRepository = auditEventRepository;
         this.jdbcTemplate = jdbcTemplate;
+        this.entityManager = entityManager;
     }
 
     @Test
@@ -86,6 +91,7 @@ class PendingContentSessionControllerIntegrationTest {
         contentRepository.saveAndFlush(deleted);
         ContentSession later = savePendingSession(approved, region, "2026-08-22T01:00:00Z");
         ContentSession first = savePendingSession(published, region, "2026-08-21T01:00:00Z");
+        ContentSession tied = savePendingSession(published, region, "2026-08-21T03:00:00Z");
         savePendingSession(initialPending, region, "2026-08-20T01:00:00Z");
         savePendingSession(deleted, region, "2026-08-20T01:00:00Z");
         ContentSession scheduled = savePendingSession(published, region, "2026-08-23T01:00:00Z");
@@ -93,7 +99,14 @@ class PendingContentSessionControllerIntegrationTest {
         contentSessionRepository.saveAndFlush(scheduled);
         updateCreatedAt(later, "2026-08-02T00:00:00Z");
         updateCreatedAt(first, "2026-08-01T00:00:00Z");
+        updateCreatedAt(tied, "2026-08-01T00:00:00Z");
+        entityManager.clear();
         DatabaseSnapshot before = snapshot();
+        SessionState firstBefore = sessionState(first);
+        SessionState tiedBefore = sessionState(tied);
+        SessionState laterBefore = sessionState(later);
+        ContentState publishedBefore = contentState(published);
+        ContentState approvedBefore = contentState(approved);
 
         mockMvc.perform(get("/api/v1/region-admin/sessions").queryParam("status", "PENDING")
                 .header(HttpHeaders.AUTHORIZATION, bearerToken(admin)))
@@ -101,16 +114,28 @@ class PendingContentSessionControllerIntegrationTest {
             .andExpect(jsonPath("$.statusCode").value(200))
             .andExpect(jsonPath("$.code").value("SUCCESS"))
             .andExpect(jsonPath("$.message").value("심사 대기 회차 목록 조회에 성공했습니다."))
-            .andExpect(jsonPath("$.data.sessions.length()").value(2))
+            .andExpect(jsonPath("$.data.sessions.length()").value(3))
             .andExpect(jsonPath("$.data.sessions[0].sessionId").value(first.getSessionId().toString()))
             .andExpect(jsonPath("$.data.sessions[0].contentId").value(published.getContentId().toString()))
             .andExpect(jsonPath("$.data.sessions[0].contentTitle").value("공개 콘텐츠"))
             .andExpect(jsonPath("$.data.sessions[0].status").value("PENDING"))
             .andExpect(jsonPath("$.data.sessions[0].startsAt").value("2026-08-21T10:00:00+09:00"))
+            .andExpect(jsonPath("$.data.sessions[0].endsAt").value("2026-08-21T12:00:00+09:00"))
+            .andExpect(jsonPath("$.data.sessions[0].checkinOpenAt").value("2026-08-21T09:30:00+09:00"))
+            .andExpect(jsonPath("$.data.sessions[0].checkinCloseAt").value("2026-08-21T11:30:00+09:00"))
+            .andExpect(jsonPath("$.data.sessions[0].capacity").value(20))
+            .andExpect(jsonPath("$.data.sessions[0].createdAt").value("2026-08-01T00:00:00Z"))
             .andExpect(jsonPath("$.data.sessions[0].operator.operatorId").value(operator.getUserId().toString()))
-            .andExpect(jsonPath("$.data.sessions[1].sessionId").value(later.getSessionId().toString()));
+            .andExpect(jsonPath("$.data.sessions[0].operator.name").value("사용자"))
+            .andExpect(jsonPath("$.data.sessions[1].sessionId").value(tied.getSessionId().toString()))
+            .andExpect(jsonPath("$.data.sessions[2].sessionId").value(later.getSessionId().toString()));
 
         assertThat(snapshot()).isEqualTo(before);
+        assertThat(sessionState(first)).isEqualTo(firstBefore);
+        assertThat(sessionState(tied)).isEqualTo(tiedBefore);
+        assertThat(sessionState(later)).isEqualTo(laterBefore);
+        assertThat(contentState(published)).isEqualTo(publishedBefore);
+        assertThat(contentState(approved)).isEqualTo(approvedBefore);
         assertThat(contentSessionRepository.findById(scheduled.getSessionId()))
             .get()
             .satisfies(session -> assertThat(session.getStatus().name()).isEqualTo("SCHEDULED"));
@@ -223,6 +248,36 @@ class PendingContentSessionControllerIntegrationTest {
         return new DatabaseSnapshot(contentRepository.count(), contentSessionRepository.count(), auditEventRepository.count());
     }
 
+    private SessionState sessionState(ContentSession session) {
+        return jdbcTemplate.queryForObject(
+            "SELECT status, version_no, updated_at FROM content_session WHERE session_id = ?",
+            (resultSet, rowNum) -> new SessionState(
+                resultSet.getString("status"),
+                resultSet.getInt("version_no"),
+                resultSet.getTimestamp("updated_at").toInstant()
+            ),
+            session.getSessionId()
+        );
+    }
+
+    private ContentState contentState(Content content) {
+        return jdbcTemplate.queryForObject(
+            "SELECT status, version_no, updated_at FROM content WHERE content_id = ?",
+            (resultSet, rowNum) -> new ContentState(
+                resultSet.getString("status"),
+                resultSet.getInt("version_no"),
+                resultSet.getTimestamp("updated_at").toInstant()
+            ),
+            content.getContentId()
+        );
+    }
+
     private record DatabaseSnapshot(long contents, long sessions, long auditEvents) {
+    }
+
+    private record SessionState(String status, int versionNo, Instant updatedAt) {
+    }
+
+    private record ContentState(String status, int versionNo, Instant updatedAt) {
     }
 }
