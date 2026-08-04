@@ -646,24 +646,14 @@ public class CheckInUseCaseIntegrationTest {
     }
 
     @Test
-    void manualCheckIn_whenSessionIsPending_throwsInternalServerErrorWithoutPublicSessionOutcome() {
+    void manualCheckIn_whenSessionIsPending_returnsConflictWithoutCreatingVisit() {
         Fixture fixture = createFixtureWithPendingSession();
-        UUID requestId = UUID.randomUUID();
 
-        assertThatThrownBy(() -> checkInUseCase.checkInManually(
-            fixture.operator().getUserId(),
-            new ManualCheckInRequest(
-                fixture.reservation().getReservationNo(),
-                ManualCheckInReason.QR_SCAN_FAILED.name()
-            ),
+        assertManualConflict(
+            fixture,
             "manual-pending-session-key",
-            requestId
-        ))
-            .isInstanceOfSatisfying(BusinessException.class, exception ->
-                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INTERNAL_SERVER_ERROR)
-            );
-
-        assertThat(auditEventsByRequestId(requestId)).isEmpty();
+            "MANUAL_CHECK_IN_QR_SCAN_FAILED_STATE_TRANSITION_CONFLICT"
+        );
     }
 
     @Test

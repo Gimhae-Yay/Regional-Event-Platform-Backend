@@ -699,6 +699,9 @@ public class CheckInUseCase {
         if (contentSession.getStatus() == ContentSessionStatus.COMPLETED) {
             return reasonCodePrefix + "_SESSION_COMPLETED";
         }
+        if (contentSession.getStatus() != ContentSessionStatus.SCHEDULED) {
+            return reasonCodePrefix + "_STATE_TRANSITION_CONFLICT";
+        }
         if (checkedAt.isBefore(contentSession.getCheckinOpenAt())) {
             return reasonCodePrefix + "_WINDOW_NOT_OPEN";
         }
@@ -713,12 +716,6 @@ public class CheckInUseCase {
         String reasonCodePrefix
     ) {
         if (!hasConsistentReservationRelations(reservation)) {
-            return reasonCodePrefix + "_RELATION_INCONSISTENT";
-        }
-        ContentSessionStatus sessionStatus = reservation.getContentSession().getStatus();
-        if (sessionStatus != ContentSessionStatus.SCHEDULED
-            && sessionStatus != ContentSessionStatus.CANCELLED
-            && sessionStatus != ContentSessionStatus.COMPLETED) {
             return reasonCodePrefix + "_RELATION_INCONSISTENT";
         }
         return null;
