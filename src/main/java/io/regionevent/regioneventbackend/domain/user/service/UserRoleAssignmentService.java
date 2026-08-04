@@ -60,4 +60,13 @@ public class UserRoleAssignmentService {
             AppUserStatus.ACTIVE
         ).orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
     }
+
+    public boolean hasPrivilegedRole(Long userId) {
+        List<UserRole> roles = findRolesByUserId(userId);
+        return roles.contains(UserRole.OPERATOR) || roles.contains(UserRole.REGION_ADMIN);
+    }
+
+    public void deleteAllByUserId(Long userId) {
+        userRoleAssignmentRepository.deleteByIdUserId(userId);
+    }
 }

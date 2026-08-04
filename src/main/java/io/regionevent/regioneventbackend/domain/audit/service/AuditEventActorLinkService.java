@@ -24,4 +24,9 @@ public class AuditEventActorLinkService {
         }
         auditEventActorLinkRepository.save(new AuditEventActorLink(auditEvent, actor.getAppUser()));
     }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void deleteByActorUserId(Long userId) {
+        auditEventActorLinkRepository.deleteByActorUserId(userId);
+    }
 }

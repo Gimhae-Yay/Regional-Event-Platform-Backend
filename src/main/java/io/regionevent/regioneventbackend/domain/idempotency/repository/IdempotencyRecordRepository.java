@@ -53,4 +53,13 @@ public interface IdempotencyRecordRepository extends JpaRepository<IdempotencyRe
     int deleteExpiredTerminalRecords(
         @Param("terminalStatuses") Collection<IdempotencyRecordStatus> terminalStatuses
     );
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+        UPDATE idempotency_record
+        SET actor_user_id = NULL,
+            idempotency_key_hash = NULL
+        WHERE actor_user_id = :userId
+        """, nativeQuery = true)
+    int unlinkActorByUserId(@Param("userId") Long userId);
 }

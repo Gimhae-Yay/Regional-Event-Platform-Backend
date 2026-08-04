@@ -177,6 +177,17 @@ public class ReservationService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
+    public void cancelConfirmedReservationsForWithdrawal(Long userId) {
+        reservationRepository.findConfirmedReservationIdsByUserId(userId)
+            .forEach(reservationRepository::cancelForWithdrawal);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void unlinkUserByUserId(Long userId) {
+        reservationRepository.unlinkUserByUserId(userId);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
     public int cancelUncheckedInReservationsForSession(
         ContentSession contentSession,
         String cancellationReason,

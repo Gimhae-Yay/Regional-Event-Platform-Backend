@@ -56,7 +56,8 @@ public class ReservationCancellationUseCase {
     @Transactional
     public CancelReservationResponse cancel(Long userId, Long reservationId, UUID requestId) {
         validatePositiveReservationId(reservationId);
-        AppUser user = appUserService.findActiveUser(userId);
+        AppUser user = appUserService.findActiveUserForUpdate(userId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
         AuditEventActor actor = new AuditEventActor(userRoleAssignmentService.findActiveVisitor(userId));
         ReservationService.ReservationCancellationLockTarget lockTarget = reservationService
             .findCancellationLockTarget(reservationId, user);

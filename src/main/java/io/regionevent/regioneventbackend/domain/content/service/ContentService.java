@@ -133,6 +133,10 @@ public class ContentService {
         );
     }
 
+    public boolean hasOwnedContent(Long userId) {
+        return contentRepository.existsByOperatorUserId(userId);
+    }
+
     public Content findPublicContent(Long contentId) {
         validateRequiredId(contentId);
         return contentRepository.findByContentIdAndStatusAndDeletedAtIsNull(
