@@ -2,6 +2,8 @@ package io.regionevent.regioneventbackend.domain.reservation.service;
 
 import java.util.Objects;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -10,11 +12,15 @@ import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepos
 import io.regionevent.regioneventbackend.domain.audit.repository.QrExceptionAuditProjection;
 import io.regionevent.regioneventbackend.domain.user.service.RegionAdminAuthorizationService;
 import io.regionevent.regioneventbackend.domain.visit.service.VisitService;
+import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 @Service
 public class GetRegionAdminQrExceptionUseCase {
+
+    private static final Logger log = LoggerFactory.getLogger(GetRegionAdminQrExceptionUseCase.class);
+    private static final String SUCCESS_RESULT_CODE = "SUCCESS";
 
     private final AuditEventRepository auditEventRepository;
     private final RegionAdminAuthorizationService regionAdminAuthorizationService;
@@ -38,52 +44,67 @@ public class GetRegionAdminQrExceptionUseCase {
 
     @Transactional(readOnly = true)
     public QrExceptionDetailResult get(Long userId, Long exceptionId) {
-        validateId(userId);
-        validateId(exceptionId);
+        Long authorizedRegionId = null;
+        try {
+            validateId(userId);
+            validateId(exceptionId);
 
-        Long authorizedRegionId = regionAdminAuthorizationService.requireAuthorizedRegionId(userId);
-        QrExceptionAuditProjection audit = auditEventRepository.findQrExceptionAuditProjectionById(exceptionId)
-            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
-        QrExceptionType exceptionType = QrExceptionType.findByReasonCode(audit.reasonCode())
-            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+            authorizedRegionId = regionAdminAuthorizationService.requireAuthorizedRegionId(userId);
+            QrExceptionAuditProjection audit = auditEventRepository.findQrExceptionAuditProjectionById(exceptionId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+            QrExceptionType exceptionType = QrExceptionType.findByReasonCode(audit.reasonCode())
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
 
-        if (audit.regionId() == null) {
-            throw new BusinessException(ErrorCode.NOT_FOUND);
-        }
-        if (!Objects.equals(authorizedRegionId, audit.regionId())) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
+            if (audit.regionId() == null) {
+                throw new BusinessException(ErrorCode.NOT_FOUND);
+            }
+            if (!Objects.equals(authorizedRegionId, audit.regionId())) {
+                throw new BusinessException(ErrorCode.FORBIDDEN);
+            }
 
-        Long reservationId = findReservationId(audit);
-        if (reservationId == null) {
-            return QrExceptionDetailResult.unresolved(
+            Long reservationId = findReservationId(audit);
+            if (reservationId == null) {
+                QrExceptionDetailResult result = QrExceptionDetailResult.unresolved(
+                    audit.exceptionId(),
+                    audit.regionId(),
+                    exceptionType,
+                    audit.result(),
+                    audit.reasonCode(),
+                    audit.occurredAt()
+                );
+                logResult(authorizedRegionId, exceptionId, SUCCESS_RESULT_CODE);
+                return result;
+            }
+
+            ReservationReadResult readResult = findReservationReadResult(reservationId);
+            ReservationReadSnapshot snapshot = readResult.snapshot();
+            validateSameRegion(audit, snapshot);
+            QrExceptionDetailResult result = new QrExceptionDetailResult(
                 audit.exceptionId(),
+                audit.regionId(),
                 exceptionType,
                 audit.result(),
                 audit.reasonCode(),
-                audit.occurredAt()
+                audit.occurredAt(),
+                true,
+                new QrExceptionDetailResult.ReservationInfo(
+                    snapshot.reservation(),
+                    snapshot.session(),
+                    snapshot.content(),
+                    snapshot.participant().userId() != null,
+                    reservationParticipantMasker.mask(snapshot.participant()),
+                    readResult.checkIn()
+                )
             );
+            logResult(authorizedRegionId, exceptionId, SUCCESS_RESULT_CODE);
+            return result;
+        } catch (BusinessException exception) {
+            logResult(authorizedRegionId, exceptionId, exception.getErrorCode().code());
+            throw exception;
+        } catch (RuntimeException exception) {
+            logResult(authorizedRegionId, exceptionId, ErrorCode.INTERNAL_SERVER_ERROR.code());
+            throw exception;
         }
-
-        ReservationReadResult readResult = findReservationReadResult(reservationId);
-        ReservationReadSnapshot snapshot = readResult.snapshot();
-        validateSameRegion(audit, snapshot);
-        return new QrExceptionDetailResult(
-            audit.exceptionId(),
-            exceptionType,
-            audit.result(),
-            audit.reasonCode(),
-            audit.occurredAt(),
-            true,
-            new QrExceptionDetailResult.ReservationInfo(
-                snapshot.reservation(),
-                snapshot.session(),
-                snapshot.content(),
-                snapshot.participant().userId() != null,
-                reservationParticipantMasker.mask(snapshot.participant()),
-                readResult.checkIn()
-            )
-        );
     }
 
     private Long findReservationId(QrExceptionAuditProjection audit) {
@@ -126,5 +147,19 @@ public class GetRegionAdminQrExceptionUseCase {
         if (id == null || id <= 0) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
+    }
+
+    private void logResult(
+        Long regionId,
+        Long exceptionId,
+        String resultCode
+    ) {
+        log.info(
+            "QR exception detail read. requestId={}, regionId={}, exceptionId={}, resultCode={}",
+            RequestIdFilter.currentRequestId(),
+            regionId,
+            exceptionId,
+            resultCode
+        );
     }
 }

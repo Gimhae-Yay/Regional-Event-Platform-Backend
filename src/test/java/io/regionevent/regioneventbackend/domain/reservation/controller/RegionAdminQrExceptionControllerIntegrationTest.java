@@ -14,8 +14,11 @@ import java.util.UUID;
 import jakarta.persistence.EntityManager;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
@@ -53,6 +56,7 @@ import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenSe
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
+@ExtendWith(OutputCaptureExtension.class)
 class RegionAdminQrExceptionControllerIntegrationTest {
 
     private final MockMvc mockMvc;
@@ -218,7 +222,7 @@ class RegionAdminQrExceptionControllerIntegrationTest {
     }
 
     @Test
-    void get_다른_담당_지역_관리자는_FORBIDDEN을_반환한다() throws Exception {
+    void get_다른_담당_지역_관리자는_FORBIDDEN을_반환한다(CapturedOutput output) throws Exception {
         Fixture fixture = createFixture(ReservationStatus.CONFIRMED);
         Region otherRegion = regionRepository.saveAndFlush(new Region("D" + System.nanoTime(), "동해시", true));
         AppUser otherRegionAdmin = saveRegionAdmin(otherRegion);
@@ -234,10 +238,17 @@ class RegionAdminQrExceptionControllerIntegrationTest {
                 .header("Authorization", bearerToken(otherRegionAdmin)))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        assertThat(output.getOut()).contains(
+            "QR exception detail read. requestId=",
+            "regionId=" + otherRegion.getRegionId()
+                + ", exceptionId=" + auditEvent.getAuditEventId()
+                + ", resultCode=FORBIDDEN"
+        );
     }
 
     @Test
-    void get_미존재_범위밖_지역없는_감사_이벤트는_NOT_FOUND를_반환한다() throws Exception {
+    void get_미존재_범위밖_지역없는_감사_이벤트는_NOT_FOUND를_반환한다(CapturedOutput output) throws Exception {
         Fixture fixture = createFixture(ReservationStatus.CONFIRMED);
         AuditEvent contentAuditEvent = saveAuditEvent(
             fixture.region(),
@@ -268,10 +279,24 @@ class RegionAdminQrExceptionControllerIntegrationTest {
                 .header("Authorization", bearerToken(fixture.regionAdmin())))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+
+        assertThat(output.getOut()).contains(
+            "QR exception detail read. requestId=",
+            "regionId=" + fixture.region().getRegionId()
+                + ", exceptionId=999999999, resultCode=NOT_FOUND",
+            "regionId=" + fixture.region().getRegionId()
+                + ", exceptionId=" + contentAuditEvent.getAuditEventId()
+                + ", resultCode=NOT_FOUND",
+            "regionId=" + fixture.region().getRegionId()
+                + ", exceptionId=" + regionlessAuditEvent.getAuditEventId()
+                + ", resultCode=NOT_FOUND"
+        );
     }
 
     @Test
-    void get_예약과_방문_관계가_불일치하면_INTERNAL_SERVER_ERROR를_반환한다() throws Exception {
+    void get_예약과_방문_관계가_불일치하면_INTERNAL_SERVER_ERROR를_반환한다(
+        CapturedOutput output
+    ) throws Exception {
         Fixture fixture = createFixture(ReservationStatus.CHECKED_IN);
         Visit visit = visitRepository.saveAndFlush(new Visit(
             fixture.region(),
@@ -302,6 +327,66 @@ class RegionAdminQrExceptionControllerIntegrationTest {
                 .header("Authorization", bearerToken(fixture.regionAdmin())))
             .andExpect(status().isInternalServerError())
             .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
+
+        assertThat(output.getOut()).contains(
+            "QR exception detail read. requestId=",
+            "regionId=" + fixture.region().getRegionId()
+                + ", exceptionId=" + auditEvent.getAuditEventId()
+                + ", resultCode=INTERNAL_SERVER_ERROR"
+        ).doesNotContain(
+            otherParticipant.getName(),
+            otherParticipant.getPhone()
+        );
+    }
+
+    @Test
+    void get_성공_로그에는_요청_지역_예외와_결과_코드만_남긴다(CapturedOutput output) throws Exception {
+        Fixture fixture = createFixture(ReservationStatus.CONFIRMED);
+        AuditEvent auditEvent = saveAuditEvent(
+            fixture.region(),
+            AuditEventTargetType.RESERVATION,
+            fixture.reservation().getReservationId(),
+            AuditEventResult.FAILURE,
+            "QR_VERIFICATION_FAILED"
+        );
+
+        mockMvc.perform(get("/api/v1/region-admin/qr-exceptions/{exceptionId}", auditEvent.getAuditEventId())
+                .header("Authorization", bearerToken(fixture.regionAdmin())))
+            .andExpect(status().isOk());
+
+        assertThat(output.getOut()).contains(
+            "QR exception detail read. requestId=",
+            "regionId=" + fixture.region().getRegionId()
+                + ", exceptionId=" + auditEvent.getAuditEventId()
+                + ", resultCode=SUCCESS"
+        ).doesNotContain(
+            fixture.participant().getName(),
+            fixture.participant().getPhone(),
+            fixture.reservation().getQrReference(),
+            "qrReference",
+            "userId"
+        );
+    }
+
+    @Test
+    void get_실패_로그에는_잘못된_원문_exceptionId를_남기지_않는다(CapturedOutput output) throws Exception {
+        Fixture fixture = createFixture(ReservationStatus.CONFIRMED);
+        String sensitiveExceptionId = "someone@example.com";
+
+        mockMvc.perform(get("/api/v1/region-admin/qr-exceptions/{exceptionId}", sensitiveExceptionId)
+                .header("Authorization", bearerToken(fixture.regionAdmin())))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+        mockMvc.perform(get("/api/v1/region-admin/qr-exceptions/{exceptionId}", sensitiveExceptionId))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+
+        assertThat(output.getOut()).contains(
+            "QR exception detail read. requestId=",
+            "regionId=null, exceptionId=null, resultCode=INVALID_TYPE",
+            "regionId=null, exceptionId=null, resultCode=UNAUTHENTICATED",
+            "HTTP request completed. method=GET, uri=/api/v1/region-admin/qr-exceptions/{exceptionId}, status=401"
+        ).doesNotContain(sensitiveExceptionId);
     }
 
     private AuditEvent saveAuditEvent(

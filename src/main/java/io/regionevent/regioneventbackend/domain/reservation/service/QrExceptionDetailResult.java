@@ -6,6 +6,7 @@ import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 
 public record QrExceptionDetailResult(
     Long exceptionId,
+    Long regionId,
     QrExceptionType exceptionType,
     AuditEventResult result,
     String reasonCode,
@@ -16,6 +17,7 @@ public record QrExceptionDetailResult(
 
     public static QrExceptionDetailResult unresolved(
         Long exceptionId,
+        Long regionId,
         QrExceptionType exceptionType,
         AuditEventResult result,
         String reasonCode,
@@ -23,6 +25,7 @@ public record QrExceptionDetailResult(
     ) {
         return new QrExceptionDetailResult(
             exceptionId,
+            regionId,
             exceptionType,
             result,
             reasonCode,
