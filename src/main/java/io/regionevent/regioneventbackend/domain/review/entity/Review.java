@@ -174,6 +174,14 @@ public class Review {
         authorUnlinkedAt = requireNotNull(unlinkedAt, "unlinkedAt");
     }
 
+    public void delete(Instant deletedAt) {
+        if (status != ReviewStatus.PUBLISHED) {
+            throw new IllegalStateException("only published review can be deleted");
+        }
+        status = ReviewStatus.DELETED;
+        this.deletedAt = requireNotNull(deletedAt, "deletedAt");
+    }
+
     public Long getReviewId() {
         return reviewId;
     }
