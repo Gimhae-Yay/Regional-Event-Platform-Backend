@@ -115,6 +115,17 @@ public class CapacityHoldService {
             .forEach(holdId -> invalidateAndReleaseCapacityIfActive(holdId, invalidationReason));
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void invalidateActiveHoldsForWithdrawal(Long userId) {
+        capacityHoldRepository.findActiveHoldIdsByUserId(userId)
+            .forEach(holdId -> invalidateAndReleaseCapacityIfActive(holdId, "USER_WITHDRAWAL"));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void unlinkUserByUserId(Long userId) {
+        capacityHoldRepository.unlinkUserByUserId(userId);
+    }
+
     @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
     public Optional<Long> findContentSessionId(Long holdId) {
         return capacityHoldRepository.findContentSessionIdByHoldId(holdId);

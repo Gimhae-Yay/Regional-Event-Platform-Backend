@@ -377,6 +377,61 @@ class ReservationRepositoryTest {
         assertThat(projection.checkedAt()).isEqualTo(CHECKED_AT);
     }
 
+    @Test
+    void 사용자별_예약_읽기_프로젝션은_소유자로_제한하고_확정시각과_식별자_내림차순으로_정렬한다() {
+        ReservationFixtures fixtures = createFixtures();
+        Reservation firstReservation = reservationRepository.saveAndFlush(newReservation(
+            "R-20260802-001",
+            "qr-reference-001",
+            fixtures.region(),
+            saveConsumedHold(fixtures),
+            fixtures.contentSession(),
+            fixtures.user(),
+            ReservationStatus.CONFIRMED,
+            null,
+            null,
+            null
+        ));
+        Reservation secondReservation = reservationRepository.saveAndFlush(newReservation(
+            "R-20260802-002",
+            "qr-reference-002",
+            fixtures.region(),
+            saveConsumedHold(fixtures),
+            fixtures.contentSession(),
+            fixtures.user(),
+            ReservationStatus.CONFIRMED,
+            null,
+            null,
+            null
+        ));
+        AppUser anotherUser = saveUser("another-visitor@example.com");
+        ReservationFixtures anotherFixtures = new ReservationFixtures(
+            fixtures.region(),
+            fixtures.contentSession(),
+            anotherUser
+        );
+        reservationRepository.saveAndFlush(newReservation(
+            "R-20260802-003",
+            "qr-reference-003",
+            anotherFixtures.region(),
+            saveConsumedHold(anotherFixtures),
+            anotherFixtures.contentSession(),
+            anotherFixtures.user(),
+            ReservationStatus.CONFIRMED,
+            null,
+            null,
+            null
+        ));
+        entityManager.clear();
+
+        List<ReservationReadProjection> projections = reservationRepository.findReadProjectionsByUserId(
+            fixtures.user().getUserId()
+        );
+
+        assertThat(projections).extracting(ReservationReadProjection::reservationId)
+            .containsExactly(secondReservation.getReservationId(), firstReservation.getReservationId());
+    }
+
     private Reservation newReservation(
         String reservationNo,
         String qrReference,

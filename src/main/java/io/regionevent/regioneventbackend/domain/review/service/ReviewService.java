@@ -8,6 +8,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.review.entity.Review;
 import io.regionevent.regioneventbackend.domain.review.entity.ReviewStatus;
@@ -52,6 +54,11 @@ public class ReviewService {
             }
             throw exception;
         }
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void unlinkAuthorByUserId(Long userId) {
+        reviewRepository.unlinkAuthorByUserId(userId);
     }
 
     public Review findByIdForUpdate(Long reviewId) {

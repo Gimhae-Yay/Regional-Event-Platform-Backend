@@ -83,6 +83,15 @@ public interface CapacityHoldRepository extends JpaRepository<CapacityHold, Long
     List<Long> findActiveHoldIdsByContentId(@Param("contentId") Long contentId);
 
     @Query("""
+        SELECT capacityHold.holdId
+        FROM CapacityHold capacityHold
+        WHERE capacityHold.user.userId = :userId
+            AND capacityHold.status = io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus.ACTIVE
+        ORDER BY capacityHold.holdId ASC
+        """)
+    List<Long> findActiveHoldIdsByUserId(@Param("userId") Long userId);
+
+    @Query("""
         SELECT capacityHold.contentSession.sessionId
         FROM CapacityHold capacityHold
         WHERE capacityHold.holdId = :holdId
@@ -172,4 +181,8 @@ public interface CapacityHoldRepository extends JpaRepository<CapacityHold, Long
         @Param("holdId") Long holdId,
         @Param("invalidationReason") String invalidationReason
     );
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = "UPDATE capacity_hold SET user_id = NULL WHERE user_id = :userId", nativeQuery = true)
+    int unlinkUserByUserId(@Param("userId") Long userId);
 }
