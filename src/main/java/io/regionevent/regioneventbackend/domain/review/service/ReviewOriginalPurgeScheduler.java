@@ -44,11 +44,10 @@ public class ReviewOriginalPurgeScheduler {
         long startedAt = System.nanoTime();
 
         try {
-            ReviewOriginalPurgeResult result = reviewOriginalPurgeService.purgeDeletedReviewOriginals();
+            ReviewOriginalPurgeResult result = reviewOriginalPurgeService.purgeDeletedReviewOriginals(
+                this::recordCommittedBatchMetrics
+            );
             executionCounter.increment();
-            batchCounter.increment(result.batchCount());
-            purgedReviewCounter.increment(result.purgedReviewCount());
-            zeroUpdateCounter.increment(result.zeroUpdateCount());
             log.info(
                 "Deleted review original purge scheduler finished. batchCount={}, selectedReviewCount={}, "
                     + "purgedReviewCount={}, zeroUpdateCount={}, elapsedMillis={}",
@@ -65,5 +64,11 @@ public class ReviewOriginalPurgeScheduler {
         } finally {
             executionTimer.record(System.nanoTime() - startedAt, TimeUnit.NANOSECONDS);
         }
+    }
+
+    private void recordCommittedBatchMetrics(ReviewOriginalPurgeResult batchResult) {
+        batchCounter.increment(batchResult.batchCount());
+        purgedReviewCounter.increment(batchResult.purgedReviewCount());
+        zeroUpdateCounter.increment(batchResult.zeroUpdateCount());
     }
 }

@@ -15,6 +15,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -688,10 +689,10 @@ class VisitReviewControllerIntegrationTest {
 
         try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
             Future<ReviewOriginalPurgeResult> first = executorService.submit(
-                reviewOriginalPurgeService::purgeDeletedReviewOriginals
+                (Callable<ReviewOriginalPurgeResult>) reviewOriginalPurgeService::purgeDeletedReviewOriginals
             );
             Future<ReviewOriginalPurgeResult> second = executorService.submit(
-                reviewOriginalPurgeService::purgeDeletedReviewOriginals
+                (Callable<ReviewOriginalPurgeResult>) reviewOriginalPurgeService::purgeDeletedReviewOriginals
             );
 
             assertThat(first.get().purgedReviewCount() + second.get().purgedReviewCount()).isEqualTo(1);

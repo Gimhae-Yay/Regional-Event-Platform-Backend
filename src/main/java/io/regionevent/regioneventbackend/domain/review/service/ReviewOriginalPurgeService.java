@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.domain.review.service;
 
 import java.util.List;
+import java.util.function.Consumer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,6 +33,12 @@ public class ReviewOriginalPurgeService {
     }
 
     public ReviewOriginalPurgeResult purgeDeletedReviewOriginals() {
+        return purgeDeletedReviewOriginals(batchResult -> { });
+    }
+
+    ReviewOriginalPurgeResult purgeDeletedReviewOriginals(
+        Consumer<ReviewOriginalPurgeResult> committedBatchConsumer
+    ) {
         int batchCount = 0;
         int selectedReviewCount = 0;
         int purgedReviewCount = 0;
@@ -56,6 +63,12 @@ public class ReviewOriginalPurgeService {
                 batchResult.purgedReviewCount(),
                 batchResult.zeroUpdateCount()
             );
+            committedBatchConsumer.accept(new ReviewOriginalPurgeResult(
+                1,
+                batchResult.selectedReviewCount(),
+                batchResult.purgedReviewCount(),
+                batchResult.zeroUpdateCount()
+            ));
             if (batchResult.selectedReviewCount() < BATCH_SIZE) {
                 return new ReviewOriginalPurgeResult(
                     batchCount,

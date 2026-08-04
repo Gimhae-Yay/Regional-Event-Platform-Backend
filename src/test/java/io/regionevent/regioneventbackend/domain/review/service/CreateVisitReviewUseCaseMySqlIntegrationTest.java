@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -199,6 +200,33 @@ class CreateVisitReviewUseCaseMySqlIntegrationTest extends NonTransactionalMySql
         );
 
         assertThat(reviewOriginalPurgeService.purgeDeletedReviewOriginals().purgedReviewCount()).isOne();
+        Review purgedReview = reviewRepository.findById(review.getReviewId()).orElseThrow();
+        assertThat(purgedReview.getRating()).isNull();
+        assertThat(purgedReview.getReviewText()).isNull();
+    }
+
+    @Test
+    @Timeout(10)
+    void purgeDeletedReviewOriginals_whenConcurrent_purgesOriginalOnceUsingMySql() throws Exception {
+        Fixture fixture = createFixture();
+        Review review = savePublishedReview(fixture);
+        jdbcTemplate.update(
+            "UPDATE review SET status = 'DELETED', deleted_at = DATE_SUB(CURRENT_TIMESTAMP(6), INTERVAL 30 DAY) "
+                + "WHERE review_id = ?",
+            review.getReviewId()
+        );
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<ReviewOriginalPurgeResult> first = executorService.submit(
+                (Callable<ReviewOriginalPurgeResult>) reviewOriginalPurgeService::purgeDeletedReviewOriginals
+            );
+            Future<ReviewOriginalPurgeResult> second = executorService.submit(
+                (Callable<ReviewOriginalPurgeResult>) reviewOriginalPurgeService::purgeDeletedReviewOriginals
+            );
+
+            assertThat(first.get().purgedReviewCount() + second.get().purgedReviewCount()).isEqualTo(1);
+        }
+
         Review purgedReview = reviewRepository.findById(review.getReviewId()).orElseThrow();
         assertThat(purgedReview.getRating()).isNull();
         assertThat(purgedReview.getReviewText()).isNull();
