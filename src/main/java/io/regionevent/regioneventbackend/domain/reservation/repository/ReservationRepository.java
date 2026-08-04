@@ -126,6 +126,92 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     );
 
     @Query("""
+        SELECT new io.regionevent.regioneventbackend.domain.reservation.repository.ReservationReadProjection(
+            reservation.reservationId,
+            reservation.reservationNo,
+            reservation.status,
+            reservation.confirmedAt,
+            reservation.cancelledAt,
+            reservation.cancellationReason,
+            reservation.expiredAt,
+            reservation.region.regionId,
+            contentSession.sessionId,
+            contentSession.status,
+            contentSession.startsAt,
+            contentSession.endsAt,
+            contentSession.checkinOpenAt,
+            contentSession.checkinCloseAt,
+            contentSession.region.regionId,
+            content.contentId,
+            content.title,
+            content.region.regionId,
+            participant.userId,
+            participant.name,
+            participant.phone,
+            visit.visitId,
+            visit.reservation.reservationId,
+            visit.region.regionId,
+            visit.contentSession.sessionId,
+            visit.content.contentId,
+            visitParticipant.userId,
+            visit.checkedAt
+        )
+        FROM Reservation reservation
+        JOIN reservation.contentSession contentSession
+        JOIN contentSession.content content
+        LEFT JOIN reservation.user participant
+        LEFT JOIN Visit visit ON visit.reservation = reservation
+        LEFT JOIN visit.user visitParticipant
+        WHERE reservation.reservationId = :reservationId
+        ORDER BY visit.visitId ASC
+        """)
+    List<ReservationReadProjection> findReadProjectionsByReservationId(
+        @Param("reservationId") Long reservationId
+    );
+
+    @Query("""
+        SELECT new io.regionevent.regioneventbackend.domain.reservation.repository.ReservationReadProjection(
+            reservation.reservationId,
+            reservation.reservationNo,
+            reservation.status,
+            reservation.confirmedAt,
+            reservation.cancelledAt,
+            reservation.cancellationReason,
+            reservation.expiredAt,
+            reservation.region.regionId,
+            contentSession.sessionId,
+            contentSession.status,
+            contentSession.startsAt,
+            contentSession.endsAt,
+            contentSession.checkinOpenAt,
+            contentSession.checkinCloseAt,
+            contentSession.region.regionId,
+            content.contentId,
+            content.title,
+            content.region.regionId,
+            participant.userId,
+            participant.name,
+            participant.phone,
+            visit.visitId,
+            visit.reservation.reservationId,
+            visit.region.regionId,
+            visit.contentSession.sessionId,
+            visit.content.contentId,
+            visitParticipant.userId,
+            visit.checkedAt
+        )
+        FROM Reservation reservation
+        JOIN reservation.contentSession contentSession
+        JOIN contentSession.content content
+        JOIN reservation.user participant
+        LEFT JOIN Visit visit ON visit.reservation = reservation
+        LEFT JOIN visit.user visitParticipant
+        WHERE participant.userId = :userId
+        ORDER BY reservation.confirmedAt DESC, reservation.reservationId DESC, visit.visitId ASC
+        """)
+    List<ReservationReadProjection> findReadProjectionsByUserId(@Param("userId") Long userId);
+
+    @Query("""
         SELECT new io.regionevent.regioneventbackend.domain.reservation.repository.SessionReservationReadProjection(
             reservation.reservationId,
             reservation.reservationNo,
