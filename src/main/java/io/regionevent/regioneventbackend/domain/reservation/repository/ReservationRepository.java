@@ -63,7 +63,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
         FROM Reservation reservation
         WHERE reservation.reservationNo = :reservationNo
         """)
-    Optional<Reservation> findByReservationNoForOperatorLookup(
+    Optional<Reservation> findByReservationNoForAuthorizedLookup(
         @Param("reservationNo") String reservationNo
     );
 

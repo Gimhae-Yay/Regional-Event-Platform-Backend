@@ -18,7 +18,6 @@ import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
-import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
@@ -29,29 +28,29 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentId;
-import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService;
+import io.regionevent.regioneventbackend.domain.user.service.RegionAdminAuthorizationService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
-class SearchOperatorReservationByNumberUseCaseTest {
+class SearchRegionAdminReservationByNumberUseCaseTest {
 
-    private static final Long OPERATOR_USER_ID = 1L;
+    private static final Long REGION_ADMIN_USER_ID = 1L;
+    private static final Long REGION_ID = 100L;
     private static final Long RESERVATION_ID = 10L;
     private static final String RESERVATION_NO = "R20260804ABCDEFGHJKLM";
     private static final UUID REQUEST_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final Instant DATABASE_NOW = Instant.parse("2026-08-04T01:00:00Z");
 
     @Test
-    void search_체크인_시작_시각이면_canCheckIn을_true로_반환하고_감사를_기록한다() {
-        TestContext context = new TestContext(DATABASE_NOW, DATABASE_NOW.plusSeconds(3_600));
+    void search_지역_관리자가_정상_조회하면_마스킹된_결과와_감사를_기록한다() {
+        TestContext context = new TestContext();
 
-        OperatorReservationSearchResult result = context.useCase.search(
-            OPERATOR_USER_ID,
+        RegionAdminReservationSearchResult result = context.useCase.search(
+            REGION_ADMIN_USER_ID,
             RESERVATION_NO,
             REQUEST_ID
         );
 
-        assertThat(result.canCheckIn()).isTrue();
         assertThat(result.participant().name()).isEqualTo("김*수");
         assertThat(result.participant().phone()).isEqualTo("010-****-5678");
 
@@ -66,32 +65,24 @@ class SearchOperatorReservationByNumberUseCaseTest {
         assertThat(command.nextState()).isEqualTo(ReservationStatus.CONFIRMED.name());
         assertThat(command.result()).isEqualTo(AuditEventResult.SUCCESS);
         assertThat(command.reasonCode()).isEqualTo("QR_VERIFICATION_FAILED");
+        assertThat(command.actor().getRole()).isEqualTo(UserRole.REGION_ADMIN);
         assertThat(command.occurredAt()).isEqualTo(DATABASE_NOW);
+        verify(context.regionAdminAuthorizationService).authorize(REGION_ADMIN_USER_ID, REGION_ID);
     }
 
     @Test
-    void search_체크인_종료_시각이면_canCheckIn을_false로_반환한다() {
-        TestContext context = new TestContext(DATABASE_NOW.minusSeconds(3_600), DATABASE_NOW);
-
-        OperatorReservationSearchResult result = context.useCase.search(
-            OPERATOR_USER_ID,
-            RESERVATION_NO,
-            REQUEST_ID
-        );
-
-        assertThat(result.canCheckIn()).isFalse();
-    }
-
-    @Test
-    void search_소유_운영자_인가에_실패하면_감사를_기록하지_않는다() {
-        TestContext context = new TestContext(DATABASE_NOW, DATABASE_NOW.plusSeconds(3_600));
-        when(context.operatorAuthorizationService.authorizeOwnedContent(any(), any(), any()))
+    void search_지역_관리자_인가에_실패하면_감사를_기록하지_않는다() {
+        TestContext context = new TestContext();
+        when(context.regionAdminAuthorizationService.authorize(any(), any()))
             .thenThrow(new BusinessException(ErrorCode.FORBIDDEN));
 
-        assertThatThrownBy(() -> context.useCase.search(OPERATOR_USER_ID, RESERVATION_NO, REQUEST_ID))
-            .isInstanceOfSatisfying(BusinessException.class, exception ->
-                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN)
-            );
+        assertThatThrownBy(() -> context.useCase.search(
+            REGION_ADMIN_USER_ID,
+            RESERVATION_NO,
+            REQUEST_ID
+        )).isInstanceOfSatisfying(BusinessException.class, exception ->
+            assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN)
+        );
 
         verifyNoInteractions(context.recordAuditEventUseCase);
     }
@@ -100,24 +91,24 @@ class SearchOperatorReservationByNumberUseCaseTest {
 
         private final ReservationReadService reservationReadService = mock(ReservationReadService.class);
         private final ReservationService reservationService = mock(ReservationService.class);
-        private final OperatorAuthorizationService operatorAuthorizationService = mock(
-            OperatorAuthorizationService.class
+        private final RegionAdminAuthorizationService regionAdminAuthorizationService = mock(
+            RegionAdminAuthorizationService.class
         );
         private final ReservationParticipantMasker reservationParticipantMasker = mock(
             ReservationParticipantMasker.class
         );
         private final RecordAuditEventUseCase recordAuditEventUseCase = mock(RecordAuditEventUseCase.class);
         private final Region region = mock(Region.class);
-        private final SearchOperatorReservationByNumberUseCase useCase =
-            new SearchOperatorReservationByNumberUseCase(
+        private final SearchRegionAdminReservationByNumberUseCase useCase =
+            new SearchRegionAdminReservationByNumberUseCase(
                 reservationReadService,
                 reservationService,
-                operatorAuthorizationService,
+                regionAdminAuthorizationService,
                 reservationParticipantMasker,
                 recordAuditEventUseCase
             );
 
-        private TestContext(Instant checkinOpenAt, Instant checkinCloseAt) {
+        private TestContext() {
             ReservationReadSnapshot snapshot = new ReservationReadSnapshot(
                 new ReservationReadSnapshot.ReservationInfo(
                     RESERVATION_ID,
@@ -127,33 +118,33 @@ class SearchOperatorReservationByNumberUseCaseTest {
                     null,
                     null,
                     null,
-                    100L
+                    REGION_ID
                 ),
                 new ReservationReadSnapshot.SessionInfo(
                     20L,
                     ContentSessionStatus.SCHEDULED,
                     Instant.parse("2026-08-04T01:30:00Z"),
                     Instant.parse("2026-08-04T03:30:00Z"),
-                    checkinOpenAt,
-                    checkinCloseAt,
-                    100L
+                    Instant.parse("2026-08-04T00:30:00Z"),
+                    Instant.parse("2026-08-04T01:30:00Z"),
+                    REGION_ID
                 ),
-                new ReservationReadSnapshot.ContentInfo(30L, "김해 가야문화 체험", 100L),
+                new ReservationReadSnapshot.ContentInfo(30L, "김해 가야문화 체험", REGION_ID),
                 new ReservationReadSnapshot.ParticipantInfo(40L, "김민수", "01012345678")
             );
             ReservationReadResult readResult = new ReservationReadResult(
                 snapshot,
                 new ReservationReadIntegrityValidator.CheckInInfo(false, null)
             );
-            Reservation reservation = reservation(region);
 
+            Reservation reservation = reservation(region);
+            UserRoleAssignment roleAssignment = roleAssignment();
+
+            when(region.getRegionId()).thenReturn(REGION_ID);
             when(reservationReadService.findByReservationNo(RESERVATION_NO)).thenReturn(readResult);
             when(reservationService.findByReservationNoForAuthorizedLookup(RESERVATION_NO)).thenReturn(reservation);
             when(reservationService.findCurrentDatabaseInstant()).thenReturn(DATABASE_NOW);
-            OperatorAuthorizationService.AuthorizedOperator authorizedOperator = authorizedOperator(region);
-            when(operatorAuthorizationService.authorizeOwnedContent(any(), any(), any())).thenReturn(
-                authorizedOperator
-            );
+            when(regionAdminAuthorizationService.authorize(REGION_ADMIN_USER_ID, REGION_ID)).thenReturn(roleAssignment);
             when(reservationParticipantMasker.mask(snapshot.participant())).thenReturn(
                 new ReservationParticipantMasker.MaskedParticipant("김*수", "010-****-5678")
             );
@@ -162,30 +153,25 @@ class SearchOperatorReservationByNumberUseCaseTest {
         private Reservation reservation(Region region) {
             Reservation reservation = mock(Reservation.class);
             ContentSession session = mock(ContentSession.class);
-            Content content = mock(Content.class);
-            AppUser contentOperator = mock(AppUser.class);
 
             when(reservation.getReservationId()).thenReturn(RESERVATION_ID);
             when(reservation.getStatus()).thenReturn(ReservationStatus.CONFIRMED);
             when(reservation.getRegion()).thenReturn(region);
             when(reservation.getContentSession()).thenReturn(session);
-            when(session.getContent()).thenReturn(content);
-            when(content.getOperator()).thenReturn(contentOperator);
-            when(content.getRegion()).thenReturn(region);
             return reservation;
         }
 
-        private OperatorAuthorizationService.AuthorizedOperator authorizedOperator(Region region) {
-            AppUser operator = mock(AppUser.class);
+        private UserRoleAssignment roleAssignment() {
+            AppUser regionAdmin = mock(AppUser.class);
             UserRoleAssignment roleAssignment = mock(UserRoleAssignment.class);
 
-            when(operator.getUserId()).thenReturn(OPERATOR_USER_ID);
-            when(operator.getStatus()).thenReturn(AppUserStatus.ACTIVE);
-            when(roleAssignment.getId()).thenReturn(new UserRoleAssignmentId(OPERATOR_USER_ID, UserRole.OPERATOR));
-            when(roleAssignment.getAppUser()).thenReturn(operator);
-            when(roleAssignment.getRole()).thenReturn(UserRole.OPERATOR);
-            when(region.getRegionId()).thenReturn(100L);
-            return new OperatorAuthorizationService.AuthorizedOperator(operator, region, roleAssignment);
+            when(regionAdmin.getStatus()).thenReturn(AppUserStatus.ACTIVE);
+            when(roleAssignment.getId()).thenReturn(
+                new UserRoleAssignmentId(REGION_ADMIN_USER_ID, UserRole.REGION_ADMIN)
+            );
+            when(roleAssignment.getAppUser()).thenReturn(regionAdmin);
+            when(roleAssignment.getRole()).thenReturn(UserRole.REGION_ADMIN);
+            return roleAssignment;
         }
     }
 }
