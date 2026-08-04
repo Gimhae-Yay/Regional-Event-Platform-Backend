@@ -24,7 +24,7 @@ public class GetMyContentsUseCase {
     }
 
     @Transactional(readOnly = true)
-    public MyContentListResult get(Long authenticatedUserId) {
+    public MyContentListResult findMyContents(Long authenticatedUserId) {
         AuthorizedOperator operator = operatorAuthorizationService.requireAuthorizedOperator(authenticatedUserId);
         List<MyContentListResult.Content> contents = contentService.findMyContents(
             operator.user().getUserId(),

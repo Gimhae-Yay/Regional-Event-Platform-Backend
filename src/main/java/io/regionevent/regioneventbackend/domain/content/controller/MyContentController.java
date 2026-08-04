@@ -30,7 +30,7 @@ public class MyContentController {
         Authentication authentication
     ) {
         GetMyContentsResponse response = GetMyContentsResponse.from(
-            getMyContentsUseCase.get(toAuthenticatedUserId(authentication))
+            getMyContentsUseCase.findMyContents(toAuthenticatedUserId(authentication))
         );
         return ApiResponse
             .success(HttpStatus.OK, GET_MY_CONTENTS_SUCCESS_MESSAGE, response)
