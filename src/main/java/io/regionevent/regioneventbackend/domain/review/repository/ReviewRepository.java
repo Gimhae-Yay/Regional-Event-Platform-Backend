@@ -1,11 +1,14 @@
 package io.regionevent.regioneventbackend.domain.review.repository;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import io.regionevent.regioneventbackend.domain.review.entity.Review;
+import io.regionevent.regioneventbackend.domain.review.entity.ReviewStatus;
 
 public interface ReviewRepository extends JpaRepository<Review, Long> {
 
@@ -32,5 +35,11 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
         @Param("userId") Long userId,
         @Param("rating") Integer rating,
         @Param("reviewText") String reviewText
+    );
+
+    Page<Review> findByContentContentIdAndStatusOrderByCreatedAtDescReviewIdDesc(
+        Long contentId,
+        ReviewStatus status,
+        Pageable pageable
     );
 }

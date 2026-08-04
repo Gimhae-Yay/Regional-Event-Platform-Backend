@@ -5,6 +5,8 @@ import java.util.Locale;
 import org.hibernate.exception.ConstraintViolationException;
 
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import io.regionevent.regioneventbackend.domain.review.entity.Review;
@@ -80,6 +82,14 @@ public class ReviewService {
         return reviewRepository.findById(reviewId)
             .map(Review::getRegion)
             .orElse(null);
+    }
+
+    public Page<Review> findPublishedByContentId(Long contentId, Pageable pageable) {
+        return reviewRepository.findByContentContentIdAndStatusOrderByCreatedAtDescReviewIdDesc(
+            contentId,
+            ReviewStatus.PUBLISHED,
+            pageable
+        );
     }
 
     private boolean isReviewVisitUniqueConstraintViolation(DataIntegrityViolationException exception) {
