@@ -11,6 +11,7 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionSta
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
+import io.regionevent.regioneventbackend.domain.content.repository.MyContentProjection;
 import io.regionevent.regioneventbackend.domain.content.repository.PublicContentProjection;
 import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
@@ -170,6 +171,12 @@ public class ContentService {
             ContentStatus.PUBLISHED,
             ContentSessionStatus.SCHEDULED
         );
+    }
+
+    public List<MyContentProjection> findMyContents(Long operatorUserId, Long regionId) {
+        validateRequiredId(operatorUserId);
+        validateRequiredId(regionId);
+        return contentRepository.findMyContents(operatorUserId, regionId);
     }
 
     public Content findApprovalTargetForUpdate(Long contentId) {
