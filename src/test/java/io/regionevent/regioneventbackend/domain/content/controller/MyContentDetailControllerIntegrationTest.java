@@ -332,7 +332,7 @@ class MyContentDetailControllerIntegrationTest {
     }
 
     @Test
-    void 비버전_경로는_지원하지_않는다() throws Exception {
+    void 비버전_경로도_지원한다() throws Exception {
         Region region = saveRegion("UNVERSIONED");
         AppUser operator = saveOperator("unversioned-owner", region, AppUserStatus.ACTIVE);
         ContentFixture fixture = saveContentFixture(operator, region, ContentStatus.PENDING, true);
