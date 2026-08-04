@@ -42,6 +42,10 @@ import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationSt
 import io.regionevent.regioneventbackend.domain.reservation.repository.CapacityHoldRepository;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationRepository;
 import io.regionevent.regioneventbackend.domain.review.dto.CreateVisitReviewRequest;
+import io.regionevent.regioneventbackend.domain.review.dto.UpdateReviewRequest;
+import io.regionevent.regioneventbackend.domain.review.entity.Review;
+import io.regionevent.regioneventbackend.domain.review.entity.ReviewStatus;
+import io.regionevent.regioneventbackend.domain.review.repository.ReviewRepository;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
@@ -61,6 +65,8 @@ import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 class CreateVisitReviewUseCaseMySqlIntegrationTest extends NonTransactionalMySqlTestSupport {
 
     private final CreateVisitReviewUseCase createVisitReviewUseCase;
+    private final UpdateReviewUseCase updateReviewUseCase;
+    private final ReviewRepository reviewRepository;
     private final AppUserRepository appUserRepository;
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
     private final RegionRepository regionRepository;
@@ -76,6 +82,8 @@ class CreateVisitReviewUseCaseMySqlIntegrationTest extends NonTransactionalMySql
     @Autowired
     CreateVisitReviewUseCaseMySqlIntegrationTest(
         CreateVisitReviewUseCase createVisitReviewUseCase,
+        UpdateReviewUseCase updateReviewUseCase,
+        ReviewRepository reviewRepository,
         AppUserRepository appUserRepository,
         UserRoleAssignmentRepository userRoleAssignmentRepository,
         RegionRepository regionRepository,
@@ -89,6 +97,8 @@ class CreateVisitReviewUseCaseMySqlIntegrationTest extends NonTransactionalMySql
         PlatformTransactionManager transactionManager
     ) {
         this.createVisitReviewUseCase = createVisitReviewUseCase;
+        this.updateReviewUseCase = updateReviewUseCase;
+        this.reviewRepository = reviewRepository;
         this.appUserRepository = appUserRepository;
         this.userRoleAssignmentRepository = userRoleAssignmentRepository;
         this.regionRepository = regionRepository;
@@ -160,6 +170,85 @@ class CreateVisitReviewUseCaseMySqlIntegrationTest extends NonTransactionalMySql
         assertThat(countReviewFailureAudits()).isEqualTo(failureAuditCountBefore + 1);
     }
 
+    @Test
+    void update_withinThirtyDays_updatesReviewUsingMySqlCurrentTime() {
+        Fixture fixture = createFixture();
+        Review review = reviewRepository.saveAndFlush(new Review(
+            fixture.visit().getRegion(),
+            fixture.visit(),
+            fixture.user(),
+            fixture.visit().getContent(),
+            5,
+            "수정 전 후기",
+            ReviewStatus.PUBLISHED,
+            null
+        ));
+        UpdateReviewRequest request = new UpdateReviewRequest();
+        request.setRating(4);
+
+        updateReviewUseCase.update(fixture.user().getUserId(), review.getReviewId(), request, UUID.randomUUID());
+
+        assertThat(reviewRepository.findById(review.getReviewId()).orElseThrow().getRating()).isEqualTo(4);
+    }
+
+    @Test
+    @Timeout(10)
+    void update_whenWithdrawalCommitsFirst_returnsForbiddenWithoutMutation() throws Exception {
+        Fixture fixture = createFixture();
+        Review review = createPublishedReview(fixture);
+        CountDownLatch withdrawalReady = new CountDownLatch(1);
+        CountDownLatch releaseWithdrawal = new CountDownLatch(1);
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<?> withdrawal = executorService.submit(() -> transactionTemplate.executeWithoutResult(status -> {
+                appUserRepository.findByIdForUpdate(fixture.user().getUserId()).orElseThrow();
+                jdbcTemplate.update("UPDATE app_user SET status = 'WITHDRAWING' WHERE user_id = ?", fixture.user().getUserId());
+                withdrawalReady.countDown();
+                await(releaseWithdrawal);
+            }));
+            assertThat(withdrawalReady.await(3, TimeUnit.SECONDS)).isTrue();
+
+            Future<ErrorCode> update = executorService.submit(() -> updateReview(fixture, review.getReviewId()));
+            assertThat(update.isDone()).isFalse();
+
+            releaseWithdrawal.countDown();
+            withdrawal.get(3, TimeUnit.SECONDS);
+            assertThat(update.get(3, TimeUnit.SECONDS)).isEqualTo(ErrorCode.FORBIDDEN);
+        }
+
+        assertThat(reviewRepository.findById(review.getReviewId()).orElseThrow().getRating()).isEqualTo(5);
+    }
+
+    @Test
+    @Timeout(10)
+    void update_whenDeletionCommitsFirst_returnsNotFoundWithoutMutation() throws Exception {
+        Fixture fixture = createFixture();
+        Review review = createPublishedReview(fixture);
+        CountDownLatch deletionReady = new CountDownLatch(1);
+        CountDownLatch releaseDeletion = new CountDownLatch(1);
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<?> deletion = executorService.submit(() -> transactionTemplate.executeWithoutResult(status -> {
+                jdbcTemplate.update(
+                    "UPDATE review SET status = 'DELETED', deleted_at = CURRENT_TIMESTAMP(6) WHERE review_id = ?",
+                    review.getReviewId()
+                );
+                deletionReady.countDown();
+                await(releaseDeletion);
+            }));
+            assertThat(deletionReady.await(3, TimeUnit.SECONDS)).isTrue();
+
+            Future<ErrorCode> update = executorService.submit(() -> updateReview(fixture, review.getReviewId()));
+            assertThat(update.isDone()).isFalse();
+
+            releaseDeletion.countDown();
+            deletion.get(3, TimeUnit.SECONDS);
+            assertThat(update.get(3, TimeUnit.SECONDS)).isEqualTo(ErrorCode.NOT_FOUND);
+        }
+
+        assertThat(reviewRepository.findById(review.getReviewId()).orElseThrow().getRating()).isEqualTo(5);
+    }
+
     private ErrorCode createReview(Fixture fixture, CountDownLatch startSignal) {
         await(startSignal);
         try {
@@ -173,6 +262,30 @@ class CreateVisitReviewUseCaseMySqlIntegrationTest extends NonTransactionalMySql
         } catch (BusinessException exception) {
             return exception.getErrorCode();
         }
+    }
+
+    private ErrorCode updateReview(Fixture fixture, Long reviewId) {
+        UpdateReviewRequest request = new UpdateReviewRequest();
+        request.setRating(4);
+        try {
+            updateReviewUseCase.update(fixture.user().getUserId(), reviewId, request, UUID.randomUUID());
+            return null;
+        } catch (BusinessException exception) {
+            return exception.getErrorCode();
+        }
+    }
+
+    private Review createPublishedReview(Fixture fixture) {
+        return reviewRepository.saveAndFlush(new Review(
+            fixture.visit().getRegion(),
+            fixture.visit(),
+            fixture.user(),
+            fixture.visit().getContent(),
+            5,
+            "수정 전 후기",
+            ReviewStatus.PUBLISHED,
+            null
+        ));
     }
 
     private Fixture createFixture() {
