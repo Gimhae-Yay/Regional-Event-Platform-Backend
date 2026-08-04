@@ -11,52 +11,48 @@ import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetTyp
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventActor;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
-import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
-import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
-import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService;
+import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
+import io.regionevent.regioneventbackend.domain.user.service.RegionAdminAuthorizationService;
 
 @Service
-public class SearchOperatorReservationByNumberUseCase {
+public class SearchRegionAdminReservationByNumberUseCase {
 
     private static final String QR_VERIFICATION_FAILED = "QR_VERIFICATION_FAILED";
 
     private final ReservationReadService reservationReadService;
     private final ReservationService reservationService;
-    private final OperatorAuthorizationService operatorAuthorizationService;
+    private final RegionAdminAuthorizationService regionAdminAuthorizationService;
     private final ReservationParticipantMasker reservationParticipantMasker;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
 
-    public SearchOperatorReservationByNumberUseCase(
+    public SearchRegionAdminReservationByNumberUseCase(
         ReservationReadService reservationReadService,
         ReservationService reservationService,
-        OperatorAuthorizationService operatorAuthorizationService,
+        RegionAdminAuthorizationService regionAdminAuthorizationService,
         ReservationParticipantMasker reservationParticipantMasker,
         RecordAuditEventUseCase recordAuditEventUseCase
     ) {
         this.reservationReadService = reservationReadService;
         this.reservationService = reservationService;
-        this.operatorAuthorizationService = operatorAuthorizationService;
+        this.regionAdminAuthorizationService = regionAdminAuthorizationService;
         this.reservationParticipantMasker = reservationParticipantMasker;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
     }
 
     @Transactional
-    public OperatorReservationSearchResult search(
+    public RegionAdminReservationSearchResult search(
         Long userId,
         String reservationNo,
         UUID requestId
     ) {
         ReservationReadResult readResult = reservationReadService.findByReservationNo(reservationNo);
         Reservation reservation = reservationService.findByReservationNoForAuthorizedLookup(reservationNo);
-        OperatorAuthorizationService.AuthorizedOperator authorizedOperator = operatorAuthorizationService
-            .authorizeOwnedContent(
-                userId,
-                reservation.getContentSession().getContent().getOperator(),
-                reservation.getContentSession().getContent().getRegion()
-            );
+        UserRoleAssignment roleAssignment = regionAdminAuthorizationService.authorize(
+            userId,
+            reservation.getRegion().getRegionId()
+        );
         Instant databaseNow = reservationService.findCurrentDatabaseInstant();
-        boolean canCheckIn = canCheckIn(readResult.snapshot(), databaseNow);
 
         recordAuditEventUseCase.record(new AuditEventCommand(
             requestId,
@@ -67,28 +63,17 @@ public class SearchOperatorReservationByNumberUseCase {
             reservation.getStatus().name(),
             AuditEventResult.SUCCESS,
             QR_VERIFICATION_FAILED,
-            new AuditEventActor(authorizedOperator.roleAssignment()),
+            new AuditEventActor(roleAssignment),
             databaseNow
         ));
 
         ReservationReadSnapshot snapshot = readResult.snapshot();
-        return new OperatorReservationSearchResult(
+        return new RegionAdminReservationSearchResult(
             snapshot.reservation(),
             snapshot.session(),
             snapshot.content(),
             reservationParticipantMasker.mask(snapshot.participant()),
-            readResult.checkIn(),
-            canCheckIn
+            readResult.checkIn()
         );
-    }
-
-    private boolean canCheckIn(
-        ReservationReadSnapshot snapshot,
-        Instant databaseNow
-    ) {
-        return snapshot.reservation().status() == ReservationStatus.CONFIRMED
-            && snapshot.session().status() == ContentSessionStatus.SCHEDULED
-            && !databaseNow.isBefore(snapshot.session().checkinOpenAt())
-            && databaseNow.isBefore(snapshot.session().checkinCloseAt());
     }
 }
