@@ -8,7 +8,9 @@ import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import io.regionevent.regioneventbackend.domain.operator.entity.OperatorApplication;
 import io.regionevent.regioneventbackend.domain.operator.entity.OperatorApplicationStatus;
@@ -70,4 +72,15 @@ public interface OperatorApplicationRepository extends JpaRepository<OperatorApp
         Long operatorApplicationId,
         Long regionId
     );
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+        UPDATE operator_application
+        SET status = CASE WHEN status = 'PENDING' THEN 'CANCELLED' ELSE status END,
+            applicant_user_id = NULL,
+            business_information = NULL,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE applicant_user_id = :userId
+        """, nativeQuery = true)
+    int cancelAndUnlinkByApplicantUserId(@Param("userId") Long userId);
 }

@@ -112,6 +112,92 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     );
 
     @Query("""
+        SELECT new io.regionevent.regioneventbackend.domain.reservation.repository.ReservationReadProjection(
+            reservation.reservationId,
+            reservation.reservationNo,
+            reservation.status,
+            reservation.confirmedAt,
+            reservation.cancelledAt,
+            reservation.cancellationReason,
+            reservation.expiredAt,
+            reservation.region.regionId,
+            contentSession.sessionId,
+            contentSession.status,
+            contentSession.startsAt,
+            contentSession.endsAt,
+            contentSession.checkinOpenAt,
+            contentSession.checkinCloseAt,
+            contentSession.region.regionId,
+            content.contentId,
+            content.title,
+            content.region.regionId,
+            participant.userId,
+            participant.name,
+            participant.phone,
+            visit.visitId,
+            visit.reservation.reservationId,
+            visit.region.regionId,
+            visit.contentSession.sessionId,
+            visit.content.contentId,
+            visitParticipant.userId,
+            visit.checkedAt
+        )
+        FROM Reservation reservation
+        JOIN reservation.contentSession contentSession
+        JOIN contentSession.content content
+        LEFT JOIN reservation.user participant
+        LEFT JOIN Visit visit ON visit.reservation = reservation
+        LEFT JOIN visit.user visitParticipant
+        WHERE reservation.reservationId = :reservationId
+        ORDER BY visit.visitId ASC
+        """)
+    List<ReservationReadProjection> findReadProjectionsByReservationId(
+        @Param("reservationId") Long reservationId
+    );
+
+    @Query("""
+        SELECT new io.regionevent.regioneventbackend.domain.reservation.repository.ReservationReadProjection(
+            reservation.reservationId,
+            reservation.reservationNo,
+            reservation.status,
+            reservation.confirmedAt,
+            reservation.cancelledAt,
+            reservation.cancellationReason,
+            reservation.expiredAt,
+            reservation.region.regionId,
+            contentSession.sessionId,
+            contentSession.status,
+            contentSession.startsAt,
+            contentSession.endsAt,
+            contentSession.checkinOpenAt,
+            contentSession.checkinCloseAt,
+            contentSession.region.regionId,
+            content.contentId,
+            content.title,
+            content.region.regionId,
+            participant.userId,
+            participant.name,
+            participant.phone,
+            visit.visitId,
+            visit.reservation.reservationId,
+            visit.region.regionId,
+            visit.contentSession.sessionId,
+            visit.content.contentId,
+            visitParticipant.userId,
+            visit.checkedAt
+        )
+        FROM Reservation reservation
+        JOIN reservation.contentSession contentSession
+        JOIN contentSession.content content
+        JOIN reservation.user participant
+        LEFT JOIN Visit visit ON visit.reservation = reservation
+        LEFT JOIN visit.user visitParticipant
+        WHERE participant.userId = :userId
+        ORDER BY reservation.confirmedAt DESC, reservation.reservationId DESC, visit.visitId ASC
+        """)
+    List<ReservationReadProjection> findReadProjectionsByUserId(@Param("userId") Long userId);
+
+    @Query("""
         SELECT new io.regionevent.regioneventbackend.domain.reservation.repository.SessionReservationReadProjection(
             reservation.reservationId,
             reservation.reservationNo,
@@ -289,6 +375,38 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
         UPDATE reservation
+        JOIN capacity_hold ON capacity_hold.hold_id = reservation.hold_id
+        JOIN content_session ON content_session.session_id = reservation.session_id
+            AND content_session.region_id = reservation.region_id
+        SET reservation.status = 'CANCELLED',
+            reservation.cancelled_at = CURRENT_TIMESTAMP,
+            reservation.cancellation_reason = 'USER_WITHDRAWAL',
+            reservation.capacity_released_at = CASE
+                WHEN content_session.starts_at > CURRENT_TIMESTAMP THEN CURRENT_TIMESTAMP
+                ELSE NULL
+            END,
+            reservation.updated_at = CURRENT_TIMESTAMP,
+            reservation.user_id = NULL,
+            content_session.remaining_capacity = content_session.remaining_capacity + CASE
+                WHEN content_session.starts_at > CURRENT_TIMESTAMP THEN capacity_hold.quantity
+                ELSE 0
+            END,
+            content_session.version_no = content_session.version_no + CASE
+                WHEN content_session.starts_at > CURRENT_TIMESTAMP THEN 1
+                ELSE 0
+            END,
+            content_session.updated_at = CASE
+                WHEN content_session.starts_at > CURRENT_TIMESTAMP THEN CURRENT_TIMESTAMP
+                ELSE content_session.updated_at
+            END
+        WHERE reservation.reservation_id = :reservationId
+            AND reservation.status = 'CONFIRMED'
+        """, nativeQuery = true)
+    int cancelForWithdrawal(@Param("reservationId") Long reservationId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+        UPDATE reservation
         SET status = 'CHECKED_IN',
             updated_at = CURRENT_TIMESTAMP
         WHERE reservation_id = :reservationId
@@ -307,6 +425,15 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
         @Param("sessionId") Long sessionId,
         @Param("confirmedStatus") ReservationStatus confirmedStatus
     );
+
+    @Query("""
+        SELECT reservation.reservationId
+        FROM Reservation reservation
+        WHERE reservation.user.userId = :userId
+            AND reservation.status = io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus.CONFIRMED
+        ORDER BY reservation.reservationId ASC
+        """)
+    List<Long> findConfirmedReservationIdsByUserId(@Param("userId") Long userId);
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
@@ -328,4 +455,8 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
         Long reservationId,
         ReservationStatus status
     );
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = "UPDATE reservation SET user_id = NULL WHERE user_id = :userId", nativeQuery = true)
+    int unlinkUserByUserId(@Param("userId") Long userId);
 }

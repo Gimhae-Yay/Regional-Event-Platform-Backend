@@ -27,6 +27,7 @@ import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
 import io.regionevent.regioneventbackend.domain.user.service.UserRoleAssignmentService;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 @Service
@@ -79,7 +80,8 @@ public class ReservationConfirmationUseCase {
     ) {
         Long holdId = toPositiveHoldId(holdIdValue);
         String validatedIdempotencyKey = validateIdempotencyKey(idempotencyKey);
-        AppUser user = appUserService.findActiveUser(userId);
+        AppUser user = appUserService.findActiveUserForUpdate(userId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
         AuditEventActor actor = new AuditEventActor(userRoleAssignmentService.findActiveVisitor(userId));
         CapacityHold capacityHold = capacityHoldService.findOwnedHold(holdId, user);
         IdempotencyAcquireResult acquireResult = idempotencyService.acquire(new IdempotencyCommand(

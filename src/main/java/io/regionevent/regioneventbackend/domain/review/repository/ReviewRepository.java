@@ -23,6 +23,15 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
     Optional<Review> findByReviewIdForUpdate(Long reviewId);
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+        UPDATE review
+        SET user_id = NULL,
+            author_unlinked_at = CURRENT_TIMESTAMP
+        WHERE user_id = :userId
+        """, nativeQuery = true)
+    int unlinkAuthorByUserId(@Param("userId") Long userId);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("""
         UPDATE Review review
         SET review.rating = COALESCE(:rating, review.rating),
