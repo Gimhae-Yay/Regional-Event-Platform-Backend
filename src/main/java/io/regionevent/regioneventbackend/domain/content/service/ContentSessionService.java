@@ -25,6 +25,11 @@ public class ContentSessionService {
         ContentSessionStatus.COMPLETED,
         ContentSessionStatus.CANCELLED
     );
+    private static final List<ContentSessionStatus> OPERATOR_RESERVATION_LIST_STATUSES = List.of(
+        ContentSessionStatus.SCHEDULED,
+        ContentSessionStatus.COMPLETED,
+        ContentSessionStatus.CANCELLED
+    );
 
     private final ContentSessionRepository contentSessionRepository;
 
@@ -37,6 +42,21 @@ public class ContentSessionService {
             sessionId,
             ContentStatus.PUBLISHED
         ).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    @Transactional(readOnly = true)
+    public ContentSession findOperatorReservationListTarget(
+        Long sessionId,
+        Long contentId,
+        Long regionId
+    ) {
+        return contentSessionRepository.findOperatorReservationListTarget(
+            sessionId,
+            contentId,
+            regionId,
+            OPERATOR_RESERVATION_LIST_STATUSES
+        )
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
     @Transactional(readOnly = true)

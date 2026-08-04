@@ -43,6 +43,22 @@ public interface ContentSessionRepository extends JpaRepository<ContentSession, 
         ContentStatus contentStatus
     );
 
+    @EntityGraph(attributePaths = {"content", "region"})
+    @Query("""
+        SELECT contentSession
+        FROM ContentSession contentSession
+        WHERE contentSession.sessionId = :sessionId
+            AND contentSession.content.contentId = :contentId
+            AND contentSession.region.regionId = :regionId
+            AND contentSession.status IN :reservationListStatuses
+        """)
+    Optional<ContentSession> findOperatorReservationListTarget(
+        @Param("sessionId") Long sessionId,
+        @Param("contentId") Long contentId,
+        @Param("regionId") Long regionId,
+        @Param("reservationListStatuses") List<ContentSessionStatus> reservationListStatuses
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT contentSession

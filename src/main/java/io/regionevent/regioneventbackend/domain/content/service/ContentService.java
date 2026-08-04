@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
@@ -143,6 +144,13 @@ public class ContentService {
     public Content findMyContentDetail(Long contentId) {
         validateRequiredId(contentId);
         return contentRepository.findDetailByContentIdAndDeletedAtIsNull(contentId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    @Transactional(readOnly = true)
+    public Content findOperatorReservationListTarget(Long contentId) {
+        validateRequiredId(contentId);
+        return contentRepository.findOperatorReservationListTarget(contentId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
