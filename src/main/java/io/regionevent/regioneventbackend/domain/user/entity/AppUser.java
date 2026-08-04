@@ -113,6 +113,13 @@ public class AppUser {
         return updatedAt;
     }
 
+    public void startWithdrawal() {
+        if (status != AppUserStatus.ACTIVE) {
+            throw new IllegalStateException("only active user can start withdrawal");
+        }
+        status = AppUserStatus.WITHDRAWING;
+    }
+
     private static String validateRequiredText(String value, String fieldName) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(fieldName + " must not be null or blank");
