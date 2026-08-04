@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.review.repository;
 
+import java.util.List;
 import java.util.Optional;
 
 import jakarta.persistence.LockModeType;
@@ -45,6 +46,28 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
         @Param("rating") Integer rating,
         @Param("reviewText") String reviewText
     );
+
+    @Query("""
+        SELECT review.reviewId
+        FROM Review review
+        WHERE review.status = io.regionevent.regioneventbackend.domain.review.entity.ReviewStatus.DELETED
+          AND review.deletedAt <= timestampadd(day, -30, CURRENT_TIMESTAMP)
+          AND (review.rating IS NOT NULL OR review.reviewText IS NOT NULL)
+        ORDER BY review.reviewId
+        """)
+    List<Long> findDeletedReviewIdsWithOriginal(Pageable pageable);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+        UPDATE Review review
+        SET review.rating = NULL,
+            review.reviewText = NULL
+        WHERE review.reviewId = :reviewId
+          AND review.status = io.regionevent.regioneventbackend.domain.review.entity.ReviewStatus.DELETED
+          AND review.deletedAt <= timestampadd(day, -30, CURRENT_TIMESTAMP)
+          AND (review.rating IS NOT NULL OR review.reviewText IS NOT NULL)
+        """)
+    int purgeDeletedReviewOriginalIfEligible(@Param("reviewId") Long reviewId);
 
     Page<Review> findByContentContentIdAndStatusOrderByCreatedAtDescReviewIdDesc(
         Long contentId,

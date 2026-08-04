@@ -66,6 +66,7 @@ class CreateVisitReviewUseCaseMySqlIntegrationTest extends NonTransactionalMySql
 
     private final CreateVisitReviewUseCase createVisitReviewUseCase;
     private final DeleteReviewUseCase deleteReviewUseCase;
+    private final ReviewOriginalPurgeService reviewOriginalPurgeService;
     private final UpdateReviewUseCase updateReviewUseCase;
     private final AppUserRepository appUserRepository;
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
@@ -84,6 +85,7 @@ class CreateVisitReviewUseCaseMySqlIntegrationTest extends NonTransactionalMySql
     CreateVisitReviewUseCaseMySqlIntegrationTest(
         CreateVisitReviewUseCase createVisitReviewUseCase,
         DeleteReviewUseCase deleteReviewUseCase,
+        ReviewOriginalPurgeService reviewOriginalPurgeService,
         UpdateReviewUseCase updateReviewUseCase,
         AppUserRepository appUserRepository,
         UserRoleAssignmentRepository userRoleAssignmentRepository,
@@ -100,6 +102,7 @@ class CreateVisitReviewUseCaseMySqlIntegrationTest extends NonTransactionalMySql
     ) {
         this.createVisitReviewUseCase = createVisitReviewUseCase;
         this.deleteReviewUseCase = deleteReviewUseCase;
+        this.reviewOriginalPurgeService = reviewOriginalPurgeService;
         this.updateReviewUseCase = updateReviewUseCase;
         this.appUserRepository = appUserRepository;
         this.userRoleAssignmentRepository = userRoleAssignmentRepository;
@@ -183,6 +186,22 @@ class CreateVisitReviewUseCaseMySqlIntegrationTest extends NonTransactionalMySql
         updateReviewUseCase.update(fixture.user().getUserId(), review.getReviewId(), request, UUID.randomUUID());
 
         assertThat(reviewRepository.findById(review.getReviewId()).orElseThrow().getRating()).isEqualTo(4);
+    }
+
+    @Test
+    void purgeDeletedReviewOriginals_whenThirtyDaysPassed_purgesUsingMySqlCurrentTime() {
+        Fixture fixture = createFixture();
+        Review review = savePublishedReview(fixture);
+        jdbcTemplate.update(
+            "UPDATE review SET status = 'DELETED', deleted_at = DATE_SUB(CURRENT_TIMESTAMP(6), INTERVAL 30 DAY) "
+                + "WHERE review_id = ?",
+            review.getReviewId()
+        );
+
+        assertThat(reviewOriginalPurgeService.purgeDeletedReviewOriginals().purgedReviewCount()).isOne();
+        Review purgedReview = reviewRepository.findById(review.getReviewId()).orElseThrow();
+        assertThat(purgedReview.getRating()).isNull();
+        assertThat(purgedReview.getReviewText()).isNull();
     }
 
     @Test
