@@ -13,9 +13,12 @@ import java.util.List;
 import jakarta.persistence.EntityManager;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.web.servlet.MockMvc;
@@ -45,6 +48,7 @@ import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenSe
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
+@ExtendWith(OutputCaptureExtension.class)
 class SessionRevisionReviewControllerIntegrationTest {
 
     private static final Instant SUBMITTED_AT = Instant.parse("2026-08-01T00:00:00Z");
@@ -84,7 +88,9 @@ class SessionRevisionReviewControllerIntegrationTest {
     private EntityManager entityManager;
 
     @Test
-    void 담당_지역의_심사_대기_회차_수정_요청을_고정_정렬하고_데이터를_변경하지_않는다() throws Exception {
+    void 담당_지역의_심사_대기_회차_수정_요청을_고정_정렬하고_데이터를_변경하지_않는다(
+        CapturedOutput output
+    ) throws Exception {
         Region region = saveRegion("LIST");
         Region otherRegion = saveRegion("OTHER");
         AppUser regionAdmin = saveRegionAdmin("list-admin@example.com", region, AppUserStatus.ACTIVE);
@@ -149,6 +155,33 @@ class SessionRevisionReviewControllerIntegrationTest {
                 .value(not(hasItem(deleted.revisionId().toString()))));
 
         assertDatabaseUnchanged(before, firstTie);
+        assertThat(output).contains(
+            "Pending session revisions queried.",
+            "regionId=" + region.getRegionId(),
+            "resultCount=3",
+            "resultCode=SUCCESS"
+        );
+    }
+
+    @Test
+    void 대상_회차가_종결되어도_심사_대기_수정_요청을_반환한다() throws Exception {
+        Region region = saveRegion("TERMINAL-TARGET");
+        AppUser regionAdmin = saveRegionAdmin("terminal-target-admin@example.com", region, AppUserStatus.ACTIVE);
+        RevisionFixture revision = saveRevision(region, "terminal-target", SUBMITTED_AT, SessionRevisionStatus.PENDING);
+        ContentSession targetSession = contentSessionRepository.findById(revision.targetSessionId()).orElseThrow();
+        targetSession.cancel(
+            contentRepository.findById(revision.contentId()).orElseThrow().getOperator(),
+            SUBMITTED_AT.plusSeconds(60),
+            "운영상 취소"
+        );
+        contentSessionRepository.flush();
+
+        mockMvc.perform(get("/api/v1/region-admin/session-revisions")
+                .queryParam("status", "PENDING")
+                .header(HttpHeaders.AUTHORIZATION, bearerToken(regionAdmin)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.revisions.length()").value(1))
+            .andExpect(jsonPath("$.data.revisions[0].revisionId").value(revision.revisionId().toString()));
     }
 
     @Test
@@ -185,7 +218,7 @@ class SessionRevisionReviewControllerIntegrationTest {
     }
 
     @Test
-    void status가_없거나_PENDING이_아니면_INVALID_INPUT으로_거부한다() throws Exception {
+    void status가_없거나_PENDING이_아니면_INVALID_INPUT으로_거부한다(CapturedOutput output) throws Exception {
         Region region = saveRegion("INVALID-STATUS");
         AppUser regionAdmin = saveRegionAdmin("invalid-status-admin@example.com", region, AppUserStatus.ACTIVE);
 
@@ -200,6 +233,11 @@ class SessionRevisionReviewControllerIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
         }
+        assertThat(output).contains(
+            "Pending session revisions queried.",
+            "regionId=" + region.getRegionId(),
+            "resultCode=INVALID_INPUT"
+        );
     }
 
     private RevisionFixture saveRevision(
@@ -214,7 +252,7 @@ class SessionRevisionReviewControllerIntegrationTest {
             region,
             operator,
             ContentType.EVENT_EXPERIENCE,
-            ContentStatus.PENDING,
+            ContentStatus.APPROVED,
             "회차 수정 요청 " + suffix,
             "콘텐츠 설명",
             "콘텐츠 위치",
