@@ -68,6 +68,20 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     );
 
     @Query("""
+        SELECT reservation.reservationId AS reservationId,
+            reservation.region AS reservationRegion,
+            content.region.regionId AS contentRegionId,
+            content.operator.userId AS operatorId
+        FROM Reservation reservation
+        JOIN reservation.contentSession contentSession
+        JOIN contentSession.content content
+        WHERE reservation.reservationNo = :reservationNo
+        """)
+    Optional<ManualCheckInLookupProjection> findManualCheckInLookupByReservationNo(
+        @Param("reservationNo") String reservationNo
+    );
+
+    @Query("""
         SELECT new io.regionevent.regioneventbackend.domain.reservation.repository.ReservationReadProjection(
             reservation.reservationId,
             reservation.reservationNo,
