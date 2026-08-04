@@ -57,11 +57,13 @@ public class DeleteReviewUseCase {
     public void delete(Long userId, Long reviewId, UUID requestId) {
         AuditEventActor actor = null;
         Review review = null;
+        ReviewStatus previousStatus = null;
 
         try {
             AppUser user = appUserService.findActiveUserForUpdate(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
             review = reviewService.findByIdForUpdate(reviewId);
+            previousStatus = review.getStatus();
             validatePublished(review);
             validateOwner(review, user);
             actor = new AuditEventActor(userRoleAssignmentService.findActiveVisitor(userId));
@@ -69,12 +71,12 @@ public class DeleteReviewUseCase {
             review.delete(deletedAt);
             recordSuccess(requestId, review, actor, deletedAt);
         } catch (BusinessException exception) {
-            if (!isDeleted(review)) {
-                recordFailure(requestId, review, actor, exception.getErrorCode());
+            if (previousStatus != ReviewStatus.DELETED) {
+                recordFailure(requestId, review, previousStatus, actor, exception.getErrorCode());
             }
             throw exception;
         } catch (RuntimeException exception) {
-            recordFailure(requestId, review, actor, ErrorCode.INTERNAL_SERVER_ERROR);
+            recordFailure(requestId, review, previousStatus, actor, ErrorCode.INTERNAL_SERVER_ERROR);
             throw exception;
         }
     }
@@ -114,6 +116,7 @@ public class DeleteReviewUseCase {
     private void recordFailure(
         UUID requestId,
         Review review,
+        ReviewStatus previousStatus,
         AuditEventActor actor,
         ErrorCode errorCode
     ) {
@@ -122,7 +125,7 @@ public class DeleteReviewUseCase {
             review == null ? null : review.getRegion(),
             AuditEventTargetType.REVIEW,
             review == null ? null : review.getReviewId(),
-            review == null ? null : review.getStatus().name(),
+            previousStatus == null ? null : previousStatus.name(),
             null,
             AuditEventResult.FAILURE,
             errorCode.code(),
@@ -137,7 +140,4 @@ public class DeleteReviewUseCase {
         );
     }
 
-    private boolean isDeleted(Review review) {
-        return review != null && review.getStatus() == ReviewStatus.DELETED;
-    }
 }

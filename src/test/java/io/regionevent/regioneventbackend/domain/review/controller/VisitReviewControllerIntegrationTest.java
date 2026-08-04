@@ -493,6 +493,14 @@ class VisitReviewControllerIntegrationTest {
 
         assertThat(reviewRepository.findById(review.getReviewId()))
             .hasValueSatisfying(savedReview -> assertThat(savedReview.getStatus()).isEqualTo(ReviewStatus.PUBLISHED));
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(event -> review.getReviewId().equals(event.getTargetId()))
+            .singleElement()
+            .satisfies(event -> {
+                assertThat(event.getResult()).isEqualTo(AuditEventResult.FAILURE);
+                assertThat(event.getPreviousState()).isEqualTo(ReviewStatus.PUBLISHED.name());
+                assertThat(event.getNextState()).isNull();
+            });
     }
 
     private org.springframework.test.web.servlet.ResultActions performCreate(
