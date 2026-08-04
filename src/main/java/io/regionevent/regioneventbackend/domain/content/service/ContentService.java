@@ -140,6 +140,12 @@ public class ContentService {
         ).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
+    public Content findMyContentDetail(Long contentId) {
+        validateRequiredId(contentId);
+        return contentRepository.findDetailByContentIdAndDeletedAtIsNull(contentId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
     public List<PublicContentProjection> findPublicContents(
         Long regionId,
         ContentType contentType,
