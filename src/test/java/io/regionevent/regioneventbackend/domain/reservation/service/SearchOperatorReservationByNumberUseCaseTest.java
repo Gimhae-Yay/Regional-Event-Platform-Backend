@@ -148,7 +148,7 @@ class SearchOperatorReservationByNumberUseCaseTest {
             Reservation reservation = reservation(region);
 
             when(reservationReadService.findByReservationNo(RESERVATION_NO)).thenReturn(readResult);
-            when(reservationService.findByReservationNoForOperatorLookup(RESERVATION_NO)).thenReturn(reservation);
+            when(reservationService.findByReservationNoForAuthorizedLookup(RESERVATION_NO)).thenReturn(reservation);
             when(reservationService.findCurrentDatabaseInstant()).thenReturn(DATABASE_NOW);
             OperatorAuthorizationService.AuthorizedOperator authorizedOperator = authorizedOperator(region);
             when(operatorAuthorizationService.authorizeOwnedContent(any(), any(), any())).thenReturn(

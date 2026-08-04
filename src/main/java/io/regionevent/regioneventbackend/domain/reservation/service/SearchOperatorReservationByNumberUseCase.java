@@ -48,7 +48,7 @@ public class SearchOperatorReservationByNumberUseCase {
         UUID requestId
     ) {
         ReservationReadResult readResult = reservationReadService.findByReservationNo(reservationNo);
-        Reservation reservation = reservationService.findByReservationNoForOperatorLookup(reservationNo);
+        Reservation reservation = reservationService.findByReservationNoForAuthorizedLookup(reservationNo);
         OperatorAuthorizationService.AuthorizedOperator authorizedOperator = operatorAuthorizationService
             .authorizeOwnedContent(
                 userId,
