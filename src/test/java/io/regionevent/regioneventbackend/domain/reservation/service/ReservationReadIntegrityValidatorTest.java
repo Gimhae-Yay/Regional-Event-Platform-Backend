@@ -25,7 +25,7 @@ class ReservationReadIntegrityValidatorTest {
         ReservationReadIntegrityValidator.CheckInInfo checkIn = validator.validate(snapshot, List.of(visit));
 
         assertThat(checkIn).isEqualTo(
-            new ReservationReadIntegrityValidator.CheckInInfo(true, CHECKED_AT)
+            new ReservationReadIntegrityValidator.CheckInInfo(17L, true, CHECKED_AT)
         );
     }
 
@@ -42,7 +42,7 @@ class ReservationReadIntegrityValidatorTest {
             );
 
             assertThat(checkIn).isEqualTo(
-                new ReservationReadIntegrityValidator.CheckInInfo(false, null)
+                new ReservationReadIntegrityValidator.CheckInInfo(null, false, null)
             );
         }
     }
