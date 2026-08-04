@@ -25,6 +25,9 @@ public class ReservationParticipantMasker {
             return "*";
         }
         int firstEndIndex = name.offsetByCodePoints(0, 1);
+        if (codePointCount == 2) {
+            return name.substring(0, firstEndIndex) + "*";
+        }
         int lastStartIndex = name.offsetByCodePoints(0, codePointCount - 1);
         return name.substring(0, firstEndIndex) + "*" + name.substring(lastStartIndex);
     }

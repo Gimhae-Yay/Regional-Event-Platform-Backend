@@ -35,14 +35,14 @@ public class ReservationReadService {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
 
-        ReservationReadSnapshot snapshot = projections.get(0).toSnapshot();
+        ReservationReadSnapshot snapshot = toSnapshot(projections.get(0));
         if (projections.stream().anyMatch(projection -> !sameReservation(snapshot, projection))) {
             throw new IllegalStateException("reservation number is not globally unique");
         }
 
         List<ReservationReadSnapshot.VisitInfo> visits = projections.stream()
-            .map(ReservationReadProjection::toVisitInfo)
-            .filter(visit -> visit != null)
+            .map(this::toVisitInfo)
+            .filter(Objects::nonNull)
             .toList();
         ReservationReadIntegrityValidator.CheckInInfo checkIn = reservationReadIntegrityValidator.validate(
             snapshot,
@@ -63,5 +63,54 @@ public class ReservationReadService {
     ) {
         return snapshot.reservation() != null
             && Objects.equals(snapshot.reservation().reservationId(), projection.reservationId());
+    }
+
+    private ReservationReadSnapshot toSnapshot(ReservationReadProjection projection) {
+        return new ReservationReadSnapshot(
+            new ReservationReadSnapshot.ReservationInfo(
+                projection.reservationId(),
+                projection.reservationNo(),
+                projection.reservationStatus(),
+                projection.confirmedAt(),
+                projection.cancelledAt(),
+                projection.cancellationReason(),
+                projection.expiredAt(),
+                projection.reservationRegionId()
+            ),
+            new ReservationReadSnapshot.SessionInfo(
+                projection.sessionId(),
+                projection.sessionStatus(),
+                projection.startsAt(),
+                projection.endsAt(),
+                projection.checkinOpenAt(),
+                projection.checkinCloseAt(),
+                projection.sessionRegionId()
+            ),
+            new ReservationReadSnapshot.ContentInfo(
+                projection.contentId(),
+                projection.contentTitle(),
+                projection.contentRegionId()
+            ),
+            new ReservationReadSnapshot.ParticipantInfo(
+                projection.participantUserId(),
+                projection.participantName(),
+                projection.participantPhone()
+            )
+        );
+    }
+
+    private ReservationReadSnapshot.VisitInfo toVisitInfo(ReservationReadProjection projection) {
+        if (projection.visitId() == null) {
+            return null;
+        }
+        return new ReservationReadSnapshot.VisitInfo(
+            projection.visitId(),
+            projection.visitReservationId(),
+            projection.visitRegionId(),
+            projection.visitSessionId(),
+            projection.visitContentId(),
+            projection.visitParticipantUserId(),
+            projection.checkedAt()
+        );
     }
 }

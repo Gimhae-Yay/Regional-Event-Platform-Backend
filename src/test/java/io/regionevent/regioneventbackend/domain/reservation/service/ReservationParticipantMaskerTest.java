@@ -24,6 +24,19 @@ class ReservationParticipantMaskerTest {
     }
 
     @Test
+    void mask_whenLinkedParticipantHasTwoCharacterName_hidesOneCharacter() {
+        ReservationReadSnapshot.ParticipantInfo participant = new ReservationReadSnapshot.ParticipantInfo(
+            1L,
+            "김수",
+            "010-1234-5678"
+        );
+
+        ReservationParticipantMasker.MaskedParticipant maskedParticipant = masker.mask(participant);
+
+        assertThat(maskedParticipant.name()).isEqualTo("김*");
+    }
+
+    @Test
     void mask_whenParticipantIsWithdrawn_returnsWithdrawnDisplayAndNullPhone() {
         ReservationReadSnapshot.ParticipantInfo participant = new ReservationReadSnapshot.ParticipantInfo(
             null,
