@@ -65,5 +65,4 @@ public class VisitReviewController {
         return visitId;
     }
 
-
 }

@@ -218,6 +218,12 @@ class VisitReviewControllerIntegrationTest {
 
         assertThat(reviewRepository.findById(review.getReviewId()).orElseThrow().getRating()).isEqualTo(5);
         assertThat(countReviewFailureAudits()).isEqualTo(failureAuditCountBefore + 1);
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(event -> event.getTargetType() == AuditEventTargetType.REVIEW)
+            .filteredOn(event -> event.getResult() == AuditEventResult.FAILURE)
+            .filteredOn(event -> review.getReviewId().equals(event.getTargetId()))
+            .anySatisfy(event -> assertThat(event.getRegion().getRegionId())
+                .isEqualTo(fixture.region().getRegionId()));
     }
 
     @Test

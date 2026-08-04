@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import io.regionevent.regioneventbackend.domain.review.entity.Review;
 import io.regionevent.regioneventbackend.domain.review.entity.ReviewStatus;
 import io.regionevent.regioneventbackend.domain.review.repository.ReviewRepository;
+import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.visit.entity.Visit;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -73,6 +74,12 @@ public class ReviewService {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         throw new BusinessException(ErrorCode.FORBIDDEN);
+    }
+
+    public Region findRegionByReviewId(Long reviewId) {
+        return reviewRepository.findById(reviewId)
+            .map(Review::getRegion)
+            .orElse(null);
     }
 
     private boolean isReviewVisitUniqueConstraintViolation(DataIntegrityViolationException exception) {

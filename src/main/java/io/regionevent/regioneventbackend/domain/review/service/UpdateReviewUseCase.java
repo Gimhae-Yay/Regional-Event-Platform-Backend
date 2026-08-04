@@ -18,6 +18,7 @@ import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditE
 import io.regionevent.regioneventbackend.domain.review.dto.UpdateReviewRequest;
 import io.regionevent.regioneventbackend.domain.review.dto.UpdateReviewResponse;
 import io.regionevent.regioneventbackend.domain.review.entity.Review;
+import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
 import io.regionevent.regioneventbackend.domain.user.service.UserRoleAssignmentService;
@@ -95,9 +96,10 @@ public class UpdateReviewUseCase {
         Long reviewId,
         ErrorCode errorCode
     ) {
+        Region region = reviewService.findRegionByReviewId(reviewId);
         recordFailedAuditEventUseCase.record(new AuditEventCommand(
             requestId,
-            null,
+            region,
             AuditEventTargetType.REVIEW,
             reviewId,
             null,
