@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.domain.user.service;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -22,6 +23,7 @@ public class OperatorAuthorizationService {
         this.userRoleAssignmentRepository = userRoleAssignmentRepository;
     }
 
+    @Transactional(readOnly = true)
     public AuthorizedOperator requireAuthorizedOperator(Long userId) {
         UserRoleAssignment assignment = userRoleAssignmentRepository
             .findByIdUserIdAndIdRoleAndAppUserStatus(
@@ -36,6 +38,24 @@ public class OperatorAuthorizationService {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         return new AuthorizedOperator(assignment.getAppUser(), assignedRegion, assignment);
+    }
+
+    @Transactional(readOnly = true)
+    public AuthorizedOperator authorizeOwnedContent(
+        Long userId,
+        AppUser contentOperator,
+        Region contentRegion
+    ) {
+        AuthorizedOperator operator = requireAuthorizedOperator(userId);
+        if (contentOperator == null
+            || contentOperator.getUserId() == null
+            || contentRegion == null
+            || contentRegion.getRegionId() == null
+            || !operator.user().getUserId().equals(contentOperator.getUserId())
+            || !operator.region().getRegionId().equals(contentRegion.getRegionId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        return operator;
     }
 
     public record AuthorizedOperator(
