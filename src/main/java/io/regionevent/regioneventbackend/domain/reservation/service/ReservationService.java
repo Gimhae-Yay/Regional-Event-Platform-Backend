@@ -82,6 +82,17 @@ public class ReservationService {
         return reservationRepository.findByReservationNo(reservationNo);
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<ManualCheckInLookup> findManualCheckInLookup(String reservationNo) {
+        return reservationRepository.findManualCheckInLookupByReservationNo(reservationNo)
+            .map(projection -> new ManualCheckInLookup(
+                projection.getReservationId(),
+                projection.getReservationRegionId(),
+                projection.getContentRegionId(),
+                projection.getOperatorId()
+            ));
+    }
+
     @Transactional(readOnly = true)
     public Instant findCurrentDatabaseInstant() {
         return toInstant(reservationRepository.findCurrentEpochSeconds());
@@ -253,5 +264,13 @@ public class ReservationService {
     }
 
     public record ReservationCancellationLockTarget(Long sessionId) {
+    }
+
+    public record ManualCheckInLookup(
+        Long reservationId,
+        Long reservationRegionId,
+        Long contentRegionId,
+        Long operatorId
+    ) {
     }
 }

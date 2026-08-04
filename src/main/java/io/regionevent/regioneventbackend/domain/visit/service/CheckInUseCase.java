@@ -25,6 +25,7 @@ import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationService;
+import io.regionevent.regioneventbackend.domain.reservation.service.ReservationService.ManualCheckInLookup;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService;
@@ -186,6 +187,50 @@ public class CheckInUseCase {
         ManualCheckInReason reason = ManualCheckInReason.from(request.reason());
         AuthorizedOperator operator = operatorAuthorizationService.requireAuthorizedOperator(userId);
         AuditEventActor actor = new AuditEventActor(operator.roleAssignment());
+        String reasonCodePrefix = "MANUAL_CHECK_IN_" + reason.name();
+        ManualCheckInLookup lookup = reservationService.findManualCheckInLookup(request.reservationNo())
+            .orElse(null);
+        if (lookup == null) {
+            recordRollbackFailure(
+                requestId,
+                actor,
+                actor.roleAssignment().getRegion(),
+                AuditEventTargetType.RESERVATION,
+                null,
+                null,
+                reasonCodePrefix + "_NOT_FOUND"
+            );
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+        String preliminaryAuthorizationFailureReasonCode = findAuthorizationFailureReasonCode(
+            lookup,
+            operator.user(),
+            actor.roleAssignment(),
+            reasonCodePrefix
+        );
+        if (preliminaryAuthorizationFailureReasonCode != null) {
+            recordRollbackFailure(
+                requestId,
+                actor,
+                actor.roleAssignment().getRegion(),
+                AuditEventTargetType.RESERVATION,
+                lookup.reservationId(),
+                null,
+                preliminaryAuthorizationFailureReasonCode
+            );
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        IdempotencyAcquireResult acquireResult = acquire(
+            operator.user(),
+            validatedIdempotencyKey,
+            checkInHasher.hashManualRequest(lookup.reservationId(), reason)
+        );
+
+        CheckInResult existingResult = toExistingResult(acquireResult, requestId, actor);
+        if (existingResult != null) {
+            return existingResult;
+        }
+
         Reservation reservation = reservationService.findByReservationNoForCheckIn(request.reservationNo())
             .orElse(null);
         if (reservation == null) {
@@ -196,38 +241,10 @@ public class CheckInUseCase {
                 AuditEventTargetType.RESERVATION,
                 null,
                 null,
-                "MANUAL_CHECK_IN_" + reason.name() + "_NOT_FOUND"
+                reasonCodePrefix + "_NOT_FOUND"
             );
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
-        String reasonCodePrefix = "MANUAL_CHECK_IN_" + reason.name();
-        String authorizationFailureReasonCode = findAuthorizationFailureReasonCode(
-            reservation,
-            operator.user(),
-            actor.roleAssignment(),
-            reasonCodePrefix
-        );
-        if (authorizationFailureReasonCode != null) {
-            recordRollbackFailure(
-                requestId,
-                actor,
-                reservation,
-                reservation.getStatus().name(),
-                authorizationFailureReasonCode
-            );
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
-        IdempotencyAcquireResult acquireResult = acquire(
-            operator.user(),
-            validatedIdempotencyKey,
-            checkInHasher.hashManualRequest(reservation.getReservationId(), reason)
-        );
-
-        CheckInResult existingResult = toExistingResult(acquireResult, requestId, actor);
-        if (existingResult != null) {
-            return existingResult;
-        }
-
         return checkInReservation(
             (IdempotencyAcquireResult.Acquired) acquireResult,
             reservation,
@@ -598,6 +615,23 @@ public class CheckInUseCase {
             return reasonCodePrefix + "_REGION_FORBIDDEN";
         }
         if (!reservation.getContentSession().getContent().isOwnedBy(operator.getUserId())) {
+            return reasonCodePrefix + "_OWNER_FORBIDDEN";
+        }
+        return null;
+    }
+
+    private String findAuthorizationFailureReasonCode(
+        ManualCheckInLookup lookup,
+        AppUser operator,
+        UserRoleAssignment operatorAssignment,
+        String reasonCodePrefix
+    ) {
+        Long operatorRegionId = operatorAssignment.getRegion().getRegionId();
+        if (!sameId(lookup.reservationRegionId(), operatorRegionId)
+            || !sameId(lookup.contentRegionId(), operatorRegionId)) {
+            return reasonCodePrefix + "_REGION_FORBIDDEN";
+        }
+        if (!sameId(lookup.operatorId(), operator.getUserId())) {
             return reasonCodePrefix + "_OWNER_FORBIDDEN";
         }
         return null;

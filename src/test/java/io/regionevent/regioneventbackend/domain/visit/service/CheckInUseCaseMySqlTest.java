@@ -220,6 +220,46 @@ class CheckInUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
             });
     }
 
+    @Test
+    @Timeout(10)
+    void checkInByQrAndManually_withSameKeyConcurrently_returnsConflictOrInProgressWithoutDeadlock()
+        throws Exception {
+
+        Fixture fixture = createFixture();
+        String idempotencyKey = "mixed-same-key-" + System.nanoTime();
+
+        List<CheckInResult> results = checkInConcurrently(
+            () -> checkInUseCase.checkInByQr(
+                fixture.operatorUserId(),
+                new QrCheckInRequest(fixture.qrToken()),
+                idempotencyKey,
+                UUID.randomUUID()
+            ),
+            () -> checkInUseCase.checkInManually(
+                fixture.operatorUserId(),
+                new ManualCheckInRequest(fixture.reservationNo(), ManualCheckInReason.QR_SCAN_FAILED.name()),
+                idempotencyKey,
+                UUID.randomUUID()
+            )
+        );
+
+        assertThat(results).filteredOn(CheckInResult::isSuccessful).hasSize(1);
+        assertThat(results)
+            .filteredOn(result -> !result.isSuccessful())
+            .singleElement()
+            .satisfies(result -> assertThat(result.errorCode()).isIn(
+                ErrorCode.IDEMPOTENCY_KEY_CONFLICT,
+                ErrorCode.IDEMPOTENCY_REQUEST_IN_PROGRESS
+            ));
+        assertSingleVisitForReservation(fixture.reservationId());
+        assertThat(idempotencyRecordRepository.findAll())
+            .singleElement()
+            .satisfies(record -> {
+                assertThat(record.getStatus()).isEqualTo(IdempotencyRecordStatus.SUCCEEDED);
+                assertThat(record.getResultVisit()).isNotNull();
+            });
+    }
+
     private List<CheckInResult> checkInByQrConcurrently(
         Fixture fixture,
         String firstIdempotencyKey,
