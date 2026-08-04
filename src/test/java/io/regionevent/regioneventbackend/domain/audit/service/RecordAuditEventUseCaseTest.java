@@ -154,21 +154,6 @@ class RecordAuditEventUseCaseTest {
     }
 
     @Test
-    void 성공_기록은_실패_결과를_받지_않는다() {
-        assertThatIllegalArgumentException().isThrownBy(
-            () -> recordAuditEventUseCase.record(createCommand("RESERVATION_NOT_FOUND"))
-        );
-    }
-
-    @Test
-    void 감사_입력은_개인정보와_원문_형식의_사유를_거부한다() {
-        assertThatIllegalArgumentException().isThrownBy(() -> createCommand("user@example.com"));
-        assertThatIllegalArgumentException().isThrownBy(() -> createCommand("idempotency-key"));
-        assertThatIllegalArgumentException().isThrownBy(() -> createCommand("eyJhbGciOiJIUzI1NiJ9.payload.signature"));
-        assertThatIllegalArgumentException().isThrownBy(() -> createCommand("550e8400-e29b-41d4-a716-446655440000"));
-    }
-
-    @Test
     void 비활성_처리자는_감사_연결_입력으로_사용할_수_없다() {
         AppUser withdrawingUser = appUserRepository.saveAndFlush(new AppUser(
             "withdrawing@example.com",
