@@ -522,11 +522,11 @@ public class CheckInUseCase {
         idempotencyService.completeWithFailure(acquired.record(), errorCode.code());
         recordFailure(requestId, actor, region, targetType, targetId, previousState, reasonCode);
         log.warn(
-            "Check-in rejected. requestId={}, userId={}, errorCode={}, reasonCode={}",
+            "Check-in rejected. requestId={}, errorCode={}, reasonCode={}, previousState={}",
             requestId,
-            actor.getAppUser().getUserId(),
             errorCode.code(),
-            reasonCode
+            reasonCode,
+            previousState
         );
         return CheckInResult.failure(errorCode);
     }

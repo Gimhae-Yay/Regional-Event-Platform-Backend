@@ -685,6 +685,7 @@ public class CheckInUseCaseIntegrationTest {
         String loginIdentifier = fixture.reservation().getUser().getLoginIdentifier();
         String name = fixture.reservation().getUser().getName();
         String phone = fixture.reservation().getUser().getPhone();
+        String operatorUserIdLogField = "userId=" + fixture.operator().getUserId();
 
         CheckInResult result = checkInUseCase.checkInManually(
             fixture.operator().getUserId(),
@@ -702,7 +703,7 @@ public class CheckInUseCaseIntegrationTest {
             .extracting(record -> record.getRequestHash())
             .doesNotContain(reservationNo, loginIdentifier, name, phone);
         assertThat(output.getOut())
-            .doesNotContain(reservationNo, loginIdentifier, name, phone);
+            .doesNotContain(reservationNo, loginIdentifier, name, phone, operatorUserIdLogField);
     }
 
     @Test
