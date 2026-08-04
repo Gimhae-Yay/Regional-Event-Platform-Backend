@@ -26,6 +26,9 @@ import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenSto
 @Testcontainers(disabledWithoutDocker = true)
 class RedisRefreshTokenStoreIntegrationTest {
 
+    private static final Duration TTL_TEST_DURATION = Duration.ofSeconds(2);
+    private static final long EXPIRY_WAIT_BUFFER_MILLIS = 100L;
+
     @Container
     static final GenericContainer<?> redis = new GenericContainer<>("redis:7.4-alpine")
         .withCommand("redis-server", "--maxmemory", "64mb", "--maxmemory-policy", "noeviction")
@@ -69,7 +72,8 @@ class RedisRefreshTokenStoreIntegrationTest {
             .isEqualTo(RefreshTokenStore.RotationStartResult.CONFLICT);
 
         UUID nextTokenId = UUID.randomUUID();
-        assertThat(refreshTokenStore.completeRotation(current, nextTokenId, firstAttemptId)).isTrue();
+        assertThat(refreshTokenStore.completeRotation(current, nextTokenId, firstAttemptId))
+            .isEqualTo(RefreshTokenStore.RotationCompletionResult.COMPLETED);
         assertThat(refreshTokenStore.startRotation(current, UUID.randomUUID()))
             .isEqualTo(RefreshTokenStore.RotationStartResult.INVALID);
 
@@ -112,7 +116,8 @@ class RedisRefreshTokenStoreIntegrationTest {
         UUID nextTokenId = UUID.randomUUID();
         assertThat(refreshTokenStore.startRotation(current, attemptId))
             .isEqualTo(RefreshTokenStore.RotationStartResult.STARTED);
-        assertThat(refreshTokenStore.completeRotation(current, nextTokenId, attemptId)).isTrue();
+        assertThat(refreshTokenStore.completeRotation(current, nextTokenId, attemptId))
+            .isEqualTo(RefreshTokenStore.RotationCompletionResult.COMPLETED);
         stringRedisTemplate.delete("auth:refresh:token:" + current.tokenId() + ":consumed");
 
         assertThat(refreshTokenStore.startRotation(current, UUID.randomUUID()))
@@ -125,7 +130,8 @@ class RedisRefreshTokenStoreIntegrationTest {
     void revokeFamily_removesCurrentRotationMarkerAndUserIndex() {
         RefreshToken current = refreshToken(1L);
         refreshTokenStore.createFamily(current);
-        assertThat(refreshTokenStore.startRotation(current, UUID.randomUUID()))
+        UUID attemptId = UUID.randomUUID();
+        assertThat(refreshTokenStore.startRotation(current, attemptId))
             .isEqualTo(RefreshTokenStore.RotationStartResult.STARTED);
 
         refreshTokenStore.revokeFamily(current);
@@ -133,20 +139,96 @@ class RedisRefreshTokenStoreIntegrationTest {
         assertThat(stringRedisTemplate.hasKey("auth:refresh:family:" + current.familyId() + ":active")).isFalse();
         assertThat(stringRedisTemplate.hasKey("auth:refresh:token:" + current.tokenId() + ":rotation")).isFalse();
         assertThat(stringRedisTemplate.hasKey("auth:refresh:user:1:families")).isFalse();
+        assertThat(refreshTokenStore.completeRotation(current, UUID.randomUUID(), attemptId))
+            .isEqualTo(RefreshTokenStore.RotationCompletionResult.CONFLICT);
+    }
+
+    @Test
+    void revokeFamily_whenPresentedTokenIsConsumed_keepsNewActiveToken() {
+        RefreshToken current = refreshToken(1L);
+        refreshTokenStore.createFamily(current);
+        UUID attemptId = UUID.randomUUID();
+        UUID nextTokenId = UUID.randomUUID();
+        assertThat(refreshTokenStore.startRotation(current, attemptId))
+            .isEqualTo(RefreshTokenStore.RotationStartResult.STARTED);
+        assertThat(refreshTokenStore.completeRotation(current, nextTokenId, attemptId))
+            .isEqualTo(RefreshTokenStore.RotationCompletionResult.COMPLETED);
+
+        RefreshToken next = nextToken(current, nextTokenId);
+        refreshTokenStore.revokeFamily(current);
+
+        assertThat(stringRedisTemplate.opsForValue().get("auth:refresh:family:" + current.familyId() + ":active"))
+            .isEqualTo(nextTokenId.toString());
+        assertThat(stringRedisTemplate.hasKey("auth:refresh:family:" + current.familyId() + ":revoked")).isFalse();
+        assertThat(refreshTokenStore.startRotation(next, UUID.randomUUID()))
+            .isEqualTo(RefreshTokenStore.RotationStartResult.STARTED);
+    }
+
+    @Test
+    void revokeFamily_whenActiveStateIsMissing_doesNotChangeUserIndexOrSetRevocationMarker() {
+        RefreshToken current = refreshToken(1L);
+        refreshTokenStore.createFamily(current);
+        stringRedisTemplate.delete("auth:refresh:family:" + current.familyId() + ":active");
+
+        refreshTokenStore.revokeFamily(current);
+
+        assertThat(stringRedisTemplate.hasKey("auth:refresh:user:1:families")).isTrue();
+        assertThat(stringRedisTemplate.hasKey("auth:refresh:family:" + current.familyId() + ":revoked")).isFalse();
+    }
+
+    @Test
+    void revokeFamily_whenUserIndexIsMissing_doesNotChangeActiveStateOrSetRevocationMarker() {
+        RefreshToken current = refreshToken(1L);
+        refreshTokenStore.createFamily(current);
+        stringRedisTemplate.delete("auth:refresh:user:1:families");
+
+        refreshTokenStore.revokeFamily(current);
+
+        assertThat(stringRedisTemplate.opsForValue().get("auth:refresh:family:" + current.familyId() + ":active"))
+            .isEqualTo(current.tokenId().toString());
+        assertThat(stringRedisTemplate.hasKey("auth:refresh:family:" + current.familyId() + ":revoked")).isFalse();
+    }
+
+    @Test
+    void revokeFamily_whenRevocationMarkerExists_doesNotChangeFamilyState() {
+        RefreshToken current = refreshToken(1L);
+        refreshTokenStore.createFamily(current);
+        stringRedisTemplate.opsForValue().set("auth:refresh:family:" + current.familyId() + ":revoked", "1");
+
+        refreshTokenStore.revokeFamily(current);
+
+        assertThat(stringRedisTemplate.opsForValue().get("auth:refresh:family:" + current.familyId() + ":active"))
+            .isEqualTo(current.tokenId().toString());
+        assertThat(stringRedisTemplate.hasKey("auth:refresh:user:1:families")).isTrue();
+        assertThat(stringRedisTemplate.hasKey("auth:refresh:family:" + current.familyId() + ":revoked")).isTrue();
+    }
+
+    @Test
+    void completeRotation_whenRotationMarkerExpires_returnsConflict() {
+        RefreshToken current = refreshToken(1L);
+        refreshTokenStore.createFamily(current);
+        UUID attemptId = UUID.randomUUID();
+        refreshTokenStore.startRotation(current, attemptId);
+        stringRedisTemplate.delete("auth:refresh:token:" + current.tokenId() + ":rotation");
+
+        assertThat(refreshTokenStore.completeRotation(current, UUID.randomUUID(), attemptId))
+            .isEqualTo(RefreshTokenStore.RotationCompletionResult.CONFLICT);
+        assertThat(refreshTokenStore.startRotation(current, UUID.randomUUID()))
+            .isEqualTo(RefreshTokenStore.RotationStartResult.STARTED);
     }
 
     @Test
     void expiredFamilyState_isRemovedByRedisTtl() throws InterruptedException {
-        RefreshToken current = refreshToken(1L, Duration.ofMillis(500));
+        RefreshToken current = refreshToken(1L, TTL_TEST_DURATION);
         refreshTokenStore.createFamily(current);
 
         Long remainingTtl = stringRedisTemplate.getExpire(
             "auth:refresh:family:" + current.familyId() + ":active",
             TimeUnit.MILLISECONDS
         );
-        assertThat(remainingTtl).isPositive().isLessThanOrEqualTo(500L);
+        assertThat(remainingTtl).isPositive().isLessThanOrEqualTo(TTL_TEST_DURATION.toMillis());
 
-        Thread.sleep(700L);
+        Thread.sleep(remainingTtl + EXPIRY_WAIT_BUFFER_MILLIS);
 
         assertThat(stringRedisTemplate.hasKey("auth:refresh:family:" + current.familyId() + ":active")).isFalse();
         assertThat(stringRedisTemplate.hasKey("auth:refresh:user:1:families")).isFalse();

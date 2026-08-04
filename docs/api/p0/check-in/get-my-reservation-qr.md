@@ -89,6 +89,25 @@ Accept: application/json
 | `data.expiresAt` | String | `issuedAt + 운영 설정 TTL`과 `checkinClosesAt` 중 이른 시각 |
 | `data.checkinClosesAt` | String | 회차의 체크인 종료 시각 |
 
+#### QR 토큰 프로필
+
+`qrToken`은 `v1.<keyId>.<payload>.<signature>` 형식의 ASCII 문자열이다. `keyId`는 영숫자·`_`·`-` 1~64자이며,
+`payload`와 `signature`는 패딩 없는 Base64URL 값이다.
+
+`payload`는 다음 UTF-8 JSON을 인코딩한다. QR을 표시하는 클라이언트는 이를 해석하거나 변경하지 않고 원문을 체크인 API에 전달한다.
+
+```json
+{
+  "qrReference": "550e8400-e29b-41d4-a716-446655440000",
+  "sessionId": 456,
+  "expiresAtEpochMillis": 1764929400000
+}
+```
+
+`signature`는 `v1.<keyId>.<payload>`의 UTF-8 바이트를 HMAC-SHA256으로 서명한 값이다. 토큰 TTL은 배포 설정으로 정하되
+P0에서 `0 < TTL <= PT5M`이며, 발급·검증 시각은 MySQL 기준 시각을 사용한다. 상세 키 회전과 검증 순서는
+[ADR-0056](../../../adr/0056-define-compact-hmac-qr-token-profile.md)를 따른다.
+
 ### Error Code
 
 | HTTP Status | Code | Description |
@@ -118,9 +137,9 @@ Accept: application/json
 2. 예약은 활성 회원 연결이 있는 `CONFIRMED`, 회차는 `SCHEDULED`여야 한다.
 3. MySQL 기준 현재 시각이 `checkin_open_at <= now < checkin_close_at`인 경우에만 조회·발급 응답을 생성한다.
 4. 성공할 때마다 현재 시각을 기준으로 새 단기 토큰을 생성할 수 있다. HTTP `GET` 응답의 QR 원문과 발급 이력은 서버 상태로 저장하지 않는다.
-5. 토큰은 HMAC-SHA256으로 서명하고 토큰 버전, 키 식별자, `qr_reference`, `session_id`, 만료 시각만 포함한다. 이름, 연락처와 `user_id`는 포함하지 않는다.
-6. `expiresAt`은 `issuedAt + 운영 설정의 짧은 TTL`과 `checkin_close_at` 중 이른 시각이다. 기존 토큰은 자신의 만료 시각과 체크인 창 종료 시각 중 이른 시각까지만 유효하다.
-7. 콘텐츠가 `SUSPENDED`, `WITHDRAWN`, `ENDED`여도 회차가 명시적으로 취소되지 않았고 기존 예약·회차 조건을 만족하면 발급 자격을 유지한다. 키 회전은 토큰 버전과 키 식별자로 검증한다.
+5. 토큰은 [QR 토큰 프로필](#qr-토큰-프로필)대로 HMAC-SHA256으로 서명하고 토큰 버전, 키 식별자, `qr_reference`, `session_id`, 만료 시각만 포함한다. 이름, 연락처와 `user_id`는 포함하지 않는다.
+6. `expiresAt`은 `issuedAt + 운영 설정 TTL`과 `checkin_close_at` 중 이른 시각이며 TTL은 `0 < TTL <= PT5M`이다. 기존 토큰은 자신의 만료 시각과 체크인 창 종료 시각 중 이른 시각까지만 유효하다.
+7. 콘텐츠가 `SUSPENDED`, `WITHDRAWN`, `ENDED`여도 회차가 명시적으로 취소되지 않았고 기존 예약·회차 조건을 만족하면 발급 자격을 유지한다. 키 회전은 ADR-0056의 토큰 버전과 키 식별자 규칙으로 검증한다.
 8. 브라우저, CDN과 중간 캐시가 QR 응답을 저장하지 않도록 `Cache-Control: no-store`를 적용한다.
 9. 이 API에는 체크인 명령용 `Idempotency-Key`를 적용하지 않는다.
 

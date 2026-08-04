@@ -3,6 +3,9 @@ package io.regionevent.regioneventbackend.domain.idempotency.repository;
 import java.util.Collection;
 import java.util.Optional;
 
+import jakarta.persistence.LockModeType;
+
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -22,6 +25,20 @@ public interface IdempotencyRecordRepository extends JpaRepository<IdempotencyRe
             AND record.idempotencyKeyHash = :idempotencyKeyHash
         """)
     Optional<IdempotencyRecord> findByActorUserIdAndOperationAndIdempotencyKeyHash(
+        @Param("actorUserId") Long actorUserId,
+        @Param("operation") IdempotencyOperation operation,
+        @Param("idempotencyKeyHash") String idempotencyKeyHash
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT record
+        FROM IdempotencyRecord record
+        WHERE record.actor.userId = :actorUserId
+            AND record.operation = :operation
+            AND record.idempotencyKeyHash = :idempotencyKeyHash
+        """)
+    Optional<IdempotencyRecord> findByActorUserIdAndOperationAndIdempotencyKeyHashForUpdate(
         @Param("actorUserId") Long actorUserId,
         @Param("operation") IdempotencyOperation operation,
         @Param("idempotencyKeyHash") String idempotencyKeyHash

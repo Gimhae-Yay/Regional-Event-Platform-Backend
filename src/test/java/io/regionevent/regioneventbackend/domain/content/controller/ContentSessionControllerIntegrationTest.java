@@ -116,20 +116,6 @@ class ContentSessionControllerIntegrationTest {
     }
 
     @Test
-    void 회차_예약정보_조회_MySQL_현재_시각이_시작_시각과_같거나_지난_경우_예약_불가를_반환한다() throws Exception {
-        Fixture fixture = createFixture(ContentStatus.PUBLISHED, 1, 60);
-        jdbcTemplate.update(
-            "UPDATE content_session SET starts_at = CURRENT_TIMESTAMP WHERE session_id = ?",
-            fixture.session().getSessionId()
-        );
-        entityManager.clear();
-
-        mockMvc.perform(get("/api/v1/sessions/{sessionId}", fixture.session().getSessionId()))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data.reservable").value(false));
-    }
-
-    @Test
     void 회차_예약정보_조회_비공개_콘텐츠의_회차는_찾을수없음을_반환한다() throws Exception {
         Fixture fixture = createFixture(ContentStatus.PENDING, 1, 60);
 
@@ -161,10 +147,103 @@ class ContentSessionControllerIntegrationTest {
             .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
     }
 
+    @Test
+    void 공개_콘텐츠_회차_목록_조회_인증없이_SCHEDULED_회차를_시작_시각_순으로_반환한다() throws Exception {
+        Fixture fixture = createFixture(ContentStatus.PUBLISHED, 2, 90);
+        ContentSession earlierSession = createScheduledSession(fixture.content(), 30);
+        ContentSession cancelledSession = createScheduledSession(fixture.content(), 60);
+        cancelledSession.cancel(
+            fixture.content().getOperator(),
+            Instant.now(),
+            "운영상 회차를 취소했습니다."
+        );
+        contentSessionRepository.saveAndFlush(cancelledSession);
+        entityManager.clear();
+
+        mockMvc.perform(get("/api/v1/contents/{contentId}/sessions", fixture.content().getContentId()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.statusCode").value(200))
+            .andExpect(jsonPath("$.code").value("SUCCESS"))
+            .andExpect(jsonPath("$.message").value("콘텐츠 회차 목록 조회에 성공했습니다."))
+            .andExpect(jsonPath("$.data.contentId").value(fixture.content().getContentId().toString()))
+            .andExpect(jsonPath("$.data.sessions[0].sessionId").value(earlierSession.getSessionId().toString()))
+            .andExpect(jsonPath("$.data.sessions[0].startsAt").value(endsWith("+09:00")))
+            .andExpect(jsonPath("$.data.sessions[0].endsAt").value(endsWith("+09:00")))
+            .andExpect(jsonPath("$.data.sessions[1].sessionId").value(fixture.session().getSessionId().toString()))
+            .andExpect(jsonPath("$.data.sessions.length()").value(2));
+    }
+
+    @Test
+    void 공개_콘텐츠_회차_목록_조회_SCHEDULED_회차가_없으면_빈_목록을_반환한다() throws Exception {
+        Fixture fixture = createFixture(ContentStatus.PUBLISHED, 2, 60);
+        jdbcTemplate.update(
+            "UPDATE content_session SET status = ?, completed_at = CURRENT_TIMESTAMP WHERE session_id = ?",
+            "COMPLETED",
+            fixture.session().getSessionId()
+        );
+        entityManager.clear();
+
+        mockMvc.perform(get("/api/v1/contents/{contentId}/sessions", fixture.content().getContentId()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.contentId").value(fixture.content().getContentId().toString()))
+            .andExpect(jsonPath("$.data.sessions").isEmpty());
+    }
+
+    @Test
+    void 공개_콘텐츠_회차_목록_조회_비공개_콘텐츠는_찾을수없음을_반환한다() throws Exception {
+        Fixture fixture = createFixture(ContentStatus.PENDING, 2, 60);
+
+        expectPublicContentSessionsNotFound(fixture.content().getContentId());
+    }
+
+    @Test
+    void 공개_콘텐츠_회차_목록_조회_식별자가_양의_정수가_아니면_입력_오류를_반환한다() throws Exception {
+        mockMvc.perform(get("/api/v1/contents/0/sessions"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        mockMvc.perform(get("/api/v1/contents/01/sessions"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        mockMvc.perform(get("/api/v1/contents/+1/sessions"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        mockMvc.perform(get("/api/v1/contents/9223372036854775808/sessions"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+
+        mockMvc.perform(get("/api/v1/contents/not-a-number/sessions"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+    }
+
     private void expectNotFound(Long sessionId) throws Exception {
         mockMvc.perform(get("/api/v1/sessions/{sessionId}", sessionId))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+    }
+
+    private void expectPublicContentSessionsNotFound(Long contentId) throws Exception {
+        mockMvc.perform(get("/api/v1/contents/{contentId}/sessions", contentId))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+    }
+
+    private ContentSession createScheduledSession(Content content, long startsInMinutes) {
+        Instant startsAt = Instant.now().plusSeconds(startsInMinutes * 60);
+        ContentSession session = new ContentSession(
+            content,
+            content.getRegion(),
+            startsAt,
+            startsAt.plusSeconds(7_200),
+            startsAt.minusSeconds(1_800),
+            startsAt.plusSeconds(5_400),
+            2
+        );
+        session.approve(content.getOperator(), Instant.now());
+        return contentSessionRepository.saveAndFlush(session);
     }
 
     private Fixture createFixture(

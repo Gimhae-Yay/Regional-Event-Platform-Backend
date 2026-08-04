@@ -1,17 +1,30 @@
 package io.regionevent.regioneventbackend.domain.content.service;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentSessionRepository;
+import io.regionevent.regioneventbackend.domain.region.entity.Region;
+import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 @Service
 public class ContentSessionService {
+
+    private static final List<ContentSessionStatus> END_TERMINAL_STATUSES = List.of(
+        ContentSessionStatus.COMPLETED,
+        ContentSessionStatus.CANCELLED
+    );
 
     private final ContentSessionRepository contentSessionRepository;
 
@@ -24,6 +37,98 @@ public class ContentSessionService {
             sessionId,
             ContentStatus.PUBLISHED
         ).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    @Transactional(readOnly = true)
+    public List<ContentSession> findCurrentSessionsByContentId(Long contentId) {
+        return contentSessionRepository.findByContentContentIdOrderByStartsAtAscSessionIdAsc(contentId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ContentSession> findPendingByContentId(Long contentId) {
+        return contentSessionRepository.findByContentContentIdAndStatusOrderByStartsAtAsc(
+            contentId,
+            ContentSessionStatus.PENDING
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public void validatePendingSessionExists(Long contentId) {
+        if (findPendingByContentId(contentId).isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+    }
+
+    public List<ContentSession> findScheduledByContentId(Long contentId) {
+        return contentSessionRepository.findByContentContentIdAndStatusOrderByStartsAtAsc(
+            contentId,
+            ContentSessionStatus.SCHEDULED
+        );
+    }
+
+    public boolean hasNonTerminalSessionForEnd(Long contentId) {
+        return contentSessionRepository.existsNonTerminalSessionForEnd(
+            contentId,
+            END_TERMINAL_STATUSES
+        );
+    }
+
+    public ContentSession findCancelTargetForUpdate(Long sessionId) {
+        return contentSessionRepository.findCancelTargetForUpdate(sessionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public boolean lockConfirmableReservationTarget(Long sessionId) {
+        return contentSessionRepository.findConfirmableReservationTargetIdForUpdate(sessionId).isPresent();
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void lockForUpdate(Long sessionId) {
+        contentSessionRepository.findBySessionIdForUpdate(sessionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public List<ContentSession> createPendingSessions(
+        Content content,
+        Region region,
+        List<CreateContentSessionCommand> commands
+    ) {
+        List<ContentSession> sessions = commands.stream()
+            .map(command -> new ContentSession(
+                content,
+                region,
+                command.startsAt(),
+                command.endsAt(),
+                command.checkinOpenAt(),
+                command.checkinCloseAt(),
+                command.capacity()
+            ))
+            .toList();
+        return contentSessionRepository.saveAllAndFlush(sessions);
+    }
+
+    public List<ContentSession> findApprovalTargetsForUpdate(Long contentId) {
+        return contentSessionRepository.findApprovalTargetsForUpdate(contentId);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void lockSuspendTargetsForUpdate(Long contentId) {
+        contentSessionRepository.findSuspendTargetsForUpdate(contentId);
+    }
+
+    public List<ContentSession> approveAll(
+        List<ContentSession> contentSessions,
+        AppUser reviewer,
+        Instant reviewedAt
+    ) {
+        if (contentSessions.isEmpty()
+            || contentSessions.stream().anyMatch(
+                contentSession -> contentSession.getStatus() != ContentSessionStatus.PENDING
+            )) {
+            throw new BusinessException(ErrorCode.CONTENT_STATE_CONFLICT);
+        }
+        contentSessions.forEach(contentSession -> contentSession.approve(reviewer, reviewedAt));
+        return contentSessionRepository.saveAllAndFlush(contentSessions);
     }
 
     @Transactional(readOnly = true)
@@ -46,5 +151,69 @@ public class ContentSessionService {
         if (updatedCount == 0) {
             throw new BusinessException(ErrorCode.RESERVATION_HOLD_CONFLICT);
         }
+    }
+
+    public ContentSession cancel(
+        ContentSession contentSession,
+        AppUser operator,
+        Instant cancelledAt,
+        String cancellationReason
+    ) {
+        if (contentSession.getStatus() != ContentSessionStatus.SCHEDULED) {
+            throw new BusinessException(ErrorCode.SESSION_NOT_CANCELLABLE);
+        }
+        contentSession.cancel(operator, cancelledAt, cancellationReason);
+        return contentSessionRepository.saveAndFlush(contentSession);
+    }
+
+    public ContentSession releaseCapacity(ContentSession contentSession, int quantity) {
+        if (quantity == 0) {
+            return contentSession;
+        }
+        contentSession.releaseCapacity(quantity);
+        return contentSessionRepository.saveAndFlush(contentSession);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void restoreCapacity(Long sessionId, int quantity) {
+        int updatedCount = contentSessionRepository.increaseRemainingCapacityIfWithinCapacity(sessionId, quantity);
+        if (updatedCount == 0) {
+            throw new IllegalStateException("failed to restore content session capacity");
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public List<Long> findNoShowProcessingTargetSessionIds() {
+        return contentSessionRepository.findNoShowProcessingTargetSessionIds(ContentSessionStatus.SCHEDULED);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<ContentSession> findNoShowProcessingTargetForUpdate(Long sessionId) {
+        return contentSessionRepository.findNoShowProcessingTargetForUpdate(
+            sessionId,
+            ContentSessionStatus.SCHEDULED
+        );
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean completeIfNoConfirmedReservation(Long sessionId) {
+        return contentSessionRepository.completeIfNoConfirmedReservation(sessionId) == 1;
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public ContentSession findCompletedSessionForNoShowAudit(Long sessionId) {
+        return contentSessionRepository.findCompletedSessionForNoShowAudit(
+            sessionId,
+            ContentSessionStatus.COMPLETED
+        ).orElseThrow(() -> new IllegalStateException("completed content session does not exist"));
+    }
+
+    public record CreateContentSessionCommand(
+        Instant startsAt,
+        Instant endsAt,
+        Instant checkinOpenAt,
+        Instant checkinCloseAt,
+        int capacity
+    ) {
     }
 }

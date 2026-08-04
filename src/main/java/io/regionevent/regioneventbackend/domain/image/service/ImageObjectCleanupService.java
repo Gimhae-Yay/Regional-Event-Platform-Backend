@@ -44,6 +44,18 @@ public class ImageObjectCleanupService {
         return deleteStorageObjects(cleanupTargets);
     }
 
+    public int deletePendingObject(
+        Long imageObjectId,
+        String objectKey
+    ) {
+        ImageObjectCleanupTarget cleanupTarget = new ImageObjectCleanupTarget(imageObjectId, objectKey);
+        if (deleteStorageObject(cleanupTarget)) {
+            return deleteImageObject(cleanupTarget.imageObjectId());
+        }
+        recordDeleteAttempt(cleanupTarget.imageObjectId());
+        return 0;
+    }
+
     private List<ImageObjectCleanupTarget> findCleanupTargets() {
         List<ImageObject> expiredUploadCandidates =
             imageObjectRepository.findExpiredUnlinkedUploadCandidateIdsWithoutDirectReferences(

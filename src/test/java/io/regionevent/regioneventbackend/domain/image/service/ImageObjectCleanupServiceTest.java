@@ -152,6 +152,40 @@ class ImageObjectCleanupServiceTest {
     }
 
     @Test
+    void deletePendingObject_whenStorageDeletionSucceeds_deletesStorageAndRow() {
+        ImageObject imageObject = saveDeletePendingImageObject("content/delete-immediate.webp");
+
+        int deletedCount = imageObjectCleanupService.deletePendingObject(
+            imageObject.getImageObjectId(),
+            imageObject.getObjectKey()
+        );
+
+        assertThat(deletedCount).isOne();
+        assertThat(imageObjectRepository.existsById(imageObject.getImageObjectId())).isFalse();
+        assertThat(imageStorageGateway.deletedObjectKeys()).containsExactly("content/delete-immediate.webp");
+    }
+
+    @Test
+    void deletePendingObject_whenStorageDeletionFails_recordsRetryState() {
+        ImageObject imageObject = saveDeletePendingImageObject("content/delete-immediate-failure.webp");
+        imageStorageGateway.failDeleteFor(imageObject.getObjectKey());
+        Instant beforeCleanup = Instant.now().minusSeconds(5);
+
+        int deletedCount = imageObjectCleanupService.deletePendingObject(
+            imageObject.getImageObjectId(),
+            imageObject.getObjectKey()
+        );
+
+        Instant afterCleanup = Instant.now().plusSeconds(5);
+        ImageObject foundImageObject = imageObjectRepository.findById(imageObject.getImageObjectId()).orElseThrow();
+        assertThat(deletedCount).isZero();
+        assertThat(foundImageObject.getLifecycleStatus()).isEqualTo(ImageLifecycleStatus.DELETE_PENDING);
+        assertThat(foundImageObject.getDeleteAttemptCount()).isOne();
+        assertThat(foundImageObject.getLastDeleteAttemptedAt()).isBetween(beforeCleanup, afterCleanup);
+        assertThat(imageStorageGateway.deletedObjectKeys()).containsExactly("content/delete-immediate-failure.webp");
+    }
+
+    @Test
     void cleanupExpiredUnlinkedUploadCandidates_whenContentReferencesImage_keepsImageObject() {
         ImageObject imageObject = saveUploadCandidate("content/content-reference.webp", Instant.now().minusSeconds(60));
         Content content = saveContent("content-reference");
@@ -366,6 +400,11 @@ class ImageObjectCleanupServiceTest {
 
         @Override
         public StoredObjectMetadata findMetadata(String objectKey) {
+            throw new UnsupportedOperationException("not used in cleanup tests");
+        }
+
+        @Override
+        public PresignedViewUrl createPresignedGetUrl(String objectKey) {
             throw new UnsupportedOperationException("not used in cleanup tests");
         }
 

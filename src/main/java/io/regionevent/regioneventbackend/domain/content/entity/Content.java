@@ -156,18 +156,123 @@ public class Content {
     }
 
     public void softDelete() {
+        softDelete(Instant.now());
+    }
+
+    public void softDelete(Instant deletedAt) {
         if (status != ContentStatus.PENDING && status != ContentStatus.APPROVED) {
             throw new IllegalStateException("only pending or approved content can be soft deleted");
         }
-        if (deletedAt != null) {
+        if (this.deletedAt != null) {
             throw new IllegalStateException("content is already soft deleted");
         }
-        deletedAt = Instant.now();
+        this.deletedAt = requireNotNull(deletedAt, "deletedAt");
+    }
+
+    public ImageObject detachRepresentativeImage() {
+        ImageObject detachedImageObject = representativeImageObject;
+        representativeImageObject = null;
+        representativeImageAssignedAt = null;
+        return detachedImageObject;
+    }
+
+    public void approve() {
+        if (deletedAt != null) {
+            throw new IllegalStateException("soft deleted content cannot be approved");
+        }
+        if (status != ContentStatus.PENDING) {
+            throw new IllegalStateException("content status must be PENDING but was " + status);
+        }
+        status = ContentStatus.APPROVED;
+    }
+
+    public void reject() {
+        if (deletedAt != null) {
+            throw new IllegalStateException("soft deleted content cannot be rejected");
+        }
+        if (status != ContentStatus.PENDING) {
+            throw new IllegalStateException("content status must be PENDING but was " + status);
+        }
+        status = ContentStatus.REJECTED;
+    }
+
+    public void submitForReview() {
+        if (deletedAt != null) {
+            throw new IllegalStateException("soft deleted content cannot be submitted");
+        }
+        if (status != ContentStatus.REJECTED) {
+            throw new IllegalStateException("content status must be REJECTED but was " + status);
+        }
+        status = ContentStatus.PENDING;
+    }
+
+    public void end() {
+        if (deletedAt != null) {
+            throw new IllegalStateException("soft deleted content cannot be ended");
+        }
+        if (status != ContentStatus.PUBLISHED) {
+            throw new IllegalStateException("content status must be PUBLISHED but was " + status);
+        }
+        status = ContentStatus.ENDED;
+    }
+
+    public void suspend() {
+        if (deletedAt != null) {
+            throw new IllegalStateException("soft deleted content cannot be suspended");
+        }
+        if (status != ContentStatus.PUBLISHED) {
+            throw new IllegalStateException("content status must be PUBLISHED but was " + status);
+        }
+        status = ContentStatus.SUSPENDED;
     }
 
     public void assignRepresentativeImage(ImageObject imageObject, Instant assignedAt) {
         representativeImageObject = requireNotNull(imageObject, "imageObject");
         representativeImageAssignedAt = requireNotNull(assignedAt, "assignedAt");
+    }
+
+    public void requestPrePublicationRevision() {
+        if (status != ContentStatus.APPROVED) {
+            throw new IllegalStateException("only approved content can request pre-publication revision");
+        }
+        status = ContentStatus.PENDING;
+    }
+
+    public void replaceEditableFields(
+        String title,
+        String description,
+        String locationText,
+        String operatingHoursText,
+        String contactText,
+        String precautions,
+        String ageRequirement,
+        String materials,
+        String cancellationPolicyText,
+        Instant publishAt
+    ) {
+        this.title = requireNotBlank(title, "title");
+        this.description = requireNotBlank(description, "description");
+        this.locationText = requireNotBlank(locationText, "locationText");
+        this.operatingHoursText = requireNotBlank(operatingHoursText, "operatingHoursText");
+        this.contactText = requireNotBlank(contactText, "contactText");
+        this.precautions = requireNotBlank(precautions, "precautions");
+        this.ageRequirement = requireNotBlank(ageRequirement, "ageRequirement");
+        this.materials = requireNotBlank(materials, "materials");
+        this.cancellationPolicyText = requireNotBlank(cancellationPolicyText, "cancellationPolicyText");
+        this.publishAt = requireNotNull(publishAt, "publishAt");
+    }
+
+    public boolean isOwnedBy(Long userId) {
+        return operator != null && operator.getUserId().equals(userId);
+    }
+
+    public boolean isScopedTo(Long regionId) {
+        return region != null && region.getRegionId().equals(regionId);
+    }
+
+    public boolean hasRepresentativeImage(Long imageObjectId) {
+        return representativeImageObject != null
+            && representativeImageObject.getImageObjectId().equals(imageObjectId);
     }
 
     public Long getContentId() {

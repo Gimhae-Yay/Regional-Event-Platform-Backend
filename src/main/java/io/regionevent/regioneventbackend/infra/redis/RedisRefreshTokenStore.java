@@ -25,8 +25,7 @@ public class RedisRefreshTokenStore implements RefreshTokenStore {
     private static final String ROTATION_SUFFIX = ":rotation";
     private static final long ROTATION_TTL_MILLIS = 5_000L;
 
-    private static final long CREATED = 1L;
-    private static final long STARTED = 1L;
+    private static final long SUCCESS = 1L;
     private static final long CONFLICT = 2L;
 
     private static final DefaultRedisScript<Long> CREATE_FAMILY_SCRIPT = script("""
@@ -87,7 +86,7 @@ public class RedisRefreshTokenStore implements RefreshTokenStore {
             return 0
         end
         if redis.call('GET', KEYS[4]) ~= ARGV[5] then
-            return 0
+            return 2
         end
         local indexedExpiry = redis.call('ZSCORE', KEYS[5], ARGV[4])
         if not indexedExpiry or tonumber(indexedExpiry) ~= expiry then
@@ -116,16 +115,22 @@ public class RedisRefreshTokenStore implements RefreshTokenStore {
     private static final DefaultRedisScript<Long> REVOKE_FAMILY_SCRIPT = script("""
         local expiry = tonumber(ARGV[1])
         local now = tonumber(ARGV[2])
-        local activeTokenId = redis.call('GET', KEYS[1])
-        if activeTokenId then
-            redis.call('DEL', ARGV[4] .. activeTokenId .. ARGV[5])
+        if expiry <= now or redis.call('EXISTS', KEYS[2]) == 1 then
+            return 0
         end
+        local activeTokenId = redis.call('GET', KEYS[1])
+        if not activeTokenId or activeTokenId ~= ARGV[4] then
+            return 0
+        end
+        local indexedExpiry = redis.call('ZSCORE', KEYS[3], ARGV[3])
+        if not indexedExpiry or tonumber(indexedExpiry) ~= expiry then
+            return 0
+        end
+        redis.call('DEL', ARGV[5] .. activeTokenId .. ARGV[6])
         redis.call('DEL', KEYS[1])
         redis.call('ZREM', KEYS[3], ARGV[3])
-        if expiry > now then
-            redis.call('SET', KEYS[2], '1')
-            redis.call('PEXPIREAT', KEYS[2], expiry)
-        end
+        redis.call('SET', KEYS[2], '1')
+        redis.call('PEXPIREAT', KEYS[2], expiry)
         local latest = redis.call('ZRANGE', KEYS[3], -1, -1, 'WITHSCORES')
         if #latest == 0 then
             redis.call('DEL', KEYS[3])
@@ -175,7 +180,7 @@ public class RedisRefreshTokenStore implements RefreshTokenStore {
             refreshToken.tokenId().toString(),
             refreshToken.familyId().toString()
         );
-        if (result != CREATED) {
+        if (result != SUCCESS) {
             throw new RefreshTokenStoreUnavailableException(new IllegalStateException("Unable to create refresh token family"));
         }
     }
@@ -200,7 +205,7 @@ public class RedisRefreshTokenStore implements RefreshTokenStore {
             KEY_PREFIX + "token:",
             ROTATION_SUFFIX
         );
-        if (result == STARTED) {
+        if (result == SUCCESS) {
             return RotationStartResult.STARTED;
         }
         if (result == CONFLICT) {
@@ -210,7 +215,7 @@ public class RedisRefreshTokenStore implements RefreshTokenStore {
     }
 
     @Override
-    public boolean completeRotation(RefreshToken refreshToken, UUID nextTokenId, UUID attemptId) {
+    public RotationCompletionResult completeRotation(RefreshToken refreshToken, UUID nextTokenId, UUID attemptId) {
         long result = execute(
             COMPLETE_ROTATION_SCRIPT,
             List.of(
@@ -227,7 +232,13 @@ public class RedisRefreshTokenStore implements RefreshTokenStore {
             attemptId.toString(),
             nextTokenId.toString()
         );
-        return result == CREATED;
+        if (result == SUCCESS) {
+            return RotationCompletionResult.COMPLETED;
+        }
+        if (result == CONFLICT) {
+            return RotationCompletionResult.CONFLICT;
+        }
+        return RotationCompletionResult.INVALID;
     }
 
     @Override
@@ -247,6 +258,7 @@ public class RedisRefreshTokenStore implements RefreshTokenStore {
             Long.toString(expiresAtMillis(refreshToken)),
             Long.toString(currentMillis()),
             refreshToken.familyId().toString(),
+            refreshToken.tokenId().toString(),
             KEY_PREFIX + "token:",
             ROTATION_SUFFIX
         );

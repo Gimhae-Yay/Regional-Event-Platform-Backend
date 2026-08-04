@@ -35,6 +35,7 @@
 | [ADR-0044](../adr/0044-use-delegating-bcrypt-password-encoder.md#결정) | 교체 가능한 BCrypt 비밀번호 해싱 |
 | [ADR-0045](../adr/0045-use-stateless-bearer-security-with-same-site-refresh-cookie.md#결정) | 무상태 Bearer 보안 체인과 동일 사이트 Refresh 쿠키 경계 |
 | [ADR-0052](../adr/0052-define-refresh-token-security-profile-and-fail-closed-redis-state.md#결정) | 전용 Refresh JWT, 14일 절대 계열 수명과 Redis 상태 소실 페일 클로즈 |
+| [ADR-0053](../adr/0053-serialize-logout-and-refresh-by-active-jti.md#결정) | 활성 `jti` 기준 로그아웃 폐기와 갱신·로그아웃 경합 순서 |
 
 > ADR-0002와 ADR-0005의 전체 관리자 관련 결정 부분은 ADR-0009로 대체한다.
 
@@ -44,7 +45,7 @@
 - 회원 가입, 로그인과 로그아웃을 제공한다.
 - 로그인 성공 시 Access Token은 응답 `Authorization` 헤더로, Refresh Token은 `HttpOnly`·`Secure`·`SameSite=Strict` 쿠키로 발급한다.
 - 로그인마다 독립된 Refresh Token 계열을 만들며, 계열은 최초 로그인부터 최대 14일만 유효하다. 갱신은 같은 계열을 회전할 뿐 만료를 연장하지 않는다.
-- 로그아웃은 현재 Refresh Token 계열만 폐기하고 같은 이름·경로의 Refresh Token 쿠키를 만료시킨다. Access Token은 짧은 만료 전까지 유효할 수 있다.
+- 로그아웃은 제출 Refresh Token의 `jti`가 활성 `jti`와 일치할 때만 현재 계열을 폐기하고 같은 이름·경로의 Refresh Token 쿠키를 만료시킨다. 갱신 완료 뒤 소비된 이전 토큰으로 요청하면 서버 상태는 바꾸지 않고 Cookie만 만료한다. Access Token은 짧은 만료 전까지 유효할 수 있다.
 - 방문자, 운영자, 지역 관리자 역할을 구분한다.
 - 서버는 신규 콘텐츠 생성에는 승인된 운영자 역할과 담당 `region_id`를 검증하고,
   기존 자원 접근에는 역할, 담당 `region_id`, 운영자-콘텐츠 소유 관계를 함께 검증한다.
@@ -174,6 +175,8 @@ Redis 폐기 전에 발생한 탈퇴 트랜잭션 예외는 `WITHDRAWING` 전환
 | [ADR-0011](../adr/0011-bootstrap-operator-ownership-on-content-creation.md#결정) | 승인 후 최초 콘텐츠 생성 시 서버가 소유자·지역을 설정하는 방식 |
 | [ADR-0012](../adr/0012-retain-author-unlinked-reviews-and-visits-after-withdrawal.md#결정) | 운영자 승인과 회원 탈퇴의 경합 처리 |
 | [ADR-0026](../adr/0026-select-signup-role-and-create-operator-application.md#결정) | 가입 시 운영자 `PENDING` 신청 생성과 승인 전 권한 차단 |
+| [ADR-0036](../adr/0036-expose-business-information-only-in-protected-review-detail.md#결정) | 담당 지역 관리자 심사용 상세 조회에만 사업자 정보 원문 노출 |
+| [ADR-0055](../adr/0055-defer-business-information-encryption-until-after-operator-request.md#결정) | 재신청 구현 뒤 별도 이슈에서 사업자 정보 암호화 전환 |
 
 ### 기능 범위
 
@@ -202,6 +205,10 @@ Redis 폐기 전에 발생한 탈퇴 트랜잭션 예외는 `WITHDRAWING` 전환
 
 지역 관리자는 운영자 신청의 사업자 정보와 요청 지역을 수동 확인해 승인·반려하고 처리자·시각을 기록하며,
 반려 시에는 반려 사유를 기록한다.
+재신청 구현 단계에서는 기존 평문 텍스트 저장을 유지하고, 담당 지역 관리자 전용 심사용 상세 조회에서만 원문을 제공한다.
+그 밖의 HTTP 응답과 애플리케이션·접근 로그, 감사 이벤트, 오류 응답, 지표에는 원문을 포함하지 않으며,
+회원 탈퇴 완료 시 모든 신청 상태의 사업자 정보와 신청자 연결을 제거한다.
+AES-256-GCM 암호화와 기존 평문 행 이관은 [ADR-0055](../adr/0055-defer-business-information-encryption-until-after-operator-request.md)를 따라 재신청 구현 뒤 [#266](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/266)에서 완료한다.
 심사 시각은 `operator_application`이 `APPROVED` 또는 `REJECTED`로 종결될 때의 `updated_at`으로 기록하고,
 별도 심사 시각 컬럼은 두지 않는다.
 회원가입에서 `OPERATOR`를 선택한 경우 새 활성 회원과 요청 지역·사업자 정보를 가진 `PENDING` 신청을 하나의

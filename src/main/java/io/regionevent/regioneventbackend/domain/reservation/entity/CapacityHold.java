@@ -242,6 +242,28 @@ public class CapacityHold {
         this.reservation = reservation;
     }
 
+    public void consume(Instant consumedAt) {
+        if (status != CapacityHoldStatus.ACTIVE) {
+            throw new IllegalStateException("only active capacity hold can be consumed");
+        }
+        this.status = CapacityHoldStatus.CONSUMED;
+        this.terminalAt = requireNotNull(consumedAt, "consumedAt");
+        this.invalidationReason = null;
+        this.capacityReleasedAt = null;
+    }
+
+    public void invalidate(String invalidationReason, Instant invalidatedAt) {
+        if (status != CapacityHoldStatus.ACTIVE) {
+            throw new IllegalStateException("only active capacity hold can be invalidated");
+        }
+        Instant validatedInvalidatedAt = requireNotNull(invalidatedAt, "invalidatedAt");
+        String validatedInvalidationReason = requireNotBlank(invalidationReason, "invalidationReason");
+        this.status = CapacityHoldStatus.INVALIDATED;
+        this.terminalAt = validatedInvalidatedAt;
+        this.invalidationReason = validatedInvalidationReason;
+        this.capacityReleasedAt = validatedInvalidatedAt;
+    }
+
     private static <T> T requireNotNull(T value, String fieldName) {
         if (value == null) {
             throw new IllegalArgumentException(fieldName + " must not be null");
@@ -254,6 +276,13 @@ public class CapacityHold {
             throw new IllegalArgumentException("quantity must be positive");
         }
         return quantity;
+    }
+
+    private static String requireNotBlank(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(fieldName + " must not be null or blank");
+        }
+        return value;
     }
 
     private static void validateSessionRegion(

@@ -16,6 +16,7 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import io.regionevent.regioneventbackend.domain.image.service.ImageStorageGateway;
 import io.regionevent.regioneventbackend.domain.image.service.ImageStorageGateway.PresignedUpload;
+import io.regionevent.regioneventbackend.domain.image.service.ImageStorageGateway.PresignedViewUrl;
 import io.regionevent.regioneventbackend.domain.image.service.ImageStorageGateway.StoredObjectMetadata;
 import io.regionevent.regioneventbackend.domain.image.service.ImageStorageException;
 
@@ -53,6 +54,7 @@ public class ImageStorageConfig {
             requireNotBlank(properties.bucketName(), "storage.s3.bucket-name"),
             clock,
             properties.presignedPutUrlTtl(),
+            properties.presignedGetUrlTtl(),
             s3Client,
             s3Presigner
         );
@@ -80,14 +82,19 @@ public class ImageStorageConfig {
         boolean enabled,
         String bucketName,
         String region,
-        Duration presignedPutUrlTtl
+        Duration presignedPutUrlTtl,
+        Duration presignedGetUrlTtl
     ) {
 
         private static final Duration DEFAULT_PRESIGNED_PUT_URL_TTL = Duration.ofMinutes(10);
+        private static final Duration DEFAULT_PRESIGNED_GET_URL_TTL = Duration.ofMinutes(5);
 
         public S3StorageProperties {
             if (presignedPutUrlTtl == null) {
                 presignedPutUrlTtl = DEFAULT_PRESIGNED_PUT_URL_TTL;
+            }
+            if (presignedGetUrlTtl == null) {
+                presignedGetUrlTtl = DEFAULT_PRESIGNED_GET_URL_TTL;
             }
         }
     }
@@ -106,6 +113,11 @@ public class ImageStorageConfig {
 
         @Override
         public StoredObjectMetadata findMetadata(String objectKey) {
+            throw imageStorageDisabled();
+        }
+
+        @Override
+        public PresignedViewUrl createPresignedGetUrl(String objectKey) {
             throw imageStorageDisabled();
         }
 

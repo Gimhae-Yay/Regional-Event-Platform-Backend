@@ -29,6 +29,7 @@ import io.regionevent.regioneventbackend.domain.image.repository.ImageObjectRepo
 import io.regionevent.regioneventbackend.domain.image.service.ImageStorageException;
 import io.regionevent.regioneventbackend.domain.image.service.ImageStorageGateway;
 import io.regionevent.regioneventbackend.domain.image.service.ImageStorageGateway.PresignedUpload;
+import io.regionevent.regioneventbackend.domain.image.service.ImageStorageGateway.PresignedViewUrl;
 import io.regionevent.regioneventbackend.domain.image.service.ImageStorageGateway.StoredObjectMetadata;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
@@ -283,6 +284,11 @@ class UploadRepresentativeImageControllerIntegrationTest {
 
         @Override
         public StoredObjectMetadata findMetadata(String objectKey) {
+            throw new UnsupportedOperationException("not used");
+        }
+
+        @Override
+        public PresignedViewUrl createPresignedGetUrl(String objectKey) {
             throw new UnsupportedOperationException("not used");
         }
 

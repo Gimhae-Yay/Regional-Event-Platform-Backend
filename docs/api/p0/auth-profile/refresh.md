@@ -5,7 +5,7 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | [FR-01 인증·역할·지역 권한](../../../p0/auth-profile.md#fr-01-인증역할지역-권한) |
 | 소유 도메인 | 인증·프로필 |
-| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ADR-0005](../../../adr/0005-use-jwt-access-and-rotating-refresh-tokens.md), [ADR-0023](../../../adr/0023-manage-refresh-token-revocation-in-redis.md), [ADR-0027](../../../adr/0027-deliver-refresh-token-in-http-only-cookie.md), [ADR-0052](../../../adr/0052-define-refresh-token-security-profile-and-fail-closed-redis-state.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ADR-0005](../../../adr/0005-use-jwt-access-and-rotating-refresh-tokens.md), [ADR-0023](../../../adr/0023-manage-refresh-token-revocation-in-redis.md), [ADR-0027](../../../adr/0027-deliver-refresh-token-in-http-only-cookie.md), [ADR-0052](../../../adr/0052-define-refresh-token-security-profile-and-fail-closed-redis-state.md), [ADR-0053](../../../adr/0053-serialize-logout-and-refresh-by-active-jti.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
@@ -125,6 +125,9 @@ Refresh Token은 JSON 본문, `Authorization` 헤더 또는 다른 일반 응답
 | 401 | `UNAUTHENTICATED` | Refresh Token이 없거나 서명·만료·활성 계열·계열 폐기·소비 상태가 유효하지 않다. 토큰을 발급하지 않으며 재로그인이 필요하다. `Set-Cookie`로 기존 `refreshToken`을 즉시 만료시킨다. |
 | 409 | `REFRESH_TOKEN_CONFLICT` | 같은 Refresh Token의 다른 갱신 요청이 진행 중이다. 토큰을 발급하지 않고 쿠키를 변경하지 않으며, 클라이언트는 진행 중인 갱신 결과를 사용하거나 완료 뒤 다시 시도한다. |
 | 503 | `AUTH_SERVICE_UNAVAILABLE` | Redis를 사용할 수 없어 계열 폐기·소비 상태를 안전하게 확인할 수 없다. 토큰을 발급하지 않고 쿠키를 변경하지 않으며 잠시 뒤 재시도할 수 있다. |
+
+`REFRESH_TOKEN_CONFLICT`의 공개 메시지는 `토큰 갱신 요청이 이미 진행 중입니다.`다.
+`AUTH_SERVICE_UNAVAILABLE`의 공개 메시지는 `인증 서비스를 일시적으로 사용할 수 없습니다.`다.
 
 #### Error Response Body
 

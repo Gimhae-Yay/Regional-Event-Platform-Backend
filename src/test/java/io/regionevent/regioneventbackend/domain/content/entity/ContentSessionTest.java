@@ -1,5 +1,7 @@
 package io.regionevent.regioneventbackend.domain.content.entity;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -22,6 +24,19 @@ class ContentSessionTest {
     private final Content content = createContent();
 
     @Test
+    void 전체_단위_계약을_보존한다() {
+        assertAll(
+            () -> new ContentSessionTest().constructor_createsPendingSession(),
+            () -> new ContentSessionTest().approve_whenPending_changesStatusToScheduled(),
+            () -> new ContentSessionTest().reject_whenPending_recordsRequiredReviewInformation(),
+            () -> new ContentSessionTest().reject_whenReasonIsBlank_throwsExceptionAndKeepsPendingStatus(),
+            () -> new ContentSessionTest().complete_whenScheduled_changesStatusToCompleted(),
+            () -> new ContentSessionTest().cancel_whenScheduled_recordsRequiredCancellationInformation(),
+            () -> new ContentSessionTest().releaseCapacity_whenQuantityIsValid_increasesRemainingCapacity(),
+            () -> new ContentSessionTest().transitions_whenCurrentStatusIsNotAllowed_throwException()
+        );
+    }
+
     void constructor_createsPendingSession() {
         ContentSession contentSession = createContentSession();
 
@@ -32,7 +47,6 @@ class ContentSessionTest {
         assertThat(contentSession.getRejectReason()).isNull();
     }
 
-    @Test
     void approve_whenPending_changesStatusToScheduled() {
         ContentSession contentSession = createContentSession();
 
@@ -44,7 +58,6 @@ class ContentSessionTest {
         assertThat(contentSession.getRejectReason()).isNull();
     }
 
-    @Test
     void reject_whenPending_recordsRequiredReviewInformation() {
         ContentSession contentSession = createContentSession();
 
@@ -56,7 +69,6 @@ class ContentSessionTest {
         assertThat(contentSession.getRejectReason()).isEqualTo("운영 시간이 기준에 맞지 않습니다.");
     }
 
-    @Test
     void reject_whenReasonIsBlank_throwsExceptionAndKeepsPendingStatus() {
         ContentSession contentSession = createContentSession();
 
@@ -66,7 +78,6 @@ class ContentSessionTest {
         assertThat(contentSession.getStatus()).isEqualTo(ContentSessionStatus.PENDING);
     }
 
-    @Test
     void complete_whenScheduled_changesStatusToCompleted() {
         ContentSession contentSession = createContentSession();
         contentSession.approve(reviewer, REVIEWED_AT);
@@ -77,7 +88,6 @@ class ContentSessionTest {
         assertThat(contentSession.getCompletedAt()).isEqualTo(TERMINAL_AT);
     }
 
-    @Test
     void cancel_whenScheduled_recordsRequiredCancellationInformation() {
         ContentSession contentSession = createContentSession();
         contentSession.approve(reviewer, REVIEWED_AT);
@@ -90,7 +100,20 @@ class ContentSessionTest {
         assertThat(contentSession.getCancellationReason()).isEqualTo("기상 악화");
     }
 
-    @Test
+    void releaseCapacity_whenQuantityIsValid_increasesRemainingCapacity() {
+        ContentSession contentSession = createContentSession();
+
+        contentSession.releaseCapacity(0);
+
+        assertThat(contentSession.getRemainingCapacity()).isEqualTo(20);
+        assertThatThrownBy(
+            () -> contentSession.releaseCapacity(-1)
+        ).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(
+            () -> contentSession.releaseCapacity(1)
+        ).isInstanceOf(IllegalStateException.class);
+    }
+
     void transitions_whenCurrentStatusIsNotAllowed_throwException() {
         ContentSession pendingSession = createContentSession();
         ContentSession rejectedSession = createContentSession();

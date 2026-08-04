@@ -1,0 +1,76 @@
+package io.regionevent.regioneventbackend.domain.content.service;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.util.UUID;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
+import io.regionevent.regioneventbackend.domain.audit.service.AuditEventActor;
+import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
+import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
+import io.regionevent.regioneventbackend.domain.content.entity.Content;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentRevision;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentRevisionStatus;
+import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
+import io.regionevent.regioneventbackend.domain.user.service.RegionAdminAuthorizationService;
+
+@Service
+public class RejectContentRevisionUseCase {
+
+    private final ContentRevisionService contentRevisionService;
+    private final RegionAdminAuthorizationService regionAdminAuthorizationService;
+    private final RecordAuditEventUseCase recordAuditEventUseCase;
+    private final Clock clock;
+
+    public RejectContentRevisionUseCase(
+        ContentRevisionService contentRevisionService,
+        RegionAdminAuthorizationService regionAdminAuthorizationService,
+        RecordAuditEventUseCase recordAuditEventUseCase,
+        Clock clock
+    ) {
+        this.contentRevisionService = contentRevisionService;
+        this.regionAdminAuthorizationService = regionAdminAuthorizationService;
+        this.recordAuditEventUseCase = recordAuditEventUseCase;
+        this.clock = clock;
+    }
+
+    @Transactional
+    public RejectContentRevisionResult reject(
+        Long userId,
+        Long revisionId,
+        String reason,
+        UUID requestId
+    ) {
+        ContentRevision revision = contentRevisionService.findReviewTargetForUpdate(revisionId);
+        Content content = revision.getContent();
+        UserRoleAssignment reviewerAssignment = regionAdminAuthorizationService.authorize(
+            userId,
+            content.getRegion().getRegionId()
+        );
+        Instant reviewedAt = clock.instant();
+
+        ContentRevision rejectedRevision = contentRevisionService.reject(
+            revision,
+            reviewerAssignment.getAppUser(),
+            reviewedAt,
+            reason
+        );
+        recordAuditEventUseCase.record(new AuditEventCommand(
+            requestId,
+            content.getRegion(),
+            AuditEventTargetType.CONTENT,
+            content.getContentId(),
+            ContentRevisionStatus.EDIT_REQUESTED.name(),
+            ContentRevisionStatus.EDIT_REJECTED.name(),
+            AuditEventResult.SUCCESS,
+            null,
+            new AuditEventActor(reviewerAssignment),
+            reviewedAt
+        ));
+        return RejectContentRevisionResult.from(rejectedRevision);
+    }
+}
