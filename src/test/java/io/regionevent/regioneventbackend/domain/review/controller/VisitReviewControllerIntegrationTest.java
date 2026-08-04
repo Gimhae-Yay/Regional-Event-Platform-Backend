@@ -15,14 +15,20 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -55,6 +61,9 @@ import io.regionevent.regioneventbackend.domain.review.repository.ReviewReposito
 import io.regionevent.regioneventbackend.domain.review.service.CreateVisitReviewUseCase;
 import io.regionevent.regioneventbackend.domain.review.service.DeleteReviewUseCase;
 import io.regionevent.regioneventbackend.domain.review.service.ReviewService;
+import io.regionevent.regioneventbackend.domain.review.service.ReviewOriginalPurgeResult;
+import io.regionevent.regioneventbackend.domain.review.service.ReviewOriginalPurgeScheduler;
+import io.regionevent.regioneventbackend.domain.review.service.ReviewOriginalPurgeService;
 import io.regionevent.regioneventbackend.domain.review.service.UpdateReviewUseCase;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
@@ -91,6 +100,7 @@ class VisitReviewControllerIntegrationTest {
     private final UserRoleAssignmentService userRoleAssignmentService;
     private final VisitService visitService;
     private final ReviewService reviewService;
+    private final ReviewOriginalPurgeService reviewOriginalPurgeService;
     private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase;
     private final Clock clock;
     private final TransactionTemplate transactionTemplate;
@@ -114,6 +124,7 @@ class VisitReviewControllerIntegrationTest {
         UserRoleAssignmentService userRoleAssignmentService,
         VisitService visitService,
         ReviewService reviewService,
+        ReviewOriginalPurgeService reviewOriginalPurgeService,
         RecordFailedAuditEventUseCase recordFailedAuditEventUseCase,
         Clock clock,
         PlatformTransactionManager transactionManager
@@ -135,6 +146,7 @@ class VisitReviewControllerIntegrationTest {
         this.userRoleAssignmentService = userRoleAssignmentService;
         this.visitService = visitService;
         this.reviewService = reviewService;
+        this.reviewOriginalPurgeService = reviewOriginalPurgeService;
         this.recordFailedAuditEventUseCase = recordFailedAuditEventUseCase;
         this.clock = clock;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
@@ -608,6 +620,103 @@ class VisitReviewControllerIntegrationTest {
     }
 
     @Test
+    void purgeDeletedReviewOriginals_purgesOnlyEligibleReviewAndIsRepeatable() {
+        Review eligibleReview = savePublishedReview(createFixture(true));
+        Review notExpiredReview = savePublishedReview(createFixture(true));
+        Review publishedReview = savePublishedReview(createFixture(true));
+        Fixture purgedFixture = createFixture(true);
+        Review alreadyPurgedReview = reviewRepository.saveAndFlush(new Review(
+            purgedFixture.region(),
+            purgedFixture.visit(),
+            purgedFixture.user(),
+            purgedFixture.content(),
+            null,
+            null,
+            ReviewStatus.DELETED,
+            Instant.now().minusSeconds(31L * 24 * 60 * 60)
+        ));
+        markReviewDeletedDaysAgo(eligibleReview, 30);
+        markReviewDeletedDaysAgo(notExpiredReview, 29);
+
+        ReviewOriginalPurgeResult firstResult = reviewOriginalPurgeService.purgeDeletedReviewOriginals();
+        ReviewOriginalPurgeResult secondResult = reviewOriginalPurgeService.purgeDeletedReviewOriginals();
+
+        assertThat(firstResult.purgedReviewCount()).isEqualTo(1);
+        assertThat(secondResult.purgedReviewCount()).isZero();
+        assertThat(reviewRepository.findById(eligibleReview.getReviewId()))
+            .hasValueSatisfying(review -> {
+                assertThat(review.getRating()).isNull();
+                assertThat(review.getReviewText()).isNull();
+                assertThat(review.getStatus()).isEqualTo(ReviewStatus.DELETED);
+            });
+        assertThat(reviewRepository.findById(notExpiredReview.getReviewId()))
+            .hasValueSatisfying(review -> assertThat(review.getRating()).isEqualTo(5));
+        assertThat(reviewRepository.findById(publishedReview.getReviewId()))
+            .hasValueSatisfying(review -> assertThat(review.getReviewText()).isNotBlank());
+        assertThat(reviewRepository.findById(alreadyPurgedReview.getReviewId()))
+            .hasValueSatisfying(review -> {
+                assertThat(review.getRating()).isNull();
+                assertThat(review.getReviewText()).isNull();
+            });
+    }
+
+    @Test
+    void purgeDeletedReviewOriginals_whenBatchFails_rollsBackAndRetries() {
+        Review review = savePublishedReview(createFixture(true));
+        markReviewDeletedDaysAgo(review, 30);
+        jdbcTemplate.update("DELETE FROM review WHERE rating IS NULL AND review_text IS NULL");
+        jdbcTemplate.execute("ALTER TABLE review ALTER COLUMN review_text SET NOT NULL");
+
+        try {
+            assertThatThrownBy(reviewOriginalPurgeService::purgeDeletedReviewOriginals)
+                .isInstanceOf(RuntimeException.class);
+            assertThat(reviewRepository.findById(review.getReviewId()))
+                .hasValueSatisfying(savedReview -> assertThat(savedReview.getReviewText()).isNotBlank());
+        } finally {
+            jdbcTemplate.execute("ALTER TABLE review ALTER COLUMN review_text DROP NOT NULL");
+        }
+
+        assertThat(reviewOriginalPurgeService.purgeDeletedReviewOriginals().purgedReviewCount()).isEqualTo(1);
+        assertThat(reviewRepository.findById(review.getReviewId()))
+            .hasValueSatisfying(savedReview -> assertThat(savedReview.getReviewText()).isNull());
+    }
+
+    @Test
+    @Timeout(10)
+    void purgeDeletedReviewOriginals_whenConcurrent_purgesOriginalOnce() throws Exception {
+        Review review = savePublishedReview(createFixture(true));
+        markReviewDeletedDaysAgo(review, 30);
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<ReviewOriginalPurgeResult> first = executorService.submit(
+                (Callable<ReviewOriginalPurgeResult>) reviewOriginalPurgeService::purgeDeletedReviewOriginals
+            );
+            Future<ReviewOriginalPurgeResult> second = executorService.submit(
+                (Callable<ReviewOriginalPurgeResult>) reviewOriginalPurgeService::purgeDeletedReviewOriginals
+            );
+
+            assertThat(first.get().purgedReviewCount() + second.get().purgedReviewCount()).isEqualTo(1);
+        }
+
+        assertThat(reviewRepository.findById(review.getReviewId()))
+            .hasValueSatisfying(savedReview -> {
+                assertThat(savedReview.getRating()).isNull();
+                assertThat(savedReview.getReviewText()).isNull();
+                assertThat(savedReview.getStatus()).isEqualTo(ReviewStatus.DELETED);
+            });
+    }
+
+    @Test
+    void reviewOriginalPurgeScheduler_runsAtKoreaMidnight() throws NoSuchMethodException {
+        Scheduled scheduled = ReviewOriginalPurgeScheduler.class
+            .getDeclaredMethod("purgeDeletedReviewOriginals")
+            .getAnnotation(Scheduled.class);
+
+        assertThat(scheduled.cron()).isEqualTo("0 0 0 * * *");
+        assertThat(scheduled.zone()).isEqualTo("Asia/Seoul");
+    }
+
+    @Test
     void deleteReview_whenSuccessAuditRecordingFails_rollsBackDeletion() {
         Fixture fixture = createFixture(true);
         Review review = savePublishedReview(fixture);
@@ -716,6 +825,14 @@ class VisitReviewControllerIntegrationTest {
             ReviewStatus.PUBLISHED,
             null
         ));
+    }
+
+    private void markReviewDeletedDaysAgo(Review review, int daysAgo) {
+        jdbcTemplate.update(
+            "UPDATE review SET status = 'DELETED', deleted_at = DATEADD('DAY', ?, CURRENT_TIMESTAMP(6)) WHERE review_id = ?",
+            -daysAgo,
+            review.getReviewId()
+        );
     }
 
     private Fixture createFixture(boolean assignVisitorRole) {
