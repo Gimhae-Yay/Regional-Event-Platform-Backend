@@ -15,14 +15,10 @@ import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import io.regionevent.regioneventbackend.domain.user.dto.RefreshAccessTokenResult;
@@ -33,18 +29,12 @@ import io.regionevent.regioneventbackend.global.security.refresh.JwtRefreshToken
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshToken;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenConflictException;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenService;
-import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
-import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
+import io.regionevent.regioneventbackend.support.redis.MySqlRedisTestSupport;
 
 @SpringBootTest
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-class RefreshAccessTokenUseCaseIntegrationTest extends NonTransactionalMySqlTestSupport {
-
-    @Container
-    static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7.4-alpine")
-        .withCommand("redis-server", "--maxmemory", "64mb", "--maxmemory-policy", "noeviction")
-        .withExposedPorts(6379);
+class RefreshAccessTokenUseCaseIntegrationTest extends MySqlRedisTestSupport {
 
     private final RefreshAccessTokenUseCase refreshAccessTokenUseCase;
     private final RefreshTokenService refreshTokenService;
@@ -68,13 +58,6 @@ class RefreshAccessTokenUseCaseIntegrationTest extends NonTransactionalMySqlTest
         this.appUserRepository = appUserRepository;
         this.stringRedisTemplate = stringRedisTemplate;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
-    }
-
-    @DynamicPropertySource
-    static void configureProperties(DynamicPropertyRegistry registry) {
-        SharedMySqlTestContainer.registerDataSourceProperties(registry);
-        registry.add("spring.data.redis.host", REDIS::getHost);
-        registry.add("spring.data.redis.port", REDIS::getFirstMappedPort);
     }
 
     @BeforeEach

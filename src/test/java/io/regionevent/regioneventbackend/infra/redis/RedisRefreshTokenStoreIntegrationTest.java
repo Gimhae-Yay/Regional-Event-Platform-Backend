@@ -13,38 +13,24 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshToken;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
+import io.regionevent.regioneventbackend.support.redis.RedisTestSupport;
 
 @SpringBootTest
 @Testcontainers(disabledWithoutDocker = true)
-class RedisRefreshTokenStoreIntegrationTest {
+class RedisRefreshTokenStoreIntegrationTest extends RedisTestSupport {
 
     private static final Duration TTL_TEST_DURATION = Duration.ofSeconds(2);
     private static final long EXPIRY_WAIT_BUFFER_MILLIS = 100L;
-
-    @Container
-    static final GenericContainer<?> redis = new GenericContainer<>("redis:7.4-alpine")
-        .withCommand("redis-server", "--maxmemory", "64mb", "--maxmemory-policy", "noeviction")
-        .withExposedPorts(6379);
 
     @Autowired
     private RedisRefreshTokenStore refreshTokenStore;
 
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
-
-    @DynamicPropertySource
-    static void redisProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.data.redis.host", redis::getHost);
-        registry.add("spring.data.redis.port", redis::getFirstMappedPort);
-    }
 
     @BeforeEach
     void clearRedis() {
