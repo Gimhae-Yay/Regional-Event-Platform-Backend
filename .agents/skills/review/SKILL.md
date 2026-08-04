@@ -35,15 +35,16 @@ description: Pull Request, 현재 브랜치 또는 로컬 변경 전체를 연�
 
 1. 가장 가까운 `AGENTS.md`와 저장소 지침
 2. PR 설명, 연결 이슈, 수용 기준, PR 템플릿과 기존 리뷰
-3. 변경과 직접 관련된 승인된 ADR
-4. 제품 범위와 수용 기준은 `docs/local-stamp-platform-prd.md`
-5. 첫 파일럿의 콘텐츠·방문 모델 경계는 `docs/local-stamp-pilot-scope-and-content-model-memo.md`
-6. 선정 기술과 설계 원칙은 `docs/local-stamp-platform-tech-stack.md`
-7. 문서 충돌 여부는 필요할 때 `docs/document-consistency-review.md`
+3. 변경 API의 공통 계약은 `docs/api/common/README.md`와 연결된 공통 명세, 엔드포인트 계약은 `docs/api/<문서-분류>/<도메인>/*.md`에서 실제 대응 명세를 확인한다. 여기서 문서 분류는 `p0`, `future`처럼 `docs/api/` 하위 API 명세를 구분하는 최상위 디렉터리 이름이다.
+4. 변경 도메인의 구현 계약은 `docs/` 하위의 실제 대응 명세를 확인한다. API 문서 분류와 구현 명세 경로가 1:1로 대응한다고 가정하지 않으며, 대응 명세가 불명확하거나 없으면 경로를 추정하지 않고 `구현 계약 확인 필요`로 분리한다.
+5. 엔터티 관계, 컬럼, 제약·인덱스, migration 정합성은 `docs/erd.md`
+6. 변경과 직접 관련된 승인된 ADR
+7. 제품 범위·보안·동시성·정합성 정책 확인이 필요한 경우에만 `docs/local-stamp-platform-prd.md`
+8. 의존성·설정 또는 기술 선택 검토가 필요한 경우에만 `docs/local-stamp-platform-tech-stack.md`
 
 - 연결 이슈나 승인된 ADR이 기존 문서를 의도적으로 대체하면 적용 근거를 리뷰에 적는다.
 - 문서 간 충돌이 아직 해결되지 않았으면 임의 정책을 강제하지 않고 `정책 확인 필요`로 분리한다.
-- 제안서·기획 검토·페르소나는 배경을 이해하는 데만 사용하고, 최신 PRD·파일럿 메모와 충돌하면 구현 계약으로 간주하지 않는다.
+- 제안서·과거 기획 문서는 배경 이해에만 사용한다. 구현 계약은 변경 API 명세서, 도메인 구현 명세서 및 ERD를 우선 기준으로 판별하며, 이들 문서 간 충돌은 AGENTS.md의 문서 충돌 우선순위를 따른다.
 
 ### 3. 전체 변경과 주변 맥락 수집
 

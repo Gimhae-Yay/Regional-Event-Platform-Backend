@@ -234,7 +234,7 @@ public class CheckInControllerIntegrationTest {
     }
 
     @Test
-    void checkInManually_whenUnversionedPathIsUsed_returnsNotFound() throws Exception {
+    void checkInManually_whenUnversionedPathIsUsed_returnsSuccessResponse() throws Exception {
         Fixture fixture = createFixture();
 
         mockMvc.perform(post("/operator/check-ins/manual")
@@ -247,7 +247,13 @@ public class CheckInControllerIntegrationTest {
                       "reason": "QR_SCAN_FAILED"
                     }
                     """.formatted(fixture.reservation().getReservationNo())))
-            .andExpect(status().isNotFound());
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.statusCode").value(200))
+            .andExpect(jsonPath("$.code").value("SUCCESS"))
+            .andExpect(jsonPath("$.data.reservationId").value(fixture.reservation().getReservationId().toString()))
+            .andExpect(jsonPath("$.data.sessionId").value(fixture.session().getSessionId().toString()))
+            .andExpect(jsonPath("$.data.reservationStatus").value("CHECKED_IN"))
+            .andExpect(jsonPath("$.data.checkInMethod").value("RESERVATION_NUMBER"));
     }
 
     @Test
@@ -266,6 +272,112 @@ public class CheckInControllerIntegrationTest {
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.statusCode").value(400))
             .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+            .andExpect(jsonPath("$.data").isEmpty());
+    }
+
+    @Test
+    void checkInManually_whenRequestBodyIsInvalid_returnsInvalidInputResponse() throws Exception {
+        Fixture fixture = createFixture();
+
+        mockMvc.perform(post("/api/v1/operator/check-ins/manual")
+                .header("Authorization", bearerToken(fixture.operator()))
+                .header("Idempotency-Key", "manual-controller-invalid-input-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "reservationNo": " ",
+                      "reason": " "
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.statusCode").value(400))
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+            .andExpect(jsonPath("$.data").isEmpty());
+    }
+
+    @Test
+    void checkInManually_whenJsonIsMalformed_returnsInvalidJsonResponse() throws Exception {
+        Fixture fixture = createFixture();
+
+        mockMvc.perform(post("/api/v1/operator/check-ins/manual")
+                .header("Authorization", bearerToken(fixture.operator()))
+                .header("Idempotency-Key", "manual-controller-invalid-json-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "reservationNo": "%s",
+                      "reason": "QR_SCAN_FAILED"
+                    """.formatted(fixture.reservation().getReservationNo())))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.statusCode").value(400))
+            .andExpect(jsonPath("$.code").value("INVALID_JSON"))
+            .andExpect(jsonPath("$.data").isEmpty());
+    }
+
+    @Test
+    void checkInManually_whenAuthenticationIsMissing_returnsUnauthenticatedResponse() throws Exception {
+        Fixture fixture = createFixture();
+
+        mockMvc.perform(post("/api/v1/operator/check-ins/manual")
+                .header("Idempotency-Key", "manual-controller-unauthenticated-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "reservationNo": "%s",
+                      "reason": "QR_SCAN_FAILED"
+                    }
+                    """.formatted(fixture.reservation().getReservationNo())))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.statusCode").value(401))
+            .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"))
+            .andExpect(jsonPath("$.data").isEmpty());
+    }
+
+    @Test
+    void checkInManually_whenUserIsNotOperator_returnsForbiddenResponse() throws Exception {
+        Fixture fixture = createFixture();
+        AppUser visitor = saveUser("manual-controller-visitor-" + System.nanoTime());
+        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(visitor, UserRole.VISITOR, null));
+
+        mockMvc.perform(post("/api/v1/operator/check-ins/manual")
+                .header("Authorization", bearerToken(visitor))
+                .header("Idempotency-Key", "manual-controller-visitor-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "reservationNo": "%s",
+                      "reason": "QR_SCAN_FAILED"
+                    }
+                    """.formatted(fixture.reservation().getReservationNo())))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.statusCode").value(403))
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+            .andExpect(jsonPath("$.data").isEmpty());
+    }
+
+    @Test
+    void checkInManually_whenUserIsRegionAdmin_returnsForbiddenResponse() throws Exception {
+        Fixture fixture = createFixture();
+        AppUser regionAdmin = saveUser("manual-controller-region-admin-" + System.nanoTime());
+        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(
+            regionAdmin,
+            UserRole.REGION_ADMIN,
+            fixture.reservation().getRegion()
+        ));
+
+        mockMvc.perform(post("/api/v1/operator/check-ins/manual")
+                .header("Authorization", bearerToken(regionAdmin))
+                .header("Idempotency-Key", "manual-controller-region-admin-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "reservationNo": "%s",
+                      "reason": "QR_SCAN_FAILED"
+                    }
+                    """.formatted(fixture.reservation().getReservationNo())))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.statusCode").value(403))
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"))
             .andExpect(jsonPath("$.data").isEmpty());
     }
 
