@@ -93,6 +93,12 @@ public class ReservationService {
             ));
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Reservation findByReservationNoForOperatorLookup(String reservationNo) {
+        return reservationRepository.findByReservationNoForOperatorLookup(reservationNo)
+            .orElseThrow(() -> new IllegalStateException("reservation read data disappeared"));
+    }
+
     @Transactional(readOnly = true)
     public Instant findCurrentDatabaseInstant() {
         return toInstant(reservationRepository.findCurrentEpochSeconds());
