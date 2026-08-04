@@ -50,11 +50,13 @@ public interface ContentSessionRepository extends JpaRepository<ContentSession, 
         WHERE contentSession.sessionId = :sessionId
             AND contentSession.content.contentId = :contentId
             AND contentSession.region.regionId = :regionId
+            AND contentSession.status IN :reservationListStatuses
         """)
     Optional<ContentSession> findOperatorReservationListTarget(
         @Param("sessionId") Long sessionId,
         @Param("contentId") Long contentId,
-        @Param("regionId") Long regionId
+        @Param("regionId") Long regionId,
+        @Param("reservationListStatuses") List<ContentSessionStatus> reservationListStatuses
     );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

@@ -12,9 +12,12 @@ import java.util.UUID;
 import jakarta.persistence.EntityManager;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.web.servlet.MockMvc;
@@ -24,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
@@ -50,6 +54,7 @@ import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenSe
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
+@ExtendWith(OutputCaptureExtension.class)
 class OperatorSessionReservationControllerIntegrationTest {
 
     private static final Instant SESSION_STARTS_AT = Instant.parse("2030-08-10T01:00:00Z");
@@ -255,6 +260,66 @@ class OperatorSessionReservationControllerIntegrationTest {
     }
 
     @Test
+    void 회차별_예약자_목록_대상이_PENDING_또는_REJECTED면_NOT_FOUND를_반환한다() throws Exception {
+        for (ContentSessionStatus sessionStatus : List.of(
+            ContentSessionStatus.PENDING,
+            ContentSessionStatus.REJECTED
+        )) {
+            Fixture fixture = createFixture(sessionStatus);
+
+            performGet(fixture.owner(), fixture.content().getContentId(), fixture.session().getSessionId().toString())
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+        }
+    }
+
+    @Test
+    void 회차별_예약자_목록_잘못된_입력의_원문을_로그에_남기지_않는다(CapturedOutput output) throws Exception {
+        Fixture fixture = createFixture();
+        String sensitiveSessionId = "someone@example.com";
+
+        performGet(fixture.owner(), fixture.content().getContentId(), sensitiveSessionId)
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        assertThat(output.getOut())
+            .contains(
+                "Session reservation list read. requestId=",
+                "contentId=" + fixture.content().getContentId()
+                    + ", sessionId=null, resultCount=0, resultCode=INVALID_INPUT"
+            )
+            .doesNotContain(sensitiveSessionId);
+    }
+
+    @Test
+    void 회차별_예약자_목록_정합성_오류면_INTERNAL_SERVER_ERROR_결과를_로그에_남긴다(
+        CapturedOutput output
+    ) throws Exception {
+        Fixture fixture = createFixture();
+        saveReservation(
+            fixture,
+            null,
+            ReservationStatus.CONFIRMED,
+            FIRST_CONFIRMED_AT,
+            "active-hold",
+            CapacityHoldStatus.ACTIVE
+        );
+        entityManager.flush();
+        entityManager.clear();
+
+        performGet(fixture.owner(), fixture.content().getContentId(), fixture.session().getSessionId().toString())
+            .andExpect(status().isInternalServerError())
+            .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
+
+        assertThat(output.getOut()).contains(
+            "Session reservation list read. requestId=",
+            "contentId=" + fixture.content().getContentId()
+                + ", sessionId=" + fixture.session().getSessionId()
+                + ", resultCount=0, resultCode=INTERNAL_SERVER_ERROR"
+        );
+    }
+
+    @Test
     void 회차별_예약자_목록_인증되지_않으면_UNAUTHENTICATED를_반환한다() throws Exception {
         Fixture fixture = createFixture();
 
@@ -271,11 +336,15 @@ class OperatorSessionReservationControllerIntegrationTest {
     }
 
     private Fixture createFixture() {
+        return createFixture(ContentSessionStatus.SCHEDULED);
+    }
+
+    private Fixture createFixture(ContentSessionStatus sessionStatus) {
         String suffix = Long.toUnsignedString(System.nanoTime());
         Region region = regionRepository.saveAndFlush(new Region("G" + suffix, "김해시", true));
         AppUser owner = saveOperator(region, "소유 운영자");
         Content content = saveContent(region, owner, "김해 문화 체험");
-        ContentSession session = saveScheduledSession(content, region, owner);
+        ContentSession session = saveSession(content, region, owner, sessionStatus);
         return new Fixture(region, owner, content, session);
     }
 
@@ -326,6 +395,15 @@ class OperatorSessionReservationControllerIntegrationTest {
     }
 
     private ContentSession saveScheduledSession(Content content, Region region, AppUser owner) {
+        return saveSession(content, region, owner, ContentSessionStatus.SCHEDULED);
+    }
+
+    private ContentSession saveSession(
+        Content content,
+        Region region,
+        AppUser owner,
+        ContentSessionStatus sessionStatus
+    ) {
         ContentSession session = new ContentSession(
             content,
             region,
@@ -335,7 +413,13 @@ class OperatorSessionReservationControllerIntegrationTest {
             CHECKIN_CLOSE_AT,
             20
         );
-        session.approve(owner, FIRST_CONFIRMED_AT);
+        if (sessionStatus == ContentSessionStatus.SCHEDULED) {
+            session.approve(owner, FIRST_CONFIRMED_AT);
+        } else if (sessionStatus == ContentSessionStatus.REJECTED) {
+            session.reject(owner, FIRST_CONFIRMED_AT, "반려 사유");
+        } else if (sessionStatus != ContentSessionStatus.PENDING) {
+            throw new IllegalArgumentException("unsupported session status");
+        }
         return contentSessionRepository.saveAndFlush(session);
     }
 
@@ -346,14 +430,35 @@ class OperatorSessionReservationControllerIntegrationTest {
         Instant confirmedAt,
         String label
     ) {
+        return saveReservation(
+            fixture,
+            participant,
+            status,
+            confirmedAt,
+            label,
+            CapacityHoldStatus.CONSUMED
+        );
+    }
+
+    private Reservation saveReservation(
+        Fixture fixture,
+        AppUser participant,
+        ReservationStatus status,
+        Instant confirmedAt,
+        String label,
+        CapacityHoldStatus capacityHoldStatus
+    ) {
+        Instant holdTerminalAt = capacityHoldStatus == CapacityHoldStatus.CONSUMED
+            ? confirmedAt.plusSeconds(1)
+            : null;
         CapacityHold hold = capacityHoldRepository.saveAndFlush(new CapacityHold(
             fixture.region(),
             fixture.session(),
             participant,
             HELD_QUANTITY,
-            CapacityHoldStatus.CONSUMED,
+            capacityHoldStatus,
             confirmedAt.plusSeconds(600),
-            confirmedAt.plusSeconds(1),
+            holdTerminalAt,
             null,
             null,
             confirmedAt

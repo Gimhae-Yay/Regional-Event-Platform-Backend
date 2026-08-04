@@ -47,16 +47,17 @@ public class OperatorSessionReservationController {
         @RequestParam String sessionId,
         @RequestAttribute(RequestIdFilter.REQUEST_ID_ATTRIBUTE) String requestId
     ) {
+        Long parsedContentId = null;
+        Long parsedSessionId = null;
         try {
-            Long parsedContentId = toId(contentId);
-            Long parsedSessionId = toId(sessionId);
+            parsedContentId = toId(contentId);
+            parsedSessionId = toId(sessionId);
             SessionReservationListResult result = getSessionReservationsUseCase.find(
                 (Long) authentication.getPrincipal(),
                 parsedContentId,
                 parsedSessionId
             );
-            log.info(
-                "Session reservation list read. requestId={}, contentId={}, sessionId={}, resultCount={}, resultCode={}",
+            logResult(
                 requestId,
                 parsedContentId,
                 parsedSessionId,
@@ -69,16 +70,41 @@ public class OperatorSessionReservationController {
                 GetSessionReservationsResponse.from(result)
             ).toResponseEntity();
         } catch (BusinessException exception) {
-            log.warn(
-                "Session reservation list rejected. requestId={}, contentId={}, sessionId={}, resultCount={}, resultCode={}",
+            logResult(
                 requestId,
-                contentId,
-                sessionId,
+                parsedContentId,
+                parsedSessionId,
                 FAILURE_RESULT_COUNT,
                 exception.getErrorCode().code()
             );
             throw exception;
+        } catch (RuntimeException exception) {
+            logResult(
+                requestId,
+                parsedContentId,
+                parsedSessionId,
+                FAILURE_RESULT_COUNT,
+                ErrorCode.INTERNAL_SERVER_ERROR.code()
+            );
+            throw exception;
         }
+    }
+
+    private void logResult(
+        String requestId,
+        Long contentId,
+        Long sessionId,
+        int resultCount,
+        String resultCode
+    ) {
+        log.info(
+            "Session reservation list read. requestId={}, contentId={}, sessionId={}, resultCount={}, resultCode={}",
+            requestId,
+            contentId,
+            sessionId,
+            resultCount,
+            resultCode
+        );
     }
 
     private Long toId(String value) {
