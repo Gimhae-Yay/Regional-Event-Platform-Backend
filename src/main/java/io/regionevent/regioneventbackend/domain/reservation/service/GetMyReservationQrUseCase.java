@@ -5,6 +5,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 @Service
 public class GetMyReservationQrUseCase {
@@ -20,9 +22,10 @@ public class GetMyReservationQrUseCase {
         this.reservationService = reservationService;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public MyReservationQrResult get(Long userId, Long reservationId) {
-        AppUser user = appUserService.findActiveUser(userId);
+        AppUser user = appUserService.findActiveUserForUpdate(userId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
         return reservationService.issueQr(reservationId, user);
     }
 }

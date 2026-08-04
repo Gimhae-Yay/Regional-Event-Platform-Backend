@@ -7,6 +7,9 @@ import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import io.regionevent.regioneventbackend.domain.visit.entity.Visit;
 
@@ -35,4 +38,13 @@ public interface VisitRepository extends JpaRepository<Visit, Long> {
     })
     @Lock(LockModeType.PESSIMISTIC_READ)
     Optional<Visit> findByReservationReservationId(Long reservationId);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+        UPDATE visit
+        SET user_id = NULL,
+            author_unlinked_at = CURRENT_TIMESTAMP
+        WHERE user_id = :userId
+        """, nativeQuery = true)
+    int unlinkAuthorByUserId(@Param("userId") Long userId);
 }
