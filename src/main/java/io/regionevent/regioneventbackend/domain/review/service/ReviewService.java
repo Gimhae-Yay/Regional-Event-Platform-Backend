@@ -51,6 +51,30 @@ public class ReviewService {
         }
     }
 
+    public Review updatePublishedByAuthorWithinThirtyDays(
+        Long reviewId,
+        Long userId,
+        Integer rating,
+        String reviewText
+    ) {
+        int updatedCount = reviewRepository.updatePublishedByAuthorWithinThirtyDays(
+            reviewId,
+            userId,
+            rating,
+            reviewText
+        );
+        if (updatedCount == 1) {
+            return reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+        }
+        Review review = reviewRepository.findById(reviewId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+        if (review.getStatus() == ReviewStatus.DELETED) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+        throw new BusinessException(ErrorCode.FORBIDDEN);
+    }
+
     private boolean isReviewVisitUniqueConstraintViolation(DataIntegrityViolationException exception) {
         Throwable cause = exception;
         while (cause != null) {
