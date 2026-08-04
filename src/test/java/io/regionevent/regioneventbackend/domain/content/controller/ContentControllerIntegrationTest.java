@@ -1,951 +1,207 @@
 package io.regionevent.regioneventbackend.domain.content.controller;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
-import org.springframework.context.annotation.Primary;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
-
-import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
-import io.regionevent.regioneventbackend.domain.content.entity.Content;
-import io.regionevent.regioneventbackend.domain.content.entity.ContentLogStatus;
-import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
+import io.regionevent.regioneventbackend.domain.content.dto.CreateContentRequest;
+import io.regionevent.regioneventbackend.domain.content.dto.CreateContentResponse;
+import io.regionevent.regioneventbackend.domain.content.dto.UpdateMyContentRequest;
+import io.regionevent.regioneventbackend.domain.content.dto.UpdateMyContentResponse;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
-import io.regionevent.regioneventbackend.domain.content.repository.ContentLogRepository;
-import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
-import io.regionevent.regioneventbackend.domain.content.repository.ContentSessionRepository;
-import io.regionevent.regioneventbackend.domain.image.entity.ImageLifecycleStatus;
-import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
-import io.regionevent.regioneventbackend.domain.image.repository.ImageObjectRepository;
-import io.regionevent.regioneventbackend.domain.image.service.ImageStorageGateway;
-import io.regionevent.regioneventbackend.domain.image.service.ImageStorageGateway.PresignedUpload;
-import io.regionevent.regioneventbackend.domain.image.service.ImageStorageGateway.PresignedViewUrl;
-import io.regionevent.regioneventbackend.domain.image.service.ImageStorageGateway.StoredObjectMetadata;
-import io.regionevent.regioneventbackend.domain.region.entity.Region;
-import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
-import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
-import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
-import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
-import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
-import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
-import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
-import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
-@SpringBootTest
-@AutoConfigureMockMvc
-@Import(ContentControllerIntegrationTest.TestImageStorageConfig.class)
-@Transactional
-class ContentControllerIntegrationTest {
+@ContentControllerWebMvcTest
+class ContentControllerIntegrationTest extends ContentControllerWebMvcTestSupport {
 
-    private static final String CHECKSUM = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
-
-    @Autowired
-    private MockMvc mockMvc;
-
-    @Autowired
-    private JwtAccessTokenService jwtAccessTokenService;
-
-    @Autowired
-    private AppUserRepository appUserRepository;
-
-    @Autowired
-    private RegionRepository regionRepository;
-
-    @Autowired
-    private UserRoleAssignmentRepository userRoleAssignmentRepository;
-
-    @Autowired
-    private ImageObjectRepository imageObjectRepository;
-
-    @Autowired
-    private ContentRepository contentRepository;
-
-    @Autowired
-    private ContentSessionRepository contentSessionRepository;
-
-    @Autowired
-    private ContentLogRepository contentLogRepository;
-
-    @Autowired
-    private AuditEventRepository auditEventRepository;
-
-    @Autowired
-    private FakeImageStorageGateway imageStorageGateway;
-
-    @BeforeEach
-    void setUp() {
-        imageStorageGateway.reset();
-    }
+    private static final long CONTENT_ID = 200L;
+    private static final String VALID_CREATE_REQUEST = """
+        {
+          "title": "김해 문화 체험",
+          "description": "가야 문화를 체험합니다.",
+          "locationText": "김해문화의전당",
+          "operatingHoursText": "매일 10:00~18:00",
+          "contactText": "055-123-4567",
+          "precautions": "안내를 따라주세요.",
+          "ageRequirement": "만 7세 이상",
+          "materials": "편한 복장",
+          "cancellationPolicyText": "시작 하루 전까지 취소할 수 있습니다.",
+          "publishAt": "2026-08-10T10:00:00+09:00",
+          "representativeImageObjectId": "10",
+          "sessions": [
+            {
+              "startsAt": "2026-08-11T10:00:00+09:00",
+              "endsAt": "2026-08-11T12:00:00+09:00",
+              "checkinOpenAt": "2026-08-11T09:30:00+09:00",
+              "checkinCloseAt": "2026-08-11T11:30:00+09:00",
+              "capacity": 20
+            }
+          ]
+        }
+        """;
+    private static final String VALID_UPDATE_REQUEST = """
+        {
+          "title": "수정한 김해 문화 체험",
+          "description": "수정한 설명입니다.",
+          "locationText": "김해문화의전당",
+          "operatingHoursText": "매일 10:00~18:00",
+          "contactText": "055-123-4567",
+          "precautions": "안내를 따라주세요.",
+          "ageRequirement": "만 7세 이상",
+          "materials": "편한 복장",
+          "cancellationPolicyText": "시작 하루 전까지 취소할 수 있습니다.",
+          "publishAt": "2026-08-10T10:00:00+09:00",
+          "representativeImageObjectId": "11"
+        }
+        """;
 
     @Test
-    void createContent_whenApprovedOperatorRequestsValidContent_createsPendingContentWithSessionsAndLog()
-        throws Exception {
+    void 콘텐츠_생성_유효한_인증과_요청이면_생성_응답을_직렬화한다() throws Exception {
+        when(createContentUseCase.createContent(eq(AUTHENTICATED_USER_ID), any(CreateContentRequest.class)))
+            .thenReturn(new CreateContentResponse(
+                Long.toString(CONTENT_ID),
+                ContentType.EVENT_EXPERIENCE,
+                ContentStatus.PENDING,
+                Instant.parse("2026-08-04T12:00:00Z")
+            ));
 
-        AppUser operator = saveUser("content-operator@example.com");
-        Region region = saveRegion("CREATE-CONTENT");
-        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
-        ImageObject imageObject = saveImageObject(operator, region, "contents/test/representative.webp");
-        imageStorageGateway.addMetadata(imageObject.getObjectKey(), imageObject.getByteSize(), imageObject.getChecksum());
-
-        mockMvc.perform(post("/api/v1/operator/contents")
-                .header(HttpHeaders.AUTHORIZATION, bearerToken(operator))
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON)
-                .content(validRequest(imageObject.getImageObjectId().toString())))
+        mockMvc.perform(authenticated(post("/api/v1/operator/contents"))
+                .contentType(APPLICATION_JSON)
+                .content(VALID_CREATE_REQUEST))
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.statusCode").value(201))
             .andExpect(jsonPath("$.code").value("SUCCESS"))
             .andExpect(jsonPath("$.message").value("콘텐츠 생성과 승인 요청에 성공했습니다."))
-            .andExpect(jsonPath("$.data.contentId").isString())
+            .andExpect(jsonPath("$.data.contentId").value(Long.toString(CONTENT_ID)))
             .andExpect(jsonPath("$.data.contentType").value("EVENT_EXPERIENCE"))
-            .andExpect(jsonPath("$.data.status").value("PENDING"))
-            .andExpect(jsonPath("$.data.submittedAt").isString());
+            .andExpect(jsonPath("$.data.status").value("PENDING"));
 
-        assertThat(contentRepository.findAll())
-            .singleElement()
-            .satisfies(content -> {
-                assertThat(content.getRegion().getRegionId()).isEqualTo(region.getRegionId());
-                assertThat(content.getOperator().getUserId()).isEqualTo(operator.getUserId());
-                assertThat(content.getContentType()).isEqualTo(ContentType.EVENT_EXPERIENCE);
-                assertThat(content.getStatus()).isEqualTo(ContentStatus.PENDING);
-                assertThat(content.getTitle()).isEqualTo("김해 가야문화 체험");
-                assertThat(content.getRepresentativeImageObject().getImageObjectId())
-                    .isEqualTo(imageObject.getImageObjectId());
-                assertThat(content.getRepresentativeImageAssignedAt()).isNotNull();
-            });
-        assertThat(contentSessionRepository.findAll())
-            .singleElement()
-            .satisfies(session -> {
-                assertThat(session.getStatus()).isEqualTo(ContentSessionStatus.PENDING);
-                assertThat(session.getCapacity()).isEqualTo(20);
-                assertThat(session.getRemainingCapacity()).isEqualTo(20);
-            });
-        assertThat(contentLogRepository.findAll())
-            .singleElement()
-            .satisfies(contentLog -> {
-                assertThat(contentLog.getActor().getUserId()).isEqualTo(operator.getUserId());
-                assertThat(contentLog.getStatus()).isEqualTo(ContentLogStatus.PENDING);
-                assertThat(contentLog.getReason()).isNull();
-            });
-        assertThat(imageObjectRepository.findById(imageObject.getImageObjectId()))
-            .get()
-            .satisfies(linkedImageObject -> {
-                assertThat(linkedImageObject.getCreatedByUser()).isNull();
-                assertThat(linkedImageObject.getLinkedAt()).isNotNull();
-                assertThat(linkedImageObject.getLifecycleStatus()).isEqualTo(ImageLifecycleStatus.ACTIVE);
-            });
+        verify(createContentUseCase).createContent(eq(AUTHENTICATED_USER_ID), any(CreateContentRequest.class));
     }
 
     @Test
-    void createContent_whenAuthorizationHeaderIsMissing_returnsUnauthenticatedWithoutCreatingContent()
-        throws Exception {
-
+    void 콘텐츠_생성_인증이_없으면_유스케이스를_호출하지_않는다() throws Exception {
         mockMvc.perform(post("/api/v1/operator/contents")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(validRequest("1")))
+                .contentType(APPLICATION_JSON)
+                .content(VALID_CREATE_REQUEST))
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
 
-        assertThat(contentRepository.count()).isZero();
+        verify(createContentUseCase, never()).createContent(any(), any());
     }
 
     @Test
-    void createContent_whenUserIsNotOperator_returnsForbiddenWithoutCreatingContent() throws Exception {
-        AppUser visitor = saveUser("content-visitor@example.com");
-        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(visitor, UserRole.VISITOR, null));
+    void 콘텐츠_생성_필수_본문이_비어있으면_입력_오류를_반환한다() throws Exception {
+        mockMvc.perform(authenticated(post("/api/v1/operator/contents"))
+                .contentType(APPLICATION_JSON)
+                .content("{}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
 
-        mockMvc.perform(post("/api/v1/operator/contents")
-                .header(HttpHeaders.AUTHORIZATION, bearerToken(visitor))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(validRequest("1")))
+        verify(createContentUseCase, never()).createContent(any(), any());
+    }
+
+    @Test
+    void 콘텐츠_생성_회차_정원_타입이_다르면_타입_오류를_반환한다() throws Exception {
+        String invalidTypeRequest = VALID_CREATE_REQUEST.replace("\"capacity\": 20", "\"capacity\": \"twenty\"");
+
+        mockMvc.perform(authenticated(post("/api/v1/operator/contents"))
+                .contentType(APPLICATION_JSON)
+                .content(invalidTypeRequest))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+    }
+
+    @Test
+    void 콘텐츠_생성_권한_거절은_공통_오류로_응답한다() throws Exception {
+        when(createContentUseCase.createContent(eq(AUTHENTICATED_USER_ID), any(CreateContentRequest.class)))
+            .thenThrow(new BusinessException(ErrorCode.FORBIDDEN));
+
+        mockMvc.perform(authenticated(post("/api/v1/operator/contents"))
+                .contentType(APPLICATION_JSON)
+                .content(VALID_CREATE_REQUEST))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.code").value("FORBIDDEN"));
-
-        assertThat(contentRepository.count()).isZero();
     }
 
     @Test
-    void createContent_whenSessionTimeRangeIsInvalid_returnsInvalidInputWithoutCreatingContent()
-        throws Exception {
+    void 내_콘텐츠_수정_유효한_요청이면_응답을_직렬화한다() throws Exception {
+        when(updateMyContentUseCase.updateContent(
+            eq(AUTHENTICATED_USER_ID),
+            eq(CONTENT_ID),
+            any(UpdateMyContentRequest.class)
+        )).thenReturn(new UpdateMyContentResponse(Long.toString(CONTENT_ID), ContentStatus.REJECTED));
 
-        AppUser operator = saveUser("invalid-session-operator@example.com");
-        Region region = saveRegion("INVALID-SESSION");
-        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
-        ImageObject imageObject = saveImageObject(operator, region, "contents/test/invalid-session.webp");
-        imageStorageGateway.addMetadata(imageObject.getObjectKey(), imageObject.getByteSize(), imageObject.getChecksum());
-
-        mockMvc.perform(post("/api/v1/operator/contents")
-                .header(HttpHeaders.AUTHORIZATION, bearerToken(operator))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(invalidSessionRequest(imageObject.getImageObjectId().toString())))
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
-
-        assertThat(contentRepository.count()).isZero();
-        assertThat(imageObjectRepository.findById(imageObject.getImageObjectId()))
-            .get()
-            .satisfies(candidate -> {
-                assertThat(candidate.getCreatedByUser().getUserId()).isEqualTo(operator.getUserId());
-                assertThat(candidate.getLinkedAt()).isNull();
-            });
-    }
-
-    @Test
-    void createContent_whenRepresentativeImageObjectIdIsNotJsonString_returnsInvalidTypeWithoutCreatingContent()
-        throws Exception {
-
-        AppUser operator = saveUser("image-id-type-operator@example.com");
-        Region region = saveRegion("IMAGE-ID-TYPE");
-        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
-        ImageObject imageObject = saveImageObject(operator, region, "contents/test/image-id-type.webp");
-        imageStorageGateway.addMetadata(imageObject.getObjectKey(), imageObject.getByteSize(), imageObject.getChecksum());
-
-        mockMvc.perform(post("/api/v1/operator/contents")
-                .header(HttpHeaders.AUTHORIZATION, bearerToken(operator))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(nonStringImageObjectIdRequest(imageObject.getImageObjectId().toString())))
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
-
-        assertThat(contentRepository.count()).isZero();
-    }
-
-    @Test
-    void createContent_whenCapacityTypeIsInvalid_returnsInvalidTypeWithoutCreatingContent()
-        throws Exception {
-
-        AppUser operator = saveUser("capacity-type-operator@example.com");
-        Region region = saveRegion("CAPACITY-TYPE");
-        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
-        ImageObject imageObject = saveImageObject(operator, region, "contents/test/capacity-type.webp");
-        imageStorageGateway.addMetadata(imageObject.getObjectKey(), imageObject.getByteSize(), imageObject.getChecksum());
-
-        mockMvc.perform(post("/api/v1/operator/contents")
-                .header(HttpHeaders.AUTHORIZATION, bearerToken(operator))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(invalidCapacityTypeRequest(imageObject.getImageObjectId().toString())))
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
-
-        assertThat(contentRepository.count()).isZero();
-    }
-
-    @Test
-    void createContent_whenDateTimeOffsetIsNotSeoul_returnsInvalidInputWithoutCreatingContent()
-        throws Exception {
-
-        AppUser operator = saveUser("offset-operator@example.com");
-        Region region = saveRegion("OFFSET");
-        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
-        ImageObject imageObject = saveImageObject(operator, region, "contents/test/offset.webp");
-        imageStorageGateway.addMetadata(imageObject.getObjectKey(), imageObject.getByteSize(), imageObject.getChecksum());
-
-        mockMvc.perform(post("/api/v1/operator/contents")
-                .header(HttpHeaders.AUTHORIZATION, bearerToken(operator))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(nonSeoulOffsetRequest(imageObject.getImageObjectId().toString())))
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
-
-        assertThat(contentRepository.count()).isZero();
-    }
-
-    @Test
-    void createContent_whenRepresentativeImageMetadataDoesNotMatch_returnsInvalidInputWithoutCreatingContent()
-        throws Exception {
-
-        AppUser operator = saveUser("invalid-image-operator@example.com");
-        Region region = saveRegion("INVALID-IMAGE");
-        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
-        ImageObject imageObject = saveImageObject(operator, region, "contents/test/invalid-image.webp");
-        imageStorageGateway.addMetadata(imageObject.getObjectKey(), 1L, imageObject.getChecksum());
-
-        mockMvc.perform(post("/api/v1/operator/contents")
-                .header(HttpHeaders.AUTHORIZATION, bearerToken(operator))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(validRequest(imageObject.getImageObjectId().toString())))
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
-
-        assertThat(contentRepository.count()).isZero();
-        assertThat(contentSessionRepository.count()).isZero();
-        assertThat(contentLogRepository.count()).isZero();
-    }
-
-    @Test
-    void updateMyContent_whenRejectedContentAndNewRepresentativeImageAreValid_updatesContentAndImage()
-        throws Exception {
-
-        AppUser operator = saveUser("update-operator@example.com");
-        Region region = saveRegion("UPDATE-CONTENT");
-        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
-        ImageObject currentImageObject = saveLinkedImageObject(operator, region, "contents/test/current-update.webp");
-        Content content = saveContent(operator, region, currentImageObject, ContentStatus.REJECTED);
-        ImageObject replacementImageObject = saveImageObject(operator, region, "contents/test/replacement-update.webp");
-        imageStorageGateway.addMetadata(
-            replacementImageObject.getObjectKey(),
-            replacementImageObject.getByteSize(),
-            replacementImageObject.getChecksum()
-        );
-
-        mockMvc.perform(put("/api/v1/operator/contents/{contentId}", content.getContentId())
-                .header(HttpHeaders.AUTHORIZATION, bearerToken(operator))
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON)
-                .content(updateRequest(replacementImageObject.getImageObjectId().toString())))
+        mockMvc.perform(authenticated(put("/api/v1/operator/contents/{contentId}", CONTENT_ID))
+                .contentType(APPLICATION_JSON)
+                .content(VALID_UPDATE_REQUEST))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.statusCode").value(200))
             .andExpect(jsonPath("$.code").value("SUCCESS"))
             .andExpect(jsonPath("$.message").value("내 콘텐츠 수정에 성공했습니다."))
-            .andExpect(jsonPath("$.data.contentId").value(content.getContentId().toString()))
+            .andExpect(jsonPath("$.data.contentId").value(Long.toString(CONTENT_ID)))
             .andExpect(jsonPath("$.data.status").value("REJECTED"));
 
-        assertThat(contentRepository.findById(content.getContentId()))
-            .get()
-            .satisfies(updatedContent -> {
-                assertThat(updatedContent.getStatus()).isEqualTo(ContentStatus.REJECTED);
-                assertThat(updatedContent.getTitle()).isEqualTo("수정된 김해 문화 체험");
-                assertThat(updatedContent.getDescription()).isEqualTo("수정된 설명입니다.");
-                assertThat(updatedContent.getLocationText()).isEqualTo("김해시 수정로 1");
-                assertThat(updatedContent.getOperatingHoursText()).isEqualTo("매주 일요일 11:00~17:00");
-                assertThat(updatedContent.getContactText()).isEqualTo("055-111-1111");
-                assertThat(updatedContent.getPrecautions()).isEqualTo("수정된 유의사항입니다.");
-                assertThat(updatedContent.getAgeRequirement()).isEqualTo("중학생 이상");
-                assertThat(updatedContent.getMaterials()).isEqualTo("개인 컵");
-                assertThat(updatedContent.getCancellationPolicyText()).isEqualTo("회차 시작 1일 전까지 취소 가능합니다.");
-                assertThat(updatedContent.getPublishAt()).isEqualTo(Instant.parse("2026-09-15T00:00:00Z"));
-                assertThat(updatedContent.getRepresentativeImageObject().getImageObjectId())
-                    .isEqualTo(replacementImageObject.getImageObjectId());
-                assertThat(updatedContent.getRepresentativeImageAssignedAt()).isNotNull();
-            });
-        assertThat(imageObjectRepository.findById(replacementImageObject.getImageObjectId()))
-            .get()
-            .satisfies(imageObject -> {
-                assertThat(imageObject.getCreatedByUser()).isNull();
-                assertThat(imageObject.getLinkedAt()).isNotNull();
-                assertThat(imageObject.getLifecycleStatus()).isEqualTo(ImageLifecycleStatus.ACTIVE);
-            });
-        assertThat(imageObjectRepository.findById(currentImageObject.getImageObjectId()))
-            .get()
-            .satisfies(imageObject -> {
-                assertThat(imageObject.getLinkedAt()).isNotNull();
-                assertThat(imageObject.getLifecycleStatus()).isEqualTo(ImageLifecycleStatus.DELETE_PENDING);
-            });
-        assertThat(contentLogRepository.count()).isZero();
-        assertThat(auditEventRepository.count()).isZero();
-    }
-
-    @Test
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    void updateMyContent_whenPreviousRepresentativeImageIsUnreferenced_deletesPreviousImageAfterCommit()
-        throws Exception {
-
-        try {
-            AppUser operator = saveUser("update-delete-operator@example.com");
-            Region region = saveRegion("UPDATE-DELETE-IMAGE");
-            userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
-            ImageObject currentImageObject = saveLinkedImageObject(
-                operator,
-                region,
-                "contents/test/current-delete.webp"
-            );
-            Long currentImageObjectId = currentImageObject.getImageObjectId();
-            String currentObjectKey = currentImageObject.getObjectKey();
-            Content content = saveContent(operator, region, currentImageObject, ContentStatus.REJECTED);
-            ImageObject replacementImageObject = saveImageObject(
-                operator,
-                region,
-                "contents/test/replacement-delete.webp"
-            );
-            imageStorageGateway.addMetadata(
-                replacementImageObject.getObjectKey(),
-                replacementImageObject.getByteSize(),
-                replacementImageObject.getChecksum()
-            );
-
-            mockMvc.perform(put("/api/v1/operator/contents/{contentId}", content.getContentId())
-                    .header(HttpHeaders.AUTHORIZATION, bearerToken(operator))
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(updateRequest(replacementImageObject.getImageObjectId().toString())))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.status").value("REJECTED"));
-
-            assertThat(imageObjectRepository.existsById(currentImageObjectId)).isFalse();
-            assertThat(imageStorageGateway.deletedObjectKeys()).containsExactly(currentObjectKey);
-        } finally {
-            deletePersistedTestData();
-        }
-    }
-
-    @Test
-    void updateMyContent_whenPreviousRepresentativeImageIsStillReferenced_keepsPreviousImageActive()
-        throws Exception {
-
-        AppUser operator = saveUser("update-shared-image-operator@example.com");
-        Region region = saveRegion("UPDATE-SHARED-IMAGE");
-        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
-        ImageObject currentImageObject = saveLinkedImageObject(operator, region, "contents/test/current-shared.webp");
-        Content content = saveContent(operator, region, currentImageObject, ContentStatus.REJECTED);
-        Content otherContent = saveContent(operator, region, currentImageObject, ContentStatus.APPROVED);
-        ImageObject replacementImageObject = saveImageObject(operator, region, "contents/test/replacement-shared.webp");
-        imageStorageGateway.addMetadata(
-            replacementImageObject.getObjectKey(),
-            replacementImageObject.getByteSize(),
-            replacementImageObject.getChecksum()
+        verify(updateMyContentUseCase).updateContent(
+            eq(AUTHENTICATED_USER_ID),
+            eq(CONTENT_ID),
+            any(UpdateMyContentRequest.class)
         );
-
-        mockMvc.perform(put("/api/v1/operator/contents/{contentId}", content.getContentId())
-                .header(HttpHeaders.AUTHORIZATION, bearerToken(operator))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(updateRequest(replacementImageObject.getImageObjectId().toString())))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data.status").value("REJECTED"));
-
-        assertThat(contentRepository.findById(otherContent.getContentId()))
-            .get()
-            .satisfies(savedContent -> assertThat(savedContent.getRepresentativeImageObject().getImageObjectId())
-                .isEqualTo(currentImageObject.getImageObjectId()));
-        assertThat(imageObjectRepository.findById(currentImageObject.getImageObjectId()))
-            .get()
-            .satisfies(imageObject -> assertThat(imageObject.getLifecycleStatus())
-                .isEqualTo(ImageLifecycleStatus.ACTIVE));
     }
 
     @Test
-    void updateMyContent_whenAuthorizationHeaderIsMissing_returnsUnauthenticatedWithoutUpdatingContent()
-        throws Exception {
-
-        AppUser operator = saveUser("update-unauthenticated-operator@example.com");
-        Region region = saveRegion("UPDATE-UNAUTHENTICATED");
-        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
-        ImageObject currentImageObject = saveLinkedImageObject(
-            operator,
-            region,
-            "contents/test/current-unauthenticated.webp"
-        );
-        Content content = saveContent(operator, region, currentImageObject, ContentStatus.REJECTED);
-
-        mockMvc.perform(put("/api/v1/operator/contents/{contentId}", content.getContentId())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(updateRequestWithoutRepresentativeImage()))
+    void 내_콘텐츠_수정_인증이_없으면_유스케이스를_호출하지_않는다() throws Exception {
+        mockMvc.perform(put("/api/v1/operator/contents/{contentId}", CONTENT_ID)
+                .contentType(APPLICATION_JSON)
+                .content(VALID_UPDATE_REQUEST))
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
 
-        assertThat(contentRepository.findById(content.getContentId()))
-            .get()
-            .satisfies(savedContent -> assertThat(savedContent.getTitle()).isEqualTo("기존 김해 문화 체험"));
+        verify(updateMyContentUseCase, never()).updateContent(any(), any(), any());
     }
 
     @Test
-    void updateMyContent_whenRepresentativeImageObjectIdIsOmitted_keepsExistingRepresentativeImage()
-        throws Exception {
-
-        AppUser operator = saveUser("update-omitted-operator@example.com");
-        Region region = saveRegion("UPDATE-OMITTED");
-        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
-        ImageObject currentImageObject = saveLinkedImageObject(operator, region, "contents/test/current-omitted.webp");
-        Content content = saveContent(operator, region, currentImageObject, ContentStatus.REJECTED);
-
-        mockMvc.perform(put("/api/v1/operator/contents/{contentId}", content.getContentId())
-                .header(HttpHeaders.AUTHORIZATION, bearerToken(operator))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(updateRequestWithoutRepresentativeImage()))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data.status").value("REJECTED"));
-
-        assertThat(contentRepository.findById(content.getContentId()))
-            .get()
-            .satisfies(updatedContent -> assertThat(updatedContent.getRepresentativeImageObject().getImageObjectId())
-                .isEqualTo(currentImageObject.getImageObjectId()));
+    void 내_콘텐츠_수정_경로_ID가_양의_정수가_아니면_입력_오류를_반환한다() throws Exception {
+        mockMvc.perform(authenticated(put("/api/v1/operator/contents/0"))
+                .contentType(APPLICATION_JSON)
+                .content(VALID_UPDATE_REQUEST))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
     }
 
     @Test
-    void updateMyContent_whenRepresentativeImageObjectIdIsNull_keepsExistingRepresentativeImage()
-        throws Exception {
-
-        AppUser operator = saveUser("update-null-operator@example.com");
-        Region region = saveRegion("UPDATE-NULL");
-        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
-        ImageObject currentImageObject = saveLinkedImageObject(operator, region, "contents/test/current-null.webp");
-        Content content = saveContent(operator, region, currentImageObject, ContentStatus.REJECTED);
-
-        mockMvc.perform(put("/api/v1/operator/contents/{contentId}", content.getContentId())
-                .header(HttpHeaders.AUTHORIZATION, bearerToken(operator))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(updateRequestWithNullRepresentativeImage()))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data.status").value("REJECTED"));
-
-        assertThat(contentRepository.findById(content.getContentId()))
-            .get()
-            .satisfies(updatedContent -> assertThat(updatedContent.getRepresentativeImageObject().getImageObjectId())
-                .isEqualTo(currentImageObject.getImageObjectId()));
+    void 내_콘텐츠_수정_필수_본문이_비어있으면_입력_오류를_반환한다() throws Exception {
+        mockMvc.perform(authenticated(put("/api/v1/operator/contents/{contentId}", CONTENT_ID))
+                .contentType(APPLICATION_JSON)
+                .content("{}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
     }
 
     @Test
-    void updateMyContent_whenCurrentRepresentativeImageObjectIdIsProvided_keepsExistingRepresentativeImage()
-        throws Exception {
+    void 내_콘텐츠_수정_소유권_거절은_공통_오류로_응답한다() throws Exception {
+        when(updateMyContentUseCase.updateContent(
+            eq(AUTHENTICATED_USER_ID),
+            eq(CONTENT_ID),
+            any(UpdateMyContentRequest.class)
+        )).thenThrow(new BusinessException(ErrorCode.FORBIDDEN));
 
-        AppUser operator = saveUser("update-same-image-operator@example.com");
-        Region region = saveRegion("UPDATE-SAME-IMAGE");
-        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
-        ImageObject currentImageObject = saveLinkedImageObject(operator, region, "contents/test/current-same.webp");
-        Content content = saveContent(operator, region, currentImageObject, ContentStatus.REJECTED);
-
-        mockMvc.perform(put("/api/v1/operator/contents/{contentId}", content.getContentId())
-                .header(HttpHeaders.AUTHORIZATION, bearerToken(operator))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(updateRequest(currentImageObject.getImageObjectId().toString())))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data.status").value("REJECTED"));
-
-        assertThat(contentRepository.findById(content.getContentId()))
-            .get()
-            .satisfies(updatedContent -> assertThat(updatedContent.getRepresentativeImageObject().getImageObjectId())
-                .isEqualTo(currentImageObject.getImageObjectId()));
-    }
-
-    @Test
-    void updateMyContent_whenUserIsNotOwner_returnsForbiddenWithoutUpdatingContent() throws Exception {
-        AppUser owner = saveUser("update-owner@example.com");
-        AppUser otherOperator = saveUser("update-other-operator@example.com");
-        Region region = saveRegion("UPDATE-FORBIDDEN");
-        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(owner, UserRole.OPERATOR, region));
-        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(otherOperator, UserRole.OPERATOR, region));
-        ImageObject currentImageObject = saveLinkedImageObject(owner, region, "contents/test/current-forbidden.webp");
-        Content content = saveContent(owner, region, currentImageObject, ContentStatus.REJECTED);
-
-        mockMvc.perform(put("/api/v1/operator/contents/{contentId}", content.getContentId())
-                .header(HttpHeaders.AUTHORIZATION, bearerToken(otherOperator))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(updateRequestWithoutRepresentativeImage()))
+        mockMvc.perform(authenticated(put("/api/v1/operator/contents/{contentId}", CONTENT_ID))
+                .contentType(APPLICATION_JSON)
+                .content(VALID_UPDATE_REQUEST))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.code").value("FORBIDDEN"));
-
-        assertThat(contentRepository.findById(content.getContentId()))
-            .get()
-            .satisfies(savedContent -> assertThat(savedContent.getTitle()).isEqualTo("기존 김해 문화 체험"));
-    }
-
-    @Test
-    void updateMyContent_whenContentDoesNotExist_returnsNotFound() throws Exception {
-        AppUser operator = saveUser("update-not-found-operator@example.com");
-        Region region = saveRegion("UPDATE-NOT-FOUND");
-        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
-
-        mockMvc.perform(put("/api/v1/operator/contents/{contentId}", 9_999_999L)
-                .header(HttpHeaders.AUTHORIZATION, bearerToken(operator))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(updateRequestWithoutRepresentativeImage()))
-            .andExpect(status().isNotFound())
-            .andExpect(jsonPath("$.code").value("NOT_FOUND"));
-    }
-
-    @Test
-    void updateMyContent_whenContentIdPathIsNotPositiveDecimal_returnsInvalidInput() throws Exception {
-        AppUser operator = saveUser("update-invalid-path-operator@example.com");
-        Region region = saveRegion("UPDATE-INVALID-PATH");
-        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
-
-        for (String invalidContentId : List.of("001", "+1", "abc")) {
-            mockMvc.perform(put("/api/v1/operator/contents/{contentId}", invalidContentId)
-                    .header(HttpHeaders.AUTHORIZATION, bearerToken(operator))
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(updateRequestWithoutRepresentativeImage()))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
-        }
-    }
-
-    @Test
-    void updateMyContent_whenContentIsSoftDeleted_returnsNotFoundWithoutUpdatingContent() throws Exception {
-        AppUser operator = saveUser("update-soft-deleted-operator@example.com");
-        Region region = saveRegion("UPDATE-SOFT-DELETED");
-        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
-        ImageObject currentImageObject = saveLinkedImageObject(operator, region, "contents/test/current-deleted.webp");
-        Content content = saveContent(operator, region, currentImageObject, ContentStatus.PENDING);
-        content.softDelete();
-        contentRepository.saveAndFlush(content);
-
-        mockMvc.perform(put("/api/v1/operator/contents/{contentId}", content.getContentId())
-                .header(HttpHeaders.AUTHORIZATION, bearerToken(operator))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(updateRequestWithoutRepresentativeImage()))
-            .andExpect(status().isNotFound())
-            .andExpect(jsonPath("$.code").value("NOT_FOUND"));
-
-        assertThat(contentRepository.findById(content.getContentId()))
-            .get()
-            .satisfies(savedContent -> assertThat(savedContent.getTitle()).isEqualTo("기존 김해 문화 체험"));
-    }
-
-    @Test
-    void updateMyContent_whenContentIsNotRejected_returnsContentStateConflictWithoutUpdatingContent()
-        throws Exception {
-
-        AppUser operator = saveUser("update-pending-operator@example.com");
-        Region region = saveRegion("UPDATE-PENDING");
-        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
-        ImageObject currentImageObject = saveLinkedImageObject(operator, region, "contents/test/current-pending.webp");
-        Content content = saveContent(operator, region, currentImageObject, ContentStatus.PENDING);
-
-        mockMvc.perform(put("/api/v1/operator/contents/{contentId}", content.getContentId())
-                .header(HttpHeaders.AUTHORIZATION, bearerToken(operator))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(updateRequestWithoutRepresentativeImage()))
-            .andExpect(status().isConflict())
-            .andExpect(jsonPath("$.code").value("CONTENT_STATE_CONFLICT"));
-
-        assertThat(contentRepository.findById(content.getContentId()))
-            .get()
-            .satisfies(savedContent -> assertThat(savedContent.getTitle()).isEqualTo("기존 김해 문화 체험"));
-    }
-
-    @Test
-    void updateMyContent_whenRepresentativeImageObjectIdIsNotJsonString_returnsInvalidType()
-        throws Exception {
-
-        AppUser operator = saveUser("update-type-operator@example.com");
-        Region region = saveRegion("UPDATE-TYPE");
-        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
-        ImageObject currentImageObject = saveLinkedImageObject(operator, region, "contents/test/current-type.webp");
-        Content content = saveContent(operator, region, currentImageObject, ContentStatus.REJECTED);
-
-        mockMvc.perform(put("/api/v1/operator/contents/{contentId}", content.getContentId())
-                .header(HttpHeaders.AUTHORIZATION, bearerToken(operator))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(nonStringUpdateRequest("1")))
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
-    }
-
-    @Test
-    void updateMyContent_whenRequiredFieldIsBlank_returnsInvalidInputWithoutUpdatingContent()
-        throws Exception {
-
-        AppUser operator = saveUser("update-blank-operator@example.com");
-        Region region = saveRegion("UPDATE-BLANK");
-        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
-        ImageObject currentImageObject = saveLinkedImageObject(operator, region, "contents/test/current-blank.webp");
-        Content content = saveContent(operator, region, currentImageObject, ContentStatus.REJECTED);
-
-        mockMvc.perform(put("/api/v1/operator/contents/{contentId}", content.getContentId())
-                .header(HttpHeaders.AUTHORIZATION, bearerToken(operator))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(blankTitleUpdateRequest()))
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
-
-        assertThat(contentRepository.findById(content.getContentId()))
-            .get()
-            .satisfies(savedContent -> assertThat(savedContent.getTitle()).isEqualTo("기존 김해 문화 체험"));
-    }
-
-    @Test
-    void updateMyContent_whenDateTimeOffsetIsNotSeoul_returnsInvalidInputWithoutUpdatingContent()
-        throws Exception {
-
-        AppUser operator = saveUser("update-offset-operator@example.com");
-        Region region = saveRegion("UPDATE-OFFSET");
-        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
-        ImageObject currentImageObject = saveLinkedImageObject(operator, region, "contents/test/current-offset.webp");
-        Content content = saveContent(operator, region, currentImageObject, ContentStatus.REJECTED);
-
-        mockMvc.perform(put("/api/v1/operator/contents/{contentId}", content.getContentId())
-                .header(HttpHeaders.AUTHORIZATION, bearerToken(operator))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(nonSeoulOffsetUpdateRequest()))
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
-
-        assertThat(contentRepository.findById(content.getContentId()))
-            .get()
-            .satisfies(savedContent -> assertThat(savedContent.getTitle()).isEqualTo("기존 김해 문화 체험"));
-    }
-
-    @Test
-    void updateMyContent_whenReplacementImageMetadataDoesNotMatch_returnsInvalidInputWithoutUpdatingContent()
-        throws Exception {
-
-        AppUser operator = saveUser("update-image-fail-operator@example.com");
-        Region region = saveRegion("UPDATE-IMAGE-FAIL");
-        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
-        ImageObject currentImageObject = saveLinkedImageObject(operator, region, "contents/test/current-image-fail.webp");
-        Content content = saveContent(operator, region, currentImageObject, ContentStatus.REJECTED);
-        ImageObject replacementImageObject = saveImageObject(operator, region, "contents/test/replacement-image-fail.webp");
-        imageStorageGateway.addMetadata(
-            replacementImageObject.getObjectKey(),
-            1L,
-            replacementImageObject.getChecksum()
-        );
-
-        mockMvc.perform(put("/api/v1/operator/contents/{contentId}", content.getContentId())
-                .header(HttpHeaders.AUTHORIZATION, bearerToken(operator))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(updateRequest(replacementImageObject.getImageObjectId().toString())))
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
-
-        assertThat(contentRepository.findById(content.getContentId()))
-            .get()
-            .satisfies(savedContent -> {
-                assertThat(savedContent.getTitle()).isEqualTo("기존 김해 문화 체험");
-                assertThat(savedContent.getRepresentativeImageObject().getImageObjectId())
-                    .isEqualTo(currentImageObject.getImageObjectId());
-            });
-        assertThat(imageObjectRepository.findById(replacementImageObject.getImageObjectId()))
-            .get()
-            .satisfies(imageObject -> {
-                assertThat(imageObject.getCreatedByUser().getUserId()).isEqualTo(operator.getUserId());
-                assertThat(imageObject.getLinkedAt()).isNull();
-            });
-    }
-
-    private String bearerToken(AppUser user) {
-        return "Bearer " + jwtAccessTokenService.issue(user.getUserId());
-    }
-
-    private void deletePersistedTestData() {
-        contentSessionRepository.deleteAllInBatch();
-        contentLogRepository.deleteAllInBatch();
-        auditEventRepository.deleteAllInBatch();
-        contentRepository.deleteAllInBatch();
-        imageObjectRepository.deleteAllInBatch();
-        userRoleAssignmentRepository.deleteAllInBatch();
-        appUserRepository.deleteAllInBatch();
-        regionRepository.deleteAllInBatch();
-        imageStorageGateway.reset();
-    }
-
-    private AppUser saveUser(String loginIdentifier) {
-        return appUserRepository.saveAndFlush(new AppUser(
-            loginIdentifier,
-            "hashed-password",
-            "Operator",
-            "01012345678",
-            AppUserStatus.ACTIVE
-        ));
-    }
-
-    private Region saveRegion(String regionCode) {
-        return regionRepository.saveAndFlush(new Region(regionCode, regionCode, true));
-    }
-
-    private ImageObject saveImageObject(AppUser operator, Region region, String objectKey) {
-        return imageObjectRepository.saveAndFlush(ImageObject.createUploadCandidate(
-            objectKey,
-            operator,
-            region,
-            "image/webp",
-            524_288L,
-            CHECKSUM,
-            Instant.now().plusSeconds(86_400)
-        ));
-    }
-
-    private ImageObject saveLinkedImageObject(AppUser operator, Region region, String objectKey) {
-        ImageObject imageObject = saveImageObject(operator, region, objectKey);
-        imageObject.markLinked(Instant.now());
-        return imageObjectRepository.saveAndFlush(imageObject);
-    }
-
-    private Content saveContent(
-        AppUser operator,
-        Region region,
-        ImageObject representativeImageObject,
-        ContentStatus status
-    ) {
-        Content content = new Content(
-            region,
-            operator,
-            ContentType.EVENT_EXPERIENCE,
-            status,
-            "기존 김해 문화 체험",
-            "기존 설명입니다.",
-            "김해시 기존로 1",
-            "매주 토요일 10:00~16:00",
-            "055-000-0000",
-            "기존 유의사항입니다.",
-            "초등학생 이상",
-            "필기 도구",
-            "회차 시작 전까지 취소 가능합니다.",
-            Instant.parse("2026-08-15T00:00:00Z")
-        );
-        content.assignRepresentativeImage(representativeImageObject, Instant.now());
-        return contentRepository.saveAndFlush(content);
-    }
-
-    private String validRequest(String representativeImageObjectId) {
-        return """
-            {
-              "title": "김해 가야문화 체험",
-              "description": "가야 문화를 체험하는 행사입니다.",
-              "locationText": "김해시 가야의길 190",
-              "operatingHoursText": "매주 토요일 10:00~16:00",
-              "contactText": "055-000-0000",
-              "precautions": "편한 복장으로 참여해 주세요.",
-              "ageRequirement": "초등학생 이상",
-              "materials": "필기 도구",
-              "cancellationPolicyText": "회차 시작 전까지 예약 취소가 가능합니다.",
-              "publishAt": "2026-08-15T09:00:00+09:00",
-              "representativeImageObjectId": "%s",
-              "sessions": [
-                {
-                  "startsAt": "2026-08-16T10:00:00+09:00",
-                  "endsAt": "2026-08-16T12:00:00+09:00",
-                  "checkinOpenAt": "2026-08-16T09:30:00+09:00",
-                  "checkinCloseAt": "2026-08-16T10:30:00+09:00",
-                  "capacity": 20
-                }
-              ]
-            }
-            """.formatted(representativeImageObjectId);
-    }
-
-    private String updateRequest(String representativeImageObjectId) {
-        return updateRequestWithRepresentativeImageField(
-            ",\n              \"representativeImageObjectId\": \"%s\"".formatted(representativeImageObjectId)
-        );
-    }
-
-    private String updateRequestWithoutRepresentativeImage() {
-        return updateRequestWithRepresentativeImageField("");
-    }
-
-    private String updateRequestWithNullRepresentativeImage() {
-        return updateRequestWithRepresentativeImageField(",\n              \"representativeImageObjectId\": null");
-    }
-
-    private String updateRequestWithRepresentativeImageField(String representativeImageField) {
-        return """
-            {
-              "title": "수정된 김해 문화 체험",
-              "description": "수정된 설명입니다.",
-              "locationText": "김해시 수정로 1",
-              "operatingHoursText": "매주 일요일 11:00~17:00",
-              "contactText": "055-111-1111",
-              "precautions": "수정된 유의사항입니다.",
-              "ageRequirement": "중학생 이상",
-              "materials": "개인 컵",
-              "cancellationPolicyText": "회차 시작 1일 전까지 취소 가능합니다.",
-              "publishAt": "2026-09-15T09:00:00+09:00"%s
-            }
-            """.formatted(representativeImageField);
-    }
-
-    private String invalidSessionRequest(String representativeImageObjectId) {
-        return validRequest(representativeImageObjectId)
-            .replace("\"endsAt\": \"2026-08-16T12:00:00+09:00\"", "\"endsAt\": \"2026-08-16T10:00:00+09:00\"");
-    }
-
-    private String nonStringImageObjectIdRequest(String representativeImageObjectId) {
-        return validRequest(representativeImageObjectId)
-            .replace(
-                "\"representativeImageObjectId\": \"%s\"".formatted(representativeImageObjectId),
-                "\"representativeImageObjectId\": %s".formatted(representativeImageObjectId)
-            );
-    }
-
-    private String nonStringUpdateRequest(String representativeImageObjectId) {
-        return updateRequestWithRepresentativeImageField(
-            ",\n              \"representativeImageObjectId\": %s".formatted(representativeImageObjectId)
-        );
-    }
-
-    private String blankTitleUpdateRequest() {
-        return updateRequestWithoutRepresentativeImage()
-            .replace("\"title\": \"수정된 김해 문화 체험\"", "\"title\": \"\"");
-    }
-
-    private String nonSeoulOffsetUpdateRequest() {
-        return updateRequestWithoutRepresentativeImage()
-            .replace("\"publishAt\": \"2026-09-15T09:00:00+09:00\"", "\"publishAt\": \"2026-09-15T00:00:00Z\"");
-    }
-
-    private String invalidCapacityTypeRequest(String representativeImageObjectId) {
-        return validRequest(representativeImageObjectId)
-            .replace("\"capacity\": 20", "\"capacity\": \"not-a-number\"");
-    }
-
-    private String nonSeoulOffsetRequest(String representativeImageObjectId) {
-        return validRequest(representativeImageObjectId)
-            .replace("\"publishAt\": \"2026-08-15T09:00:00+09:00\"", "\"publishAt\": \"2026-08-15T00:00:00Z\"");
-    }
-
-    @TestConfiguration
-    static class TestImageStorageConfig {
-
-        @Bean
-        @Primary
-        FakeImageStorageGateway fakeImageStorageGateway() {
-            return new FakeImageStorageGateway();
-        }
-    }
-
-    static class FakeImageStorageGateway implements ImageStorageGateway {
-
-        private final Map<String, StoredObjectMetadata> metadataByObjectKey = new HashMap<>();
-        private final List<String> deletedObjectKeys = new ArrayList<>();
-
-        @Override
-        public PresignedUpload createPresignedPutUpload(
-            String objectKey,
-            String mediaType,
-            long byteSize,
-            String checksum
-        ) {
-            throw new UnsupportedOperationException("not used");
-        }
-
-        @Override
-        public StoredObjectMetadata findMetadata(String objectKey) {
-            return metadataByObjectKey.get(objectKey);
-        }
-
-        @Override
-        public PresignedViewUrl createPresignedGetUrl(String objectKey) {
-            throw new UnsupportedOperationException("not used");
-        }
-
-        @Override
-        public void delete(String objectKey) {
-            deletedObjectKeys.add(objectKey);
-        }
-
-        void addMetadata(String objectKey, long byteSize, String checksum) {
-            metadataByObjectKey.put(objectKey, new StoredObjectMetadata(byteSize, checksum));
-        }
-
-        List<String> deletedObjectKeys() {
-            return deletedObjectKeys;
-        }
-
-        void reset() {
-            metadataByObjectKey.clear();
-            deletedObjectKeys.clear();
-        }
     }
 }
