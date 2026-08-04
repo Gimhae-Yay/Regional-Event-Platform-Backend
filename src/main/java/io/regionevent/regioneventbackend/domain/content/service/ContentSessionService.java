@@ -40,6 +40,16 @@ public class ContentSessionService {
     }
 
     @Transactional(readOnly = true)
+    public ContentSession findOperatorReservationListTarget(
+        Long sessionId,
+        Long contentId,
+        Long regionId
+    ) {
+        return contentSessionRepository.findOperatorReservationListTarget(sessionId, contentId, regionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    @Transactional(readOnly = true)
     public List<ContentSession> findCurrentSessionsByContentId(Long contentId) {
         return contentSessionRepository.findByContentContentIdOrderByStartsAtAscSessionIdAsc(contentId);
     }

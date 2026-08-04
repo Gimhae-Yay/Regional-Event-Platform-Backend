@@ -94,6 +94,57 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
         @Param("reservationNo") String reservationNo
     );
 
+    @Query("""
+        SELECT new io.regionevent.regioneventbackend.domain.reservation.repository.SessionReservationReadProjection(
+            reservation.reservationId,
+            reservation.reservationNo,
+            reservation.status,
+            reservation.confirmedAt,
+            reservation.region.regionId,
+            contentSession.sessionId,
+            contentSession.status,
+            contentSession.startsAt,
+            contentSession.endsAt,
+            contentSession.checkinOpenAt,
+            contentSession.checkinCloseAt,
+            contentSession.region.regionId,
+            content.contentId,
+            content.title,
+            content.region.regionId,
+            participant.userId,
+            participant.name,
+            participant.phone,
+            visit.visitId,
+            visit.reservation.reservationId,
+            visit.region.regionId,
+            visit.contentSession.sessionId,
+            visit.content.contentId,
+            visitParticipant.userId,
+            visit.checkedAt,
+            capacityHold.holdId,
+            capacityHold.status,
+            capacityHold.quantity,
+            holdSession.sessionId,
+            holdRegion.regionId,
+            holdReservation.reservationId
+        )
+        FROM Reservation reservation
+        JOIN reservation.contentSession contentSession
+        JOIN contentSession.content content
+        LEFT JOIN reservation.user participant
+        LEFT JOIN Visit visit ON visit.reservation = reservation
+        LEFT JOIN visit.user visitParticipant
+        LEFT JOIN reservation.capacityHold capacityHold
+        LEFT JOIN capacityHold.contentSession holdSession
+        LEFT JOIN capacityHold.region holdRegion
+        LEFT JOIN capacityHold.reservation holdReservation
+        WHERE contentSession.sessionId = :sessionId
+        ORDER BY reservation.confirmedAt ASC, reservation.reservationId ASC, visit.visitId ASC
+        """)
+    List<SessionReservationReadProjection> findSessionReservationReadProjections(
+        @Param("sessionId") Long sessionId
+    );
+
     @EntityGraph(attributePaths = {
         "region",
         "contentSession",
