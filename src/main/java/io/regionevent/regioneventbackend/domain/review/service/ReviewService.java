@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import io.regionevent.regioneventbackend.domain.review.entity.Review;
 import io.regionevent.regioneventbackend.domain.review.entity.ReviewStatus;
 import io.regionevent.regioneventbackend.domain.review.repository.ReviewRepository;
+import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.visit.entity.Visit;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -56,6 +57,36 @@ public class ReviewService {
     public Review findByIdForUpdate(Long reviewId) {
         return reviewRepository.findByReviewIdForUpdate(reviewId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public Review updatePublishedByAuthorWithinThirtyDays(
+        Long reviewId,
+        Long userId,
+        Integer rating,
+        String reviewText
+    ) {
+        int updatedCount = reviewRepository.updatePublishedByAuthorWithinThirtyDays(
+            reviewId,
+            userId,
+            rating,
+            reviewText
+        );
+        if (updatedCount == 1) {
+            return reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+        }
+        Review review = reviewRepository.findById(reviewId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+        if (review.getStatus() == ReviewStatus.DELETED) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+        throw new BusinessException(ErrorCode.FORBIDDEN);
+    }
+
+    public Region findRegionByReviewId(Long reviewId) {
+        return reviewRepository.findById(reviewId)
+            .map(Review::getRegion)
+            .orElse(null);
     }
 
     public Page<Review> findPublishedByContentId(Long contentId, Pageable pageable) {
