@@ -20,6 +20,8 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 
 public interface ContentRepository extends JpaRepository<Content, Long> {
 
+    boolean existsByOperatorUserId(Long userId);
+
     @Query("""
         SELECT new io.regionevent.regioneventbackend.domain.content.repository.PublicContentProjection(
             content.contentId,

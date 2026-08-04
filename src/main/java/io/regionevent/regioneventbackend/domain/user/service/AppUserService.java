@@ -72,6 +72,7 @@ public class AppUserService {
 
     public void delete(AppUser user) {
         appUserRepository.delete(user);
+        appUserRepository.flush();
     }
 
     private void validateLoginIdentifierAvailable(String email) {

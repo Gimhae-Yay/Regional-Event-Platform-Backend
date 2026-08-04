@@ -6,6 +6,8 @@ import org.hibernate.exception.ConstraintViolationException;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.review.entity.Review;
 import io.regionevent.regioneventbackend.domain.review.entity.ReviewStatus;
@@ -49,6 +51,11 @@ public class ReviewService {
             }
             throw exception;
         }
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void unlinkAuthorByUserId(Long userId) {
+        reviewRepository.unlinkAuthorByUserId(userId);
     }
 
     private boolean isReviewVisitUniqueConstraintViolation(DataIntegrityViolationException exception) {
