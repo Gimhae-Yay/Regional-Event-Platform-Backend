@@ -65,6 +65,15 @@ public class AppUserService {
             .filter(user -> user.getStatus() == AppUserStatus.ACTIVE);
     }
 
+    public void startWithdrawal(AppUser user) {
+        user.startWithdrawal();
+        appUserRepository.saveAndFlush(user);
+    }
+
+    public void delete(AppUser user) {
+        appUserRepository.delete(user);
+    }
+
     private void validateLoginIdentifierAvailable(String email) {
         if (appUserRepository.existsByLoginIdentifier(email)) {
             throw new BusinessException(ErrorCode.DUPLICATE_LOGIN_IDENTIFIER);
