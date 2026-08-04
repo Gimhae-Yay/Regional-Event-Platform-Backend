@@ -191,6 +191,64 @@ class CreateVisitReviewUseCaseMySqlIntegrationTest extends NonTransactionalMySql
         assertThat(reviewRepository.findById(review.getReviewId()).orElseThrow().getRating()).isEqualTo(4);
     }
 
+    @Test
+    @Timeout(10)
+    void update_whenWithdrawalCommitsFirst_returnsForbiddenWithoutMutation() throws Exception {
+        Fixture fixture = createFixture();
+        Review review = createPublishedReview(fixture);
+        CountDownLatch withdrawalReady = new CountDownLatch(1);
+        CountDownLatch releaseWithdrawal = new CountDownLatch(1);
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<?> withdrawal = executorService.submit(() -> transactionTemplate.executeWithoutResult(status -> {
+                appUserRepository.findByIdForUpdate(fixture.user().getUserId()).orElseThrow();
+                jdbcTemplate.update("UPDATE app_user SET status = 'WITHDRAWING' WHERE user_id = ?", fixture.user().getUserId());
+                withdrawalReady.countDown();
+                await(releaseWithdrawal);
+            }));
+            assertThat(withdrawalReady.await(3, TimeUnit.SECONDS)).isTrue();
+
+            Future<ErrorCode> update = executorService.submit(() -> updateReview(fixture, review.getReviewId()));
+            assertThat(update.isDone()).isFalse();
+
+            releaseWithdrawal.countDown();
+            withdrawal.get(3, TimeUnit.SECONDS);
+            assertThat(update.get(3, TimeUnit.SECONDS)).isEqualTo(ErrorCode.FORBIDDEN);
+        }
+
+        assertThat(reviewRepository.findById(review.getReviewId()).orElseThrow().getRating()).isEqualTo(5);
+    }
+
+    @Test
+    @Timeout(10)
+    void update_whenDeletionCommitsFirst_returnsNotFoundWithoutMutation() throws Exception {
+        Fixture fixture = createFixture();
+        Review review = createPublishedReview(fixture);
+        CountDownLatch deletionReady = new CountDownLatch(1);
+        CountDownLatch releaseDeletion = new CountDownLatch(1);
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<?> deletion = executorService.submit(() -> transactionTemplate.executeWithoutResult(status -> {
+                jdbcTemplate.update(
+                    "UPDATE review SET status = 'DELETED', deleted_at = CURRENT_TIMESTAMP(6) WHERE review_id = ?",
+                    review.getReviewId()
+                );
+                deletionReady.countDown();
+                await(releaseDeletion);
+            }));
+            assertThat(deletionReady.await(3, TimeUnit.SECONDS)).isTrue();
+
+            Future<ErrorCode> update = executorService.submit(() -> updateReview(fixture, review.getReviewId()));
+            assertThat(update.isDone()).isFalse();
+
+            releaseDeletion.countDown();
+            deletion.get(3, TimeUnit.SECONDS);
+            assertThat(update.get(3, TimeUnit.SECONDS)).isEqualTo(ErrorCode.NOT_FOUND);
+        }
+
+        assertThat(reviewRepository.findById(review.getReviewId()).orElseThrow().getRating()).isEqualTo(5);
+    }
+
     private ErrorCode createReview(Fixture fixture, CountDownLatch startSignal) {
         await(startSignal);
         try {
@@ -204,6 +262,30 @@ class CreateVisitReviewUseCaseMySqlIntegrationTest extends NonTransactionalMySql
         } catch (BusinessException exception) {
             return exception.getErrorCode();
         }
+    }
+
+    private ErrorCode updateReview(Fixture fixture, Long reviewId) {
+        UpdateReviewRequest request = new UpdateReviewRequest();
+        request.setRating(4);
+        try {
+            updateReviewUseCase.update(fixture.user().getUserId(), reviewId, request, UUID.randomUUID());
+            return null;
+        } catch (BusinessException exception) {
+            return exception.getErrorCode();
+        }
+    }
+
+    private Review createPublishedReview(Fixture fixture) {
+        return reviewRepository.saveAndFlush(new Review(
+            fixture.visit().getRegion(),
+            fixture.visit(),
+            fixture.user(),
+            fixture.visit().getContent(),
+            5,
+            "수정 전 후기",
+            ReviewStatus.PUBLISHED,
+            null
+        ));
     }
 
     private Fixture createFixture() {

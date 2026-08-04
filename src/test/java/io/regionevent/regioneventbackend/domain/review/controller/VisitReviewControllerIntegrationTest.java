@@ -199,6 +199,23 @@ class VisitReviewControllerIntegrationTest {
     }
 
     @Test
+    void updateReview_whenAuthorDiffers_returnsForbiddenWithoutMutation() throws Exception {
+        Fixture fixture = createFixture(true);
+        Review review = createPublishedReview(fixture, 5, "수정 전 후기");
+        AppUser anotherVisitor = saveUser("another-visitor-" + System.nanoTime() + "@example.com", true);
+
+        performUpdate(anotherVisitor, review.getReviewId(), """
+            {
+              "rating": 4
+            }
+            """)
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        assertThat(reviewRepository.findById(review.getReviewId()).orElseThrow().getRating()).isEqualTo(5);
+    }
+
+    @Test
     void updateReview_whenThirtyDaysHaveElapsed_returnsForbiddenWithoutMutation() throws Exception {
         Fixture fixture = createFixture(true);
         Review review = createPublishedReview(fixture, 5, "수정 전 후기");
