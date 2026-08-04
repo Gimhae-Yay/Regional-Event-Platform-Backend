@@ -28,6 +28,7 @@ public class OperatorSessionReservationUnauthenticatedLogFilter extends OncePerR
     private static final Pattern TARGET_URI_PATTERN = Pattern.compile(
         "^/api/v1/operator/contents/([^/]+)/reservations$"
     );
+    private static final String TARGET_URI_TEMPLATE = "/api/v1/operator/contents/{contentId}/reservations";
     private static final int FAILURE_RESULT_COUNT = 0;
 
     @Override
@@ -42,6 +43,7 @@ public class OperatorSessionReservationUnauthenticatedLogFilter extends OncePerR
         HttpServletResponse response,
         FilterChain filterChain
     ) throws ServletException, IOException {
+        request.setAttribute(RequestIdFilter.REQUEST_LOG_URI_ATTRIBUTE, TARGET_URI_TEMPLATE);
         filterChain.doFilter(request, response);
         if (response.getStatus() == ErrorCode.UNAUTHENTICATED.httpStatus().value()) {
             logUnauthenticatedResult(request);

@@ -354,6 +354,45 @@ class OperatorSessionReservationControllerIntegrationTest {
             .doesNotContain(sensitiveSessionId);
     }
 
+    @Test
+    void 회차별_예약자_목록_잘못된_contentId_원문은_인증_요청_완료_로그에_남기지_않는다(
+        CapturedOutput output
+    ) throws Exception {
+        Fixture fixture = createFixture();
+        String sensitiveContentId = "someone@example.com";
+
+        mockMvc.perform(get("/api/v1/operator/contents/{contentId}/reservations", sensitiveContentId)
+            .param("sessionId", fixture.session().getSessionId().toString())
+            .header(HttpHeaders.AUTHORIZATION, bearerToken(fixture.owner())))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        assertThat(output.getOut())
+            .contains(
+                "HTTP request completed. method=GET, uri=/api/v1/operator/contents/{contentId}/reservations, status=400"
+            )
+            .doesNotContain(sensitiveContentId);
+    }
+
+    @Test
+    void 회차별_예약자_목록_잘못된_contentId_원문은_미인증_요청_완료_로그에_남기지_않는다(
+        CapturedOutput output
+    ) throws Exception {
+        Fixture fixture = createFixture();
+        String sensitiveContentId = "someone@example.com";
+
+        mockMvc.perform(get("/api/v1/operator/contents/{contentId}/reservations", sensitiveContentId)
+            .param("sessionId", fixture.session().getSessionId().toString()))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+
+        assertThat(output.getOut())
+            .contains(
+                "HTTP request completed. method=GET, uri=/api/v1/operator/contents/{contentId}/reservations, status=401"
+            )
+            .doesNotContain(sensitiveContentId);
+    }
+
     private ResultActions performGet(AppUser user, Long contentId, String sessionId) throws Exception {
         return mockMvc.perform(get("/api/v1/operator/contents/{contentId}/reservations", contentId)
             .param("sessionId", sessionId)
