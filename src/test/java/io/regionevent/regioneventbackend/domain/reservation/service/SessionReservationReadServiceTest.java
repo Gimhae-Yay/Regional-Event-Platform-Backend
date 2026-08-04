@@ -38,7 +38,7 @@ class SessionReservationReadServiceTest {
                 new ReservationParticipantMasker.MaskedParticipant("김*수", "010-****-5678")
             );
             assertThat(result.checkIn()).isEqualTo(
-                new ReservationReadIntegrityValidator.CheckInInfo(true, CHECKED_AT)
+                new ReservationReadIntegrityValidator.CheckInInfo(17L, true, CHECKED_AT)
             );
         });
     }

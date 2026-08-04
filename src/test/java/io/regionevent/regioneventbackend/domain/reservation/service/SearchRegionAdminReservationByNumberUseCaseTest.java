@@ -134,7 +134,7 @@ class SearchRegionAdminReservationByNumberUseCaseTest {
             );
             ReservationReadResult readResult = new ReservationReadResult(
                 snapshot,
-                new ReservationReadIntegrityValidator.CheckInInfo(false, null)
+                new ReservationReadIntegrityValidator.CheckInInfo(null, false, null)
             );
 
             Reservation reservation = reservation(region);
