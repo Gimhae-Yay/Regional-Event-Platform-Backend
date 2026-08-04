@@ -5,7 +5,7 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | `FR-03`, `FR-04`, `AUTH-01`, `SES-01`, `SES-02` |
 | 소유 도메인 | 지역·콘텐츠 카탈로그 |
-| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [ADR-0038](../../../adr/0038-create-sessions-with-lifecycle-and-review-session-changes.md), [ERD](../../../erd.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [ADR-0038](../../../adr/0038-create-sessions-with-lifecycle-and-review-session-changes.md), [ADR-0060](../../../adr/0060-serialize-content-ending-and-session-creation-with-content-lock.md), [ERD](../../../erd.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
@@ -103,12 +103,13 @@ Accept: application/json
 ### 처리 규칙
 
 1. 인증 주체가 활성 `OPERATOR`인지, 콘텐츠의 소유 운영자이고 담당 지역이 콘텐츠 지역과 일치하는지 확인한다.
-2. 콘텐츠가 존재하고 소프트 삭제되지 않았으며 상태가 `APPROVED` 또는 `PUBLISHED`인지 확인한다.
+2. 쓰기 트랜잭션에서 대상 `content` 행을 `PESSIMISTIC_WRITE`(`SELECT ... FOR UPDATE`)로 먼저 잠근다. 잠금을 얻은 뒤 콘텐츠가 존재하고 소프트 삭제되지 않았으며 상태가 `APPROVED` 또는 `PUBLISHED`인지 다시 확인한다.
 3. 일정이 현재 시각과 콘텐츠의 `publish_at` 이후인지, 체크인 창·정원이 유효한지 검증한 뒤 `content_session`을
    `status = PENDING`으로 생성한다. `region_id`는 콘텐츠의 `region_id`와 같고 `remaining_capacity`는 `capacity`와 같다.
 4. 회차 행, `PENDING` 생성 상태 전이 감사 이벤트와 처리자 연결을 하나의 트랜잭션으로 커밋한다. 홀드·예약은 생성하지 않는다.
 5. 지역 관리자 승인 때만 회차를 `SCHEDULED`로 전이한다. `PENDING`·`REJECTED` 회차는 공개 목록, 예약 정보,
    정원 홀드·예약 처리에서 제외한다.
+6. 자동 종료와 지역 관리자의 정상 종료도 같은 `content` 행을 먼저 잠근다. 회차 생성이 잠금을 먼저 얻으면 `PENDING` 회차를 커밋하고, 뒤의 종료 처리는 이를 확인해 종료하지 않는다. 종료가 먼저 `ENDED`를 커밋하면 회차 생성은 잠금 뒤 `ENDED`를 확인해 `404 NOT_FOUND`로 응답하고 회차와 감사 기록을 만들지 않는다.
 
 ### Response
 
