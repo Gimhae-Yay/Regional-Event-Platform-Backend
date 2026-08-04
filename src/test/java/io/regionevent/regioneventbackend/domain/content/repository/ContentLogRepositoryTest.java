@@ -139,6 +139,38 @@ class ContentLogRepositoryTest {
     }
 
     @Test
+    void 최신_REJECTED_로그는_처리시각과_식별자_내림차순으로_조회한다() {
+        Content content = saveContent();
+        AppUser actor = saveUser("latest-rejected-actor@example.com");
+        Instant earlier = Instant.parse("2026-08-01T00:00:00Z");
+        Instant later = Instant.parse("2026-08-01T01:00:00Z");
+        contentLogRepository.saveAndFlush(
+            new ContentLog(content, actor, ContentLogStatus.REJECTED, "이전 반려 사유", earlier)
+        );
+        ContentLog firstAtSameTime = contentLogRepository.saveAndFlush(
+            new ContentLog(content, actor, ContentLogStatus.REJECTED, "동일 시각 첫 반려 사유", later)
+        );
+        ContentLog latestAtSameTime = contentLogRepository.saveAndFlush(
+            new ContentLog(content, null, ContentLogStatus.REJECTED, "최신 반려 사유", later)
+        );
+        contentLogRepository.saveAndFlush(
+            new ContentLog(content, actor, ContentLogStatus.APPROVED, null, later.plusSeconds(60))
+        );
+        entityManager.clear();
+
+        ContentLog latestRejectedLog = contentLogRepository
+            .findTopByContentContentIdAndStatusOrderByDateDescIdDesc(
+                content.getContentId(),
+                ContentLogStatus.REJECTED
+            )
+            .orElseThrow();
+
+        assertThat(latestRejectedLog.getId()).isGreaterThan(firstAtSameTime.getId());
+        assertThat(latestRejectedLog.getId()).isEqualTo(latestAtSameTime.getId());
+        assertThat(latestRejectedLog.getReason()).isEqualTo("최신 반려 사유");
+    }
+
+    @Test
     void 소프트_삭제_콘텐츠의_로그와_처리자를_처리시각과_식별자_오름차순으로_조회한다() {
         Content content = saveContent();
         AppUser actor = saveUser("history-actor@example.com");

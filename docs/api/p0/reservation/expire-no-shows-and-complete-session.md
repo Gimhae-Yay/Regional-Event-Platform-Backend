@@ -5,6 +5,8 @@
 
 스케줄러는 회차가 종료되고 체크인 창이 닫힌 뒤에도 남아 있는 `CONFIRMED` 예약을 노쇼 `EXPIRED`로 전환한다.
 해당 회차의 노쇼 처리가 끝나면 회차를 `COMPLETED`로 전환한다.
+모든 회차가 종결된 뒤 콘텐츠를 `ENDED`로 바꾸는 것은
+[모든 회차 종결 콘텐츠 자동 종료](../content-catalog/end-completed-contents.md)의 별도 조정 스케줄러 책임이다.
 
 ### 실행 계약
 

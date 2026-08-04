@@ -145,6 +145,12 @@ public class ContentService {
         ).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
+    public Content findMyContentDetail(Long contentId) {
+        validateRequiredId(contentId);
+        return contentRepository.findDetailByContentIdAndDeletedAtIsNull(contentId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
     @Transactional(readOnly = true)
     public Content findOperatorReservationListTarget(Long contentId) {
         validateRequiredId(contentId);
