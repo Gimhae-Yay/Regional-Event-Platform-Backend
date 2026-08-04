@@ -27,7 +27,8 @@ import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationSt
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationService;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
-import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
+import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService;
+import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService.AuthorizedOperator;
 import io.regionevent.regioneventbackend.domain.user.service.UserRoleAssignmentService;
 import io.regionevent.regioneventbackend.domain.visit.dto.CheckInResponse;
 import io.regionevent.regioneventbackend.domain.visit.dto.ManualCheckInRequest;
@@ -44,7 +45,7 @@ public class CheckInUseCase {
     private static final Logger log = LoggerFactory.getLogger(CheckInUseCase.class);
     private static final String SUCCESS_RESULT_CODE = "SUCCESS";
 
-    private final AppUserService appUserService;
+    private final OperatorAuthorizationService operatorAuthorizationService;
     private final UserRoleAssignmentService userRoleAssignmentService;
     private final ReservationService reservationService;
     private final VisitService visitService;
@@ -56,7 +57,7 @@ public class CheckInUseCase {
     private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase;
 
     public CheckInUseCase(
-        AppUserService appUserService,
+        OperatorAuthorizationService operatorAuthorizationService,
         UserRoleAssignmentService userRoleAssignmentService,
         ReservationService reservationService,
         VisitService visitService,
@@ -67,7 +68,7 @@ public class CheckInUseCase {
         RecordFailureAuditEventUseCase recordFailureAuditEventUseCase,
         RecordFailedAuditEventUseCase recordFailedAuditEventUseCase
     ) {
-        this.appUserService = appUserService;
+        this.operatorAuthorizationService = operatorAuthorizationService;
         this.userRoleAssignmentService = userRoleAssignmentService;
         this.reservationService = reservationService;
         this.visitService = visitService;
@@ -87,10 +88,11 @@ public class CheckInUseCase {
         UUID requestId
     ) {
         String validatedIdempotencyKey = validateIdempotencyKey(idempotencyKey);
-        AppUser operator = appUserService.findActiveUser(userId);
+        AuthorizedOperator operator;
         AuditEventActor actor;
         try {
-            actor = new AuditEventActor(userRoleAssignmentService.findActiveOperator(userId));
+            operator = operatorAuthorizationService.requireAuthorizedOperator(userId);
+            actor = new AuditEventActor(operator.roleAssignment());
         } catch (BusinessException exception) {
             recordRollbackFailure(
                 requestId,
@@ -104,7 +106,7 @@ public class CheckInUseCase {
             throw exception;
         }
         IdempotencyAcquireResult acquireResult = acquire(
-            operator,
+            operator.user(),
             validatedIdempotencyKey,
             checkInHasher.hashQrRequest(request.qrToken())
         );
@@ -162,7 +164,7 @@ public class CheckInUseCase {
         return checkInReservation(
             acquired,
             reservation,
-            operator,
+            operator.user(),
             actor,
             requestId,
             CheckinMethod.QR,
@@ -182,8 +184,8 @@ public class CheckInUseCase {
     ) {
         String validatedIdempotencyKey = validateIdempotencyKey(idempotencyKey);
         ManualCheckInReason reason = ManualCheckInReason.from(request.reason());
-        AppUser operator = appUserService.findActiveUser(userId);
-        AuditEventActor actor = new AuditEventActor(userRoleAssignmentService.findActiveOperator(userId));
+        AuthorizedOperator operator = operatorAuthorizationService.requireAuthorizedOperator(userId);
+        AuditEventActor actor = new AuditEventActor(operator.roleAssignment());
         Reservation reservation = reservationService.findByReservationNoForCheckIn(request.reservationNo())
             .orElse(null);
         if (reservation == null) {
@@ -198,8 +200,25 @@ public class CheckInUseCase {
             );
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
+        String reasonCodePrefix = "MANUAL_CHECK_IN_" + reason.name();
+        String authorizationFailureReasonCode = findAuthorizationFailureReasonCode(
+            reservation,
+            operator.user(),
+            actor.roleAssignment(),
+            reasonCodePrefix
+        );
+        if (authorizationFailureReasonCode != null) {
+            recordRollbackFailure(
+                requestId,
+                actor,
+                reservation,
+                reservation.getStatus().name(),
+                authorizationFailureReasonCode
+            );
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
         IdempotencyAcquireResult acquireResult = acquire(
-            operator,
+            operator.user(),
             validatedIdempotencyKey,
             checkInHasher.hashManualRequest(reservation.getReservationId(), reason)
         );
@@ -212,12 +231,12 @@ public class CheckInUseCase {
         return checkInReservation(
             (IdempotencyAcquireResult.Acquired) acquireResult,
             reservation,
-            operator,
+            operator.user(),
             actor,
             requestId,
             CheckinMethod.RESERVATION_NUMBER,
-            "MANUAL_CHECK_IN_" + reason.name(),
-            "MANUAL_CHECK_IN_" + reason.name() + "_SUCCESS",
+            reasonCodePrefix,
+            reasonCodePrefix + "_SUCCESS",
             false,
             reservationService.findCurrentDatabaseInstant()
         );
@@ -271,6 +290,17 @@ public class CheckInUseCase {
         boolean allowQrRescan,
         Instant checkedAt
     ) {
+        String consistencyFailureReasonCode = findConsistencyFailureReasonCode(reservation, reasonCodePrefix);
+        if (consistencyFailureReasonCode != null) {
+            return completeConsistencyFailure(
+                requestId,
+                actor,
+                reservation,
+                reservation.getStatus().name(),
+                consistencyFailureReasonCode
+            );
+        }
+
         String authorizationFailureReasonCode = findAuthorizationFailureReasonCode(
             reservation,
             operator,
@@ -635,9 +665,6 @@ public class CheckInUseCase {
         if (contentSession.getStatus() == ContentSessionStatus.COMPLETED) {
             return reasonCodePrefix + "_SESSION_COMPLETED";
         }
-        if (contentSession.getStatus() != ContentSessionStatus.SCHEDULED) {
-            return reasonCodePrefix + "_SESSION_NOT_SCHEDULED";
-        }
         if (checkedAt.isBefore(contentSession.getCheckinOpenAt())) {
             return reasonCodePrefix + "_WINDOW_NOT_OPEN";
         }
@@ -645,6 +672,31 @@ public class CheckInUseCase {
             return reasonCodePrefix + "_WINDOW_CLOSED";
         }
         return null;
+    }
+
+    private String findConsistencyFailureReasonCode(
+        Reservation reservation,
+        String reasonCodePrefix
+    ) {
+        if (!hasConsistentReservationRelations(reservation)) {
+            return reasonCodePrefix + "_RELATION_INCONSISTENT";
+        }
+        ContentSessionStatus sessionStatus = reservation.getContentSession().getStatus();
+        if (sessionStatus != ContentSessionStatus.SCHEDULED
+            && sessionStatus != ContentSessionStatus.CANCELLED
+            && sessionStatus != ContentSessionStatus.COMPLETED) {
+            return reasonCodePrefix + "_RELATION_INCONSISTENT";
+        }
+        return null;
+    }
+
+    private boolean hasConsistentReservationRelations(Reservation reservation) {
+        ContentSession contentSession = reservation.getContentSession();
+        return sameId(reservation.getRegion().getRegionId(), contentSession.getRegion().getRegionId())
+            && sameId(
+                reservation.getRegion().getRegionId(),
+                contentSession.getContent().getRegion().getRegionId()
+            );
     }
 
     private String qrFailureReasonCode(QrTokenService.VerificationFailure failure) {
