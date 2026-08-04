@@ -148,6 +148,72 @@ class AuditEventRepositoryTest {
         assertThat(auditEventColumns).doesNotContain("USER_ID");
     }
 
+    @Test
+    void QR_예외_감사_이벤트를_단건_projection으로_조회한다() {
+        Region region = regionRepository.saveAndFlush(new Region("GIMHAE", "김해시", true));
+        AuditEvent auditEvent = auditEventRepository.saveAndFlush(new AuditEvent(
+            "00000000-0000-0000-0000-000000000002",
+            region,
+            AuditEventTargetType.RESERVATION,
+            123L,
+            null,
+            null,
+            AuditEventResult.FAILURE,
+            "QR_CHECK_IN_SIGNATURE_INVALID",
+            "USER",
+            "OPERATOR",
+            Instant.parse("2026-08-01T01:02:00Z")
+        ));
+
+        QrExceptionAuditProjection projection = auditEventRepository
+            .findQrExceptionAuditProjectionById(auditEvent.getAuditEventId())
+            .orElseThrow();
+
+        assertThat(projection.exceptionId()).isEqualTo(auditEvent.getAuditEventId());
+        assertThat(projection.regionId()).isEqualTo(region.getRegionId());
+        assertThat(projection.targetType()).isEqualTo(AuditEventTargetType.RESERVATION);
+        assertThat(projection.targetId()).isEqualTo(123L);
+        assertThat(projection.result()).isEqualTo(AuditEventResult.FAILURE);
+        assertThat(projection.reasonCode()).isEqualTo("QR_CHECK_IN_SIGNATURE_INVALID");
+        assertThat(projection.occurredAt()).isEqualTo(Instant.parse("2026-08-01T01:02:00Z"));
+    }
+
+    @Test
+    void QR_예외_범위가_아닌_감사_이벤트는_projection으로_조회하지_않는다() {
+        Region region = regionRepository.saveAndFlush(new Region("BUSAN", "부산시", true));
+        AuditEvent contentAuditEvent = auditEventRepository.saveAndFlush(new AuditEvent(
+            "00000000-0000-0000-0000-000000000003",
+            region,
+            AuditEventTargetType.CONTENT,
+            101L,
+            "PENDING",
+            "PUBLISHED",
+            AuditEventResult.SUCCESS,
+            null,
+            "SYSTEM",
+            null,
+            Instant.parse("2026-08-01T01:02:00Z")
+        ));
+        AuditEvent qrSuccessAuditEvent = auditEventRepository.saveAndFlush(new AuditEvent(
+            "00000000-0000-0000-0000-000000000004",
+            region,
+            AuditEventTargetType.VISIT,
+            201L,
+            "CONFIRMED",
+            "CHECKED_IN",
+            AuditEventResult.SUCCESS,
+            "QR_CHECK_IN_SUCCESS",
+            "USER",
+            "OPERATOR",
+            Instant.parse("2026-08-01T01:03:00Z")
+        ));
+
+        assertThat(auditEventRepository.findQrExceptionAuditProjectionById(contentAuditEvent.getAuditEventId()))
+            .isEmpty();
+        assertThat(auditEventRepository.findQrExceptionAuditProjectionById(qrSuccessAuditEvent.getAuditEventId()))
+            .isEmpty();
+    }
+
     private AuditEvent createAuditEvent(
         Region region,
         AuditEventResult result
