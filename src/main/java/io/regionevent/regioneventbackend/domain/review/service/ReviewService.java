@@ -54,6 +54,11 @@ public class ReviewService {
         }
     }
 
+    public Review findByIdForUpdate(Long reviewId) {
+        return reviewRepository.findByReviewIdForUpdate(reviewId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
     public Review updatePublishedByAuthorWithinThirtyDays(
         Long reviewId,
         Long userId,
