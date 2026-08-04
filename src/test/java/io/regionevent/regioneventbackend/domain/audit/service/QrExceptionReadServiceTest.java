@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
@@ -46,6 +47,103 @@ class QrExceptionReadServiceTest {
                 assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT)
             );
         verifyNoInteractions(auditEventRepository);
+    }
+
+    @Test
+    void findAll_cursor_is_after_now_then_rejects_with_INVALID_INPUT() {
+        Instant futureCursorOccurredAt = NOW.plusNanos(1);
+
+        assertThatThrownBy(() -> qrExceptionReadService.findAll(REGION_ID, futureCursorOccurredAt, 10L, 20))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT)
+            );
+        verifyNoInteractions(auditEventRepository);
+    }
+
+    @Test
+    void findAll_cursor_boundary_does_not_exist_then_rejects_with_INVALID_INPUT() {
+        when(auditEventRepository.existsQrExceptionCursorBoundary(
+            eq(REGION_ID),
+            eq(NOW),
+            eq(10L),
+            any(Instant.class),
+            eq(NOW),
+            any(String.class),
+            any(String.class),
+            any(String.class)
+        )).thenReturn(false);
+
+        assertThatThrownBy(() -> qrExceptionReadService.findAll(REGION_ID, NOW, 10L, 20))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT)
+            );
+        verify(auditEventRepository).existsQrExceptionCursorBoundary(
+            eq(REGION_ID),
+            eq(NOW),
+            eq(10L),
+            any(Instant.class),
+            eq(NOW),
+            eq("QR_CHECK_IN_"),
+            eq("QR_VERIFICATION_FAILED"),
+            eq("MANUAL_CHECK_IN_")
+        );
+        verifyNoMoreInteractions(auditEventRepository);
+    }
+
+    @Test
+    void findAll_cursor_boundary_exists_then_queries_next_page() {
+        Instant cursorOccurredAt = NOW.minusSeconds(1);
+        Long cursorAuditEventId = 10L;
+        when(auditEventRepository.existsQrExceptionCursorBoundary(
+            eq(REGION_ID),
+            eq(cursorOccurredAt),
+            eq(cursorAuditEventId),
+            any(Instant.class),
+            eq(NOW),
+            any(String.class),
+            any(String.class),
+            any(String.class)
+        )).thenReturn(true);
+        when(auditEventRepository.findQrExceptionReadProjections(
+            eq(REGION_ID),
+            any(Instant.class),
+            eq(cursorOccurredAt),
+            eq(cursorAuditEventId),
+            any(String.class),
+            any(String.class),
+            any(String.class),
+            any(Pageable.class)
+        )).thenReturn(List.of());
+
+        QrExceptionReadService.QrExceptionPage page = qrExceptionReadService.findAll(
+            REGION_ID,
+            cursorOccurredAt,
+            cursorAuditEventId,
+            20
+        );
+
+        assertThat(page.items()).isEmpty();
+        assertThat(page.hasNext()).isFalse();
+        verify(auditEventRepository).existsQrExceptionCursorBoundary(
+            eq(REGION_ID),
+            eq(cursorOccurredAt),
+            eq(cursorAuditEventId),
+            any(Instant.class),
+            eq(NOW),
+            eq("QR_CHECK_IN_"),
+            eq("QR_VERIFICATION_FAILED"),
+            eq("MANUAL_CHECK_IN_")
+        );
+        verify(auditEventRepository).findQrExceptionReadProjections(
+            eq(REGION_ID),
+            any(Instant.class),
+            eq(cursorOccurredAt),
+            eq(cursorAuditEventId),
+            eq("QR_CHECK_IN_"),
+            eq("QR_VERIFICATION_FAILED"),
+            eq("MANUAL_CHECK_IN_"),
+            any(Pageable.class)
+        );
     }
 
     @Test

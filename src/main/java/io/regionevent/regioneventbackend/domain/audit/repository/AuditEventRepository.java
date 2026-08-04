@@ -75,4 +75,29 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
         @Param("manualCheckInPrefix") String manualCheckInPrefix,
         Pageable pageable
     );
+
+    @Query("""
+        SELECT CASE WHEN COUNT(auditEvent) > 0 THEN true ELSE false END
+        FROM AuditEvent auditEvent
+        WHERE auditEvent.auditEventId = :cursorAuditEventId
+            AND auditEvent.region.regionId = :regionId
+            AND auditEvent.occurredAt = :cursorOccurredAt
+            AND auditEvent.occurredAt >= :cutoff
+            AND auditEvent.occurredAt <= :now
+            AND (
+                LOCATE(:qrCheckInPrefix, auditEvent.reasonCode) = 1
+                OR auditEvent.reasonCode = :reservationLookupReasonCode
+                OR LOCATE(:manualCheckInPrefix, auditEvent.reasonCode) = 1
+            )
+        """)
+    boolean existsQrExceptionCursorBoundary(
+        @Param("regionId") Long regionId,
+        @Param("cursorOccurredAt") Instant cursorOccurredAt,
+        @Param("cursorAuditEventId") Long cursorAuditEventId,
+        @Param("cutoff") Instant cutoff,
+        @Param("now") Instant now,
+        @Param("qrCheckInPrefix") String qrCheckInPrefix,
+        @Param("reservationLookupReasonCode") String reservationLookupReasonCode,
+        @Param("manualCheckInPrefix") String manualCheckInPrefix
+    );
 }

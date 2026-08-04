@@ -44,8 +44,9 @@ public class QrExceptionReadService {
         Long cursorAuditEventId,
         int size
     ) {
-        Instant cutoff = Instant.now(clock).minus(RETENTION_PERIOD);
-        validateCursorOccurredAt(cursorOccurredAt, cutoff);
+        Instant now = Instant.now(clock);
+        Instant cutoff = now.minus(RETENTION_PERIOD);
+        validateCursor(regionId, cursorOccurredAt, cursorAuditEventId, cutoff, now);
         List<QrExceptionReadProjection> projections = auditEventRepository.findQrExceptionReadProjections(
             regionId,
             cutoff,
@@ -64,11 +65,33 @@ public class QrExceptionReadService {
         return new QrExceptionPage(items, hasNext);
     }
 
-    private void validateCursorOccurredAt(
+    private void validateCursor(
+        Long regionId,
         Instant cursorOccurredAt,
-        Instant cutoff
+        Long cursorAuditEventId,
+        Instant cutoff,
+        Instant now
     ) {
-        if (cursorOccurredAt != null && cursorOccurredAt.isBefore(cutoff)) {
+        if (cursorOccurredAt == null && cursorAuditEventId == null) {
+            return;
+        }
+        if (cursorOccurredAt == null || cursorAuditEventId == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        if (cursorOccurredAt.isBefore(cutoff) || cursorOccurredAt.isAfter(now)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        boolean cursorBoundaryExists = auditEventRepository.existsQrExceptionCursorBoundary(
+            regionId,
+            cursorOccurredAt,
+            cursorAuditEventId,
+            cutoff,
+            now,
+            QR_CHECK_IN_PREFIX,
+            RESERVATION_LOOKUP_REASON_CODE,
+            MANUAL_CHECK_IN_PREFIX
+        );
+        if (!cursorBoundaryExists) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
     }
