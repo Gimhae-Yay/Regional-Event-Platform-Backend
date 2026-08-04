@@ -40,4 +40,9 @@ public class VisitService {
     public Visit create(Visit visit) {
         return visitRepository.saveAndFlush(visit);
     }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void unlinkAuthorByUserId(Long userId) {
+        visitRepository.unlinkAuthorByUserId(userId);
+    }
 }

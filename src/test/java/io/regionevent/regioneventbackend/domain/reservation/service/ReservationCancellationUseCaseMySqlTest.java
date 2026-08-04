@@ -15,10 +15,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
-import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -56,19 +52,16 @@ import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepositor
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
-import io.regionevent.regioneventbackend.global.security.qr.QrTokenService;
 import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
 import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 
 @SpringBootTest
-@Import(ReservationCancellationUseCaseMySqlTest.BlockingReservationServiceConfig.class)
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class ReservationCancellationUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
 
     private final ReservationCancellationUseCase reservationCancellationUseCase;
     private final CancelContentSessionUseCase cancelContentSessionUseCase;
-    private final BlockingReservationService blockingReservationService;
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
@@ -84,7 +77,6 @@ class ReservationCancellationUseCaseMySqlTest extends NonTransactionalMySqlTestS
     ReservationCancellationUseCaseMySqlTest(
         ReservationCancellationUseCase reservationCancellationUseCase,
         CancelContentSessionUseCase cancelContentSessionUseCase,
-        BlockingReservationService blockingReservationService,
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
         UserRoleAssignmentRepository userRoleAssignmentRepository,
@@ -98,7 +90,6 @@ class ReservationCancellationUseCaseMySqlTest extends NonTransactionalMySqlTestS
     ) {
         this.reservationCancellationUseCase = reservationCancellationUseCase;
         this.cancelContentSessionUseCase = cancelContentSessionUseCase;
-        this.blockingReservationService = blockingReservationService;
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
         this.userRoleAssignmentRepository = userRoleAssignmentRepository;
@@ -186,7 +177,6 @@ class ReservationCancellationUseCaseMySqlTest extends NonTransactionalMySqlTestS
     private List<CancellationResult> cancelConcurrently(Fixture fixture) throws Exception {
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
-        blockingReservationService.blockInitialReads(2);
 
         try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
             Future<CancellationResult> first = executorService.submit(
@@ -198,8 +188,6 @@ class ReservationCancellationUseCaseMySqlTest extends NonTransactionalMySqlTestS
             assertThat(ready.await(3, TimeUnit.SECONDS)).isTrue();
             start.countDown();
             return List.of(first.get(5, TimeUnit.SECONDS), second.get(5, TimeUnit.SECONDS));
-        } finally {
-            blockingReservationService.resetInitialReadBlock();
         }
     }
 
@@ -342,63 +330,6 @@ class ReservationCancellationUseCaseMySqlTest extends NonTransactionalMySqlTestS
     private static String withUseAffectedRows(String jdbcUrl) {
         String parameterPrefix = jdbcUrl.contains("?") ? "&" : "?";
         return jdbcUrl + parameterPrefix + "useAffectedRows=true";
-    }
-
-    @TestConfiguration(proxyBeanMethods = false)
-    static class BlockingReservationServiceConfig {
-
-        @Bean
-        @Primary
-        BlockingReservationService blockingReservationService(
-            ReservationRepository reservationRepository,
-            ReservationIdentifierGenerator reservationIdentifierGenerator,
-            QrTokenService qrTokenService
-        ) {
-            return new BlockingReservationService(reservationRepository, reservationIdentifierGenerator, qrTokenService);
-        }
-    }
-
-    static class BlockingReservationService extends ReservationService {
-
-        private volatile CountDownLatch initialReadBarrier;
-
-        BlockingReservationService(
-            ReservationRepository reservationRepository,
-            ReservationIdentifierGenerator reservationIdentifierGenerator,
-            QrTokenService qrTokenService
-        ) {
-            super(reservationRepository, reservationIdentifierGenerator, qrTokenService);
-        }
-
-        @Override
-        public ReservationCancellationLockTarget findCancellationLockTarget(Long reservationId, AppUser user) {
-            ReservationCancellationLockTarget lockTarget = super.findCancellationLockTarget(reservationId, user);
-            CountDownLatch barrier = initialReadBarrier;
-            if (barrier != null) {
-                barrier.countDown();
-                await(barrier);
-            }
-            return lockTarget;
-        }
-
-        void blockInitialReads(int requestCount) {
-            initialReadBarrier = new CountDownLatch(requestCount);
-        }
-
-        void resetInitialReadBlock() {
-            initialReadBarrier = null;
-        }
-
-        private void await(CountDownLatch latch) {
-            try {
-                if (!latch.await(5, TimeUnit.SECONDS)) {
-                    throw new IllegalStateException("initial reservation reads did not complete in time");
-                }
-            } catch (InterruptedException exception) {
-                Thread.currentThread().interrupt();
-                throw new IllegalStateException("initial reservation read was interrupted", exception);
-            }
-        }
     }
 
     private record Fixture(Long userId, Long operatorId, Long reservationId, Long sessionId) {
