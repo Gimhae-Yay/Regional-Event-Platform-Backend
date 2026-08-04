@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -45,11 +46,13 @@ import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationSt
 import io.regionevent.regioneventbackend.domain.reservation.repository.CapacityHoldRepository;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationRepository;
 import io.regionevent.regioneventbackend.domain.review.dto.CreateVisitReviewRequest;
+import io.regionevent.regioneventbackend.domain.review.dto.UpdateReviewRequest;
 import io.regionevent.regioneventbackend.domain.review.entity.Review;
 import io.regionevent.regioneventbackend.domain.review.entity.ReviewStatus;
 import io.regionevent.regioneventbackend.domain.review.repository.ReviewRepository;
 import io.regionevent.regioneventbackend.domain.review.service.CreateVisitReviewUseCase;
 import io.regionevent.regioneventbackend.domain.review.service.ReviewService;
+import io.regionevent.regioneventbackend.domain.review.service.UpdateReviewUseCase;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
@@ -150,6 +153,126 @@ class VisitReviewControllerIntegrationTest {
             .filteredOn(event -> event.getTargetType() == AuditEventTargetType.REVIEW)
             .filteredOn(event -> event.getResult() == AuditEventResult.SUCCESS)
             .anySatisfy(event -> assertThat(event.getNextState()).isEqualTo(ReviewStatus.PUBLISHED.name()));
+    }
+
+    @Test
+    void updateReview_updatesProvidedFieldAndRecordsSuccessAudit() throws Exception {
+        Fixture fixture = createFixture(true);
+        Review review = createPublishedReview(fixture, 5, "수정 전 후기");
+
+        performUpdate(fixture.user(), review.getReviewId(), """
+            {
+              "reviewText": "  수정한 후기  "
+            }
+            """)
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.statusCode").value(200))
+            .andExpect(jsonPath("$.code").value("SUCCESS"))
+            .andExpect(jsonPath("$.message").value("후기 수정에 성공했습니다."))
+            .andExpect(jsonPath("$.data.reviewId").value(review.getReviewId().toString()))
+            .andExpect(jsonPath("$.data.rating").value(5))
+            .andExpect(jsonPath("$.data.reviewText").value("수정한 후기"));
+
+        Review updatedReview = reviewRepository.findById(review.getReviewId()).orElseThrow();
+        assertThat(updatedReview.getRating()).isEqualTo(5);
+        assertThat(updatedReview.getReviewText()).isEqualTo("수정한 후기");
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(event -> event.getTargetType() == AuditEventTargetType.REVIEW)
+            .filteredOn(event -> event.getResult() == AuditEventResult.SUCCESS)
+            .anySatisfy(event -> assertThat(event.getTargetId()).isEqualTo(review.getReviewId()));
+    }
+
+    @Test
+    void updateReview_whenNoFieldIsProvided_returnsInvalidInputWithoutMutation() throws Exception {
+        Fixture fixture = createFixture(true);
+        Review review = createPublishedReview(fixture, 5, "수정 전 후기");
+        long failureAuditCountBefore = countReviewFailureAudits();
+
+        performUpdate(fixture.user(), review.getReviewId(), "{}")
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        Review unchangedReview = reviewRepository.findById(review.getReviewId()).orElseThrow();
+        assertThat(unchangedReview.getRating()).isEqualTo(5);
+        assertThat(unchangedReview.getReviewText()).isEqualTo("수정 전 후기");
+        assertThat(countReviewFailureAudits()).isEqualTo(failureAuditCountBefore);
+    }
+
+    @Test
+    void updateReview_whenAuthorDiffers_returnsForbiddenWithoutMutation() throws Exception {
+        Fixture fixture = createFixture(true);
+        Review review = createPublishedReview(fixture, 5, "수정 전 후기");
+        AppUser anotherVisitor = saveUser("another-visitor-" + System.nanoTime() + "@example.com", true);
+
+        performUpdate(anotherVisitor, review.getReviewId(), """
+            {
+              "rating": 4
+            }
+            """)
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        assertThat(reviewRepository.findById(review.getReviewId()).orElseThrow().getRating()).isEqualTo(5);
+    }
+
+    @Test
+    void updateReview_whenThirtyDaysHaveElapsed_returnsForbiddenWithoutMutation() throws Exception {
+        Fixture fixture = createFixture(true);
+        Review review = createPublishedReview(fixture, 5, "수정 전 후기");
+        long failureAuditCountBefore = countReviewFailureAudits();
+        jdbcTemplate.update(
+            "UPDATE review SET created_at = DATEADD('DAY', -30, CURRENT_TIMESTAMP(6)) WHERE review_id = ?",
+            review.getReviewId()
+        );
+
+        performUpdate(fixture.user(), review.getReviewId(), """
+            {
+              "rating": 4
+            }
+            """)
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        assertThat(reviewRepository.findById(review.getReviewId()).orElseThrow().getRating()).isEqualTo(5);
+        assertThat(countReviewFailureAudits()).isEqualTo(failureAuditCountBefore + 1);
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(event -> event.getTargetType() == AuditEventTargetType.REVIEW)
+            .filteredOn(event -> event.getResult() == AuditEventResult.FAILURE)
+            .filteredOn(event -> review.getReviewId().equals(event.getTargetId()))
+            .anySatisfy(event -> assertThat(event.getRegion().getRegionId())
+                .isEqualTo(fixture.region().getRegionId()));
+    }
+
+    @Test
+    void updateReview_whenSuccessAuditRecordingFails_rollsBackReview() {
+        Fixture fixture = createFixture(true);
+        Review review = createPublishedReview(fixture, 5, "수정 전 후기");
+        long failureAuditCountBefore = countReviewFailureAudits();
+        RecordAuditEventUseCase rejectingAuditEventUseCase = mock(RecordAuditEventUseCase.class);
+        doThrow(new IllegalStateException("audit storage failure"))
+            .when(rejectingAuditEventUseCase)
+            .record(any(AuditEventCommand.class));
+        UpdateReviewUseCase useCase = new UpdateReviewUseCase(
+            appUserService,
+            userRoleAssignmentService,
+            reviewService,
+            rejectingAuditEventUseCase,
+            recordFailedAuditEventUseCase
+        );
+        UpdateReviewRequest request = new UpdateReviewRequest();
+        request.setRating(4);
+
+        assertThatThrownBy(() -> transactionTemplate.executeWithoutResult(transactionStatus ->
+            useCase.update(
+                fixture.user().getUserId(),
+                review.getReviewId(),
+                request,
+                UUID.randomUUID()
+            )
+        )).isInstanceOf(IllegalStateException.class);
+
+        assertThat(reviewRepository.findById(review.getReviewId()).orElseThrow().getRating()).isEqualTo(5);
+        assertThat(countReviewFailureAudits()).isEqualTo(failureAuditCountBefore + 1);
     }
 
     @Test
@@ -381,6 +504,30 @@ class VisitReviewControllerIntegrationTest {
         String reviewText
     ) throws Exception {
         return performCreate(user, visitId.toString(), rating, reviewText);
+    }
+
+    private org.springframework.test.web.servlet.ResultActions performUpdate(
+        AppUser user,
+        Long reviewId,
+        String requestBody
+    ) throws Exception {
+        return mockMvc.perform(patch("/api/v1/reviews/{reviewId}", reviewId)
+            .header("Authorization", "Bearer " + jwtAccessTokenService.issue(user.getUserId()))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(requestBody));
+    }
+
+    private Review createPublishedReview(Fixture fixture, int rating, String reviewText) {
+        return reviewRepository.saveAndFlush(new Review(
+            fixture.region(),
+            fixture.visit(),
+            fixture.user(),
+            fixture.content(),
+            rating,
+            reviewText,
+            ReviewStatus.PUBLISHED,
+            null
+        ));
     }
 
     private org.springframework.test.web.servlet.ResultActions performCreate(
