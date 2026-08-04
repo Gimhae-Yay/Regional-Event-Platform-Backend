@@ -1,6 +1,9 @@
 package io.regionevent.regioneventbackend.domain.reservation.service;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import org.springframework.stereotype.Service;
@@ -35,9 +38,45 @@ public class ReservationReadService {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
 
+        return toReadResult(projections);
+    }
+
+    @Transactional(readOnly = true)
+    public ReservationReadResult findOwnedByReservationId(Long userId, Long reservationId) {
+        validateId(userId);
+        validateId(reservationId);
+
+        List<ReservationReadProjection> projections = reservationRepository
+            .findReadProjectionsByReservationId(reservationId);
+        if (projections.isEmpty()) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+        if (!Objects.equals(projections.get(0).participantUserId(), userId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        return toReadResult(projections);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ReservationReadResult> findAllOwnedByUserId(Long userId) {
+        validateId(userId);
+
+        Map<Long, List<ReservationReadProjection>> projectionsByReservationId = new LinkedHashMap<>();
+        reservationRepository.findReadProjectionsByUserId(userId)
+            .forEach(projection -> projectionsByReservationId
+                .computeIfAbsent(projection.reservationId(), ignored -> new ArrayList<>())
+                .add(projection));
+
+        return projectionsByReservationId.values().stream()
+            .map(this::toReadResult)
+            .toList();
+    }
+
+    private ReservationReadResult toReadResult(List<ReservationReadProjection> projections) {
         ReservationReadSnapshot snapshot = toSnapshot(projections.get(0));
         if (projections.stream().anyMatch(projection -> !sameReservation(snapshot, projection))) {
-            throw new IllegalStateException("reservation number is not globally unique");
+            throw new IllegalStateException("reservation read data is inconsistent");
         }
 
         List<ReservationReadSnapshot.VisitInfo> visits = projections.stream()
@@ -53,6 +92,12 @@ public class ReservationReadService {
 
     private void validateReservationNo(String reservationNo) {
         if (reservationNo == null || reservationNo.isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+    }
+
+    private void validateId(Long id) {
+        if (id == null || id <= 0) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
     }
