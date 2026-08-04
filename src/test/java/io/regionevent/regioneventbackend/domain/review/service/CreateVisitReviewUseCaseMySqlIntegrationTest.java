@@ -217,12 +217,18 @@ class CreateVisitReviewUseCaseMySqlIntegrationTest extends NonTransactionalMySql
         );
 
         try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
-            Future<ReviewOriginalPurgeResult> first = executorService.submit(
-                (Callable<ReviewOriginalPurgeResult>) reviewOriginalPurgeService::purgeDeletedReviewOriginals
-            );
-            Future<ReviewOriginalPurgeResult> second = executorService.submit(
-                (Callable<ReviewOriginalPurgeResult>) reviewOriginalPurgeService::purgeDeletedReviewOriginals
-            );
+            CountDownLatch readySignal = new CountDownLatch(2);
+            CountDownLatch startSignal = new CountDownLatch(1);
+            Callable<ReviewOriginalPurgeResult> purgeTask = () -> {
+                readySignal.countDown();
+                await(startSignal);
+                return reviewOriginalPurgeService.purgeDeletedReviewOriginals();
+            };
+            Future<ReviewOriginalPurgeResult> first = executorService.submit(purgeTask);
+            Future<ReviewOriginalPurgeResult> second = executorService.submit(purgeTask);
+
+            assertThat(readySignal.await(3, TimeUnit.SECONDS)).isTrue();
+            startSignal.countDown();
 
             assertThat(first.get().purgedReviewCount() + second.get().purgedReviewCount()).isEqualTo(1);
         }
