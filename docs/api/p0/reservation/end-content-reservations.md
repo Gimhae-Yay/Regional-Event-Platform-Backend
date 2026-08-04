@@ -94,7 +94,7 @@ Accept: application/json
 | `401` | `UNAUTHENTICATED` | 인증 정보가 없거나 유효하지 않다. 상태 변경은 발생하지 않으며 유효한 인증 정보로 재시도할 수 있다. |
 | `403` | `FORBIDDEN` | 인증 주체가 지역 관리자가 아니거나, 대상 콘텐츠의 `region_id`가 인증 주체의 담당 지역과 일치하지 않는다. 상태 변경은 발생하지 않으며 동일한 권한 상태로 재시도해도 성공하지 않는다. |
 | `404` | `NOT_FOUND` | 대상 콘텐츠를 찾을 수 없다. 상태 변경은 발생하지 않으며 콘텐츠 식별자를 확인한 뒤 재시도할 수 있다. |
-| `409` | `CONTENT_END_CONFLICT` | 콘텐츠가 `PUBLISHED`도 `ENDED`도 아니거나 `SCHEDULED` 회차가 남아 있거나, 다른 상태 전이가 먼저 성공했다. 이미 `ENDED`인 콘텐츠는 재시도해도 기존 성공 결과를 반환하며, 그 외 충돌은 종료 조건을 충족한 뒤 재시도할 수 있다. |
+| `409` | `CONTENT_END_CONFLICT` | 콘텐츠가 `PUBLISHED`도 `ENDED`도 아니거나 종결되지 않은 회차가 남아 있거나, 다른 상태 전이가 먼저 성공했다. 이미 `ENDED`인 콘텐츠는 재시도해도 기존 성공 결과를 반환하며, 그 외 충돌은 종료 조건을 충족한 뒤 재시도할 수 있다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 종료 처리 중 예상하지 못한 서버 오류가 발생했다. 트랜잭션이 커밋되지 않은 경우 상태 변경은 발생하지 않으며 일시적 장애라면 동일 요청으로 재시도할 수 있다. |
 
 #### Error Response Body
@@ -114,8 +114,8 @@ Accept: application/json
 2. 대상 콘텐츠의 `region_id`가 인증 주체의 담당 지역과 일치해야 한다.
 3. 콘텐츠가 존재하지 않으면 `404 NOT_FOUND`로 응답한다.
 4. 담당 지역이 일치하지 않으면 `403 FORBIDDEN`으로 응답한다.
-5. 종료 쓰기 트랜잭션에서 대상 `content` 행을 `PESSIMISTIC_WRITE`(`SELECT ... FOR UPDATE`)로 먼저 잠근다. 잠금을 얻은 뒤 현재 상태가 `PUBLISHED`이고 연결된 회차가 하나 이상이며 모든 회차가 `COMPLETED` 또는 `CANCELLED`인지 다시 확인하고, 조건을 만족할 때만 `PUBLISHED → ENDED` 전이를 적용한다.
-6. `SCHEDULED` 회차가 하나라도 남아 있으면 종료할 수 없다.
+5. 종료 쓰기 트랜잭션에서 대상 `content` 행을 `PESSIMISTIC_WRITE`(`SELECT ... FOR UPDATE`)로 먼저 잠근다. 잠금을 얻은 뒤 현재 상태가 `PUBLISHED`이고 연결된 회차가 하나 이상이며 모든 회차가 `COMPLETED`, `CANCELLED`, `REJECTED` 중 하나인지 다시 확인하고, 조건을 만족할 때만 `PUBLISHED → ENDED` 전이를 적용한다.
+6. `PENDING`, `SCHEDULED` 회차가 하나라도 남아 있으면 종료할 수 없다. `COMPLETED`, `CANCELLED`, `REJECTED`는 종료 판정의 종결 상태다.
 7. 기존 `CONFIRMED` 예약을 취소해야 하면 이 API 호출 전에 해당 회차를 명시적으로 취소해야 한다.
 8. 종료 성공 후 신규 홀드 생성과 예약 확정을 차단한다.
 9. 종료 성공 후 공개 콘텐츠 조회 경로에서 대상 콘텐츠를 노출하지 않는다.

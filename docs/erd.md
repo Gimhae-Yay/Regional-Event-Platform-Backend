@@ -442,9 +442,10 @@ erDiagram
   `content.status` 값이 아니며, 자동 공개·종료 같은 시스템 처리는 `actor_id = NULL`로 기록한다.
 - 실제 공개 시각은 `status = PUBLISHED`인 `content_log` 행의 `date`다. `content.publish_at`은 공개 예정 시각이며,
   별도 `content.published_at` 현재 상태 컬럼은 두지 않는다.
-- 소프트 삭제되지 않은 `PUBLISHED` 콘텐츠의 모든 회차가 `COMPLETED` 또는 `CANCELLED`가 되면 시스템이
-  `PUBLISHED → ENDED`를 조건부로 적용한다. 실제 종료 시각은 `status = ENDED`인 `content_log` 행의 `date`이며,
-  별도 콘텐츠 종료 예정 시각이나 `content.ended_at` 현재 상태 컬럼을 두지 않는다.
+- 소프트 삭제되지 않은 `PUBLISHED` 콘텐츠에 연결된 회차가 하나 이상이고 모든 회차가 `COMPLETED`, `CANCELLED`,
+  `REJECTED` 중 하나이면 시스템이 `PUBLISHED → ENDED`를 조건부로 적용한다. `PENDING` 또는 `SCHEDULED` 회차가
+  있으면 종료하지 않는다. 실제 종료 시각은 `status = ENDED`인 `content_log` 행의 `date`이며, 별도 콘텐츠 종료
+  예정 시각이나 `content.ended_at` 현재 상태 컬럼을 두지 않는다.
 - `REJECTED`, `SUSPENDED`, `WITHDRAWN`, `DELETED` 로그는 `reason`이 필수다. 방문자에게 보이는 중단·철회 안내는
   해당 콘텐츠의 최신 `SUSPENDED` 또는 `WITHDRAWN` 로그의 `reason`에서 파생한다.
 - 소프트 삭제는 콘텐츠 상태가 아니지만 `PENDING` 또는 `APPROVED`에서 `content.deleted_at`을 설정하고,

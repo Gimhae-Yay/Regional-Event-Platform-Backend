@@ -3,8 +3,9 @@
 이 기능은 외부 클라이언트가 호출하는 HTTP API가 아닌 내부 스케줄러 작업이다.
 실행 경로 식별자는 `scheduler`이며, 외부 URL·인증 헤더·JSON 요청과 응답은 제공하지 않는다.
 
-스케줄러는 연결된 모든 회차가 `COMPLETED` 또는 `CANCELLED`인 공개 콘텐츠를 `ENDED`로 전환한다. 지역
-관리자의 정상 종료 API는 같은 공통 종료 서비스를 사용해 스케줄러 실행을 기다리지 않고 동일한 결과를 만든다.
+스케줄러는 연결된 회차가 하나 이상이고 모든 회차가 `COMPLETED`, `CANCELLED`, `REJECTED` 중 하나인 공개
+콘텐츠를 `ENDED`로 전환한다. `PENDING` 또는 `SCHEDULED` 회차가 있으면 종료하지 않는다. 지역 관리자의 정상
+종료 API는 같은 공통 종료 서비스를 사용해 스케줄러 실행을 기다리지 않고 동일한 결과를 만든다.
 
 ### 실행 계약
 
@@ -22,14 +23,14 @@
 
 | 구분 | 대상 조건 | 상태 전이 | 홀드·정원 처리 |
 | --- | --- | --- | --- |
-| 자동 종료 | `content.status = PUBLISHED`, `deleted_at IS NULL`, 연결된 회차가 하나 이상이고 모든 회차의 상태가 `COMPLETED` 또는 `CANCELLED` | `PUBLISHED → ENDED` | 남은 `ACTIVE` 홀드를 `INVALIDATED`로 전환하고 홀드별 정원을 한 번 복구한다. |
+| 자동 종료 | `content.status = PUBLISHED`, `deleted_at IS NULL`, 연결된 회차가 하나 이상이고 모든 회차가 `COMPLETED`, `CANCELLED`, `REJECTED` 중 하나 | `PUBLISHED → ENDED` | 남은 `ACTIVE` 홀드를 `INVALIDATED`로 전환하고 홀드별 정원을 한 번 복구한다. |
 
 ### 처리 규칙
 
 1. 스케줄러는 `PUBLISHED` 콘텐츠 후보를 조회한 뒤 `content_session(content_id, status, starts_at)` 접근 경로로 종결되지 않은 회차의 존재 여부를 판정한다.
-2. 후보별 실제 처리 트랜잭션은 대상 `content` 행을 `PESSIMISTIC_WRITE`(`SELECT ... FOR UPDATE`)로 먼저 잠근다. 잠금을 얻은 뒤 콘텐츠가 `PUBLISHED`이고 `deleted_at IS NULL`인지, 연결된 회차가 하나 이상이며 모든 회차가 `COMPLETED` 또는 `CANCELLED`인지 다시 확인한다.
-3. 회차가 없거나 `PENDING`, `SCHEDULED`, `REJECTED` 회차가 하나라도 있으면 콘텐츠·로그·감사·홀드·정원을 변경하지 않는다.
-4. 자동 종료는 별도 콘텐츠 종료 예정 시각이나 마지막 회차의 원래 `ends_at`을 추가 조건으로 사용하지 않는다. 미래 회차를 모두 취소해 모든 회차가 종결된 콘텐츠도 다음 실행의 종료 대상이다.
+2. 후보별 실제 처리 트랜잭션은 대상 `content` 행을 `PESSIMISTIC_WRITE`(`SELECT ... FOR UPDATE`)로 먼저 잠근다. 잠금을 얻은 뒤 콘텐츠가 `PUBLISHED`이고 `deleted_at IS NULL`인지, 연결된 회차가 하나 이상이며 모든 회차가 `COMPLETED`, `CANCELLED`, `REJECTED` 중 하나인지 다시 확인한다.
+3. 회차가 없거나 `PENDING`, `SCHEDULED` 회차가 하나라도 있으면 콘텐츠·로그·감사·홀드·정원을 변경하지 않는다. `COMPLETED`, `CANCELLED`, `REJECTED`는 종료 판정의 종결 상태다.
+4. 자동 종료는 별도 콘텐츠 종료 예정 시각이나 마지막 회차의 원래 `ends_at`을 추가 조건으로 사용하지 않는다. 미래 회차가 `CANCELLED` 또는 `REJECTED`로 종결된 경우에도 다음 실행의 종료 대상이 될 수 있다.
 5. 콘텐츠 상태 전이는 반드시 `PUBLISHED`를 조건으로 수행한다. 이미 `ENDED`거나 다른 상태가 된 콘텐츠는 변경하지 않는다.
 6. 종료 성공 시 콘텐츠 상태, `ENDED` 콘텐츠 로그, 성공 감사 기록, 활성 홀드 무효화와 정원 복구를 하나의 MySQL 트랜잭션에서 함께 커밋한다.
 7. `content_log.status`는 `ENDED`, `actor_id`와 `reason`은 `NULL`이고 `date`는 MySQL 기준 종료 처리 시각이다. 실제 종료 시각은 이 로그의 `date`이며 `content`에 별도 `ended_at`을 저장하지 않는다.
