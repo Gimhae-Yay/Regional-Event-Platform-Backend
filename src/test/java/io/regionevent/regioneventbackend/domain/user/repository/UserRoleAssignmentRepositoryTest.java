@@ -181,6 +181,60 @@ class UserRoleAssignmentRepositoryTest {
         )).isEmpty();
     }
 
+    @Test
+    void 활성_운영자_역할과_담당_지역을_함께_조회한다() {
+        AppUser appUser = saveUser("active-operator@example.com");
+        Region region = regionRepository.saveAndFlush(new Region("GIMHAE", "김해시", true));
+        userRoleAssignmentRepository.saveAndFlush(
+            new UserRoleAssignment(appUser, UserRole.OPERATOR, region)
+        );
+        entityManager.clear();
+
+        UserRoleAssignment assignment = userRoleAssignmentRepository
+            .findByIdUserIdAndIdRoleAndAppUserStatus(
+                appUser.getUserId(),
+                UserRole.OPERATOR,
+                AppUserStatus.ACTIVE
+            )
+            .orElseThrow();
+
+        assertThat(assignment.getAppUser().getUserId()).isEqualTo(appUser.getUserId());
+        assertThat(assignment.getRole()).isEqualTo(UserRole.OPERATOR);
+        assertThat(Hibernate.isInitialized(assignment.getRegion())).isTrue();
+        assertThat(assignment.getRegion().getRegionId()).isEqualTo(region.getRegionId());
+    }
+
+    @Test
+    void 활성_회원에게_운영자_역할이_없으면_조회되지_않는다() {
+        AppUser appUser = saveUser("active-visitor@example.com");
+        userRoleAssignmentRepository.saveAndFlush(
+            new UserRoleAssignment(appUser, UserRole.VISITOR, null)
+        );
+        entityManager.clear();
+
+        assertThat(userRoleAssignmentRepository.findByIdUserIdAndIdRoleAndAppUserStatus(
+            appUser.getUserId(),
+            UserRole.OPERATOR,
+            AppUserStatus.ACTIVE
+        )).isEmpty();
+    }
+
+    @Test
+    void 비활성_운영자는_조회되지_않는다() {
+        AppUser appUser = saveUser("withdrawing-operator@example.com", AppUserStatus.WITHDRAWING);
+        Region region = regionRepository.saveAndFlush(new Region("DONGHAE", "동해시", true));
+        userRoleAssignmentRepository.saveAndFlush(
+            new UserRoleAssignment(appUser, UserRole.OPERATOR, region)
+        );
+        entityManager.clear();
+
+        assertThat(userRoleAssignmentRepository.findByIdUserIdAndIdRoleAndAppUserStatus(
+            appUser.getUserId(),
+            UserRole.OPERATOR,
+            AppUserStatus.ACTIVE
+        )).isEmpty();
+    }
+
     private AppUser saveUser(String loginIdentifier) {
         return saveUser(loginIdentifier, AppUserStatus.ACTIVE);
     }
