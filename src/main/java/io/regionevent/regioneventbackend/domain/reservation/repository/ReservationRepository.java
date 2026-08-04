@@ -50,6 +50,23 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<Reservation> findByReservationNo(String reservationNo);
 
+    @EntityGraph(attributePaths = {
+        "region",
+        "contentSession",
+        "contentSession.region",
+        "contentSession.content",
+        "contentSession.content.region",
+        "contentSession.content.operator"
+    })
+    @Query("""
+        SELECT reservation
+        FROM Reservation reservation
+        WHERE reservation.reservationNo = :reservationNo
+        """)
+    Optional<Reservation> findByReservationNoForOperatorLookup(
+        @Param("reservationNo") String reservationNo
+    );
+
     @Query("""
         SELECT new io.regionevent.regioneventbackend.domain.reservation.repository.ReservationReadProjection(
             reservation.reservationId,

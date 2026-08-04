@@ -60,6 +60,11 @@ public class ReviewService {
     public void unlinkAuthorByUserId(Long userId) {
         reviewRepository.unlinkAuthorByUserId(userId);
     }
+  
+    public Review findByIdForUpdate(Long reviewId) {
+        return reviewRepository.findByReviewIdForUpdate(reviewId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
 
     public Review updatePublishedByAuthorWithinThirtyDays(
         Long reviewId,
