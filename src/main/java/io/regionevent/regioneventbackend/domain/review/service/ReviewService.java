@@ -51,6 +51,11 @@ public class ReviewService {
         }
     }
 
+    public Review findByIdForUpdate(Long reviewId) {
+        return reviewRepository.findByReviewIdForUpdate(reviewId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
     private boolean isReviewVisitUniqueConstraintViolation(DataIntegrityViolationException exception) {
         Throwable cause = exception;
         while (cause != null) {
