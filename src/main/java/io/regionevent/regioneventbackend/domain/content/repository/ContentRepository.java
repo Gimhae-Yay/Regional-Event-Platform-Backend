@@ -78,6 +78,25 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
         @Param("sessionStatus") ContentSessionStatus sessionStatus
     );
 
+    @Query("""
+        SELECT new io.regionevent.regioneventbackend.domain.content.repository.MyContentProjection(
+            content.contentId,
+            content.contentType,
+            content.title,
+            content.status,
+            content.createdAt
+        )
+        FROM Content content
+        WHERE content.operator.userId = :operatorUserId
+            AND content.region.regionId = :regionId
+            AND content.deletedAt IS NULL
+        ORDER BY content.createdAt DESC, content.contentId DESC
+        """)
+    List<MyContentProjection> findMyContents(
+        @Param("operatorUserId") Long operatorUserId,
+        @Param("regionId") Long regionId
+    );
+
     @EntityGraph(attributePaths = "region")
     Optional<Content> findByContentId(Long contentId);
 
