@@ -1,23 +1,22 @@
 package io.regionevent.regioneventbackend.domain.content.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.util.UUID;
 
 import jakarta.persistence.EntityManager;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.http.MediaType;
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
@@ -28,6 +27,7 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentLogRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
 import io.regionevent.regioneventbackend.domain.content.service.ContentLogService;
+import io.regionevent.regioneventbackend.domain.content.service.RejectContentUseCase;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -36,20 +36,22 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
-import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
+import io.regionevent.regioneventbackend.support.jpa.AtomicityJpaTestConfiguration;
+import io.regionevent.regioneventbackend.support.jpa.CleanH2Database;
 
-@SpringBootTest
-@AutoConfigureMockMvc
+@DataJpaTest
+@Import(AtomicityJpaTestConfiguration.class)
+@Transactional(propagation = Propagation.NOT_SUPPORTED)
+@CleanH2Database
 class ContentRejectionLogAtomicityTest {
 
-    private final MockMvc mockMvc;
+    private final RejectContentUseCase rejectContentUseCase;
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
     private final ContentRepository contentRepository;
     private final ContentLogRepository contentLogRepository;
     private final AuditEventRepository auditEventRepository;
-    private final JwtAccessTokenService jwtAccessTokenService;
     private final EntityManager entityManager;
 
     @MockitoBean
@@ -57,43 +59,38 @@ class ContentRejectionLogAtomicityTest {
 
     @Autowired
     ContentRejectionLogAtomicityTest(
-        MockMvc mockMvc,
+        RejectContentUseCase rejectContentUseCase,
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
         UserRoleAssignmentRepository userRoleAssignmentRepository,
         ContentRepository contentRepository,
         ContentLogRepository contentLogRepository,
         AuditEventRepository auditEventRepository,
-        JwtAccessTokenService jwtAccessTokenService,
         EntityManager entityManager
     ) {
-        this.mockMvc = mockMvc;
+        this.rejectContentUseCase = rejectContentUseCase;
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
         this.userRoleAssignmentRepository = userRoleAssignmentRepository;
         this.contentRepository = contentRepository;
         this.contentLogRepository = contentLogRepository;
         this.auditEventRepository = auditEventRepository;
-        this.jwtAccessTokenService = jwtAccessTokenService;
         this.entityManager = entityManager;
     }
 
     @Test
-    void rejectContent_whenLogRecordingFails_rollsBackContentAndAudit() throws Exception {
+    void rejectContent_whenLogRecordingFails_rollsBackContentAndAudit() {
         Fixture fixture = createFixture();
         doThrow(new IllegalStateException("content log storage failure"))
             .when(contentLogService)
             .recordRejected(any(Content.class), any(AppUser.class), any(Instant.class), any(String.class));
 
-        mockMvc.perform(post(
-                "/api/v1/region-admin/contents/{contentId}/reject",
-                fixture.content().getContentId()
-            )
-                .header("Authorization", "Bearer " + jwtAccessTokenService.issue(fixture.admin().getUserId()))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"reason\":\"반려 사유\"}"))
-            .andExpect(status().isInternalServerError())
-            .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
+        assertThatThrownBy(() -> rejectContentUseCase.reject(
+            fixture.admin().getUserId(),
+            fixture.content().getContentId(),
+            "반려 사유",
+            UUID.randomUUID()
+        )).isInstanceOf(IllegalStateException.class);
 
         entityManager.clear();
         Content content = contentRepository.findById(fixture.content().getContentId()).orElseThrow();
