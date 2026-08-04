@@ -212,7 +212,7 @@ public class CheckInUseCase {
             recordRollbackFailure(
                 requestId,
                 actor,
-                actor.roleAssignment().getRegion(),
+                lookup.reservationRegion(),
                 AuditEventTargetType.RESERVATION,
                 lookup.reservationId(),
                 null,
@@ -627,7 +627,7 @@ public class CheckInUseCase {
         String reasonCodePrefix
     ) {
         Long operatorRegionId = operatorAssignment.getRegion().getRegionId();
-        if (!sameId(lookup.reservationRegionId(), operatorRegionId)
+        if (!sameId(lookup.reservationRegion().getRegionId(), operatorRegionId)
             || !sameId(lookup.contentRegionId(), operatorRegionId)) {
             return reasonCodePrefix + "_REGION_FORBIDDEN";
         }

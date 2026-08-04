@@ -87,7 +87,7 @@ public class ReservationService {
         return reservationRepository.findManualCheckInLookupByReservationNo(reservationNo)
             .map(projection -> new ManualCheckInLookup(
                 projection.getReservationId(),
-                projection.getReservationRegionId(),
+                projection.getReservationRegion(),
                 projection.getContentRegionId(),
                 projection.getOperatorId()
             ));
@@ -274,7 +274,7 @@ public class ReservationService {
 
     public record ManualCheckInLookup(
         Long reservationId,
-        Long reservationRegionId,
+        Region reservationRegion,
         Long contentRegionId,
         Long operatorId
     ) {

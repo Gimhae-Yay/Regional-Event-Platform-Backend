@@ -69,7 +69,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
 
     @Query("""
         SELECT reservation.reservationId AS reservationId,
-            reservation.region.regionId AS reservationRegionId,
+            reservation.region AS reservationRegion,
             content.region.regionId AS contentRegionId,
             content.operator.userId AS operatorId
         FROM Reservation reservation

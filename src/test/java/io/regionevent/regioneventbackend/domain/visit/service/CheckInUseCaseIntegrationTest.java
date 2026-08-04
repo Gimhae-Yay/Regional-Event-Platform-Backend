@@ -245,33 +245,53 @@ public class CheckInUseCaseIntegrationTest {
     }
 
     @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void manualCheckIn_whenOperatorHasDifferentRegion_throwsForbiddenWithoutCreatingVisit() {
         Fixture fixture = createFixture();
         String suffix = Long.toUnsignedString(System.nanoTime());
         Region otherRegion = regionRepository.saveAndFlush(new Region("OR" + suffix, "Other Region", true));
         AppUser otherRegionOperator = saveUser("operator-other-region-" + suffix);
-        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(
+        UserRoleAssignment otherRegionAssignment = userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(
             otherRegionOperator,
             UserRole.OPERATOR,
             otherRegion
         ));
         DatabaseSnapshot before = snapshot(fixture.reservation());
+        UUID requestId = UUID.randomUUID();
 
-        assertThatThrownBy(() -> checkInUseCase.checkInManually(
-            otherRegionOperator.getUserId(),
-            new ManualCheckInRequest(
-                fixture.reservation().getReservationNo(),
-                ManualCheckInReason.QR_SCAN_FAILED.name()
-            ),
-            "manual-region-forbidden-key",
-            UUID.randomUUID()
-        ))
-            .isInstanceOfSatisfying(BusinessException.class, exception ->
-                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN)
-            );
+        try {
+            assertThatThrownBy(() -> checkInUseCase.checkInManually(
+                otherRegionOperator.getUserId(),
+                new ManualCheckInRequest(
+                    fixture.reservation().getReservationNo(),
+                    ManualCheckInReason.QR_SCAN_FAILED.name()
+                ),
+                "manual-region-forbidden-key",
+                requestId
+            ))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                    assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN)
+                );
 
-        assertThat(visitRepository.count()).isZero();
-        assertThat(snapshot(fixture.reservation())).isEqualTo(before);
+            assertThat(visitRepository.count()).isZero();
+            assertThat(snapshot(fixture.reservation())).isEqualTo(before);
+            assertThat(auditEventsByRequestId(requestId))
+                .singleElement()
+                .satisfies(auditEvent -> {
+                    assertThat(auditEvent.getRegion().getRegionId())
+                        .isEqualTo(fixture.reservation().getRegion().getRegionId());
+                    assertThat(auditEvent.getTargetType()).isEqualTo(AuditEventTargetType.RESERVATION);
+                    assertThat(auditEvent.getTargetId()).isEqualTo(fixture.reservation().getReservationId());
+                    assertThat(auditEvent.getReasonCode())
+                        .isEqualTo("MANUAL_CHECK_IN_QR_SCAN_FAILED_REGION_FORBIDDEN");
+                });
+        } finally {
+            deleteAuditEvents(requestId);
+            userRoleAssignmentRepository.delete(otherRegionAssignment);
+            appUserRepository.delete(otherRegionOperator);
+            regionRepository.delete(otherRegion);
+            deleteFixture(fixture);
+        }
     }
 
     @Test
@@ -1083,6 +1103,26 @@ public class CheckInUseCaseIntegrationTest {
             .forEach(auditEventActorLinkRepository::delete);
         auditEventRepository.findAllById(auditEventIds)
             .forEach(auditEventRepository::delete);
+    }
+
+    private void deleteFixture(Fixture fixture) {
+        Reservation reservation = fixture.reservation();
+        Long operatorUserId = fixture.operator().getUserId();
+        AppUser visitor = reservation.getUser();
+        ContentSession contentSession = reservation.getContentSession();
+        Content content = contentSession.getContent();
+        Region region = reservation.getRegion();
+        userRoleAssignmentRepository.findAll()
+            .stream()
+            .filter(assignment -> assignment.getAppUser().getUserId().equals(operatorUserId))
+            .forEach(userRoleAssignmentRepository::delete);
+        reservationRepository.delete(reservation);
+        capacityHoldRepository.delete(reservation.getCapacityHold());
+        contentSessionRepository.delete(contentSession);
+        contentRepository.delete(content);
+        appUserRepository.delete(visitor);
+        appUserRepository.delete(fixture.operator());
+        regionRepository.delete(region);
     }
 
     private AppUser saveUser(String loginIdentifier) {
