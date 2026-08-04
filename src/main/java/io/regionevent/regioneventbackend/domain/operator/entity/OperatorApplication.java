@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.domain.operator.entity;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 import jakarta.persistence.CheckConstraint;
 import jakarta.persistence.Column;
@@ -17,6 +18,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -90,6 +92,9 @@ public class OperatorApplication {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    @Transient
+    private boolean updatedAtExplicitlySet;
+
     protected OperatorApplication() {
     }
 
@@ -119,7 +124,9 @@ public class OperatorApplication {
 
     @PreUpdate
     protected void onUpdate() {
-        updatedAt = Instant.now();
+        if (!updatedAtExplicitlySet) {
+            updatedAt = Instant.now();
+        }
     }
 
     public Long getOperatorApplicationId() {
@@ -156,6 +163,32 @@ public class OperatorApplication {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public void approve(AppUser reviewer, Instant approvedAt) {
+        if (status != OperatorApplicationStatus.PENDING) {
+            throw new IllegalStateException("only pending application can be approved");
+        }
+        status = OperatorApplicationStatus.APPROVED;
+        inspectedUser = requireNotNull(reviewer, "reviewer");
+        rejectedReason = null;
+        updatedAt = requireNotNull(approvedAt, "approvedAt").truncatedTo(ChronoUnit.MICROS);
+        updatedAtExplicitlySet = true;
+    }
+
+    public void reject(
+        AppUser reviewer,
+        String rejectedReason,
+        Instant rejectedAt
+    ) {
+        if (status != OperatorApplicationStatus.PENDING) {
+            throw new IllegalStateException("only pending application can be rejected");
+        }
+        status = OperatorApplicationStatus.REJECTED;
+        inspectedUser = requireNotNull(reviewer, "reviewer");
+        this.rejectedReason = requireNotBlank(rejectedReason, "rejectedReason");
+        updatedAt = requireNotNull(rejectedAt, "rejectedAt").truncatedTo(ChronoUnit.MICROS);
+        updatedAtExplicitlySet = true;
     }
 
     private void validateReviewResult() {

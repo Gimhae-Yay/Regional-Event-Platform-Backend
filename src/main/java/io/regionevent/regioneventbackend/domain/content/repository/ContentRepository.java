@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.content.repository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -8,6 +9,7 @@ import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -79,9 +81,24 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
     @EntityGraph(attributePaths = "region")
     Optional<Content> findByContentId(Long contentId);
 
+    @EntityGraph(attributePaths = "representativeImageObject")
+    Optional<Content> findByContentIdAndStatusAndDeletedAtIsNull(
+        Long contentId,
+        ContentStatus status
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @EntityGraph(attributePaths = {"operator", "region", "representativeImageObject"})
     Optional<Content> findByContentIdAndDeletedAtIsNull(Long contentId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = {"region", "representativeImageObject"})
+    @Query("""
+        SELECT content
+        FROM Content content
+        WHERE content.contentId = :contentId
+        """)
+    Optional<Content> findDeletionTargetForUpdate(@Param("contentId") Long contentId);
 
     boolean existsByContentIdAndStatusAndDeletedAtIsNull(
         Long contentId,
@@ -97,4 +114,87 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
             AND content.deletedAt IS NULL
         """)
     Optional<Content> findApprovalTargetForUpdate(@Param("contentId") Long contentId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = "region")
+    @Query("""
+        SELECT content
+        FROM Content content
+        WHERE content.contentId = :contentId
+            AND content.deletedAt IS NULL
+        """)
+    Optional<Content> findEndTargetForUpdate(@Param("contentId") Long contentId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = "region")
+    @Query("""
+        SELECT content
+        FROM Content content
+        WHERE content.contentId = :contentId
+            AND content.deletedAt IS NULL
+        """)
+    Optional<Content> findSuspendTargetForUpdate(@Param("contentId") Long contentId);
+
+    @Query(value = """
+        SELECT content_id
+        FROM content
+        WHERE content_id = :contentId
+            AND status = 'PUBLISHED'
+            AND deleted_at IS NULL
+        FOR UPDATE
+        """, nativeQuery = true)
+    Optional<Long> findPublishedReservationTargetIdForUpdate(@Param("contentId") Long contentId);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+        UPDATE Content content
+        SET content.status = :nextStatus,
+            content.versionNo = content.versionNo + 1,
+            content.updatedAt = :updatedAt
+        WHERE content.contentId = :contentId
+            AND content.status = :expectedStatus
+            AND content.deletedAt IS NULL
+        """)
+    int updateStatusIfExpected(
+        @Param("contentId") Long contentId,
+        @Param("expectedStatus") ContentStatus expectedStatus,
+        @Param("nextStatus") ContentStatus nextStatus,
+        @Param("updatedAt") Instant updatedAt
+    );
+
+    default int rejectPendingByContentId(Long contentId, Instant rejectedAt) {
+        return updateStatusIfExpected(
+            contentId,
+            ContentStatus.PENDING,
+            ContentStatus.REJECTED,
+            rejectedAt
+        );
+    }
+
+    default int submitRejectedByContentId(Long contentId, Instant submittedAt) {
+        return updateStatusIfExpected(
+            contentId,
+            ContentStatus.REJECTED,
+            ContentStatus.PENDING,
+            submittedAt
+        );
+    }
+
+    default int endPublishedByContentId(Long contentId, Instant endedAt) {
+        return updateStatusIfExpected(
+            contentId,
+            ContentStatus.PUBLISHED,
+            ContentStatus.ENDED,
+            endedAt
+        );
+    }
+
+    default int suspendPublishedByContentId(Long contentId, Instant suspendedAt) {
+        return updateStatusIfExpected(
+            contentId,
+            ContentStatus.PUBLISHED,
+            ContentStatus.SUSPENDED,
+            suspendedAt
+        );
+    }
 }

@@ -5,6 +5,7 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
+import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
@@ -26,6 +27,10 @@ public class UserRoleAssignmentService {
         userRoleAssignmentRepository.save(new UserRoleAssignment(user, UserRole.VISITOR, null));
     }
 
+    public void assignOperator(AppUser user, Region region) {
+        userRoleAssignmentRepository.save(new UserRoleAssignment(user, UserRole.OPERATOR, region));
+    }
+
     public List<UserRole> findRolesByUserId(Long userId) {
         return findRoleAssignmentsByUserId(userId)
             .stream()
@@ -44,6 +49,14 @@ public class UserRoleAssignmentService {
         return userRoleAssignmentRepository.findByIdUserIdAndIdRoleAndAppUserStatus(
             userId,
             UserRole.VISITOR,
+            AppUserStatus.ACTIVE
+        ).orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+    }
+
+    public UserRoleAssignment findActiveOperator(Long userId) {
+        return userRoleAssignmentRepository.findByIdUserIdAndIdRoleAndAppUserStatus(
+            userId,
+            UserRole.OPERATOR,
             AppUserStatus.ACTIVE
         ).orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
     }

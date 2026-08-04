@@ -37,6 +37,13 @@ public interface ContentRevisionRepository extends JpaRepository<ContentRevision
         ContentRevisionStatus status
     );
 
+    @Query("""
+        SELECT revision.content.contentId
+        FROM ContentRevision revision
+        WHERE revision.contentRevisionId = :revisionId
+        """)
+    Optional<Long> findContentIdByContentRevisionId(@Param("revisionId") Long revisionId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT revision
@@ -54,4 +61,13 @@ public interface ContentRevisionRepository extends JpaRepository<ContentRevision
             Long regionId,
             ContentRevisionStatus status
         );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = {
+        "content",
+        "content.operator",
+        "content.region",
+        "candidateImageObject"
+    })
+    Optional<ContentRevision> findByContentRevisionId(Long contentRevisionId);
 }

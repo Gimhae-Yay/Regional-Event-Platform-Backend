@@ -2,13 +2,13 @@ package io.regionevent.regioneventbackend.global.response;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertAll;
 
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 
@@ -17,6 +17,18 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
 class ApiResponseTest {
 
     @Test
+    void API_응답_계약을_보존한다() {
+        assertAll(
+            () -> new ApiResponseTest().success_withData_createsSuccessResponse(),
+            () -> new ApiResponseTest().success_withoutData_setsDataToNull(),
+            () -> new ApiResponseTest().fail_withErrorCode_preservesPublicErrorContract(),
+            () -> new ApiResponseTest().toResponseEntity_withAccessToken_addsAuthorizationHeader(),
+            () -> new ApiResponseTest().constructor_whenSuccessResponseUsesErrorCode_throwsException(),
+            () -> new ApiResponseTest().constructor_whenErrorResponseContainsData_throwsException(),
+            () -> new ApiResponseTest().constructor_whenErrorResponseDoesNotMatchErrorCode_throwsException()
+        );
+    }
+
     void success_withData_createsSuccessResponse() {
         ApiResponse<String> response = ApiResponse.success(HttpStatus.OK, "조회에 성공했습니다.", "result");
 
@@ -26,7 +38,6 @@ class ApiResponseTest {
         assertThat(response.data()).isEqualTo("result");
     }
 
-    @Test
     void success_withoutData_setsDataToNull() {
         ApiResponse<Void> response = ApiResponse.success(HttpStatus.CREATED, "등록에 성공했습니다.");
 
@@ -35,23 +46,24 @@ class ApiResponseTest {
         assertThat(response.data()).isNull();
     }
 
-    @ParameterizedTest
-    @MethodSource("errorCodeContracts")
-    void fail_withErrorCode_preservesPublicErrorContract(
-        ErrorCode errorCode,
-        HttpStatus httpStatus,
-        String code,
-        String message
-    ) {
-        ApiResponse<Void> response = ApiResponse.fail(errorCode);
+    void fail_withErrorCode_preservesPublicErrorContract() {
+        Stream<Executable> contracts = errorCodeContracts().map(arguments -> () -> {
+            Object[] values = arguments.get();
+            ErrorCode errorCode = (ErrorCode) values[0];
+            HttpStatus httpStatus = (HttpStatus) values[1];
+            String code = (String) values[2];
+            String message = (String) values[3];
+            ApiResponse<Void> response = ApiResponse.fail(errorCode);
 
-        assertThat(response.statusCode()).isEqualTo(httpStatus.value());
-        assertThat(response.code()).isEqualTo(code);
-        assertThat(response.message()).isEqualTo(message);
-        assertThat(response.data()).isNull();
+            assertThat(response.statusCode()).isEqualTo(httpStatus.value());
+            assertThat(response.code()).isEqualTo(code);
+            assertThat(response.message()).isEqualTo(message);
+            assertThat(response.data()).isNull();
+        });
+
+        assertAll(contracts);
     }
 
-    @Test
     void toResponseEntity_withAccessToken_addsAuthorizationHeader() {
         ApiResponse<String> response = ApiResponse.success(HttpStatus.OK, "로그인에 성공했습니다.", "profile");
 
@@ -62,7 +74,6 @@ class ApiResponseTest {
         assertThat(responseEntity.getBody()).isEqualTo(response);
     }
 
-    @Test
     void constructor_whenSuccessResponseUsesErrorCode_throwsException() {
         assertThatThrownBy(() -> new ApiResponse<>(
             HttpStatus.OK.value(),
@@ -72,7 +83,6 @@ class ApiResponseTest {
         )).isInstanceOf(IllegalArgumentException.class);
     }
 
-    @Test
     void constructor_whenErrorResponseContainsData_throwsException() {
         assertThatThrownBy(() -> new ApiResponse<>(
             ErrorCode.FORBIDDEN.httpStatus().value(),
@@ -82,7 +92,6 @@ class ApiResponseTest {
         )).isInstanceOf(IllegalArgumentException.class);
     }
 
-    @Test
     void constructor_whenErrorResponseDoesNotMatchErrorCode_throwsException() {
         assertThatThrownBy(() -> new ApiResponse<>(
             ErrorCode.FORBIDDEN.httpStatus().value(),
@@ -117,6 +126,12 @@ class ApiResponseTest {
                 HttpStatus.CONFLICT,
                 "OPERATOR_APPLICATION_REAPPLICATION_NOT_ALLOWED",
                 "운영자 권한 재신청을 할 수 없습니다."
+            ),
+            Arguments.of(
+                ErrorCode.OPERATOR_APPLICATION_STATE_CONFLICT,
+                HttpStatus.CONFLICT,
+                "OPERATOR_APPLICATION_STATE_CONFLICT",
+                "운영자 신청 상태가 요청과 일치하지 않습니다."
             ),
             Arguments.of(
                 ErrorCode.INVALID_INPUT,

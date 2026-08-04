@@ -54,10 +54,77 @@ public class ContentLogService {
         ));
     }
 
+    public ContentLog recordRejected(
+        Content content,
+        AppUser actor,
+        Instant rejectedAt,
+        String reason
+    ) {
+        return contentLogRepository.saveAndFlush(new ContentLog(
+            content,
+            actor,
+            ContentLogStatus.REJECTED,
+            reason,
+            rejectedAt
+        ));
+    }
+
     public ContentLog findLatestApproved(Long contentId) {
         return contentLogRepository.findTopByContentContentIdAndStatusOrderByDateDescIdDesc(
             contentId,
             ContentLogStatus.APPROVED
         ).orElseThrow(() -> new IllegalStateException("approved content log must exist"));
+    }
+
+    public ContentLog findLatestRejected(Long contentId) {
+        return contentLogRepository.findTopByContentContentIdAndStatusOrderByDateDescIdDesc(
+            contentId,
+            ContentLogStatus.REJECTED
+        ).orElseThrow(() -> new IllegalStateException("rejected content log must exist"));
+    }
+
+    public ContentLog recordEnded(Content content, AppUser actor, Instant endedAt) {
+        return contentLogRepository.saveAndFlush(new ContentLog(
+            content,
+            actor,
+            ContentLogStatus.ENDED,
+            null,
+            endedAt
+        ));
+    }
+
+    public ContentLog recordDeleted(
+        Content content,
+        AppUser actor,
+        Instant deletedAt,
+        String reason
+    ) {
+        return contentLogRepository.saveAndFlush(new ContentLog(
+            content,
+            actor,
+            ContentLogStatus.DELETED,
+            reason,
+            deletedAt
+        ));
+    }
+
+    public ContentLog recordSuspended(
+        Content content,
+        AppUser actor,
+        Instant suspendedAt,
+        String reason
+    ) {
+        return contentLogRepository.saveAndFlush(new ContentLog(
+            content,
+            actor,
+            ContentLogStatus.SUSPENDED,
+            reason,
+            suspendedAt
+        ));
+    }
+
+    public ContentLog findLatestEnded(Long contentId) {
+        return contentLogRepository.findLatestEnded(contentId)
+            .orElseThrow(() -> new IllegalStateException("ended content log must exist"));
     }
 }

@@ -23,10 +23,11 @@
 | [ADR-0004](../adr/0004-use-hmac-signed-reservation-qr.md#결정) | HMAC 서명, 키 관리와 예약당 방문 한 건 제약 |
 | [ADR-0010](../adr/0010-issue-short-lived-qr-on-demand-and-separate-retry-idempotency.md#결정) | 체크인 창 온디맨드 QR 발급·갱신과 재시도·재스캔 구분 |
 | [ADR-0040](../adr/0040-use-single-get-endpoint-for-my-reservation-qr.md#결정) | 내 예약 QR 조회 시 단기 QR을 발급하고 별도 발급 경로를 두지 않는 HTTP 계약 |
+| [ADR-0056](../adr/0056-define-compact-hmac-qr-token-profile.md#결정) | QR 토큰 직렬화, TTL 상한, 키 회전과 MySQL 시각 전달 계약 |
 | [ADR-0012](../adr/0012-retain-author-unlinked-reviews-and-visits-after-withdrawal.md#결정) | 탈퇴 회원의 미사용 QR·미체크인 예약 종결 |
 
 > QR 발급 시점과 재스캔 판정은 ADR-0010을 우선 적용한다. HTTP 경로는 ADR-0040을 따라 내 예약 QR 조회 시
-> 발급하며, ADR-0004는 HMAC·키 관리·방문 고유 제약에 적용한다.
+> 발급하며, ADR-0004는 HMAC·키 관리·방문 고유 제약에 적용한다. 토큰 형식과 수명·키 회전의 구현 계약은 ADR-0056을 따른다.
 
 ### 기능 범위
 

@@ -156,13 +156,24 @@ public class Content {
     }
 
     public void softDelete() {
+        softDelete(Instant.now());
+    }
+
+    public void softDelete(Instant deletedAt) {
         if (status != ContentStatus.PENDING && status != ContentStatus.APPROVED) {
             throw new IllegalStateException("only pending or approved content can be soft deleted");
         }
-        if (deletedAt != null) {
+        if (this.deletedAt != null) {
             throw new IllegalStateException("content is already soft deleted");
         }
-        deletedAt = Instant.now();
+        this.deletedAt = requireNotNull(deletedAt, "deletedAt");
+    }
+
+    public ImageObject detachRepresentativeImage() {
+        ImageObject detachedImageObject = representativeImageObject;
+        representativeImageObject = null;
+        representativeImageAssignedAt = null;
+        return detachedImageObject;
     }
 
     public void approve() {
@@ -173,6 +184,46 @@ public class Content {
             throw new IllegalStateException("content status must be PENDING but was " + status);
         }
         status = ContentStatus.APPROVED;
+    }
+
+    public void reject() {
+        if (deletedAt != null) {
+            throw new IllegalStateException("soft deleted content cannot be rejected");
+        }
+        if (status != ContentStatus.PENDING) {
+            throw new IllegalStateException("content status must be PENDING but was " + status);
+        }
+        status = ContentStatus.REJECTED;
+    }
+
+    public void submitForReview() {
+        if (deletedAt != null) {
+            throw new IllegalStateException("soft deleted content cannot be submitted");
+        }
+        if (status != ContentStatus.REJECTED) {
+            throw new IllegalStateException("content status must be REJECTED but was " + status);
+        }
+        status = ContentStatus.PENDING;
+    }
+
+    public void end() {
+        if (deletedAt != null) {
+            throw new IllegalStateException("soft deleted content cannot be ended");
+        }
+        if (status != ContentStatus.PUBLISHED) {
+            throw new IllegalStateException("content status must be PUBLISHED but was " + status);
+        }
+        status = ContentStatus.ENDED;
+    }
+
+    public void suspend() {
+        if (deletedAt != null) {
+            throw new IllegalStateException("soft deleted content cannot be suspended");
+        }
+        if (status != ContentStatus.PUBLISHED) {
+            throw new IllegalStateException("content status must be PUBLISHED but was " + status);
+        }
+        status = ContentStatus.SUSPENDED;
     }
 
     public void assignRepresentativeImage(ImageObject imageObject, Instant assignedAt) {
