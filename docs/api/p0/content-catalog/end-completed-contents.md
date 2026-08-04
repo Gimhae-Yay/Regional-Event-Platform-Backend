@@ -5,7 +5,7 @@
 
 스케줄러는 연결된 회차가 하나 이상이고 모든 회차가 `COMPLETED`, `CANCELLED`, `REJECTED` 중 하나인 공개
 콘텐츠를 `ENDED`로 전환한다. `PENDING` 또는 `SCHEDULED` 회차가 있으면 종료하지 않는다. 지역 관리자의 정상
-종료 API는 같은 공통 종료 서비스를 사용해 스케줄러 실행을 기다리지 않고 동일한 결과를 만든다.
+종료 API와 자동 종료 Scheduler는 같은 `EndContentReservationsUseCase`를 사용해 동일한 결과를 만든다.
 
 ### 실행 계약
 
@@ -13,11 +13,14 @@
 | --- | --- |
 | 실행 경로 | `scheduler` |
 | 실행 주체 | 애플리케이션 내부 조정 스케줄러 |
+| 입력 컴포넌트 | `EndCompletedContentsScheduler`. `@Scheduled` 실행 시점과 후보 반복만 담당한다. |
+| 처리 진입점 | 후보 조회는 `EndContentReservationsUseCase.findAutoEndCandidateIds()`, 후보별 종료는 `endBySystem(contentId, requestId)`를 사용한다. |
 | 외부 HTTP 경로 | 없음 |
 | 인증·인가 | 없음. 외부 요청을 받지 않는다. |
 | 요청 본문·응답 본문 | 없음 |
 | 시간 기준 | 대상 상태는 MySQL의 커밋된 현재 상태로 판정하고 종료 로그·감사 시각은 MySQL 현재 시각을 사용한다. |
 | 실행 주기 | 운영 설정으로 관리한다. 지연되더라도 공개 조회와 예약 경로는 MySQL의 현재 콘텐츠·회차 상태를 검증한다. |
+| 트랜잭션 범위 | 후보 전체가 아니라 `endBySystem`이 처리하는 콘텐츠 한 건마다 별도 쓰기 트랜잭션을 사용한다. |
 
 ### 처리 대상과 상태 전이
 
@@ -27,20 +30,20 @@
 
 ### 처리 규칙
 
-1. 스케줄러는 `PUBLISHED` 콘텐츠 후보를 조회한 뒤 `content_session(content_id, status, starts_at)` 접근 경로로 종결되지 않은 회차의 존재 여부를 판정한다.
-2. 후보별 실제 처리 트랜잭션은 대상 `content` 행을 `PESSIMISTIC_WRITE`(`SELECT ... FOR UPDATE`)로 먼저 잠근다. 잠금을 얻은 뒤 콘텐츠가 `PUBLISHED`이고 `deleted_at IS NULL`인지, 연결된 회차가 하나 이상이며 모든 회차가 `COMPLETED`, `CANCELLED`, `REJECTED` 중 하나인지 다시 확인한다.
+1. `EndCompletedContentsScheduler`는 `EndContentReservationsUseCase`에 `PUBLISHED` 콘텐츠 후보 식별자를 요청하고 후보마다 `endBySystem`을 호출한다. Scheduler는 개별 Service나 Repository를 직접 호출하지 않는다.
+2. `endBySystem`은 후보 한 건의 쓰기 트랜잭션을 시작하고 대상 `content` 행을 `PESSIMISTIC_WRITE`(`SELECT ... FOR UPDATE`)로 먼저 잠근다. 잠금을 얻은 뒤 콘텐츠가 `PUBLISHED`이고 `deleted_at IS NULL`인지, 연결된 회차가 하나 이상이며 모든 회차가 `COMPLETED`, `CANCELLED`, `REJECTED` 중 하나인지 다시 확인한다.
 3. 회차가 없거나 `PENDING`, `SCHEDULED` 회차가 하나라도 있으면 콘텐츠·로그·감사·홀드·정원을 변경하지 않는다. `COMPLETED`, `CANCELLED`, `REJECTED`는 종료 판정의 종결 상태다.
 4. 자동 종료는 별도 콘텐츠 종료 예정 시각이나 마지막 회차의 원래 `ends_at`을 추가 조건으로 사용하지 않는다. 미래 회차가 `CANCELLED` 또는 `REJECTED`로 종결된 경우에도 다음 실행의 종료 대상이 될 수 있다.
 5. 콘텐츠 상태 전이는 반드시 `PUBLISHED`를 조건으로 수행한다. 이미 `ENDED`거나 다른 상태가 된 콘텐츠는 변경하지 않는다.
-6. 종료 성공 시 콘텐츠 상태, `ENDED` 콘텐츠 로그, 성공 감사 기록, 활성 홀드 무효화와 정원 복구를 하나의 MySQL 트랜잭션에서 함께 커밋한다.
+6. `EndContentReservationsUseCase`는 콘텐츠·회차·로그·홀드 담당 Service와 감사 기록 담당 객체를 조정한다. 종료 성공 시 콘텐츠 상태, `ENDED` 콘텐츠 로그, 성공 감사 기록, 활성 홀드 무효화와 정원 복구를 하나의 MySQL 트랜잭션에서 함께 커밋한다.
 7. `content_log.status`는 `ENDED`, `actor_id`와 `reason`은 `NULL`이고 `date`는 MySQL 기준 종료 처리 시각이다. 실제 종료 시각은 이 로그의 `date`이며 `content`에 별도 `ended_at`을 저장하지 않는다.
-8. 남은 `ACTIVE` 홀드는 공통 홀드 무효화 서비스로 `INVALIDATED` 전환하고 최초 성공한 홀드 전이에만 `remaining_capacity`를 `quantity`만큼 복구한다. 이미 종결된 홀드는 상태·정원을 변경하지 않는다.
+8. 남은 `ACTIVE` 홀드는 UseCase가 `CapacityHoldService`에 요청해 `INVALIDATED`로 전환하고 최초 성공한 홀드 전이에만 `remaining_capacity`를 `quantity`만큼 복구한다. 이미 종결된 홀드는 상태·정원을 변경하지 않는다.
 9. 종결 회차의 기존 `CONFIRMED`, `CHECKED_IN`, `CANCELLED`, `EXPIRED` 예약, 방문과 후기는 변경하지 않는다. `CONFIRMED` 예약이 남아 있으면 회차 완료·취소 계약 위반이므로 콘텐츠 종료로 이를 보정하지 않는다.
 10. 마지막 `SCHEDULED → COMPLETED` 전이 또는 회차 취소와 경합하면 스케줄러는 커밋된 회차 상태만 판정한다. 종결되지 않은 상태를 확인하면 건너뛰고 다음 실행에서 재시도한다.
 11. 지역 관리자의 정상 종료 API도 같은 `content` 행을 먼저 잠근다. 자동·수동 종료가 경합하면 잠금을 먼저 얻어 `PUBLISHED → ENDED`를 커밋한 처리만 상태·로그·감사와 홀드·정원 변경을 반영하고, 나중 처리는 기존 `ENDED` 결과를 사용한다.
 12. 새 회차 생성도 같은 `content` 행을 먼저 잠그고 잠금 뒤 상태를 다시 확인한다. 회차 생성이 잠금을 먼저 얻으면 `PENDING` 회차 커밋 뒤 자동 종료가 이를 확인하고 건너뛴다. 자동 종료가 먼저 `ENDED`를 커밋하면 회차 생성은 `ENDED`를 확인하고 회차를 만들지 않는다.
 13. 종료 커밋 뒤 공개 범위를 벗어난 콘텐츠의 정적 캐시는 최선 노력으로 삭제한다. 삭제 실패는 종료 트랜잭션을 롤백하지 않으며 MySQL 현재 상태 검증으로 이전 캐시 노출을 차단하고 실패를 구조화 로그로 기록한다.
-14. 하나의 후보 처리에서 예외가 발생하면 해당 콘텐츠의 상태·로그·성공 감사·홀드·정원을 함께 롤백한다. 다음 스케줄러 실행에서 같은 후보를 재시도할 수 있다.
+14. 하나의 후보 처리에서 예외가 발생하면 `endBySystem`의 트랜잭션이 해당 콘텐츠의 상태·로그·성공 감사·홀드·정원을 함께 롤백한다. 다른 후보는 별도 트랜잭션이므로 계속 처리할 수 있고, 다음 스케줄러 실행에서 실패한 후보를 재시도할 수 있다.
 15. 스케줄러가 중복 실행되거나 다중 인스턴스에서 동시에 실행돼도 같은 `content` 행 잠금과 잠금 뒤 상태 확인을 사용하며, `PUBLISHED` 조건부 전이에 성공한 처리만 종료 결과를 한 번 기록한다.
 16. 스케줄러는 외부 API 응답을 만들지 않는다. 처리 건수, 마지막 회차 종결부터 종료까지의 지연과 실패 사유는 구조화 로그와 비개인 운영 지표로 관찰한다.
 

@@ -134,6 +134,7 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 | [ADR-0059](../adr/0059-automatically-end-content-after-all-sessions-terminate.md#결정) | 모든 회차 종결을 기준으로 한 콘텐츠 자동 종료와 조정 스케줄러 |
 | [ADR-0060](../adr/0060-serialize-content-ending-and-session-creation-with-content-lock.md#결정) | 자동·수동 종료와 추가 회차 생성을 같은 콘텐츠 행 잠금으로 처리하는 규칙 |
 | [ADR-0061](../adr/0061-treat-rejected-sessions-as-terminal-for-content-ending.md#결정) | `REJECTED` 회차를 콘텐츠 종료 판정의 종결 상태로 처리하는 규칙 |
+| [ADR-0062](../adr/0062-coordinate-content-ending-with-usecase.md#결정) | 별도 Scheduler와 수동 Controller가 같은 종료 UseCase를 호출하고 콘텐츠 한 건 단위 트랜잭션을 사용하는 규칙 |
 
 ### 기능 범위
 
@@ -165,9 +166,11 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 한 번만 `ENDED`로 전환하고 신규 예약 접수와 노출을 종료한다. `PENDING` 또는 `SCHEDULED` 회차가 있으면 종료하지
 않는다. 지역 관리자의 정상 종료 요청은 같은 조건에서 스케줄러 실행을 기다리지 않고 동일 전이를 수행한다. 기존
 `CONFIRMED` 예약을 취소해야 하면 먼저 명시적으로 회차를 취소한다.
-
 자동·수동 종료와 추가 회차 생성은 같은 `content` 행을 먼저 잠그고, 잠금을 얻은 뒤 콘텐츠와 전체 회차 상태를
 다시 확인한다. 따라서 `ENDED` 콘텐츠와 새 `PENDING` 회차를 함께 커밋할 수 없다.
+자동 종료의 `@Scheduled` 실행은 별도 Scheduler가 담당하고, Scheduler와 수동 Controller는 같은
+`EndContentReservationsUseCase`를 호출한다. UseCase는 콘텐츠 한 건마다 트랜잭션을 열어 각 Service의 작업을
+조정하며, Scheduler와 Controller는 개별 Service를 직접 호출하지 않는다.
 
 ### 완료 기준
 

@@ -6,6 +6,10 @@
 [모든 회차 종결 콘텐츠 자동 종료](../content-catalog/end-completed-contents.md)를 따르며, 이 API는 같은 조건에서
 스케줄러 실행을 기다리지 않고 동일한 종료 결과를 만든다.
 
+`EndContentReservationsController`는 `EndContentReservationsUseCase.endByRegionAdmin`만 호출한다. 이 UseCase가
+권한을 확인하고 콘텐츠·회차·로그·홀드 담당 Service와 감사 기록 담당 객체를 조정하며, 자동 종료도 같은
+UseCase의 `endBySystem`을 사용한다.
+
 ### Request
 
 ```http
@@ -128,7 +132,7 @@ Accept: application/json
 
 ### 감사 및 정합성
 
-- 성공한 종료는 하나의 트랜잭션에서 콘텐츠 상태 갱신, `content_log` 추가, 성공 `audit_event` 기록을 함께 커밋한다.
+- `EndContentReservationsUseCase.endByRegionAdmin`이 콘텐츠 한 건의 쓰기 트랜잭션을 소유한다. 성공한 종료는 이 트랜잭션에서 콘텐츠 상태 갱신, `content_log` 추가, 성공 `audit_event` 기록을 함께 커밋한다.
 - `content_log.status`는 `ENDED`로 기록한다.
 - `content_log.actor_id`는 처리한 지역 관리자 식별자로 기록한다.
 - `content_log.reason`은 `null`로 기록한다.
