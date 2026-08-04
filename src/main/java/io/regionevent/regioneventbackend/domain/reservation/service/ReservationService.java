@@ -83,6 +83,17 @@ public class ReservationService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<ManualCheckInLookup> findManualCheckInLookup(String reservationNo) {
+        return reservationRepository.findManualCheckInLookupByReservationNo(reservationNo)
+            .map(projection -> new ManualCheckInLookup(
+                projection.getReservationId(),
+                projection.getReservationRegion(),
+                projection.getContentRegionId(),
+                projection.getOperatorId()
+            ));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
     public Reservation findByReservationNoForAuthorizedLookup(String reservationNo) {
         return reservationRepository.findByReservationNoForAuthorizedLookup(reservationNo)
             .orElseThrow(() -> new IllegalStateException("reservation read data disappeared"));
@@ -270,5 +281,13 @@ public class ReservationService {
     }
 
     public record ReservationCancellationLockTarget(Long sessionId) {
+    }
+
+    public record ManualCheckInLookup(
+        Long reservationId,
+        Region reservationRegion,
+        Long contentRegionId,
+        Long operatorId
+    ) {
     }
 }
