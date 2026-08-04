@@ -253,10 +253,24 @@ class OperatorSessionReservationControllerIntegrationTest {
         performGet(fixture.owner(), fixture.content().getContentId(), "abc")
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+    }
+
+    @Test
+    void 회차별_예약자_목록_sessionId가_누락되면_INVALID_INPUT_결과를_로그에_남긴다(
+        CapturedOutput output
+    ) throws Exception {
+        Fixture fixture = createFixture();
+
         mockMvc.perform(get("/api/v1/operator/contents/{contentId}/reservations", fixture.content().getContentId())
             .header(HttpHeaders.AUTHORIZATION, bearerToken(fixture.owner())))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        assertThat(output.getOut()).contains(
+            "Session reservation list read. requestId=",
+            "contentId=" + fixture.content().getContentId()
+                + ", sessionId=null, resultCount=0, resultCode=INVALID_INPUT"
+        );
     }
 
     @Test
@@ -320,13 +334,24 @@ class OperatorSessionReservationControllerIntegrationTest {
     }
 
     @Test
-    void 회차별_예약자_목록_인증되지_않으면_UNAUTHENTICATED를_반환한다() throws Exception {
+    void 회차별_예약자_목록_인증되지_않으면_UNAUTHENTICATED_결과를_로그에_남긴다(
+        CapturedOutput output
+    ) throws Exception {
         Fixture fixture = createFixture();
+        String sensitiveSessionId = "someone@example.com";
 
         mockMvc.perform(get("/api/v1/operator/contents/{contentId}/reservations", fixture.content().getContentId())
-            .param("sessionId", fixture.session().getSessionId().toString()))
+            .param("sessionId", sensitiveSessionId))
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+
+        assertThat(output.getOut())
+            .contains(
+                "Session reservation list read. requestId=",
+                "contentId=" + fixture.content().getContentId()
+                    + ", sessionId=null, resultCount=0, resultCode=UNAUTHENTICATED"
+            )
+            .doesNotContain(sensitiveSessionId);
     }
 
     private ResultActions performGet(AppUser user, Long contentId, String sessionId) throws Exception {

@@ -1,7 +1,5 @@
 package io.regionevent.regioneventbackend.domain.reservation.controller;
 
-import java.util.regex.Pattern;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -30,8 +28,6 @@ public class OperatorSessionReservationController {
     private static final String SUCCESS_MESSAGE = "회차별 예약자 목록 조회에 성공했습니다.";
     private static final String SUCCESS_RESULT_CODE = "SUCCESS";
     private static final int FAILURE_RESULT_COUNT = 0;
-    private static final Pattern POSITIVE_DECIMAL_PATTERN = Pattern.compile("^[1-9][0-9]*$");
-
     private final GetSessionReservationsUseCase getSessionReservationsUseCase;
 
     public OperatorSessionReservationController(
@@ -44,14 +40,14 @@ public class OperatorSessionReservationController {
     public ResponseEntity<ApiResponse<GetSessionReservationsResponse>> getSessionReservations(
         Authentication authentication,
         @PathVariable String contentId,
-        @RequestParam String sessionId,
+        @RequestParam(required = false) String sessionId,
         @RequestAttribute(RequestIdFilter.REQUEST_ID_ATTRIBUTE) String requestId
     ) {
         Long parsedContentId = null;
         Long parsedSessionId = null;
         try {
-            parsedContentId = toId(contentId);
-            parsedSessionId = toId(sessionId);
+            parsedContentId = OperatorSessionReservationRequestIdParser.parseRequired(contentId);
+            parsedSessionId = OperatorSessionReservationRequestIdParser.parseRequired(sessionId);
             SessionReservationListResult result = getSessionReservationsUseCase.find(
                 (Long) authentication.getPrincipal(),
                 parsedContentId,
@@ -107,14 +103,4 @@ public class OperatorSessionReservationController {
         );
     }
 
-    private Long toId(String value) {
-        if (value == null || !POSITIVE_DECIMAL_PATTERN.matcher(value).matches()) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT);
-        }
-        try {
-            return Long.valueOf(value);
-        } catch (NumberFormatException exception) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, exception);
-        }
-    }
 }
