@@ -34,7 +34,13 @@ public class PendingSessionReviewController {
         if (!POSITIVE_DECIMAL_PATTERN.matcher(sessionId).matches()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
-        PendingSessionReviewDetailResponse response = PendingSessionReviewDetailResponse.from(useCase.get(userId, Long.valueOf(sessionId)));
+        Long parsedSessionId;
+        try {
+            parsedSessionId = Long.valueOf(sessionId);
+        } catch (NumberFormatException exception) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, exception);
+        }
+        PendingSessionReviewDetailResponse response = PendingSessionReviewDetailResponse.from(useCase.get(userId, parsedSessionId));
         return ApiResponse.success(HttpStatus.OK, "심사 대기 회차 상세 조회에 성공했습니다.", response).toResponseEntity();
     }
 }
