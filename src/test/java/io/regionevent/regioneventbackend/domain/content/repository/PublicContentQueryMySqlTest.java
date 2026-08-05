@@ -181,6 +181,46 @@ class PublicContentQueryMySqlTest {
             .containsExactly(false, true);
     }
 
+    @Test
+    void 지역_홈_회차_조회는_MySQL_현재시각과_공개_범위로_후보를_제한한다() {
+        String suffix = Long.toUnsignedString(System.nanoTime());
+        Region publicRegion = regionRepository.saveAndFlush(new Region("HOME-" + suffix, "김해시", true));
+        Region privateRegion = regionRepository.saveAndFlush(new Region("PRIVATE-" + suffix, "비공개 지역", false));
+        AppUser operator = appUserRepository.saveAndFlush(new AppUser(
+            "home-operator-" + suffix + "@example.com",
+            "hashed-password",
+            "운영자",
+            "010-1234-5678",
+            AppUserStatus.ACTIVE
+        ));
+        Content ongoing = savePublishedContent(publicRegion, operator, "진행 콘텐츠");
+        Content upcoming = savePublishedContent(publicRegion, operator, "임박 콘텐츠");
+        Content ended = savePublishedContent(publicRegion, operator, "종료 회차 콘텐츠");
+        Content privateContent = savePublishedContent(privateRegion, operator, "비공개 지역 콘텐츠");
+        Instant now = Instant.now();
+        saveScheduledSession(ongoing, publicRegion, operator, now.minusSeconds(1_800), 1);
+        saveScheduledSession(upcoming, publicRegion, operator, now.plusSeconds(3_600), 1);
+        saveScheduledSession(ended, publicRegion, operator, now.minusSeconds(7_200), 1);
+        saveScheduledSession(privateContent, privateRegion, operator, now.plusSeconds(3_600), 1);
+
+        List<RegionHomeContentSessionVerificationProjection> results = contentRepository
+            .findRegionHomeContentSessionVerifications(
+                publicRegion.getRegionId(),
+                ContentStatus.PUBLISHED,
+                ContentSessionStatus.SCHEDULED
+            );
+
+        assertThat(results)
+            .extracting(RegionHomeContentSessionVerificationProjection::contentId)
+            .containsExactly(ongoing.getContentId(), upcoming.getContentId());
+        assertThat(results)
+            .extracting(RegionHomeContentSessionVerificationProjection::ongoing)
+            .containsExactly(true, false);
+        assertThat(results)
+            .extracting(RegionHomeContentSessionVerificationProjection::reservationAvailable)
+            .containsExactly(false, true);
+    }
+
     private Content savePublishedContent() {
         String suffix = Long.toUnsignedString(System.nanoTime());
         Region region = regionRepository.saveAndFlush(new Region("R" + suffix, "김해시", true));

@@ -142,6 +142,39 @@ class PublicContentRepositoryTest {
             .containsExactly(unavailable.getContentId());
     }
 
+    @Test
+    void 지역_홈_후보는_공개_지역의_진행_또는_향후_SCHEDULED_회차만_MySQL_현재시각으로_조회한다() {
+        Region publicRegion = saveRegion("HOME-PUBLIC");
+        Region privateRegion = regionRepository.saveAndFlush(new Region("HOME-PRIVATE", "비공개 지역", false));
+        AppUser operator = saveUser();
+        Content ongoing = saveContent(publicRegion, operator, "진행 콘텐츠", SAME_PUBLISH_AT);
+        Content upcoming = saveContent(publicRegion, operator, "임박 콘텐츠", SAME_PUBLISH_AT);
+        Content ended = saveContent(publicRegion, operator, "종료 회차 콘텐츠", SAME_PUBLISH_AT);
+        Content privateContent = saveContent(privateRegion, operator, "비공개 지역 콘텐츠", SAME_PUBLISH_AT);
+        Instant now = Instant.now();
+        saveScheduledSession(ongoing, publicRegion, operator, now.minusSeconds(1_800), 10);
+        saveScheduledSession(upcoming, publicRegion, operator, now.plusSeconds(3_600), 0);
+        saveScheduledSession(ended, publicRegion, operator, now.minusSeconds(7_200), 10);
+        saveScheduledSession(privateContent, privateRegion, operator, now.plusSeconds(3_600), 10);
+
+        List<RegionHomeContentSessionVerificationProjection> results = contentRepository
+            .findRegionHomeContentSessionVerifications(
+                publicRegion.getRegionId(),
+                ContentStatus.PUBLISHED,
+                ContentSessionStatus.SCHEDULED
+            );
+
+        assertThat(results)
+            .extracting(RegionHomeContentSessionVerificationProjection::contentId)
+            .containsExactly(ongoing.getContentId(), upcoming.getContentId());
+        assertThat(results)
+            .extracting(RegionHomeContentSessionVerificationProjection::ongoing)
+            .containsExactly(true, false);
+        assertThat(results)
+            .extracting(RegionHomeContentSessionVerificationProjection::reservationAvailable)
+            .containsExactly(false, false);
+    }
+
     private Region saveRegion(String suffix) {
         return regionRepository.saveAndFlush(new Region("REGION-" + suffix, "테스트 지역", true));
     }
