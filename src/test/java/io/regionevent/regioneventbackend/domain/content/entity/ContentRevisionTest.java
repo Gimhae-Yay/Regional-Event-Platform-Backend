@@ -34,7 +34,8 @@ class ContentRevisionTest {
                 .withdraw_whenWithdrawalDetailsAreMissing_rejectsTransitionWithoutChangingStatus(),
             () -> new ContentRevisionTest().approve_whenEditIsRequested_recordsReviewerWithoutReason(),
             () -> new ContentRevisionTest().approve_whenRevisionIsAlreadyTerminal_throwsContentStateConflict(),
-            () -> new ContentRevisionTest().constructor_whenApprovedRevisionHasReason_rejectsInvalidState()
+            () -> new ContentRevisionTest().constructor_whenApprovedRevisionHasReason_rejectsInvalidState(),
+            () -> new ContentRevisionTest().constructor_whenReviewOrWithdrawalDetailsAreMissing_rejectsInvalidState()
         );
     }
 
@@ -192,6 +193,13 @@ class ContentRevisionTest {
         )).isInstanceOf(IllegalArgumentException.class);
     }
 
+    void constructor_whenReviewOrWithdrawalDetailsAreMissing_rejectsInvalidState() {
+        assertThatThrownBy(() -> newRevision(ContentRevisionStatus.EDIT_APPROVED, null))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> newRevision(ContentRevisionStatus.EDIT_WITHDRAWN, null))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
     private ContentRevision newRevision() {
         return newRevision(ContentRevisionStatus.EDIT_REQUESTED, null);
     }
@@ -244,12 +252,12 @@ class ContentRevisionTest {
             "시작 이틀 전까지 취소할 수 있습니다.",
             null,
             Instant.parse("2026-08-01T00:00:00Z"),
-            isReviewed(status) ? REVIEWED_AT : null,
+            isReviewed(status) && reviewer != null ? REVIEWED_AT : null,
             isReviewed(status) ? reviewer : null,
             reviewReason,
-            status == ContentRevisionStatus.EDIT_WITHDRAWN ? REVIEWED_AT : null,
+            status == ContentRevisionStatus.EDIT_WITHDRAWN && reviewer != null ? REVIEWED_AT : null,
             status == ContentRevisionStatus.EDIT_WITHDRAWN ? reviewer : null,
-            status == ContentRevisionStatus.EDIT_WITHDRAWN ? "기존 철회 사유" : null
+            status == ContentRevisionStatus.EDIT_WITHDRAWN && reviewer != null ? "기존 철회 사유" : null
         );
     }
 
