@@ -1,22 +1,22 @@
 package io.regionevent.regioneventbackend.domain.reservation.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.util.UUID;
 
 import jakarta.persistence.EntityManager;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
@@ -33,19 +33,23 @@ import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus;
 import io.regionevent.regioneventbackend.domain.reservation.repository.CapacityHoldRepository;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationRepository;
+import io.regionevent.regioneventbackend.domain.reservation.service.ReservationConfirmationUseCase;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
-import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
+import io.regionevent.regioneventbackend.support.jpa.CleanH2Database;
+import io.regionevent.regioneventbackend.support.jpa.AtomicityJpaTestConfiguration;
 
-@SpringBootTest
-@AutoConfigureMockMvc
+@DataJpaTest
+@Import(AtomicityJpaTestConfiguration.class)
+@Transactional(propagation = Propagation.NOT_SUPPORTED)
+@CleanH2Database
 class ReservationConfirmationAuditAtomicityTest {
 
-    private final MockMvc mockMvc;
+    private final ReservationConfirmationUseCase reservationConfirmationUseCase;
     private final AppUserRepository appUserRepository;
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
     private final RegionRepository regionRepository;
@@ -54,7 +58,6 @@ class ReservationConfirmationAuditAtomicityTest {
     private final CapacityHoldRepository capacityHoldRepository;
     private final ReservationRepository reservationRepository;
     private final IdempotencyRecordRepository idempotencyRecordRepository;
-    private final JwtAccessTokenService jwtAccessTokenService;
     private final EntityManager entityManager;
 
     @MockitoBean
@@ -62,7 +65,7 @@ class ReservationConfirmationAuditAtomicityTest {
 
     @Autowired
     ReservationConfirmationAuditAtomicityTest(
-        MockMvc mockMvc,
+        ReservationConfirmationUseCase reservationConfirmationUseCase,
         AppUserRepository appUserRepository,
         UserRoleAssignmentRepository userRoleAssignmentRepository,
         RegionRepository regionRepository,
@@ -71,10 +74,9 @@ class ReservationConfirmationAuditAtomicityTest {
         CapacityHoldRepository capacityHoldRepository,
         ReservationRepository reservationRepository,
         IdempotencyRecordRepository idempotencyRecordRepository,
-        JwtAccessTokenService jwtAccessTokenService,
         EntityManager entityManager
     ) {
-        this.mockMvc = mockMvc;
+        this.reservationConfirmationUseCase = reservationConfirmationUseCase;
         this.appUserRepository = appUserRepository;
         this.userRoleAssignmentRepository = userRoleAssignmentRepository;
         this.regionRepository = regionRepository;
@@ -83,22 +85,22 @@ class ReservationConfirmationAuditAtomicityTest {
         this.capacityHoldRepository = capacityHoldRepository;
         this.reservationRepository = reservationRepository;
         this.idempotencyRecordRepository = idempotencyRecordRepository;
-        this.jwtAccessTokenService = jwtAccessTokenService;
         this.entityManager = entityManager;
     }
 
     @Test
-    void confirmReservation_whenAuditRecordingFails_rollsBackHoldReservationAndIdempotencyRecord() throws Exception {
+    void confirmReservation_whenAuditRecordingFails_rollsBackHoldReservationAndIdempotencyRecord() {
         Fixture fixture = createFixture();
         doThrow(new IllegalStateException("audit storage failure"))
             .when(recordAuditEventUseCase)
             .record(any(AuditEventCommand.class));
 
-        mockMvc.perform(post("/api/v1/reservation-holds/{holdId}/confirm", fixture.capacityHold().getHoldId())
-                .header("Authorization", "Bearer " + jwtAccessTokenService.issue(fixture.user().getUserId()))
-                .header("Idempotency-Key", "audit-rollback-key"))
-            .andExpect(status().isInternalServerError())
-            .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
+        assertThatThrownBy(() -> reservationConfirmationUseCase.confirm(
+            fixture.user().getUserId(),
+            fixture.capacityHold().getHoldId().toString(),
+            "audit-rollback-key",
+            UUID.randomUUID()
+        )).isInstanceOf(IllegalStateException.class);
 
         entityManager.clear();
         assertThat(capacityHoldRepository.findById(fixture.capacityHold().getHoldId()))
