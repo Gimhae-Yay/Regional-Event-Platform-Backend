@@ -13,7 +13,8 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.MyContentProjection;
-import io.regionevent.regioneventbackend.domain.content.repository.PublicContentProjection;
+import io.regionevent.regioneventbackend.domain.content.repository.PublicContentDetailVerificationProjection;
+import io.regionevent.regioneventbackend.domain.content.repository.PublicContentListVerificationProjection;
 import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -141,10 +142,32 @@ public class ContentService {
 
     public Content findPublicContent(Long contentId) {
         validateRequiredId(contentId);
-        return contentRepository.findByContentIdAndStatusAndDeletedAtIsNull(
+        return contentRepository.findPublicContentByContentId(
             contentId,
             ContentStatus.PUBLISHED
         ).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public PublicContentDetailVerificationProjection findPublicContentDetailVerification(Long contentId) {
+        validateRequiredId(contentId);
+        return contentRepository.findPublicContentDetailVerification(
+            contentId,
+            ContentStatus.PUBLISHED
+        ).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public PublicContentStaticInfo findPublicContentStaticInfo(
+        Long regionId,
+        Long contentId,
+        int versionNo
+    ) {
+        return contentRepository.findPublicContentStaticInfo(
+            regionId,
+            contentId,
+            versionNo,
+            ContentStatus.PUBLISHED
+        ).map(PublicContentStaticInfo::from)
+            .orElseThrow(() -> new IllegalStateException("public content static info must exist after verification"));
     }
 
     public Content findMyContentDetail(Long contentId) {
@@ -160,12 +183,12 @@ public class ContentService {
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
-    public List<PublicContentProjection> findPublicContents(
+    public List<PublicContentListVerificationProjection> findPublicContentListVerifications(
         Long regionId,
         ContentType contentType,
         Boolean reservationAvailable
     ) {
-        return contentRepository.findPublicContents(
+        return contentRepository.findPublicContentListVerifications(
             regionId,
             contentType,
             reservationAvailable,
