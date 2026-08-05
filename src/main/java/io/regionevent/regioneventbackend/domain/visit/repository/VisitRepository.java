@@ -39,6 +39,13 @@ public interface VisitRepository extends JpaRepository<Visit, Long> {
     @Lock(LockModeType.PESSIMISTIC_READ)
     Optional<Visit> findByReservationReservationId(Long reservationId);
 
+    @Query("""
+        SELECT visit.reservation.reservationId
+        FROM Visit visit
+        WHERE visit.visitId = :visitId
+        """)
+    Optional<Long> findReservationIdByVisitId(@Param("visitId") Long visitId);
+
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
         UPDATE visit
