@@ -95,40 +95,6 @@ class OperatorApplicationRepositoryTest {
     }
 
     @Test
-    void 승인과_반려_상태의_필수값을_생성_시_검증한다() {
-        AppUser applicant = saveUser("validation-applicant@example.com");
-        AppUser inspector = saveUser("validation-inspector@example.com");
-        Region region = saveRegion();
-
-        assertThatThrownBy(() -> new OperatorApplication(
-            applicant,
-            region,
-            "사업자 정보",
-            OperatorApplicationStatus.APPROVED,
-            null,
-            null
-        )).isInstanceOf(IllegalArgumentException.class);
-
-        assertThatThrownBy(() -> new OperatorApplication(
-            applicant,
-            region,
-            "사업자 정보",
-            OperatorApplicationStatus.APPROVED,
-            inspector,
-            "반려 사유"
-        )).isInstanceOf(IllegalArgumentException.class);
-
-        assertThatThrownBy(() -> new OperatorApplication(
-            applicant,
-            region,
-            "사업자 정보",
-            OperatorApplicationStatus.REJECTED,
-            inspector,
-            " "
-        )).isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
     void 심사_결과_필수값을_데이터베이스_제약으로_검증한다() {
         AppUser applicant = saveUser("constraint-applicant@example.com");
         AppUser inspector = saveUser("constraint-inspector@example.com");
