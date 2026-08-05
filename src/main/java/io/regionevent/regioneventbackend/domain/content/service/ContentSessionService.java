@@ -49,6 +49,14 @@ public class ContentSessionService {
     }
 
     @Transactional(readOnly = true)
+    public ContentSession findPendingReviewTarget(Long sessionId) {
+        return contentSessionRepository.findPendingReviewTarget(
+            sessionId,
+            List.of(ContentStatus.APPROVED, ContentStatus.PUBLISHED)
+        ).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    @Transactional(readOnly = true)
     public ContentSession findOperatorReservationListTarget(
         Long sessionId,
         Long contentId,

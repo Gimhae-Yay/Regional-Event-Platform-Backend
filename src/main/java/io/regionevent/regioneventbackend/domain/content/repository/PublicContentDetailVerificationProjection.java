@@ -2,16 +2,14 @@ package io.regionevent.regioneventbackend.domain.content.repository;
 
 import java.time.Instant;
 
-import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
 
-public record PublicContentProjection(
+public record PublicContentDetailVerificationProjection(
+    Long regionId,
     Long contentId,
-    ContentType contentType,
-    String title,
-    String locationText,
+    int versionNo,
     ImageObject representativeImageObject,
     Instant representativeImageAssignedAt,
-    boolean reservationAvailable
+    String contactText
 ) {
 }
