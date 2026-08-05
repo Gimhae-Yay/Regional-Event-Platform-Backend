@@ -58,6 +58,12 @@ public class ContentSessionService {
         ).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ContentSession findRejectTargetForUpdate(Long sessionId) {
+        return contentSessionRepository.findRejectTargetForUpdate(sessionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
     @Transactional(readOnly = true)
     public ContentSession findOperatorReservationListTarget(
         Long sessionId,
@@ -264,6 +270,21 @@ public class ContentSessionService {
             throw new BusinessException(ErrorCode.SESSION_NOT_CANCELLABLE);
         }
         contentSession.cancel(operator, cancelledAt, cancellationReason);
+        return contentSessionRepository.saveAndFlush(contentSession);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ContentSession reject(
+        ContentSession contentSession,
+        AppUser reviewer,
+        Instant reviewedAt,
+        String rejectReason
+    ) {
+        if (contentSession.getStatus() != ContentSessionStatus.PENDING
+            || !PENDING_REVIEW_CONTENT_STATUSES.contains(contentSession.getContent().getStatus())) {
+            throw new BusinessException(ErrorCode.SESSION_STATE_CONFLICT);
+        }
+        contentSession.reject(reviewer, reviewedAt, rejectReason);
         return contentSessionRepository.saveAndFlush(contentSession);
     }
 
