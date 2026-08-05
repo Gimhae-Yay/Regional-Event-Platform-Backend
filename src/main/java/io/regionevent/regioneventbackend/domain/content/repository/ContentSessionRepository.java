@@ -36,6 +36,24 @@ public interface ContentSessionRepository extends JpaRepository<ContentSession, 
         @Param("contentStatuses") List<ContentStatus> contentStatuses
     );
 
+    @Query("""
+        SELECT contentSession.content.contentId
+        FROM ContentSession contentSession
+        WHERE contentSession.sessionId = :sessionId
+        """)
+    Optional<Long> findContentIdBySessionId(@Param("sessionId") Long sessionId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT contentSession
+        FROM ContentSession contentSession
+        JOIN FETCH contentSession.content content
+        JOIN FETCH content.region
+        WHERE contentSession.sessionId = :sessionId
+            AND content.deletedAt IS NULL
+        """)
+    Optional<ContentSession> findApprovalTargetBySessionIdForUpdate(@Param("sessionId") Long sessionId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT contentSession
