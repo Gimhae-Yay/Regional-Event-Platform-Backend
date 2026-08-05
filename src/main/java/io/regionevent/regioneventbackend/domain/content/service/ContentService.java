@@ -2,6 +2,7 @@ package io.regionevent.regioneventbackend.domain.content.service;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -209,12 +210,30 @@ public class ContentService {
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
+    public List<Long> findApprovedPublicationCandidateIds() {
+        return contentRepository.findApprovedPublicationCandidateIds();
+    }
+
+    public Optional<Content> findApprovedPublicationTargetForUpdate(Long contentId) {
+        validateRequiredId(contentId);
+        return contentRepository.findApprovedPublicationTargetForUpdate(contentId);
+    }
+
+    public Instant findCurrentDatabaseTime() {
+        return contentRepository.findCurrentDatabaseTime();
+    }
+
     public boolean lockPublishedReservationTarget(Long contentId) {
         return contentRepository.findPublishedReservationTargetIdForUpdate(contentId).isPresent();
     }
 
     public Content approve(Content content) {
         content.approve();
+        return contentRepository.saveAndFlush(content);
+    }
+
+    public Content publish(Content content) {
+        content.publish();
         return contentRepository.saveAndFlush(content);
     }
 
