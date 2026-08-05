@@ -179,6 +179,15 @@ public class ContentService {
         return contentRepository.findMyContents(operatorUserId, regionId);
     }
 
+    @Transactional(readOnly = true)
+    public List<Content> findPendingReviewContentsByRegionId(Long regionId) {
+        validateRequiredId(regionId);
+        return contentRepository.findByRegionRegionIdAndStatusAndDeletedAtIsNullOrderByContentIdAsc(
+            regionId,
+            ContentStatus.PENDING
+        );
+    }
+
     public Content findApprovalTargetForUpdate(Long contentId) {
         return contentRepository.findApprovalTargetForUpdate(contentId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
