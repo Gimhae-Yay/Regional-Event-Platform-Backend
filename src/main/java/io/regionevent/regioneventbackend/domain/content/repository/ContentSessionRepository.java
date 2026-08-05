@@ -97,6 +97,23 @@ public interface ContentSessionRepository extends JpaRepository<ContentSession, 
     Optional<ContentSession> findBySessionIdForUpdate(@Param("sessionId") Long sessionId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT contentSession
+        FROM ContentSession contentSession
+        WHERE contentSession.sessionId = :sessionId
+            AND contentSession.content.deletedAt IS NULL
+        """)
+    Optional<ContentSession> findRevisionTargetForUpdate(@Param("sessionId") Long sessionId);
+
+    @Query(value = """
+        SELECT COUNT(*)
+        FROM content_session
+        WHERE session_id = :sessionId
+            AND starts_at > CURRENT_TIMESTAMP
+        """, nativeQuery = true)
+    long countBeforeStartByDatabaseTime(@Param("sessionId") Long sessionId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @EntityGraph(attributePaths = {"content", "content.operator", "region"})
     @Query("""
         SELECT contentSession

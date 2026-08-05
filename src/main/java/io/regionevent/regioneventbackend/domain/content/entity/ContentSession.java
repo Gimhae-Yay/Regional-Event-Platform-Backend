@@ -206,6 +206,32 @@ public class ContentSession {
         remainingCapacity = releasedCapacity;
     }
 
+    public void applyRevision(
+        Instant startsAt,
+        Instant endsAt,
+        Instant checkinOpenAt,
+        Instant checkinCloseAt,
+        int capacity
+    ) {
+        validateStatus(ContentSessionStatus.SCHEDULED);
+        Instant validatedStartsAt = requireNotNull(startsAt, "startsAt");
+        Instant validatedEndsAt = requireNotNull(endsAt, "endsAt");
+        Instant validatedCheckinOpenAt = requireNotNull(checkinOpenAt, "checkinOpenAt");
+        Instant validatedCheckinCloseAt = requireNotNull(checkinCloseAt, "checkinCloseAt");
+        validateTimeRange(
+            validatedStartsAt,
+            validatedEndsAt,
+            validatedCheckinOpenAt,
+            validatedCheckinCloseAt
+        );
+        this.startsAt = validatedStartsAt;
+        this.endsAt = validatedEndsAt;
+        this.checkinOpenAt = validatedCheckinOpenAt;
+        this.checkinCloseAt = validatedCheckinCloseAt;
+        this.capacity = validateCapacity(capacity);
+        this.remainingCapacity = capacity;
+    }
+
     public Long getSessionId() {
         return sessionId;
     }
