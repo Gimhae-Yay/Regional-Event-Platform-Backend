@@ -21,6 +21,29 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 
 public interface ContentRepository extends JpaRepository<Content, Long> {
 
+    @Query("""
+        SELECT content.contentId
+        FROM Content content
+        WHERE content.status = :contentStatus
+            AND content.deletedAt IS NULL
+            AND EXISTS (
+                SELECT contentSession.sessionId
+                FROM ContentSession contentSession
+                WHERE contentSession.content = content
+            )
+            AND NOT EXISTS (
+                SELECT contentSession.sessionId
+                FROM ContentSession contentSession
+                WHERE contentSession.content = content
+                    AND contentSession.status NOT IN :terminalStatuses
+            )
+        ORDER BY content.contentId ASC
+        """)
+    List<Long> findAutoEndCandidateIds(
+        @Param("contentStatus") ContentStatus contentStatus,
+        @Param("terminalStatuses") List<ContentSessionStatus> terminalStatuses
+    );
+
     boolean existsByOperatorUserId(Long userId);
 
     @Query("""

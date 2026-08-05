@@ -24,7 +24,8 @@ public class ContentSessionService {
 
     private static final List<ContentSessionStatus> END_TERMINAL_STATUSES = List.of(
         ContentSessionStatus.COMPLETED,
-        ContentSessionStatus.CANCELLED
+        ContentSessionStatus.CANCELLED,
+        ContentSessionStatus.REJECTED
     );
     private static final List<ContentSessionStatus> OPERATOR_RESERVATION_LIST_STATUSES = List.of(
         ContentSessionStatus.SCHEDULED,
@@ -124,6 +125,10 @@ public class ContentSessionService {
             contentId,
             END_TERMINAL_STATUSES
         );
+    }
+
+    public List<ContentSessionStatus> getEndTerminalStatuses() {
+        return END_TERMINAL_STATUSES;
     }
 
     public ContentSession findCancelTargetForUpdate(Long sessionId) {
