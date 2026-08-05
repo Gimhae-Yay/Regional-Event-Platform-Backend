@@ -6,6 +6,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -151,10 +156,91 @@ class RejectSessionRevisionUseCaseMySqlTest {
         )).isInstanceOfSatisfying(BusinessException.class, exception ->
             assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.SESSION_STATE_CONFLICT)
         );
-        assertThat(auditEventRepository.findAll()).hasSize(1);
+    }
+
+    @Test
+    @Timeout(15)
+    void MySQL에서_동일_수정_요청을_동시에_반려하면_감사는_한_건만_기록된다() throws Exception {
+        Fixture fixture = createFixture();
+        ExecutorService executorService = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+
+        try {
+            Future<AttemptResult> firstAttempt = executorService.submit(
+                () -> rejectAfterStart(fixture, ready, start)
+            );
+            Future<AttemptResult> secondAttempt = executorService.submit(
+                () -> rejectAfterStart(fixture, ready, start)
+            );
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            List<AttemptResult> attempts = List.of(
+                firstAttempt.get(10, TimeUnit.SECONDS),
+                secondAttempt.get(10, TimeUnit.SECONDS)
+            );
+
+            assertThat(attempts.stream().filter(AttemptResult::isRejected).count()).isOne();
+            assertThat(attempts.stream()
+                .filter(attempt -> attempt.errorCode() == ErrorCode.SESSION_STATE_CONFLICT)
+                .count()).isOne();
+            List<AuditEvent> auditEvents = auditEventRepository.findAll().stream()
+                .filter(auditEvent -> fixture.sessionId().equals(auditEvent.getTargetId()))
+                .toList();
+            assertThat(auditEvents).hasSize(1);
+            assertThat(jdbcTemplate.queryForList(
+                "SELECT user_id FROM audit_event_actor_link WHERE audit_event_id = ?",
+                Long.class,
+                auditEvents.getFirst().getAuditEventId()
+            )).containsExactly(fixture.adminId());
+            ContentSession session = contentSessionRepository.findById(fixture.sessionId()).orElseThrow();
+            assertThat(session.getStatus()).isEqualTo(fixture.sessionStatus());
+            assertThat(session.getVersionNo()).isEqualTo(fixture.sessionVersion());
+        } finally {
+            executorService.shutdownNow();
+        }
+    }
+
+    @Test
+    @Timeout(15)
+    void MySQL에서_없는_수정_요청과_삭제된_콘텐츠의_수정_요청은_NOT_FOUND를_반환한다() {
+        Fixture missingRevisionFixture = createFixture();
+
+        assertThatThrownBy(() -> rejectSessionRevisionUseCase.reject(
+            missingRevisionFixture.adminId(),
+            Long.MAX_VALUE,
+            "없는 수정 요청",
+            UUID.randomUUID()
+        )).isInstanceOfSatisfying(BusinessException.class, exception ->
+            assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.NOT_FOUND)
+        );
+
+        Fixture deletedContentFixture = createFixture(ContentStatus.APPROVED);
+        transactionTemplate.executeWithoutResult(status -> contentRepository.findById(deletedContentFixture.contentId())
+            .orElseThrow()
+            .softDelete(Instant.parse("2026-08-03T00:00:00Z"))
+        );
+
+        assertThatThrownBy(() -> rejectSessionRevisionUseCase.reject(
+            deletedContentFixture.adminId(),
+            deletedContentFixture.revisionId(),
+            "삭제된 콘텐츠 수정 요청",
+            UUID.randomUUID()
+        )).isInstanceOfSatisfying(BusinessException.class, exception ->
+            assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.NOT_FOUND)
+        );
+        assertThat(auditEventRepository.findAll().stream()
+            .filter(auditEvent -> missingRevisionFixture.sessionId().equals(auditEvent.getTargetId())
+                || deletedContentFixture.sessionId().equals(auditEvent.getTargetId()))
+            .toList()).isEmpty();
     }
 
     private Fixture createFixture() {
+        return createFixture(ContentStatus.PUBLISHED);
+    }
+
+    private Fixture createFixture(ContentStatus contentStatus) {
         return transactionTemplate.execute(status -> {
             String suffix = Long.toUnsignedString(System.nanoTime());
             Region region = regionRepository.save(new Region("R" + suffix, "김해시", true));
@@ -165,7 +251,7 @@ class RejectSessionRevisionUseCaseMySqlTest {
                 region,
                 operator,
                 ContentType.EVENT_EXPERIENCE,
-                ContentStatus.PUBLISHED,
+                contentStatus,
                 "원본 제목",
                 "원본 설명",
                 "원본 장소",
@@ -208,6 +294,7 @@ class RejectSessionRevisionUseCaseMySqlTest {
             return new Fixture(
                 admin.getUserId(),
                 revision.getSessionRevisionId(),
+                content.getContentId(),
                 session.getSessionId(),
                 session.getStatus(),
                 session.getVersionNo()
@@ -225,9 +312,45 @@ class RejectSessionRevisionUseCaseMySqlTest {
         ));
     }
 
+    private AttemptResult rejectAfterStart(
+        Fixture fixture,
+        CountDownLatch ready,
+        CountDownLatch start
+    ) {
+        try {
+            ready.countDown();
+            if (!start.await(5, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("concurrent rejection did not start");
+            }
+            RejectSessionRevisionResult result = rejectSessionRevisionUseCase.reject(
+                fixture.adminId(),
+                fixture.revisionId(),
+                "동시 반려",
+                UUID.randomUUID()
+            );
+            return new AttemptResult(result.revisionStatus(), null);
+        } catch (BusinessException exception) {
+            return new AttemptResult(null, exception.getErrorCode());
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("concurrent rejection was interrupted", exception);
+        }
+    }
+
+    private record AttemptResult(
+        SessionRevisionStatus status,
+        ErrorCode errorCode
+    ) {
+
+        private boolean isRejected() {
+            return status == SessionRevisionStatus.REJECTED;
+        }
+    }
+
     private record Fixture(
         Long adminId,
         Long revisionId,
+        Long contentId,
         Long sessionId,
         ContentSessionStatus sessionStatus,
         int sessionVersion

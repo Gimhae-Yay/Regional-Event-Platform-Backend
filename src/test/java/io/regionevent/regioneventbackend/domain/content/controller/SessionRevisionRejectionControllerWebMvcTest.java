@@ -91,6 +91,7 @@ class SessionRevisionRejectionControllerWebMvcTest extends ContentControllerWebM
     @Test
     void 권한_거부와_상태_충돌은_공통_오류_계약으로_응답한다() throws Exception {
         expectBusinessError(ErrorCode.FORBIDDEN, 403, "FORBIDDEN");
+        expectBusinessError(ErrorCode.NOT_FOUND, 404, "NOT_FOUND");
         expectBusinessError(ErrorCode.SESSION_STATE_CONFLICT, 409, "SESSION_STATE_CONFLICT");
     }
 
