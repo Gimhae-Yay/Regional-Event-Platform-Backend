@@ -1,6 +1,9 @@
 package io.regionevent.regioneventbackend.domain.content.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.time.Instant;
 import java.util.List;
@@ -18,6 +21,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -75,6 +79,9 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
     private final JdbcTemplate jdbcTemplate;
     private final TransactionTemplate transactionTemplate;
+
+    @MockitoBean
+    private PublicCatalogCacheInvalidator publicCatalogCacheInvalidator;
 
     @Autowired
     EndContentReservationsUseCaseMySqlTest(
@@ -150,6 +157,11 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
                 assertThat(auditEvent.getOccurredAt()).isEqualTo(result.endedAt());
             });
         assertThat(endedLog.getDate()).isEqualTo(result.endedAt());
+        verify(publicCatalogCacheInvalidator).invalidateContentAfterCommit(
+            fixture.regionId(),
+            fixture.contentId(),
+            0
+        );
     }
 
     @Test
@@ -170,6 +182,11 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
                 assertThat(auditEvent.getActorKind()).isEqualTo("SYSTEM");
                 assertThat(auditEventActorLinkRepository.findById(auditEvent.getAuditEventId())).isEmpty();
             });
+        verify(publicCatalogCacheInvalidator).invalidateContentAfterCommit(
+            fixture.regionId(),
+            fixture.contentId(),
+            0
+        );
     }
 
     @Test
@@ -189,6 +206,7 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
         assertThat(contentRepository.findById(fixture.contentId()))
             .hasValueSatisfying(content -> assertThat(content.getStatus()).isEqualTo(ContentStatus.PUBLISHED));
         assertNoEndSideEffects(fixture);
+        verifyNoInteractions(publicCatalogCacheInvalidator);
     }
 
     @Test
@@ -294,6 +312,11 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
             .hasValueSatisfying(session -> assertThat(session.getRemainingCapacity()).isEqualTo(SESSION_CAPACITY));
         assertThat(contentSessionRepository.findById(fixture.secondSessionId()))
             .hasValueSatisfying(session -> assertThat(session.getRemainingCapacity()).isEqualTo(SESSION_CAPACITY));
+        verify(publicCatalogCacheInvalidator, times(1)).invalidateContentAfterCommit(
+            fixture.regionId(),
+            fixture.contentId(),
+            0
+        );
     }
 
     @Test
@@ -457,6 +480,7 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
             CapacityHold secondHold = saveActiveHold(region, secondSession, visitor, 1, now);
             return new Fixture(
                 admin.getUserId(),
+                region.getRegionId(),
                 content.getContentId(),
                 firstSession.getSessionId(),
                 secondSession.getSessionId(),
@@ -596,6 +620,7 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
 
     private record Fixture(
         Long adminId,
+        Long regionId,
         Long contentId,
         Long firstSessionId,
         Long secondSessionId,
