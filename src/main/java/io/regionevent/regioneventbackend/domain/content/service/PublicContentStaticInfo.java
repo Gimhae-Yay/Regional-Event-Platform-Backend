@@ -3,6 +3,8 @@ package io.regionevent.regioneventbackend.domain.content.service;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.PublicContentProjection;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 public record PublicContentStaticInfo(
     Long regionId,
@@ -21,25 +23,25 @@ public record PublicContentStaticInfo(
 
     public PublicContentStaticInfo {
         if (regionId == null || regionId <= 0) {
-            throw new IllegalArgumentException("regionId must be positive");
+            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
         if (contentId == null || contentId <= 0) {
-            throw new IllegalArgumentException("contentId must be positive");
+            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
         if (versionNo < 0) {
-            throw new IllegalArgumentException("versionNo must not be negative");
+            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
         if (contentType == null) {
-            throw new IllegalArgumentException("contentType must not be null");
+            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
-        validateText(title, "title");
-        validateText(description, "description");
-        validateText(locationText, "locationText");
-        validateText(operatingHoursText, "operatingHoursText");
-        validateText(precautions, "precautions");
-        validateText(ageRequirement, "ageRequirement");
-        validateText(materials, "materials");
-        validateText(cancellationPolicyText, "cancellationPolicyText");
+        validateText(title);
+        validateText(description);
+        validateText(locationText);
+        validateText(operatingHoursText);
+        validateText(precautions);
+        validateText(ageRequirement);
+        validateText(materials);
+        validateText(cancellationPolicyText);
     }
 
     public static PublicContentStaticInfo from(Content content) {
@@ -76,9 +78,9 @@ public record PublicContentStaticInfo(
         );
     }
 
-    private static void validateText(String value, String fieldName) {
+    private static void validateText(String value) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(fieldName + " must not be blank");
+            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
     }
 }
