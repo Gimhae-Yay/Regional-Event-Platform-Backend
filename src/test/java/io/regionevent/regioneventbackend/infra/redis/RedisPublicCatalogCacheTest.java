@@ -20,6 +20,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.service.PublicContentStaticInfo;
+import io.regionevent.regioneventbackend.domain.region.service.PublicRegionStaticInfo;
 
 class RedisPublicCatalogCacheTest {
 
@@ -59,6 +60,24 @@ class RedisPublicCatalogCacheTest {
         assertThat(serialized.has("reservationAvailable")).isFalse();
         assertThat(serialized.has("displaySession")).isFalse();
         assertThat(serialized.has("contactText")).isFalse();
+    }
+
+    @Test
+    void saveRegion_지역별_키와_기본_TTL로_정적_표시_정보를_직렬화한다() throws Exception {
+        PublicRegionStaticInfo region = new PublicRegionStaticInfo(10L, "GIMHAE", "김해시");
+
+        cache.saveRegion(region);
+
+        org.mockito.ArgumentCaptor<String> valueCaptor = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(valueOperations).set(
+            eq("public-region:10"),
+            valueCaptor.capture(),
+            eq(TTL)
+        );
+        JsonNode serialized = objectMapper.readTree(valueCaptor.getValue());
+        assertThat(serialized.get("regionId").asLong()).isEqualTo(10L);
+        assertThat(serialized.get("regionCode").asString()).isEqualTo("GIMHAE");
+        assertThat(serialized.get("name").asString()).isEqualTo("김해시");
     }
 
     @Test

@@ -5,22 +5,16 @@ import java.util.Objects;
 import org.springframework.stereotype.Component;
 
 @Component
-public class PublicCatalogCacheAside {
+public class PublicContentCacheAside {
 
-    private final PublicCatalogCache publicCatalogCache;
+    private final PublicContentCache publicContentCache;
 
-    public PublicCatalogCacheAside(PublicCatalogCache publicCatalogCache) {
-        this.publicCatalogCache = Objects.requireNonNull(publicCatalogCache, "publicCatalogCache must not be null");
-    }
-
-    public PublicRegionStaticInfo resolveRegion(PublicRegionStaticInfo source) {
-        return publicCatalogCache.findRegion(source.regionId())
-            .filter(cached -> cached.regionId().equals(source.regionId()))
-            .orElseGet(() -> saveRegion(source));
+    public PublicContentCacheAside(PublicContentCache publicContentCache) {
+        this.publicContentCache = Objects.requireNonNull(publicContentCache, "publicContentCache must not be null");
     }
 
     public PublicContentStaticInfo resolveContent(PublicContentStaticInfo source) {
-        return publicCatalogCache.findContent(
+        return publicContentCache.findContent(
             source.regionId(),
             source.contentId(),
             source.versionNo()
@@ -28,13 +22,8 @@ public class PublicCatalogCacheAside {
             .orElseGet(() -> saveContent(source));
     }
 
-    private PublicRegionStaticInfo saveRegion(PublicRegionStaticInfo source) {
-        publicCatalogCache.saveRegion(source);
-        return source;
-    }
-
     private PublicContentStaticInfo saveContent(PublicContentStaticInfo source) {
-        publicCatalogCache.saveContent(source);
+        publicContentCache.saveContent(source);
         return source;
     }
 

@@ -6,17 +6,24 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import io.regionevent.regioneventbackend.domain.region.service.PublicRegionCache;
+
 @Component
 public class PublicCatalogCacheInvalidator {
 
-    private final PublicCatalogCache publicCatalogCache;
+    private final PublicRegionCache publicRegionCache;
+    private final PublicContentCache publicContentCache;
 
-    public PublicCatalogCacheInvalidator(PublicCatalogCache publicCatalogCache) {
-        this.publicCatalogCache = Objects.requireNonNull(publicCatalogCache, "publicCatalogCache must not be null");
+    public PublicCatalogCacheInvalidator(
+        PublicRegionCache publicRegionCache,
+        PublicContentCache publicContentCache
+    ) {
+        this.publicRegionCache = Objects.requireNonNull(publicRegionCache, "publicRegionCache must not be null");
+        this.publicContentCache = Objects.requireNonNull(publicContentCache, "publicContentCache must not be null");
     }
 
     public void invalidateRegionAfterCommit(Long regionId) {
-        runAfterCommit(() -> publicCatalogCache.evictRegion(regionId));
+        runAfterCommit(() -> publicRegionCache.evictRegion(regionId));
     }
 
     public void invalidateContentAfterCommit(
@@ -24,7 +31,7 @@ public class PublicCatalogCacheInvalidator {
         Long contentId,
         int versionNo
     ) {
-        runAfterCommit(() -> publicCatalogCache.evictContent(regionId, contentId, versionNo));
+        runAfterCommit(() -> publicContentCache.evictContent(regionId, contentId, versionNo));
     }
 
     private void runAfterCommit(Runnable operation) {

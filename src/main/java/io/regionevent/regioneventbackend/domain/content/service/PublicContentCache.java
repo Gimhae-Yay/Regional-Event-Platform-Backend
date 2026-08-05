@@ -2,13 +2,7 @@ package io.regionevent.regioneventbackend.domain.content.service;
 
 import java.util.Optional;
 
-public interface PublicCatalogCache {
-
-    Optional<PublicRegionStaticInfo> findRegion(Long regionId);
-
-    void saveRegion(PublicRegionStaticInfo region);
-
-    void evictRegion(Long regionId);
+public interface PublicContentCache {
 
     Optional<PublicContentStaticInfo> findContent(
         Long regionId,

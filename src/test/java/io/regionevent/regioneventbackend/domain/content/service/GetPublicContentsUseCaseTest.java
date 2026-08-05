@@ -30,13 +30,13 @@ class GetPublicContentsUseCaseTest {
 
     private final RegionService regionService = mock(RegionService.class);
     private final ContentService contentService = mock(ContentService.class);
-    private final PublicCatalogCacheAside publicCatalogCacheAside = mock(PublicCatalogCacheAside.class);
+    private final PublicContentCacheAside publicContentCacheAside = mock(PublicContentCacheAside.class);
     private final RepresentativeImageViewUrlService representativeImageViewUrlService =
         mock(RepresentativeImageViewUrlService.class);
     private final GetPublicContentsUseCase useCase = new GetPublicContentsUseCase(
         regionService,
         contentService,
-        publicCatalogCacheAside,
+        publicContentCacheAside,
         representativeImageViewUrlService
     );
 
@@ -132,9 +132,7 @@ class GetPublicContentsUseCaseTest {
     }
 
     private void returnsMysqlSourceFromCacheAside() {
-        when(publicCatalogCacheAside.resolveRegion(any(PublicRegionStaticInfo.class)))
-            .thenAnswer(invocation -> invocation.getArgument(0));
-        when(publicCatalogCacheAside.resolveContent(any(PublicContentStaticInfo.class)))
+        when(publicContentCacheAside.resolveContent(any(PublicContentStaticInfo.class)))
             .thenAnswer(invocation -> invocation.getArgument(0));
     }
 

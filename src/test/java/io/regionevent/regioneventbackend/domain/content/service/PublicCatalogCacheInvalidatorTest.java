@@ -9,10 +9,16 @@ import org.junit.jupiter.api.Test;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import io.regionevent.regioneventbackend.domain.region.service.PublicRegionCache;
+
 class PublicCatalogCacheInvalidatorTest {
 
-    private final PublicCatalogCache publicCatalogCache = mock(PublicCatalogCache.class);
-    private final PublicCatalogCacheInvalidator invalidator = new PublicCatalogCacheInvalidator(publicCatalogCache);
+    private final PublicRegionCache publicRegionCache = mock(PublicRegionCache.class);
+    private final PublicContentCache publicContentCache = mock(PublicContentCache.class);
+    private final PublicCatalogCacheInvalidator invalidator = new PublicCatalogCacheInvalidator(
+        publicRegionCache,
+        publicContentCache
+    );
 
     @AfterEach
     void clearSynchronization() {
@@ -27,16 +33,16 @@ class PublicCatalogCacheInvalidatorTest {
 
         invalidator.invalidateContentAfterCommit(10L, 200L, 3);
 
-        verifyNoInteractions(publicCatalogCache);
+        verifyNoInteractions(publicRegionCache, publicContentCache);
         TransactionSynchronizationManager.getSynchronizations()
             .forEach(TransactionSynchronization::afterCommit);
-        verify(publicCatalogCache).evictContent(10L, 200L, 3);
+        verify(publicContentCache).evictContent(10L, 200L, 3);
     }
 
     @Test
     void invalidateRegionAfterCommit_트랜잭션_밖에서는_즉시_삭제한다() {
         invalidator.invalidateRegionAfterCommit(10L);
 
-        verify(publicCatalogCache).evictRegion(10L);
+        verify(publicRegionCache).evictRegion(10L);
     }
 }

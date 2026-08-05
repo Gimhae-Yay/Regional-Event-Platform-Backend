@@ -14,23 +14,23 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
 public class GetPublicContentUseCase {
 
     private final ContentService contentService;
-    private final PublicCatalogCacheAside publicCatalogCacheAside;
+    private final PublicContentCacheAside publicContentCacheAside;
     private final RepresentativeImageViewUrlService representativeImageViewUrlService;
 
     public GetPublicContentUseCase(
         ContentService contentService,
-        PublicCatalogCacheAside publicCatalogCacheAside,
+        PublicContentCacheAside publicContentCacheAside,
         RepresentativeImageViewUrlService representativeImageViewUrlService
     ) {
         this.contentService = contentService;
-        this.publicCatalogCacheAside = publicCatalogCacheAside;
+        this.publicContentCacheAside = publicContentCacheAside;
         this.representativeImageViewUrlService = representativeImageViewUrlService;
     }
 
     @Transactional(readOnly = true)
     public PublicContentDetailResult get(Long contentId) {
         Content content = contentService.findPublicContent(contentId);
-        PublicContentStaticInfo staticInfo = publicCatalogCacheAside.resolveContent(
+        PublicContentStaticInfo staticInfo = publicContentCacheAside.resolveContent(
             PublicContentStaticInfo.from(content)
         );
         RepresentativeImageViewUrl representativeImageViewUrl = createRepresentativeImageViewUrl(content);

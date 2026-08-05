@@ -2,7 +2,7 @@ package io.regionevent.regioneventbackend.domain.region.dto;
 
 import java.util.List;
 
-import io.regionevent.regioneventbackend.domain.region.entity.Region;
+import io.regionevent.regioneventbackend.domain.region.service.PublicRegionStaticInfo;
 
 public record GetPublicRegionsResponse(List<RegionResponse> regions) {
 
@@ -10,7 +10,7 @@ public record GetPublicRegionsResponse(List<RegionResponse> regions) {
         regions = List.copyOf(regions);
     }
 
-    public static GetPublicRegionsResponse from(List<Region> regions) {
+    public static GetPublicRegionsResponse from(List<PublicRegionStaticInfo> regions) {
         return new GetPublicRegionsResponse(regions.stream()
             .map(RegionResponse::from)
             .toList());
@@ -22,11 +22,11 @@ public record GetPublicRegionsResponse(List<RegionResponse> regions) {
         String name
     ) {
 
-        private static RegionResponse from(Region region) {
+        private static RegionResponse from(PublicRegionStaticInfo region) {
             return new RegionResponse(
-                region.getRegionId().toString(),
-                region.getRegionCode(),
-                region.getName()
+                region.regionId().toString(),
+                region.regionCode(),
+                region.name()
             );
         }
     }

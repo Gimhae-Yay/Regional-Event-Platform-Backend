@@ -1,4 +1,4 @@
-package io.regionevent.regioneventbackend.domain.content.service;
+package io.regionevent.regioneventbackend.domain.region.service;
 
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 

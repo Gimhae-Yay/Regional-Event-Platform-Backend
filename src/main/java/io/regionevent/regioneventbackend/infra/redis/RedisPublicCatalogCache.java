@@ -9,12 +9,13 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 
-import io.regionevent.regioneventbackend.domain.content.service.PublicCatalogCache;
+import io.regionevent.regioneventbackend.domain.content.service.PublicContentCache;
 import io.regionevent.regioneventbackend.domain.content.service.PublicContentStaticInfo;
-import io.regionevent.regioneventbackend.domain.content.service.PublicRegionStaticInfo;
+import io.regionevent.regioneventbackend.domain.region.service.PublicRegionCache;
+import io.regionevent.regioneventbackend.domain.region.service.PublicRegionStaticInfo;
 
 @Component
-public class RedisPublicCatalogCache implements PublicCatalogCache {
+public class RedisPublicCatalogCache implements PublicContentCache, PublicRegionCache {
 
     private static final Logger log = LoggerFactory.getLogger(RedisPublicCatalogCache.class);
 
