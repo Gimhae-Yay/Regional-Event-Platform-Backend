@@ -72,6 +72,16 @@ public interface ContentSessionRepository extends JpaRepository<ContentSession, 
         @Param("contentStatuses") List<ContentStatus> contentStatuses
     );
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = {"content", "content.region", "region"})
+    @Query("""
+        SELECT contentSession
+        FROM ContentSession contentSession
+        WHERE contentSession.sessionId = :sessionId
+            AND contentSession.content.deletedAt IS NULL
+        """)
+    Optional<ContentSession> findRejectTargetForUpdate(@Param("sessionId") Long sessionId);
+
     @EntityGraph(attributePaths = {"content", "region"})
     @Query("""
         SELECT contentSession
