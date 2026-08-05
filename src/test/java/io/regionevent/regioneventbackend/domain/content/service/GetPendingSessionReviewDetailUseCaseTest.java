@@ -5,16 +5,12 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
-
 import org.junit.jupiter.api.Test;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
-import io.regionevent.regioneventbackend.domain.content.repository.ContentSessionRepository;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.service.RegionAdminAuthorizationService;
@@ -26,12 +22,11 @@ class GetPendingSessionReviewDetailUseCaseTest {
     @Test
     void get_whenSessionIsReviewTargetInAuthorizedRegion_returnsDetail() {
         RegionAdminAuthorizationService authorizationService = mock(RegionAdminAuthorizationService.class);
-        ContentSessionRepository repository = mock(ContentSessionRepository.class);
-        GetPendingSessionReviewDetailUseCase useCase = new GetPendingSessionReviewDetailUseCase(authorizationService, repository);
+        ContentSessionService contentSessionService = mock(ContentSessionService.class);
+        GetPendingSessionReviewDetailUseCase useCase = new GetPendingSessionReviewDetailUseCase(authorizationService, contentSessionService);
         ContentSession session = session(1L);
         when(authorizationService.requireAuthorizedRegionId(10L)).thenReturn(1L);
-        when(repository.findPendingReviewTarget(20L, List.of(ContentStatus.APPROVED, ContentStatus.PUBLISHED)))
-            .thenReturn(Optional.of(session));
+        when(contentSessionService.findPendingReviewTarget(20L)).thenReturn(session);
 
         useCase.get(10L, 20L);
     }
@@ -39,11 +34,10 @@ class GetPendingSessionReviewDetailUseCaseTest {
     @Test
     void get_whenSessionIsNotReviewTarget_throwsNotFound() {
         RegionAdminAuthorizationService authorizationService = mock(RegionAdminAuthorizationService.class);
-        ContentSessionRepository repository = mock(ContentSessionRepository.class);
-        GetPendingSessionReviewDetailUseCase useCase = new GetPendingSessionReviewDetailUseCase(authorizationService, repository);
+        ContentSessionService contentSessionService = mock(ContentSessionService.class);
+        GetPendingSessionReviewDetailUseCase useCase = new GetPendingSessionReviewDetailUseCase(authorizationService, contentSessionService);
         when(authorizationService.requireAuthorizedRegionId(10L)).thenReturn(1L);
-        when(repository.findPendingReviewTarget(20L, List.of(ContentStatus.APPROVED, ContentStatus.PUBLISHED)))
-            .thenReturn(Optional.empty());
+        when(contentSessionService.findPendingReviewTarget(20L)).thenThrow(new BusinessException(ErrorCode.NOT_FOUND));
 
         assertThatThrownBy(() -> useCase.get(10L, 20L))
             .isInstanceOfSatisfying(BusinessException.class, exception ->
@@ -53,12 +47,11 @@ class GetPendingSessionReviewDetailUseCaseTest {
     @Test
     void get_whenRegionDiffers_throwsForbidden() {
         RegionAdminAuthorizationService authorizationService = mock(RegionAdminAuthorizationService.class);
-        ContentSessionRepository repository = mock(ContentSessionRepository.class);
-        GetPendingSessionReviewDetailUseCase useCase = new GetPendingSessionReviewDetailUseCase(authorizationService, repository);
+        ContentSessionService contentSessionService = mock(ContentSessionService.class);
+        GetPendingSessionReviewDetailUseCase useCase = new GetPendingSessionReviewDetailUseCase(authorizationService, contentSessionService);
         ContentSession session = session(1L);
         when(authorizationService.requireAuthorizedRegionId(10L)).thenReturn(2L);
-        when(repository.findPendingReviewTarget(20L, List.of(ContentStatus.APPROVED, ContentStatus.PUBLISHED)))
-            .thenReturn(Optional.of(session));
+        when(contentSessionService.findPendingReviewTarget(20L)).thenReturn(session);
 
         assertThatThrownBy(() -> useCase.get(10L, 20L))
             .isInstanceOfSatisfying(BusinessException.class, exception ->
