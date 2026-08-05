@@ -1,8 +1,6 @@
 package io.regionevent.regioneventbackend.domain.content.service;
 
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
-import io.regionevent.regioneventbackend.global.error.BusinessException;
-import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 public record PublicRegionStaticInfo(
     Long regionId,
@@ -12,13 +10,13 @@ public record PublicRegionStaticInfo(
 
     public PublicRegionStaticInfo {
         if (regionId == null || regionId <= 0) {
-            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
+            throw new IllegalArgumentException("regionId must be positive");
         }
         if (regionCode == null || regionCode.isBlank()) {
-            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
+            throw new IllegalArgumentException("regionCode must not be blank");
         }
         if (name == null || name.isBlank()) {
-            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
+            throw new IllegalArgumentException("name must not be blank");
         }
     }
 
