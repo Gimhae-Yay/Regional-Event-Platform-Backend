@@ -54,7 +54,12 @@ class GetRegionAdminQrExceptionUseCaseTest {
     @Test
     void get_VISIT_대상이면_방문에서_예약_ID를_확인해_예약을_반환한다() {
         TestContext context = new TestContext();
-        context.stubAudit(audit(AuditEventTargetType.VISIT, VISIT_ID, "MANUAL_CHECK_IN_QR_SCAN_FAILED_SUCCESS"));
+        context.stubAudit(audit(
+            AuditEventTargetType.VISIT,
+            VISIT_ID,
+            AuditEventResult.SUCCESS,
+            "MANUAL_CHECK_IN_QR_SCAN_FAILED_SUCCESS"
+        ));
         when(context.visitService.findReservationIdByVisitId(VISIT_ID)).thenReturn(Optional.of(RESERVATION_ID));
 
         QrExceptionDetailResult result = context.useCase.get(USER_ID, EXCEPTION_ID);
@@ -127,9 +132,69 @@ class GetRegionAdminQrExceptionUseCaseTest {
             .hasMessage("qr exception reservation relation is inconsistent");
     }
 
+    @Test
+    void get_QR_check_in_failure_with_VISIT_target_propagates_contract_error() {
+        TestContext context = new TestContext();
+        context.stubAudit(audit(AuditEventTargetType.VISIT, VISIT_ID, "QR_CHECK_IN_SIGNATURE_INVALID"));
+
+        assertThatThrownBy(() -> context.useCase.get(USER_ID, EXCEPTION_ID))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("qr exception audit target contract is inconsistent");
+
+        verifyNoInteractions(context.visitService);
+    }
+
+    @Test
+    void get_reservation_number_lookup_with_VISIT_target_propagates_contract_error() {
+        TestContext context = new TestContext();
+        context.stubAudit(audit(AuditEventTargetType.VISIT, VISIT_ID, "QR_VERIFICATION_FAILED"));
+
+        assertThatThrownBy(() -> context.useCase.get(USER_ID, EXCEPTION_ID))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("qr exception audit target contract is inconsistent");
+
+        verifyNoInteractions(context.visitService);
+    }
+
+    @Test
+    void get_manual_check_in_success_with_RESERVATION_target_propagates_contract_error() {
+        TestContext context = new TestContext();
+        context.stubAudit(audit(
+            AuditEventTargetType.RESERVATION,
+            RESERVATION_ID,
+            AuditEventResult.SUCCESS,
+            "MANUAL_CHECK_IN_QR_SCAN_FAILED_SUCCESS"
+        ));
+
+        assertThatThrownBy(() -> context.useCase.get(USER_ID, EXCEPTION_ID))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("qr exception audit target contract is inconsistent");
+    }
+
+    @Test
+    void get_manual_check_in_failure_with_VISIT_target_propagates_contract_error() {
+        TestContext context = new TestContext();
+        context.stubAudit(audit(AuditEventTargetType.VISIT, VISIT_ID, "MANUAL_CHECK_IN_QR_SCAN_FAILED"));
+
+        assertThatThrownBy(() -> context.useCase.get(USER_ID, EXCEPTION_ID))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("qr exception audit target contract is inconsistent");
+
+        verifyNoInteractions(context.visitService);
+    }
+
     private static QrExceptionAuditProjection audit(
         AuditEventTargetType targetType,
         Long targetId,
+        String reasonCode
+    ) {
+        return audit(targetType, targetId, AuditEventResult.FAILURE, reasonCode);
+    }
+
+    private static QrExceptionAuditProjection audit(
+        AuditEventTargetType targetType,
+        Long targetId,
+        AuditEventResult result,
         String reasonCode
     ) {
         return new QrExceptionAuditProjection(
@@ -137,7 +202,7 @@ class GetRegionAdminQrExceptionUseCaseTest {
             REGION_ID,
             targetType,
             targetId,
-            AuditEventResult.FAILURE,
+            result,
             reasonCode,
             OCCURRED_AT
         );

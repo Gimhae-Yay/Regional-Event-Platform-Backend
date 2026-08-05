@@ -294,7 +294,7 @@ class RegionAdminQrExceptionControllerIntegrationTest {
     }
 
     @Test
-    void get_예약과_방문_관계가_불일치하면_INTERNAL_SERVER_ERROR를_반환한다(
+    void get_예약번호_조회_VISIT_감사_계약_불일치는_INTERNAL_SERVER_ERROR를_반환한다(
         CapturedOutput output
     ) throws Exception {
         Fixture fixture = createFixture(ReservationStatus.CHECKED_IN);
@@ -328,12 +328,9 @@ class RegionAdminQrExceptionControllerIntegrationTest {
             .andExpect(status().isInternalServerError())
             .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
 
-        assertThat(output.getOut()).contains(
+        assertThat(output.getOut()).doesNotContain(
             "QR exception detail read. requestId=",
-            "regionId=" + fixture.region().getRegionId()
-                + ", exceptionId=" + auditEvent.getAuditEventId()
-                + ", resultCode=INTERNAL_SERVER_ERROR"
-        ).doesNotContain(
+            "resultCode=INTERNAL_SERVER_ERROR",
             otherParticipant.getName(),
             otherParticipant.getPhone()
         );

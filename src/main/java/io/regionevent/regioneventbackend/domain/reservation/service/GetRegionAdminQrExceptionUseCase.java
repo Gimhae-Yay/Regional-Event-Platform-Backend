@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
 import io.regionevent.regioneventbackend.domain.audit.repository.QrExceptionAuditProjection;
@@ -62,7 +63,7 @@ public class GetRegionAdminQrExceptionUseCase {
                 throw new BusinessException(ErrorCode.FORBIDDEN);
             }
 
-            Long reservationId = findReservationId(audit);
+            Long reservationId = findReservationId(audit, exceptionType);
             if (reservationId == null) {
                 QrExceptionDetailResult result = QrExceptionDetailResult.unresolved(
                     audit.exceptionId(),
@@ -101,13 +102,14 @@ public class GetRegionAdminQrExceptionUseCase {
         } catch (BusinessException exception) {
             logResult(authorizedRegionId, exceptionId, exception.getErrorCode().code());
             throw exception;
-        } catch (RuntimeException exception) {
-            logResult(authorizedRegionId, exceptionId, ErrorCode.INTERNAL_SERVER_ERROR.code());
-            throw exception;
         }
     }
 
-    private Long findReservationId(QrExceptionAuditProjection audit) {
+    private Long findReservationId(
+        QrExceptionAuditProjection audit,
+        QrExceptionType exceptionType
+    ) {
+        validateAuditTargetContract(audit, exceptionType);
         if (audit.targetId() == null) {
             return null;
         }
@@ -119,6 +121,37 @@ public class GetRegionAdminQrExceptionUseCase {
                 .orElseThrow(() -> new IllegalStateException("qr exception visit target does not exist"));
         }
         throw new IllegalStateException("qr exception target type is inconsistent");
+    }
+
+    private void validateAuditTargetContract(
+        QrExceptionAuditProjection audit,
+        QrExceptionType exceptionType
+    ) {
+        if (exceptionType == QrExceptionType.MANUAL_CHECK_IN) {
+            validateManualCheckInTargetContract(audit);
+            return;
+        }
+        validateReservationTargetContract(audit);
+    }
+
+    private void validateManualCheckInTargetContract(QrExceptionAuditProjection audit) {
+        if (audit.result() == AuditEventResult.SUCCESS) {
+            validateVisitTargetContract(audit);
+            return;
+        }
+        validateReservationTargetContract(audit);
+    }
+
+    private void validateReservationTargetContract(QrExceptionAuditProjection audit) {
+        if (audit.targetType() != AuditEventTargetType.RESERVATION) {
+            throw new IllegalStateException("qr exception audit target contract is inconsistent");
+        }
+    }
+
+    private void validateVisitTargetContract(QrExceptionAuditProjection audit) {
+        if (audit.targetType() != AuditEventTargetType.VISIT || audit.targetId() == null) {
+            throw new IllegalStateException("qr exception audit target contract is inconsistent");
+        }
     }
 
     private ReservationReadResult findReservationReadResult(Long reservationId) {
