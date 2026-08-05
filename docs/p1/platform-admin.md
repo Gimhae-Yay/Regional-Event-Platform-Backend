@@ -3,7 +3,7 @@
 | 항목 | 내용 |
 | --- | --- |
 | 상위 명세 | [로컬스탬프 P1 명세](../p1-spec.md) |
-| 관련 결정 | [ADR-0009 초기 MVP의 전체관리자 제외](../adr/0009-exclude-platform-admin-from-initial-mvp.md), [ADR-0010 전체관리자 기능 P1 승격](../adr/0010-move-platform-admin-capabilities-from-p2-to-p1.md), [ADR-0063 기존 역할 연결에 전역 ADMIN 역할 추가](../adr/0063-use-global-admin-role-in-existing-user-role-assignment.md) |
+| 관련 결정 | [ADR-0009 초기 MVP의 전체관리자 제외](../adr/0009-exclude-platform-admin-from-initial-mvp.md), [ADR-0010 전체관리자 기능 P1 승격](../adr/0010-move-platform-admin-capabilities-from-p2-to-p1.md), [ADR-0063 기존 역할 연결에 전역 PLATFORM_ADMIN 역할 추가](../adr/0063-use-global-admin-role-in-existing-user-role-assignment.md), [ADR-0064 전체관리자 계정 준비·비활성화 보호](../adr/0064-bootstrap-and-deactivate-platform-admin-accounts.md) |
 | 소유 범위 | 전체관리자 계정, 지역, 관리자 역할, 결제 불일치·환불 실패 수동 처리 |
 | API 명세 | [전체관리자 API](../api/p1/platform-admin/platform-admin.md) |
 | 데이터 모델 | [ERD](../erd.md) |
@@ -78,8 +78,10 @@
 
 - `ADM-01`:
   전체관리자 계정은 생성과 비활성화를 구분한다. 비활성화된 계정의 새 특권 요청은 허용하지 않는다.
-  P1의 전체관리자 권한은 기존 `user_role_assignment`의 `ADMIN` 역할로 표현하며 담당 지역은 두지 않는다.
-  인증 수단, 세션 무효화 시점과 최초 계정 준비 절차는 구현 전 확정한다.
+  P1의 전체관리자 권한은 기존 `user_role_assignment`의 `PLATFORM_ADMIN` 역할로 표현하며 담당 지역은 두지 않는다.
+  최초 전체관리자 계정은 일반 API가 아닌 승인된 배포 절차로 준비한다. 활성 전체관리자만 추가 전체관리자 계정을
+  생성할 수 있다. 비활성화는 `ACTIVE → INACTIVE` 전이와 대상의 활성 Refresh Token 계열 전체 폐기를 함께
+  수행하며, 자기 자신과 마지막 활성 전체관리자는 비활성화할 수 없다. 재활성화는 현재 제공하지 않는다.
 - `ADM-02`:
   지역은 고유 식별자와 운영 상태를 가진다. 지역 생성·상태 변경은 전체관리자 전용 유스케이스에서만 수행하며,
   상태 변경이 공개 콘텐츠·예약·혜택에 미치는 영향은 정책으로 명시한다.
@@ -97,8 +99,8 @@
 
 | 항목 | 확정할 내용 |
 | --- | --- |
-| 최초 계정 | 최초 전체관리자 생성 경로, 다중 관리자 허용 여부와 비상 복구 절차 |
-| 계정 비활성화 | 세션·토큰 무효화 시점, 재활성화 권한과 감사·보관 정책 |
+| 최초 계정 | 비상 복구 절차와 배포 절차의 승인·실행 증적 |
+| 계정 비활성화 | `INACTIVE` 상태의 ERD 반영, 감사·보관 정책 |
 | 지역 상태 | 상태 종류, 상태 변경이 공개 콘텐츠·예약·혜택에 미치는 효과 |
 | 역할 보호 | 자기 권한 변경, 마지막 관리자 회수, 복수 승인·분리 의무 |
 | 수동 거래 처리 | 허용 조치, 증빙 형식, 이중 승인, 고객 안내와 외부 거래 정정 방식 |
