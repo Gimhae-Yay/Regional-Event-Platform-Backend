@@ -110,6 +110,20 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
     }
 
     @Test
+    void 반려된_회차가_있어도_모든_회차가_종결되면_콘텐츠를_종료한다() {
+        Fixture fixture = createFixture();
+        saveRejectedSession(fixture);
+
+        EndContentReservationsResult result = endContentReservationsUseCase.end(
+            fixture.adminId(),
+            fixture.contentId(),
+            UUID.randomUUID()
+        );
+
+        assertThat(result.status()).isEqualTo(ContentStatus.ENDED);
+    }
+
+    @Test
     void 종료는_활성홀드를_무효화하고_정원을_한번만_복구한다() {
         Fixture fixture = createFixture();
 
@@ -366,6 +380,7 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
             CapacityHold secondHold = saveActiveHold(region, secondSession, visitor, 1, now);
             return new Fixture(
                 admin.getUserId(),
+                region.getRegionId(),
                 content.getContentId(),
                 firstSession.getSessionId(),
                 secondSession.getSessionId(),
@@ -397,6 +412,16 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
         session.approve(admin, startsAt.minusSeconds(3_600));
         session.cancel(admin, startsAt.minusSeconds(1_800), "정상 종료 전 회차 취소");
         return contentSessionRepository.save(session);
+    }
+
+    private void saveRejectedSession(Fixture fixture) {
+        Content content = contentRepository.findById(fixture.contentId()).orElseThrow();
+        Region region = regionRepository.findById(fixture.regionId()).orElseThrow();
+        AppUser admin = appUserRepository.findById(fixture.adminId()).orElseThrow();
+        Instant startsAt = Instant.now().plusSeconds(14_400);
+        ContentSession session = newSession(content, region, startsAt);
+        session.reject(admin, startsAt.minusSeconds(3_600), "추가 회차 반려");
+        contentSessionRepository.save(session);
     }
 
     private ContentSession newSession(
@@ -491,6 +516,7 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
 
     private record Fixture(
         Long adminId,
+        Long regionId,
         Long contentId,
         Long firstSessionId,
         Long secondSessionId,
