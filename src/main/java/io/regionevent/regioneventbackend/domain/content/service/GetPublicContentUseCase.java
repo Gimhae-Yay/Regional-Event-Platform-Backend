@@ -14,34 +14,40 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
 public class GetPublicContentUseCase {
 
     private final ContentService contentService;
+    private final PublicCatalogCacheAside publicCatalogCacheAside;
     private final RepresentativeImageViewUrlService representativeImageViewUrlService;
 
     public GetPublicContentUseCase(
         ContentService contentService,
+        PublicCatalogCacheAside publicCatalogCacheAside,
         RepresentativeImageViewUrlService representativeImageViewUrlService
     ) {
         this.contentService = contentService;
+        this.publicCatalogCacheAside = publicCatalogCacheAside;
         this.representativeImageViewUrlService = representativeImageViewUrlService;
     }
 
     @Transactional(readOnly = true)
     public PublicContentDetailResult get(Long contentId) {
         Content content = contentService.findPublicContent(contentId);
+        PublicContentStaticInfo staticInfo = publicCatalogCacheAside.resolveContent(
+            PublicContentStaticInfo.from(content)
+        );
         RepresentativeImageViewUrl representativeImageViewUrl = createRepresentativeImageViewUrl(content);
         return new PublicContentDetailResult(
-            content.getContentId(),
-            content.getContentType(),
-            content.getTitle(),
-            content.getDescription(),
+            staticInfo.contentId(),
+            staticInfo.contentType(),
+            staticInfo.title(),
+            staticInfo.description(),
             representativeImageViewUrl.url(),
             representativeImageViewUrl.expiresAt(),
-            content.getLocationText(),
-            content.getOperatingHoursText(),
+            staticInfo.locationText(),
+            staticInfo.operatingHoursText(),
             content.getContactText(),
-            content.getPrecautions(),
-            content.getAgeRequirement(),
-            content.getMaterials(),
-            content.getCancellationPolicyText()
+            staticInfo.precautions(),
+            staticInfo.ageRequirement(),
+            staticInfo.materials(),
+            staticInfo.cancellationPolicyText()
         );
     }
 

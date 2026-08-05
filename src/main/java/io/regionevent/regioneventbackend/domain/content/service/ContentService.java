@@ -140,7 +140,7 @@ public class ContentService {
 
     public Content findPublicContent(Long contentId) {
         validateRequiredId(contentId);
-        return contentRepository.findByContentIdAndStatusAndDeletedAtIsNull(
+        return contentRepository.findPublicContentByContentId(
             contentId,
             ContentStatus.PUBLISHED
         ).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
