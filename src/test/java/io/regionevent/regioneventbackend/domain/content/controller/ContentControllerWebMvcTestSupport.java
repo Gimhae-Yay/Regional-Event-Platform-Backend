@@ -36,9 +36,11 @@ import io.regionevent.regioneventbackend.domain.content.service.GetOriginalConte
 import io.regionevent.regioneventbackend.domain.content.service.GetPendingContentsUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetPendingContentRevisionsUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetPendingSessionReviewDetailUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.GetPendingSessionRevisionsUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetPublicContentSessionsUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetPublicContentUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetPublicContentsUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.GetSessionRevisionReviewDetailUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.RejectContentRevisionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.RejectContentUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.SubmitContentUseCase;
@@ -113,6 +115,9 @@ abstract class ContentControllerWebMvcTestSupport {
     protected GetPendingSessionReviewDetailUseCase getPendingSessionReviewDetailUseCase;
 
     @MockitoBean
+    protected GetPendingSessionRevisionsUseCase getPendingSessionRevisionsUseCase;
+
+    @MockitoBean
     protected GetPublicContentSessionsUseCase getPublicContentSessionsUseCase;
 
     @MockitoBean
@@ -120,6 +125,9 @@ abstract class ContentControllerWebMvcTestSupport {
 
     @MockitoBean
     protected GetPublicContentsUseCase getPublicContentsUseCase;
+
+    @MockitoBean
+    protected GetSessionRevisionReviewDetailUseCase getSessionRevisionReviewDetailUseCase;
 
     @MockitoBean
     protected RejectContentRevisionUseCase rejectContentRevisionUseCase;
