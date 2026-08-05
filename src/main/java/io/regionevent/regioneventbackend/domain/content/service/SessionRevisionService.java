@@ -1,5 +1,7 @@
 package io.regionevent.regioneventbackend.domain.content.service;
 
+import java.util.List;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,5 +26,13 @@ public class SessionRevisionService {
             revisionId,
             SessionRevisionStatus.PENDING
         ).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    @Transactional(readOnly = true)
+    public List<SessionRevision> findPendingByRegionId(Long regionId) {
+        return sessionRevisionRepository.findByRegionIdAndStatusForReview(
+            regionId,
+            SessionRevisionStatus.PENDING
+        );
     }
 }
