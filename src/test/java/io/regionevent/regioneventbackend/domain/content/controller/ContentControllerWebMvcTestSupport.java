@@ -27,6 +27,7 @@ import io.regionevent.regioneventbackend.domain.content.service.ApproveContentUs
 import io.regionevent.regioneventbackend.domain.content.service.CancelContentSessionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.ContentSessionService;
 import io.regionevent.regioneventbackend.domain.content.service.CreateContentRevisionUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.CreateContentSessionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.CreateContentUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.DeleteContentUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.EndContentReservationsUseCase;
@@ -87,6 +88,9 @@ abstract class ContentControllerWebMvcTestSupport {
 
     @MockitoBean
     protected CreateContentRevisionUseCase createContentRevisionUseCase;
+
+    @MockitoBean
+    protected CreateContentSessionUseCase createContentSessionUseCase;
 
     @MockitoBean
     protected CreateContentUseCase createContentUseCase;
