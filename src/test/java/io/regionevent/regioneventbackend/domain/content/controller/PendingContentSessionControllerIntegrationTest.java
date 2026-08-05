@@ -11,10 +11,13 @@ import java.time.Instant;
 import jakarta.persistence.EntityManager;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
@@ -40,6 +43,7 @@ import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenSe
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
+@ExtendWith(OutputCaptureExtension.class)
 class PendingContentSessionControllerIntegrationTest {
 
     private final MockMvc mockMvc;
@@ -153,7 +157,7 @@ class PendingContentSessionControllerIntegrationTest {
     }
 
     @Test
-    void getPendingSessions_rejectsMissingOrUnsupportedStatus() throws Exception {
+    void getPendingSessions_rejectsMissingOrUnsupportedStatus(CapturedOutput output) throws Exception {
         Region region = saveRegion("INVALID");
         AppUser admin = saveRegionAdmin("invalid-admin@example.com", region);
 
@@ -165,10 +169,15 @@ class PendingContentSessionControllerIntegrationTest {
                 .header(HttpHeaders.AUTHORIZATION, bearerToken(admin)))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        assertThat(output.getOut()).contains(
+            "Pending content sessions queried. requestId=",
+            "resultCount=0, resultCode=INVALID_INPUT"
+        );
     }
 
     @Test
-    void getPendingSessions_enforcesRegionAdminAndRegionIsolation() throws Exception {
+    void getPendingSessions_enforcesRegionAdminAndRegionIsolation(CapturedOutput output) throws Exception {
         Region ownerRegion = saveRegion("OWNER");
         Region otherRegion = saveRegion("OTHER");
         AppUser ownerAdmin = saveRegionAdmin("owner-admin@example.com", ownerRegion);
@@ -194,6 +203,8 @@ class PendingContentSessionControllerIntegrationTest {
                 .header(HttpHeaders.AUTHORIZATION, bearerToken(ownerAdmin)))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.sessions.length()").value(1));
+
+        assertThat(output.getOut()).contains("resultCount=0, resultCode=FORBIDDEN");
     }
 
     private ContentSession savePendingSession(Content content, Region region, String startsAt) {

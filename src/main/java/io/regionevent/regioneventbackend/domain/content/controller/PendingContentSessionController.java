@@ -30,7 +30,7 @@ public class PendingContentSessionController {
     @GetMapping
     public ResponseEntity<ApiResponse<PendingContentSessionsResponse>> getPendingSessions(
         Authentication authentication,
-        @RequestParam String status
+        @RequestParam(required = false) String status
     ) {
         PendingContentSessionListResult result = getPendingContentSessionsUseCase.get(
             toAuthenticatedUserId(authentication),
