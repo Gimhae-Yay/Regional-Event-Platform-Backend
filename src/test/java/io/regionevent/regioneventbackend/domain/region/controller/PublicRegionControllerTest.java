@@ -16,11 +16,10 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 
-import io.regionevent.regioneventbackend.domain.region.entity.Region;
-import io.regionevent.regioneventbackend.domain.region.service.RegionService;
+import io.regionevent.regioneventbackend.domain.region.service.GetPublicRegionsUseCase;
+import io.regionevent.regioneventbackend.domain.region.service.PublicRegionStaticInfo;
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
@@ -39,18 +38,17 @@ class PublicRegionControllerTest {
     private MockMvc mockMvc;
 
     @MockitoBean
-    private RegionService regionService;
+    private GetPublicRegionsUseCase getPublicRegionsUseCase;
 
     @MockitoBean
     private RefreshTokenStore refreshTokenStore;
 
     @Test
     void 인증_없이_공개_지역_목록_응답을_반환하고_성공_로그를_남긴다(CapturedOutput output) throws Exception {
-        Region gimhae = new Region("GIMHAE", "김해시", true);
-        Region donghae = new Region("DONGHAE", "동해시", true);
-        ReflectionTestUtils.setField(gimhae, "regionId", 1L);
-        ReflectionTestUtils.setField(donghae, "regionId", 2L);
-        when(regionService.findPublicRegions()).thenReturn(List.of(gimhae, donghae));
+        when(getPublicRegionsUseCase.get()).thenReturn(List.of(
+            new PublicRegionStaticInfo(1L, "GIMHAE", "김해시"),
+            new PublicRegionStaticInfo(2L, "DONGHAE", "동해시")
+        ));
 
         mockMvc.perform(get("/api/v1/regions"))
             .andExpect(status().isOk())
@@ -72,7 +70,7 @@ class PublicRegionControllerTest {
 
     @Test
     void 공개_지역이_없으면_빈_배열을_반환한다() throws Exception {
-        when(regionService.findPublicRegions()).thenReturn(List.of());
+        when(getPublicRegionsUseCase.get()).thenReturn(List.of());
 
         mockMvc.perform(get("/api/v1/regions"))
             .andExpect(status().isOk())
@@ -83,7 +81,7 @@ class PublicRegionControllerTest {
     @Test
     void 서버_오류_응답과_실패_로그에_비공개_지역_정보를_남기지_않는다(CapturedOutput output) throws Exception {
         String privateRegionName = "비공개-지역-이름";
-        when(regionService.findPublicRegions()).thenThrow(new IllegalStateException("database unavailable"));
+        when(getPublicRegionsUseCase.get()).thenThrow(new IllegalStateException("database unavailable"));
 
         mockMvc.perform(get("/api/v1/regions"))
             .andExpect(status().isInternalServerError())

@@ -24,11 +24,10 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
     boolean existsByOperatorUserId(Long userId);
 
     @Query("""
-        SELECT new io.regionevent.regioneventbackend.domain.content.repository.PublicContentProjection(
+        SELECT new io.regionevent.regioneventbackend.domain.content.repository.PublicContentListVerificationProjection(
+            content.region.regionId,
             content.contentId,
-            content.contentType,
-            content.title,
-            content.locationText,
+            content.versionNo,
             representativeImageObject,
             content.representativeImageAssignedAt,
             CASE WHEN EXISTS (
@@ -73,12 +72,63 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
             )
         ORDER BY content.publishAt DESC, content.contentId DESC
         """)
-    List<PublicContentProjection> findPublicContents(
+    List<PublicContentListVerificationProjection> findPublicContentListVerifications(
         @Param("regionId") Long regionId,
         @Param("contentType") ContentType contentType,
         @Param("reservationAvailable") Boolean reservationAvailable,
         @Param("contentStatus") ContentStatus contentStatus,
         @Param("sessionStatus") ContentSessionStatus sessionStatus
+    );
+
+    @Query("""
+        SELECT new io.regionevent.regioneventbackend.domain.content.repository.PublicContentDetailVerificationProjection(
+            content.region.regionId,
+            content.contentId,
+            content.versionNo,
+            representativeImageObject,
+            content.representativeImageAssignedAt,
+            content.contactText
+        )
+        FROM Content content
+        LEFT JOIN content.representativeImageObject representativeImageObject
+        WHERE content.contentId = :contentId
+            AND content.status = :contentStatus
+            AND content.deletedAt IS NULL
+            AND content.region.isPublic = true
+        """)
+    Optional<PublicContentDetailVerificationProjection> findPublicContentDetailVerification(
+        @Param("contentId") Long contentId,
+        @Param("contentStatus") ContentStatus contentStatus
+    );
+
+    @Query("""
+        SELECT new io.regionevent.regioneventbackend.domain.content.repository.PublicContentStaticProjection(
+            content.region.regionId,
+            content.contentId,
+            content.versionNo,
+            content.contentType,
+            content.title,
+            content.description,
+            content.locationText,
+            content.operatingHoursText,
+            content.precautions,
+            content.ageRequirement,
+            content.materials,
+            content.cancellationPolicyText
+        )
+        FROM Content content
+        WHERE content.region.regionId = :regionId
+            AND content.contentId = :contentId
+            AND content.versionNo = :versionNo
+            AND content.status = :contentStatus
+            AND content.deletedAt IS NULL
+            AND content.region.isPublic = true
+        """)
+    Optional<PublicContentStaticProjection> findPublicContentStaticInfo(
+        @Param("regionId") Long regionId,
+        @Param("contentId") Long contentId,
+        @Param("versionNo") int versionNo,
+        @Param("contentStatus") ContentStatus contentStatus
     );
 
     @Query("""
@@ -112,10 +162,18 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
         """)
     Optional<Content> findOperatorReservationListTarget(@Param("contentId") Long contentId);
 
-    @EntityGraph(attributePaths = "representativeImageObject")
-    Optional<Content> findByContentIdAndStatusAndDeletedAtIsNull(
-        Long contentId,
-        ContentStatus status
+    @EntityGraph(attributePaths = {"region", "representativeImageObject"})
+    @Query("""
+        SELECT content
+        FROM Content content
+        WHERE content.contentId = :contentId
+            AND content.status = :status
+            AND content.deletedAt IS NULL
+            AND content.region.isPublic = true
+        """)
+    Optional<Content> findPublicContentByContentId(
+        @Param("contentId") Long contentId,
+        @Param("status") ContentStatus status
     );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

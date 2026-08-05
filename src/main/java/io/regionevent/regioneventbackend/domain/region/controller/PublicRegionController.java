@@ -12,8 +12,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import io.regionevent.regioneventbackend.domain.region.dto.GetPublicRegionsResponse;
-import io.regionevent.regioneventbackend.domain.region.entity.Region;
-import io.regionevent.regioneventbackend.domain.region.service.RegionService;
+import io.regionevent.regioneventbackend.domain.region.service.GetPublicRegionsUseCase;
+import io.regionevent.regioneventbackend.domain.region.service.PublicRegionStaticInfo;
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
@@ -28,10 +28,10 @@ public class PublicRegionController {
     private static final String SUCCESS_RESULT_CODE = "SUCCESS";
     private static final int FAILURE_RESULT_COUNT = 0;
 
-    private final RegionService regionService;
+    private final GetPublicRegionsUseCase getPublicRegionsUseCase;
 
-    public PublicRegionController(RegionService regionService) {
-        this.regionService = regionService;
+    public PublicRegionController(GetPublicRegionsUseCase getPublicRegionsUseCase) {
+        this.getPublicRegionsUseCase = getPublicRegionsUseCase;
     }
 
     @GetMapping
@@ -39,7 +39,7 @@ public class PublicRegionController {
         @RequestAttribute(RequestIdFilter.REQUEST_ID_ATTRIBUTE) String requestId
     ) {
         try {
-            List<Region> regions = regionService.findPublicRegions();
+            List<PublicRegionStaticInfo> regions = getPublicRegionsUseCase.get();
             logResult(requestId, regions.size(), SUCCESS_RESULT_CODE);
             return ApiResponse.success(
                 HttpStatus.OK,
