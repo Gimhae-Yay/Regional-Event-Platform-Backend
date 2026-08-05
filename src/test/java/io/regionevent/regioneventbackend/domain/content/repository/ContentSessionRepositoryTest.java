@@ -265,6 +265,59 @@ class ContentSessionRepositoryTest {
             .containsExactly(earlierSession.getSessionId(), laterSession.getSessionId());
     }
 
+    @Test
+    void 심사_대기_추가_회차와_공개_대상_콘텐츠만_조회한다() {
+        Region region = saveRegion();
+        AppUser operator = saveUser("pending-review-operator@example.com");
+        ContentSession approvedSession = contentSessionRepository.saveAndFlush(
+            createContentSession(saveContent(region, operator, ContentStatus.APPROVED), region)
+        );
+        ContentSession publishedSession = contentSessionRepository.saveAndFlush(
+            createContentSession(saveContent(region, operator, ContentStatus.PUBLISHED), region)
+        );
+        ContentSession scheduledSession = contentSessionRepository.saveAndFlush(
+            createContentSession(saveContent(region, operator, ContentStatus.APPROVED), region)
+        );
+        scheduledSession.approve(operator, Instant.parse("2026-08-01T00:00:00Z"));
+        contentSessionRepository.saveAndFlush(scheduledSession);
+        ContentSession nonTargetContentSession = contentSessionRepository.saveAndFlush(
+            createContentSession(saveContent(region, operator, ContentStatus.PENDING), region)
+        );
+        Content deletedContent = saveContent(region, operator, ContentStatus.APPROVED);
+        ContentSession deletedContentSession = contentSessionRepository.saveAndFlush(
+            createContentSession(deletedContent, region)
+        );
+        deletedContent.softDelete(Instant.parse("2026-08-01T00:00:00Z"));
+        contentRepository.flush();
+        entityManager.clear();
+
+        List<ContentStatus> reviewableContentStatuses = List.of(
+            ContentStatus.APPROVED,
+            ContentStatus.PUBLISHED
+        );
+
+        assertThat(contentSessionRepository.findPendingReviewTarget(
+            approvedSession.getSessionId(),
+            reviewableContentStatuses
+        )).isPresent();
+        assertThat(contentSessionRepository.findPendingReviewTarget(
+            publishedSession.getSessionId(),
+            reviewableContentStatuses
+        )).isPresent();
+        assertThat(contentSessionRepository.findPendingReviewTarget(
+            scheduledSession.getSessionId(),
+            reviewableContentStatuses
+        )).isEmpty();
+        assertThat(contentSessionRepository.findPendingReviewTarget(
+            nonTargetContentSession.getSessionId(),
+            reviewableContentStatuses
+        )).isEmpty();
+        assertThat(contentSessionRepository.findPendingReviewTarget(
+            deletedContentSession.getSessionId(),
+            reviewableContentStatuses
+        )).isEmpty();
+    }
+
     private Region saveRegion() {
         return regionRepository.saveAndFlush(new Region("GIMHAE", "김해시", true));
     }
@@ -282,12 +335,16 @@ class ContentSessionRepositoryTest {
     }
 
     private Content saveContent(Region region, AppUser operator) {
+        return saveContent(region, operator, ContentStatus.PENDING);
+    }
+
+    private Content saveContent(Region region, AppUser operator, ContentStatus status) {
         return contentRepository.saveAndFlush(
             new Content(
                 region,
                 operator,
                 ContentType.EVENT_EXPERIENCE,
-                ContentStatus.PENDING,
+                status,
                 "김해 가야 문화 체험",
                 "김해 가야 문화를 체험하는 행사입니다.",
                 "김해문화의전당",
