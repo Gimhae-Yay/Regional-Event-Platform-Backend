@@ -3,9 +3,9 @@
 | 항목 | 내용 |
 | --- | --- |
 | 상위 명세 | [로컬스탬프 P1 명세](../p1-spec.md) |
-| 관련 결정 | [ADR-0009 초기 MVP의 전체관리자 제외](../adr/0009-exclude-platform-admin-from-initial-mvp.md) |
+| 관련 결정 | [ADR-0009 초기 MVP의 전체관리자 제외](../adr/0009-exclude-platform-admin-from-initial-mvp.md), [ADR-0010 전체관리자 기능 P1 승격](../adr/0010-move-platform-admin-capabilities-from-p2-to-p1.md), [ADR-0063 기존 역할 연결에 전역 ADMIN 역할 추가](../adr/0063-use-global-admin-role-in-existing-user-role-assignment.md) |
 | 소유 범위 | 전체관리자 계정, 지역, 관리자 역할, 결제 불일치·환불 실패 수동 처리 |
-| API 명세 | [API 명세서](../api/api-specification.md) |
+| API 명세 | [전체관리자 API](../api/p1/platform-admin/platform-admin.md) |
 | 데이터 모델 | [ERD](../erd.md) |
 
 > 이 문서는 P1 전체관리자 정책의 단일 기준이다. ADR-0009의 전체관리자 제외는 P0 범위의 결정이다.
@@ -78,6 +78,7 @@
 
 - `ADM-01`:
   전체관리자 계정은 생성과 비활성화를 구분한다. 비활성화된 계정의 새 특권 요청은 허용하지 않는다.
+  P1의 전체관리자 권한은 기존 `user_role_assignment`의 `ADMIN` 역할로 표현하며 담당 지역은 두지 않는다.
   인증 수단, 세션 무효화 시점과 최초 계정 준비 절차는 구현 전 확정한다.
 - `ADM-02`:
   지역은 고유 식별자와 운영 상태를 가진다. 지역 생성·상태 변경은 전체관리자 전용 유스케이스에서만 수행하며,
