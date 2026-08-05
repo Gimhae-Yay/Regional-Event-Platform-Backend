@@ -37,6 +37,7 @@ import io.regionevent.regioneventbackend.domain.content.service.GetPendingConten
 import io.regionevent.regioneventbackend.domain.content.service.GetPublicContentSessionsUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetPublicContentUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetPublicContentsUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.GetSessionRevisionReviewDetailUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.RejectContentRevisionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.RejectContentUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.SubmitContentUseCase;
@@ -112,6 +113,9 @@ abstract class ContentControllerWebMvcTestSupport {
 
     @MockitoBean
     protected GetPublicContentsUseCase getPublicContentsUseCase;
+
+    @MockitoBean
+    protected GetSessionRevisionReviewDetailUseCase getSessionRevisionReviewDetailUseCase;
 
     @MockitoBean
     protected RejectContentRevisionUseCase rejectContentRevisionUseCase;

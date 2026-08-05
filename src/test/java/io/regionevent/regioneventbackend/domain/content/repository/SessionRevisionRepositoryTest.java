@@ -108,6 +108,34 @@ class SessionRevisionRepositoryTest {
     }
 
     @Test
+    void 심사_대기_미삭제_수정_요청_상세의_관계를_함께_조회한다() {
+        SessionRevisionFixtures fixtures = createFixtures();
+        SessionRevision sessionRevision = sessionRevisionRepository.saveAndFlush(newRevision(
+            fixtures,
+            SessionRevisionStatus.PENDING,
+            null,
+            null,
+            null
+        ));
+        entityManager.clear();
+
+        SessionRevision foundSessionRevision = sessionRevisionRepository.findPendingReviewDetailById(
+            sessionRevision.getSessionRevisionId(),
+            SessionRevisionStatus.PENDING
+        ).orElseThrow();
+        PersistenceUnitUtil persistenceUnitUtil = entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
+
+        assertThat(persistenceUnitUtil.isLoaded(foundSessionRevision, "content")).isTrue();
+        assertThat(persistenceUnitUtil.isLoaded(foundSessionRevision, "region")).isTrue();
+        assertThat(persistenceUnitUtil.isLoaded(foundSessionRevision, "targetSession")).isTrue();
+        assertThat(persistenceUnitUtil.isLoaded(foundSessionRevision, "requestedBy")).isTrue();
+        assertThat(foundSessionRevision.getContent().getRegion().getRegionId())
+            .isEqualTo(fixtures.region().getRegionId());
+        assertThat(foundSessionRevision.getTargetSession().getContent().getContentId())
+            .isEqualTo(fixtures.content().getContentId());
+    }
+
+    @Test
     void 승인과_반려_상태에_심사_정보를_저장한다() {
         SessionRevisionFixtures fixtures = createFixtures();
 
