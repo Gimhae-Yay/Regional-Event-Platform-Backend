@@ -110,18 +110,17 @@ public class EndContentReservationsUseCase {
             ));
             return EndContentReservationsResult.from(endedContent, endedAt);
         } catch (BusinessException exception) {
-            recordFailedAuditEventUseCase.record(new AuditEventCommand(
+            recordFailure(requestId, region, contentId, previousState, exception.getErrorCode().name(), actor);
+            throw exception;
+        } catch (RuntimeException exception) {
+            recordFailure(
                 requestId,
                 region,
-                AuditEventTargetType.CONTENT,
                 contentId,
                 previousState,
-                null,
-                AuditEventResult.FAILURE,
-                exception.getErrorCode().name(),
-                actor,
-                contentService.findDatabaseCurrentInstant()
-            ));
+                ErrorCode.INTERNAL_SERVER_ERROR.name(),
+                actor
+            );
             throw exception;
         }
     }
@@ -163,19 +162,37 @@ public class EndContentReservationsUseCase {
                 endedAt
             ));
         } catch (RuntimeException exception) {
-            recordFailedAuditEventUseCase.record(new AuditEventCommand(
+            recordFailure(
                 requestId,
                 content.getRegion(),
-                AuditEventTargetType.CONTENT,
                 contentId,
                 previousState,
-                null,
-                AuditEventResult.FAILURE,
                 ErrorCode.INTERNAL_SERVER_ERROR.name(),
-                null,
-                contentService.findDatabaseCurrentInstant()
-            ));
+                null
+            );
             throw exception;
         }
+    }
+
+    private void recordFailure(
+        UUID requestId,
+        Region region,
+        Long contentId,
+        String previousState,
+        String reasonCode,
+        AuditEventActor actor
+    ) {
+        recordFailedAuditEventUseCase.record(new AuditEventCommand(
+            requestId,
+            region,
+            AuditEventTargetType.CONTENT,
+            contentId,
+            previousState,
+            null,
+            AuditEventResult.FAILURE,
+            reasonCode,
+            actor,
+            contentService.findDatabaseCurrentInstant()
+        ));
     }
 }

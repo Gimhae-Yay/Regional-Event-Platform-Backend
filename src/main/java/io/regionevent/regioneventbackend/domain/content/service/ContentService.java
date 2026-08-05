@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.domain.content.service;
 
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -204,7 +205,7 @@ public class ContentService {
     }
 
     public Instant findDatabaseCurrentInstant() {
-        return contentRepository.findCurrentTimestamp();
+        return contentRepository.findCurrentTimestamp().toInstant(ZoneOffset.UTC);
     }
 
     public Content findDeletionTargetForUpdate(Long contentId) {

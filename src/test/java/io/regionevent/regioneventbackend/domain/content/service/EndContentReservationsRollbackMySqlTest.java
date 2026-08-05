@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
@@ -44,6 +45,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
 import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 
@@ -132,7 +134,12 @@ class EndContentReservationsRollbackMySqlTest extends NonTransactionalMySqlTestS
         assertThat(contentSessionRepository.findById(fixture.secondSessionId()))
             .hasValueSatisfying(session -> assertThat(session.getRemainingCapacity()).isEqualTo(9));
         assertThat(auditEventRepository.findAll())
-            .noneMatch(auditEvent -> fixture.contentId().equals(auditEvent.getTargetId()));
+            .filteredOn(auditEvent -> fixture.contentId().equals(auditEvent.getTargetId()))
+            .singleElement()
+            .satisfies(auditEvent -> {
+                assertThat(auditEvent.getResult()).isEqualTo(AuditEventResult.FAILURE);
+                assertThat(auditEvent.getReasonCode()).isEqualTo(ErrorCode.INTERNAL_SERVER_ERROR.name());
+            });
     }
 
     private Fixture createFixture() {

@@ -114,7 +114,7 @@ class EndContentReservationsHoldAtomicityTest {
             });
         assertThat(contentSessionRepository.findById(fixture.sessionId()))
             .hasValueSatisfying(session -> assertThat(session.getRemainingCapacity()).isEqualTo(8));
-        assertThat(auditEventRepository.count()).isZero();
+        assertThat(auditEventRepository.count()).isOne();
     }
 
     private Fixture createFixture() {

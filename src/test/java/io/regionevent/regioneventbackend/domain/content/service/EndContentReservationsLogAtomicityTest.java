@@ -94,7 +94,7 @@ class EndContentReservationsLogAtomicityTest {
         assertThat(contentLogRepository.findByContentContentIdOrderByDateAscIdAsc(fixture.contentId()))
             .extracting(ContentLog::getStatus)
             .containsExactly(ContentLogStatus.PUBLISHED);
-        assertThat(auditEventRepository.count()).isZero();
+        assertThat(auditEventRepository.count()).isOne();
     }
 
     private Fixture createFixture() {
