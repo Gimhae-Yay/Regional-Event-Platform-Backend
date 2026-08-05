@@ -256,6 +256,75 @@ class QrExceptionReadServiceTest {
     }
 
     @Test
+    void findAll_maps_manual_check_in_failure_with_reservation_item() {
+        when(auditEventRepository.findQrExceptionReadProjections(
+            eq(REGION_ID),
+            any(Instant.class),
+            isNull(),
+            isNull(),
+            any(String.class),
+            any(String.class),
+            any(String.class),
+            any(String.class),
+            any(Pageable.class)
+        )).thenReturn(List.of(reservationProjection(
+            10L,
+            "MANUAL_CHECK_IN_QR_SCAN_FAILED_WINDOW_CLOSED",
+            100L,
+            AuditEventResult.FAILURE
+        )));
+
+        QrExceptionReadService.QrExceptionPage page = qrExceptionReadService.findAll(REGION_ID, null, null, 20);
+
+        assertThat(page.hasNext()).isFalse();
+        assertThat(page.items()).singleElement()
+            .satisfies(item -> {
+                assertThat(item.exceptionId()).isEqualTo(10L);
+                assertThat(item.exceptionType()).isEqualTo("MANUAL_CHECK_IN");
+                assertThat(item.result()).isEqualTo("FAILURE");
+                assertThat(item.reasonCode()).isEqualTo("MANUAL_CHECK_IN_QR_SCAN_FAILED_WINDOW_CLOSED");
+                assertThat(item.reservationResolved()).isTrue();
+                assertThat(item.reservationId()).isEqualTo(100L);
+                assertThat(item.contentId()).isEqualTo(300L);
+                assertThat(item.sessionId()).isEqualTo(200L);
+            });
+    }
+
+    @Test
+    void findAll_maps_manual_check_in_failure_without_reservation_target_id_as_unresolved_item() {
+        when(auditEventRepository.findQrExceptionReadProjections(
+            eq(REGION_ID),
+            any(Instant.class),
+            isNull(),
+            isNull(),
+            any(String.class),
+            any(String.class),
+            any(String.class),
+            any(String.class),
+            any(Pageable.class)
+        )).thenReturn(List.of(unresolvedProjection(
+            10L,
+            "MANUAL_CHECK_IN_QR_SCAN_FAILED_NOT_FOUND",
+            AuditEventResult.FAILURE
+        )));
+
+        QrExceptionReadService.QrExceptionPage page = qrExceptionReadService.findAll(REGION_ID, null, null, 20);
+
+        assertThat(page.hasNext()).isFalse();
+        assertThat(page.items()).singleElement()
+            .satisfies(item -> {
+                assertThat(item.exceptionId()).isEqualTo(10L);
+                assertThat(item.exceptionType()).isEqualTo("MANUAL_CHECK_IN");
+                assertThat(item.result()).isEqualTo("FAILURE");
+                assertThat(item.reasonCode()).isEqualTo("MANUAL_CHECK_IN_QR_SCAN_FAILED_NOT_FOUND");
+                assertThat(item.reservationResolved()).isFalse();
+                assertThat(item.reservationId()).isNull();
+                assertThat(item.contentId()).isNull();
+                assertThat(item.sessionId()).isNull();
+            });
+    }
+
+    @Test
     void findAll_visit_target_is_missing_then_rejects_with_INTERNAL_SERVER_ERROR() {
         when(auditEventRepository.findQrExceptionReadProjections(
             eq(REGION_ID),
@@ -458,13 +527,22 @@ class QrExceptionReadServiceTest {
         String reasonCode,
         Long targetId
     ) {
+        return reservationProjection(auditEventId, reasonCode, targetId, AuditEventResult.SUCCESS);
+    }
+
+    private QrExceptionReadProjection reservationProjection(
+        Long auditEventId,
+        String reasonCode,
+        Long targetId,
+        AuditEventResult result
+    ) {
         return new QrExceptionReadProjection(
             auditEventId,
             NOW.minusSeconds(auditEventId),
             REGION_ID,
             AuditEventTargetType.RESERVATION,
             targetId,
-            AuditEventResult.SUCCESS,
+            result,
             reasonCode,
             100L,
             REGION_ID,

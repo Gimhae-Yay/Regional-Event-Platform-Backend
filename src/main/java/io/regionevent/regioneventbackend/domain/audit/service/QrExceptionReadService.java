@@ -9,6 +9,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
 import io.regionevent.regioneventbackend.domain.audit.repository.QrExceptionReadProjection;
@@ -127,10 +128,25 @@ public class QrExceptionReadService {
             }
             return;
         }
-        if (MANUAL_CHECK_IN.equals(exceptionType)
-            && (projection.targetType() != AuditEventTargetType.VISIT || projection.targetId() == null)) {
-            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
+        if (MANUAL_CHECK_IN.equals(exceptionType)) {
+            validateManualCheckInTargetType(projection);
         }
+    }
+
+    private void validateManualCheckInTargetType(QrExceptionReadProjection projection) {
+        if (projection.result() == AuditEventResult.SUCCESS) {
+            if (projection.targetType() != AuditEventTargetType.VISIT || projection.targetId() == null) {
+                throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
+            }
+            return;
+        }
+        if (projection.result() == AuditEventResult.FAILURE) {
+            if (projection.targetType() != AuditEventTargetType.RESERVATION) {
+                throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
+            }
+            return;
+        }
+        throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
     }
 
     private QrExceptionItem unresolvedItem(
