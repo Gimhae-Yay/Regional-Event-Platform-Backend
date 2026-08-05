@@ -93,6 +93,18 @@ public class ContentSessionService {
         );
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Long findContentIdBySessionId(Long sessionId) {
+        return contentSessionRepository.findContentIdBySessionId(sessionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ContentSession findApprovalTargetForUpdate(Long sessionId) {
+        return contentSessionRepository.findApprovalTargetBySessionIdForUpdate(sessionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
     @Transactional(readOnly = true)
     public void validatePendingSessionExists(Long contentId) {
         if (findPendingByContentId(contentId).isEmpty()) {
@@ -200,6 +212,19 @@ public class ContentSessionService {
         }
         contentSessions.forEach(contentSession -> contentSession.approve(reviewer, reviewedAt));
         return contentSessionRepository.saveAllAndFlush(contentSessions);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ContentSession approve(
+        ContentSession contentSession,
+        AppUser reviewer,
+        Instant reviewedAt
+    ) {
+        if (contentSession.getStatus() != ContentSessionStatus.PENDING) {
+            throw new BusinessException(ErrorCode.SESSION_STATE_CONFLICT);
+        }
+        contentSession.approve(reviewer, reviewedAt);
+        return contentSessionRepository.saveAndFlush(contentSession);
     }
 
     @Transactional(readOnly = true)
