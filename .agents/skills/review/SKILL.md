@@ -140,13 +140,31 @@ findings를 가장 먼저 심각도순으로 작성한다. 각 finding에 다음
 
 1. 기존 리뷰와 중복되지 않는지 다시 확인한다.
 2. 먼저 대화에 게시할 본문과 판정을 보여 주거나, 사용자가 본문까지 위임했다면 작성한 내용을 그대로 사용한다.
-3. 하나의 종합 리뷰로 게시하고 게시 결과를 확인한다.
-4. 사용자가 리뷰 상태까지 지정하지 않았다면 `COMMENT`로 게시한다. 임의로 `APPROVE` 또는 `REQUEST_CHANGES`를 선택하지 않는다.
+3. 한글을 포함한 게시 본문은 인라인 `--body`나 표준 입력으로 전달하지 않는다. 임시 파일을 UTF-8(무BOM)로 명시 저장하고 `--body-file`로만 전달한다. PowerShell에서는 `[System.IO.File]::WriteAllText()`와 `New-Object System.Text.UTF8Encoding($false)`를 사용한다.
+4. 하나의 종합 리뷰로 게시한 뒤 GitHub API에서 게시된 리뷰 본문을 재조회한다. UTF-8 콘솔 출력으로 확인하고, 작성한 본문과 한글이 동일하게 보존됐는지 확인한다. 콘솔 표시가 깨졌다면 게시 성공으로 판단하지 않는다.
+5. 인코딩이 깨진 게시물을 발견하면 새 리뷰를 추가하지 않는다. 해당 리뷰를 수정하거나 삭제한 뒤 UTF-8 파일로 다시 게시하고 재검증한다.
+6. 사용자가 리뷰 상태까지 지정하지 않았다면 `COMMENT`로 게시한다. 임의로 `APPROVE` 또는 `REQUEST_CHANGES`를 선택하지 않는다.
 
 예시:
 
-```text
-gh pr review <PR> --comment --body-file <review-file>
+```powershell
+$reviewBody = @'
+### [P1] 예시 제목
+본문을 UTF-8로 게시한다.
+'@
+$reviewFile = Join-Path ([System.IO.Path]::GetTempPath()) "codex-review-$([guid]::NewGuid()).md"
+try {
+    [System.IO.File]::WriteAllText(
+        $reviewFile,
+        $reviewBody,
+        (New-Object System.Text.UTF8Encoding($false))
+    )
+    gh pr review <PR> --comment --body-file $reviewFile
+} finally {
+    Remove-Item -LiteralPath $reviewFile -ErrorAction SilentlyContinue
+}
 ```
+
+게시 후에는 해당 PR의 리뷰를 GitHub API로 다시 조회해 작성 본문과 비교한다. 조회 명령도 PowerShell의 출력 인코딩을 UTF-8로 설정한 뒤 실행한다.
 
 로컬 변경 리뷰에는 외부 게시를 시도하지 않는다.

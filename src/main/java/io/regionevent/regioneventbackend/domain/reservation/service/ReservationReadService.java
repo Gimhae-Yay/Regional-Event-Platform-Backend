@@ -59,6 +59,19 @@ public class ReservationReadService {
     }
 
     @Transactional(readOnly = true)
+    public ReservationReadResult findByReservationId(Long reservationId) {
+        validateId(reservationId);
+
+        List<ReservationReadProjection> projections = reservationRepository
+            .findReadProjectionsByReservationId(reservationId);
+        if (projections.isEmpty()) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+
+        return toReadResult(projections);
+    }
+
+    @Transactional(readOnly = true)
     public List<ReservationReadResult> findAllOwnedByUserId(Long userId) {
         validateId(userId);
 
