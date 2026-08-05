@@ -16,6 +16,7 @@ import io.regionevent.regioneventbackend.domain.content.repository.ContentReposi
 import io.regionevent.regioneventbackend.domain.content.repository.MyContentProjection;
 import io.regionevent.regioneventbackend.domain.content.repository.PublicContentDetailVerificationProjection;
 import io.regionevent.regioneventbackend.domain.content.repository.PublicContentListVerificationProjection;
+import io.regionevent.regioneventbackend.domain.content.repository.RegionHomeContentSessionVerificationProjection;
 import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -193,6 +194,17 @@ public class ContentService {
             regionId,
             contentType,
             reservationAvailable,
+            ContentStatus.PUBLISHED,
+            ContentSessionStatus.SCHEDULED
+        );
+    }
+
+    public List<RegionHomeContentSessionVerificationProjection> findRegionHomeContentSessionVerifications(
+        Long regionId
+    ) {
+        validateRequiredId(regionId);
+        return contentRepository.findRegionHomeContentSessionVerifications(
+            regionId,
             ContentStatus.PUBLISHED,
             ContentSessionStatus.SCHEDULED
         );

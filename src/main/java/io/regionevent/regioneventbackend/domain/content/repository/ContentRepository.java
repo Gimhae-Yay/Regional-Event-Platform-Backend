@@ -104,6 +104,54 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
     );
 
     @Query("""
+        SELECT new io.regionevent.regioneventbackend.domain.content.repository.RegionHomeContentSessionVerificationProjection(
+            content.region.regionId,
+            content.contentId,
+            content.versionNo,
+            representativeImageObject,
+            content.representativeImageAssignedAt,
+            contentSession.sessionId,
+            contentSession.startsAt,
+            contentSession.endsAt,
+            contentSession.remainingCapacity,
+            CASE WHEN EXISTS (
+                SELECT futureSession.sessionId
+                FROM ContentSession futureSession
+                WHERE futureSession.content = content
+                    AND futureSession.region.regionId = :regionId
+                    AND futureSession.status = :sessionStatus
+                    AND futureSession.startsAt > CURRENT_TIMESTAMP
+                    AND futureSession.remainingCapacity > 0
+            ) THEN true ELSE false END,
+            CASE WHEN contentSession.startsAt <= CURRENT_TIMESTAMP
+                    AND CURRENT_TIMESTAMP < contentSession.endsAt
+                THEN true ELSE false END
+        )
+        FROM ContentSession contentSession
+        JOIN contentSession.content content
+        LEFT JOIN content.representativeImageObject representativeImageObject
+        WHERE content.region.regionId = :regionId
+            AND contentSession.region.regionId = :regionId
+            AND content.region.isPublic = true
+            AND content.status = :contentStatus
+            AND content.deletedAt IS NULL
+            AND contentSession.status = :sessionStatus
+            AND (
+                (
+                    contentSession.startsAt <= CURRENT_TIMESTAMP
+                    AND CURRENT_TIMESTAMP < contentSession.endsAt
+                )
+                OR contentSession.startsAt > CURRENT_TIMESTAMP
+            )
+        ORDER BY content.contentId ASC, contentSession.startsAt ASC, contentSession.sessionId ASC
+        """)
+    List<RegionHomeContentSessionVerificationProjection> findRegionHomeContentSessionVerifications(
+        @Param("regionId") Long regionId,
+        @Param("contentStatus") ContentStatus contentStatus,
+        @Param("sessionStatus") ContentSessionStatus sessionStatus
+    );
+
+    @Query("""
         SELECT new io.regionevent.regioneventbackend.domain.content.repository.PublicContentDetailVerificationProjection(
             content.region.regionId,
             content.contentId,
