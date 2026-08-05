@@ -1,11 +1,8 @@
 package io.regionevent.regioneventbackend.domain.content.repository;
 
-import java.time.Instant;
-
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
-import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
 
-public record PublicContentProjection(
+public record PublicContentStaticProjection(
     Long regionId,
     Long contentId,
     int versionNo,
@@ -17,9 +14,6 @@ public record PublicContentProjection(
     String precautions,
     String ageRequirement,
     String materials,
-    String cancellationPolicyText,
-    ImageObject representativeImageObject,
-    Instant representativeImageAssignedAt,
-    boolean reservationAvailable
+    String cancellationPolicyText
 ) {
 }

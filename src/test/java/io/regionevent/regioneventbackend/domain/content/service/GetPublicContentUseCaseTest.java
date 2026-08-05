@@ -3,29 +3,34 @@ package io.regionevent.regioneventbackend.domain.content.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
-import static org.mockito.ArgumentMatchers.any;
 
 import java.time.Instant;
+import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
-import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
+import io.regionevent.regioneventbackend.domain.content.repository.PublicContentDetailVerificationProjection;
 import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
 import io.regionevent.regioneventbackend.domain.image.service.RepresentativeImageViewUrl;
 import io.regionevent.regioneventbackend.domain.image.service.RepresentativeImageViewUrlService;
-import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 class GetPublicContentUseCaseTest {
 
+    private static final Long REGION_ID = 10L;
     private static final Long CONTENT_ID = 200L;
+    private static final int VERSION_NO = 3;
 
     private final ContentService contentService = mock(ContentService.class);
-    private final PublicContentCacheAside publicContentCacheAside = mock(PublicContentCacheAside.class);
+    private final PublicContentCache publicContentCache = mock(PublicContentCache.class);
+    private final PublicContentCacheAside publicContentCacheAside =
+        new PublicContentCacheAside(publicContentCache);
     private final RepresentativeImageViewUrlService representativeImageViewUrlService =
         mock(RepresentativeImageViewUrlService.class);
     private final GetPublicContentUseCase useCase = new GetPublicContentUseCase(
@@ -35,26 +40,50 @@ class GetPublicContentUseCaseTest {
     );
 
     @Test
-    void get_대표_이미지가_연결된_공개_콘텐츠를_반환한다() {
-        Content content = contentWithImage();
-        ImageObject imageObject = content.getRepresentativeImageObject();
-        when(contentService.findPublicContent(CONTENT_ID)).thenReturn(content);
-        returnsMysqlSourceFromCacheAside();
+    void get_캐시_적중이면_정적_표시_정보를_MySQL에서_추가_조회하지_않는다() {
+        ImageObject imageObject = mock(ImageObject.class);
+        when(contentService.findPublicContentDetailVerification(CONTENT_ID)).thenReturn(verification(imageObject));
+        when(publicContentCache.findContent(REGION_ID, CONTENT_ID, VERSION_NO))
+            .thenReturn(Optional.of(staticInfo("캐시 제목")));
         when(representativeImageViewUrlService.createViewUrl(imageObject)).thenReturn(viewUrl());
 
         PublicContentDetailResult result = useCase.get(CONTENT_ID);
 
-        assertThat(result.contentId()).isEqualTo(CONTENT_ID);
-        assertThat(result.title()).isEqualTo("지역 축제");
-        assertThat(result.representativeImageUrl()).isEqualTo("https://image.example/content.webp");
+        assertThat(result.title()).isEqualTo("캐시 제목");
+        assertThat(result.contactText()).isEqualTo("055-000-0000");
+        verify(contentService, never()).findPublicContentStaticInfo(REGION_ID, CONTENT_ID, VERSION_NO);
+    }
+
+    @Test
+    void get_캐시_미스이면_정적_표시_정보를_조회해_상세_응답을_조립한다() {
+        ImageObject imageObject = mock(ImageObject.class);
+        when(contentService.findPublicContentDetailVerification(CONTENT_ID)).thenReturn(verification(imageObject));
+        when(publicContentCache.findContent(REGION_ID, CONTENT_ID, VERSION_NO)).thenReturn(Optional.empty());
+        when(contentService.findPublicContentStaticInfo(REGION_ID, CONTENT_ID, VERSION_NO))
+            .thenReturn(staticInfo("MySQL 제목"));
+        when(representativeImageViewUrlService.createViewUrl(imageObject)).thenReturn(viewUrl());
+
+        PublicContentDetailResult result = useCase.get(CONTENT_ID);
+
+        assertThat(result.title()).isEqualTo("MySQL 제목");
+        verify(contentService).findPublicContentStaticInfo(REGION_ID, CONTENT_ID, VERSION_NO);
+        verify(publicContentCache).saveContent(staticInfo("MySQL 제목"));
     }
 
     @Test
     void get_대표_이미지가_없으면_서버_오류를_반환한다() {
-        Content content = contentWithImage();
-        when(content.getRepresentativeImageObject()).thenReturn(null);
-        when(contentService.findPublicContent(CONTENT_ID)).thenReturn(content);
-        returnsMysqlSourceFromCacheAside();
+        when(contentService.findPublicContentDetailVerification(CONTENT_ID)).thenReturn(
+            new PublicContentDetailVerificationProjection(
+                REGION_ID,
+                CONTENT_ID,
+                VERSION_NO,
+                null,
+                Instant.parse("2026-08-05T00:00:00Z"),
+                "055-000-0000"
+            )
+        );
+        when(publicContentCache.findContent(REGION_ID, CONTENT_ID, VERSION_NO))
+            .thenReturn(Optional.of(staticInfo("캐시 제목")));
 
         assertThatThrownBy(() -> useCase.get(CONTENT_ID))
             .isInstanceOfSatisfying(BusinessException.class, exception ->
@@ -65,10 +94,19 @@ class GetPublicContentUseCaseTest {
 
     @Test
     void get_대표_이미지_연결_시각이_없으면_서버_오류를_반환한다() {
-        Content content = contentWithImage();
-        when(content.getRepresentativeImageAssignedAt()).thenReturn(null);
-        when(contentService.findPublicContent(CONTENT_ID)).thenReturn(content);
-        returnsMysqlSourceFromCacheAside();
+        ImageObject imageObject = mock(ImageObject.class);
+        when(contentService.findPublicContentDetailVerification(CONTENT_ID)).thenReturn(
+            new PublicContentDetailVerificationProjection(
+                REGION_ID,
+                CONTENT_ID,
+                VERSION_NO,
+                imageObject,
+                null,
+                "055-000-0000"
+            )
+        );
+        when(publicContentCache.findContent(REGION_ID, CONTENT_ID, VERSION_NO))
+            .thenReturn(Optional.of(staticInfo("캐시 제목")));
 
         assertThatThrownBy(() -> useCase.get(CONTENT_ID))
             .isInstanceOfSatisfying(BusinessException.class, exception ->
@@ -77,32 +115,32 @@ class GetPublicContentUseCaseTest {
         verifyNoInteractions(representativeImageViewUrlService);
     }
 
-    private Content contentWithImage() {
-        Content content = mock(Content.class);
-        ImageObject imageObject = mock(ImageObject.class);
-        Region region = mock(Region.class);
-        when(region.getRegionId()).thenReturn(10L);
-        when(content.getRegion()).thenReturn(region);
-        when(content.getContentId()).thenReturn(CONTENT_ID);
-        when(content.getVersionNo()).thenReturn(3);
-        when(content.getContentType()).thenReturn(ContentType.EVENT_EXPERIENCE);
-        when(content.getTitle()).thenReturn("지역 축제");
-        when(content.getDescription()).thenReturn("축제 설명");
-        when(content.getLocationText()).thenReturn("김해시");
-        when(content.getOperatingHoursText()).thenReturn("10:00~18:00");
-        when(content.getContactText()).thenReturn("055-000-0000");
-        when(content.getPrecautions()).thenReturn("우천 시 취소");
-        when(content.getAgeRequirement()).thenReturn("전 연령");
-        when(content.getMaterials()).thenReturn("없음");
-        when(content.getCancellationPolicyText()).thenReturn("당일 취소 불가");
-        when(content.getRepresentativeImageObject()).thenReturn(imageObject);
-        when(content.getRepresentativeImageAssignedAt()).thenReturn(Instant.parse("2026-08-05T00:00:00Z"));
-        return content;
+    private static PublicContentDetailVerificationProjection verification(ImageObject imageObject) {
+        return new PublicContentDetailVerificationProjection(
+            REGION_ID,
+            CONTENT_ID,
+            VERSION_NO,
+            imageObject,
+            Instant.parse("2026-08-05T00:00:00Z"),
+            "055-000-0000"
+        );
     }
 
-    private void returnsMysqlSourceFromCacheAside() {
-        when(publicContentCacheAside.resolveContent(any(PublicContentStaticInfo.class)))
-            .thenAnswer(invocation -> invocation.getArgument(0));
+    private static PublicContentStaticInfo staticInfo(String title) {
+        return new PublicContentStaticInfo(
+            REGION_ID,
+            CONTENT_ID,
+            VERSION_NO,
+            ContentType.EVENT_EXPERIENCE,
+            title,
+            "축제 설명",
+            "김해시",
+            "10:00~18:00",
+            "우천 시 취소",
+            "전 연령",
+            "없음",
+            "당일 취소 불가"
+        );
     }
 
     private static RepresentativeImageViewUrl viewUrl() {

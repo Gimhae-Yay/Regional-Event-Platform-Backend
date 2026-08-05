@@ -1,8 +1,7 @@
 package io.regionevent.regioneventbackend.domain.content.service;
 
-import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
-import io.regionevent.regioneventbackend.domain.content.repository.PublicContentProjection;
+import io.regionevent.regioneventbackend.domain.content.repository.PublicContentStaticProjection;
 
 public record PublicContentStaticInfo(
     Long regionId,
@@ -42,24 +41,7 @@ public record PublicContentStaticInfo(
         validateText(cancellationPolicyText, "cancellationPolicyText");
     }
 
-    public static PublicContentStaticInfo from(Content content) {
-        return new PublicContentStaticInfo(
-            content.getRegion().getRegionId(),
-            content.getContentId(),
-            content.getVersionNo(),
-            content.getContentType(),
-            content.getTitle(),
-            content.getDescription(),
-            content.getLocationText(),
-            content.getOperatingHoursText(),
-            content.getPrecautions(),
-            content.getAgeRequirement(),
-            content.getMaterials(),
-            content.getCancellationPolicyText()
-        );
-    }
-
-    public static PublicContentStaticInfo from(PublicContentProjection projection) {
+    public static PublicContentStaticInfo from(PublicContentStaticProjection projection) {
         return new PublicContentStaticInfo(
             projection.regionId(),
             projection.contentId(),

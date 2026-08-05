@@ -3,7 +3,7 @@ package io.regionevent.regioneventbackend.domain.content.service;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import io.regionevent.regioneventbackend.domain.content.entity.Content;
+import io.regionevent.regioneventbackend.domain.content.repository.PublicContentDetailVerificationProjection;
 import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
 import io.regionevent.regioneventbackend.domain.image.service.RepresentativeImageViewUrl;
 import io.regionevent.regioneventbackend.domain.image.service.RepresentativeImageViewUrlService;
@@ -29,9 +29,16 @@ public class GetPublicContentUseCase {
 
     @Transactional(readOnly = true)
     public PublicContentDetailResult get(Long contentId) {
-        Content content = contentService.findPublicContent(contentId);
+        PublicContentDetailVerificationProjection content = contentService.findPublicContentDetailVerification(contentId);
         PublicContentStaticInfo staticInfo = publicContentCacheAside.resolveContent(
-            PublicContentStaticInfo.from(content)
+            content.regionId(),
+            content.contentId(),
+            content.versionNo(),
+            () -> contentService.findPublicContentStaticInfo(
+                content.regionId(),
+                content.contentId(),
+                content.versionNo()
+            )
         );
         RepresentativeImageViewUrl representativeImageViewUrl = createRepresentativeImageViewUrl(content);
         return new PublicContentDetailResult(
@@ -43,7 +50,7 @@ public class GetPublicContentUseCase {
             representativeImageViewUrl.expiresAt(),
             staticInfo.locationText(),
             staticInfo.operatingHoursText(),
-            content.getContactText(),
+            content.contactText(),
             staticInfo.precautions(),
             staticInfo.ageRequirement(),
             staticInfo.materials(),
@@ -51,9 +58,11 @@ public class GetPublicContentUseCase {
         );
     }
 
-    private RepresentativeImageViewUrl createRepresentativeImageViewUrl(Content content) {
-        ImageObject representativeImageObject = content.getRepresentativeImageObject();
-        if (representativeImageObject == null || content.getRepresentativeImageAssignedAt() == null) {
+    private RepresentativeImageViewUrl createRepresentativeImageViewUrl(
+        PublicContentDetailVerificationProjection content
+    ) {
+        ImageObject representativeImageObject = content.representativeImageObject();
+        if (representativeImageObject == null || content.representativeImageAssignedAt() == null) {
             throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
         return representativeImageViewUrlService.createViewUrl(representativeImageObject);
