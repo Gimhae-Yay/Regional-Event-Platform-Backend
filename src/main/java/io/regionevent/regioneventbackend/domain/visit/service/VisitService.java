@@ -36,6 +36,14 @@ public class VisitService {
         return visitRepository.findByReservationReservationId(reservationId);
     }
 
+    @Transactional(readOnly = true)
+    public Optional<Long> findReservationIdByVisitId(Long visitId) {
+        if (visitId == null || visitId <= 0) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        return visitRepository.findReservationIdByVisitId(visitId);
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
     public Visit create(Visit visit) {
         return visitRepository.saveAndFlush(visit);

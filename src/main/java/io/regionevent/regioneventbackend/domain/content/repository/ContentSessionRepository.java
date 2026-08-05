@@ -20,6 +20,22 @@ public interface ContentSessionRepository extends JpaRepository<ContentSession, 
 
     List<ContentSession> findByContentContentIdOrderByStartsAtAscSessionIdAsc(Long contentId);
 
+    @EntityGraph(attributePaths = {"content", "content.region", "content.operator", "region"})
+    @Query("""
+        SELECT contentSession
+        FROM ContentSession contentSession
+        WHERE contentSession.region.regionId = :regionId
+            AND contentSession.status = :sessionStatus
+            AND contentSession.content.deletedAt IS NULL
+            AND contentSession.content.status IN :contentStatuses
+        ORDER BY contentSession.createdAt ASC, contentSession.sessionId ASC
+        """)
+    List<ContentSession> findPendingReviewCandidatesByRegionId(
+        @Param("regionId") Long regionId,
+        @Param("sessionStatus") ContentSessionStatus sessionStatus,
+        @Param("contentStatuses") List<ContentStatus> contentStatuses
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT contentSession
