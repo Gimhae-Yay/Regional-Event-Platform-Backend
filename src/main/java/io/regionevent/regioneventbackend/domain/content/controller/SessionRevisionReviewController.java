@@ -17,7 +17,7 @@ import io.regionevent.regioneventbackend.global.response.ApiResponse;
 @RequestMapping("/api/v1/region-admin/session-revisions")
 public class SessionRevisionReviewController {
 
-    private static final String SUCCESS_MESSAGE = "심사 대기 회차 수정 요청 목록 조회에 성공했습니다.";
+    private static final String LIST_SUCCESS_MESSAGE = "심사 대기 회차 수정 요청 목록 조회에 성공했습니다.";
 
     private final GetPendingSessionRevisionsUseCase getPendingSessionRevisionsUseCase;
 
@@ -33,8 +33,9 @@ public class SessionRevisionReviewController {
         PendingSessionRevisionListResult result = getPendingSessionRevisionsUseCase.get(userId, status);
         return ApiResponse.success(
             HttpStatus.OK,
-            SUCCESS_MESSAGE,
+            LIST_SUCCESS_MESSAGE,
             PendingSessionRevisionsResponse.from(result)
         ).toResponseEntity();
     }
+
 }

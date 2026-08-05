@@ -59,6 +59,19 @@ public interface ContentSessionRepository extends JpaRepository<ContentSession, 
         ContentStatus contentStatus
     );
 
+    @EntityGraph(attributePaths = {"content", "content.operator", "region"})
+    @Query("""
+        SELECT contentSession FROM ContentSession contentSession
+        WHERE contentSession.sessionId = :sessionId
+          AND contentSession.status = io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus.PENDING
+          AND contentSession.content.deletedAt IS NULL
+          AND contentSession.content.status IN :contentStatuses
+        """)
+    Optional<ContentSession> findPendingReviewTarget(
+        @Param("sessionId") Long sessionId,
+        @Param("contentStatuses") List<ContentStatus> contentStatuses
+    );
+
     @EntityGraph(attributePaths = {"content", "region"})
     @Query("""
         SELECT contentSession

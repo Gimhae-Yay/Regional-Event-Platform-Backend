@@ -24,6 +24,14 @@ public class SessionRevisionService {
     }
 
     @Transactional(readOnly = true)
+    public SessionRevision findPendingReviewDetailById(Long revisionId) {
+        return sessionRevisionRepository.findPendingReviewDetailById(
+            revisionId,
+            SessionRevisionStatus.PENDING
+        ).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    @Transactional(readOnly = true)
     public List<SessionRevision> findPendingByRegionId(Long regionId) {
         return sessionRevisionRepository.findByRegionIdAndStatusForReview(
             regionId,
