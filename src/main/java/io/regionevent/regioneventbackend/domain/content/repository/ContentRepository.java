@@ -24,10 +24,18 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
 
     @Query("""
         SELECT new io.regionevent.regioneventbackend.domain.content.repository.PublicContentProjection(
+            content.region.regionId,
             content.contentId,
+            content.versionNo,
             content.contentType,
             content.title,
+            content.description,
             content.locationText,
+            content.operatingHoursText,
+            content.precautions,
+            content.ageRequirement,
+            content.materials,
+            content.cancellationPolicyText,
             representativeImageObject,
             content.representativeImageAssignedAt,
             CASE WHEN EXISTS (
@@ -111,10 +119,18 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
         """)
     Optional<Content> findOperatorReservationListTarget(@Param("contentId") Long contentId);
 
-    @EntityGraph(attributePaths = "representativeImageObject")
-    Optional<Content> findByContentIdAndStatusAndDeletedAtIsNull(
-        Long contentId,
-        ContentStatus status
+    @EntityGraph(attributePaths = {"region", "representativeImageObject"})
+    @Query("""
+        SELECT content
+        FROM Content content
+        WHERE content.contentId = :contentId
+            AND content.status = :status
+            AND content.deletedAt IS NULL
+            AND content.region.isPublic = true
+        """)
+    Optional<Content> findPublicContentByContentId(
+        @Param("contentId") Long contentId,
+        @Param("status") ContentStatus status
     );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

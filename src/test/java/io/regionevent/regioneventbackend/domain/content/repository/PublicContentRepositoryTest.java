@@ -82,6 +82,32 @@ class PublicContentRepositoryTest {
         assertThat(results)
             .extracting(PublicContentProjection::reservationAvailable)
             .containsExactly(false, true, false);
+        assertThat(results)
+            .extracting(PublicContentProjection::regionId)
+            .containsOnly(region.getRegionId());
+        assertThat(results)
+            .extracting(PublicContentProjection::versionNo)
+            .containsOnly(0);
+    }
+
+    @Test
+    void 공개_콘텐츠_단건_조회는_공개_지역의_현재_공개본만_반환한다() {
+        Region publicRegion = saveRegion("DETAIL-PUBLIC");
+        Region privateRegion = regionRepository.saveAndFlush(
+            new Region("REGION-DETAIL-PRIVATE", "비공개 지역", false)
+        );
+        AppUser operator = saveUser();
+        Content publicContent = saveContent(publicRegion, operator, "공개 콘텐츠", SAME_PUBLISH_AT);
+        Content privateContent = saveContent(privateRegion, operator, "비공개 콘텐츠", SAME_PUBLISH_AT);
+
+        assertThat(contentRepository.findPublicContentByContentId(
+            publicContent.getContentId(),
+            ContentStatus.PUBLISHED
+        )).contains(publicContent);
+        assertThat(contentRepository.findPublicContentByContentId(
+            privateContent.getContentId(),
+            ContentStatus.PUBLISHED
+        )).isEmpty();
     }
 
     @Test
