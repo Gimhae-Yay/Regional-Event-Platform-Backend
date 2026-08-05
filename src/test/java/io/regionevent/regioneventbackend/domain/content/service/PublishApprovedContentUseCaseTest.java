@@ -5,10 +5,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
@@ -49,7 +51,8 @@ class PublishApprovedContentUseCaseTest {
 
         PublishApprovedContentResult result = useCase.publish(CONTENT_ID, REQUEST_ID);
 
-        assertThat(result).isEqualTo(PublishApprovedContentResult.SKIPPED);
+        assertThat(result.status()).isEqualTo(PublishApprovedContentResult.Status.SKIPPED);
+        assertThat(result.publicationDelay()).isZero();
         verify(contentService, never()).publish(any());
         verify(contentLogService, never()).recordPublished(any(), any());
         verify(recordAuditEventUseCase, never()).record(any());
@@ -65,6 +68,7 @@ class PublishApprovedContentUseCaseTest {
         );
         Content content = mock(Content.class);
         when(content.getContentId()).thenReturn(CONTENT_ID);
+        when(content.getPublishAt()).thenReturn(DATABASE_TIME.minusSeconds(30));
         when(contentService.findApprovedPublicationTargetForUpdate(CONTENT_ID)).thenReturn(Optional.of(content));
         when(contentService.findCurrentDatabaseTime()).thenReturn(DATABASE_TIME);
         when(contentService.publish(content)).thenReturn(content);
@@ -78,9 +82,10 @@ class PublishApprovedContentUseCaseTest {
 
         PublishApprovedContentResult result = useCase.publish(CONTENT_ID, REQUEST_ID);
 
-        assertThat(result).isEqualTo(PublishApprovedContentResult.PUBLISHED);
-        verify(contentLogService).recordPublished(content, DATABASE_TIME);
-        verify(recordAuditEventUseCase).record(any(AuditEventCommand.class));
+        assertThat(result.status()).isEqualTo(PublishApprovedContentResult.Status.PUBLISHED);
+        assertThat(result.publicationDelay()).isEqualTo(Duration.ofSeconds(30));
+        verify(contentLogService, times(1)).recordPublished(content, DATABASE_TIME);
+        verify(recordAuditEventUseCase, times(1)).record(any(AuditEventCommand.class));
         verify(recordFailedAuditEventUseCase, never()).record(any());
     }
 

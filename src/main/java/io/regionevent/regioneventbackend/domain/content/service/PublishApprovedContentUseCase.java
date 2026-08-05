@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.domain.content.service;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
@@ -47,7 +48,7 @@ public class PublishApprovedContentUseCase {
         try {
             content = contentService.findApprovedPublicationTargetForUpdate(contentId).orElse(null);
             if (content == null) {
-                return PublishApprovedContentResult.SKIPPED;
+                return PublishApprovedContentResult.skipped();
             }
 
             Instant publishedAt = contentService.findCurrentDatabaseTime();
@@ -65,7 +66,9 @@ public class PublishApprovedContentUseCase {
                 null,
                 publishedAt
             ));
-            return PublishApprovedContentResult.PUBLISHED;
+            return PublishApprovedContentResult.published(
+                Duration.between(publishedContent.getPublishAt(), publishedAt)
+            );
         } catch (RuntimeException exception) {
             recordFailure(requestId, contentId, content);
             throw exception;
