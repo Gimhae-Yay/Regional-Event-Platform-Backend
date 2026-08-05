@@ -3,10 +3,11 @@
 | 항목 | 내용 |
 | --- | --- |
 | 상위 명세 | [로컬스탬프 P0 명세](../p0-spec.md) |
-| 분할 기준 원문 | [로컬스탬프 제품 PRD v1.6](../local-stamp-platform-prd.md) |
 | 소유 범위 | 지역 탐색, 콘텐츠·회차 등록, 승인, 자동 공개, 수정, 중단, 철회, 종료, 삭제, 회차 운영 상태 |
+| API 명세 | [콘텐츠 카탈로그 API](../api/p0/content-catalog/), [콘텐츠 API](../api/p0/content/), [지역 콘텐츠 API](../api/p0/region-content/) |
+| 데이터 모델 | [ERD](../erd.md) |
 
-> 이 문서는 원문을 기반으로 현재 P0 명세와 채택 ADR을 반영한 지역·콘텐츠·회차 구현 계약이다.
+> 이 문서는 지역·콘텐츠·회차 정책의 단일 기준이며, 현재 P0 명세와 채택 ADR을 반영한 구현 계약이다.
 
 ## FR-02. 지역 선택과 콘텐츠 탐색
 
@@ -15,7 +16,6 @@
 | 문서 | 적용 범위 |
 | --- | --- |
 | [P0 명세](../p0-spec.md#7-기능-요구사항과-소유-문서) | `FR-02` 범위와 공개 콘텐츠 탐색 기준 |
-| [제품 PRD](../local-stamp-platform-prd.md#82-콘텐츠-정책) | 지역 선택·콘텐츠 탐색 원문 정책 |
 | [ADR-0020](../adr/0020-merge-event-experience-details-into-content-and-revision.md#결정) | 행사·체험 필드를 콘텐츠와 수정본에 통합하는 P0 모델 |
 | [정원 홀드·무료 예약](reservation.md#rsv-04) | 상세 화면에 표시할 P0 무료 예약 취소 정책 |
 | [인증·프로필](auth-profile.md#prv-02) | 탈퇴 회원 후기를 공통 표시로 노출하는 기준 |
@@ -91,7 +91,6 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 
 | 문서 | 적용 범위 |
 | --- | --- |
-| [제품 PRD](../local-stamp-platform-prd.md#82-콘텐츠-정책) | 콘텐츠·회차 등록과 승인 요청 원문 정책 |
 | [인증·프로필](auth-profile.md#fr-09-운영자-승인정보-마스킹) | 운영자 승인 상태, 담당 지역과 최초 소유자 설정 |
 | [ADR-0002](../adr/0002-isolate-regions-in-a-shared-schema.md#결정) | 지역 범위와 저장된 소유 관계의 검증 |
 | [ADR-0020](../adr/0020-merge-event-experience-details-into-content-and-revision.md#결정) | 행사·체험 필드를 통합한 콘텐츠·수정본·회차의 모델 경계 |
@@ -126,7 +125,6 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 
 | 문서 | 적용 범위 |
 | --- | --- |
-| [제품 PRD](../local-stamp-platform-prd.md#82-콘텐츠-정책) | 승인, 공개 예정 시각, 종료 원문 정책 |
 | [인증·프로필](auth-profile.md#fr-01-인증역할지역-권한) | 담당 지역 관리자와 소유 운영자의 권한 경계 |
 | [정원 홀드·무료 예약](reservation.md#rsv-06) | 회차 취소 시 활성 홀드·확정 예약 처리 |
 | [P0 명세](../p0-spec.md#88-감사-및-운영-로그) | 승인·자동 공개·종료 처리자와 상태 이력 감사 |
@@ -183,7 +181,6 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 
 | 문서                                                                             | 적용 범위                       |
 |--------------------------------------------------------------------------------|-----------------------------|
-| [제품 PRD](../local-stamp-platform-prd.md#82-콘텐츠-정책)                             | 수정 심사, 중단, 철회와 삭제 원문 정책     |
 | [인증·프로필](auth-profile.md#fr-01-인증역할지역-권한)                                      | 담당 지역·소유 관계 기반의 변경 권한       |
 | [ADR-0011](../adr/0011-bootstrap-operator-ownership-on-content-creation.md#결정) | 저장된 최초 소유 관계를 기준으로 한 운영자 권한 |
 | [ADR-0020](../adr/0020-merge-event-experience-details-into-content-and-revision.md#결정) | 행사·체험 후보 필드를 수정본에 통합하는 모델 |
