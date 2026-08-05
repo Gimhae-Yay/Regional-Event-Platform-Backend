@@ -7,6 +7,7 @@ import java.util.Optional;
 import jakarta.persistence.LockModeType;
 
 import org.springframework.data.jpa.repository.EntityGraph;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
@@ -68,6 +69,24 @@ public interface SessionRevisionRepository extends JpaRepository<SessionRevision
         @Param("reviewedAt") Instant reviewedAt,
         @Param("reason") String reason
     );
+
+    @Query("""
+        SELECT sessionRevision.content.contentId
+        FROM SessionRevision sessionRevision
+        WHERE sessionRevision.sessionRevisionId = :revisionId
+        """)
+    Optional<Long> findContentIdBySessionRevisionId(@Param("revisionId") Long revisionId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT sessionRevision
+        FROM SessionRevision sessionRevision
+        JOIN FETCH sessionRevision.content
+        JOIN FETCH sessionRevision.region
+        JOIN FETCH sessionRevision.targetSession
+        WHERE sessionRevision.sessionRevisionId = :revisionId
+        """)
+    Optional<SessionRevision> findApprovalTargetForUpdate(@Param("revisionId") Long revisionId);
 
     @Query("""
         SELECT sessionRevision

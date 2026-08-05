@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.content.repository;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -19,6 +20,29 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 
 public interface ContentRepository extends JpaRepository<Content, Long> {
+
+    @Query("""
+        SELECT content.contentId
+        FROM Content content
+        WHERE content.status = :contentStatus
+            AND content.deletedAt IS NULL
+            AND EXISTS (
+                SELECT contentSession.sessionId
+                FROM ContentSession contentSession
+                WHERE contentSession.content = content
+            )
+            AND NOT EXISTS (
+                SELECT contentSession.sessionId
+                FROM ContentSession contentSession
+                WHERE contentSession.content = content
+                    AND contentSession.status NOT IN :terminalStatuses
+            )
+        ORDER BY content.contentId ASC
+        """)
+    List<Long> findAutoEndCandidateIds(
+        @Param("contentStatus") ContentStatus contentStatus,
+        @Param("terminalStatuses") List<ContentSessionStatus> terminalStatuses
+    );
 
     boolean existsByOperatorUserId(Long userId);
 
@@ -242,6 +266,31 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
             AND content.deletedAt IS NULL
         """)
     Optional<Content> findSuspendTargetForUpdate(@Param("contentId") Long contentId);
+
+    @Query(value = """
+        SELECT content_id
+        FROM content
+        WHERE status = 'APPROVED'
+            AND deleted_at IS NULL
+            AND publish_at <= CURRENT_TIMESTAMP(6)
+        ORDER BY content_id ASC
+        """, nativeQuery = true)
+    List<Long> findApprovedPublicationCandidateIds();
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = "region")
+    @Query("""
+        SELECT content
+        FROM Content content
+        WHERE content.contentId = :contentId
+            AND content.status = io.regionevent.regioneventbackend.domain.content.entity.ContentStatus.APPROVED
+            AND content.deletedAt IS NULL
+            AND content.publishAt <= CURRENT_TIMESTAMP
+        """)
+    Optional<Content> findApprovedPublicationTargetForUpdate(@Param("contentId") Long contentId);
+
+    @Query(value = "SELECT UNIX_TIMESTAMP(CURRENT_TIMESTAMP(6))", nativeQuery = true)
+    BigDecimal findCurrentEpochSeconds();
 
     @Query(value = """
         SELECT content_id
