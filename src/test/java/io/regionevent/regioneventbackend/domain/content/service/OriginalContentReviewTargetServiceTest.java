@@ -3,6 +3,7 @@ package io.regionevent.regioneventbackend.domain.content.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -126,12 +127,70 @@ class OriginalContentReviewTargetServiceTest {
         assertThat(originalContentReviewTargetService.findByContentId(content.getContentId())).isEmpty();
     }
 
+    @Test
+    void 여러_콘텐츠의_최신_두_로그를_일괄_조회해_각각_판정한다() {
+        Content initialSubmission = saveContent("initial-batch-operator@example.com");
+        Content resubmission = saveContent("resubmission-batch-operator@example.com");
+        saveLog(initialSubmission, ContentLogStatus.PENDING, RECORDED_AT);
+        saveLog(resubmission, ContentLogStatus.REJECTED, RECORDED_AT.minusSeconds(1));
+        ContentLog resubmittedPendingLog = saveLog(resubmission, ContentLogStatus.PENDING, RECORDED_AT);
+
+        List<OriginalContentReviewTarget> targets = originalContentReviewTargetService.findByContents(List.of(
+            resubmission,
+            initialSubmission
+        ));
+
+        assertThat(targets).extracting(target -> target.content().getContentId())
+            .containsExactly(resubmission.getContentId(), initialSubmission.getContentId());
+        assertThat(targets.getFirst().type())
+            .isEqualTo(OriginalContentReviewTargetType.RESUBMISSION_AFTER_REJECTION);
+        assertThat(targets.getFirst().pendingLog().getId()).isEqualTo(resubmittedPendingLog.getId());
+        assertThat(targets.get(1).type())
+            .isEqualTo(OriginalContentReviewTargetType.INITIAL_SUBMISSION);
+    }
+
+    @Test
+    void 담당지역의_미삭제_PENDING_콘텐츠만_목록_후보로_조회한다() {
+        Region assignedRegion = regionRepository.saveAndFlush(new Region("ASSIGNED", "담당 지역", true));
+        Content pendingContent = saveContent(
+            assignedRegion,
+            "pending-list-operator@example.com",
+            ContentStatus.PENDING
+        );
+        Content softDeletedContent = saveContent(
+            assignedRegion,
+            "deleted-list-operator@example.com",
+            ContentStatus.PENDING
+        );
+        softDeletedContent.softDelete();
+        contentRepository.saveAndFlush(softDeletedContent);
+        saveContent(assignedRegion, "approved-list-operator@example.com", ContentStatus.APPROVED);
+        saveContent("other-region-list-operator@example.com");
+
+        List<Content> contents = contentRepository
+            .findByRegionRegionIdAndStatusAndDeletedAtIsNullOrderByContentIdAsc(
+                assignedRegion.getRegionId(),
+                ContentStatus.PENDING
+            );
+
+        assertThat(contents).extracting(Content::getContentId)
+            .containsExactly(pendingContent.getContentId());
+    }
+
     private Content saveContent(String operatorLoginIdentifier) {
         Region region = regionRepository.saveAndFlush(new Region(
             "REGION-" + operatorLoginIdentifier,
             "테스트 지역",
             true
         ));
+        return saveContent(region, operatorLoginIdentifier, ContentStatus.PENDING);
+    }
+
+    private Content saveContent(
+        Region region,
+        String operatorLoginIdentifier,
+        ContentStatus contentStatus
+    ) {
         AppUser operator = appUserRepository.saveAndFlush(new AppUser(
             operatorLoginIdentifier,
             "hashed-password",
@@ -144,7 +203,7 @@ class OriginalContentReviewTargetServiceTest {
             region,
             operator,
             ContentType.EVENT_EXPERIENCE,
-            ContentStatus.PENDING,
+            contentStatus,
             "김해 가야 문화 체험",
             "김해 가야 문화를 체험하는 행사입니다.",
             "김해문화의전당",
