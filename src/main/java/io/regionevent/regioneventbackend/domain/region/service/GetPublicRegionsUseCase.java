@@ -21,9 +21,11 @@ public class GetPublicRegionsUseCase {
 
     @Transactional(readOnly = true)
     public List<PublicRegionStaticInfo> get() {
-        return regionService.findPublicRegions().stream()
-            .map(PublicRegionStaticInfo::from)
-            .map(publicRegionCacheAside::resolve)
+        return regionService.findPublicRegionVerifications().stream()
+            .map(projection -> publicRegionCacheAside.resolve(
+                projection.regionId(),
+                () -> regionService.findPublicRegionStaticInfo(projection.regionId())
+            ))
             .toList();
     }
 }

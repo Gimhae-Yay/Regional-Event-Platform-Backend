@@ -1,6 +1,6 @@
 package io.regionevent.regioneventbackend.domain.region.service;
 
-import io.regionevent.regioneventbackend.domain.region.entity.Region;
+import io.regionevent.regioneventbackend.domain.region.repository.PublicRegionStaticProjection;
 
 public record PublicRegionStaticInfo(
     Long regionId,
@@ -20,11 +20,11 @@ public record PublicRegionStaticInfo(
         }
     }
 
-    public static PublicRegionStaticInfo from(Region region) {
+    public static PublicRegionStaticInfo from(PublicRegionStaticProjection projection) {
         return new PublicRegionStaticInfo(
-            region.getRegionId(),
-            region.getRegionCode(),
-            region.getName()
+            projection.regionId(),
+            projection.regionCode(),
+            projection.name()
         );
     }
 }
