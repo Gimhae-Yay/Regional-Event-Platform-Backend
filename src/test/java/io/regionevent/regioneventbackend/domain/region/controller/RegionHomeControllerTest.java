@@ -64,6 +64,10 @@ class RegionHomeControllerTest {
             .andExpect(jsonPath("$.data.region.regionCode").value("GIMHAE"))
             .andExpect(jsonPath("$.data.ongoingContents[0].contentId").value("200"))
             .andExpect(jsonPath("$.data.ongoingContents[0].displaySession.sessionId").value("1001"))
+            .andExpect(jsonPath("$.data.ongoingContents[0].displaySession.startsAt")
+                .value("2026-08-05T09:00:00+09:00"))
+            .andExpect(jsonPath("$.data.ongoingContents[0].displaySession.endsAt")
+                .value("2026-08-05T11:00:00+09:00"))
             .andExpect(jsonPath("$.data.upcomingContents").isEmpty());
 
         verify(getRegionHomeUseCase).get(REGION_ID);
