@@ -291,6 +291,53 @@ class ContentRepositoryTest {
         assertThat(foundContent.getRegion().getRegionId()).isEqualTo(region.getRegionId());
     }
 
+    @Test
+    void 자동_공개_후보는_승인되고_삭제되지_않았으며_공개_예정_시각이_지난_콘텐츠만_조회한다() {
+        Region region = saveRegion();
+        AppUser operator = saveOperator();
+        Instant now = Instant.now();
+        Content pastApprovedContent = contentRepository.saveAndFlush(
+            newContent(region, operator, ContentStatus.APPROVED, now.minusSeconds(60))
+        );
+        contentRepository.saveAndFlush(
+            newContent(region, operator, ContentStatus.APPROVED, now.plusSeconds(3_600))
+        );
+        contentRepository.saveAndFlush(
+            newContent(region, operator, ContentStatus.PENDING, now.minusSeconds(60))
+        );
+        Content deletedApprovedContent = contentRepository.saveAndFlush(
+            newContent(region, operator, ContentStatus.APPROVED, now.minusSeconds(60))
+        );
+        deletedApprovedContent.softDelete();
+        contentRepository.flush();
+
+        assertThat(contentRepository.findApprovedPublicationCandidateIds())
+            .containsExactly(pastApprovedContent.getContentId());
+    }
+
+    @Test
+    void 자동_공개_대상은_잠금_시점에도_상태와_삭제와_공개_예정_시각을_다시_확인한다() {
+        Region region = saveRegion();
+        AppUser operator = saveOperator();
+        Content approvedContent = contentRepository.saveAndFlush(
+            newContent(region, operator, ContentStatus.APPROVED, Instant.now().minusSeconds(60))
+        );
+        Content futureContent = contentRepository.saveAndFlush(
+            newContent(region, operator, ContentStatus.APPROVED, Instant.now().plusSeconds(3_600))
+        );
+        Content pendingContent = contentRepository.saveAndFlush(
+            newContent(region, operator, ContentStatus.PENDING, Instant.now().minusSeconds(60))
+        );
+        entityManager.clear();
+
+        assertThat(contentRepository.findApprovedPublicationTargetForUpdate(approvedContent.getContentId()))
+            .isPresent();
+        assertThat(contentRepository.findApprovedPublicationTargetForUpdate(futureContent.getContentId()))
+            .isEmpty();
+        assertThat(contentRepository.findApprovedPublicationTargetForUpdate(pendingContent.getContentId()))
+            .isEmpty();
+    }
+
     private Region saveRegion() {
         return regionRepository.saveAndFlush(new Region("GIMHAE", "김해시", true));
     }

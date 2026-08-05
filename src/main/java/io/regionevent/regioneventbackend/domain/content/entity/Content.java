@@ -186,6 +186,16 @@ public class Content {
         status = ContentStatus.APPROVED;
     }
 
+    public void publish() {
+        if (deletedAt != null) {
+            throw new IllegalStateException("soft deleted content cannot be published");
+        }
+        if (status != ContentStatus.APPROVED) {
+            throw new IllegalStateException("content status must be APPROVED but was " + status);
+        }
+        status = ContentStatus.PUBLISHED;
+    }
+
     public void reject() {
         if (deletedAt != null) {
             throw new IllegalStateException("soft deleted content cannot be rejected");
