@@ -20,7 +20,7 @@ import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 @ContentControllerWebMvcTest
-class SessionRevisionReviewControllerWebMvcTest extends ContentControllerWebMvcTestSupport {
+class SessionRevisionReviewDetailControllerWebMvcTest extends ContentControllerWebMvcTestSupport {
 
     private static final long REVISION_ID = 52L;
 
