@@ -42,7 +42,7 @@ public class EndContentReservationsController {
         @RequestAttribute(RequestIdFilter.REQUEST_ID_ATTRIBUTE) String requestId
     ) {
         Long userId = (Long) authentication.getPrincipal();
-        EndContentReservationsResult result = endContentReservationsUseCase.end(
+        EndContentReservationsResult result = endContentReservationsUseCase.endByRegionAdmin(
             userId,
             toContentId(contentId),
             UUID.fromString(requestId)

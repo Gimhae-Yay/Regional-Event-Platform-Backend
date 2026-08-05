@@ -198,6 +198,15 @@ public class ContentService {
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
+    @Transactional(readOnly = true)
+    public List<Long> findAutoEndCandidateIds(List<ContentSessionStatus> terminalStatuses) {
+        return contentRepository.findAutoEndCandidateIds(ContentStatus.PUBLISHED, terminalStatuses);
+    }
+
+    public Instant findDatabaseCurrentInstant() {
+        return contentRepository.findCurrentTimestamp();
+    }
+
     public Content findDeletionTargetForUpdate(Long contentId) {
         validateRequiredId(contentId);
         return contentRepository.findDeletionTargetForUpdate(contentId)
