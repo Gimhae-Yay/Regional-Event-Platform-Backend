@@ -1,8 +1,10 @@
 package io.regionevent.regioneventbackend.domain.content.service;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -242,12 +244,30 @@ public class ContentService {
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
+    public List<Long> findApprovedPublicationCandidateIds() {
+        return contentRepository.findApprovedPublicationCandidateIds();
+    }
+
+    public Optional<Content> findApprovedPublicationTargetForUpdate(Long contentId) {
+        validateRequiredId(contentId);
+        return contentRepository.findApprovedPublicationTargetForUpdate(contentId);
+    }
+
+    public Instant findCurrentDatabaseTime() {
+        return toInstant(contentRepository.findCurrentEpochSeconds());
+    }
+
     public boolean lockPublishedReservationTarget(Long contentId) {
         return contentRepository.findPublishedReservationTargetIdForUpdate(contentId).isPresent();
     }
 
     public Content approve(Content content) {
         content.approve();
+        return contentRepository.saveAndFlush(content);
+    }
+
+    public Content publish(Content content) {
+        content.publish();
         return contentRepository.saveAndFlush(content);
     }
 
@@ -328,6 +348,11 @@ public class ContentService {
         }
         content.suspend();
         return content;
+    }
+
+    private Instant toInstant(BigDecimal epochSeconds) {
+        long seconds = epochSeconds.longValue();
+        return Instant.ofEpochSecond(seconds, epochSeconds.remainder(BigDecimal.ONE).movePointRight(9).longValue());
     }
 
     private void validateRequiredId(Long id) {

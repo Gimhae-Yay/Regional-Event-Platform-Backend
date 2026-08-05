@@ -25,7 +25,10 @@ class ContentTest {
             () -> new ContentTest().reject_whenStatusIsNotPending_throwsExceptionWithoutChanges(),
             () -> new ContentTest().reject_whenSoftDeleted_throwsExceptionWithoutChanges(),
             () -> new ContentTest().submitForReview_whenRejectedAndActive_changesStatusToPending(),
-            () -> new ContentTest().submitForReview_whenStatusIsNotRejected_throwsExceptionWithoutChanges()
+            () -> new ContentTest().submitForReview_whenStatusIsNotRejected_throwsExceptionWithoutChanges(),
+            () -> new ContentTest().publish_whenApprovedAndActive_changesStatusToPublished(),
+            () -> new ContentTest().publish_whenStatusIsNotApproved_throwsExceptionWithoutChanges(),
+            () -> new ContentTest().publish_whenSoftDeleted_throwsExceptionWithoutChanges()
         );
     }
 
@@ -93,6 +96,31 @@ class ContentTest {
         assertThatThrownBy(content::submitForReview)
             .isInstanceOf(IllegalStateException.class);
         assertThat(content.getStatus()).isEqualTo(ContentStatus.PENDING);
+    }
+
+    void publish_whenApprovedAndActive_changesStatusToPublished() {
+        Content content = createContent(ContentStatus.APPROVED);
+
+        content.publish();
+
+        assertThat(content.getStatus()).isEqualTo(ContentStatus.PUBLISHED);
+    }
+
+    void publish_whenStatusIsNotApproved_throwsExceptionWithoutChanges() {
+        Content content = createContent(ContentStatus.PENDING);
+
+        assertThatThrownBy(content::publish)
+            .isInstanceOf(IllegalStateException.class);
+        assertThat(content.getStatus()).isEqualTo(ContentStatus.PENDING);
+    }
+
+    void publish_whenSoftDeleted_throwsExceptionWithoutChanges() {
+        Content content = createContent(ContentStatus.APPROVED);
+        content.softDelete();
+
+        assertThatThrownBy(content::publish)
+            .isInstanceOf(IllegalStateException.class);
+        assertThat(content.getStatus()).isEqualTo(ContentStatus.APPROVED);
     }
 
     private Content createContent(ContentStatus status) {
