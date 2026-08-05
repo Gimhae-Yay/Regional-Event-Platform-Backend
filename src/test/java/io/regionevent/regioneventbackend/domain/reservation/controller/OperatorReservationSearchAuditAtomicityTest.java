@@ -1,11 +1,9 @@
 package io.regionevent.regioneventbackend.domain.reservation.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.math.BigDecimal;
 import java.sql.Timestamp;
@@ -14,15 +12,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEvent;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
@@ -42,19 +40,23 @@ import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.reservation.repository.CapacityHoldRepository;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationRepository;
+import io.regionevent.regioneventbackend.domain.reservation.service.SearchOperatorReservationByNumberUseCase;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
-import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
+import io.regionevent.regioneventbackend.support.jpa.CleanH2Database;
+import io.regionevent.regioneventbackend.support.jpa.AtomicityJpaTestConfiguration;
 
-@SpringBootTest
-@AutoConfigureMockMvc
-class OperatorReservationSearchAuditAtomicityTest {
+@DataJpaTest
+@Import(AtomicityJpaTestConfiguration.class)
+@Transactional(propagation = Propagation.NOT_SUPPORTED)
+@CleanH2Database
+public class OperatorReservationSearchAuditAtomicityTest {
 
-    private final MockMvc mockMvc;
+    private final SearchOperatorReservationByNumberUseCase searchOperatorReservationByNumberUseCase;
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
@@ -63,7 +65,6 @@ class OperatorReservationSearchAuditAtomicityTest {
     private final CapacityHoldRepository capacityHoldRepository;
     private final ReservationRepository reservationRepository;
     private final AuditEventRepository auditEventRepository;
-    private final JwtAccessTokenService jwtAccessTokenService;
     private final JdbcTemplate jdbcTemplate;
     private final List<Long> createdReservationIds = new ArrayList<>();
     private final List<Long> createdCapacityHoldIds = new ArrayList<>();
@@ -77,7 +78,7 @@ class OperatorReservationSearchAuditAtomicityTest {
 
     @Autowired
     OperatorReservationSearchAuditAtomicityTest(
-        MockMvc mockMvc,
+        SearchOperatorReservationByNumberUseCase searchOperatorReservationByNumberUseCase,
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
         UserRoleAssignmentRepository userRoleAssignmentRepository,
@@ -86,10 +87,9 @@ class OperatorReservationSearchAuditAtomicityTest {
         CapacityHoldRepository capacityHoldRepository,
         ReservationRepository reservationRepository,
         AuditEventRepository auditEventRepository,
-        JwtAccessTokenService jwtAccessTokenService,
         JdbcTemplate jdbcTemplate
     ) {
-        this.mockMvc = mockMvc;
+        this.searchOperatorReservationByNumberUseCase = searchOperatorReservationByNumberUseCase;
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
         this.userRoleAssignmentRepository = userRoleAssignmentRepository;
@@ -98,7 +98,6 @@ class OperatorReservationSearchAuditAtomicityTest {
         this.capacityHoldRepository = capacityHoldRepository;
         this.reservationRepository = reservationRepository;
         this.auditEventRepository = auditEventRepository;
-        this.jwtAccessTokenService = jwtAccessTokenService;
         this.jdbcTemplate = jdbcTemplate;
     }
 
@@ -113,30 +112,18 @@ class OperatorReservationSearchAuditAtomicityTest {
         return BigDecimal.valueOf(timestamp.getTime(), 3);
     }
 
-    @AfterEach
-    void cleanUp() {
-        deleteReservationAuditEvents();
-        deleteRows("DELETE FROM reservation WHERE reservation_id = ?", createdReservationIds);
-        deleteRows("DELETE FROM capacity_hold WHERE hold_id = ?", createdCapacityHoldIds);
-        deleteRows("DELETE FROM content_session WHERE session_id = ?", createdSessionIds);
-        deleteRows("DELETE FROM content WHERE content_id = ?", createdContentIds);
-        deleteRows("DELETE FROM user_role_assignment WHERE user_id = ?", createdUserIds);
-        deleteRows("DELETE FROM app_user WHERE user_id = ?", createdUserIds);
-        deleteRows("DELETE FROM region WHERE region_id = ?", createdRegionIds);
-    }
-
     @Test
-    void search_감사_처리자_연결이_실패하면_성공_응답과_감사를_롤백한다() throws Exception {
+    void search_감사_처리자_연결이_실패하면_성공_응답과_감사를_롤백한다() {
         Fixture fixture = createFixture();
         doThrow(new IllegalStateException("audit actor link storage failure"))
             .when(auditEventActorLinkService)
             .record(any(AuditEvent.class), any());
 
-        mockMvc.perform(get("/api/v1/operator/reservations/search")
-                .queryParam("reservationNo", fixture.reservation().getReservationNo())
-                .header("Authorization", bearerToken(fixture.operator())))
-            .andExpect(status().isInternalServerError())
-            .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
+        assertThatThrownBy(() -> searchOperatorReservationByNumberUseCase.search(
+            fixture.operator().getUserId(),
+            fixture.reservation().getReservationNo(),
+            UUID.randomUUID()
+        )).isInstanceOf(IllegalStateException.class);
 
         assertThat(auditEventRepository.findAll())
             .noneMatch(event -> fixture.reservation().getReservationId().equals(event.getTargetId()));
@@ -243,10 +230,6 @@ class OperatorReservationSearchAuditAtomicityTest {
 
     private void deleteRows(String sql, List<Long> ids) {
         ids.forEach(id -> jdbcTemplate.update(sql, id));
-    }
-
-    private String bearerToken(AppUser user) {
-        return "Bearer " + jwtAccessTokenService.issue(user.getUserId());
     }
 
     private record Fixture(AppUser operator, Reservation reservation) {

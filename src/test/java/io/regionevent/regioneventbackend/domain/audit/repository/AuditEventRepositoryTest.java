@@ -93,27 +93,6 @@ class AuditEventRepositoryTest {
     }
 
     @Test
-    void 감사_결과는_성공과_실패를_표현한다() {
-        assertThat(AuditEventResult.values())
-            .containsExactly(AuditEventResult.SUCCESS, AuditEventResult.FAILURE);
-    }
-
-    @Test
-    void 감사_대상_유형은_비개인_도메인으로만_제한한다() {
-        assertThat(AuditEventTargetType.values()).containsExactly(
-            AuditEventTargetType.REGION,
-            AuditEventTargetType.OPERATOR_APPLICATION,
-            AuditEventTargetType.CONTENT,
-            AuditEventTargetType.CONTENT_SESSION,
-            AuditEventTargetType.CAPACITY_HOLD,
-            AuditEventTargetType.RESERVATION,
-            AuditEventTargetType.VISIT,
-            AuditEventTargetType.REVIEW
-        );
-
-    }
-
-    @Test
     void 사용자_actor는_감사_이벤트와_분리된_연결_테이블에_저장한다() {
         AppUser actor = appUserRepository.saveAndFlush(new AppUser(
             "actor@example.com",

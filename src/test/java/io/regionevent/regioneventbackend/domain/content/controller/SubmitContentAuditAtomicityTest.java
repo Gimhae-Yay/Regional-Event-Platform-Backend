@@ -1,17 +1,16 @@
 package io.regionevent.regioneventbackend.domain.content.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 import jakarta.persistence.EntityManager;
 
@@ -19,10 +18,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEvent;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
@@ -39,6 +39,7 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentLogRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentSessionRepository;
+import io.regionevent.regioneventbackend.domain.content.service.SubmitContentUseCase;
 import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
 import io.regionevent.regioneventbackend.domain.image.repository.ImageObjectRepository;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
@@ -49,16 +50,19 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
-import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
+import io.regionevent.regioneventbackend.support.jpa.AtomicityJpaTestConfiguration;
+import io.regionevent.regioneventbackend.support.jpa.CleanH2Database;
 
-@SpringBootTest
-@AutoConfigureMockMvc
+@DataJpaTest
+@Import(AtomicityJpaTestConfiguration.class)
+@Transactional(propagation = Propagation.NOT_SUPPORTED)
+@CleanH2Database
 class SubmitContentAuditAtomicityTest {
 
     private static final Instant INITIAL_SUBMITTED_AT = Instant.parse("2026-08-01T00:00:00Z");
     private static final Instant REJECTED_AT = Instant.parse("2026-08-02T00:00:00Z");
 
-    private final MockMvc mockMvc;
+    private final SubmitContentUseCase submitContentUseCase;
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
@@ -68,7 +72,6 @@ class SubmitContentAuditAtomicityTest {
     private final ImageObjectRepository imageObjectRepository;
     private final AuditEventRepository auditEventRepository;
     private final AuditEventActorLinkRepository auditEventActorLinkRepository;
-    private final JwtAccessTokenService jwtAccessTokenService;
     private final EntityManager entityManager;
     private final List<Long> createdContentIds = new ArrayList<>();
     private final List<Long> createdImageObjectIds = new ArrayList<>();
@@ -81,7 +84,7 @@ class SubmitContentAuditAtomicityTest {
 
     @Autowired
     SubmitContentAuditAtomicityTest(
-        MockMvc mockMvc,
+        SubmitContentUseCase submitContentUseCase,
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
         UserRoleAssignmentRepository userRoleAssignmentRepository,
@@ -91,10 +94,9 @@ class SubmitContentAuditAtomicityTest {
         ImageObjectRepository imageObjectRepository,
         AuditEventRepository auditEventRepository,
         AuditEventActorLinkRepository auditEventActorLinkRepository,
-        JwtAccessTokenService jwtAccessTokenService,
         EntityManager entityManager
     ) {
-        this.mockMvc = mockMvc;
+        this.submitContentUseCase = submitContentUseCase;
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
         this.userRoleAssignmentRepository = userRoleAssignmentRepository;
@@ -104,7 +106,6 @@ class SubmitContentAuditAtomicityTest {
         this.imageObjectRepository = imageObjectRepository;
         this.auditEventRepository = auditEventRepository;
         this.auditEventActorLinkRepository = auditEventActorLinkRepository;
-        this.jwtAccessTokenService = jwtAccessTokenService;
         this.entityManager = entityManager;
     }
 
@@ -144,21 +145,17 @@ class SubmitContentAuditAtomicityTest {
     }
 
     @Test
-    void submitContent_whenAuditRecordingFails_rollsBackStatusAndLog() throws Exception {
+    void submitContent_whenAuditRecordingFails_rollsBackStatusAndLog() {
         Fixture fixture = createFixture();
         doThrow(new IllegalStateException("audit storage failure"))
             .when(recordAuditEventUseCase)
             .record(any(AuditEventCommand.class));
 
-        mockMvc.perform(post(
-            "/api/v1/operator/contents/{contentId}/submit",
-            fixture.content().getContentId()
-        ).header(
-            "Authorization",
-            "Bearer " + jwtAccessTokenService.issue(fixture.operator().getUserId())
-        ))
-            .andExpect(status().isInternalServerError())
-            .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
+        assertThatThrownBy(() -> submitContentUseCase.submit(
+            fixture.operator().getUserId(),
+            fixture.content().getContentId(),
+            UUID.randomUUID()
+        )).isInstanceOf(IllegalStateException.class);
 
         entityManager.clear();
         Content unchangedContent = contentRepository.findById(fixture.content().getContentId()).orElseThrow();

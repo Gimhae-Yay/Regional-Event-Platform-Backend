@@ -1,24 +1,19 @@
 package io.regionevent.regioneventbackend.domain.content.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.util.UUID;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,10 +29,10 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentLogRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
+import io.regionevent.regioneventbackend.domain.content.service.DeleteContentUseCase;
 import io.regionevent.regioneventbackend.domain.image.entity.ImageLifecycleStatus;
 import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
 import io.regionevent.regioneventbackend.domain.image.repository.ImageObjectRepository;
-import io.regionevent.regioneventbackend.domain.image.service.ImageStorageGateway;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -46,18 +41,17 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
-import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
+import io.regionevent.regioneventbackend.support.jpa.AtomicityJpaTestConfiguration;
+import io.regionevent.regioneventbackend.support.jpa.CleanH2Database;
 
-@SpringBootTest
-@AutoConfigureMockMvc
+@DataJpaTest
+@Import(AtomicityJpaTestConfiguration.class)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
+@CleanH2Database
 class ContentDeletionAuditAtomicityTest {
 
     @Autowired
-    private MockMvc mockMvc;
-
-    @Autowired
-    private JwtAccessTokenService jwtAccessTokenService;
+    private DeleteContentUseCase deleteContentUseCase;
 
     @Autowired
     private RegionRepository regionRepository;
@@ -86,39 +80,20 @@ class ContentDeletionAuditAtomicityTest {
     @MockitoBean
     private RecordAuditEventUseCase recordAuditEventUseCase;
 
-    @MockitoBean
-    private ImageStorageGateway imageStorageGateway;
-
-    @AfterEach
-    void tearDown() {
-        auditEventActorLinkRepository.deleteAllInBatch();
-        auditEventRepository.deleteAllInBatch();
-        contentLogRepository.deleteAllInBatch();
-        contentRepository.deleteAllInBatch();
-        imageObjectRepository.deleteAllInBatch();
-        userRoleAssignmentRepository.deleteAllInBatch();
-        appUserRepository.deleteAllInBatch();
-        regionRepository.deleteAllInBatch();
-    }
-
     @Test
-    void deleteContent_whenSuccessAuditRecordingFails_rollsBackDomainChangesAndRecordsFailureAudit()
-        throws Exception {
+    void deleteContent_whenSuccessAuditRecordingFails_rollsBackDomainChangesAndRecordsFailureAudit() {
 
         Fixture fixture = createFixture();
         doThrow(new IllegalStateException("audit storage failure"))
             .when(recordAuditEventUseCase)
             .record(any(AuditEventCommand.class));
 
-        mockMvc.perform(delete("/api/v1/region-admin/contents/{contentId}", fixture.contentId())
-                .header(
-                    HttpHeaders.AUTHORIZATION,
-                    "Bearer " + jwtAccessTokenService.issue(fixture.adminId())
-                )
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"reason\":\"행사 준비가 취소되었습니다.\"}"))
-            .andExpect(status().isInternalServerError())
-            .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
+        assertThatThrownBy(() -> deleteContentUseCase.delete(
+            fixture.adminId(),
+            fixture.contentId(),
+            "행사 준비가 취소되었습니다.",
+            UUID.randomUUID()
+        )).isInstanceOf(IllegalStateException.class);
 
         assertThat(contentRepository.findById(fixture.contentId()))
             .get()
