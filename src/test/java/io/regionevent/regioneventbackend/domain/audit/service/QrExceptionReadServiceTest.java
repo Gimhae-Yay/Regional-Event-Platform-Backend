@@ -174,6 +174,78 @@ class QrExceptionReadServiceTest {
     }
 
     @Test
+    void findAll_maps_qr_exception_items_and_detects_next_page() {
+        when(auditEventRepository.findQrExceptionReadProjections(
+            eq(REGION_ID),
+            any(Instant.class),
+            isNull(),
+            isNull(),
+            any(String.class),
+            any(String.class),
+            any(String.class),
+            any(Pageable.class)
+        )).thenReturn(List.of(
+            unresolvedProjection(30L, "QR_CHECK_IN_SIGNATURE_INVALID", AuditEventResult.FAILURE),
+            reservationProjection(20L),
+            visitProjection(10L)
+        ));
+
+        QrExceptionReadService.QrExceptionPage page = qrExceptionReadService.findAll(REGION_ID, null, null, 2);
+
+        assertThat(page.hasNext()).isTrue();
+        assertThat(page.items()).hasSize(2);
+        assertThat(page.items().get(0))
+            .satisfies(item -> {
+                assertThat(item.exceptionId()).isEqualTo(30L);
+                assertThat(item.exceptionType()).isEqualTo("QR_CHECK_IN_FAILURE");
+                assertThat(item.result()).isEqualTo("FAILURE");
+                assertThat(item.reasonCode()).isEqualTo("QR_CHECK_IN_SIGNATURE_INVALID");
+                assertThat(item.reservationResolved()).isFalse();
+                assertThat(item.reservationId()).isNull();
+                assertThat(item.contentId()).isNull();
+                assertThat(item.sessionId()).isNull();
+            });
+        assertThat(page.items().get(1))
+            .satisfies(item -> {
+                assertThat(item.exceptionId()).isEqualTo(20L);
+                assertThat(item.exceptionType()).isEqualTo("RESERVATION_NUMBER_LOOKUP");
+                assertThat(item.result()).isEqualTo("SUCCESS");
+                assertThat(item.reservationResolved()).isTrue();
+                assertThat(item.reservationId()).isEqualTo(100L);
+                assertThat(item.contentId()).isEqualTo(300L);
+                assertThat(item.sessionId()).isEqualTo(200L);
+            });
+    }
+
+    @Test
+    void findAll_maps_visit_exception_item() {
+        when(auditEventRepository.findQrExceptionReadProjections(
+            eq(REGION_ID),
+            any(Instant.class),
+            isNull(),
+            isNull(),
+            any(String.class),
+            any(String.class),
+            any(String.class),
+            any(Pageable.class)
+        )).thenReturn(List.of(visitProjection(10L)));
+
+        QrExceptionReadService.QrExceptionPage page = qrExceptionReadService.findAll(REGION_ID, null, null, 20);
+
+        assertThat(page.hasNext()).isFalse();
+        assertThat(page.items()).singleElement()
+            .satisfies(item -> {
+                assertThat(item.exceptionId()).isEqualTo(10L);
+                assertThat(item.exceptionType()).isEqualTo("MANUAL_CHECK_IN");
+                assertThat(item.result()).isEqualTo("SUCCESS");
+                assertThat(item.reservationResolved()).isTrue();
+                assertThat(item.reservationId()).isEqualTo(400L);
+                assertThat(item.contentId()).isEqualTo(600L);
+                assertThat(item.sessionId()).isEqualTo(500L);
+            });
+    }
+
+    @Test
     void findAll_visit_target_is_missing_then_rejects_with_INTERNAL_SERVER_ERROR() {
         when(auditEventRepository.findQrExceptionReadProjections(
             eq(REGION_ID),
@@ -253,5 +325,87 @@ class QrExceptionReadServiceTest {
             .isInstanceOfSatisfying(BusinessException.class, exception ->
                 assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INTERNAL_SERVER_ERROR)
             );
+    }
+
+    private QrExceptionReadProjection unresolvedProjection(
+        Long auditEventId,
+        String reasonCode,
+        AuditEventResult result
+    ) {
+        return new QrExceptionReadProjection(
+            auditEventId,
+            NOW.minusSeconds(auditEventId),
+            REGION_ID,
+            AuditEventTargetType.RESERVATION,
+            null,
+            result,
+            reasonCode,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+        );
+    }
+
+    private QrExceptionReadProjection reservationProjection(Long auditEventId) {
+        return new QrExceptionReadProjection(
+            auditEventId,
+            NOW.minusSeconds(auditEventId),
+            REGION_ID,
+            AuditEventTargetType.RESERVATION,
+            100L,
+            AuditEventResult.SUCCESS,
+            "QR_VERIFICATION_FAILED",
+            100L,
+            REGION_ID,
+            200L,
+            REGION_ID,
+            300L,
+            REGION_ID,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+        );
+    }
+
+    private QrExceptionReadProjection visitProjection(Long auditEventId) {
+        return new QrExceptionReadProjection(
+            auditEventId,
+            NOW.minusSeconds(auditEventId),
+            REGION_ID,
+            AuditEventTargetType.VISIT,
+            700L,
+            AuditEventResult.SUCCESS,
+            "MANUAL_CHECK_IN_QR_SCAN_FAILED_SUCCESS",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            700L,
+            REGION_ID,
+            400L,
+            REGION_ID,
+            500L,
+            REGION_ID,
+            600L,
+            REGION_ID
+        );
     }
 }
