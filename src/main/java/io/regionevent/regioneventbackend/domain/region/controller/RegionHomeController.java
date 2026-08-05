@@ -66,15 +66,6 @@ public class RegionHomeController {
                 exception.getErrorCode().code()
             );
             throw exception;
-        } catch (RuntimeException exception) {
-            logResult(
-                requestId,
-                parsedRegionId,
-                FAILURE_RESULT_COUNT,
-                FAILURE_RESULT_COUNT,
-                ErrorCode.INTERNAL_SERVER_ERROR.code()
-            );
-            throw exception;
         }
     }
 

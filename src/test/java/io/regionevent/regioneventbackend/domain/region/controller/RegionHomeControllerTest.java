@@ -97,6 +97,19 @@ class RegionHomeControllerTest {
             .andExpect(jsonPath("$.code").value("NOT_FOUND"));
     }
 
+    @Test
+    void 예상하지_못한_예외는_전역_예외_경계에서만_기록한다(CapturedOutput output) throws Exception {
+        when(getRegionHomeUseCase.get(REGION_ID)).thenThrow(new IllegalStateException("database unavailable"));
+
+        mockMvc.perform(get("/api/v1/regions/{regionId}/home", REGION_ID))
+            .andExpect(status().isInternalServerError())
+            .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
+
+        assertThat(output.getOut())
+            .contains("Unhandled exception. requestId=")
+            .doesNotContain("Region home read.");
+    }
+
     private static RegionHomeResult regionHomeResult() {
         return new RegionHomeResult(
             new PublicRegionStaticInfo(REGION_ID, "GIMHAE", "김해시"),
