@@ -228,6 +228,43 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
     }
 
     @Test
+    @Timeout(10)
+    void 동시_시스템_종료에서도_로그와_감사와_정원복구는_한번만_발생한다() throws Exception {
+        Fixture fixture = createFixture();
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<EndContentReservationsSystemResult> first = executorService.submit(
+                () -> endBySystemAfterStart(fixture, ready, start)
+            );
+            Future<EndContentReservationsSystemResult> second = executorService.submit(
+                () -> endBySystemAfterStart(fixture, ready, start)
+            );
+            assertThat(ready.await(3, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            assertThat(List.of(first.get(5, TimeUnit.SECONDS), second.get(5, TimeUnit.SECONDS)))
+                .extracting(EndContentReservationsSystemResult::status)
+                .containsExactlyInAnyOrder(
+                    EndContentReservationsSystemResult.Status.ENDED,
+                    EndContentReservationsSystemResult.Status.SKIPPED
+                );
+        }
+
+        assertThat(contentLogRepository.findByContentContentIdOrderByDateAscIdAsc(fixture.contentId()))
+            .extracting(ContentLog::getStatus)
+            .containsExactly(ContentLogStatus.PUBLISHED, ContentLogStatus.ENDED);
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent -> fixture.contentId().equals(auditEvent.getTargetId()))
+            .hasSize(1);
+        assertThat(capacityHoldRepository.findById(fixture.firstHoldId()))
+            .hasValueSatisfying(this::assertInvalidated);
+        assertThat(contentSessionRepository.findById(fixture.firstSessionId()))
+            .hasValueSatisfying(session -> assertThat(session.getRemainingCapacity()).isEqualTo(SESSION_CAPACITY));
+    }
+
+    @Test
     void 종료된_콘텐츠를_순차_재시도하면_기존_종료_결과만_반환하고_종료_부수_효과를_중복_생성하지_않는다() {
         Fixture fixture = createFixture();
 
@@ -309,6 +346,16 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
             fixture.contentId(),
             UUID.randomUUID()
         );
+    }
+
+    private EndContentReservationsSystemResult endBySystemAfterStart(
+        Fixture fixture,
+        CountDownLatch ready,
+        CountDownLatch start
+    ) {
+        ready.countDown();
+        await(start);
+        return endContentReservationsUseCase.endBySystem(fixture.contentId(), UUID.randomUUID());
     }
 
     private Attempt endExpectingConflict(Fixture fixture) {
