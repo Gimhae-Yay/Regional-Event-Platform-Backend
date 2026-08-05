@@ -129,7 +129,7 @@ public class ContentSessionService {
 
     @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
     public boolean isBeforeStartByDatabaseTime(Long sessionId) {
-        return contentSessionRepository.isBeforeStartByDatabaseTime(sessionId);
+        return contentSessionRepository.countBeforeStartByDatabaseTime(sessionId) > 0;
     }
 
     @Transactional(propagation = Propagation.MANDATORY)

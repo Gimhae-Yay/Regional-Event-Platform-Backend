@@ -53,14 +53,14 @@ import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class SessionRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
 
-    private static final Instant ORIGINAL_STARTS_AT = Instant.parse("2099-08-29T01:00:00Z");
-    private static final Instant ORIGINAL_ENDS_AT = Instant.parse("2099-08-29T03:00:00Z");
-    private static final Instant ORIGINAL_CHECKIN_OPEN_AT = Instant.parse("2099-08-29T00:30:00Z");
-    private static final Instant ORIGINAL_CHECKIN_CLOSE_AT = Instant.parse("2099-08-29T02:30:00Z");
-    private static final Instant CANDIDATE_STARTS_AT = Instant.parse("2099-08-30T01:00:00Z");
-    private static final Instant CANDIDATE_ENDS_AT = Instant.parse("2099-08-30T03:00:00Z");
-    private static final Instant CANDIDATE_CHECKIN_OPEN_AT = Instant.parse("2099-08-30T00:30:00Z");
-    private static final Instant CANDIDATE_CHECKIN_CLOSE_AT = Instant.parse("2099-08-30T02:30:00Z");
+    private static final Instant ORIGINAL_STARTS_AT = Instant.parse("2037-08-29T01:00:00Z");
+    private static final Instant ORIGINAL_ENDS_AT = Instant.parse("2037-08-29T03:00:00Z");
+    private static final Instant ORIGINAL_CHECKIN_OPEN_AT = Instant.parse("2037-08-29T00:30:00Z");
+    private static final Instant ORIGINAL_CHECKIN_CLOSE_AT = Instant.parse("2037-08-29T02:30:00Z");
+    private static final Instant CANDIDATE_STARTS_AT = Instant.parse("2037-08-30T01:00:00Z");
+    private static final Instant CANDIDATE_ENDS_AT = Instant.parse("2037-08-30T03:00:00Z");
+    private static final Instant CANDIDATE_CHECKIN_OPEN_AT = Instant.parse("2037-08-30T00:30:00Z");
+    private static final Instant CANDIDATE_CHECKIN_CLOSE_AT = Instant.parse("2037-08-30T02:30:00Z");
     private static final Instant SUBMITTED_AT = Instant.parse("2026-08-01T00:00:00Z");
 
     private final ApproveSessionRevisionUseCase approveSessionRevisionUseCase;

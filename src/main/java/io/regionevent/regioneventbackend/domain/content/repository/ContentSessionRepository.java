@@ -93,12 +93,12 @@ public interface ContentSessionRepository extends JpaRepository<ContentSession, 
     Optional<ContentSession> findRevisionTargetForUpdate(@Param("sessionId") Long sessionId);
 
     @Query(value = """
-        SELECT CASE WHEN COUNT(*) = 1 THEN true ELSE false END
+        SELECT COUNT(*)
         FROM content_session
         WHERE session_id = :sessionId
             AND starts_at > CURRENT_TIMESTAMP
         """, nativeQuery = true)
-    boolean isBeforeStartByDatabaseTime(@Param("sessionId") Long sessionId);
+    long countBeforeStartByDatabaseTime(@Param("sessionId") Long sessionId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @EntityGraph(attributePaths = {"content", "content.operator", "region"})
