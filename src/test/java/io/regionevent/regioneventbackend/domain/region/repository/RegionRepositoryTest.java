@@ -50,21 +50,36 @@ class RegionRepositoryTest {
     }
 
     @Test
-    void 공개_지역만_이름과_지역_식별자_오름차순으로_조회한다() {
+    void 공개_지역_검증_정보를_이름과_지역_식별자_오름차순으로_조회한다() {
         Region privateRegion = regionRepository.saveAndFlush(new Region("PRIVATE", "Aardvark", false));
         Region beta = regionRepository.saveAndFlush(new Region("BETA", "Beta", true));
         Region firstSameName = regionRepository.saveAndFlush(new Region("SAME_ONE", "Same", true));
         Region secondSameName = regionRepository.saveAndFlush(new Region("SAME_TWO", "Same", true));
 
-        List<Region> regions = regionRepository.findAllByIsPublicTrueOrderByNameAscRegionIdAsc();
+        List<PublicRegionVerificationProjection> regions = regionRepository.findPublicRegionVerifications();
 
         assertThat(regions)
-            .extracting(Region::getRegionId)
+            .extracting(PublicRegionVerificationProjection::regionId)
             .containsExactly(
                 beta.getRegionId(),
                 firstSameName.getRegionId(),
                 secondSameName.getRegionId()
             );
-        assertThat(regions).doesNotContain(privateRegion);
+        assertThat(regions)
+            .extracting(PublicRegionVerificationProjection::regionId)
+            .doesNotContain(privateRegion.getRegionId());
+    }
+
+    @Test
+    void 공개_지역_정적_표시_정보를_별도로_조회한다() {
+        Region region = regionRepository.saveAndFlush(new Region("GIMHAE", "김해시", true));
+
+        PublicRegionStaticProjection staticInfo = regionRepository.findPublicRegionStaticInfo(
+            region.getRegionId()
+        ).orElseThrow();
+
+        assertThat(staticInfo).isEqualTo(
+            new PublicRegionStaticProjection(region.getRegionId(), "GIMHAE", "김해시")
+        );
     }
 }
