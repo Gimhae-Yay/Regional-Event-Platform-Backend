@@ -3,10 +3,11 @@
 | 항목 | 내용 |
 | --- | --- |
 | 상위 명세 | [로컬스탬프 P0 명세](../p0-spec.md) |
-| 분할 기준 원문 | [로컬스탬프 제품 PRD v1.6](../local-stamp-platform-prd.md) |
 | 소유 범위 | 인증, 역할, 지역 권한, 운영자 승인, 최초 콘텐츠 소유자 설정, 개인정보 |
+| API 명세 | [인증·프로필 API](../api/p0/auth-profile/) |
+| 데이터 모델 | [ERD](../erd.md) |
 
-> 이 문서는 원문을 기반으로 현재 P0 명세와 채택 ADR을 반영한 인증·권한·개인정보 구현 계약이다.
+> 이 문서는 인증·권한·개인정보 정책의 단일 기준이며, 현재 P0 명세와 채택 ADR을 반영한 구현 계약이다.
 
 ## 권한·개인정보 정책 라우팅
 
@@ -22,7 +23,6 @@
 | 문서 | 적용 범위 |
 | --- | --- |
 | [P0 명세](../p0-spec.md#7-기능-요구사항과-소유-문서) | `FR-01` 완료 조건과 현재 P0 범위 |
-| [제품 PRD](../local-stamp-platform-prd.md#81-권한개인정보-정책) | 역할·지역 권한과 개인정보 원문 정책 |
 | [ADR-0002](../adr/0002-isolate-regions-in-a-shared-schema.md#결정) | `region_id`와 소유 관계를 함께 검증하는 지역 격리 |
 | [ADR-0005](../adr/0005-use-jwt-access-and-rotating-refresh-tokens.md#결정) | JWT Access Token과 회전형 Refresh Token 인증 수명주기 |
 | [ADR-0009](../adr/0009-exclude-platform-admin-from-initial-mvp.md#결정) | 전체 관리자 제외와 최초 지역 관리자 배포 초기화 |
@@ -169,7 +169,6 @@ Redis 폐기 전에 발생한 탈퇴 트랜잭션 예외는 `WITHDRAWING` 전환
 | 문서 | 적용 범위 |
 | --- | --- |
 | [P0 명세](../p0-spec.md#7-기능-요구사항과-소유-문서) | `FR-09` 완료 조건과 최소 운영 도구 범위 |
-| [제품 PRD](../local-stamp-platform-prd.md#81-권한개인정보-정책) | 운영자 승인과 예약자 정보 마스킹 원문 정책 |
 | [ADR-0002](../adr/0002-isolate-regions-in-a-shared-schema.md#결정) | 담당 지역·콘텐츠 소유 관계 기반의 접근 제한 |
 | [ADR-0009](../adr/0009-exclude-platform-admin-from-initial-mvp.md#결정) | 전체 관리자·전역 관리 API 제외와 초기 운영 데이터 준비 |
 | [ADR-0011](../adr/0011-bootstrap-operator-ownership-on-content-creation.md#결정) | 승인 후 최초 콘텐츠 생성 시 서버가 소유자·지역을 설정하는 방식 |
