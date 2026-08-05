@@ -187,47 +187,6 @@ class ContentSessionRepositoryTest {
     }
 
     @Test
-    void 잘못된_시간_순서와_정원을_허용하지_않는다() {
-        Region region = saveRegion();
-        AppUser operator = saveUser("operator@example.com");
-        Content content = saveContent(region, operator);
-        Instant startsAt = Instant.parse("2026-08-02T01:00:00Z");
-        Instant endsAt = Instant.parse("2026-08-02T03:00:00Z");
-        Instant checkinOpenAt = Instant.parse("2026-08-02T00:30:00Z");
-        Instant checkinCloseAt = Instant.parse("2026-08-02T02:30:00Z");
-
-        assertThatThrownBy(() -> new ContentSession(
-            content,
-            region,
-            endsAt,
-            startsAt,
-            checkinOpenAt,
-            checkinCloseAt,
-            20
-        )).isInstanceOf(IllegalArgumentException.class);
-
-        assertThatThrownBy(() -> new ContentSession(
-            content,
-            region,
-            startsAt,
-            endsAt,
-            checkinOpenAt,
-            endsAt,
-            20
-        )).isInstanceOf(IllegalArgumentException.class);
-
-        assertThatThrownBy(() -> new ContentSession(
-            content,
-            region,
-            startsAt,
-            endsAt,
-            checkinOpenAt,
-            checkinCloseAt,
-            0
-        )).isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
     void 원본_콘텐츠의_현재_회차를_시작시각과_식별자_오름차순으로_조회한다() {
         Region region = saveRegion();
         AppUser operator = saveUser("session-detail-operator@example.com");

@@ -1,11 +1,9 @@
 package io.regionevent.regioneventbackend.domain.reservation.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -14,14 +12,14 @@ import java.util.UUID;
 
 import jakarta.persistence.EntityManager;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
@@ -41,23 +39,27 @@ import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.reservation.repository.CapacityHoldRepository;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationRepository;
+import io.regionevent.regioneventbackend.domain.reservation.service.ReservationCancellationUseCase;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
-import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
+import io.regionevent.regioneventbackend.support.jpa.CleanH2Database;
+import io.regionevent.regioneventbackend.support.jpa.AtomicityJpaTestConfiguration;
 
-@SpringBootTest
-@AutoConfigureMockMvc
+@DataJpaTest
+@Import(AtomicityJpaTestConfiguration.class)
+@Transactional(propagation = Propagation.NOT_SUPPORTED)
+@CleanH2Database
 class ReservationCancellationAuditAtomicityTest {
 
     private static final int SESSION_CAPACITY = 5;
     private static final int HELD_QUANTITY = 2;
     private static final int RESERVED_REMAINING_CAPACITY = SESSION_CAPACITY - HELD_QUANTITY;
 
-    private final MockMvc mockMvc;
+    private final ReservationCancellationUseCase reservationCancellationUseCase;
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
@@ -67,7 +69,6 @@ class ReservationCancellationAuditAtomicityTest {
     private final ReservationRepository reservationRepository;
     private final AuditEventRepository auditEventRepository;
     private final JdbcTemplate jdbcTemplate;
-    private final JwtAccessTokenService jwtAccessTokenService;
     private final EntityManager entityManager;
     private final List<Long> createdReservationIds = new ArrayList<>();
     private final List<Long> createdCapacityHoldIds = new ArrayList<>();
@@ -81,7 +82,7 @@ class ReservationCancellationAuditAtomicityTest {
 
     @Autowired
     ReservationCancellationAuditAtomicityTest(
-        MockMvc mockMvc,
+        ReservationCancellationUseCase reservationCancellationUseCase,
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
         UserRoleAssignmentRepository userRoleAssignmentRepository,
@@ -91,10 +92,9 @@ class ReservationCancellationAuditAtomicityTest {
         ReservationRepository reservationRepository,
         AuditEventRepository auditEventRepository,
         JdbcTemplate jdbcTemplate,
-        JwtAccessTokenService jwtAccessTokenService,
         EntityManager entityManager
     ) {
-        this.mockMvc = mockMvc;
+        this.reservationCancellationUseCase = reservationCancellationUseCase;
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
         this.userRoleAssignmentRepository = userRoleAssignmentRepository;
@@ -104,37 +104,21 @@ class ReservationCancellationAuditAtomicityTest {
         this.reservationRepository = reservationRepository;
         this.auditEventRepository = auditEventRepository;
         this.jdbcTemplate = jdbcTemplate;
-        this.jwtAccessTokenService = jwtAccessTokenService;
         this.entityManager = entityManager;
     }
 
-    @AfterEach
-    void cleanUpFixture() {
-        entityManager.clear();
-
-        deleteReservationAuditEvents();
-        deleteRows("DELETE FROM reservation WHERE reservation_id = ?", createdReservationIds);
-        deleteRows("DELETE FROM capacity_hold WHERE hold_id = ?", createdCapacityHoldIds);
-        deleteRows("DELETE FROM content_session WHERE session_id = ?", createdSessionIds);
-        deleteRows("DELETE FROM content WHERE content_id = ?", createdContentIds);
-        deleteRows("DELETE FROM user_role_assignment WHERE user_id = ?", createdUserIds);
-        deleteRows("DELETE FROM app_user WHERE user_id = ?", createdUserIds);
-        deleteRows("DELETE FROM region WHERE region_id = ?", createdRegionIds);
-
-        entityManager.clear();
-    }
-
     @Test
-    void cancelReservation_whenAuditRecordingFails_rollsBackReservationAndCapacity() throws Exception {
+    void cancelReservation_whenAuditRecordingFails_rollsBackReservationAndCapacity() {
         Fixture fixture = createFixture();
         doThrow(new IllegalStateException("audit storage failure"))
             .when(recordAuditEventUseCase)
             .record(any(AuditEventCommand.class));
 
-        mockMvc.perform(post("/api/v1/me/reservations/{reservationId}/cancel", fixture.reservation().getReservationId())
-                .header("Authorization", "Bearer " + jwtAccessTokenService.issue(fixture.user().getUserId())))
-            .andExpect(status().isInternalServerError())
-            .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
+        assertThatThrownBy(() -> reservationCancellationUseCase.cancel(
+            fixture.user().getUserId(),
+            fixture.reservation().getReservationId(),
+            UUID.randomUUID()
+        )).isInstanceOf(IllegalStateException.class);
 
         entityManager.clear();
         assertThat(reservationRepository.findById(fixture.reservation().getReservationId()))

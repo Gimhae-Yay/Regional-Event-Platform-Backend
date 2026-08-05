@@ -1,25 +1,23 @@
 package io.regionevent.regioneventbackend.domain.content.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.util.UUID;
 
 import jakarta.persistence.EntityManager;
 
 import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
@@ -31,6 +29,7 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentSessionRepository;
+import io.regionevent.regioneventbackend.domain.content.service.CancelContentSessionUseCase;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
@@ -42,17 +41,19 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
-import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
+import io.regionevent.regioneventbackend.support.jpa.AtomicityJpaTestConfiguration;
+import io.regionevent.regioneventbackend.support.jpa.CleanH2Database;
 
-@SpringBootTest
-@AutoConfigureMockMvc
+@DataJpaTest
+@Import(AtomicityJpaTestConfiguration.class)
+@Transactional(propagation = Propagation.NOT_SUPPORTED)
+@CleanH2Database
 class ContentSessionCancelAuditAtomicityTest {
 
     private static final Instant REVIEWED_AT = Instant.parse("2026-08-01T00:00:00Z");
     private static final Instant STARTS_AT = Instant.parse("2030-08-10T01:00:00Z");
 
-    private final MockMvc mockMvc;
-    private final JwtAccessTokenService jwtAccessTokenService;
+    private final CancelContentSessionUseCase cancelContentSessionUseCase;
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
@@ -67,8 +68,7 @@ class ContentSessionCancelAuditAtomicityTest {
 
     @Autowired
     ContentSessionCancelAuditAtomicityTest(
-        MockMvc mockMvc,
-        JwtAccessTokenService jwtAccessTokenService,
+        CancelContentSessionUseCase cancelContentSessionUseCase,
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
         UserRoleAssignmentRepository userRoleAssignmentRepository,
@@ -78,8 +78,7 @@ class ContentSessionCancelAuditAtomicityTest {
         AuditEventRepository auditEventRepository,
         EntityManager entityManager
     ) {
-        this.mockMvc = mockMvc;
-        this.jwtAccessTokenService = jwtAccessTokenService;
+        this.cancelContentSessionUseCase = cancelContentSessionUseCase;
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
         this.userRoleAssignmentRepository = userRoleAssignmentRepository;
@@ -91,26 +90,19 @@ class ContentSessionCancelAuditAtomicityTest {
     }
 
     @Test
-    void cancelSession_whenAuditRecordingFails_rollsBackSessionAndHoldChanges() throws Exception {
+    void cancelSession_whenAuditRecordingFails_rollsBackSessionAndHoldChanges() {
         Fixture fixture = createFixture();
         CapacityHold activeHold = saveActiveHold(fixture);
         doThrow(new IllegalStateException("audit storage failure"))
             .when(recordAuditEventUseCase)
             .record(any(AuditEventCommand.class));
 
-        mockMvc.perform(post(
-            "/api/v1/operator/sessions/{sessionId}/cancel",
-            fixture.contentSession().getSessionId()
-        )
-            .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(fixture.operator().getUserId()))
-            .contentType(MediaType.APPLICATION_JSON)
-            .content("""
-                {
-                  "cancellationReason": "Session cancelled"
-                }
-                """))
-            .andExpect(status().isInternalServerError())
-            .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
+        assertThatThrownBy(() -> cancelContentSessionUseCase.cancel(
+            fixture.operator().getUserId(),
+            fixture.contentSession().getSessionId(),
+            "Session cancelled",
+            UUID.randomUUID()
+        )).isInstanceOf(IllegalStateException.class);
 
         entityManager.clear();
         ContentSession unchangedSession = contentSessionRepository
