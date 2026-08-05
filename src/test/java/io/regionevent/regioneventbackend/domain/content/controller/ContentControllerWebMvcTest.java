@@ -30,6 +30,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
     PublicContentController.class,
     PublicContentDetailController.class,
     PublicContentSessionController.class,
+    SessionRevisionRejectionController.class,
     SessionRevisionReviewController.class,
     SessionRevisionReviewDetailController.class,
     SubmitContentController.class,
