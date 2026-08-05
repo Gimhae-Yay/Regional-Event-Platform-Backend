@@ -12,6 +12,7 @@ import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
+import io.regionevent.regioneventbackend.domain.content.entity.SessionRevision;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentSessionRepository;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -92,6 +93,18 @@ public class ContentSessionService {
         );
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Long findContentIdBySessionId(Long sessionId) {
+        return contentSessionRepository.findContentIdBySessionId(sessionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ContentSession findApprovalTargetForUpdate(Long sessionId) {
+        return contentSessionRepository.findApprovalTargetBySessionIdForUpdate(sessionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
     @Transactional(readOnly = true)
     public void validatePendingSessionExists(Long contentId) {
         if (findPendingByContentId(contentId).isEmpty()) {
@@ -126,6 +139,36 @@ public class ContentSessionService {
     public void lockForUpdate(Long sessionId) {
         contentSessionRepository.findBySessionIdForUpdate(sessionId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ContentSession findRevisionTargetForUpdate(Long sessionId) {
+        return contentSessionRepository.findRevisionTargetForUpdate(sessionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public boolean isBeforeStartByDatabaseTime(Long sessionId) {
+        return contentSessionRepository.countBeforeStartByDatabaseTime(sessionId) > 0;
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ContentSession applyRevision(
+        ContentSession contentSession,
+        SessionRevision revision
+    ) {
+        if (contentSession.getStatus() != ContentSessionStatus.SCHEDULED
+            || contentSession.getVersionNo() != revision.getBaseSessionVersion()) {
+            throw new BusinessException(ErrorCode.SESSION_STATE_CONFLICT);
+        }
+        contentSession.applyRevision(
+            revision.getStartsAt(),
+            revision.getEndsAt(),
+            revision.getCheckinOpenAt(),
+            revision.getCheckinCloseAt(),
+            revision.getCapacity()
+        );
+        return contentSessionRepository.saveAndFlush(contentSession);
     }
 
     public List<ContentSession> createPendingSessions(
@@ -169,6 +212,19 @@ public class ContentSessionService {
         }
         contentSessions.forEach(contentSession -> contentSession.approve(reviewer, reviewedAt));
         return contentSessionRepository.saveAllAndFlush(contentSessions);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ContentSession approve(
+        ContentSession contentSession,
+        AppUser reviewer,
+        Instant reviewedAt
+    ) {
+        if (contentSession.getStatus() != ContentSessionStatus.PENDING) {
+            throw new BusinessException(ErrorCode.SESSION_STATE_CONFLICT);
+        }
+        contentSession.approve(reviewer, reviewedAt);
+        return contentSessionRepository.saveAndFlush(contentSession);
     }
 
     @Transactional(readOnly = true)

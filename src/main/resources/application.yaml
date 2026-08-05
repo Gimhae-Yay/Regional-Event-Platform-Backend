@@ -40,6 +40,11 @@ reservation:
     initial-delay: PT1M
     fixed-delay: PT1M
 
+content:
+  publication:
+    initial-delay: PT1M
+    fixed-delay: PT1M
+
 logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [requestId=%X{requestId:-}] %logger{36} - %msg%n"

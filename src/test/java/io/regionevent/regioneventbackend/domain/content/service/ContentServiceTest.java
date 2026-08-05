@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -30,9 +31,19 @@ class ContentServiceTest {
     private static final Long USER_ID = 100L;
     private static final Long REGION_ID = 10L;
     private static final Instant UPDATED_AT = Instant.parse("2026-08-05T00:00:00Z");
+    private static final BigDecimal DATABASE_EPOCH_SECONDS = new BigDecimal("1754356800.123456");
 
     private final ContentRepository contentRepository = mock(ContentRepository.class);
     private final ContentService contentService = new ContentService(contentRepository);
+
+    @Test
+    void findCurrentDatabaseTime_MySQL_현재_시각을_Instant로_변환한다() {
+        when(contentRepository.findCurrentEpochSeconds()).thenReturn(DATABASE_EPOCH_SECONDS);
+
+        Instant result = contentService.findCurrentDatabaseTime();
+
+        assertThat(result).isEqualTo(Instant.ofEpochSecond(1_754_356_800L, 123_456_000));
+    }
 
     @ParameterizedTest
     @MethodSource("invalidIds")
