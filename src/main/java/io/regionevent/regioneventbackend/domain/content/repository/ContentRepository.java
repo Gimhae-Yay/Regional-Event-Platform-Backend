@@ -2,7 +2,6 @@ package io.regionevent.regioneventbackend.domain.content.repository;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -21,9 +20,6 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 
 public interface ContentRepository extends JpaRepository<Content, Long> {
-
-    @Query(value = "SELECT CURRENT_TIMESTAMP(6)", nativeQuery = true)
-    LocalDateTime findCurrentTimestamp();
 
     @Query("""
         SELECT content.contentId

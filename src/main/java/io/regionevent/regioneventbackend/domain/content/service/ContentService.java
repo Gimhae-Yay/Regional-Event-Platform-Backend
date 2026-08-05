@@ -2,7 +2,6 @@ package io.regionevent.regioneventbackend.domain.content.service;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
@@ -227,10 +226,6 @@ public class ContentService {
     @Transactional(readOnly = true)
     public List<Long> findAutoEndCandidateIds(List<ContentSessionStatus> terminalStatuses) {
         return contentRepository.findAutoEndCandidateIds(ContentStatus.PUBLISHED, terminalStatuses);
-    }
-
-    public Instant findDatabaseCurrentInstant() {
-        return contentRepository.findCurrentTimestamp().toInstant(ZoneOffset.UTC);
     }
 
     public Content findDeletionTargetForUpdate(Long contentId) {

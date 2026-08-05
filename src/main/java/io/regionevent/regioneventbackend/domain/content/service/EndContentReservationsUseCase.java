@@ -89,7 +89,7 @@ public class EndContentReservationsUseCase {
                 throw new BusinessException(ErrorCode.CONTENT_END_CONFLICT);
             }
 
-            Instant endedAt = contentService.findDatabaseCurrentInstant();
+            Instant endedAt = contentService.findCurrentDatabaseTime();
             Content endedContent = contentService.end(content, endedAt);
             contentLogService.recordEnded(endedContent, actor.getAppUser(), endedAt);
             capacityHoldService.invalidateAllActiveHoldsForContent(
@@ -142,7 +142,7 @@ public class EndContentReservationsUseCase {
 
         String previousState = content.getStatus().name();
         try {
-            Instant endedAt = contentService.findDatabaseCurrentInstant();
+            Instant endedAt = contentService.findCurrentDatabaseTime();
             Content endedContent = contentService.end(content, endedAt);
             contentLogService.recordEnded(endedContent, null, endedAt);
             capacityHoldService.invalidateAllActiveHoldsForContent(
@@ -192,7 +192,7 @@ public class EndContentReservationsUseCase {
             AuditEventResult.FAILURE,
             reasonCode,
             actor,
-            contentService.findDatabaseCurrentInstant()
+            contentService.findCurrentDatabaseTime()
         ));
     }
 }
