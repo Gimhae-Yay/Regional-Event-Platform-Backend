@@ -20,6 +20,7 @@ public class QrExceptionReadService {
 
     private static final Duration RETENTION_PERIOD = Duration.ofDays(90);
     private static final String QR_CHECK_IN_PREFIX = "QR_CHECK_IN_";
+    private static final String QR_CHECK_IN_SUCCESS_REASON_CODE = "QR_CHECK_IN_SUCCESS";
     private static final String RESERVATION_LOOKUP_REASON_CODE = "QR_VERIFICATION_FAILED";
     private static final String MANUAL_CHECK_IN_PREFIX = "MANUAL_CHECK_IN_";
     private static final String QR_CHECK_IN_FAILURE = "QR_CHECK_IN_FAILURE";
@@ -53,6 +54,7 @@ public class QrExceptionReadService {
             cursorOccurredAt,
             cursorAuditEventId,
             QR_CHECK_IN_PREFIX,
+            QR_CHECK_IN_SUCCESS_REASON_CODE,
             RESERVATION_LOOKUP_REASON_CODE,
             MANUAL_CHECK_IN_PREFIX,
             PageRequest.of(0, size + 1)
@@ -88,6 +90,7 @@ public class QrExceptionReadService {
             cutoff,
             now,
             QR_CHECK_IN_PREFIX,
+            QR_CHECK_IN_SUCCESS_REASON_CODE,
             RESERVATION_LOOKUP_REASON_CODE,
             MANUAL_CHECK_IN_PREFIX
         );
@@ -101,6 +104,7 @@ public class QrExceptionReadService {
         Long regionId
     ) {
         String exceptionType = toExceptionType(projection.reasonCode());
+        validateTargetType(projection, exceptionType);
         if (projection.targetId() == null) {
             return unresolvedItem(projection, exceptionType);
         }
@@ -111,6 +115,22 @@ public class QrExceptionReadService {
             return visitItem(projection, regionId, exceptionType);
         }
         throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
+    }
+
+    private void validateTargetType(
+        QrExceptionReadProjection projection,
+        String exceptionType
+    ) {
+        if (QR_CHECK_IN_FAILURE.equals(exceptionType) || RESERVATION_NUMBER_LOOKUP.equals(exceptionType)) {
+            if (projection.targetType() != AuditEventTargetType.RESERVATION) {
+                throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
+            }
+            return;
+        }
+        if (MANUAL_CHECK_IN.equals(exceptionType)
+            && (projection.targetType() != AuditEventTargetType.VISIT || projection.targetId() == null)) {
+            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
+        }
     }
 
     private QrExceptionItem unresolvedItem(
@@ -202,6 +222,9 @@ public class QrExceptionReadService {
 
     private String toExceptionType(String reasonCode) {
         if (reasonCode == null) {
+            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
+        }
+        if (QR_CHECK_IN_SUCCESS_REASON_CODE.equals(reasonCode)) {
             throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
         if (reasonCode.startsWith(QR_CHECK_IN_PREFIX)) {

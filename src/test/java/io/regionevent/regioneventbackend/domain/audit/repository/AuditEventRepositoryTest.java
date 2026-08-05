@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 
@@ -127,22 +128,130 @@ class AuditEventRepositoryTest {
         assertThat(auditEventColumns).doesNotContain("USER_ID");
     }
 
+    @Test
+    void findQrExceptionReadProjections_excludes_qr_check_in_success_reason() {
+        Region region = regionRepository.saveAndFlush(new Region("QR-EXCEPTION-1", "김해시", true));
+        auditEventRepository.saveAndFlush(createAuditEvent(
+            "00000000-0000-0000-0000-000000000101",
+            region,
+            AuditEventTargetType.RESERVATION,
+            null,
+            AuditEventResult.SUCCESS,
+            "QR_CHECK_IN_SUCCESS",
+            Instant.parse("2026-08-01T00:00:02Z")
+        ));
+        AuditEvent failureAuditEvent = auditEventRepository.saveAndFlush(createAuditEvent(
+            "00000000-0000-0000-0000-000000000102",
+            region,
+            AuditEventTargetType.RESERVATION,
+            null,
+            AuditEventResult.FAILURE,
+            "QR_CHECK_IN_SIGNATURE_INVALID",
+            Instant.parse("2026-08-01T00:00:01Z")
+        ));
+
+        List<QrExceptionReadProjection> projections = auditEventRepository.findQrExceptionReadProjections(
+            region.getRegionId(),
+            Instant.parse("2026-07-01T00:00:00Z"),
+            null,
+            null,
+            "QR_CHECK_IN_",
+            "QR_CHECK_IN_SUCCESS",
+            "QR_VERIFICATION_FAILED",
+            "MANUAL_CHECK_IN_",
+            PageRequest.of(0, 20)
+        );
+
+        assertThat(projections)
+            .extracting(QrExceptionReadProjection::auditEventId)
+            .containsExactly(failureAuditEvent.getAuditEventId());
+    }
+
+    @Test
+    void existsQrExceptionCursorBoundary_excludes_qr_check_in_success_reason() {
+        Region region = regionRepository.saveAndFlush(new Region("QR-EXCEPTION-2", "김해시", true));
+        AuditEvent successAuditEvent = auditEventRepository.saveAndFlush(createAuditEvent(
+            "00000000-0000-0000-0000-000000000201",
+            region,
+            AuditEventTargetType.RESERVATION,
+            null,
+            AuditEventResult.SUCCESS,
+            "QR_CHECK_IN_SUCCESS",
+            Instant.parse("2026-08-01T00:00:02Z")
+        ));
+        AuditEvent failureAuditEvent = auditEventRepository.saveAndFlush(createAuditEvent(
+            "00000000-0000-0000-0000-000000000202",
+            region,
+            AuditEventTargetType.RESERVATION,
+            null,
+            AuditEventResult.FAILURE,
+            "QR_CHECK_IN_SIGNATURE_INVALID",
+            Instant.parse("2026-08-01T00:00:01Z")
+        ));
+
+        boolean successBoundaryExists = auditEventRepository.existsQrExceptionCursorBoundary(
+            region.getRegionId(),
+            successAuditEvent.getOccurredAt(),
+            successAuditEvent.getAuditEventId(),
+            Instant.parse("2026-07-01T00:00:00Z"),
+            Instant.parse("2026-08-02T00:00:00Z"),
+            "QR_CHECK_IN_",
+            "QR_CHECK_IN_SUCCESS",
+            "QR_VERIFICATION_FAILED",
+            "MANUAL_CHECK_IN_"
+        );
+        boolean failureBoundaryExists = auditEventRepository.existsQrExceptionCursorBoundary(
+            region.getRegionId(),
+            failureAuditEvent.getOccurredAt(),
+            failureAuditEvent.getAuditEventId(),
+            Instant.parse("2026-07-01T00:00:00Z"),
+            Instant.parse("2026-08-02T00:00:00Z"),
+            "QR_CHECK_IN_",
+            "QR_CHECK_IN_SUCCESS",
+            "QR_VERIFICATION_FAILED",
+            "MANUAL_CHECK_IN_"
+        );
+
+        assertThat(successBoundaryExists).isFalse();
+        assertThat(failureBoundaryExists).isTrue();
+    }
+
     private AuditEvent createAuditEvent(
         Region region,
         AuditEventResult result
     ) {
-        return new AuditEvent(
+        return createAuditEvent(
             "00000000-0000-0000-0000-000000000001",
             region,
             AuditEventTargetType.CONTENT,
             101L,
+            result,
+            null,
+            Instant.parse("2026-07-29T00:00:00Z")
+        );
+    }
+
+    private AuditEvent createAuditEvent(
+        String requestId,
+        Region region,
+        AuditEventTargetType targetType,
+        Long targetId,
+        AuditEventResult result,
+        String reasonCode,
+        Instant occurredAt
+    ) {
+        return new AuditEvent(
+            requestId,
+            region,
+            targetType,
+            targetId,
             "PENDING",
             "PUBLISHED",
             result,
-            null,
+            reasonCode,
             "SYSTEM",
             null,
-            Instant.parse("2026-07-29T00:00:00Z")
+            occurredAt
         );
     }
 }

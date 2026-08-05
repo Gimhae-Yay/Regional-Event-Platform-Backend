@@ -70,6 +70,7 @@ class QrExceptionReadServiceTest {
             eq(NOW),
             any(String.class),
             any(String.class),
+            any(String.class),
             any(String.class)
         )).thenReturn(false);
 
@@ -84,6 +85,7 @@ class QrExceptionReadServiceTest {
             any(Instant.class),
             eq(NOW),
             eq("QR_CHECK_IN_"),
+            eq("QR_CHECK_IN_SUCCESS"),
             eq("QR_VERIFICATION_FAILED"),
             eq("MANUAL_CHECK_IN_")
         );
@@ -102,6 +104,7 @@ class QrExceptionReadServiceTest {
             eq(NOW),
             any(String.class),
             any(String.class),
+            any(String.class),
             any(String.class)
         )).thenReturn(true);
         when(auditEventRepository.findQrExceptionReadProjections(
@@ -109,6 +112,7 @@ class QrExceptionReadServiceTest {
             any(Instant.class),
             eq(cursorOccurredAt),
             eq(cursorAuditEventId),
+            any(String.class),
             any(String.class),
             any(String.class),
             any(String.class),
@@ -131,6 +135,7 @@ class QrExceptionReadServiceTest {
             any(Instant.class),
             eq(NOW),
             eq("QR_CHECK_IN_"),
+            eq("QR_CHECK_IN_SUCCESS"),
             eq("QR_VERIFICATION_FAILED"),
             eq("MANUAL_CHECK_IN_")
         );
@@ -140,6 +145,7 @@ class QrExceptionReadServiceTest {
             eq(cursorOccurredAt),
             eq(cursorAuditEventId),
             eq("QR_CHECK_IN_"),
+            eq("QR_CHECK_IN_SUCCESS"),
             eq("QR_VERIFICATION_FAILED"),
             eq("MANUAL_CHECK_IN_"),
             any(Pageable.class)
@@ -156,6 +162,7 @@ class QrExceptionReadServiceTest {
             any(String.class),
             any(String.class),
             any(String.class),
+            any(String.class),
             any(Pageable.class)
         )).thenReturn(List.of());
 
@@ -167,6 +174,7 @@ class QrExceptionReadServiceTest {
             isNull(),
             isNull(),
             eq("QR_CHECK_IN_"),
+            eq("QR_CHECK_IN_SUCCESS"),
             eq("QR_VERIFICATION_FAILED"),
             eq("MANUAL_CHECK_IN_"),
             any(Pageable.class)
@@ -180,6 +188,7 @@ class QrExceptionReadServiceTest {
             any(Instant.class),
             isNull(),
             isNull(),
+            any(String.class),
             any(String.class),
             any(String.class),
             any(String.class),
@@ -227,6 +236,7 @@ class QrExceptionReadServiceTest {
             any(String.class),
             any(String.class),
             any(String.class),
+            any(String.class),
             any(Pageable.class)
         )).thenReturn(List.of(visitProjection(10L)));
 
@@ -252,6 +262,7 @@ class QrExceptionReadServiceTest {
             any(Instant.class),
             isNull(),
             isNull(),
+            any(String.class),
             any(String.class),
             any(String.class),
             any(String.class),
@@ -296,6 +307,7 @@ class QrExceptionReadServiceTest {
             any(String.class),
             any(String.class),
             any(String.class),
+            any(String.class),
             any(Pageable.class)
         )).thenReturn(List.of(new QrExceptionReadProjection(
             10L,
@@ -320,6 +332,86 @@ class QrExceptionReadServiceTest {
             null,
             null
         )));
+
+        assertThatThrownBy(() -> qrExceptionReadService.findAll(REGION_ID, null, null, 20))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INTERNAL_SERVER_ERROR)
+            );
+    }
+
+    @Test
+    void findAll_qr_check_in_failure_with_visit_target_then_rejects_with_INTERNAL_SERVER_ERROR() {
+        when(auditEventRepository.findQrExceptionReadProjections(
+            eq(REGION_ID),
+            any(Instant.class),
+            isNull(),
+            isNull(),
+            any(String.class),
+            any(String.class),
+            any(String.class),
+            any(String.class),
+            any(Pageable.class)
+        )).thenReturn(List.of(visitProjection(10L, "QR_CHECK_IN_SIGNATURE_INVALID", 700L)));
+
+        assertThatThrownBy(() -> qrExceptionReadService.findAll(REGION_ID, null, null, 20))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INTERNAL_SERVER_ERROR)
+            );
+    }
+
+    @Test
+    void findAll_reservation_lookup_with_visit_target_then_rejects_with_INTERNAL_SERVER_ERROR() {
+        when(auditEventRepository.findQrExceptionReadProjections(
+            eq(REGION_ID),
+            any(Instant.class),
+            isNull(),
+            isNull(),
+            any(String.class),
+            any(String.class),
+            any(String.class),
+            any(String.class),
+            any(Pageable.class)
+        )).thenReturn(List.of(visitProjection(10L, "QR_VERIFICATION_FAILED", 700L)));
+
+        assertThatThrownBy(() -> qrExceptionReadService.findAll(REGION_ID, null, null, 20))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INTERNAL_SERVER_ERROR)
+            );
+    }
+
+    @Test
+    void findAll_manual_check_in_with_reservation_target_then_rejects_with_INTERNAL_SERVER_ERROR() {
+        when(auditEventRepository.findQrExceptionReadProjections(
+            eq(REGION_ID),
+            any(Instant.class),
+            isNull(),
+            isNull(),
+            any(String.class),
+            any(String.class),
+            any(String.class),
+            any(String.class),
+            any(Pageable.class)
+        )).thenReturn(List.of(reservationProjection(10L, "MANUAL_CHECK_IN_QR_SCAN_FAILED_SUCCESS", 100L)));
+
+        assertThatThrownBy(() -> qrExceptionReadService.findAll(REGION_ID, null, null, 20))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INTERNAL_SERVER_ERROR)
+            );
+    }
+
+    @Test
+    void findAll_manual_check_in_without_visit_target_id_then_rejects_with_INTERNAL_SERVER_ERROR() {
+        when(auditEventRepository.findQrExceptionReadProjections(
+            eq(REGION_ID),
+            any(Instant.class),
+            isNull(),
+            isNull(),
+            any(String.class),
+            any(String.class),
+            any(String.class),
+            any(String.class),
+            any(Pageable.class)
+        )).thenReturn(List.of(visitProjection(10L, "MANUAL_CHECK_IN_QR_SCAN_FAILED_SUCCESS", null)));
 
         assertThatThrownBy(() -> qrExceptionReadService.findAll(REGION_ID, null, null, 20))
             .isInstanceOfSatisfying(BusinessException.class, exception ->
@@ -358,14 +450,22 @@ class QrExceptionReadServiceTest {
     }
 
     private QrExceptionReadProjection reservationProjection(Long auditEventId) {
+        return reservationProjection(auditEventId, "QR_VERIFICATION_FAILED", 100L);
+    }
+
+    private QrExceptionReadProjection reservationProjection(
+        Long auditEventId,
+        String reasonCode,
+        Long targetId
+    ) {
         return new QrExceptionReadProjection(
             auditEventId,
             NOW.minusSeconds(auditEventId),
             REGION_ID,
             AuditEventTargetType.RESERVATION,
-            100L,
+            targetId,
             AuditEventResult.SUCCESS,
-            "QR_VERIFICATION_FAILED",
+            reasonCode,
             100L,
             REGION_ID,
             200L,
@@ -384,14 +484,22 @@ class QrExceptionReadServiceTest {
     }
 
     private QrExceptionReadProjection visitProjection(Long auditEventId) {
+        return visitProjection(auditEventId, "MANUAL_CHECK_IN_QR_SCAN_FAILED_SUCCESS", 700L);
+    }
+
+    private QrExceptionReadProjection visitProjection(
+        Long auditEventId,
+        String reasonCode,
+        Long targetId
+    ) {
         return new QrExceptionReadProjection(
             auditEventId,
             NOW.minusSeconds(auditEventId),
             REGION_ID,
             AuditEventTargetType.VISIT,
-            700L,
+            targetId,
             AuditEventResult.SUCCESS,
-            "MANUAL_CHECK_IN_QR_SCAN_FAILED_SUCCESS",
+            reasonCode,
             null,
             null,
             null,

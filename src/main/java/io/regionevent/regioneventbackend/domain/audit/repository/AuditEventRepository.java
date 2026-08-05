@@ -51,7 +51,10 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
         WHERE auditEvent.region.regionId = :regionId
             AND auditEvent.occurredAt >= :cutoff
             AND (
-                LOCATE(:qrCheckInPrefix, auditEvent.reasonCode) = 1
+                (
+                    LOCATE(:qrCheckInPrefix, auditEvent.reasonCode) = 1
+                    AND auditEvent.reasonCode <> :qrCheckInSuccessReasonCode
+                )
                 OR auditEvent.reasonCode = :reservationLookupReasonCode
                 OR LOCATE(:manualCheckInPrefix, auditEvent.reasonCode) = 1
             )
@@ -71,6 +74,7 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
         @Param("cursorOccurredAt") Instant cursorOccurredAt,
         @Param("cursorAuditEventId") Long cursorAuditEventId,
         @Param("qrCheckInPrefix") String qrCheckInPrefix,
+        @Param("qrCheckInSuccessReasonCode") String qrCheckInSuccessReasonCode,
         @Param("reservationLookupReasonCode") String reservationLookupReasonCode,
         @Param("manualCheckInPrefix") String manualCheckInPrefix,
         Pageable pageable
@@ -85,7 +89,10 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
             AND auditEvent.occurredAt >= :cutoff
             AND auditEvent.occurredAt <= :now
             AND (
-                LOCATE(:qrCheckInPrefix, auditEvent.reasonCode) = 1
+                (
+                    LOCATE(:qrCheckInPrefix, auditEvent.reasonCode) = 1
+                    AND auditEvent.reasonCode <> :qrCheckInSuccessReasonCode
+                )
                 OR auditEvent.reasonCode = :reservationLookupReasonCode
                 OR LOCATE(:manualCheckInPrefix, auditEvent.reasonCode) = 1
             )
@@ -97,6 +104,7 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
         @Param("cutoff") Instant cutoff,
         @Param("now") Instant now,
         @Param("qrCheckInPrefix") String qrCheckInPrefix,
+        @Param("qrCheckInSuccessReasonCode") String qrCheckInSuccessReasonCode,
         @Param("reservationLookupReasonCode") String reservationLookupReasonCode,
         @Param("manualCheckInPrefix") String manualCheckInPrefix
     );
