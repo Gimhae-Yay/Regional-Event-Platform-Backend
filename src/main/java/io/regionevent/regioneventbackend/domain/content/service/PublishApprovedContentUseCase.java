@@ -1,6 +1,8 @@
 package io.regionevent.regioneventbackend.domain.content.service;
 
+import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -22,27 +24,32 @@ public class PublishApprovedContentUseCase {
     private final ContentLogService contentLogService;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase;
+    private final Clock clock;
 
     public PublishApprovedContentUseCase(
         ContentService contentService,
         ContentLogService contentLogService,
         RecordAuditEventUseCase recordAuditEventUseCase,
-        RecordFailedAuditEventUseCase recordFailedAuditEventUseCase
+        RecordFailedAuditEventUseCase recordFailedAuditEventUseCase,
+        Clock clock
     ) {
         this.contentService = contentService;
         this.contentLogService = contentLogService;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
         this.recordFailedAuditEventUseCase = recordFailedAuditEventUseCase;
+        this.clock = clock;
     }
 
     @Transactional
     public PublishApprovedContentResult publish(Long contentId, UUID requestId) {
-        Content content = contentService.findApprovedPublicationTargetForUpdate(contentId).orElse(null);
-        if (content == null) {
-            return PublishApprovedContentResult.SKIPPED;
-        }
+        Content content = null;
 
         try {
+            content = contentService.findApprovedPublicationTargetForUpdate(contentId).orElse(null);
+            if (content == null) {
+                return PublishApprovedContentResult.SKIPPED;
+            }
+
             Instant publishedAt = contentService.findCurrentDatabaseTime();
             Content publishedContent = contentService.publish(content);
             contentLogService.recordPublished(publishedContent, publishedAt);
@@ -60,19 +67,23 @@ public class PublishApprovedContentUseCase {
             ));
             return PublishApprovedContentResult.PUBLISHED;
         } catch (RuntimeException exception) {
-            recordFailedAuditEventUseCase.record(new AuditEventCommand(
-                requestId,
-                content.getRegion(),
-                AuditEventTargetType.CONTENT,
-                content.getContentId(),
-                ContentStatus.APPROVED.name(),
-                null,
-                AuditEventResult.FAILURE,
-                ErrorCode.INTERNAL_SERVER_ERROR.code(),
-                null,
-                contentService.findCurrentDatabaseTime()
-            ));
+            recordFailure(requestId, contentId, content);
             throw exception;
         }
+    }
+
+    private void recordFailure(UUID requestId, Long contentId, Content content) {
+        recordFailedAuditEventUseCase.record(new AuditEventCommand(
+            requestId,
+            content == null ? null : content.getRegion(),
+            AuditEventTargetType.CONTENT,
+            contentId,
+            content == null ? null : ContentStatus.APPROVED.name(),
+            null,
+            AuditEventResult.FAILURE,
+            ErrorCode.INTERNAL_SERVER_ERROR.code(),
+            null,
+            clock.instant().truncatedTo(ChronoUnit.MICROS)
+        ));
     }
 }
