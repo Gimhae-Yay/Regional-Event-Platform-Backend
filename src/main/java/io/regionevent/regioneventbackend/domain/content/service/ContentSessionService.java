@@ -30,6 +30,10 @@ public class ContentSessionService {
         ContentSessionStatus.COMPLETED,
         ContentSessionStatus.CANCELLED
     );
+    private static final List<ContentStatus> PENDING_REVIEW_CONTENT_STATUSES = List.of(
+        ContentStatus.APPROVED,
+        ContentStatus.PUBLISHED
+    );
 
     private final ContentSessionRepository contentSessionRepository;
 
@@ -69,6 +73,14 @@ public class ContentSessionService {
         return contentSessionRepository.findByContentContentIdAndStatusOrderByStartsAtAsc(
             contentId,
             ContentSessionStatus.PENDING
+        );
+    }
+
+    public List<ContentSession> findPendingReviewCandidatesByRegionId(Long regionId) {
+        return contentSessionRepository.findPendingReviewCandidatesByRegionId(
+            regionId,
+            ContentSessionStatus.PENDING,
+            PENDING_REVIEW_CONTENT_STATUSES
         );
     }
 
