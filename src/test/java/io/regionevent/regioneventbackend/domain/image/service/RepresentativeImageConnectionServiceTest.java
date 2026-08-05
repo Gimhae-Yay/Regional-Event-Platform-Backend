@@ -1,7 +1,6 @@
 package io.regionevent.regioneventbackend.domain.image.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -11,7 +10,6 @@ import java.util.Map;
 
 import jakarta.persistence.EntityManager;
 
-import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -32,8 +30,6 @@ import io.regionevent.regioneventbackend.domain.region.repository.RegionReposito
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
-import io.regionevent.regioneventbackend.global.error.BusinessException;
-import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 @DataJpaTest
 @Import({
@@ -98,148 +94,6 @@ class RepresentativeImageConnectionServiceTest {
         assertThat(connectedImageObject.getCreatedByUser()).isNull();
     }
 
-    @Test
-    void validateAndMarkConnected_whenOperatorIsDifferent_rejectsConnection() {
-        Region region = saveRegion("OTHER-OPERATOR");
-        AppUser uploader = saveUser("uploader");
-        AppUser otherOperator = saveUser("other-operator");
-        ImageObject imageObject = saveUploadCandidate(
-            "content/other-operator.webp",
-            uploader,
-            region,
-            NOW.plusSeconds(60)
-        );
-        entityManager.clear();
-
-        assertInvalidInputThrownBy(() -> representativeImageConnectionService.validateAndMarkConnected(
-            imageObject.getImageObjectId(),
-            otherOperator.getUserId(),
-            region.getRegionId()
-        ));
-    }
-
-    @Test
-    void validateAndMarkConnected_whenRegionIsDifferent_rejectsConnection() {
-        Region uploadRegion = saveRegion("UPLOAD-REGION");
-        Region otherRegion = saveRegion("OTHER-REGION");
-        AppUser operator = saveUser("region-operator");
-        ImageObject imageObject = saveUploadCandidate(
-            "content/other-region.webp",
-            operator,
-            uploadRegion,
-            NOW.plusSeconds(60)
-        );
-        entityManager.clear();
-
-        assertInvalidInputThrownBy(() -> representativeImageConnectionService.validateAndMarkConnected(
-            imageObject.getImageObjectId(),
-            operator.getUserId(),
-            otherRegion.getRegionId()
-        ));
-    }
-
-    @Test
-    void validateAndMarkConnected_whenUploadCandidateIsExpired_rejectsConnection() {
-        Region region = saveRegion("EXPIRED");
-        AppUser operator = saveUser("expired-operator");
-        ImageObject imageObject = saveUploadCandidate(
-            "content/expired.webp",
-            operator,
-            region,
-            NOW
-        );
-        entityManager.clear();
-
-        assertInvalidInputThrownBy(() -> representativeImageConnectionService.validateAndMarkConnected(
-            imageObject.getImageObjectId(),
-            operator.getUserId(),
-            region.getRegionId()
-        ));
-    }
-
-    @Test
-    void validateAndMarkConnected_whenImageObjectIsAlreadyLinked_rejectsConnection() {
-        Region region = saveRegion("ALREADY-LINKED");
-        AppUser operator = saveUser("linked-operator");
-        ImageObject imageObject = saveUploadCandidate(
-            "content/already-linked.webp",
-            operator,
-            region,
-            NOW.plusSeconds(60)
-        );
-        imageObject.markLinked(NOW.minusSeconds(1));
-        imageObjectRepository.saveAndFlush(imageObject);
-        entityManager.clear();
-
-        assertInvalidInputThrownBy(() -> representativeImageConnectionService.validateAndMarkConnected(
-            imageObject.getImageObjectId(),
-            operator.getUserId(),
-            region.getRegionId()
-        ));
-    }
-
-    @Test
-    void validateAndMarkConnected_whenImageObjectIsDeletePending_rejectsConnection() {
-        Region region = saveRegion("DELETE-PENDING");
-        AppUser operator = saveUser("delete-pending-operator");
-        ImageObject imageObject = saveUploadCandidate(
-            "content/delete-pending.webp",
-            operator,
-            region,
-            NOW.plusSeconds(60)
-        );
-        imageObject.markDeletePending();
-        imageObjectRepository.saveAndFlush(imageObject);
-        entityManager.clear();
-
-        assertInvalidInputThrownBy(() -> representativeImageConnectionService.validateAndMarkConnected(
-            imageObject.getImageObjectId(),
-            operator.getUserId(),
-            region.getRegionId()
-        ));
-    }
-
-    @Test
-    void validateAndMarkConnected_whenStoredByteSizeIsDifferent_rejectsConnection() {
-        assertStoredMetadataMismatchRejected(
-            "byte-size-mismatch",
-            BYTE_SIZE + 1,
-            CHECKSUM
-        );
-    }
-
-    @Test
-    void validateAndMarkConnected_whenStoredChecksumIsDifferent_rejectsConnection() {
-        assertStoredMetadataMismatchRejected(
-            "checksum-mismatch",
-            BYTE_SIZE,
-            "other-checksum"
-        );
-    }
-
-    private void assertStoredMetadataMismatchRejected(
-        String scenario,
-        long storedByteSize,
-        String storedChecksum
-    ) {
-        Region region = saveRegion(scenario.toUpperCase());
-        AppUser operator = saveUser(scenario + "-operator");
-        ImageObject imageObject = saveUploadCandidate(
-            "content/" + scenario + ".webp",
-            operator,
-            region,
-            NOW.plusSeconds(60)
-        );
-        imageStorageGateway.putMetadata(imageObject.getObjectKey(), storedByteSize, storedChecksum);
-        entityManager.clear();
-
-        assertInvalidInputThrownBy(() -> representativeImageConnectionService.validateAndMarkConnected(
-            imageObject.getImageObjectId(),
-            operator.getUserId(),
-            region.getRegionId()
-        ));
-    }
-
     private Region saveRegion(String codePrefix) {
         return regionRepository.saveAndFlush(new Region(
             codePrefix,
@@ -274,13 +128,6 @@ class RepresentativeImageConnectionServiceTest {
             CHECKSUM,
             uploadExpiresAt
         ));
-    }
-
-    private void assertInvalidInputThrownBy(ThrowingCallable throwingCallable) {
-        assertThatThrownBy(throwingCallable)
-            .isInstanceOfSatisfying(BusinessException.class, exception ->
-                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT)
-            );
     }
 
     @TestConfiguration

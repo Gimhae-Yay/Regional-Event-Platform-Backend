@@ -1,22 +1,22 @@
 package io.regionevent.regioneventbackend.domain.content.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.util.UUID;
 
 import jakarta.persistence.EntityManager;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
@@ -31,6 +31,7 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentLogRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentSessionRepository;
+import io.regionevent.regioneventbackend.domain.content.service.ApproveContentUseCase;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -39,13 +40,16 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
-import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
+import io.regionevent.regioneventbackend.support.jpa.AtomicityJpaTestConfiguration;
+import io.regionevent.regioneventbackend.support.jpa.CleanH2Database;
 
-@SpringBootTest
-@AutoConfigureMockMvc
+@DataJpaTest
+@Import(AtomicityJpaTestConfiguration.class)
+@Transactional(propagation = Propagation.NOT_SUPPORTED)
+@CleanH2Database
 class ContentApprovalAuditAtomicityTest {
 
-    private final MockMvc mockMvc;
+    private final ApproveContentUseCase approveContentUseCase;
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
@@ -53,7 +57,6 @@ class ContentApprovalAuditAtomicityTest {
     private final ContentSessionRepository contentSessionRepository;
     private final ContentLogRepository contentLogRepository;
     private final AuditEventRepository auditEventRepository;
-    private final JwtAccessTokenService jwtAccessTokenService;
     private final EntityManager entityManager;
 
     @MockitoBean
@@ -61,7 +64,7 @@ class ContentApprovalAuditAtomicityTest {
 
     @Autowired
     ContentApprovalAuditAtomicityTest(
-        MockMvc mockMvc,
+        ApproveContentUseCase approveContentUseCase,
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
         UserRoleAssignmentRepository userRoleAssignmentRepository,
@@ -69,10 +72,9 @@ class ContentApprovalAuditAtomicityTest {
         ContentSessionRepository contentSessionRepository,
         ContentLogRepository contentLogRepository,
         AuditEventRepository auditEventRepository,
-        JwtAccessTokenService jwtAccessTokenService,
         EntityManager entityManager
     ) {
-        this.mockMvc = mockMvc;
+        this.approveContentUseCase = approveContentUseCase;
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
         this.userRoleAssignmentRepository = userRoleAssignmentRepository;
@@ -80,26 +82,21 @@ class ContentApprovalAuditAtomicityTest {
         this.contentSessionRepository = contentSessionRepository;
         this.contentLogRepository = contentLogRepository;
         this.auditEventRepository = auditEventRepository;
-        this.jwtAccessTokenService = jwtAccessTokenService;
         this.entityManager = entityManager;
     }
 
     @Test
-    void approveContent_whenAuditRecordingFails_rollsBackContentSessionsAndLog() throws Exception {
+    void approveContent_whenAuditRecordingFails_rollsBackContentSessionsAndLog() {
         Fixture fixture = createFixture();
         doThrow(new IllegalStateException("audit storage failure"))
             .when(recordAuditEventUseCase)
             .record(any(AuditEventCommand.class));
 
-        mockMvc.perform(post(
-            "/api/v1/region-admin/contents/{contentId}/approve",
-            fixture.content().getContentId()
-        ).header(
-            "Authorization",
-            "Bearer " + jwtAccessTokenService.issue(fixture.admin().getUserId())
-        ))
-            .andExpect(status().isInternalServerError())
-            .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
+        assertThatThrownBy(() -> approveContentUseCase.approve(
+            fixture.admin().getUserId(),
+            fixture.content().getContentId(),
+            UUID.randomUUID()
+        )).isInstanceOf(IllegalStateException.class);
 
         entityManager.clear();
         Content unchangedContent = contentRepository.findById(fixture.content().getContentId()).orElseThrow();

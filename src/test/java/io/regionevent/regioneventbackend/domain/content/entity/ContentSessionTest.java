@@ -130,6 +130,42 @@ class ContentSessionTest {
         ).isInstanceOf(IllegalStateException.class);
     }
 
+    @Test
+    void 생성_시_시간_순서와_정원을_검증한다() {
+        Instant startsAt = Instant.parse("2026-08-02T01:00:00Z");
+        Instant endsAt = Instant.parse("2026-08-02T03:00:00Z");
+        Instant checkinOpenAt = Instant.parse("2026-08-02T00:30:00Z");
+        Instant checkinCloseAt = Instant.parse("2026-08-02T02:30:00Z");
+
+        assertThatThrownBy(() -> new ContentSession(
+            content,
+            region,
+            endsAt,
+            startsAt,
+            checkinOpenAt,
+            checkinCloseAt,
+            20
+        )).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new ContentSession(
+            content,
+            region,
+            startsAt,
+            endsAt,
+            checkinOpenAt,
+            endsAt,
+            20
+        )).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new ContentSession(
+            content,
+            region,
+            startsAt,
+            endsAt,
+            checkinOpenAt,
+            checkinCloseAt,
+            0
+        )).isInstanceOf(IllegalArgumentException.class);
+    }
+
     private ContentSession createContentSession() {
         return new ContentSession(
             content,
