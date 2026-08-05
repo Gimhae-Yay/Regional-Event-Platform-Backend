@@ -4,6 +4,14 @@ spring:
       s3:
         enabled: false
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include:
+          - health
+          - metrics
+
 security:
   jwt:
     access:
