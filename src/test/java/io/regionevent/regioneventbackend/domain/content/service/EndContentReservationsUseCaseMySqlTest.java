@@ -25,6 +25,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventActorLinkRepository;
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
@@ -134,6 +135,8 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
         );
 
         assertThat(result.status()).isEqualTo(ContentStatus.ENDED);
+        ContentLog endedLog = contentLogRepository.findByContentContentIdOrderByDateAscIdAsc(fixture.contentId())
+            .getLast();
         assertThat(contentRepository.findById(fixture.contentId()))
             .hasValueSatisfying(content -> assertThat(content.getStatus()).isEqualTo(ContentStatus.ENDED));
         assertThat(contentLogRepository.findByContentContentIdOrderByDateAscIdAsc(fixture.contentId()))
@@ -158,7 +161,48 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
                     .hasValueSatisfying(actorLink ->
                         assertThat(actorLink.getActor().getUserId()).isEqualTo(fixture.adminId())
                     );
+                assertThat(auditEvent.getOccurredAt()).isEqualTo(result.endedAt());
             });
+        assertThat(endedLog.getDate()).isEqualTo(result.endedAt());
+    }
+
+    @Test
+    void 시스템_종료는_종결_회차를_후보로_조회해_SYSTEM_감사와_함께_종료한다() {
+        Fixture fixture = createFixture();
+
+        assertThat(endContentReservationsUseCase.findAutoEndCandidateIds())
+            .contains(fixture.contentId());
+
+        endContentReservationsUseCase.endBySystem(fixture.contentId(), UUID.randomUUID());
+
+        assertThat(contentRepository.findById(fixture.contentId()))
+            .hasValueSatisfying(content -> assertThat(content.getStatus()).isEqualTo(ContentStatus.ENDED));
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent -> fixture.contentId().equals(auditEvent.getTargetId()))
+            .singleElement()
+            .satisfies(auditEvent -> {
+                assertThat(auditEvent.getActorKind()).isEqualTo("SYSTEM");
+                assertThat(auditEventActorLinkRepository.findById(auditEvent.getAuditEventId())).isEmpty();
+            });
+    }
+
+    @Test
+    void 오래된_시스템_후보에_미종결_회차가_추가되면_변경과_실패_감사_없이_건너뛴다() {
+        Fixture fixture = createFixture();
+        transactionTemplate.executeWithoutResult(status -> {
+            Content content = contentRepository.findById(fixture.contentId()).orElseThrow();
+            contentSessionRepository.saveAndFlush(newSession(
+                content,
+                content.getRegion(),
+                Instant.now().plusSeconds(86_400)
+            ));
+        });
+
+        endContentReservationsUseCase.endBySystem(fixture.contentId(), UUID.randomUUID());
+
+        assertThat(contentRepository.findById(fixture.contentId()))
+            .hasValueSatisfying(content -> assertThat(content.getStatus()).isEqualTo(ContentStatus.PUBLISHED));
+        assertNoEndSideEffects(fixture);
     }
 
     @Test
@@ -264,7 +308,7 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
         assertThat(contentLogRepository.findByContentContentIdOrderByDateAscIdAsc(fixture.contentId()))
             .extracting(ContentLog::getStatus)
             .containsExactly(ContentLogStatus.PUBLISHED);
-        assertNoEndSideEffects(fixture);
+        assertFailureAuditOnly(fixture);
     }
 
     private EndContentReservationsResult endAfterStart(
@@ -494,6 +538,20 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
             .hasValueSatisfying(session -> assertThat(session.getRemainingCapacity()).isEqualTo(8));
         assertThat(contentSessionRepository.findById(fixture.secondSessionId()))
             .hasValueSatisfying(session -> assertThat(session.getRemainingCapacity()).isEqualTo(9));
+    }
+
+    private void assertFailureAuditOnly(Fixture fixture) {
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent -> fixture.contentId().equals(auditEvent.getTargetId()))
+            .singleElement()
+            .satisfies(auditEvent -> {
+                assertThat(auditEvent.getResult()).isEqualTo(AuditEventResult.FAILURE);
+                assertThat(auditEvent.getReasonCode()).isEqualTo(ErrorCode.CONTENT_END_CONFLICT.name());
+            });
+        assertThat(capacityHoldRepository.findById(fixture.firstHoldId()))
+            .hasValueSatisfying(this::assertActive);
+        assertThat(capacityHoldRepository.findById(fixture.secondHoldId()))
+            .hasValueSatisfying(this::assertActive);
     }
 
     private void assertActive(CapacityHold capacityHold) {

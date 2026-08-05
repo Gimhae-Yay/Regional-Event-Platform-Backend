@@ -133,6 +133,10 @@ public class ContentSessionService {
         );
     }
 
+    public List<ContentSessionStatus> getEndTerminalStatuses() {
+        return END_TERMINAL_STATUSES;
+    }
+
     public ContentSession findCancelTargetForUpdate(Long sessionId) {
         return contentSessionRepository.findCancelTargetForUpdate(sessionId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
