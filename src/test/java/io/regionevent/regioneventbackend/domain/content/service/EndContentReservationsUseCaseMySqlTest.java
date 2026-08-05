@@ -148,6 +148,26 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
     }
 
     @Test
+    void 시스템_종료는_종결_회차를_후보로_조회해_SYSTEM_감사와_함께_종료한다() {
+        Fixture fixture = createFixture();
+
+        assertThat(endContentReservationsUseCase.findAutoEndCandidateIds())
+            .contains(fixture.contentId());
+
+        endContentReservationsUseCase.endBySystem(fixture.contentId(), UUID.randomUUID());
+
+        assertThat(contentRepository.findById(fixture.contentId()))
+            .hasValueSatisfying(content -> assertThat(content.getStatus()).isEqualTo(ContentStatus.ENDED));
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent -> fixture.contentId().equals(auditEvent.getTargetId()))
+            .singleElement()
+            .satisfies(auditEvent -> {
+                assertThat(auditEvent.getActorKind()).isEqualTo("SYSTEM");
+                assertThat(auditEventActorLinkRepository.findById(auditEvent.getAuditEventId())).isEmpty();
+            });
+    }
+
+    @Test
     @Timeout(10)
     void 동시_종료_요청에서도_로그와_감사와_정원복구는_한번만_발생한다() throws Exception {
         Fixture fixture = createFixture();
