@@ -79,6 +79,19 @@ class GetSessionRevisionReviewDetailUseCaseTest {
     }
 
     @Test
+    void 대상_회차가_예정_상태가_아니면_서버_오류로_처리한다() {
+        SessionRevision revision = revision(REGION_ID, REGION_ID, REGION_ID);
+        when(revision.getTargetSession().getStatus()).thenReturn(ContentSessionStatus.CANCELLED);
+        when(regionAdminAuthorizationService.requireAuthorizedRegionId(USER_ID)).thenReturn(REGION_ID);
+        when(sessionRevisionService.findPendingReviewDetailById(REVISION_ID)).thenReturn(revision);
+
+        assertThatThrownBy(() -> useCase.get(USER_ID, REVISION_ID))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INTERNAL_SERVER_ERROR)
+            );
+    }
+
+    @Test
     void 지역_관리자_권한이_없으면_수정_요청을_조회하지_않는다() {
         when(regionAdminAuthorizationService.requireAuthorizedRegionId(USER_ID))
             .thenThrow(new BusinessException(ErrorCode.FORBIDDEN));

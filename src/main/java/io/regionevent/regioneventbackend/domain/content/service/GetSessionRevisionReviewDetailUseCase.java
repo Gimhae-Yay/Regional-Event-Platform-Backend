@@ -5,6 +5,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.SessionRevision;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -58,6 +59,7 @@ public class GetSessionRevisionReviewDetailUseCase {
             || targetSession.getContent().getContentId() == null
             || targetSession.getRegion() == null
             || targetSession.getRegion().getRegionId() == null
+            || targetSession.getStatus() != ContentSessionStatus.SCHEDULED
             || requestedBy.getUserId() == null
             || requestedBy.getName() == null
             || !revisionRegion.getRegionId().equals(content.getRegion().getRegionId())
