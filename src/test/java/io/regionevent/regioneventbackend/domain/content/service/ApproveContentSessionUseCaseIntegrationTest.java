@@ -7,6 +7,8 @@ import java.time.Instant;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -83,9 +85,12 @@ class ApproveContentSessionUseCaseIntegrationTest {
         this.reservationRepository = reservationRepository;
     }
 
-    @Test
-    void 추가_회차를_승인하면_감사와_처리자_연결을_기록하고_홀드와_예약은_만들지_않는다() {
-        Fixture fixture = createFixture(ContentStatus.APPROVED, ContentSessionStatus.PENDING);
+    @ParameterizedTest
+    @EnumSource(value = ContentStatus.class, names = {"APPROVED", "PUBLISHED"})
+    void 승인_가능한_콘텐츠의_추가_회차를_승인하면_감사와_처리자_연결을_기록하고_홀드와_예약은_만들지_않는다(
+        ContentStatus contentStatus
+    ) {
+        Fixture fixture = createFixture(contentStatus, ContentSessionStatus.PENDING);
         long holdCount = capacityHoldRepository.count();
         long reservationCount = reservationRepository.count();
 
