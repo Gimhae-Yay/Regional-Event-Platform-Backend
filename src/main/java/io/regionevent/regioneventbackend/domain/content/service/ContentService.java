@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.content.service;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -220,7 +221,7 @@ public class ContentService {
     }
 
     public Instant findCurrentDatabaseTime() {
-        return contentRepository.findCurrentDatabaseTime();
+        return toInstant(contentRepository.findCurrentEpochSeconds());
     }
 
     public boolean lockPublishedReservationTarget(Long contentId) {
@@ -314,6 +315,11 @@ public class ContentService {
         }
         content.suspend();
         return content;
+    }
+
+    private Instant toInstant(BigDecimal epochSeconds) {
+        long seconds = epochSeconds.longValue();
+        return Instant.ofEpochSecond(seconds, epochSeconds.remainder(BigDecimal.ONE).movePointRight(9).longValue());
     }
 
     private void validateRequiredId(Long id) {

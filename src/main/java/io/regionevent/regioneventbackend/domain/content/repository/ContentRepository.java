@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.content.repository;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -207,8 +208,8 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
         """)
     Optional<Content> findApprovedPublicationTargetForUpdate(@Param("contentId") Long contentId);
 
-    @Query(value = "SELECT CURRENT_TIMESTAMP(6)", nativeQuery = true)
-    Instant findCurrentDatabaseTime();
+    @Query(value = "SELECT UNIX_TIMESTAMP(CURRENT_TIMESTAMP(6))", nativeQuery = true)
+    BigDecimal findCurrentEpochSeconds();
 
     @Query(value = """
         SELECT content_id
