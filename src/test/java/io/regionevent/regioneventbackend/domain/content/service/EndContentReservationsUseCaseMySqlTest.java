@@ -111,6 +111,20 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
     }
 
     @Test
+    void 반려된_회차가_있어도_모든_회차가_종결되면_콘텐츠를_종료한다() {
+        Fixture fixture = createFixture();
+        saveRejectedSession(fixture);
+
+        EndContentReservationsResult result = endContentReservationsUseCase.end(
+            fixture.adminId(),
+            fixture.contentId(),
+            UUID.randomUUID()
+        );
+
+        assertThat(result.status()).isEqualTo(ContentStatus.ENDED);
+    }
+
+    @Test
     void 종료는_활성홀드를_무효화하고_정원을_한번만_복구한다() {
         Fixture fixture = createFixture();
 
@@ -228,6 +242,43 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
     }
 
     @Test
+    @Timeout(10)
+    void 동시_시스템_종료에서도_로그와_감사와_정원복구는_한번만_발생한다() throws Exception {
+        Fixture fixture = createFixture();
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<EndContentReservationsSystemResult> first = executorService.submit(
+                () -> endBySystemAfterStart(fixture, ready, start)
+            );
+            Future<EndContentReservationsSystemResult> second = executorService.submit(
+                () -> endBySystemAfterStart(fixture, ready, start)
+            );
+            assertThat(ready.await(3, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            assertThat(List.of(first.get(5, TimeUnit.SECONDS), second.get(5, TimeUnit.SECONDS)))
+                .extracting(EndContentReservationsSystemResult::status)
+                .containsExactlyInAnyOrder(
+                    EndContentReservationsSystemResult.Status.ENDED,
+                    EndContentReservationsSystemResult.Status.SKIPPED
+                );
+        }
+
+        assertThat(contentLogRepository.findByContentContentIdOrderByDateAscIdAsc(fixture.contentId()))
+            .extracting(ContentLog::getStatus)
+            .containsExactly(ContentLogStatus.PUBLISHED, ContentLogStatus.ENDED);
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent -> fixture.contentId().equals(auditEvent.getTargetId()))
+            .hasSize(1);
+        assertThat(capacityHoldRepository.findById(fixture.firstHoldId()))
+            .hasValueSatisfying(this::assertInvalidated);
+        assertThat(contentSessionRepository.findById(fixture.firstSessionId()))
+            .hasValueSatisfying(session -> assertThat(session.getRemainingCapacity()).isEqualTo(SESSION_CAPACITY));
+    }
+
+    @Test
     void 종료된_콘텐츠를_순차_재시도하면_기존_종료_결과만_반환하고_종료_부수_효과를_중복_생성하지_않는다() {
         Fixture fixture = createFixture();
 
@@ -309,6 +360,16 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
             fixture.contentId(),
             UUID.randomUUID()
         );
+    }
+
+    private EndContentReservationsSystemResult endBySystemAfterStart(
+        Fixture fixture,
+        CountDownLatch ready,
+        CountDownLatch start
+    ) {
+        ready.countDown();
+        await(start);
+        return endContentReservationsUseCase.endBySystem(fixture.contentId(), UUID.randomUUID());
     }
 
     private Attempt endExpectingConflict(Fixture fixture) {
@@ -410,6 +471,7 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
             CapacityHold secondHold = saveActiveHold(region, secondSession, visitor, 1, now);
             return new Fixture(
                 admin.getUserId(),
+                region.getRegionId(),
                 content.getContentId(),
                 firstSession.getSessionId(),
                 secondSession.getSessionId(),
@@ -441,6 +503,16 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
         session.approve(admin, startsAt.minusSeconds(3_600));
         session.cancel(admin, startsAt.minusSeconds(1_800), "정상 종료 전 회차 취소");
         return contentSessionRepository.save(session);
+    }
+
+    private void saveRejectedSession(Fixture fixture) {
+        Content content = contentRepository.findById(fixture.contentId()).orElseThrow();
+        Region region = regionRepository.findById(fixture.regionId()).orElseThrow();
+        AppUser admin = appUserRepository.findById(fixture.adminId()).orElseThrow();
+        Instant startsAt = Instant.now().plusSeconds(14_400);
+        ContentSession session = newSession(content, region, startsAt);
+        session.reject(admin, startsAt.minusSeconds(3_600), "추가 회차 반려");
+        contentSessionRepository.save(session);
     }
 
     private ContentSession newSession(
@@ -549,6 +621,7 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
 
     private record Fixture(
         Long adminId,
+        Long regionId,
         Long contentId,
         Long firstSessionId,
         Long secondSessionId,

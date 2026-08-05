@@ -103,6 +103,23 @@ class SecurityConfigIntegrationTest {
     }
 
     @Test
+    void metricsEndpoint_withValidAccessToken_exposesAutoPublicationMetric() throws Exception {
+        String accessToken = jwtAccessTokenService.issue(1L);
+
+        mockMvc.perform(get("/actuator/metrics/content.publication.candidate")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.name").value("content.publication.candidate"));
+    }
+
+    @Test
+    void metricsEndpoint_withoutAccessToken_returnsUnauthenticatedResponse() throws Exception {
+        mockMvc.perform(get("/actuator/metrics/content.publication.candidate"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+    }
+
+    @Test
     void protectedPath_withRefreshTokenCookieOnly_returnsUnauthenticatedResponse() throws Exception {
         mockMvc.perform(get("/test/protected")
                 .cookie(new Cookie("refreshToken", "refresh-token")))

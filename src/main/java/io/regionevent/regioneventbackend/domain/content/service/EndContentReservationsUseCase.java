@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.content.service;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -15,6 +16,7 @@ import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUs
 import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentLog;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHoldService;
@@ -131,13 +133,17 @@ public class EndContentReservationsUseCase {
     }
 
     @Transactional
-    public void endBySystem(Long contentId, UUID requestId) {
+    public EndContentReservationsSystemResult endBySystem(Long contentId, UUID requestId) {
         Content content = contentService.findEndTargetForUpdate(contentId);
+        List<ContentSession> contentSessions = contentSessionService.findCurrentSessionsByContentId(contentId);
         if (content.getStatus() != ContentStatus.PUBLISHED
             || content.getDeletedAt() != null
-            || contentSessionService.hasNonTerminalSessionForEnd(contentId)
-            || contentSessionService.findCurrentSessionsByContentId(contentId).isEmpty()) {
-            return;
+            || contentSessions.isEmpty()
+            || contentSessions.stream().anyMatch(
+                contentSession -> !contentSessionService.getEndTerminalStatuses()
+                    .contains(contentSession.getStatus())
+            )) {
+            return EndContentReservationsSystemResult.skipped();
         }
 
         String previousState = content.getStatus().name();
@@ -161,6 +167,9 @@ public class EndContentReservationsUseCase {
                 null,
                 endedAt
             ));
+            return EndContentReservationsSystemResult.ended(
+                calculateEndingDelayMillis(contentSessions, endedAt)
+            );
         } catch (RuntimeException exception) {
             recordFailure(
                 requestId,
@@ -172,6 +181,26 @@ public class EndContentReservationsUseCase {
             );
             throw exception;
         }
+    }
+
+    private long calculateEndingDelayMillis(
+        List<ContentSession> contentSessions,
+        Instant endedAt
+    ) {
+        Instant lastTerminalAt = contentSessions.stream()
+            .map(this::findTerminalAt)
+            .max(Instant::compareTo)
+            .orElseThrow(() -> new IllegalStateException("ended content must have terminal sessions"));
+        return Math.max(0L, Duration.between(lastTerminalAt, endedAt).toMillis());
+    }
+
+    private Instant findTerminalAt(ContentSession contentSession) {
+        return switch (contentSession.getStatus()) {
+            case COMPLETED -> contentSession.getCompletedAt();
+            case CANCELLED -> contentSession.getCancelledAt();
+            case REJECTED -> contentSession.getReviewedAt();
+            default -> throw new IllegalStateException("content session must be terminal before ending content");
+        };
     }
 
     private void recordFailure(
