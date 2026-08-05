@@ -31,6 +31,24 @@ public class SessionRevisionService {
         ).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public SessionRevision findReviewTargetForUpdate(Long revisionId) {
+        return sessionRevisionRepository.findReviewTargetByIdForUpdate(revisionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void rejectPending(
+        Long revisionId,
+        AppUser reviewer,
+        Instant reviewedAt,
+        String reason
+    ) {
+        if (sessionRevisionRepository.rejectPendingById(revisionId, reviewer, reviewedAt, reason) != 1) {
+            throw new BusinessException(ErrorCode.SESSION_STATE_CONFLICT);
+        }
+    }
+
     @Transactional(readOnly = true)
     public List<SessionRevision> findPendingByRegionId(Long regionId) {
         return sessionRevisionRepository.findByRegionIdAndStatusForReview(
