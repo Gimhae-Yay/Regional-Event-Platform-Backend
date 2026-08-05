@@ -31,6 +31,15 @@
 | 예약 QR·체크인 | [예약 QR·체크인 API 명세서](p0/check-in/check-in.md) | [예약 QR·체크인](../p0/check-in.md) | QR 발급·검증, 체크인, 방문 기록 |
 | 인증 후기 | [인증 후기 API](p0/review/review.md) | [인증 후기](../p0/review.md) | 후기 작성·조회·수정·삭제와 원문 파기 |
 
+## P1 도메인 API 명세
+
+P1 API 명세는 `docs/p1/` 소유 문서와 `docs/p1-spec.md`를 기능·정책 기준으로 삼는다.
+도메인 API 명세서가 작성된 경우, 해당 문서가 요청·응답·상태 코드·오류 코드의 단일 기준이다.
+
+| 도메인 | 도메인 API 명세서 | 기능·정책 기준 문서 | 주요 범위 |
+| --- | --- | --- | --- |
+| 지역 | [지역 API 명세서](p1/region/region.md) | [전체관리자](../p1/platform-admin.md), [P1 명세](../p1-spec.md), [ERD](../erd.md) | 지역 생성, 지역 운영 상태 변경, 전체 지역 조회 |
+
 ## 새 도메인 API 명세 추가
 
 1. [API 명세서 템플릿](api-specification-template.md)을 복사해 `{기능 요구사항 우선순위}/{도메인명}/`에 API 명세 파일을 만든다.
