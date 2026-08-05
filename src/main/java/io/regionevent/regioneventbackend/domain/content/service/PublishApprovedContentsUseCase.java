@@ -16,6 +16,7 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
 public class PublishApprovedContentsUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(PublishApprovedContentsUseCase.class);
+    private static final String CANDIDATE_FAILURE_LOG_MESSAGE = "Approved content publication candidate failed";
 
     private final ContentService contentService;
     private final PublishApprovedContentUseCase publishApprovedContentUseCase;
@@ -36,6 +37,13 @@ public class PublishApprovedContentsUseCase {
         for (Long contentId : candidateContentIds) {
             try {
                 counts.record(publishApprovedContentUseCase.publish(contentId, requestId));
+            } catch (BusinessException exception) {
+                counts.failedContentCount++;
+                log.atWarn()
+                    .addKeyValue("requestId", requestId)
+                    .addKeyValue("contentId", contentId)
+                    .addKeyValue("failureCode", exception.getErrorCode().code())
+                    .log(CANDIDATE_FAILURE_LOG_MESSAGE);
             } catch (RuntimeException exception) {
                 counts.failedContentCount++;
                 log.atError()
@@ -43,7 +51,7 @@ public class PublishApprovedContentsUseCase {
                     .addKeyValue("contentId", contentId)
                     .addKeyValue("failureCode", resolveFailureCode(exception))
                     .setCause(exception)
-                    .log("Approved content publication candidate failed");
+                    .log(CANDIDATE_FAILURE_LOG_MESSAGE);
             }
         }
 
