@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
@@ -89,6 +90,35 @@ class SessionRevisionCreationControllerIntegrationTest extends ContentController
             .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
 
         verify(createSessionRevisionUseCase, never()).create(any(), any(), any(), any());
+    }
+
+    @Test
+    void 회차_수정_요청_소수초_1에서9자리를_허용한다() throws Exception {
+        when(createSessionRevisionUseCase.create(
+            eq(AUTHENTICATED_USER_ID),
+            eq(SESSION_ID),
+            any(CreateContentSessionRequest.class),
+            any(UUID.class)
+        )).thenReturn(new CreateSessionRevisionResult(
+            REVISION_ID,
+            SessionRevisionStatus.PENDING,
+            CONTENT_ID,
+            SESSION_ID,
+            3,
+            Instant.parse("2026-08-22T01:00:00Z"),
+            Instant.parse("2026-08-22T03:00:00Z"),
+            Instant.parse("2026-08-22T00:30:00Z"),
+            Instant.parse("2026-08-22T02:30:00Z"),
+            30,
+            Instant.parse("2026-08-01T01:00:00Z")
+        ));
+
+        for (String fraction : List.of(".1", ".123456", ".123456789")) {
+            mockMvc.perform(authenticated(post("/api/v1/operator/sessions/{sessionId}/change-requests", SESSION_ID))
+                    .contentType(APPLICATION_JSON)
+                    .content(VALID_REQUEST.replace("10:00:00+09:00", "10:00:00" + fraction + "+09:00")))
+                .andExpect(status().isCreated());
+        }
     }
 
     @Test

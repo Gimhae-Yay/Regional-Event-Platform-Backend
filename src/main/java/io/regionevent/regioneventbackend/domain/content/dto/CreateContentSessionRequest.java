@@ -5,35 +5,23 @@ import java.time.OffsetDateTime;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
+import tools.jackson.databind.annotation.JsonDeserialize;
 
 public record CreateContentSessionRequest(
     @NotNull
-    @JsonFormat(
-        pattern = "yyyy-MM-dd'T'HH:mm:ss[.SSSSSSSSS]XXX",
-        without = JsonFormat.Feature.ADJUST_DATES_TO_CONTEXT_TIME_ZONE
-    )
+    @JsonDeserialize(using = SeoulOffsetDateTimeDeserializer.class)
     OffsetDateTime startsAt,
 
     @NotNull
-    @JsonFormat(
-        pattern = "yyyy-MM-dd'T'HH:mm:ss[.SSSSSSSSS]XXX",
-        without = JsonFormat.Feature.ADJUST_DATES_TO_CONTEXT_TIME_ZONE
-    )
+    @JsonDeserialize(using = SeoulOffsetDateTimeDeserializer.class)
     OffsetDateTime endsAt,
 
     @NotNull
-    @JsonFormat(
-        pattern = "yyyy-MM-dd'T'HH:mm:ss[.SSSSSSSSS]XXX",
-        without = JsonFormat.Feature.ADJUST_DATES_TO_CONTEXT_TIME_ZONE
-    )
+    @JsonDeserialize(using = SeoulOffsetDateTimeDeserializer.class)
     OffsetDateTime checkinOpenAt,
 
     @NotNull
-    @JsonFormat(
-        pattern = "yyyy-MM-dd'T'HH:mm:ss[.SSSSSSSSS]XXX",
-        without = JsonFormat.Feature.ADJUST_DATES_TO_CONTEXT_TIME_ZONE
-    )
+    @JsonDeserialize(using = SeoulOffsetDateTimeDeserializer.class)
     OffsetDateTime checkinCloseAt,
 
     @NotNull
