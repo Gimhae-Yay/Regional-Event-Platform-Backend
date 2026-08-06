@@ -26,7 +26,7 @@ class EndContentReservationsControllerIntegrationTest extends ContentControllerW
 
     @Test
     void 콘텐츠_예약_종료_유효한_요청이면_응답을_직렬화한다() throws Exception {
-        when(endContentReservationsUseCase.end(
+        when(endContentReservationsUseCase.endByRegionAdmin(
             eq(AUTHENTICATED_USER_ID),
             eq(CONTENT_ID),
             any(UUID.class)
@@ -43,7 +43,7 @@ class EndContentReservationsControllerIntegrationTest extends ContentControllerW
             .andExpect(jsonPath("$.data.contentId").value(Long.toString(CONTENT_ID)))
             .andExpect(jsonPath("$.data.status").value("ENDED"));
 
-        verify(endContentReservationsUseCase).end(
+        verify(endContentReservationsUseCase).endByRegionAdmin(
             eq(AUTHENTICATED_USER_ID),
             eq(CONTENT_ID),
             any(UUID.class)
@@ -56,7 +56,7 @@ class EndContentReservationsControllerIntegrationTest extends ContentControllerW
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
 
-        verify(endContentReservationsUseCase, never()).end(any(), any(), any());
+        verify(endContentReservationsUseCase, never()).endByRegionAdmin(any(), any(), any());
     }
 
     @Test
@@ -81,7 +81,7 @@ class EndContentReservationsControllerIntegrationTest extends ContentControllerW
     }
 
     private void expectBusinessError(ErrorCode errorCode, int statusCode, String code) throws Exception {
-        when(endContentReservationsUseCase.end(
+        when(endContentReservationsUseCase.endByRegionAdmin(
             eq(AUTHENTICATED_USER_ID),
             eq(CONTENT_ID),
             any(UUID.class)

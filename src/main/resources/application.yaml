@@ -29,6 +29,9 @@ idempotency:
   cleanup-initial-delay: PT1H
   lock-wait-timeout-seconds: 3
 
+public-catalog-cache:
+  ttl: ${PUBLIC_CATALOG_CACHE_TTL:PT10M}
+
 reservation:
   hold-termination:
     initial-delay: PT1M
@@ -42,6 +45,19 @@ storage:
     enabled: ${IMAGE_STORAGE_FAKE_ENABLED:false}
     base-url: ${IMAGE_STORAGE_FAKE_BASE_URL:https://example.invalid/local-image-storage}
 
+content:
+  publication:
+    initial-delay: PT1M
+    fixed-delay: PT1M
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include:
+          - health
+          - metrics
+
 logging:
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [requestId=%X{requestId:-}] %logger{36} - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [requestId=%X{requestId:-}] %logger{36} - %msg %kvp%n"
