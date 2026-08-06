@@ -9,6 +9,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -16,6 +17,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -64,7 +66,6 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
-import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
 import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
@@ -175,19 +176,18 @@ class PublishApprovedContentsUseCaseMySqlTest extends NonTransactionalMySqlTestS
     @Timeout(15)
     void 중복_스케줄러_실행에서도_상태_로그_성공감사는_한번만_기록된다() throws Exception {
         Fixture fixture = createFixture(contentService.findCurrentDatabaseTime().minusSeconds(1));
-        CountDownLatch ready = new CountDownLatch(2);
-        CountDownLatch start = new CountDownLatch(1);
+        failingContentService.blockPublicationTargetLookups(2);
 
         List<PublishApprovedContentsResult> results;
         try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
             Future<PublishApprovedContentsResult> first = executorService.submit(
-                () -> publishAfterStart(ready, start)
+                publishApprovedContentsUseCase::publishApprovedContents
             );
             Future<PublishApprovedContentsResult> second = executorService.submit(
-                () -> publishAfterStart(ready, start)
+                publishApprovedContentsUseCase::publishApprovedContents
             );
-            assertThat(ready.await(3, TimeUnit.SECONDS)).isTrue();
-            start.countDown();
+            failingContentService.awaitPublicationTargetLookups();
+            failingContentService.releasePublicationTargetLookups();
             results = List.of(
                 first.get(10, TimeUnit.SECONDS),
                 second.get(10, TimeUnit.SECONDS)
@@ -207,38 +207,28 @@ class PublishApprovedContentsUseCaseMySqlTest extends NonTransactionalMySqlTestS
     @Timeout(15)
     void 자동_공개와_공개_전_수정_요청이_경합해도_두_상태_전이를_함께_커밋하지_않는다() throws Exception {
         Fixture fixture = createFixture(contentService.findCurrentDatabaseTime().minusSeconds(1));
-        CountDownLatch ready = new CountDownLatch(2);
-        CountDownLatch start = new CountDownLatch(1);
+        failingContentService.blockPublicationTargetLookups(1);
 
-        String revisionOutcome;
         PublishApprovedContentsResult publicationResult;
-        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+        try (ExecutorService executorService = Executors.newSingleThreadExecutor()) {
             Future<PublishApprovedContentsResult> publication = executorService.submit(
-                () -> publishAfterStart(ready, start)
+                publishApprovedContentsUseCase::publishApprovedContents
             );
-            Future<String> revision = executorService.submit(
-                () -> createRevisionAfterStart(fixture, ready, start)
-            );
-            assertThat(ready.await(3, TimeUnit.SECONDS)).isTrue();
-            start.countDown();
+            failingContentService.awaitPublicationTargetLookups();
+            createRevision(fixture);
+            failingContentService.releasePublicationTargetLookups();
             publicationResult = publication.get(10, TimeUnit.SECONDS);
-            revisionOutcome = revision.get(10, TimeUnit.SECONDS);
         }
 
-        assertThat(revisionOutcome).isIn("REVISION_CREATED", "CONFLICT");
+        assertThat(publicationResult.candidateContentCount()).isEqualTo(1);
+        assertThat(publicationResult.publishedContentCount()).isZero();
+        assertThat(publicationResult.skippedContentCount()).isEqualTo(1);
         assertThat(publicationResult.failedContentCount()).isZero();
         Content content = contentRepository.findById(fixture.contentId()).orElseThrow();
-        long publishedLogCount = countContentLogs(fixture.contentId(), ContentLogStatus.PUBLISHED);
-        long pendingLogCount = countContentLogs(fixture.contentId(), ContentLogStatus.PENDING);
-        if (content.getStatus() == ContentStatus.PUBLISHED) {
-            assertThat(publishedLogCount).isEqualTo(1);
-            assertThat(pendingLogCount).isZero();
-        } else {
-            assertThat(content.getStatus()).isEqualTo(ContentStatus.PENDING);
-            assertThat(publishedLogCount).isZero();
-            assertThat(pendingLogCount).isEqualTo(1);
-        }
-        assertThat(contentRevisionRepository.findAll()).hasSizeLessThanOrEqualTo(1);
+        assertThat(content.getStatus()).isEqualTo(ContentStatus.PENDING);
+        assertThat(countContentLogs(fixture.contentId(), ContentLogStatus.PUBLISHED)).isZero();
+        assertThat(countContentLogs(fixture.contentId(), ContentLogStatus.PENDING)).isEqualTo(1);
+        assertThat(contentRevisionRepository.findAll()).hasSize(1);
         assertThat(countSuccessAudits(fixture.contentId())).isEqualTo(1);
         assertThat(countTargetAudits(fixture.contentId(), AuditEventResult.FAILURE)).isZero();
     }
@@ -247,35 +237,28 @@ class PublishApprovedContentsUseCaseMySqlTest extends NonTransactionalMySqlTestS
     @Timeout(15)
     void 자동_공개와_삭제가_경합해도_공개와_소프트삭제를_함께_커밋하지_않는다() throws Exception {
         Fixture fixture = createFixture(contentService.findCurrentDatabaseTime().minusSeconds(1));
-        CountDownLatch ready = new CountDownLatch(2);
-        CountDownLatch start = new CountDownLatch(1);
+        failingContentService.blockPublicationTargetLookups(1);
 
-        DeleteAttempt deletionAttempt;
         PublishApprovedContentsResult publicationResult;
-        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
-            Future<DeleteAttempt> deletion = executorService.submit(
-                () -> deleteAfterStart(fixture, ready, start)
-            );
+        try (ExecutorService executorService = Executors.newSingleThreadExecutor()) {
             Future<PublishApprovedContentsResult> publication = executorService.submit(
-                () -> publishAfterStart(ready, start)
+                publishApprovedContentsUseCase::publishApprovedContents
             );
-            assertThat(ready.await(3, TimeUnit.SECONDS)).isTrue();
-            start.countDown();
-            deletionAttempt = deletion.get(10, TimeUnit.SECONDS);
+            failingContentService.awaitPublicationTargetLookups();
+            deleteContent(fixture);
+            failingContentService.releasePublicationTargetLookups();
             publicationResult = publication.get(10, TimeUnit.SECONDS);
         }
 
+        assertThat(publicationResult.candidateContentCount()).isEqualTo(1);
+        assertThat(publicationResult.publishedContentCount()).isZero();
+        assertThat(publicationResult.skippedContentCount()).isEqualTo(1);
+        assertThat(publicationResult.failedContentCount()).isZero();
         Content content = contentRepository.findById(fixture.contentId()).orElseThrow();
-        if (publicationResult.publishedContentCount() == 1) {
-            assertThat(content.getStatus()).isEqualTo(ContentStatus.PUBLISHED);
-            assertThat(content.getDeletedAt()).isNull();
-            assertThat(deletionAttempt.errorCode()).isEqualTo(ErrorCode.CONTENT_DELETE_CONFLICT);
-        } else {
-            assertThat(deletionAttempt.errorCode()).isNull();
-            assertThat(content.getStatus()).isEqualTo(ContentStatus.APPROVED);
-            assertThat(content.getDeletedAt()).isNotNull();
-            assertPublishedStateIsNotRecorded(fixture.contentId());
-        }
+        assertThat(content.getStatus()).isEqualTo(ContentStatus.APPROVED);
+        assertThat(content.getDeletedAt()).isNotNull();
+        assertPublishedStateIsNotRecorded(fixture.contentId());
+        assertThat(countTargetAudits(fixture.contentId(), AuditEventResult.FAILURE)).isZero();
     }
 
     @Test
@@ -342,53 +325,22 @@ class PublishApprovedContentsUseCaseMySqlTest extends NonTransactionalMySqlTestS
         }
     }
 
-    private PublishApprovedContentsResult publishAfterStart(
-        CountDownLatch ready,
-        CountDownLatch start
-    ) {
-        ready.countDown();
-        await(start);
-        return publishApprovedContentsUseCase.publishApprovedContents();
+    private void createRevision(Fixture fixture) {
+        createContentRevisionUseCase.createRevision(
+            fixture.operatorId(),
+            fixture.contentId(),
+            createRevisionRequest(),
+            UUID.randomUUID().toString()
+        );
     }
 
-    private String createRevisionAfterStart(
-        Fixture fixture,
-        CountDownLatch ready,
-        CountDownLatch start
-    ) {
-        ready.countDown();
-        await(start);
-        try {
-            createContentRevisionUseCase.createRevision(
-                fixture.operatorId(),
-                fixture.contentId(),
-                createRevisionRequest(),
-                UUID.randomUUID().toString()
-            );
-            return "REVISION_CREATED";
-        } catch (BusinessException exception) {
-            return "CONFLICT";
-        }
-    }
-
-    private DeleteAttempt deleteAfterStart(
-        Fixture fixture,
-        CountDownLatch ready,
-        CountDownLatch start
-    ) {
-        ready.countDown();
-        await(start);
-        try {
-            deleteContentUseCase.delete(
-                fixture.adminId(),
-                fixture.contentId(),
-                "행사 준비가 취소되었습니다.",
-                UUID.randomUUID()
-            );
-            return new DeleteAttempt(null);
-        } catch (BusinessException exception) {
-            return new DeleteAttempt(exception.getErrorCode());
-        }
+    private void deleteContent(Fixture fixture) {
+        deleteContentUseCase.delete(
+            fixture.adminId(),
+            fixture.contentId(),
+            "행사 준비가 취소되었습니다.",
+            UUID.randomUUID()
+        );
     }
 
     private CreateContentRevisionRequest createRevisionRequest() {
@@ -484,13 +436,13 @@ class PublishApprovedContentsUseCaseMySqlTest extends NonTransactionalMySqlTestS
 
     private void assertPublishedStateIsRecordedOnce(Long contentId) {
         assertThat(countContentLogs(contentId, ContentLogStatus.PUBLISHED)).isEqualTo(1);
-        assertThat(countTargetAudits(contentId, AuditEventResult.SUCCESS)).isEqualTo(1);
+        assertThat(countPublicationAudits(contentId, AuditEventResult.SUCCESS)).isEqualTo(1);
         assertThat(countTargetAudits(contentId, AuditEventResult.FAILURE)).isZero();
     }
 
     private void assertPublishedStateIsNotRecorded(Long contentId) {
         assertThat(countContentLogs(contentId, ContentLogStatus.PUBLISHED)).isZero();
-        assertThat(countTargetAudits(contentId, AuditEventResult.SUCCESS)).isZero();
+        assertThat(countPublicationAudits(contentId, AuditEventResult.SUCCESS)).isZero();
     }
 
     private void assertFailureAuditIsRecorded(Long contentId) {
@@ -515,6 +467,16 @@ class PublishApprovedContentsUseCaseMySqlTest extends NonTransactionalMySqlTestS
 
     private long countSuccessAudits(Long contentId) {
         return countTargetAudits(contentId, AuditEventResult.SUCCESS);
+    }
+
+    private long countPublicationAudits(Long contentId, AuditEventResult result) {
+        return auditEventRepository.findAll().stream()
+            .filter(auditEvent -> auditEvent.getTargetType() == AuditEventTargetType.CONTENT)
+            .filter(auditEvent -> contentId.equals(auditEvent.getTargetId()))
+            .filter(auditEvent -> ContentStatus.APPROVED.name().equals(auditEvent.getPreviousState()))
+            .filter(auditEvent -> ContentStatus.PUBLISHED.name().equals(auditEvent.getNextState()))
+            .filter(auditEvent -> auditEvent.getResult() == result)
+            .count();
     }
 
     private long countTargetAudits(Long contentId, AuditEventResult result) {
@@ -570,6 +532,7 @@ class PublishApprovedContentsUseCaseMySqlTest extends NonTransactionalMySqlTestS
     static class FailingContentService extends ContentService {
 
         private final AtomicBoolean failNextPublish = new AtomicBoolean();
+        private final AtomicReference<PublicationTargetLookupGate> publicationTargetLookupGate = new AtomicReference<>();
 
         FailingContentService(ContentRepository contentRepository) {
             super(contentRepository);
@@ -584,12 +547,70 @@ class PublishApprovedContentsUseCaseMySqlTest extends NonTransactionalMySqlTestS
             return publishedContent;
         }
 
+        @Override
+        public Optional<Content> findApprovedPublicationTargetForUpdate(Long contentId) {
+            PublicationTargetLookupGate gate = publicationTargetLookupGate.get();
+            if (gate != null) {
+                gate.awaitRelease();
+            }
+            return super.findApprovedPublicationTargetForUpdate(contentId);
+        }
+
+        void blockPublicationTargetLookups(int expectedLookupCount) {
+            if (!publicationTargetLookupGate.compareAndSet(
+                null,
+                new PublicationTargetLookupGate(expectedLookupCount)
+            )) {
+                throw new IllegalStateException("publication target lookup gate is already configured");
+            }
+        }
+
+        void awaitPublicationTargetLookups() {
+            PublicationTargetLookupGate gate = publicationTargetLookupGate.get();
+            if (gate == null) {
+                throw new IllegalStateException("publication target lookup gate must be configured");
+            }
+            gate.awaitReached();
+        }
+
+        void releasePublicationTargetLookups() {
+            PublicationTargetLookupGate gate = publicationTargetLookupGate.get();
+            if (gate == null) {
+                throw new IllegalStateException("publication target lookup gate must be configured");
+            }
+            gate.release();
+        }
+
         void failNextPublish() {
             failNextPublish.set(true);
         }
 
         void resetFailureInjection() {
             failNextPublish.set(false);
+            publicationTargetLookupGate.set(null);
+        }
+    }
+
+    static class PublicationTargetLookupGate {
+
+        private final CountDownLatch reached;
+        private final CountDownLatch release = new CountDownLatch(1);
+
+        PublicationTargetLookupGate(int expectedLookupCount) {
+            reached = new CountDownLatch(expectedLookupCount);
+        }
+
+        void awaitReached() {
+            await(reached);
+        }
+
+        void awaitRelease() {
+            reached.countDown();
+            await(release);
+        }
+
+        void release() {
+            release.countDown();
         }
     }
 
@@ -696,6 +717,4 @@ class PublishApprovedContentsUseCaseMySqlTest extends NonTransactionalMySqlTestS
     private record Fixture(Long adminId, Long operatorId, Long contentId) {
     }
 
-    private record DeleteAttempt(ErrorCode errorCode) {
-    }
 }
