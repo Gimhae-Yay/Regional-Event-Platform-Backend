@@ -2,11 +2,11 @@ package io.regionevent.regioneventbackend.domain.content.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.when;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
@@ -18,7 +18,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -94,15 +93,13 @@ class PublishApprovedContentsUseCaseMySqlTest extends NonTransactionalMySqlTestS
     private final AuditEventRepository auditEventRepository;
     private final AuditEventActorLinkRepository auditEventActorLinkRepository;
     private final TransactionTemplate transactionTemplate;
+    private final MutableTestClock mutableTestClock;
     private final FailingContentService failingContentService;
     private final FailingContentLogService failingContentLogService;
     private final FailingRecordAuditEventUseCase failingRecordAuditEventUseCase;
 
     @MockitoBean
     private ImageStorageGateway imageStorageGateway;
-
-    @MockitoBean
-    private Clock clock;
 
     @Autowired
     PublishApprovedContentsUseCaseMySqlTest(
@@ -121,6 +118,7 @@ class PublishApprovedContentsUseCaseMySqlTest extends NonTransactionalMySqlTestS
         AuditEventRepository auditEventRepository,
         AuditEventActorLinkRepository auditEventActorLinkRepository,
         PlatformTransactionManager transactionManager,
+        MutableTestClock mutableTestClock,
         FailingContentService failingContentService,
         FailingContentLogService failingContentLogService,
         FailingRecordAuditEventUseCase failingRecordAuditEventUseCase
@@ -140,14 +138,10 @@ class PublishApprovedContentsUseCaseMySqlTest extends NonTransactionalMySqlTestS
         this.auditEventRepository = auditEventRepository;
         this.auditEventActorLinkRepository = auditEventActorLinkRepository;
         transactionTemplate = new TransactionTemplate(transactionManager);
+        this.mutableTestClock = mutableTestClock;
         this.failingContentService = failingContentService;
         this.failingContentLogService = failingContentLogService;
         this.failingRecordAuditEventUseCase = failingRecordAuditEventUseCase;
-    }
-
-    @BeforeEach
-    void useSystemTimeForApplicationClock() {
-        when(clock.instant()).thenAnswer(invocation -> Instant.now());
     }
 
     @DynamicPropertySource
@@ -157,6 +151,7 @@ class PublishApprovedContentsUseCaseMySqlTest extends NonTransactionalMySqlTestS
 
     @AfterEach
     void resetFailureInjection() {
+        mutableTestClock.reset();
         failingContentService.resetFailureInjection();
         failingContentLogService.resetFailureInjection();
         failingRecordAuditEventUseCase.resetFailureInjection();
@@ -165,7 +160,7 @@ class PublishApprovedContentsUseCaseMySqlTest extends NonTransactionalMySqlTestS
     @Test
     void MySQL_현재_시각_전의_콘텐츠는_애플리케이션_시계가_앞서도_공개하지_않는다() {
         Instant databaseNow = contentService.findCurrentDatabaseTime();
-        when(clock.instant()).thenReturn(databaseNow.plusSeconds(7_200));
+        mutableTestClock.setInstant(databaseNow.plusSeconds(7_200));
         Fixture fixture = createFixture(databaseNow.plusSeconds(3_600));
 
         PublishApprovedContentsResult result = publishApprovedContentsUseCase.publishApprovedContents();
@@ -546,6 +541,12 @@ class PublishApprovedContentsUseCaseMySqlTest extends NonTransactionalMySqlTestS
 
         @Bean
         @Primary
+        MutableTestClock mutableTestClock() {
+            return new MutableTestClock();
+        }
+
+        @Bean
+        @Primary
         FailingContentService failingContentService(ContentRepository contentRepository) {
             return new FailingContentService(contentRepository);
         }
@@ -589,6 +590,34 @@ class PublishApprovedContentsUseCaseMySqlTest extends NonTransactionalMySqlTestS
 
         void resetFailureInjection() {
             failNextPublish.set(false);
+        }
+    }
+
+    static class MutableTestClock extends Clock {
+
+        private Clock delegate = Clock.systemUTC();
+
+        @Override
+        public ZoneId getZone() {
+            return delegate.getZone();
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            return delegate.withZone(zone);
+        }
+
+        @Override
+        public Instant instant() {
+            return delegate.instant();
+        }
+
+        void setInstant(Instant instant) {
+            delegate = Clock.fixed(instant, ZoneOffset.UTC);
+        }
+
+        void reset() {
+            delegate = Clock.systemUTC();
         }
     }
 
