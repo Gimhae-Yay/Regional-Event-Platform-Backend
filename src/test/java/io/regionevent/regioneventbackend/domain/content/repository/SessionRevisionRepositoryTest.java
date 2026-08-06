@@ -217,6 +217,27 @@ class SessionRevisionRepositoryTest {
     }
 
     @Test
+    void 대상_회차당_심사대기_수정_요청은_하나만_저장한다() {
+        SessionRevisionFixtures fixtures = createFixtures();
+
+        sessionRevisionRepository.saveAndFlush(newRevision(
+            fixtures,
+            SessionRevisionStatus.PENDING,
+            null,
+            null,
+            null
+        ));
+
+        assertThatThrownBy(() -> sessionRevisionRepository.saveAndFlush(newRevision(
+            fixtures,
+            SessionRevisionStatus.PENDING,
+            null,
+            null,
+            null
+        ))).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
     void 데이터베이스가_심사_상태와_대상_회차의_콘텐츠_지역_일치를_강제한다() {
         SessionRevisionFixtures fixtures = createFixtures();
 

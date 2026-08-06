@@ -7,6 +7,7 @@ import static org.mockito.Mockito.doThrow;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
 
@@ -25,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
+import io.regionevent.regioneventbackend.domain.content.dto.CreateContentSessionRequest;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
@@ -44,11 +46,16 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 import io.regionevent.regioneventbackend.domain.user.service.RegionAdminAuthorizationService;
+import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService;
 
 @DataJpaTest
 @Import({
     RejectSessionRevisionUseCase.class,
+    CreateSessionRevisionUseCase.class,
+    ContentService.class,
+    ContentSessionService.class,
     SessionRevisionService.class,
+    OperatorAuthorizationService.class,
     RegionAdminAuthorizationService.class,
     SessionRevisionRejectionAuditAtomicityTest.ClockConfiguration.class
 })
@@ -61,6 +68,7 @@ class SessionRevisionRejectionAuditAtomicityTest {
     private static final Instant CHECKIN_CLOSE_AT = Instant.parse("2026-08-20T02:30:00Z");
 
     private final RejectSessionRevisionUseCase rejectSessionRevisionUseCase;
+    private final CreateSessionRevisionUseCase createSessionRevisionUseCase;
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
@@ -76,6 +84,7 @@ class SessionRevisionRejectionAuditAtomicityTest {
     @Autowired
     SessionRevisionRejectionAuditAtomicityTest(
         RejectSessionRevisionUseCase rejectSessionRevisionUseCase,
+        CreateSessionRevisionUseCase createSessionRevisionUseCase,
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
         UserRoleAssignmentRepository userRoleAssignmentRepository,
@@ -86,6 +95,7 @@ class SessionRevisionRejectionAuditAtomicityTest {
         EntityManager entityManager
     ) {
         this.rejectSessionRevisionUseCase = rejectSessionRevisionUseCase;
+        this.createSessionRevisionUseCase = createSessionRevisionUseCase;
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
         this.userRoleAssignmentRepository = userRoleAssignmentRepository;
@@ -123,12 +133,58 @@ class SessionRevisionRejectionAuditAtomicityTest {
         assertThat(auditEventRepository.count()).isZero();
     }
 
+    @Test
+    void 감사_기록에_실패하면_회차_수정_요청을_저장하지_않는다() {
+        Fixture fixture = createFixture();
+        Content content = contentRepository.findById(fixture.contentId()).orElseThrow();
+        AppUser admin = appUserRepository.findById(fixture.adminId()).orElseThrow();
+        ContentSession targetSession = new ContentSession(
+            content,
+            content.getRegion(),
+            STARTS_AT.plusSeconds(604_800),
+            ENDS_AT.plusSeconds(604_800),
+            CHECKIN_OPEN_AT.plusSeconds(604_800),
+            CHECKIN_CLOSE_AT.plusSeconds(604_800),
+            20
+        );
+        targetSession.approve(admin, Instant.parse("2026-08-01T01:00:00Z"));
+        targetSession = contentSessionRepository.saveAndFlush(targetSession);
+        doThrow(new IllegalStateException("audit storage failure"))
+            .when(recordAuditEventUseCase)
+            .record(any(AuditEventCommand.class));
+
+        ContentSession finalTargetSession = targetSession;
+        assertThatThrownBy(() -> createSessionRevisionUseCase.create(
+            fixture.operatorId(),
+            finalTargetSession.getSessionId(),
+            new CreateContentSessionRequest(
+                OffsetDateTime.parse("2026-08-27T10:00:00+09:00"),
+                OffsetDateTime.parse("2026-08-27T12:00:00+09:00"),
+                OffsetDateTime.parse("2026-08-27T09:30:00+09:00"),
+                OffsetDateTime.parse("2026-08-27T11:30:00+09:00"),
+                30
+            ),
+            UUID.randomUUID()
+        )).isInstanceOf(IllegalStateException.class);
+
+        entityManager.clear();
+        Number pendingRevisionCount = (Number) entityManager.createNativeQuery("""
+            SELECT COUNT(*)
+            FROM session_revision
+            WHERE target_session_id = :sessionId
+                AND status = 'PENDING'
+            """).setParameter("sessionId", finalTargetSession.getSessionId()).getSingleResult();
+        assertThat(pendingRevisionCount.longValue()).isZero();
+        assertThat(auditEventRepository.count()).isZero();
+    }
+
     private Fixture createFixture() {
         String suffix = Long.toUnsignedString(System.nanoTime());
         Region region = regionRepository.saveAndFlush(new Region("R" + suffix, "김해시", true));
         AppUser admin = saveUser("admin-" + suffix);
         userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(admin, UserRole.REGION_ADMIN, region));
         AppUser operator = saveUser("operator-" + suffix);
+        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
         Content content = contentRepository.saveAndFlush(new Content(
             region,
             operator,
@@ -175,6 +231,8 @@ class SessionRevisionRejectionAuditAtomicityTest {
         ));
         return new Fixture(
             admin.getUserId(),
+            operator.getUserId(),
+            content.getContentId(),
             revision.getSessionRevisionId(),
             session.getSessionId(),
             session.getStatus(),
@@ -203,6 +261,8 @@ class SessionRevisionRejectionAuditAtomicityTest {
 
     private record Fixture(
         Long adminId,
+        Long operatorId,
+        Long contentId,
         Long revisionId,
         Long sessionId,
         ContentSessionStatus sessionStatus,
