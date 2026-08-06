@@ -49,7 +49,8 @@ Accept: application/json
   "name": "관리자",
   "phone": "01012345678",
   "grade": "PLATFORM_ADMIN",
-  "reasonCode": "ADMIN_ACCOUNT_CREATION"
+  "reasonCode": "ADMIN_ACCOUNT_CREATION",
+  "evidenceReference": "OPS-2026-0806-001"
 }
 ```
 
@@ -78,7 +79,8 @@ Accept: application/json
   "name": "관리자",
   "phone": "01012345678",
   "grade": "PLATFORM_ADMIN",
-  "reasonCode": "ADMIN_ACCOUNT_CREATION"
+  "reasonCode": "ADMIN_ACCOUNT_CREATION",
+  "evidenceReference": "OPS-2026-0806-001"
 }
 ```
 
@@ -92,6 +94,7 @@ Accept: application/json
 | `phone` | String | Y | 숫자 10~11자리다. 입력의 하이픈은 제거하고 숫자만 저장한다. |
 | `grade` | String | Y | `SUPER_ADMIN` 또는 `PLATFORM_ADMIN` 중 하나다. |
 | `reasonCode` | String | Y | 비어 있지 않은 생성 사유 코드이며 성공 감사 이벤트에 기록한다. |
+| `evidenceReference` | String | Y | 앞뒤 공백 제거 뒤 1~500자인 운영 증빙 참조다. 비밀번호·토큰·API 키·결제수단 전체 정보 등 비밀값을 포함할 수 없으며 성공 감사 이벤트의 `evidence_reference`에 기록한다. |
 
 ### Response
 
@@ -137,7 +140,7 @@ Accept: application/json
 
 | HTTP Status | Code | Description |
 | --- | --- | --- |
-| `400` | `INVALID_INPUT` | 필수값 누락 또는 요청 필드의 형식·길이·등급 위반이다. 계정·고권한 배정·감사 이벤트를 생성하지 않는다. |
+| `400` | `INVALID_INPUT` | 필수값 누락 또는 요청 필드의 형식·길이·등급 위반, 증빙 참조의 비밀값 포함이다. 계정·고권한 배정·감사 이벤트를 생성하지 않는다. |
 | `400` | `INVALID_JSON` | 요청 본문이 JSON 형식이 아니거나 역직렬화할 수 없다. 계정·고권한 배정·감사 이벤트를 생성하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 계정·고권한 배정·감사 이벤트를 생성하지 않는다. |
 | `403` | `FORBIDDEN` | 인증 주체가 활성 `SUPER_ADMIN` 고권한 배정을 갖지 않는다. 계정·고권한 배정·감사 이벤트를 생성하지 않는다. |

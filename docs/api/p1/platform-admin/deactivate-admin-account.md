@@ -43,7 +43,8 @@ Content-Type: application/json; charset=UTF-8
 Accept: application/json
 
 {
-  "reasonCode": "ADMIN_ACCOUNT_INACTIVATION"
+  "reasonCode": "ADMIN_ACCOUNT_INACTIVATION",
+  "evidenceReference": "OPS-2026-0806-002"
 }
 ```
 
@@ -69,7 +70,8 @@ Accept: application/json
 
 ```json
 {
-  "reasonCode": "ADMIN_ACCOUNT_INACTIVATION"
+  "reasonCode": "ADMIN_ACCOUNT_INACTIVATION",
+  "evidenceReference": "OPS-2026-0806-002"
 }
 ```
 
@@ -78,6 +80,7 @@ Accept: application/json
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
 | `reasonCode` | String | Y | 비어 있지 않은 비활성화 사유 코드다. `platform_admin_assignment.inactive_reason_code`와 성공 감사 이벤트에 기록한다. |
+| `evidenceReference` | String | Y | 앞뒤 공백 제거 뒤 1~500자인 운영 증빙 참조다. 비밀번호·토큰·API 키·결제수단 전체 정보 등 비밀값을 포함할 수 없으며 성공 감사 이벤트의 `evidence_reference`에 기록한다. |
 
 ### Response
 
@@ -122,7 +125,7 @@ Accept: application/json
 | HTTP Status | Code | Description |
 | --- | --- | --- |
 | `400` | `INVALID_TYPE` | `userId`를 양의 정수 식별자로 처리할 수 없다. 고권한 배정·감사 이벤트를 변경하지 않는다. |
-| `400` | `INVALID_INPUT` | `userId`가 양의 10진 문자열·signed 64비트 범위를 만족하지 않거나 `reasonCode`가 누락·공백이다. 고권한 배정·감사 이벤트를 변경하지 않는다. |
+| `400` | `INVALID_INPUT` | `userId`가 양의 10진 문자열·signed 64비트 범위를 만족하지 않거나 `reasonCode`, `evidenceReference`가 누락·공백·형식 위반이거나 증빙 참조에 비밀값이 포함됐다. 고권한 배정·감사 이벤트를 변경하지 않는다. |
 | `400` | `INVALID_JSON` | 요청 본문이 JSON 형식이 아니거나 역직렬화할 수 없다. 고권한 배정·감사 이벤트를 변경하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 고권한 배정·감사 이벤트를 변경하지 않는다. |
 | `403` | `FORBIDDEN` | 인증 주체가 활성 `SUPER_ADMIN` 고권한 배정을 갖지 않는다. 고권한 배정·감사 이벤트를 변경하지 않는다. |
