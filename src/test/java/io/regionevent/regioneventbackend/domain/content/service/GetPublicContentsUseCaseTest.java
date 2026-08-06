@@ -57,6 +57,19 @@ class GetPublicContentsUseCaseTest {
     }
 
     @Test
+    void get_종료_뒤_캐시_삭제에_실패해도_MySQL_검증에서_목록에_포함하지_않는다() {
+        when(regionService.findPublicRegion(REGION_ID)).thenReturn(publicRegion());
+        when(contentService.findPublicContentListVerifications(REGION_ID, null, null)).thenReturn(List.of());
+        when(publicContentCache.findContent(REGION_ID, CONTENT_ID, VERSION_NO))
+            .thenReturn(Optional.of(staticInfo("오래된 캐시 제목")));
+
+        PublicContentListResult result = useCase.get(condition());
+
+        assertThat(result.contents()).isEmpty();
+        verifyNoInteractions(publicContentCache, representativeImageViewUrlService);
+    }
+
+    @Test
     void get_캐시_적중이면_정적_표시_정보를_MySQL에서_추가_조회하지_않는다() {
         ImageObject imageObject = mock(ImageObject.class);
         when(imageObject.isScopedTo(REGION_ID)).thenReturn(true);

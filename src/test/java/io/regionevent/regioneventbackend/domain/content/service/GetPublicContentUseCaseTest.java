@@ -71,6 +71,20 @@ class GetPublicContentUseCaseTest {
     }
 
     @Test
+    void get_종료_뒤_캐시_삭제에_실패해도_MySQL_검증에서_공개하지_않는다() {
+        when(contentService.findPublicContentDetailVerification(CONTENT_ID))
+            .thenThrow(new BusinessException(ErrorCode.NOT_FOUND));
+        when(publicContentCache.findContent(REGION_ID, CONTENT_ID, VERSION_NO))
+            .thenReturn(Optional.of(staticInfo("오래된 캐시 제목")));
+
+        assertThatThrownBy(() -> useCase.get(CONTENT_ID))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.NOT_FOUND)
+            );
+        verifyNoInteractions(publicContentCache, representativeImageViewUrlService);
+    }
+
+    @Test
     void get_대표_이미지가_없으면_서버_오류를_반환한다() {
         when(contentService.findPublicContentDetailVerification(CONTENT_ID)).thenReturn(
             new PublicContentDetailVerificationProjection(
