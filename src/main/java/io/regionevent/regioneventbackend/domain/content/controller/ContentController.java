@@ -94,7 +94,7 @@ public class ContentController {
     ) {
         CreateContentSessionResult result = createContentSessionUseCase.create(
             toAuthenticatedUserId(authentication),
-            parsePositiveId(contentId),
+            parseSessionCreateContentId(contentId),
             request,
             UUID.fromString(requestId)
         );
@@ -113,6 +113,14 @@ public class ContentController {
     }
 
     private Long parsePositiveId(String value) {
+        return parsePositiveId(value, ErrorCode.INVALID_INPUT);
+    }
+
+    private Long parseSessionCreateContentId(String value) {
+        return parsePositiveId(value, ErrorCode.INVALID_TYPE);
+    }
+
+    private Long parsePositiveId(String value, ErrorCode nonNumericErrorCode) {
         if (value == null) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
@@ -123,7 +131,7 @@ public class ContentController {
             }
             return parsedValue;
         } catch (NumberFormatException exception) {
-            throw new BusinessException(ErrorCode.INVALID_TYPE, exception);
+            throw new BusinessException(nonNumericErrorCode, exception);
         }
     }
 }

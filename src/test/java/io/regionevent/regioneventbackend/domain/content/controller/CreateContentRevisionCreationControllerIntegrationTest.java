@@ -94,6 +94,12 @@ class CreateContentRevisionCreationControllerIntegrationTest extends ContentCont
                 .content(VALID_REQUEST))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        mockMvc.perform(authenticated(post("/api/v1/operator/contents/not-a-number/revisions"))
+                .contentType(APPLICATION_JSON)
+                .content(VALID_REQUEST))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
     }
 
     @Test
