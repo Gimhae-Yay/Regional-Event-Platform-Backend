@@ -471,6 +471,7 @@ P0의 복합 PK `(user_id, role)`를 `role_assignment_id`로 대체한다. 역�
 | 추가·확장 항목 | 규칙 |
 | --- | --- |
 | `target_type` | 기존 P0 값에 `PLATFORM_ADMIN_ASSIGNMENT`, `USER_ROLE_ASSIGNMENT`, `STAMPBOOK`, `MISSION`, `COUPON_POLICY`, `COUPON`, `RESERVATION_PRICE_SNAPSHOT`, `PAYMENT`, `REFUND`, `PAYMENT_DISCREPANCY`를 추가 |
+| `reason` | P1 수명주기·운영 명령의 사유 원문. 스탬프북·미션·쿠폰 정책의 생성·수정·심사 요청·승인·반려·종료에서는 앞뒤 공백 제거 뒤 1~500자이며 NOT NULL, 그 외 이벤트는 nullable |
 | `evidence_reference` | 특권 변경·수동 거래 처리의 비밀값 없는 증빙 참조. nullable |
 | `audit_event_actor_link` | 활성 actor에만 만든다. 탈퇴 전 제거한다. |
 
