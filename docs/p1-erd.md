@@ -126,16 +126,16 @@ erDiagram
     }
     stampbook_progress {
         BIGINT stampbook_progress_id PK "사용자별 진행 식별자; NOT NULL"
-        BIGINT stampbook_id FK "대상 스탬프북; NOT NULL"
-        BIGINT user_id FK "참여 사용자; 탈퇴 뒤 NULL 가능"
+        BIGINT stampbook_id FK "대상 스탬프북; NOT NULL; UNIQUE(user_id 조합)"
+        BIGINT user_id FK "참여 사용자; 탈퇴 뒤 NULL 가능; UNIQUE(stampbook_id 조합)"
         VARCHAR status "진행 상태: IN_PROGRESS|COMPLETED|ENDED_INCOMPLETE; NOT NULL"
         TIMESTAMP completed_at "완료 시각; 미완료면 NULL 가능"
     }
     stamp_earn {
         BIGINT stamp_earn_id PK "스탬프 적립 식별자; NOT NULL"
         BIGINT stampbook_progress_id FK "적립 대상 진행; NOT NULL"
-        BIGINT visit_id FK "적립을 증명한 유효 방문; NOT NULL"
-        BIGINT content_id FK "방문한 대상 콘텐츠; NOT NULL"
+        BIGINT visit_id FK "적립을 증명한 유효 방문; NOT NULL; UNIQUE(stampbook_progress_id 조합)"
+        BIGINT content_id FK "방문한 대상 콘텐츠; NOT NULL; UNIQUE(stampbook_progress_id 조합)"
         TIMESTAMP earned_at "적립 확정 시각; NOT NULL"
     }
     stampbook_reward_grant {
@@ -224,7 +224,9 @@ erDiagram
 erDiagram
     region ||--o{ coupon_policy : scopes
     coupon_policy ||--o{ coupon : governs
+    coupon_policy ||--o{ coupon_issuance : issues
     app_user ||--o{ coupon : owns
+    app_user ||--o{ coupon_issuance : receives
     coupon ||--|| coupon_issuance : has_source
     visit o|--o{ coupon_issuance : visit_source
     mission_reward_claim o|--o| coupon_issuance : mission_source
@@ -269,10 +271,13 @@ erDiagram
     }
     coupon_issuance {
         BIGINT coupon_issuance_id PK "쿠폰 발급 근거 식별자; NOT NULL"
-        BIGINT coupon_id FK "발급된 쿠폰(쿠폰당 1행); NOT NULL"
+        BIGINT coupon_id FK "발급된 쿠폰; NOT NULL; UNIQUE"
+        BIGINT coupon_policy_id FK "발급 정책(coupon과 일치); NOT NULL"
+        BIGINT recipient_user_id FK "수령 사용자(coupon과 일치); 탈퇴 뒤 NULL 가능"
         BIGINT visit_id FK "방문 보상 근거; 다른 근거 사용 시 NULL"
         BIGINT mission_reward_claim_id FK "미션 보상 근거; 다른 근거 사용 시 NULL"
         BIGINT stampbook_reward_grant_id FK "스탬프북 보상 근거; 다른 근거 사용 시 NULL"
+        VARCHAR issuance_identity_hash "서버 계산 발급 중복 차단 키; NOT NULL; UNIQUE"
         TIMESTAMP issued_at "발급 근거 확정 시각; NOT NULL"
     }
     coupon_status_history {
@@ -294,7 +299,7 @@ erDiagram
 
 ### 3.5 가격·결제·환불
 
-`capacity_hold`, `reservation`은 P0 재사용 테이블이고, `coupon`의 전체 열은 [3.4 쿠폰](#34-쿠폰-발급과-사용)에 있다. `payment_webhook.payment_id`는 결제 연결을 찾지 못한 웹훅도 남겨야 하므로 nullable이다.
+`app_user`, `capacity_hold`, `reservation`은 P0 재사용 테이블이고, `coupon`의 전체 열은 [3.4 쿠폰](#34-쿠폰-발급과-사용)에 있다. `payment_webhook.payment_id`는 결제 연결을 찾지 못한 웹훅도 남겨야 하므로 nullable이다.
 
 ```mermaid
 erDiagram
@@ -302,6 +307,8 @@ erDiagram
     coupon o|--o{ reservation_price_snapshot : applies
     capacity_hold ||--o{ payment : starts
     reservation_price_snapshot ||--o{ payment : fixes_price
+    app_user ||--o{ payment_idempotency : requests
+    payment_idempotency o|--o| payment : returns
     payment o|--o| reservation : confirms
     payment ||--o{ payment_verification : verifies
     payment o|--o{ payment_webhook : receives
@@ -310,8 +317,13 @@ erDiagram
     payment ||--o| refund : refunds
     refund ||--o{ refund_attempt : retries
 
+    app_user {
+        BIGINT user_id PK "P0 사용자 식별자; NOT NULL"
+    }
     capacity_hold {
         BIGINT hold_id PK "P0 정원 홀드 식별자; NOT NULL"
+        BIGINT user_id FK "P0 홀드 소유자; NOT NULL"
+        BIGINT region_id FK "P0 홀드 지역; NOT NULL"
     }
     reservation {
         BIGINT reservation_id PK "P0 확정 예약 식별자; NOT NULL"
@@ -337,8 +349,18 @@ erDiagram
         VARCHAR order_id "내부 주문 식별자(유일); NOT NULL"
         VARCHAR portone_payment_id "PortOne V2 거래 ID; 결제 시작 전 NULL 가능"
         VARCHAR status "상태: PENDING|APPROVED|DECLINED|CANCELLED|EXPIRED|DISCREPANT; NOT NULL"
-        VARCHAR idempotency_key_hash "Idempotency-Key 해시; NOT NULL"
         TIMESTAMP finalized_at "종결 시각; PENDING이면 NULL 가능"
+    }
+    payment_idempotency {
+        BIGINT payment_idempotency_id PK "결제 생성 멱등 기록 식별자; NOT NULL"
+        BIGINT actor_user_id FK "결제 생성 요청자; 탈퇴 뒤 NULL 가능; UNIQUE(operation·key 조합)"
+        VARCHAR operation "PAYMENT_CREATE만 허용; NOT NULL; UNIQUE(actor·key 조합)"
+        VARCHAR idempotency_key_hash "Idempotency-Key 해시; NOT NULL; UNIQUE(actor·operation 조합)"
+        VARCHAR request_hash "정규화한 결제 생성 요청 해시; NOT NULL"
+        VARCHAR status "처리 상태: PROCESSING|SUCCEEDED|FAILED; NOT NULL"
+        BIGINT payment_id FK "성공한 결제 생성 결과; 처리 중·실패면 NULL; UNIQUE"
+        TIMESTAMP completed_at "결제 생성 요청 완료 시각; 처리 중 NULL 가능"
+        TIMESTAMP expires_at "결제 종결 뒤 24시간 만료; PENDING 결제면 NULL"
     }
     payment_verification {
         BIGINT payment_verification_id PK "서버 검증 이력 식별자; NOT NULL"
@@ -478,9 +500,12 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 | --- | --- |
 | 대상 콘텐츠 | `content.region_id = stampbook.region_id` |
 | 적립 원본 | `visit.content_id = stamp_earn.content_id`, `visit.user_id = stampbook_progress.user_id` |
-| 중복 차단 | `UNIQUE (stampbook_progress_id, content_id)` 및 `UNIQUE (stampbook_id, visit_id)` |
+| 사용자 진행 | `UNIQUE (stampbook_id, user_id)`로 활성 사용자의 스탬프북 진행 행을 하나만 둔다. |
+| 중복 차단 | `UNIQUE (stampbook_progress_id, content_id)`로 콘텐츠별 한 번 적립하고, `UNIQUE (stampbook_progress_id, visit_id)`로 같은 방문 재전달을 막는다. 두 제약은 모두 `stamp_earn`의 실제 열로 만든다. |
 | 완료 보상 | `UNIQUE (stampbook_progress_id)` |
 | 상태 | `IN_PROGRESS → COMPLETED` 또는 미완료 상태에서 종료 시 `ENDED_INCOMPLETE` |
+
+적립은 진행 행 생성·조회와 `stamp_earn` 삽입을 같은 트랜잭션에서 처리한다. 유일 키 충돌은 기존 적립 결과를 반환하며, 중복 행을 새로 만들지 않는다.
 
 ### 5.3 지역 미션
 
@@ -513,7 +538,7 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 | --- | --- | --- |
 | `coupon_policy` | `coupon_policy_id`, `region_id`, `issuance_type`, `discount_amount`, `valid_days`, 상태 | 지역 전체 유료 콘텐츠에 적용되는 정액 할인·발급 규칙 |
 | `coupon` | `coupon_id`, `coupon_policy_id`, `user_id`, `status`, `issued_at`, `expires_at` | 사용자가 보유한 현재 쿠폰 상태 |
-| `coupon_issuance` | `coupon_issuance_id`, `coupon_id`, 발급 근거 FK 3종, `issued_at` | 발급 근거와 중복 지급 차단 |
+| `coupon_issuance` | `coupon_issuance_id`, `coupon_id`, `coupon_policy_id`, `recipient_user_id`, 발급 근거 FK 3종, 발급 식별 키, `issued_at` | 발급 근거와 중복 지급 차단 |
 | `coupon_status_history` | `coupon_status_history_id`, `coupon_id`, 이전·이후 상태, 사유, actor 종류, 시각 | 모든 쿠폰 상태 전이의 추가 전용 이력 |
 | `coupon_redemption` | `coupon_redemption_id`, `coupon_id`, `reservation_id`, `redeemed_at` | 예약 확정에 따른 한 번의 사용 사실 |
 
@@ -525,9 +550,13 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 | `MISSION_REWARD` | `coupon_issuance.mission_reward_claim_id` | 연결 미션 보상 수령 결과당 한 장 |
 | `STAMPBOOK_COMPLETION` | `coupon_issuance.stampbook_reward_grant_id` | 연결 스탬프북 완료 보상당 한 장 |
 
-`coupon_issuance`에는 세 근거 FK 중 정확히 하나만 존재해야 한다. 근거 유형은 정책의 `issuance_type`과 같아야 한다.
+`coupon_issuance`에는 세 근거 FK 중 정확히 하나만 존재해야 한다. 근거 유형은 정책의 `issuance_type`과 같고, `coupon_policy_id`·`recipient_user_id`는 연결한 `coupon`의 정책·소유자와 각각 일치해야 한다.
 
-`MISSION_REWARD` 발급은 `UNIQUE (mission_reward_claim_id)`로 같은 수령 행에서 쿠폰을 두 번 만들지 않는다. 수령 행 생성·쿠폰 발급·쿠폰 상태 전이는 같은 트랜잭션으로 처리한다.
+발급 근거와 정책·수령자도 일치해야 한다. `VISIT`은 `visit.user_id = recipient_user_id`를, `MISSION_REWARD`는 수령 행의 `coupon_policy_id`·참여 사용자 일치를, `STAMPBOOK_COMPLETION`은 완료 보상 행의 `coupon_policy_id`·진행 사용자 일치를 각각 검증한다.
+
+`issuance_identity_hash`는 서버가 발급 경로별로 결정적으로 계산한다. `VISIT`은 `(coupon_policy_id, recipient_user_id)`, `MISSION_REWARD`는 `(coupon_policy_id, recipient_user_id, mission_reward_claim_id)`, `STAMPBOOK_COMPLETION`은 `(coupon_policy_id, recipient_user_id, stampbook_reward_grant_id)`를 입력으로 사용한다. `UNIQUE (issuance_identity_hash)`와 `UNIQUE (coupon_id)`가 같은 발급을 한 쿠폰으로 수렴시킨다. 추가로 `UNIQUE (mission_reward_claim_id)`, `UNIQUE (stampbook_reward_grant_id)`를 둔다.
+
+쿠폰 생성·발급 이력·최초 `AVAILABLE` 상태 이력은 같은 트랜잭션으로 처리한다. 발급 식별 키 충돌은 기존 쿠폰과 발급 이력을 반환하며, 서로 다른 재전달 식별자가 와도 새 쿠폰을 만들지 않는다.
 
 쿠폰 상태 전이는 다음과 같다.
 
@@ -554,13 +583,16 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 
 `UNIQUE (hold_id)`이다. 같은 홀드의 결제 재시도는 같은 스냅샷을 사용한다. 쿠폰은 최대 하나만 연결할 수 있고, `base_amount - discount_amount = final_amount`, `final_amount >= 0`을 만족한다.
 
-최종 금액이 0이면 PortOne 결제를 만들지 않는다. 스냅샷·쿠폰 사용·P0 홀드 소비·`reservation(CONFIRMED)` 생성을 같은 트랜잭션에서 처리한다.
+쿠폰을 적용하면 홀드를 잠근 뒤 `coupon.user_id = capacity_hold.user_id`, `coupon_policy.region_id = capacity_hold.region_id`, 쿠폰 `AVAILABLE` 상태와 `expires_at > 현재 시각`을 모두 검증한다. 이미 발급된 쿠폰은 정책 종료 뒤에도 자체 만료 시각까지 사용하므로, 이 사용 검증에서 `coupon_policy.status`를 다시 `PUBLISHED`로 요구하지 않는다.
+
+새 스냅샷은 홀드 잠금·쿠폰의 조건부 `AVAILABLE → RESERVED` 전이·스냅샷 삽입을 같은 트랜잭션에서 처리한다. 같은 홀드의 스냅샷이 있으면 이를 반환하고 쿠폰 상태를 다시 바꾸지 않는다. 조건부 전이에 실패하면 스냅샷을 만들지 않는다. 최종 금액이 0이면 이 트랜잭션에서 홀드 소비·`reservation(CONFIRMED)`·쿠폰 `USED`까지 처리하며, 양수 금액은 서버 검증 승인 때 이 세 변경을 같은 트랜잭션으로 처리한다.
 
 ### 6.2 결제와 검증
 
 | 테이블 | 핵심 열 | 책임 |
 | --- | --- | --- |
-| `payment` | `payment_id`, `hold_id`, `reservation_price_snapshot_id`, `reservation_id`, `order_id`, `portone_payment_id`, 상태·멱등 키·종결 시각 | 외부 결제가 필요한 내부 결제 시도 |
+| `payment` | `payment_id`, `hold_id`, `reservation_price_snapshot_id`, `reservation_id`, `order_id`, `portone_payment_id`, 상태·종결 시각 | 외부 결제가 필요한 내부 결제 시도 |
+| `payment_idempotency` | `payment_idempotency_id`, 요청자·연산·키·요청 해시, 처리 상태, `payment_id`, 만료 시각 | 결제 생성 요청의 동시 실행·재시도 결과 |
 | `payment_verification` | `payment_verification_id`, `payment_id`, 검증 원인·관측 금액·통화·주문 ID·외부 상태·내부 판정·해시 | 서버 조회 결과와 판정 근거 |
 | `payment_webhook` | `payment_webhook_id`, `provider_event_id`, `payment_id`, 인증·처리 결과·원문 해시·수신 시각 | 웹훅 재전송 차단과 처리 감사 |
 | `payment_discrepancy` | `payment_discrepancy_id`, `payment_id`, 유형·상태·관측 시각 | 결제 불일치의 현재 조사 상태 |
@@ -572,7 +604,9 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 | PortOne 거래 | 값이 존재하면 `UNIQUE (portone_payment_id)` |
 | 홀드 연결 | 모든 결제는 `hold_id`와 가격 스냅샷을 반드시 가진다. 예약은 승인 전 nullable |
 | 진행 중 결제 | 홀드당 `PENDING` 결제는 최대 하나 |
-| 멱등 키 | 사용자·`PAYMENT_CREATE`·키 해시가 같으면 기존 결과를 반환한다. 종결 뒤 24시간 보관 |
+| 멱등 키 | `UNIQUE (actor_user_id, operation, idempotency_key_hash)`, `CHECK (operation = 'PAYMENT_CREATE')`, `UNIQUE (payment_id)`를 `payment_idempotency`에 둔다. 요청자의 `actor_user_id`는 `capacity_hold.user_id`와 일치해야 한다. |
+| 멱등 처리 | 먼저 멱등 기록을 점유하고 같은 키·같은 `request_hash`면 기존 결제 또는 진행 중 결과를 반환한다. 같은 키·다른 요청 해시는 충돌로 거부한다. 다른 키로 이미 `PENDING`인 홀드를 시작하려 하면 진행 중 오류를 반환한다. |
+| 보관 | 결제 종결 시 `expires_at = payment.finalized_at + 24시간`으로 정하고, 만료한 종결 기록만 정리한다. 결제 생성 전 실패는 `completed_at + 24시간`으로 정리한다. |
 | 웹훅 | `UNIQUE (provider_event_id)`. 결제 연결을 찾지 못해도 수신·인증 결과는 남긴다. |
 
 결제 상태는 다음과 같다.
@@ -611,8 +645,9 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 
 ```text
 ACTIVE capacity_hold
+  → payment_idempotency 멱등 기록 점유
   → reservation_price_snapshot 생성 + 쿠폰 AVAILABLE→RESERVED
-  → payment(PENDING) 생성
+  → payment(PENDING) 생성 및 멱등 기록에 연결
   → PortOne V2 결제 및 서버 재조회
   → 검증 성공: hold CONSUMED + reservation CONFIRMED + coupon USED + payment APPROVED
   → 거절·취소·만료: payment 종결 + 쿠폰 복구 + 필요 시 hold 정원 복구
@@ -656,9 +691,9 @@ PUBLISHED mission AND ends_at <= 현재 시각
 | --- | --- |
 | 미종결 유료 예약·진행 환불 | 탈퇴 요청 거부. 먼저 취소·환불을 종결해야 함 |
 | 무료 미체크인 예약·활성 홀드 | P0 탈퇴 정책대로 종결 |
-| `coupon` | `AVAILABLE`·`RESERVED`는 `INVALIDATED`; 이후 `user_id` 제거 |
+| `coupon`, `coupon_issuance` | `AVAILABLE`·`RESERVED`는 `INVALIDATED`; 이후 각각 `user_id`, `recipient_user_id` 제거 |
 | 스탬프·미션 진행·근거 | `user_id`를 제거하고 비개인 진행 사실·방문 근거 유지 |
-| 결제·환불 | 법정 보관용 분리 거래 기록을 제외한 운영 DB의 `user_id` 제거 |
+| 결제·환불 | 법정 보관용 분리 거래 기록을 제외한 운영 DB의 `user_id` 제거. `payment_idempotency.actor_user_id`는 종결·만료 정리 전만 유지 |
 | 권한 배정 | 활성 고권한·운영 역할은 먼저 종결. 이력의 `user_id`는 제거 |
 | 감사 | `audit_event_actor_link` 제거. `target_id`는 처음부터 사용자 ID를 저장하지 않음 |
 
@@ -670,13 +705,15 @@ PUBLISHED mission AND ends_at <= 현재 시각
 | --- | --- | --- |
 | 높음 | `platform_admin_assignment` | 활성 고권한 사용자당 한 배정, 활성 슈퍼 최소 한 명은 조건부 쓰기로 보호 |
 | 높음 | `user_role_assignment` | 활성 역할의 사용자·역할·지역 범위 유일성, 지역·상태 조회 인덱스 |
-| 높음 | `stamp_earn`, `mission_progress` | 방문 근거 중복 차단 복합 유일 제약 |
+| 높음 | `stampbook_progress`, `stamp_earn` | `UNIQUE (stampbook_id, user_id)`, `UNIQUE (stampbook_progress_id, visit_id)`, 콘텐츠별 적립 유일 제약 |
+| 높음 | `mission_progress` | 방문 근거 중복 차단 복합 유일 제약 |
 | 높음 | `mission_participation` | `UNIQUE (mission_id, user_id)` — 사용자·미션당 참여 하나 |
 | 높음 | `mission_reward_claim` | `UNIQUE (mission_participation_id)` — 참여당 보상 수령 하나 |
-| 높음 | `coupon_issuance` | 근거별 정책 중복 발급 차단, `UNIQUE (mission_reward_claim_id)`, 세 FK 중 정확히 하나 CHECK |
+| 높음 | `coupon_issuance` | `coupon_id`, 발급 식별 키, `mission_reward_claim_id`, `stampbook_reward_grant_id` 유일; 세 FK 중 정확히 하나 CHECK |
 | 높음 | `coupon_redemption` | `UNIQUE (coupon_id)` |
 | 높음 | `reservation_price_snapshot` | `UNIQUE (hold_id)`, 금액 CHECK |
 | 높음 | `payment` | `order_id`, `portone_payment_id` 유일; 홀드당 진행 중 결제 하나 |
+| 높음 | `payment_idempotency` | `(actor_user_id, operation, idempotency_key_hash)`, `payment_id` 유일; `expires_at` 정리 인덱스 |
 | 높음 | `payment_webhook` | `provider_event_id` 유일 |
 | 높음 | `refund_attempt` | `(refund_id, attempt_no)` 유일, 시도 번호 상한 |
 | 중간 | `coupon(status, expires_at)` | 만료 배치와 내 쿠폰 목록 |
