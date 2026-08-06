@@ -66,7 +66,7 @@
 | 40 | 쿠폰 발급 주체 | 운영자 임의 지급 금지 | 방문·미션 보상·스탬프북 보상에 따른 시스템 발급만 허용한다. |
 | 41 | 발급 근거 무결성 | 근거 테이블을 직접 FK로 연결 | `visit`, `mission_reward_claim`, `stampbook_reward_grant` 중 정확히 하나를 연결한다. |
 | 42 | 동일 근거 중복 지급 | 같은 근거·같은 정책은 1장 | 각 근거와 정책의 고유 제약을 둔다. |
-| 43 | 쿠폰 정책 공개 | 지역 관리자 승인 필요 | `DRAFT → PENDING_REVIEW → PUBLISHED → ENDED`를 사용한다. |
+| 43 | 쿠폰 정책 공개 | 지역 관리자 승인 필요 | `DRAFT → PENDING_REVIEW → PUBLISHED → ENDED`를 사용하며, `PUBLISHED` 정책만 새 쿠폰 발급 근거가 된다. |
 | 44 | 할인 방식 | 정액 할인만 | 정률·최소 결제금액·할인 상한을 제외한다. |
 | 45 | 적용 범위 | 한 지역의 모든 현재·신규 유료 콘텐츠 | 정책-콘텐츠 매핑 테이블을 만들지 않는다. |
 | 46 | 발급 경로 | 정책당 정확히 하나 | `VISIT`, `MISSION_REWARD`, `STAMPBOOK_COMPLETION` 중 하나다. |

@@ -32,7 +32,7 @@
 
 `coupon_issuance`은 `visit`, `mission_reward_claim`, `stampbook_reward_grant` 중 정확히 하나를 FK로 참조한다. 발급 행에는 `coupon_policy_id`, `recipient_user_id`, 서버가 정책·수령자·근거에서 계산하는 `issuance_identity_hash`를 함께 보관한다. 쿠폰과 발급 행의 정책·수령자를 같은 트랜잭션에서 일치시키고, 방문·미션 수령·스탬프북 완료 보상의 각 근거도 해당 정책과 수령 사용자를 증명해야 한다.
 
-`issuance_identity_hash`는 방문 보상에서는 정책·수령자, 미션·스탬프북 보상에서는 정책·수령자·각 보상 근거를 입력으로 한다. 이 키와 `coupon_id`를 유일하게 두고, 미션 보상 수령·스탬프북 완료 보상 근거도 각각 유일하게 둔다. 중복 이벤트는 발급 식별 키 충돌 뒤 기존 쿠폰을 반환한다. 쿠폰 현재 상태는 `AVAILABLE`, `RESERVED`, `USED`, `EXPIRED`, `INVALIDATED`이고, 모든 변화는 `coupon_status_history`에 추가 전용으로 남긴다. 만료 배치가 `EXPIRED`를 기록한다.
+`issuance_identity_hash`는 방문 보상에서는 정책·수령자, 미션·스탬프북 보상에서는 정책·수령자·각 보상 근거를 입력으로 한다. 이 키와 `coupon_id`를 유일하게 두고, 미션 보상 수령·스탬프북 완료 보상 근거도 각각 유일하게 둔다. 중복 이벤트는 발급 식별 키 충돌 뒤 기존 쿠폰을 반환한다. 새 쿠폰 발급은 잠근 `coupon_policy.status`가 `PUBLISHED`일 때만 허용하며, `DRAFT`·`PENDING_REVIEW`·`ENDED` 정책은 신규 발급을 시작할 수 없다. 쿠폰 현재 상태는 `AVAILABLE`, `RESERVED`, `USED`, `EXPIRED`, `INVALIDATED`이고, 모든 변화는 `coupon_status_history`에 추가 전용으로 남긴다. 만료 배치가 `EXPIRED`를 기록한다.
 
 결제 시작 시 홀드 소유자와 쿠폰 소유자, 홀드 지역과 쿠폰 정책 지역, 쿠폰 상태·만료를 함께 검증한 뒤 `AVAILABLE → RESERVED`가 된다. 예약 확정 시 `RESERVED → USED`가 된다. 결제 실패·취소·홀드 만료와 회차 시작 전 예약 취소는 원래 만료 시각을 유지한 채 사용 가능 상태로 복구한다.
 
@@ -56,6 +56,7 @@ P1 신규 테이블로 시작한다. 상태 전이와 이력 삽입은 한 트�
 
 - 근거가 없거나 둘 이상인 발급 이력이 생성되지 않는지 확인한다.
 - 같은 근거·정책의 동시 발급이 쿠폰 한 장으로 수렴하는지 확인한다.
+- `DRAFT`·`PENDING_REVIEW`·`ENDED` 정책으로 새 쿠폰 발급이 거부되고, `PUBLISHED` 정책만 발급되는지 확인한다.
 - 타인 쿠폰, 다른 지역 쿠폰, 만료·예약·사용 쿠폰이 가격 스냅샷에 연결되지 않는지 확인한다.
 - 쿠폰 사용 동시 요청에서 한 건만 `USED`와 사용 이력을 만드는지 확인한다.
 
