@@ -171,6 +171,35 @@ class ContentLogRepositoryTest {
     }
 
     @Test
+    void 최신_ENDED_로그는_처리시각과_식별자_내림차순으로_한건_조회한다() {
+        Content content = saveContent();
+        AppUser actor = saveUser("latest-ended-actor@example.com");
+        Instant earlier = Instant.parse("2026-08-01T00:00:00Z");
+        Instant later = Instant.parse("2026-08-01T01:00:00Z");
+        contentLogRepository.saveAndFlush(
+            new ContentLog(content, actor, ContentLogStatus.ENDED, null, earlier)
+        );
+        ContentLog firstAtSameTime = contentLogRepository.saveAndFlush(
+            new ContentLog(content, actor, ContentLogStatus.ENDED, null, later)
+        );
+        ContentLog latestAtSameTime = contentLogRepository.saveAndFlush(
+            new ContentLog(content, null, ContentLogStatus.ENDED, null, later)
+        );
+        entityManager.clear();
+
+        ContentLog latestEndedLog = contentLogRepository
+            .findTopByContentContentIdAndStatusOrderByDateDescIdDesc(
+                content.getContentId(),
+                ContentLogStatus.ENDED
+            )
+            .orElseThrow();
+
+        assertThat(latestEndedLog.getId()).isGreaterThan(firstAtSameTime.getId());
+        assertThat(latestEndedLog.getId()).isEqualTo(latestAtSameTime.getId());
+        assertThat(latestEndedLog.getDate()).isEqualTo(later);
+    }
+
+    @Test
     void 소프트_삭제_콘텐츠의_로그와_처리자를_처리시각과_식별자_오름차순으로_조회한다() {
         Content content = saveContent();
         AppUser actor = saveUser("history-actor@example.com");

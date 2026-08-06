@@ -48,12 +48,4 @@ public interface ContentLogRepository extends JpaRepository<ContentLog, Long> {
         ContentLogStatus status
     );
 
-    @Query("""
-        SELECT contentLog
-        FROM ContentLog contentLog
-        WHERE contentLog.content.contentId = :contentId
-            AND contentLog.status = io.regionevent.regioneventbackend.domain.content.entity.ContentLogStatus.ENDED
-        ORDER BY contentLog.date DESC, contentLog.id DESC
-        """)
-    Optional<ContentLog> findLatestEnded(@Param("contentId") Long contentId);
 }

@@ -134,7 +134,10 @@ public class ContentLogService {
     }
 
     public ContentLog findLatestEnded(Long contentId) {
-        return contentLogRepository.findLatestEnded(contentId)
+        return contentLogRepository.findTopByContentContentIdAndStatusOrderByDateDescIdDesc(
+            contentId,
+            ContentLogStatus.ENDED
+        )
             .orElseThrow(() -> new IllegalStateException("ended content log must exist"));
     }
 }
