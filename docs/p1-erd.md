@@ -232,8 +232,9 @@ erDiagram
     mission_reward_claim o|--o| coupon_issuance : mission_source
     stampbook_reward_grant o|--o| coupon_issuance : stampbook_source
     coupon ||--o{ coupon_status_history : changes
-    coupon ||--o| coupon_redemption : redeemed_once
+    coupon ||--o{ coupon_redemption : redemption_history
     reservation ||--o| coupon_redemption : consumes
+    reservation_price_snapshot ||--o| coupon_redemption : proves_price
 
     app_user {
         BIGINT user_id PK "P0 사용자 식별자; NOT NULL"
@@ -246,6 +247,9 @@ erDiagram
     }
     reservation {
         BIGINT reservation_id PK "P0 확정 예약 식별자; NOT NULL"
+    }
+    reservation_price_snapshot {
+        BIGINT reservation_price_snapshot_id PK "가격을 고정한 스냅샷 식별자; NOT NULL"
     }
     mission_reward_claim {
         BIGINT mission_reward_claim_id PK "미션 보상 수령 요청 식별자; NOT NULL"
@@ -291,9 +295,12 @@ erDiagram
     }
     coupon_redemption {
         BIGINT coupon_redemption_id PK "쿠폰 사용 확정 식별자; NOT NULL"
-        BIGINT coupon_id FK "사용된 쿠폰(쿠폰당 최대 1행); NOT NULL"
-        BIGINT reservation_id FK "쿠폰을 소비한 확정 예약; NOT NULL"
+        BIGINT coupon_id FK "사용된 쿠폰; 스냅샷 쿠폰과 일치; NOT NULL"
+        BIGINT reservation_price_snapshot_id FK "쿠폰을 적용한 가격 스냅샷; NOT NULL"
+        BIGINT reservation_id FK "스냅샷 홀드에서 확정된 예약; NOT NULL"
+        VARCHAR status "상태: CONFIRMED|REVERSED; NOT NULL"
         TIMESTAMP redeemed_at "사용 확정 시각; NOT NULL"
+        TIMESTAMP reversed_at "회차 시작 전 취소·환불 복구 시각; CONFIRMED면 NULL"
     }
 ```
 
@@ -545,7 +552,7 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 | `coupon` | `coupon_id`, `coupon_policy_id`, `user_id`, `status`, `issued_at`, `expires_at` | 사용자가 보유한 현재 쿠폰 상태 |
 | `coupon_issuance` | `coupon_issuance_id`, `coupon_id`, `coupon_policy_id`, `recipient_user_id`, 발급 근거 FK 3종, 발급 식별 키, `issued_at` | 발급 근거와 중복 지급 차단 |
 | `coupon_status_history` | `coupon_status_history_id`, `coupon_id`, 이전·이후 상태, 사유, actor 종류, 시각 | 모든 쿠폰 상태 전이의 추가 전용 이력 |
-| `coupon_redemption` | `coupon_redemption_id`, `coupon_id`, `reservation_id`, `redeemed_at` | 예약 확정에 따른 한 번의 사용 사실 |
+| `coupon_redemption` | `coupon_redemption_id`, `coupon_id`, `reservation_price_snapshot_id`, `reservation_id`, 상태·확정·복구 시각 | 가격 스냅샷과 예약에 연결한 쿠폰 사용·복구 이력 |
 
 `coupon_policy.issuance_type`은 다음 중 하나다.
 
@@ -570,15 +577,15 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 ```text
 발급:              NULL → AVAILABLE
 결제 시작:         AVAILABLE → RESERVED
-결제 승인·예약확정: RESERVED → USED
+결제 승인·예약확정: RESERVED → USED + coupon_redemption(CONFIRMED)
 결제 실패·취소:    RESERVED → AVAILABLE
 홀드 만료:         RESERVED → AVAILABLE 또는 EXPIRED
-회차 시작 전 취소: USED → AVAILABLE 또는 EXPIRED
+회차 시작 전 취소: USED → AVAILABLE 또는 EXPIRED + coupon_redemption(REVERSED)
 만료 배치:         AVAILABLE → EXPIRED
 회원 탈퇴:         AVAILABLE 또는 RESERVED → INVALIDATED
 ```
 
-`USED`는 결제·예약 취소가 아닌 한 다시 바꾸지 않는다. `EXPIRED`, `INVALIDATED`는 종결 상태다. 각 전이는 `coupon_status_history`와 같은 트랜잭션에서 기록한다.
+스냅샷에 쿠폰이 있으면 `RESERVED → USED`와 `coupon_redemption(CONFIRMED)` 삽입, `USED` 복구와 기존 사용 이력의 `REVERSED` 전이는 각각 `coupon_status_history`와 같은 트랜잭션에서 처리한다. `coupon_redemption`은 `UNIQUE (reservation_id)`, `UNIQUE (reservation_price_snapshot_id)`를 둔다. `(reservation_price_snapshot_id, coupon_id)`는 가격 스냅샷의 같은 복합 키를 참조해 적용 쿠폰과 일치시킨다. `status = CONFIRMED`이면 `reversed_at IS NULL`, `REVERSED`이면 `reversed_at IS NOT NULL`이다. 예약의 `hold_id`와 스냅샷의 `hold_id`는 확정 트랜잭션에서 같아야 한다. 쿠폰당 `CONFIRMED` 사용 이력은 조건부 유일 제약으로 최대 하나만 두며, `REVERSED` 이력은 보존해 복구 뒤 다음 사용 이력을 허용한다. `EXPIRED`, `INVALIDATED`는 종결 상태다.
 
 ## 6. 가격·결제·환불
 
@@ -592,7 +599,7 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 
 쿠폰을 적용하면 홀드를 잠근 뒤 `coupon.user_id = capacity_hold.user_id`, `coupon_policy.region_id = capacity_hold.region_id`, 쿠폰 `AVAILABLE` 상태와 `expires_at > 현재 시각`을 모두 검증한다. 이미 발급된 쿠폰은 정책 종료 뒤에도 자체 만료 시각까지 사용하므로, 이 사용 검증에서 `coupon_policy.status`를 다시 `PUBLISHED`로 요구하지 않는다.
 
-새 스냅샷은 홀드 잠금·쿠폰의 조건부 `AVAILABLE → RESERVED` 전이·스냅샷 삽입을 같은 트랜잭션에서 처리한다. 같은 홀드의 스냅샷이 있으면 이를 반환하고 쿠폰 상태를 다시 바꾸지 않는다. 조건부 전이에 실패하면 스냅샷을 만들지 않는다. 최종 금액이 0이면 이 트랜잭션에서 홀드 소비·`reservation(CONFIRMED)`·쿠폰 `USED`까지 처리하며, 양수 금액은 서버 검증 승인 때 이 세 변경을 같은 트랜잭션으로 처리한다.
+새 스냅샷은 홀드 잠금·쿠폰의 조건부 `AVAILABLE → RESERVED` 전이·스냅샷 삽입을 같은 트랜잭션에서 처리한다. 같은 홀드의 스냅샷이 있으면 이를 반환하고 쿠폰 상태를 다시 바꾸지 않는다. 조건부 전이에 실패하면 스냅샷을 만들지 않는다. 스냅샷에 쿠폰이 있고 최종 금액이 0이면 이 트랜잭션에서 홀드 소비·`reservation(CONFIRMED)`·쿠폰 `USED`·`coupon_redemption(CONFIRMED)`을 함께 처리한다. 양수 금액은 서버 검증 승인 때 같은 네 변경을 같은 트랜잭션으로 처리한다.
 
 ### 6.2 결제와 검증
 
@@ -660,7 +667,7 @@ ACTIVE capacity_hold
   → reservation_price_snapshot 생성 + 쿠폰 AVAILABLE→RESERVED
   → payment(PENDING) 생성 및 멱등 기록에 연결
   → PortOne V2 결제 및 서버 재조회
-  → 검증 성공: hold CONSUMED + reservation CONFIRMED + coupon USED + payment APPROVED
+  → 검증 성공: hold CONSUMED + reservation CONFIRMED + 적용 쿠폰이면 USED + coupon_redemption(CONFIRMED) + payment APPROVED
   → 거절·취소·만료: payment 종결 + 쿠폰 복구 + 필요 시 hold 정원 복구
 ```
 
@@ -669,7 +676,7 @@ ACTIVE capacity_hold
 ```text
 ACTIVE capacity_hold
   → reservation_price_snapshot(final_amount = 0) 생성
-  → hold CONSUMED + reservation CONFIRMED + coupon USED
+  → hold CONSUMED + reservation CONFIRMED + 적용 쿠폰이면 USED + coupon_redemption(CONFIRMED)
 ```
 
 P0 무료 예약 확정 흐름을 사용하며 `payment`·PortOne 호출·웹훅 행을 만들지 않는다.
@@ -724,8 +731,8 @@ PUBLISHED mission AND ends_at <= 현재 시각
 | 높음 | `mission_reward_claim` | `UNIQUE (mission_participation_id)` — 참여당 보상 수령 하나, 원본 `mission.reward_coupon_policy_id` 일치 조건부 쓰기 |
 | 높음 | `stampbook_reward_grant` | `UNIQUE (stampbook_progress_id)`, 원본 `stampbook.reward_coupon_policy_id` 일치 조건부 쓰기 |
 | 높음 | `coupon_issuance` | `coupon_id`, 발급 식별 키, `mission_reward_claim_id`, `stampbook_reward_grant_id` 유일; 세 FK 중 정확히 하나 CHECK |
-| 높음 | `coupon_redemption` | `UNIQUE (coupon_id)` |
-| 높음 | `reservation_price_snapshot` | `UNIQUE (hold_id)`, 금액 CHECK |
+| 높음 | `coupon_redemption` | `UNIQUE (reservation_id)`, `UNIQUE (reservation_price_snapshot_id)`, 쿠폰당 `CONFIRMED` 행 하나를 위한 조건부 유일 제약, 상태·`reversed_at` CHECK, 스냅샷·쿠폰 복합 FK |
+| 높음 | `reservation_price_snapshot` | `UNIQUE (hold_id)`, `(reservation_price_snapshot_id, coupon_id)` 유일 복합 키, 금액 CHECK |
 | 높음 | `payment` | `order_id`, `portone_payment_id` 유일; 홀드당 진행 중 결제 하나 |
 | 높음 | `payment_idempotency` | `(actor_user_id, operation, idempotency_key_hash)`, `payment_id` 유일; `actor_user_id`는 비-FK; `expires_at` 정리 인덱스 |
 | 높음 | `payment_webhook` | `provider_event_id` 유일 |
