@@ -6,6 +6,7 @@ import java.util.regex.Pattern;
 
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.JsonParser;
+import tools.jackson.core.exc.StreamReadException;
 import tools.jackson.databind.DeserializationContext;
 import tools.jackson.databind.ValueDeserializer;
 
@@ -19,19 +20,18 @@ public class SeoulOffsetDateTimeDeserializer extends ValueDeserializer<OffsetDat
     public OffsetDateTime deserialize(JsonParser parser, DeserializationContext context) throws JacksonException {
         String value = parser.getValueAsString();
         if (value == null || !SEOUL_OFFSET_DATE_TIME_PATTERN.matcher(value).matches()) {
-            throw context.weirdStringException(
-                value,
-                OffsetDateTime.class,
+            throw new StreamReadException(
+                parser,
                 "Asia/Seoul ISO 8601 오프셋 일시여야 합니다."
             );
         }
         try {
             return OffsetDateTime.parse(value);
         } catch (DateTimeException exception) {
-            throw context.weirdStringException(
-                value,
-                OffsetDateTime.class,
-                "유효한 일정 시각이어야 합니다."
+            throw new StreamReadException(
+                parser,
+                "유효한 일정 시각이어야 합니다.",
+                exception
             );
         }
     }

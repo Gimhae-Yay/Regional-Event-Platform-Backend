@@ -145,13 +145,13 @@ class SessionRevisionCreationControllerIntegrationTest extends ContentController
                 .contentType(APPLICATION_JSON)
                 .content(VALID_REQUEST.replace("10:00:00+09:00", "10:00+09:00")))
             .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+            .andExpect(jsonPath("$.code").value("INVALID_JSON"));
 
         mockMvc.perform(authenticated(post("/api/v1/operator/sessions/{sessionId}/change-requests", SESSION_ID))
                 .contentType(APPLICATION_JSON)
                 .content(VALID_REQUEST.replace("+09:00", "+09")))
             .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+            .andExpect(jsonPath("$.code").value("INVALID_JSON"));
     }
 
     @Test
