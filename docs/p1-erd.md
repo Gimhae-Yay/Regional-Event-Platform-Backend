@@ -186,8 +186,9 @@ erDiagram
         INT required_visit_count "VISIT_COUNT의 목표 횟수(양수); CONTENT_SET면 NULL"
         BIGINT reward_coupon_policy_id FK "완료 보상 쿠폰 정책; NOT NULL"
         VARCHAR status "상태: DRAFT|PENDING_REVIEW|PUBLISHED|ENDED; NOT NULL"
+        TIMESTAMP ends_at "예정 종료 시각; NOT NULL"
         TIMESTAMP published_at "공개 승인 시각; 공개 전 NULL 가능"
-        TIMESTAMP ended_at "종료 시각; 종료 전 NULL 가능"
+        TIMESTAMP ended_at "실제 종료 확정 시각; 종료 전 NULL 가능"
     }
     mission_target_content {
         BIGINT mission_id PK, FK "CONTENT_SET 미션; NOT NULL"
@@ -209,7 +210,7 @@ erDiagram
     }
     mission_reward_claim {
         BIGINT mission_reward_claim_id PK "보상 수령 요청 식별자; NOT NULL"
-        BIGINT mission_participation_id FK "완료된 미션 참여; NOT NULL"
+        BIGINT mission_participation_id FK "완료된 미션 참여; NOT NULL; UNIQUE"
         BIGINT coupon_policy_id FK "지급할 쿠폰 정책; NOT NULL"
         TIMESTAMP claimed_at "사용자 수령 요청·지급 시각; NOT NULL"
     }
@@ -485,7 +486,7 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 
 | 테이블 | 핵심 열 | 책임 |
 | --- | --- | --- |
-| `mission` | `mission_id`, `region_id`, `condition_type`, `required_visit_count`, `reward_coupon_policy_id`, 상태·종료 시각 | 미션 조건과 공개·종료 상태 |
+| `mission` | `mission_id`, `region_id`, `condition_type`, `required_visit_count`, `reward_coupon_policy_id`, 상태·예정·실제 종료 시각 | 미션 조건과 공개·종료 상태 |
 | `mission_target_content` | `mission_id`, `content_id` | `CONTENT_SET` 미션의 지정 콘텐츠 |
 | `mission_participation` | `mission_participation_id`, `mission_id`, `user_id`, `status`, `joined_at`, `completed_at` | 사용자의 명시적 참여와 완료 자격 |
 | `mission_progress` | `mission_participation_id`, `visit_id`, `content_id`, `recorded_at` | 참여 뒤 방문의 진행 근거 |
@@ -496,7 +497,15 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 | `VISIT_COUNT` | `required_visit_count > 0`, 목표 콘텐츠 행 없음. 참여 뒤 같은 지역의 모든 유효 방문을 센다. |
 | `CONTENT_SET` | `required_visit_count IS NULL`, 목표 콘텐츠 행이 하나 이상. 지정 콘텐츠를 각각 한 번 방문해야 완료한다. |
 
-같은 유효 방문은 조건을 만족하는 여러 공개 미션에 각각 반영할 수 있다. 단, `UNIQUE (mission_participation_id, visit_id)`로 같은 참여에 두 번 반영하지 않는다. `mission_progress.content_id`를 유지하므로 `visit.content_id = mission_progress.content_id`와 `visit.user_id = mission_participation.user_id`를 함께 검증한다. 참여 전·미션 종료 뒤의 방문은 반영하지 않는다.
+| 무결성 | 규칙 |
+| --- | --- |
+| 예정 종료 | `ends_at`은 필수다. `PUBLISHED` 전이 때 `published_at < ends_at`를 검증하며, 공개 뒤 수정하지 않는다. |
+| 자동 종료 | 종료 작업은 `status = PUBLISHED AND ends_at <= 현재 시각`인 행만 `ENDED`로 조건부 전이하고, 그 실제 처리 시각을 `ended_at`에 기록한다. |
+| 참여 멱등성 | `UNIQUE (mission_id, user_id)`로 사용자·미션당 참여 행을 하나만 허용한다. 중복 키 요청은 기존 참여 결과를 반환한다. |
+| 보상 수령 멱등성 | `UNIQUE (mission_participation_id)`로 참여당 보상 수령 행을 하나만 허용한다. 중복 키 요청은 기존 수령 결과를 반환한다. |
+| 진행도 | `UNIQUE (mission_participation_id, visit_id)`로 같은 참여에 같은 방문을 두 번 반영하지 않는다. |
+
+같은 유효 방문은 조건을 만족하는 여러 공개 미션에 각각 반영할 수 있다. `mission_progress.content_id`를 유지하므로 `visit.content_id = mission_progress.content_id`와 `visit.user_id = mission_participation.user_id`를 함께 검증한다. 참여·진행도 반영은 모두 `status = PUBLISHED AND ends_at > 현재 시각`인 미션에만 허용한다. 따라서 종료 작업이 지연돼도 종료 시각 뒤 신규 참여·진행도는 생기지 않는다.
 
 ### 5.4 쿠폰 정책과 쿠폰
 
@@ -517,6 +526,8 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 | `STAMPBOOK_COMPLETION` | `coupon_issuance.stampbook_reward_grant_id` | 연결 스탬프북 완료 보상당 한 장 |
 
 `coupon_issuance`에는 세 근거 FK 중 정확히 하나만 존재해야 한다. 근거 유형은 정책의 `issuance_type`과 같아야 한다.
+
+`MISSION_REWARD` 발급은 `UNIQUE (mission_reward_claim_id)`로 같은 수령 행에서 쿠폰을 두 번 만들지 않는다. 수령 행 생성·쿠폰 발급·쿠폰 상태 전이는 같은 트랜잭션으로 처리한다.
 
 쿠폰 상태 전이는 다음과 같다.
 
@@ -628,6 +639,17 @@ DISCREPANT payment 또는 FAILED/DISCREPANT refund
 
 수동 관리자는 외부 결제를 내부적으로 승인 처리하거나 취소된 예약을 강제로 확정하지 못한다.
 
+### 7.4 미션 자동 종료
+
+```text
+PUBLISHED mission AND ends_at <= 현재 시각
+  → status = ENDED, ended_at = 실제 처리 시각으로 조건부 전이
+  → 미완료 participation은 ENDED_INCOMPLETE로 전이
+  → audit_event 기록
+```
+
+참여·진행도 반영은 `ends_at`을 함께 검사하므로, 종료 배치가 늦게 실행돼도 예정 종료 시각 뒤에는 새 참여·진행도가 허용되지 않는다.
+
 ## 8. 회원 탈퇴와 비식별화
 
 | 대상 | 탈퇴 처리 |
@@ -649,14 +671,16 @@ DISCREPANT payment 또는 FAILED/DISCREPANT refund
 | 높음 | `platform_admin_assignment` | 활성 고권한 사용자당 한 배정, 활성 슈퍼 최소 한 명은 조건부 쓰기로 보호 |
 | 높음 | `user_role_assignment` | 활성 역할의 사용자·역할·지역 범위 유일성, 지역·상태 조회 인덱스 |
 | 높음 | `stamp_earn`, `mission_progress` | 방문 근거 중복 차단 복합 유일 제약 |
-| 높음 | `coupon_issuance` | 근거별 정책 중복 발급 차단, 세 FK 중 정확히 하나 CHECK |
+| 높음 | `mission_participation` | `UNIQUE (mission_id, user_id)` — 사용자·미션당 참여 하나 |
+| 높음 | `mission_reward_claim` | `UNIQUE (mission_participation_id)` — 참여당 보상 수령 하나 |
+| 높음 | `coupon_issuance` | 근거별 정책 중복 발급 차단, `UNIQUE (mission_reward_claim_id)`, 세 FK 중 정확히 하나 CHECK |
 | 높음 | `coupon_redemption` | `UNIQUE (coupon_id)` |
 | 높음 | `reservation_price_snapshot` | `UNIQUE (hold_id)`, 금액 CHECK |
 | 높음 | `payment` | `order_id`, `portone_payment_id` 유일; 홀드당 진행 중 결제 하나 |
 | 높음 | `payment_webhook` | `provider_event_id` 유일 |
 | 높음 | `refund_attempt` | `(refund_id, attempt_no)` 유일, 시도 번호 상한 |
 | 중간 | `coupon(status, expires_at)` | 만료 배치와 내 쿠폰 목록 |
-| 중간 | `mission_participation(mission_id, user_id)` | 참여 멱등·내 진행도 조회 |
+| 중간 | `mission(status, ends_at)` | 자동 종료 후보 조회와 공개 미션 기간 판정 |
 | 중간 | `audit_event(target_type, target_id, occurred_at)` | 특권·거래 조사 |
 
 MySQL의 조건부 유일 제약이 필요한 활성 배정·진행 중 결제는 생성 열을 포함한 유일 인덱스 또는 동등한 조건부 쓰기와 통합 테스트로 강제한다.
