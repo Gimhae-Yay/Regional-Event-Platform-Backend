@@ -1,0 +1,198 @@
+@baseUrl = http://localhost:8080
+@regionAdminAccessToken =
+@otherRegionAdminAccessToken =
+@pendingContentId = 920002
+@rejectContentId = 920001
+@publishedContentId = 900001
+@revisionId = 920001
+@rejectRevisionId = 920002
+@pendingSessionId = 920011
+@rejectSessionId = 920012
+@sessionRevisionId = 920001
+@rejectSessionRevisionId = 920002
+@suspendContentId = 920003
+@deleteContentId = 920002
+@endContentId = 920006
+@notPublishedContentId = 920004
+
+# P0 지역 관리자 콘텐츠 심사/운영 상태 변경
+# 선행 조건: 담당 region의 REGION_ADMIN 토큰, PENDING 콘텐츠, EDIT_REQUESTED 수정본이 필요하다.
+
+### 1. 대기 콘텐츠 목록 조회
+GET {{baseUrl}}/api/v1/region-admin/contents?status=PENDING
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+### 2. 잘못된 status 필터 - 400 INVALID_INPUT 기대
+GET {{baseUrl}}/api/v1/region-admin/contents?status=UNKNOWN
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+### 3. 콘텐츠 심사 상세 조회
+GET {{baseUrl}}/api/v1/region-admin/contents/{{pendingContentId}}
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+### 4. 타 지역 관리자 콘텐츠 상세 조회 - 403 FORBIDDEN 기대
+GET {{baseUrl}}/api/v1/region-admin/contents/{{pendingContentId}}
+Authorization: Bearer {{otherRegionAdminAccessToken}}
+Accept: application/json
+
+### 5. 콘텐츠 승인
+POST {{baseUrl}}/api/v1/region-admin/contents/{{pendingContentId}}/approve
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+### 6. 콘텐츠 승인 반복 - 기존 승인 결과 또는 409 CONTENT_STATE_CONFLICT 기대
+POST {{baseUrl}}/api/v1/region-admin/contents/{{pendingContentId}}/approve
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+### 7. 콘텐츠 반려 - 다른 PENDING 콘텐츠 ID로 실행
+POST {{baseUrl}}/api/v1/region-admin/contents/{{rejectContentId}}/reject
+Authorization: Bearer {{regionAdminAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": "필수 안내 문구 보완 필요"
+}
+
+### 8. 콘텐츠 반려 사유 공백 - 400 INVALID_INPUT 기대
+POST {{baseUrl}}/api/v1/region-admin/contents/{{rejectContentId}}/reject
+Authorization: Bearer {{regionAdminAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": " "
+}
+
+### 9. 수정본 목록 조회
+GET {{baseUrl}}/api/v1/region-admin/content-revisions?status=EDIT_REQUESTED
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+### 10. 수정본 상세 조회
+GET {{baseUrl}}/api/v1/region-admin/content-revisions/{{revisionId}}
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+### 11. 수정본 승인
+POST {{baseUrl}}/api/v1/region-admin/content-revisions/{{revisionId}}/approve
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+### 12. 수정본 반려 - 다른 EDIT_REQUESTED 수정본 ID로 실행
+POST {{baseUrl}}/api/v1/region-admin/content-revisions/{{rejectRevisionId}}/reject
+Authorization: Bearer {{regionAdminAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": "수정 내용 보완 필요"
+}
+
+### 13. 회차 대기 목록 조회
+GET {{baseUrl}}/api/v1/region-admin/sessions?status=PENDING
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+### 14. 회차 상세 조회
+GET {{baseUrl}}/api/v1/region-admin/sessions/{{pendingSessionId}}
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+### 15. 회차 승인
+POST {{baseUrl}}/api/v1/region-admin/sessions/{{pendingSessionId}}/approve
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+### 16. 회차 반려 - 다른 PENDING 회차 ID로 실행
+POST {{baseUrl}}/api/v1/region-admin/sessions/{{rejectSessionId}}/reject
+Authorization: Bearer {{regionAdminAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": "회차 시간 보완 필요"
+}
+
+### 17. 회차 수정 요청 목록 조회
+GET {{baseUrl}}/api/v1/region-admin/session-revisions?status=PENDING
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+### 18. 회차 수정 요청 상세 조회
+GET {{baseUrl}}/api/v1/region-admin/session-revisions/{{sessionRevisionId}}
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+### 19. 회차 수정 요청 승인
+POST {{baseUrl}}/api/v1/region-admin/session-revisions/{{sessionRevisionId}}/approve
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+### 20. 회차 수정 요청 반려 - 다른 PENDING 회차 수정 요청 ID로 실행
+POST {{baseUrl}}/api/v1/region-admin/session-revisions/{{rejectSessionRevisionId}}/reject
+Authorization: Bearer {{regionAdminAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": "정원 변경 근거 보완 필요"
+}
+
+### 21. 운영 중단 - PUBLISHED 콘텐츠에서 실행
+POST {{baseUrl}}/api/v1/region-admin/contents/{{suspendContentId}}/suspend
+Authorization: Bearer {{regionAdminAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": "운영 정책 위반"
+}
+
+### 22. PUBLISHED가 아닌 콘텐츠 운영 중단 - 409 CONTENT_SUSPEND_CONFLICT 기대
+POST {{baseUrl}}/api/v1/region-admin/contents/{{notPublishedContentId}}/suspend
+Authorization: Bearer {{regionAdminAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": "상태 오류 검증"
+}
+
+### 23. 콘텐츠 삭제 - 삭제 가능한 상태 콘텐츠에서 200 OK 기대
+DELETE {{baseUrl}}/api/v1/region-admin/contents/{{deleteContentId}}
+Authorization: Bearer {{regionAdminAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": "관리자 삭제"
+}
+
+### 24. 콘텐츠 종료 - PUBLISHED 콘텐츠에서 실행
+POST {{baseUrl}}/api/v1/region-admin/contents/{{endContentId}}/end
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+### 25. PUBLISHED가 아닌 콘텐츠 종료 - 409 CONTENT_END_CONFLICT 기대
+POST {{baseUrl}}/api/v1/region-admin/contents/{{notPublishedContentId}}/end
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+### 26. 이력 조회
+GET {{baseUrl}}/api/v1/region-admin/contents/{{publishedContentId}}/history
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+# DB 확인
+# SELECT content_id, region_id, status, deleted_at FROM content WHERE content_id IN ({{pendingContentId}}, {{rejectContentId}}, {{publishedContentId}}, {{suspendContentId}}, {{deleteContentId}}, {{endContentId}}, {{notPublishedContentId}});
+# SELECT content_revision_id, content_id, status, rejected_reason FROM content_revision WHERE content_revision_id IN ({{revisionId}}, {{rejectRevisionId}});
+# SELECT session_id, content_id, status, remaining_capacity FROM content_session WHERE session_id IN ({{pendingSessionId}}, {{rejectSessionId}});
+# SELECT content_log_id, content_id, status, reason FROM content_log WHERE content_id IN ({{pendingContentId}}, {{rejectContentId}}, {{publishedContentId}}, {{suspendContentId}}, {{deleteContentId}}, {{endContentId}}, {{notPublishedContentId}}) ORDER BY content_log_id;
+# SELECT audit_event_id, region_id, target_type, target_id, result, reason_code FROM audit_event WHERE target_id IN ({{pendingContentId}}, {{rejectContentId}}, {{publishedContentId}}, {{suspendContentId}}, {{deleteContentId}}, {{endContentId}}, {{notPublishedContentId}}, {{revisionId}}, {{rejectRevisionId}}, {{pendingSessionId}}, {{rejectSessionId}}, {{sessionRevisionId}}, {{rejectSessionRevisionId}}) ORDER BY audit_event_id DESC;
+# 홀드/예약 종료 영향: SELECT status, COUNT(*) FROM capacity_hold WHERE content_session_id IN (SELECT session_id FROM content_session WHERE content_id = {{endContentId}}) GROUP BY status;
+# 홀드/예약 종료 영향: SELECT status, COUNT(*) FROM reservation WHERE content_session_id IN (SELECT session_id FROM content_session WHERE content_id = {{endContentId}}) GROUP BY status;
