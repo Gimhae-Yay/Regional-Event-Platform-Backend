@@ -115,7 +115,7 @@ erDiagram
     stampbook {
         BIGINT stampbook_id PK "스탬프북 식별자; NOT NULL"
         BIGINT region_id FK "소속 지역; NOT NULL"
-        BIGINT reward_coupon_policy_id FK "완료 보상 쿠폰 정책; NOT NULL"
+        BIGINT reward_coupon_policy_id FK "완료 보상 쿠폰 정책; 지역·발급 경로 일치; NOT NULL"
         VARCHAR status "상태: DRAFT|PENDING_REVIEW|PUBLISHED|ENDED; NOT NULL"
         TIMESTAMP published_at "공개 승인 시각; 공개 전 NULL 가능"
         TIMESTAMP ended_at "종료 시각; 종료 전 NULL 가능"
@@ -141,7 +141,7 @@ erDiagram
     stampbook_reward_grant {
         BIGINT stampbook_reward_grant_id PK "완료 보상 식별자; NOT NULL"
         BIGINT stampbook_progress_id FK "완료된 스탬프북 진행; NOT NULL"
-        BIGINT coupon_policy_id FK "지급할 쿠폰 정책; NOT NULL"
+        BIGINT coupon_policy_id FK "stampbook.reward_coupon_policy_id와 일치; NOT NULL"
         TIMESTAMP granted_at "보상 지급 시각; NOT NULL"
     }
 ```
@@ -184,7 +184,7 @@ erDiagram
         BIGINT region_id FK "미션 운영 지역; NOT NULL"
         VARCHAR condition_type "완료 조건: VISIT_COUNT|CONTENT_SET; NOT NULL"
         INT required_visit_count "VISIT_COUNT의 목표 횟수(양수); CONTENT_SET면 NULL"
-        BIGINT reward_coupon_policy_id FK "완료 보상 쿠폰 정책; NOT NULL"
+        BIGINT reward_coupon_policy_id FK "완료 보상 쿠폰 정책; 지역·발급 경로 일치; NOT NULL"
         VARCHAR status "상태: DRAFT|PENDING_REVIEW|PUBLISHED|ENDED; NOT NULL"
         TIMESTAMP ends_at "예정 종료 시각; NOT NULL"
         TIMESTAMP published_at "공개 승인 시각; 공개 전 NULL 가능"
@@ -211,7 +211,7 @@ erDiagram
     mission_reward_claim {
         BIGINT mission_reward_claim_id PK "보상 수령 요청 식별자; NOT NULL"
         BIGINT mission_participation_id FK "완료된 미션 참여; NOT NULL; UNIQUE"
-        BIGINT coupon_policy_id FK "지급할 쿠폰 정책; NOT NULL"
+        BIGINT coupon_policy_id FK "mission.reward_coupon_policy_id와 일치; NOT NULL"
         TIMESTAMP claimed_at "사용자 수령 요청·지급 시각; NOT NULL"
     }
 ```
@@ -500,10 +500,12 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 | 무결성 | 규칙 |
 | --- | --- |
 | 대상 콘텐츠 | `content.region_id = stampbook.region_id` |
+| 보상 정책 | 작성·검토 때 `coupon_policy.region_id = stampbook.region_id`와 `issuance_type = STAMPBOOK_COMPLETION`을 검증한다. `PUBLISHED` 전이 때 잠근 정책도 `PUBLISHED`여야 한다. |
 | 적립 원본 | `visit.content_id = stamp_earn.content_id`, `visit.user_id = stampbook_progress.user_id` |
 | 사용자 진행 | `UNIQUE (stampbook_id, user_id)`로 활성 사용자의 스탬프북 진행 행을 하나만 둔다. |
 | 중복 차단 | `UNIQUE (stampbook_progress_id, content_id)`로 콘텐츠별 한 번 적립하고, `UNIQUE (stampbook_progress_id, visit_id)`로 같은 방문 재전달을 막는다. 두 제약은 모두 `stamp_earn`의 실제 열로 만든다. |
 | 완료 보상 | `UNIQUE (stampbook_progress_id)` |
+| 보상 정책 고정 | `stampbook_reward_grant.coupon_policy_id = stampbook.reward_coupon_policy_id`를 완료 보상 생성과 같은 조건부 쓰기로 검증한다. |
 | 상태 | `IN_PROGRESS → COMPLETED` 또는 미완료 상태에서 종료 시 `ENDED_INCOMPLETE` |
 
 적립은 진행 행 생성·조회와 `stamp_earn` 삽입을 같은 트랜잭션에서 처리한다. 유일 키 충돌은 기존 적립 결과를 반환하며, 중복 행을 새로 만들지 않는다.
@@ -526,9 +528,11 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 | 무결성 | 규칙 |
 | --- | --- |
 | 예정 종료 | `ends_at`은 필수다. `PUBLISHED` 전이 때 `published_at < ends_at`를 검증하며, 공개 뒤 수정하지 않는다. |
+| 보상 정책 | 작성·검토 때 `coupon_policy.region_id = mission.region_id`와 `issuance_type = MISSION_REWARD`를 검증한다. `PUBLISHED` 전이 때 잠근 정책도 `PUBLISHED`여야 한다. |
 | 자동 종료 | 종료 작업은 `status = PUBLISHED AND ends_at <= 현재 시각`인 행만 `ENDED`로 조건부 전이하고, 그 실제 처리 시각을 `ended_at`에 기록한다. |
 | 참여 멱등성 | `UNIQUE (mission_id, user_id)`로 사용자·미션당 참여 행을 하나만 허용한다. 중복 키 요청은 기존 참여 결과를 반환한다. |
 | 보상 수령 멱등성 | `UNIQUE (mission_participation_id)`로 참여당 보상 수령 행을 하나만 허용한다. 중복 키 요청은 기존 수령 결과를 반환한다. |
+| 보상 정책 고정 | `mission_reward_claim.coupon_policy_id = mission.reward_coupon_policy_id`를 보상 수령 생성과 같은 조건부 쓰기로 검증한다. |
 | 진행도 | `UNIQUE (mission_participation_id, visit_id)`로 같은 참여에 같은 방문을 두 번 반영하지 않는다. |
 
 같은 유효 방문은 조건을 만족하는 여러 공개 미션에 각각 반영할 수 있다. `mission_progress.content_id`를 유지하므로 `visit.content_id = mission_progress.content_id`와 `visit.user_id = mission_participation.user_id`를 함께 검증한다. 참여·진행도 반영은 모두 `status = PUBLISHED AND ends_at > 현재 시각`인 미션에만 허용한다. 따라서 종료 작업이 지연돼도 종료 시각 뒤 신규 참여·진행도는 생기지 않는다.
@@ -553,11 +557,13 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 
 `coupon_issuance`에는 세 근거 FK 중 정확히 하나만 존재해야 한다. 근거 유형은 정책의 `issuance_type`과 같고, `coupon_policy_id`·`recipient_user_id`는 연결한 `coupon`의 정책·소유자와 각각 일치해야 한다.
 
-발급 근거와 정책·수령자도 일치해야 한다. `VISIT`은 `visit.user_id = recipient_user_id`를, `MISSION_REWARD`는 수령 행의 `coupon_policy_id`·참여 사용자 일치를, `STAMPBOOK_COMPLETION`은 완료 보상 행의 `coupon_policy_id`·진행 사용자 일치를 각각 검증한다.
+발급 근거와 정책·수령자도 일치해야 한다. `VISIT`은 `visit.user_id = recipient_user_id`를, `MISSION_REWARD`는 수령 행의 `coupon_policy_id = mission.reward_coupon_policy_id`·참여 사용자 일치를, `STAMPBOOK_COMPLETION`은 완료 보상 행의 `coupon_policy_id = stampbook.reward_coupon_policy_id`·진행 사용자 일치를 각각 검증한다.
 
 `issuance_identity_hash`는 서버가 발급 경로별로 결정적으로 계산한다. `VISIT`은 `(coupon_policy_id, recipient_user_id)`, `MISSION_REWARD`는 `(coupon_policy_id, recipient_user_id, mission_reward_claim_id)`, `STAMPBOOK_COMPLETION`은 `(coupon_policy_id, recipient_user_id, stampbook_reward_grant_id)`를 입력으로 사용한다. `UNIQUE (issuance_identity_hash)`와 `UNIQUE (coupon_id)`가 같은 발급을 한 쿠폰으로 수렴시킨다. 추가로 `UNIQUE (mission_reward_claim_id)`, `UNIQUE (stampbook_reward_grant_id)`를 둔다.
 
 새 쿠폰 발급은 `coupon_policy` 행을 잠근 뒤 `status = PUBLISHED`일 때만 시작한다. `DRAFT`·`PENDING_REVIEW`·`ENDED` 정책은 발급 근거가 될 수 없다. 쿠폰 생성·발급 이력·최초 `AVAILABLE` 상태 이력은 이 검증과 같은 트랜잭션으로 처리한다. 발급 식별 키 충돌은 기존 쿠폰과 발급 이력을 반환하며, 서로 다른 재전달 식별자가 와도 새 쿠폰을 만들지 않는다.
+
+`coupon_policy`는 이를 완료 보상으로 참조하는 `PUBLISHED` 스탬프북 또는 미션이 하나라도 있으면 `ENDED`로 전이할 수 없다. 먼저 해당 스탬프북·미션을 종료해야 한다. 이 제약은 완료했지만 아직 수령하지 않은 사용자에게 발급 불가능한 보상을 남기지 않으며, 이미 발급된 쿠폰은 정책 종료 뒤에도 자체 만료 시각까지 사용할 수 있게 한다.
 
 쿠폰 상태 전이는 다음과 같다.
 
@@ -715,7 +721,8 @@ PUBLISHED mission AND ends_at <= 현재 시각
 | 높음 | `stampbook_progress`, `stamp_earn` | `UNIQUE (stampbook_id, user_id)`, `UNIQUE (stampbook_progress_id, visit_id)`, 콘텐츠별 적립 유일 제약 |
 | 높음 | `mission_progress` | 방문 근거 중복 차단 복합 유일 제약 |
 | 높음 | `mission_participation` | `UNIQUE (mission_id, user_id)` — 사용자·미션당 참여 하나 |
-| 높음 | `mission_reward_claim` | `UNIQUE (mission_participation_id)` — 참여당 보상 수령 하나 |
+| 높음 | `mission_reward_claim` | `UNIQUE (mission_participation_id)` — 참여당 보상 수령 하나, 원본 `mission.reward_coupon_policy_id` 일치 조건부 쓰기 |
+| 높음 | `stampbook_reward_grant` | `UNIQUE (stampbook_progress_id)`, 원본 `stampbook.reward_coupon_policy_id` 일치 조건부 쓰기 |
 | 높음 | `coupon_issuance` | `coupon_id`, 발급 식별 키, `mission_reward_claim_id`, `stampbook_reward_grant_id` 유일; 세 FK 중 정확히 하나 CHECK |
 | 높음 | `coupon_redemption` | `UNIQUE (coupon_id)` |
 | 높음 | `reservation_price_snapshot` | `UNIQUE (hold_id)`, 금액 CHECK |
