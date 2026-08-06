@@ -31,6 +31,7 @@
 | Base URL·미디어 타입·시간 형식 | [API 공통 규칙](../../common/api-conventions.md) | Base URL은 `/api/v1`이며, 적립·완료·종료 시각은 UTC ISO 8601 형식이다. |
 | 인증·인가 | [인증·인가](../../common/authentication.md) | 운영 API는 승인된 `OPERATOR`와 지역·콘텐츠 소유권, 조회 API는 활성 회원의 본인 진행 조건을 검증한다. |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | API별 `data` 필드와 오류 코드를 확인한다. `STAMPBOOK_STATE_CONFLICT`는 P1 구현 시 전역 `ErrorCode`에 추가한다. |
+| 감사 이력 | [P1 ERD](../../../p1-erd.md#45-audit_event-확장) | 수명주기 전이는 대상·처리자·이전·이후 상태·사유·시각과 서버가 부여한 `requestId`를 함께 감사한다. `requestId`는 응답에 노출하지 않는다. |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | 세 API 모두 단순 목록 또는 단건 조회로 페이지네이션을 적용하지 않는다. |
 
 ## 기능별 API 명세

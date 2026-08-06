@@ -139,4 +139,4 @@ Accept: application/json
 2. 상태가 `PUBLISHED`일 때만 `ENDED`로 전이하고 `endedAt`을 기록한다. `DRAFT`, `PENDING_REVIEW`, `ENDED`에서는 `STAMPBOOK_STATE_CONFLICT`를 반환한다.
 3. 같은 처리 단위에서 해당 스탬프북의 `IN_PROGRESS` 진행을 모두 `ENDED_INCOMPLETE`로 전이한다. 이미 `COMPLETED`인 진행은 상태와 완료 보상을 유지한다.
 4. 종료 뒤에는 신규 `stamp_earn`, `stampbook_progress`, `stampbook_reward_grant`를 만들지 않는다. 기존 진행·적립 근거는 본인 조회용으로 보존한다.
-5. 스탬프북 상태 전이, 미완료 진행 전이와 `STAMPBOOK` 종료 감사 이력은 하나의 트랜잭션으로 처리한다.
+5. 스탬프북 상태 전이, 미완료 진행 전이와 대상·처리자·이전·이후 상태·사유·시각 및 서버가 부여한 `requestId`를 포함한 `STAMPBOOK` 종료 감사 이력은 하나의 트랜잭션으로 처리한다.

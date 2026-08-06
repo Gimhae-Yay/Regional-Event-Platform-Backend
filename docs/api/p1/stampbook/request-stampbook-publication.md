@@ -139,4 +139,4 @@ Accept: application/json
 2. 상태가 `DRAFT`일 때만 `PENDING_REVIEW`로 전이한다. `PENDING_REVIEW`, `PUBLISHED`, `ENDED`에서는 `STAMPBOOK_STATE_CONFLICT`를 반환한다.
 3. 대상 콘텐츠는 하나 이상이어야 하고 모두 스탬프북 지역과 같아야 한다. 완료 보상 정책은 같은 지역의 `STAMPBOOK_COMPLETION` 정책이어야 한다.
 4. 이 요청은 보상 정책을 공개 상태로 전이하지 않는다. 담당 지역 관리자의 승인 시점에 잠근 보상 정책이 `PUBLISHED`인지 최종 검증하고 스탬프북을 `PUBLISHED`로 전이하는 별도 API가 필요하다.
-5. 상태 전이와 `STAMPBOOK` 공개 심사 요청 감사 이력은 하나의 트랜잭션으로 처리한다.
+5. 상태 전이와 대상·처리자·이전·이후 상태·사유·시각 및 서버가 부여한 `requestId`를 포함한 `STAMPBOOK` 공개 심사 요청 감사 이력은 하나의 트랜잭션으로 처리한다.

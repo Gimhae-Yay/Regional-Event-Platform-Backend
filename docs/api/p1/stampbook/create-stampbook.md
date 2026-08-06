@@ -146,5 +146,5 @@ Accept: application/json
 1. 인증 주체는 활성·승인된 `OPERATOR`이고, `regionId`의 담당 지역 및 모든 `contentIds`의 소유 운영자여야 한다.
 2. 모든 대상 콘텐츠의 지역은 `regionId`와 같아야 한다. 다른 지역·회차 단위·지역 전체 자동 적용은 허용하지 않는다.
 3. 보상 쿠폰 정책은 `regionId`와 같고 발급 경로가 `STAMPBOOK_COMPLETION`이어야 한다.
-4. 스탬프북, 모든 `stampbook_content` 연결과 `STAMPBOOK` 생성 감사 이력은 하나의 트랜잭션으로 생성한다.
+4. 스탬프북, 모든 `stampbook_content` 연결과 서버가 부여한 `requestId`를 포함한 `STAMPBOOK` 생성 감사 이력은 하나의 트랜잭션으로 생성한다.
 5. 생성된 스탬프북은 `DRAFT`이며 방문자에게 노출하거나 신규 적립 대상으로 사용하지 않는다.
