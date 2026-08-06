@@ -11,7 +11,7 @@ import {
   scenarioP95Threshold,
   scenarioVus,
 } from '../lib/config.js';
-import { pickByIteration } from '../lib/data.js';
+import { pickByIteration, requireUniqueValuesAtLeast } from '../lib/data.js';
 import { authHeaders, postJson } from '../lib/http.js';
 import { recordOutcome } from '../lib/responses.js';
 import { markdownSummary } from '../lib/summary.js';
@@ -56,6 +56,13 @@ const visitorTokens = csvEnv('PERF_VISITOR_ACCESS_TOKENS');
 const sessionId = requiredEnv('PERF_RESERVATION_HOLD_SESSION_ID');
 const quantity = numberEnv('PERF_HOLD_QUANTITY', 1);
 const commonTags = { test: testTag, session_id: sessionId };
+
+requireUniqueValuesAtLeast(
+  'PERF_VISITOR_ACCESS_TOKENS',
+  visitorTokens,
+  concurrencyVus,
+  `PERF_${scenarioName}_VUS`,
+);
 
 export function handleSummary(data) {
   return markdownSummary(data, {

@@ -14,6 +14,16 @@ export function requireSameLength(leftName, leftValues, rightName, rightValues) 
   }
 }
 
+export function requireUniqueValuesAtLeast(name, values, minimum, minimumName) {
+  const uniqueValues = new Set(values);
+  if (uniqueValues.size < minimum) {
+    fail(`${name} must contain at least ${minimum} unique comma-separated values for ${minimumName}`);
+  }
+  if (uniqueValues.size !== values.length) {
+    fail(`${name} must not contain duplicate comma-separated values`);
+  }
+}
+
 export function idempotencyKey(prefix) {
   const random = Math.random().toString(36).slice(2, 12);
   return `${prefix}-${__VU}-${__ITER}-${Date.now()}-${random}`;
