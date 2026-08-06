@@ -13,7 +13,6 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 
-import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.content.service.ContentService;
 import io.regionevent.regioneventbackend.domain.content.service.ContentSessionService;
@@ -39,14 +38,12 @@ class CreateReservationHoldUseCaseTest {
         ContentSessionService contentSessionService = mock(ContentSessionService.class);
         CapacityHoldService capacityHoldService = mock(CapacityHoldService.class);
         AppUser user = mock(AppUser.class);
-        Content content = mock(Content.class);
         ContentSession contentSession = mock(ContentSession.class);
         CapacityHold capacityHold = mock(CapacityHold.class);
         when(appUserService.findActiveUserForUpdate(USER_ID)).thenReturn(Optional.of(user));
-        when(contentSessionService.findPublicSession(SESSION_ID)).thenReturn(contentSession);
-        when(contentSession.getContent()).thenReturn(content);
-        when(content.getContentId()).thenReturn(CONTENT_ID);
+        when(contentSessionService.findPublicContentId(SESSION_ID)).thenReturn(CONTENT_ID);
         when(contentService.lockPublishedReservationTarget(CONTENT_ID)).thenReturn(true);
+        when(contentSessionService.findForUpdate(SESSION_ID)).thenReturn(contentSession);
         when(contentSession.getStartsAt()).thenReturn(SESSION_STARTS_AT);
         when(capacityHoldService.createActiveHold(
             user,
@@ -75,9 +72,9 @@ class CreateReservationHoldUseCaseTest {
 
         assertThat(response.holdId()).isEqualTo("17");
         InOrder lockOrder = inOrder(contentService, contentSessionService);
-        lockOrder.verify(contentSessionService).findPublicSession(SESSION_ID);
+        lockOrder.verify(contentSessionService).findPublicContentId(SESSION_ID);
         lockOrder.verify(contentService).lockPublishedReservationTarget(CONTENT_ID);
-        lockOrder.verify(contentSessionService).lockForUpdate(SESSION_ID);
+        lockOrder.verify(contentSessionService).findForUpdate(SESSION_ID);
         lockOrder.verify(contentSessionService).reserveCapacity(SESSION_ID, 2);
     }
 }

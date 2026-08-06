@@ -49,12 +49,11 @@ public class CreateReservationHoldUseCase {
         Long sessionId = toPositiveSessionId(request.sessionId());
         AppUser user = appUserService.findActiveUserForUpdate(userId)
             .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
-        ContentSession contentSession = contentSessionService.findPublicSession(sessionId);
-        Long contentId = contentSession.getContent().getContentId();
+        Long contentId = contentSessionService.findPublicContentId(sessionId);
         if (!contentService.lockPublishedReservationTarget(contentId)) {
             throw new BusinessException(ErrorCode.RESERVATION_HOLD_CONFLICT);
         }
-        contentSessionService.lockForUpdate(sessionId);
+        ContentSession contentSession = contentSessionService.findForUpdate(sessionId);
         Instant createdAt = clock.instant().truncatedTo(ChronoUnit.MICROS);
 
         contentSessionService.reserveCapacity(sessionId, request.quantity());

@@ -41,6 +41,8 @@ import io.regionevent.regioneventbackend.domain.region.repository.RegionReposito
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
+import io.regionevent.regioneventbackend.domain.reservation.dto.CreateReservationHoldRequest;
+import io.regionevent.regioneventbackend.domain.reservation.dto.CreateReservationHoldResponse;
 import io.regionevent.regioneventbackend.domain.reservation.repository.CapacityHoldRepository;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationRepository;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -59,6 +61,7 @@ import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
 
     private final ReservationConfirmationUseCase reservationConfirmationUseCase;
+    private final CreateReservationHoldUseCase createReservationHoldUseCase;
     private final CancelContentSessionUseCase cancelContentSessionUseCase;
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
@@ -74,6 +77,7 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
     @Autowired
     ReservationConfirmationUseCaseMySqlTest(
         ReservationConfirmationUseCase reservationConfirmationUseCase,
+        CreateReservationHoldUseCase createReservationHoldUseCase,
         CancelContentSessionUseCase cancelContentSessionUseCase,
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
@@ -87,6 +91,7 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
         PlatformTransactionManager transactionManager
     ) {
         this.reservationConfirmationUseCase = reservationConfirmationUseCase;
+        this.createReservationHoldUseCase = createReservationHoldUseCase;
         this.cancelContentSessionUseCase = cancelContentSessionUseCase;
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
@@ -221,6 +226,55 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
         }
 
         assertSessionCancellationTerminalState(fixture);
+    }
+
+    @Test
+    @Timeout(10)
+    void 홀드생성과_예약확정이_동시에_실행되어도_잠금순서에따라_완료되고_정원이_일치한다() throws Exception {
+        ConcurrentFixture fixture = createConcurrentFixture();
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<CreateReservationHoldResponse> createFuture = executorService.submit(() -> {
+                ready.countDown();
+                await(start);
+                return createReservationHoldUseCase.create(
+                    fixture.holdCreator().getUserId(),
+                    new CreateReservationHoldRequest(fixture.contentSession().getSessionId().toString(), 1)
+                );
+            });
+            Future<ReservationConfirmationResult> confirmFuture = executorService.submit(() -> {
+                ready.countDown();
+                await(start);
+                return reservationConfirmationUseCase.confirm(
+                    fixture.holdOwner().getUserId(),
+                    fixture.capacityHold().getHoldId().toString(),
+                    "hold-confirm-race-" + System.nanoTime(),
+                    UUID.randomUUID()
+                );
+            });
+
+            assertThat(ready.await(3, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            assertThat(createFuture.get(5, TimeUnit.SECONDS)).isNotNull();
+            assertThat(confirmFuture.get(5, TimeUnit.SECONDS).isSuccessful()).isTrue();
+        }
+
+        transactionTemplate.executeWithoutResult(status -> {
+            ContentSession session = contentSessionRepository.findById(fixture.contentSession().getSessionId())
+                .orElseThrow();
+            assertThat(session.getRemainingCapacity()).isZero();
+            assertThat(capacityHoldRepository.findAll())
+                .filteredOn(hold -> hold.getContentSession().getSessionId().equals(session.getSessionId()))
+                .extracting(CapacityHold::getStatus)
+                .containsExactlyInAnyOrder(CapacityHoldStatus.ACTIVE, CapacityHoldStatus.CONSUMED);
+            assertThat(reservationRepository.findAll())
+                .filteredOn(reservation -> reservation.getContentSession().getSessionId().equals(session.getSessionId()))
+                .extracting(reservation -> reservation.getStatus())
+                .containsExactly(ReservationStatus.CONFIRMED);
+        });
     }
 
     private List<ReservationConfirmationResult> confirmConcurrently(
@@ -408,6 +462,84 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
         });
     }
 
+    private ConcurrentFixture createConcurrentFixture() {
+        return transactionTemplate.execute(status -> {
+            String suffix = Long.toUnsignedString(System.nanoTime());
+            Instant now = Instant.now();
+            Region region = regionRepository.save(new Region("R" + suffix, "김해시", true));
+            AppUser holdOwner = appUserRepository.save(new AppUser(
+                "owner-" + suffix + "@example.com",
+                "hashed-password",
+                "홀드 소유자",
+                "010-1234-5678",
+                AppUserStatus.ACTIVE
+            ));
+            userRoleAssignmentRepository.save(new UserRoleAssignment(holdOwner, UserRole.VISITOR, null));
+            AppUser holdCreator = appUserRepository.save(new AppUser(
+                "creator-" + suffix + "@example.com",
+                "hashed-password",
+                "홀드 생성자",
+                "010-2345-6789",
+                AppUserStatus.ACTIVE
+            ));
+            userRoleAssignmentRepository.save(new UserRoleAssignment(holdCreator, UserRole.VISITOR, null));
+            AppUser operator = appUserRepository.save(new AppUser(
+                "operator-" + suffix + "@example.com",
+                "hashed-password",
+                "운영자",
+                "010-9876-5432",
+                AppUserStatus.ACTIVE
+            ));
+            userRoleAssignmentRepository.save(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
+            Content content = contentRepository.save(new Content(
+                region,
+                operator,
+                ContentType.EVENT_EXPERIENCE,
+                ContentStatus.PUBLISHED,
+                "김해 가야 문화 체험",
+                "김해 가야 문화를 체험하는 행사입니다.",
+                "김해문화의전당",
+                "매일 10:00~18:00",
+                "055-123-4567",
+                "안내를 따라주세요.",
+                "만 7세 이상",
+                "편한 복장",
+                "시작 하루 전까지 취소할 수 있습니다.",
+                now
+            ));
+            ContentSession contentSession = new ContentSession(
+                content,
+                region,
+                now.plusSeconds(3_600),
+                now.plusSeconds(10_800),
+                now.plusSeconds(1_800),
+                now.plusSeconds(9_000),
+                2
+            );
+            contentSession.approve(operator, now);
+            ContentSession savedSession = contentSessionRepository.saveAndFlush(contentSession);
+            contentSessionRepository.decreaseRemainingCapacityIfReservable(
+                savedSession.getSessionId(),
+                1,
+                ContentStatus.PUBLISHED,
+                ContentSessionStatus.SCHEDULED
+            );
+            CapacityHold capacityHold = capacityHoldRepository.save(new CapacityHold(
+                region,
+                savedSession,
+                holdOwner,
+                1,
+                CapacityHoldStatus.ACTIVE,
+                now.plusSeconds(600),
+                null,
+                null,
+                null,
+                now
+            ));
+            return new ConcurrentFixture(holdOwner, holdCreator, savedSession, capacityHold);
+        });
+    }
+
     private void await(CountDownLatch latch) {
         try {
             if (!latch.await(5, TimeUnit.SECONDS)) {
@@ -425,5 +557,13 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
     }
 
     private record Fixture(AppUser user, AppUser operator, ContentSession contentSession, CapacityHold capacityHold) {
+    }
+
+    private record ConcurrentFixture(
+        AppUser holdOwner,
+        AppUser holdCreator,
+        ContentSession contentSession,
+        CapacityHold capacityHold
+    ) {
     }
 }
