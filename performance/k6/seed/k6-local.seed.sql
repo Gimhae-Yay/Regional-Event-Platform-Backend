@@ -8,12 +8,66 @@ SET @image_object_id = 900001;
 SET @content_id = 900001;
 SET @reservation_session_id = 900001;
 SET @checkin_session_id = 900002;
+SET @reservation_concurrency_session_id = 900003;
 SET @qr_hold_id = 900001;
 SET @manual_hold_id = 900002;
 SET @qr_reservation_id = 900001;
 SET @manual_reservation_id = 900002;
 SET @password_hash = '{bcrypt}$2a$12$/SenwR03QWMkim.0.mDq7uE3vB75E5egW2.A5FQPVmlBU9VEUlmm2';
 SET @now = UTC_TIMESTAMP(6);
+
+DELETE idempotency_record
+FROM idempotency_record
+LEFT JOIN reservation
+    ON reservation.reservation_id = idempotency_record.result_reservation_id
+LEFT JOIN visit
+    ON visit.visit_id = idempotency_record.result_visit_id
+WHERE idempotency_record.actor_user_id IN (
+        @operator_user_id,
+        @visitor_user_id,
+        @qr_visitor_user_id,
+        @manual_visitor_user_id
+    )
+    OR reservation.session_id IN (
+        @reservation_session_id,
+        @checkin_session_id,
+        @reservation_concurrency_session_id
+    )
+    OR visit.session_id IN (
+        @reservation_session_id,
+        @checkin_session_id,
+        @reservation_concurrency_session_id
+    );
+
+DELETE review
+FROM review
+JOIN visit ON visit.visit_id = review.visit_id
+WHERE visit.session_id IN (
+    @reservation_session_id,
+    @checkin_session_id,
+    @reservation_concurrency_session_id
+);
+
+DELETE FROM visit
+WHERE session_id IN (
+    @reservation_session_id,
+    @checkin_session_id,
+    @reservation_concurrency_session_id
+);
+
+DELETE FROM reservation
+WHERE session_id IN (
+    @reservation_session_id,
+    @checkin_session_id,
+    @reservation_concurrency_session_id
+);
+
+DELETE FROM capacity_hold
+WHERE session_id IN (
+    @reservation_session_id,
+    @checkin_session_id,
+    @reservation_concurrency_session_id
+);
 
 INSERT INTO region (
     region_id,
@@ -242,6 +296,28 @@ INSERT INTO content_session (
         @now,
         @admin_user_id,
         NULL
+    ),
+    (
+        @reservation_concurrency_session_id,
+        @content_id,
+        @region_id,
+        'SCHEDULED',
+        @now + INTERVAL 7 DAY,
+        @now + INTERVAL 7 DAY + INTERVAL 3 HOUR,
+        @now + INTERVAL 7 DAY - INTERVAL 30 MINUTE,
+        @now + INTERVAL 7 DAY + INTERVAL 2 HOUR,
+        1,
+        1,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        0,
+        @now,
+        @now,
+        @now,
+        @admin_user_id,
+        NULL
     )
 ON DUPLICATE KEY UPDATE
     content_id = VALUES(content_id),
@@ -381,6 +457,7 @@ SELECT
     @image_object_id AS perf_image_object_id,
     @content_id AS perf_content_id,
     @reservation_session_id AS perf_session_id,
+    @reservation_concurrency_session_id AS perf_concurrency_session_id,
     @qr_reservation_id AS perf_qr_reservation_id,
     @manual_reservation_id AS perf_manual_reservation_id,
     'k6-visitor@example.com' AS perf_user_email,

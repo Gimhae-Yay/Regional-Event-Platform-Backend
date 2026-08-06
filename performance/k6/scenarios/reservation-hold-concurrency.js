@@ -1,8 +1,10 @@
+import { fail } from 'k6';
+import { Counter } from 'k6/metrics';
+
 import {
   apiBaseUrl,
   csvEnv,
   env,
-  minExpectedOutcomeRate,
   numberEnv,
   requiredEnv,
   scenarioDuration,
@@ -19,12 +21,29 @@ const testTag = 'reservation_hold_concurrency';
 const businessCodes = [
   'RESERVATION_HOLD_CONFLICT',
 ];
+const concurrencyVus = scenarioVus(scenarioName, 10);
+const maxDuration = scenarioDuration(scenarioName);
+
+if (!Number.isInteger(concurrencyVus) || concurrencyVus < 2) {
+  fail(`PERF_${scenarioName}_VUS must be an integer greater than or equal to 2`);
+}
+
+const holdSuccessCount = new Counter('reservation_hold_success_count');
+const holdConflictCount = new Counter('reservation_hold_conflict_count');
 
 export const options = {
-  vus: scenarioVus(scenarioName),
-  duration: scenarioDuration(scenarioName),
+  scenarios: {
+    reservation_hold_last_seat: {
+      executor: 'per-vu-iterations',
+      vus: concurrencyVus,
+      iterations: 1,
+      maxDuration,
+    },
+  },
   thresholds: {
-    expected_outcome_rate: [`rate>=${minExpectedOutcomeRate()}`],
+    expected_outcome_rate: ['rate==1'],
+    reservation_hold_success_count: ['count==1'],
+    reservation_hold_conflict_count: [`count==${concurrencyVus - 1}`],
     system_failure_rate: ['rate==0'],
     unexpected_failure_rate: ['rate==0'],
     [`http_req_duration{test:${testTag}}`]: [`p(95)<${scenarioP95Threshold(scenarioName)}`],
@@ -34,7 +53,7 @@ export const options = {
 
 const apiBase = apiBaseUrl();
 const visitorTokens = csvEnv('PERF_VISITOR_ACCESS_TOKENS');
-const sessionId = requiredEnv('PERF_SESSION_ID');
+const sessionId = requiredEnv('PERF_RESERVATION_HOLD_SESSION_ID');
 const quantity = numberEnv('PERF_HOLD_QUANTITY', 1);
 const commonTags = { test: testTag, session_id: sessionId };
 
@@ -45,8 +64,8 @@ export function handleSummary(data) {
     testTag,
     baseUrl: env('PERF_BASE_URL', ''),
     apiBase,
-    vus: options.vus,
-    duration: options.duration,
+    vus: concurrencyVus,
+    duration: maxDuration,
     visitorTokens: visitorTokens.length,
     sessionId,
   });
@@ -55,7 +74,7 @@ export function handleSummary(data) {
 export default function () {
   const token = pickByIteration(visitorTokens);
 
-  recordOutcome(
+  const outcome = recordOutcome(
     'POST /reservations',
     postJson(
       apiBase,
@@ -66,4 +85,10 @@ export default function () {
     ),
     { successStatuses: [201], businessCodes },
   );
+
+  if (outcome.success) {
+    holdSuccessCount.add(1, commonTags);
+  } else if (outcome.code === 'RESERVATION_HOLD_CONFLICT') {
+    holdConflictCount.add(1, commonTags);
+  }
 }
