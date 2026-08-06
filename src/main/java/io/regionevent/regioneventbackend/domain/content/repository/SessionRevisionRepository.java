@@ -9,7 +9,6 @@ import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -19,7 +18,6 @@ import io.regionevent.regioneventbackend.domain.content.entity.SessionRevisionSt
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 
 public interface SessionRevisionRepository extends JpaRepository<SessionRevision, Long> {
-
     @EntityGraph(attributePaths = {
         "content",
         "content.region",
