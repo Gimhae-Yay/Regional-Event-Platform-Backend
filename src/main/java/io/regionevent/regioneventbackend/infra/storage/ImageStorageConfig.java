@@ -21,7 +21,10 @@ import io.regionevent.regioneventbackend.domain.image.service.ImageStorageGatewa
 import io.regionevent.regioneventbackend.domain.image.service.ImageStorageException;
 
 @Configuration
-@EnableConfigurationProperties(ImageStorageConfig.S3StorageProperties.class)
+@EnableConfigurationProperties({
+    ImageStorageConfig.S3StorageProperties.class,
+    ImageStorageConfig.FakeStorageProperties.class
+})
 public class ImageStorageConfig {
 
     @Bean
@@ -61,6 +64,19 @@ public class ImageStorageConfig {
     }
 
     @Bean
+    @ConditionalOnProperty(prefix = "storage.fake", name = "enabled", havingValue = "true")
+    public ImageStorageGateway fakeImageStorageGateway(
+        FakeStorageProperties properties,
+        Clock clock
+    ) {
+        return new FakeImageStorageClient(
+            requireNotBlank(properties.baseUrl(), "storage.fake.base-url"),
+            clock,
+            properties.presignedUrlTtl()
+        );
+    }
+
+    @Bean
     @ConditionalOnMissingBean(ImageStorageGateway.class)
     public ImageStorageGateway disabledImageStorageGateway() {
         return new DisabledImageStorageClient();
@@ -95,6 +111,26 @@ public class ImageStorageConfig {
             }
             if (presignedGetUrlTtl == null) {
                 presignedGetUrlTtl = DEFAULT_PRESIGNED_GET_URL_TTL;
+            }
+        }
+    }
+
+    @ConfigurationProperties(prefix = "storage.fake")
+    public record FakeStorageProperties(
+        boolean enabled,
+        String baseUrl,
+        Duration presignedUrlTtl
+    ) {
+
+        private static final String DEFAULT_BASE_URL = "https://example.invalid/local-image-storage";
+        private static final Duration DEFAULT_PRESIGNED_URL_TTL = Duration.ofMinutes(5);
+
+        public FakeStorageProperties {
+            if (baseUrl == null || baseUrl.isBlank()) {
+                baseUrl = DEFAULT_BASE_URL;
+            }
+            if (presignedUrlTtl == null) {
+                presignedUrlTtl = DEFAULT_PRESIGNED_URL_TTL;
             }
         }
     }
