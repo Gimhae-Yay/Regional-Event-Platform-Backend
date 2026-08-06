@@ -413,7 +413,7 @@ erDiagram
         VARCHAR initiator_kind "시작 주체: SYSTEM|SUPER_ADMIN|PLATFORM_ADMIN; NOT NULL"
         VARCHAR portone_cancellation_id "PortOne 취소 ID; 외부 호출 전 NULL 가능"
         VARCHAR outcome_kind "호출 결과: PENDING|RESPONDED|NO_RESPONSE; NOT NULL"
-        VARCHAR failure_reason_code "응답 미수신 사유: TIMEOUT|CONNECTION|NETWORK|UNKNOWN; NO_RESPONSE일 때만 NOT NULL"
+        VARCHAR failure_reason_code "응답 미수신 사유: TIMEOUT|CONNECTION|NETWORK|PROCESS_INTERRUPTED|UNKNOWN; NO_RESPONSE일 때만 NOT NULL"
         VARCHAR external_status "외부 환불 상태; RESPONDED일 때만 NOT NULL"
         VARCHAR result_hash "외부 응답 원문 해시; RESPONDED일 때만 NOT NULL"
         TIMESTAMP attempted_at "외부 환불 시도 시각; NOT NULL"
@@ -635,8 +635,9 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 | 환불 수 | `UNIQUE (payment_id)` — 승인 결제당 환불은 최대 한 건 |
 | 금액 | `refund.amount = reservation_price_snapshot.final_amount` |
 | 시도 번호 | `UNIQUE (refund_id, attempt_no)`, `1 ≤ attempt_no ≤ 3` |
-| 호출 이력 | 외부 호출 직전에 `PENDING` 시도 행을 먼저 만들고 `attempt_no`를 점유한다. 응답 수신은 `RESPONDED`, 타임아웃·연결·네트워크 실패처럼 응답을 받지 못한 호출은 `NO_RESPONSE`로 확정한다. `NO_RESPONSE`도 시도 횟수에 포함한다. |
+| 호출 이력 | 외부 호출 직전에 `PENDING` 시도 행을 먼저 만들고 `attempt_no`를 점유한다. PortOne 환불 호출의 최대 응답 대기 시간은 30초다. 응답 수신은 `RESPONDED`, 타임아웃·연결·네트워크 실패처럼 응답을 받지 못한 호출은 `NO_RESPONSE`로 확정한다. `NO_RESPONSE`도 시도 횟수에 포함한다. |
 | 응답 값 | `RESPONDED`이면 `external_status`, `result_hash`는 모두 NOT NULL이고 `failure_reason_code`는 NULL이다. `NO_RESPONSE`이면 `failure_reason_code`는 NOT NULL이고 두 응답 값은 NULL이다. `PENDING`이면 셋 모두 NULL이다. |
+| `PENDING` 복구 | 1분 고정 지연 복구 작업은 `attempted_at` 뒤 1분이 지난 `PENDING` 행을 잠근다. PortOne에서 원 결제·취소 상태를 재조회해 결과가 확인되면 같은 행을 `RESPONDED`로 확정하고, 확인된 성공·미처리·불일치에 따라 `refund`를 각각 `SUCCEEDED`·`FAILED`·`DISCREPANT`로 전이한다. 재조회 결과도 확인하지 못하면 `NO_RESPONSE(PROCESS_INTERRUPTED)`와 `DISCREPANT`로 확정한다. 이 작업은 기존 행만 갱신하므로 `attempt_no`를 새로 점유하거나 외부 환불 호출 횟수를 늘리지 않는다. |
 | 재시도 | 최초 시도는 `SYSTEM`, 이후는 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN`만. 자동 재시도 금지 |
 | 응답 미수신 | `NO_RESPONSE`는 `refund`를 `DISCREPANT`로 전이한다. PortOne 재조회 증빙으로 실제 환불 미처리가 확인된 경우에만 `FAILED`로 전이해 남은 횟수 안에서 수동 재시도할 수 있다. 성공·미확인은 각각 `SUCCEEDED`·`DISCREPANT`를 유지한다. |
 | 쿠폰 복구 | 회차 시작 전 유효 취소와 환불 성공에만 원래 만료 시각을 유지해 복구 |
@@ -678,7 +679,7 @@ DISCREPANT payment 또는 FAILED/DISCREPANT refund
 
 수동 관리자는 외부 결제를 내부적으로 승인 처리하거나 취소된 예약을 강제로 확정하지 못한다.
 
-환불 외부 호출은 `refund_attempt(PENDING, attempt_no)`를 먼저 기록한 뒤 시작한다. 응답을 받지 못하면 해당 행을 `NO_RESPONSE`와 비밀값 없는 실패 사유로 확정하고 `refund`를 `DISCREPANT`로 전이한다. 이 시도도 총 3회에 포함하며, PortOne 재조회로 미처리가 확인되기 전에는 다음 외부 환불을 호출하지 않는다.
+환불 외부 호출은 `refund_attempt(PENDING, attempt_no)`를 먼저 기록한 뒤 최대 30초 동안 응답을 기다린다. 응답을 받지 못하면 해당 행을 `NO_RESPONSE`와 비밀값 없는 실패 사유로 확정하고 `refund`를 `DISCREPANT`로 전이한다. 이 시도도 총 3회에 포함하며, PortOne 재조회로 미처리가 확인되기 전에는 다음 외부 환불을 호출하지 않는다. 프로세스 종료처럼 결과 확정 전에 남은 `PENDING`은 1분 고정 지연 복구 작업이 행을 잠근 뒤 PortOne 상태를 재조회한다. 재조회는 같은 시도 행만 `RESPONDED` 또는 `NO_RESPONSE(PROCESS_INTERRUPTED)`로 확정하며 새 환불 호출·새 `attempt_no`를 만들지 않는다.
 
 ### 7.4 미션 자동 종료
 
@@ -721,7 +722,7 @@ PUBLISHED mission AND ends_at <= 현재 시각
 | 높음 | `payment` | `order_id`, `portone_payment_id` 유일; 홀드당 진행 중 결제 하나 |
 | 높음 | `payment_idempotency` | `(actor_user_id, operation, idempotency_key_hash)`, `payment_id` 유일; `actor_user_id`는 비-FK; `expires_at` 정리 인덱스 |
 | 높음 | `payment_webhook` | `provider_event_id` 유일 |
-| 높음 | `refund_attempt` | `(refund_id, attempt_no)` 유일, `1 ≤ attempt_no ≤ 3`, `outcome_kind`별 응답 값 NULL/NOT NULL CHECK |
+| 높음 | `refund_attempt` | `(refund_id, attempt_no)` 유일, `1 ≤ attempt_no ≤ 3`, `outcome_kind`별 응답 값 NULL/NOT NULL CHECK, `(outcome_kind, attempted_at)` 복구 후보 인덱스 |
 | 중간 | `coupon(status, expires_at)` | 만료 배치와 내 쿠폰 목록 |
 | 중간 | `mission(status, ends_at)` | 자동 종료 후보 조회와 공개 미션 기간 판정 |
 | 중간 | `audit_event(target_type, target_id, occurred_at)` | 특권·거래 조사 |
