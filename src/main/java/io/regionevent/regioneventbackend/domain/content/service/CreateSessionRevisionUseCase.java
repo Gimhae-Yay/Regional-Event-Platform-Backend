@@ -77,7 +77,7 @@ public class CreateSessionRevisionUseCase {
             operator.region().getRegionId()
         );
         ContentSession targetSession = contentSessionService.findRevisionTargetForUpdate(sessionId);
-        validateTarget(content, targetSession, request.startsAt().toInstant());
+        validateTarget(content, targetSession, toMicroseconds(request.startsAt()));
 
         Instant submittedAt = clock.instant().truncatedTo(ChronoUnit.MICROS);
         SessionRevision revision = sessionRevisionService.createPending(
@@ -113,10 +113,10 @@ public class CreateSessionRevisionUseCase {
             throw invalidInput();
         }
 
-        Instant startsAt = request.startsAt().toInstant();
-        Instant endsAt = request.endsAt().toInstant();
-        Instant checkinOpenAt = request.checkinOpenAt().toInstant();
-        Instant checkinCloseAt = request.checkinCloseAt().toInstant();
+        Instant startsAt = toMicroseconds(request.startsAt());
+        Instant endsAt = toMicroseconds(request.endsAt());
+        Instant checkinOpenAt = toMicroseconds(request.checkinOpenAt());
+        Instant checkinCloseAt = toMicroseconds(request.checkinCloseAt());
         if (!startsAt.isBefore(endsAt)
             || !checkinOpenAt.isBefore(checkinCloseAt)
             || !endsAt.isAfter(checkinCloseAt)) {
@@ -147,12 +147,16 @@ public class CreateSessionRevisionUseCase {
 
     private CreateSessionRevisionCommand toCommand(CreateContentSessionRequest request) {
         return new CreateSessionRevisionCommand(
-            request.startsAt().toInstant(),
-            request.endsAt().toInstant(),
-            request.checkinOpenAt().toInstant(),
-            request.checkinCloseAt().toInstant(),
+            toMicroseconds(request.startsAt()),
+            toMicroseconds(request.endsAt()),
+            toMicroseconds(request.checkinOpenAt()),
+            toMicroseconds(request.checkinCloseAt()),
             request.capacity()
         );
+    }
+
+    private static Instant toMicroseconds(OffsetDateTime dateTime) {
+        return dateTime.toInstant().truncatedTo(ChronoUnit.MICROS);
     }
 
     private static BusinessException invalidInput() {

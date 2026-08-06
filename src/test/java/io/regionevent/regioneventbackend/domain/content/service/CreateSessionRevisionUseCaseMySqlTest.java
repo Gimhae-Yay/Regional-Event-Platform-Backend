@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -114,6 +115,33 @@ class CreateSessionRevisionUseCaseMySqlTest extends NonTransactionalMySqlTestSup
         assertMySqlUniqueConstraint(fixture);
     }
 
+    @Test
+    void 후보_일정_나노초_입력은_마이크로초로_정규화해_응답과_DB_재조회가_같다() {
+        Fixture fixture = createFixture();
+        CreateContentSessionRequest request = requestWithNanoseconds();
+
+        CreateSessionRevisionResult result = createSessionRevisionUseCase.create(
+            fixture.operatorId(),
+            fixture.sessionId(),
+            request,
+            UUID.randomUUID()
+        );
+        SessionRevision revision = sessionRevisionRepository.findById(result.revisionId()).orElseThrow();
+
+        assertThat(result.startsAt()).isEqualTo(request.startsAt().toInstant().truncatedTo(ChronoUnit.MICROS));
+        assertThat(result.endsAt()).isEqualTo(request.endsAt().toInstant().truncatedTo(ChronoUnit.MICROS));
+        assertThat(result.checkinOpenAt()).isEqualTo(
+            request.checkinOpenAt().toInstant().truncatedTo(ChronoUnit.MICROS)
+        );
+        assertThat(result.checkinCloseAt()).isEqualTo(
+            request.checkinCloseAt().toInstant().truncatedTo(ChronoUnit.MICROS)
+        );
+        assertThat(revision.getStartsAt()).isEqualTo(result.startsAt());
+        assertThat(revision.getEndsAt()).isEqualTo(result.endsAt());
+        assertThat(revision.getCheckinOpenAt()).isEqualTo(result.checkinOpenAt());
+        assertThat(revision.getCheckinCloseAt()).isEqualTo(result.checkinCloseAt());
+    }
+
     private Attempt createAfterStart(Fixture fixture, CountDownLatch start) {
         await(start);
         try {
@@ -205,6 +233,18 @@ class CreateSessionRevisionUseCaseMySqlTest extends NonTransactionalMySqlTestSup
 
     private CreateContentSessionRequest request() {
         Instant startsAt = Instant.now().plusSeconds(1_209_600);
+        return request(startsAt);
+    }
+
+    private CreateContentSessionRequest requestWithNanoseconds() {
+        Instant startsAt = Instant.now()
+            .plusSeconds(1_209_600)
+            .truncatedTo(ChronoUnit.SECONDS)
+            .plusNanos(123_456_789);
+        return request(startsAt);
+    }
+
+    private CreateContentSessionRequest request(Instant startsAt) {
         return new CreateContentSessionRequest(
             OffsetDateTime.ofInstant(startsAt, ZoneOffset.ofHours(9)),
             OffsetDateTime.ofInstant(startsAt.plusSeconds(7_200), ZoneOffset.ofHours(9)),
