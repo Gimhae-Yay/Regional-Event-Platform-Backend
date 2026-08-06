@@ -5,7 +5,7 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | `FR-03`, `FR-04`, `AUTH-01`, `SES-01`, `SES-02` |
 | 소유 도메인 | 지역·콘텐츠 카탈로그 |
-| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [ADR-0038](../../../adr/0038-create-sessions-with-lifecycle-and-review-session-changes.md), [ADR-0060](../../../adr/0060-serialize-content-ending-and-session-creation-with-content-lock.md), [ERD](../../../erd.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [ADR-0038](../../../adr/0038-create-sessions-with-lifecycle-and-review-session-changes.md), [ADR-0060](../../../adr/0060-serialize-content-ending-and-session-creation-with-content-lock.md), [ADR-0063](../../../adr/0063-record-failed-session-creation-after-ended-content-check.md), [ERD](../../../erd.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
@@ -55,7 +55,7 @@ Accept: application/json
   "startsAt": "2026-08-22T10:00:00+09:00",
   "endsAt": "2026-08-22T12:00:00+09:00",
   "checkinOpenAt": "2026-08-22T09:30:00+09:00",
-  "checkinCloseAt": "2026-08-22T12:30:00+09:00",
+  "checkinCloseAt": "2026-08-22T11:30:00+09:00",
   "capacity": 30
 }
 ```
@@ -85,7 +85,7 @@ Accept: application/json
   "startsAt": "2026-08-22T10:00:00+09:00",
   "endsAt": "2026-08-22T12:00:00+09:00",
   "checkinOpenAt": "2026-08-22T09:30:00+09:00",
-  "checkinCloseAt": "2026-08-22T12:30:00+09:00",
+  "checkinCloseAt": "2026-08-22T11:30:00+09:00",
   "capacity": 30
 }
 ```
@@ -95,9 +95,9 @@ Accept: application/json
 | Name | Type | Required | Description |
 | --- | --- | --- |
 | `startsAt` | String | Y | API 공통 규칙에 따른 `Asia/Seoul` 일정 시각이다. 현재 시각과 콘텐츠의 `publishAt` 이후이고 `endsAt`보다 앞서야 한다. |
-| `endsAt` | String | Y | API 공통 규칙에 따른 `Asia/Seoul` 일정 시각이다. `startsAt`보다 뒤고 `checkinCloseAt`보다 늦지 않아야 한다. |
+| `endsAt` | String | Y | API 공통 규칙에 따른 `Asia/Seoul` 일정 시각이다. `startsAt`와 `checkinCloseAt`보다 뒤여야 한다. |
 | `checkinOpenAt` | String | Y | API 공통 규칙에 따른 `Asia/Seoul` 일정 시각이다. `checkinCloseAt`보다 앞서야 한다. |
-| `checkinCloseAt` | String | Y | API 공통 규칙에 따른 `Asia/Seoul` 일정 시각이다. `endsAt`보다 이르면 안 된다. |
+| `checkinCloseAt` | String | Y | API 공통 규칙에 따른 `Asia/Seoul` 일정 시각이다. `checkinOpenAt`보다 뒤고 `endsAt`보다 앞서야 한다. |
 | `capacity` | Integer | Y | 1 이상의 정수다. |
 
 ### 처리 규칙
@@ -109,7 +109,8 @@ Accept: application/json
 4. 회차 행, `PENDING` 생성 상태 전이 감사 이벤트와 처리자 연결을 하나의 트랜잭션으로 커밋한다. 홀드·예약은 생성하지 않는다.
 5. 지역 관리자 승인 때만 회차를 `SCHEDULED`로 전이한다. `PENDING`·`REJECTED` 회차는 공개 목록, 예약 정보,
    정원 홀드·예약 처리에서 제외한다.
-6. 자동 종료와 지역 관리자의 정상 종료도 같은 `content` 행을 먼저 잠근다. 회차 생성이 잠금을 먼저 얻으면 `PENDING` 회차를 커밋하고, 뒤의 종료 처리는 이를 확인해 종료하지 않는다. 종료가 먼저 `ENDED`를 커밋하면 회차 생성은 잠금 뒤 `ENDED`를 확인해 `404 NOT_FOUND`로 응답하고 회차와 감사 기록을 만들지 않는다.
+6. 자동 종료와 지역 관리자의 정상 종료도 같은 `content` 행을 먼저 잠근다. 회차 생성이 잠금을 먼저 얻으면 `PENDING` 회차와 성공 감사 이벤트를 같은 트랜잭션으로 커밋하고, 뒤의 종료 처리는 이를 확인해 종료하지 않는다. 종료가 먼저 `ENDED`를 커밋하면, 인증과 운영자 권한 검증을 통과한 회차 생성 요청은 잠금 뒤 `ENDED`를 확인해 `404 NOT_FOUND`로 응답한다. 이 거부는 상태 전이가 아니므로 `content_log`와 성공 감사 이벤트를 만들지 않으며, 원래 트랜잭션이 끝난 뒤 별도 트랜잭션에서 `CONTENT` 대상의 실패 감사 이벤트 한 건만 기록한다. 실패 감사는 서버 `request_id`, `USER`·`OPERATOR` 처리자와 actor link, `previous_state = ENDED`, `result = FAILURE`, `reason_code = NOT_FOUND`를 사용한다.
+7. 잘못된 JSON, 미인증 요청, 존재하지 않는 콘텐츠와 잠금 전 권한·입력 검증 거부에는 실패 감사를 기록하지 않는다. 자동 종료 스케줄러가 오래된 후보를 다시 확인한 뒤 건너뛰는 경우도 정상 처리이므로 실패 감사 대상이 아니다.
 
 ### Response
 
@@ -133,7 +134,7 @@ Accept: application/json
     "startsAt": "2026-08-22T10:00:00+09:00",
     "endsAt": "2026-08-22T12:00:00+09:00",
     "checkinOpenAt": "2026-08-22T09:30:00+09:00",
-    "checkinCloseAt": "2026-08-22T12:30:00+09:00",
+    "checkinCloseAt": "2026-08-22T11:30:00+09:00",
     "capacity": 30,
     "remainingCapacity": 30,
     "createdAt": "2026-08-01T01:00:00Z"
@@ -168,7 +169,7 @@ Accept: application/json
 | 400 | `INVALID_TYPE` | 콘텐츠 식별자를 정수로 변환할 수 없다. 회차와 감사 기록은 생성되지 않는다. |
 | 401 | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 회차와 감사 기록은 생성되지 않는다. |
 | 403 | `FORBIDDEN` | `OPERATOR` 역할, 담당 지역 또는 콘텐츠 소유 관계가 없다. 회차와 감사 기록은 생성되지 않는다. |
-| 404 | `NOT_FOUND` | 콘텐츠가 없거나 소프트 삭제됐거나 생성 대상 상태(`APPROVED`, `PUBLISHED`)가 아니다. 회차와 감사 기록은 생성되지 않는다. |
+| 404 | `NOT_FOUND` | 콘텐츠가 없거나 소프트 삭제됐거나 생성 대상 상태(`APPROVED`, `PUBLISHED`)가 아니다. 존재하지 않는 콘텐츠에는 감사 기록을 생성하지 않는다. 인증·권한 검증을 통과한 요청이 잠금 뒤 `ENDED`를 확인한 경우에만 회차, `content_log`, 성공 감사는 생성하지 않고 별도 트랜잭션의 실패 감사 한 건을 기록한다. |
 
 #### Error Response Body
 

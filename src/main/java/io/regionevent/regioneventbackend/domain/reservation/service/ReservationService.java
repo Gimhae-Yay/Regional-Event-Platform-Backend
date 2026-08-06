@@ -27,6 +27,10 @@ import io.regionevent.regioneventbackend.global.security.qr.QrTokenService;
 public class ReservationService {
 
     private static final int IDENTIFIER_GENERATION_MAX_ATTEMPTS = 5;
+    private static final List<ReservationStatus> REVISION_BLOCKING_STATUSES = List.of(
+        ReservationStatus.CONFIRMED,
+        ReservationStatus.CHECKED_IN
+    );
 
     private final ReservationRepository reservationRepository;
     private final ReservationIdentifierGenerator reservationIdentifierGenerator;
@@ -232,6 +236,14 @@ public class ReservationService {
             .map(this::expireIfNoShowEligible)
             .flatMap(Optional::stream)
             .toList();
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean hasRevisionBlockingReservationForUpdate(Long sessionId) {
+        return !reservationRepository.findBySessionIdAndStatusInForUpdate(
+            sessionId,
+            REVISION_BLOCKING_STATUSES
+        ).isEmpty();
     }
 
     private boolean insertConfirmed(

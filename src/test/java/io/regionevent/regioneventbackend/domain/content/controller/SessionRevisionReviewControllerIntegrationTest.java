@@ -240,6 +240,28 @@ class SessionRevisionReviewControllerIntegrationTest {
         );
     }
 
+    @Test
+    void 심사_대기_회차_수정_요청_상세_조회는_데이터를_변경하지_않는다() throws Exception {
+        Region region = saveRegion("DETAIL");
+        AppUser regionAdmin = saveRegionAdmin("detail-admin@example.com", region, AppUserStatus.ACTIVE);
+        RevisionFixture revision = saveRevision(
+            region,
+            "detail",
+            SUBMITTED_AT,
+            SessionRevisionStatus.PENDING
+        );
+        DatabaseSnapshot before = snapshot();
+
+        mockMvc.perform(get("/api/v1/region-admin/session-revisions/{revisionId}", revision.revisionId())
+                .header(HttpHeaders.AUTHORIZATION, bearerToken(regionAdmin)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.statusCode").value(200))
+            .andExpect(jsonPath("$.code").value("SUCCESS"))
+            .andExpect(jsonPath("$.data.revisionId").value(revision.revisionId().toString()));
+
+        assertDatabaseUnchanged(before, revision);
+    }
+
     private RevisionFixture saveRevision(
         Region region,
         String suffix,

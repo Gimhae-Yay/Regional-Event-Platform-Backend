@@ -15,6 +15,7 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.jdbc.Sql;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,6 +48,9 @@ import io.regionevent.regioneventbackend.support.jpa.CleanH2Database;
 @Import(AtomicityJpaTestConfiguration.class)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 @CleanH2Database
+@Sql(statements = """
+    CREATE ALIAS IF NOT EXISTS UNIX_TIMESTAMP FOR "io.regionevent.regioneventbackend.support.jpa.H2MySqlCompatibilityFunctions.unixTimestamp"
+    """)
 class EndContentReservationsHoldAtomicityTest {
 
     private final EndContentReservationsUseCase endContentReservationsUseCase;
@@ -114,7 +118,7 @@ class EndContentReservationsHoldAtomicityTest {
             });
         assertThat(contentSessionRepository.findById(fixture.sessionId()))
             .hasValueSatisfying(session -> assertThat(session.getRemainingCapacity()).isEqualTo(8));
-        assertThat(auditEventRepository.count()).isZero();
+        assertThat(auditEventRepository.count()).isOne();
     }
 
     private Fixture createFixture() {

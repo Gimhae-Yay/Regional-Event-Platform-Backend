@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
+import io.regionevent.regioneventbackend.domain.region.repository.PublicRegionVerificationProjection;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
@@ -25,7 +26,13 @@ public class RegionService {
     }
 
     @Transactional(readOnly = true)
-    public List<Region> findPublicRegions() {
-        return regionRepository.findAllByIsPublicTrueOrderByNameAscRegionIdAsc();
+    public List<PublicRegionVerificationProjection> findPublicRegionVerifications() {
+        return regionRepository.findPublicRegionVerifications();
+    }
+
+    public PublicRegionStaticInfo findPublicRegionStaticInfo(Long regionId) {
+        return regionRepository.findPublicRegionStaticInfo(regionId)
+            .map(PublicRegionStaticInfo::from)
+            .orElseThrow(() -> new IllegalStateException("public region static info must exist after verification"));
     }
 }
