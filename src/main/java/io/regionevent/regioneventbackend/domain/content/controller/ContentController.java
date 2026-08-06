@@ -41,7 +41,6 @@ public class ContentController {
 
     private final CreateContentUseCase createContentUseCase;
     private final CreateContentRevisionUseCase createContentRevisionUseCase;
-
     private final CreateContentSessionUseCase createContentSessionUseCase;
 
     public ContentController(
@@ -114,13 +113,17 @@ public class ContentController {
     }
 
     private Long parsePositiveId(String value) {
-        if (value == null || !value.matches("[1-9]\\d*")) {
+        if (value == null) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
         try {
-            return Long.valueOf(value);
+            Long parsedValue = Long.valueOf(value);
+            if (!value.matches("[1-9]\\d*")) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT);
+            }
+            return parsedValue;
         } catch (NumberFormatException exception) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT);
+            throw new BusinessException(ErrorCode.INVALID_TYPE, exception);
         }
     }
 }

@@ -64,6 +64,11 @@ class CreateContentSessionControllerIntegrationTest extends ContentControllerWeb
             .andExpect(jsonPath("$.message").value("콘텐츠 회차 생성에 성공했습니다."))
             .andExpect(jsonPath("$.data.sessionId").value(Long.toString(SESSION_ID)))
             .andExpect(jsonPath("$.data.status").value("PENDING"))
+            .andExpect(jsonPath("$.data.startsAt").value("2026-08-22T10:00:00+09:00"))
+            .andExpect(jsonPath("$.data.endsAt").value("2026-08-22T12:00:00+09:00"))
+            .andExpect(jsonPath("$.data.checkinOpenAt").value("2026-08-22T09:30:00+09:00"))
+            .andExpect(jsonPath("$.data.checkinCloseAt").value("2026-08-22T11:30:00+09:00"))
+            .andExpect(jsonPath("$.data.createdAt").value("2026-08-01T01:00:00Z"))
             .andExpect(jsonPath("$.data.remainingCapacity").value(30));
 
         verify(createContentSessionUseCase).create(
@@ -92,6 +97,12 @@ class CreateContentSessionControllerIntegrationTest extends ContentControllerWeb
                 .content(VALID_REQUEST))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        mockMvc.perform(authenticated(post("/api/v1/operator/contents/not-a-number/sessions"))
+                .contentType(APPLICATION_JSON)
+                .content(VALID_REQUEST))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
 
         mockMvc.perform(authenticated(post("/api/v1/operator/contents/{contentId}/sessions", CONTENT_ID))
                 .contentType(APPLICATION_JSON)

@@ -124,9 +124,11 @@ public class CreateContentSessionUseCase {
     }
 
     private void validateTarget(Content content, Instant startsAt) {
-        if (!CREATABLE_CONTENT_STATUSES.contains(content.getStatus())
-            || !startsAt.isAfter(content.getPublishAt())) {
+        if (!CREATABLE_CONTENT_STATUSES.contains(content.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+        if (!startsAt.isAfter(clock.instant()) || !startsAt.isAfter(content.getPublishAt())) {
+            throw invalidInput();
         }
     }
 

@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -72,6 +73,7 @@ class CreateContentSessionUseCaseMySqlTest extends NonTransactionalMySqlTestSupp
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
+    private final JdbcTemplate jdbcTemplate;
     private final TransactionTemplate transactionTemplate;
 
     @Autowired
@@ -86,6 +88,7 @@ class CreateContentSessionUseCaseMySqlTest extends NonTransactionalMySqlTestSupp
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
         UserRoleAssignmentRepository userRoleAssignmentRepository,
+        JdbcTemplate jdbcTemplate,
         PlatformTransactionManager transactionManager
     ) {
         this.createContentSessionUseCase = createContentSessionUseCase;
@@ -98,6 +101,7 @@ class CreateContentSessionUseCaseMySqlTest extends NonTransactionalMySqlTestSupp
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
         this.userRoleAssignmentRepository = userRoleAssignmentRepository;
+        this.jdbcTemplate = jdbcTemplate;
         transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
@@ -134,9 +138,10 @@ class CreateContentSessionUseCaseMySqlTest extends NonTransactionalMySqlTestSupp
     @Test
     void 종료가_먼저_완료되면_회차와_성공_부수효과_없이_실패감사만_기록한다() {
         Fixture fixture = createFixture();
+        UUID requestId = UUID.randomUUID();
         endContentReservationsUseCase.endBySystem(fixture.contentId(), UUID.randomUUID());
 
-        assertThatThrownBy(() -> create(fixture))
+        assertThatThrownBy(() -> create(fixture, requestId))
             .isInstanceOfSatisfying(BusinessException.class, exception ->
                 assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.NOT_FOUND)
             );
@@ -150,70 +155,121 @@ class CreateContentSessionUseCaseMySqlTest extends NonTransactionalMySqlTestSupp
         assertThat(contentLogRepository.findByContentContentIdOrderByDateAscIdAsc(fixture.contentId()))
             .extracting(ContentLog::getStatus)
             .containsExactly(ContentLogStatus.PUBLISHED, ContentLogStatus.ENDED);
-        assertThat(auditEventRepository.findAll())
-            .filteredOn(auditEvent -> fixture.contentId().equals(auditEvent.getTargetId()))
-            .anySatisfy(auditEvent -> {
-                assertThat(auditEvent.getTargetType()).isEqualTo(AuditEventTargetType.CONTENT);
-                assertThat(auditEvent.getPreviousState()).isEqualTo(ContentStatus.ENDED.name());
-                assertThat(auditEvent.getResult()).isEqualTo(AuditEventResult.FAILURE);
-                assertThat(auditEvent.getReasonCode()).isEqualTo(ErrorCode.NOT_FOUND.name());
-                assertThat(auditEventActorLinkRepository.findById(auditEvent.getAuditEventId()))
-                    .hasValueSatisfying(link ->
-                        assertThat(link.getActor().getUserId()).isEqualTo(fixture.operatorId())
-                    );
-            });
+        assertEndedCreationFailureAudit(fixture, requestId);
     }
 
     @Test
     @Timeout(10)
-    void 동시_회차생성과_자동종료는_콘텐츠_잠금순서에_따라_한쪽_결과만_커밋한다() throws Exception {
+    void 수동종료가_콘텐츠_잠금을_먼저_대기하면_회차생성은_종료뒤_실패한다() throws Exception {
         Fixture fixture = createFixture();
-        CountDownLatch ready = new CountDownLatch(2);
-        CountDownLatch start = new CountDownLatch(1);
+        UUID requestId = UUID.randomUUID();
+        CountDownLatch contentLocked = new CountDownLatch(1);
+        CountDownLatch releaseContentLock = new CountDownLatch(1);
 
-        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
-            Future<Attempt> createAttempt = executorService.submit(() -> createAfterStart(fixture, ready, start));
-            Future<Attempt> endAttempt = executorService.submit(() -> endAfterStart(fixture, ready, start));
-            assertThat(ready.await(3, TimeUnit.SECONDS)).isTrue();
-            start.countDown();
-            assertThat(createAttempt.get(5, TimeUnit.SECONDS).errorCode())
-                .isIn(null, ErrorCode.NOT_FOUND);
+        try (ExecutorService executorService = Executors.newFixedThreadPool(3)) {
+            Future<?> lockHolder = executorService.submit(
+                () -> holdContentLock(fixture.contentId(), contentLocked, releaseContentLock)
+            );
+            assertThat(contentLocked.await(3, TimeUnit.SECONDS)).isTrue();
+
+            Future<Attempt> endAttempt = executorService.submit(() -> endByRegionAdmin(fixture));
+            assertThat(awaitContentLockWaitCount(1)).isTrue();
+
+            Future<Attempt> createAttempt = executorService.submit(
+                () -> createExpectingResult(fixture, requestId)
+            );
+            assertThat(awaitContentLockWaitCount(2)).isTrue();
+            releaseContentLock.countDown();
+
+            lockHolder.get(5, TimeUnit.SECONDS);
             assertThat(endAttempt.get(5, TimeUnit.SECONDS).errorCode()).isNull();
+            assertThat(createAttempt.get(5, TimeUnit.SECONDS).errorCode()).isEqualTo(ErrorCode.NOT_FOUND);
         }
 
         List<ContentSession> pendingSessions = contentSessionRepository
             .findByContentContentIdAndStatusOrderByStartsAtAsc(fixture.contentId(), ContentSessionStatus.PENDING);
-        ContentStatus contentStatus = contentRepository.findById(fixture.contentId()).orElseThrow().getStatus();
-        assertThat(contentStatus == ContentStatus.PUBLISHED && pendingSessions.size() == 1
-            || contentStatus == ContentStatus.ENDED && pendingSessions.isEmpty()).isTrue();
+        assertThat(contentRepository.findById(fixture.contentId()))
+            .hasValueSatisfying(content -> assertThat(content.getStatus()).isEqualTo(ContentStatus.ENDED));
+        assertThat(pendingSessions).isEmpty();
+        assertEndedCreationFailureAudit(fixture, requestId);
     }
 
     private CreateContentSessionResult create(Fixture fixture) {
+        return create(fixture, UUID.randomUUID());
+    }
+
+    private CreateContentSessionResult create(Fixture fixture, UUID requestId) {
         Instant startsAt = Instant.now().plusSeconds(172_800);
         return createContentSessionUseCase.create(
             fixture.operatorId(),
             fixture.contentId(),
             request(startsAt),
-            UUID.randomUUID()
+            requestId
         );
     }
 
-    private Attempt createAfterStart(Fixture fixture, CountDownLatch ready, CountDownLatch start) {
-        ready.countDown();
-        await(start);
+    private Attempt createExpectingResult(Fixture fixture, UUID requestId) {
         try {
-            create(fixture);
+            create(fixture, requestId);
             return new Attempt(null);
         } catch (BusinessException exception) {
             return new Attempt(exception.getErrorCode());
         }
     }
 
-    private Attempt endAfterStart(Fixture fixture, CountDownLatch ready, CountDownLatch start) {
-        ready.countDown();
-        await(start);
-        endContentReservationsUseCase.endBySystem(fixture.contentId(), UUID.randomUUID());
-        return new Attempt(null);
+    private Attempt endByRegionAdmin(Fixture fixture) {
+        try {
+            endContentReservationsUseCase.endByRegionAdmin(
+                fixture.adminId(),
+                fixture.contentId(),
+                UUID.randomUUID()
+            );
+            return new Attempt(null);
+        } catch (BusinessException exception) {
+            return new Attempt(exception.getErrorCode());
+        }
+    }
+
+    private void holdContentLock(
+        Long contentId,
+        CountDownLatch contentLocked,
+        CountDownLatch releaseContentLock
+    ) {
+        transactionTemplate.executeWithoutResult(status -> {
+            contentRepository.findByContentIdAndDeletedAtIsNull(contentId).orElseThrow();
+            contentLocked.countDown();
+            await(releaseContentLock);
+        });
+    }
+
+    private boolean awaitContentLockWaitCount(int expectedCount) {
+        for (int attempt = 0; attempt < 30; attempt++) {
+            Integer waitingRequestCount = jdbcTemplate.queryForObject(
+                """
+                    SELECT COUNT(*)
+                    FROM information_schema.processlist
+                    WHERE id <> CONNECTION_ID()
+                        AND db = DATABASE()
+                        AND command = 'Query'
+                        AND LOWER(info) LIKE '%for update%'
+                    """,
+                Integer.class
+            );
+            if (waitingRequestCount != null && waitingRequestCount >= expectedCount) {
+                return true;
+            }
+            awaitLockWaitInterval();
+        }
+        return false;
+    }
+
+    private void awaitLockWaitInterval() {
+        try {
+            TimeUnit.MILLISECONDS.sleep(100);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("content lock wait confirmation was interrupted", exception);
+        }
     }
 
     private CreateContentSessionRequest request(Instant startsAt) {
@@ -259,7 +315,12 @@ class CreateContentSessionUseCaseMySqlTest extends NonTransactionalMySqlTestSupp
                 now.minusSeconds(86_400)
             ));
             contentSessionRepository.save(completedSession(content, region, admin, now));
-            return new Fixture(admin.getUserId(), operator.getUserId(), content.getContentId());
+            return new Fixture(
+                admin.getUserId(),
+                operator.getUserId(),
+                region.getRegionId(),
+                content.getContentId()
+            );
         });
     }
 
@@ -303,6 +364,28 @@ class CreateContentSessionUseCaseMySqlTest extends NonTransactionalMySqlTestSupp
             });
     }
 
+    private void assertEndedCreationFailureAudit(Fixture fixture, UUID requestId) {
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent -> fixture.contentId().equals(auditEvent.getTargetId()))
+            .filteredOn(auditEvent -> auditEvent.getResult() == AuditEventResult.FAILURE)
+            .singleElement()
+            .satisfies(auditEvent -> {
+                assertThat(auditEvent.getRequestId()).isEqualTo(requestId.toString());
+                assertThat(auditEvent.getRegion().getRegionId()).isEqualTo(fixture.regionId());
+                assertThat(auditEvent.getTargetType()).isEqualTo(AuditEventTargetType.CONTENT);
+                assertThat(auditEvent.getPreviousState()).isEqualTo(ContentStatus.ENDED.name());
+                assertThat(auditEvent.getNextState()).isNull();
+                assertThat(auditEvent.getResult()).isEqualTo(AuditEventResult.FAILURE);
+                assertThat(auditEvent.getReasonCode()).isEqualTo(ErrorCode.NOT_FOUND.name());
+                assertThat(auditEvent.getActorKind()).isEqualTo("USER");
+                assertThat(auditEvent.getActorRole()).isEqualTo(UserRole.OPERATOR.name());
+                assertThat(auditEventActorLinkRepository.findById(auditEvent.getAuditEventId()))
+                    .hasValueSatisfying(link ->
+                        assertThat(link.getActor().getUserId()).isEqualTo(fixture.operatorId())
+                    );
+            });
+    }
+
     private void await(CountDownLatch latch) {
         try {
             if (!latch.await(3, TimeUnit.SECONDS)) {
@@ -314,7 +397,7 @@ class CreateContentSessionUseCaseMySqlTest extends NonTransactionalMySqlTestSupp
         }
     }
 
-    private record Fixture(Long adminId, Long operatorId, Long contentId) {
+    private record Fixture(Long adminId, Long operatorId, Long regionId, Long contentId) {
     }
 
     private record Attempt(ErrorCode errorCode) {
