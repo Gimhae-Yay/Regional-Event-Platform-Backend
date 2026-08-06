@@ -1,3 +1,5 @@
+import { Counter } from 'k6/metrics';
+
 import {
   apiBaseUrl,
   csvEnv,
@@ -22,12 +24,14 @@ const businessCodes = [
   'IDEMPOTENCY_KEY_CONFLICT',
   'IDEMPOTENCY_REQUEST_IN_PROGRESS',
 ];
+const reservationFlowSuccessCount = new Counter('reservation_flow_success_count');
 
 export const options = {
   vus: scenarioVus(scenarioName),
   duration: scenarioDuration(scenarioName),
   thresholds: {
     expected_outcome_rate: [`rate>=${minExpectedOutcomeRate()}`],
+    reservation_flow_success_count: ['count>0'],
     system_failure_rate: ['rate==0'],
     unexpected_failure_rate: ['rate==0'],
     [`http_req_duration{test:${testTag}}`]: [`p(95)<${scenarioP95Threshold(scenarioName)}`],
@@ -93,8 +97,11 @@ export default function () {
     return;
   }
 
-  recordOutcome(
+  const listOutcome = recordOutcome(
     'GET /me/reservations',
     get(apiBase, '/me/reservations', authAcceptHeaders(token), commonTags),
   );
+  if (listOutcome.success) {
+    reservationFlowSuccessCount.add(1, commonTags);
+  }
 }

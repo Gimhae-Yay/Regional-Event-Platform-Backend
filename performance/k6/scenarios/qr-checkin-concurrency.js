@@ -1,3 +1,5 @@
+import { Counter } from 'k6/metrics';
+
 import {
   apiBaseUrl,
   csvEnv,
@@ -22,12 +24,14 @@ const businessCodes = [
   'IDEMPOTENCY_KEY_CONFLICT',
   'IDEMPOTENCY_REQUEST_IN_PROGRESS',
 ];
+const qrCheckinSuccessCount = new Counter('qr_checkin_success_count');
 
 export const options = {
   vus: scenarioVus(scenarioName),
   duration: scenarioDuration(scenarioName),
   thresholds: {
     expected_outcome_rate: [`rate>=${minExpectedOutcomeRate()}`],
+    qr_checkin_success_count: ['count>0'],
     system_failure_rate: ['rate==0'],
     unexpected_failure_rate: ['rate==0'],
     [`http_req_duration{test:${testTag}}`]: [`p(95)<${scenarioP95Threshold(scenarioName)}`],
@@ -80,7 +84,7 @@ export function setup() {
 }
 
 export default function (data) {
-  recordOutcome(
+  const outcome = recordOutcome(
     'POST /operator/check-ins',
     postJson(
       apiBase,
@@ -91,4 +95,7 @@ export default function (data) {
     ),
     { businessCodes },
   );
+  if (outcome.success) {
+    qrCheckinSuccessCount.add(1, commonTags);
+  }
 }

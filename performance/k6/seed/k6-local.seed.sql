@@ -4,6 +4,13 @@ SET @visitor_user_id = 900002;
 SET @qr_visitor_user_id = 900003;
 SET @manual_visitor_user_id = 900004;
 SET @admin_user_id = 900005;
+SET @concurrency_visitor_04_user_id = 900006;
+SET @concurrency_visitor_05_user_id = 900007;
+SET @concurrency_visitor_06_user_id = 900008;
+SET @concurrency_visitor_07_user_id = 900009;
+SET @concurrency_visitor_08_user_id = 900010;
+SET @concurrency_visitor_09_user_id = 900011;
+SET @concurrency_visitor_10_user_id = 900012;
 SET @image_object_id = 900001;
 SET @content_id = 900001;
 SET @reservation_session_id = 900001;
@@ -26,7 +33,14 @@ WHERE idempotency_record.actor_user_id IN (
         @operator_user_id,
         @visitor_user_id,
         @qr_visitor_user_id,
-        @manual_visitor_user_id
+        @manual_visitor_user_id,
+        @concurrency_visitor_04_user_id,
+        @concurrency_visitor_05_user_id,
+        @concurrency_visitor_06_user_id,
+        @concurrency_visitor_07_user_id,
+        @concurrency_visitor_08_user_id,
+        @concurrency_visitor_09_user_id,
+        @concurrency_visitor_10_user_id
     )
     OR reservation.session_id IN (
         @reservation_session_id,
@@ -102,7 +116,14 @@ INSERT INTO app_user (
     (@visitor_user_id, 'k6-visitor@example.com', @password_hash, 'K6 Visitor', '01090000002', 'ACTIVE', @now, @now),
     (@qr_visitor_user_id, 'k6-qr-visitor@example.com', @password_hash, 'K6 QR Visitor', '01090000003', 'ACTIVE', @now, @now),
     (@manual_visitor_user_id, 'k6-manual-visitor@example.com', @password_hash, 'K6 Manual Visitor', '01090000004', 'ACTIVE', @now, @now),
-    (@admin_user_id, 'k6-admin@example.com', @password_hash, 'K6 Admin', '01090000005', 'ACTIVE', @now, @now)
+    (@admin_user_id, 'k6-admin@example.com', @password_hash, 'K6 Admin', '01090000005', 'ACTIVE', @now, @now),
+    (@concurrency_visitor_04_user_id, 'k6-concurrency-visitor-04@example.com', @password_hash, 'K6 Concurrency Visitor 04', '01090000006', 'ACTIVE', @now, @now),
+    (@concurrency_visitor_05_user_id, 'k6-concurrency-visitor-05@example.com', @password_hash, 'K6 Concurrency Visitor 05', '01090000007', 'ACTIVE', @now, @now),
+    (@concurrency_visitor_06_user_id, 'k6-concurrency-visitor-06@example.com', @password_hash, 'K6 Concurrency Visitor 06', '01090000008', 'ACTIVE', @now, @now),
+    (@concurrency_visitor_07_user_id, 'k6-concurrency-visitor-07@example.com', @password_hash, 'K6 Concurrency Visitor 07', '01090000009', 'ACTIVE', @now, @now),
+    (@concurrency_visitor_08_user_id, 'k6-concurrency-visitor-08@example.com', @password_hash, 'K6 Concurrency Visitor 08', '01090000010', 'ACTIVE', @now, @now),
+    (@concurrency_visitor_09_user_id, 'k6-concurrency-visitor-09@example.com', @password_hash, 'K6 Concurrency Visitor 09', '01090000011', 'ACTIVE', @now, @now),
+    (@concurrency_visitor_10_user_id, 'k6-concurrency-visitor-10@example.com', @password_hash, 'K6 Concurrency Visitor 10', '01090000012', 'ACTIVE', @now, @now)
 ON DUPLICATE KEY UPDATE
     password_hash = VALUES(password_hash),
     name = VALUES(name),
@@ -120,7 +141,14 @@ INSERT INTO user_role_assignment (
     (@visitor_user_id, 'VISITOR', NULL, @now),
     (@qr_visitor_user_id, 'VISITOR', NULL, @now),
     (@manual_visitor_user_id, 'VISITOR', NULL, @now),
-    (@admin_user_id, 'REGION_ADMIN', @region_id, @now)
+    (@admin_user_id, 'REGION_ADMIN', @region_id, @now),
+    (@concurrency_visitor_04_user_id, 'VISITOR', NULL, @now),
+    (@concurrency_visitor_05_user_id, 'VISITOR', NULL, @now),
+    (@concurrency_visitor_06_user_id, 'VISITOR', NULL, @now),
+    (@concurrency_visitor_07_user_id, 'VISITOR', NULL, @now),
+    (@concurrency_visitor_08_user_id, 'VISITOR', NULL, @now),
+    (@concurrency_visitor_09_user_id, 'VISITOR', NULL, @now),
+    (@concurrency_visitor_10_user_id, 'VISITOR', NULL, @now)
 ON DUPLICATE KEY UPDATE
     region_id = VALUES(region_id),
     granted_at = VALUES(granted_at);
@@ -463,5 +491,18 @@ SELECT
     'k6-visitor@example.com' AS perf_user_email,
     'k6-qr-visitor@example.com' AS perf_qr_user_email,
     'k6-manual-visitor@example.com' AS perf_manual_user_email,
+    CONCAT_WS(
+        ',',
+        'k6-visitor@example.com',
+        'k6-qr-visitor@example.com',
+        'k6-manual-visitor@example.com',
+        'k6-concurrency-visitor-04@example.com',
+        'k6-concurrency-visitor-05@example.com',
+        'k6-concurrency-visitor-06@example.com',
+        'k6-concurrency-visitor-07@example.com',
+        'k6-concurrency-visitor-08@example.com',
+        'k6-concurrency-visitor-09@example.com',
+        'k6-concurrency-visitor-10@example.com'
+    ) AS perf_concurrency_user_emails,
     'K6MN20260806000001' AS perf_manual_reservation_no,
     'Password1!' AS perf_user_password;

@@ -1,3 +1,5 @@
+import { Counter } from 'k6/metrics';
+
 import {
   apiBaseUrl,
   env,
@@ -32,12 +34,16 @@ const businessCodes = [
   'REFRESH_TOKEN_CONFLICT',
 ];
 const systemCodes = ['AUTH_SERVICE_UNAVAILABLE'];
+const loginSuccessCount = new Counter('auth_login_success_count');
+const refreshSuccessCount = new Counter('auth_refresh_success_count');
 
 export const options = {
   vus: scenarioVus(scenarioName),
   duration: scenarioDuration(scenarioName),
   thresholds: {
     expected_outcome_rate: [`rate>=${minExpectedOutcomeRate()}`],
+    auth_login_success_count: ['count>0'],
+    auth_refresh_success_count: ['count>0'],
     system_failure_rate: ['rate==0'],
     unexpected_failure_rate: ['rate==0'],
     [`http_req_duration{test:${testTag}}`]: [`p(95)<${scenarioP95Threshold(scenarioName)}`],
@@ -81,6 +87,7 @@ export default function () {
   if (!loginOutcome.success) {
     return;
   }
+  loginSuccessCount.add(1, commonTags);
 
   const accessToken = extractBearerToken(loginOutcome.response);
   const refreshToken = extractRefreshToken(loginOutcome.response);
@@ -93,9 +100,12 @@ export default function () {
     return;
   }
 
-  recordOutcome(
+  const refreshOutcome = recordOutcome(
     'POST /auth/refresh',
     refreshRequest(apiBase, refreshToken, refreshTags),
     { businessCodes, systemCodes },
   );
+  if (refreshOutcome.success) {
+    refreshSuccessCount.add(1, commonTags);
+  }
 }

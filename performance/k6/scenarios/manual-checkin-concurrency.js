@@ -1,3 +1,5 @@
+import { Counter } from 'k6/metrics';
+
 import {
   apiBaseUrl,
   csvEnv,
@@ -20,12 +22,14 @@ const businessCodes = [
   'IDEMPOTENCY_KEY_CONFLICT',
   'IDEMPOTENCY_REQUEST_IN_PROGRESS',
 ];
+const manualCheckinSuccessCount = new Counter('manual_checkin_success_count');
 
 export const options = {
   vus: scenarioVus(scenarioName),
   duration: scenarioDuration(scenarioName),
   thresholds: {
     expected_outcome_rate: [`rate>=${minExpectedOutcomeRate()}`],
+    manual_checkin_success_count: ['count>0'],
     system_failure_rate: ['rate==0'],
     unexpected_failure_rate: ['rate==0'],
     [`http_req_duration{test:${testTag}}`]: [`p(95)<${scenarioP95Threshold(scenarioName)}`],
@@ -54,7 +58,7 @@ export function handleSummary(data) {
 }
 
 export default function () {
-  recordOutcome(
+  const outcome = recordOutcome(
     'POST /operator/check-ins/manual',
     postJson(
       apiBase,
@@ -65,4 +69,7 @@ export default function () {
     ),
     { businessCodes },
   );
+  if (outcome.success) {
+    manualCheckinSuccessCount.add(1, commonTags);
+  }
 }
