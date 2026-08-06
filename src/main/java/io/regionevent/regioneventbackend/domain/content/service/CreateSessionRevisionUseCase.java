@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
@@ -78,7 +79,7 @@ public class CreateSessionRevisionUseCase {
         ContentSession targetSession = contentSessionService.findRevisionTargetForUpdate(sessionId);
         validateTarget(content, targetSession, request.startsAt().toInstant());
 
-        Instant submittedAt = clock.instant();
+        Instant submittedAt = clock.instant().truncatedTo(ChronoUnit.MICROS);
         SessionRevision revision = sessionRevisionService.createPending(
             targetSession,
             operator.user(),

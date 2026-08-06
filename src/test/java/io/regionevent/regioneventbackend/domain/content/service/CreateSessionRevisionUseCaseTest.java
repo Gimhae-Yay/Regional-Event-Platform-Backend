@@ -13,6 +13,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
@@ -48,6 +49,8 @@ class CreateSessionRevisionUseCaseTest {
     private static final Long REGION_ID = 1L;
     private static final Instant NOW = Instant.parse("2026-08-05T00:00:00Z");
     private static final Instant STARTS_AT = NOW.plusSeconds(86_400);
+    private static final Instant SUBMITTED_AT = NOW.plusSeconds(1).plusNanos(789);
+    private static final Instant NORMALIZED_SUBMITTED_AT = SUBMITTED_AT.truncatedTo(ChronoUnit.MICROS);
 
     private final OperatorAuthorizationService operatorAuthorizationService = mock(
         OperatorAuthorizationService.class
@@ -75,7 +78,7 @@ class CreateSessionRevisionUseCaseTest {
         UUID requestId = UUID.randomUUID();
         CreateContentSessionRequest request = request();
 
-        when(clock.instant()).thenReturn(NOW, NOW.plusSeconds(1));
+        when(clock.instant()).thenReturn(NOW, SUBMITTED_AT);
         when(contentSessionService.findContentIdBySessionId(SESSION_ID)).thenReturn(CONTENT_ID);
         when(operatorAuthorizationService.requireAuthorizedOperator(USER_ID)).thenReturn(operator);
         when(contentService.findOwnedContentForRevisionCreation(CONTENT_ID, USER_ID, REGION_ID))
@@ -91,7 +94,7 @@ class CreateSessionRevisionUseCaseTest {
             eq(targetSession),
             eq(operator.user()),
             any(CreateSessionRevisionCommand.class),
-            eq(NOW.plusSeconds(1))
+            eq(NORMALIZED_SUBMITTED_AT)
         )).thenReturn(revision);
         stubRevision(revision, content, targetSession);
 
@@ -106,7 +109,7 @@ class CreateSessionRevisionUseCaseTest {
             eq(targetSession),
             eq(operator.user()),
             commandCaptor.capture(),
-            eq(NOW.plusSeconds(1))
+            eq(NORMALIZED_SUBMITTED_AT)
         );
         assertThat(commandCaptor.getValue().startsAt()).isEqualTo(STARTS_AT);
         assertThat(commandCaptor.getValue().capacity()).isEqualTo(30);
@@ -118,6 +121,7 @@ class CreateSessionRevisionUseCaseTest {
         assertThat(auditCaptor.getValue().targetId()).isEqualTo(SESSION_ID);
         assertThat(auditCaptor.getValue().nextState()).isEqualTo(SessionRevisionStatus.PENDING.name());
         assertThat(auditCaptor.getValue().result()).isEqualTo(AuditEventResult.SUCCESS);
+        assertThat(auditCaptor.getValue().occurredAt()).isEqualTo(NORMALIZED_SUBMITTED_AT);
     }
 
     @Test
@@ -172,7 +176,7 @@ class CreateSessionRevisionUseCaseTest {
         when(revision.getCheckinOpenAt()).thenReturn(STARTS_AT.minusSeconds(1_800));
         when(revision.getCheckinCloseAt()).thenReturn(STARTS_AT.plusSeconds(5_400));
         when(revision.getCapacity()).thenReturn(30);
-        when(revision.getSubmittedAt()).thenReturn(NOW.plusSeconds(1));
+        when(revision.getSubmittedAt()).thenReturn(NORMALIZED_SUBMITTED_AT);
         when(content.getContentId()).thenReturn(CONTENT_ID);
         when(targetSession.getSessionId()).thenReturn(SESSION_ID);
     }

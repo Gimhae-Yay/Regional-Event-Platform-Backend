@@ -9,19 +9,31 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 
 public record CreateContentSessionRequest(
     @NotNull
-    @JsonFormat(without = JsonFormat.Feature.ADJUST_DATES_TO_CONTEXT_TIME_ZONE)
+    @JsonFormat(
+        pattern = "yyyy-MM-dd'T'HH:mm:ss[.SSSSSSSSS]XXX",
+        without = JsonFormat.Feature.ADJUST_DATES_TO_CONTEXT_TIME_ZONE
+    )
     OffsetDateTime startsAt,
 
     @NotNull
-    @JsonFormat(without = JsonFormat.Feature.ADJUST_DATES_TO_CONTEXT_TIME_ZONE)
+    @JsonFormat(
+        pattern = "yyyy-MM-dd'T'HH:mm:ss[.SSSSSSSSS]XXX",
+        without = JsonFormat.Feature.ADJUST_DATES_TO_CONTEXT_TIME_ZONE
+    )
     OffsetDateTime endsAt,
 
     @NotNull
-    @JsonFormat(without = JsonFormat.Feature.ADJUST_DATES_TO_CONTEXT_TIME_ZONE)
+    @JsonFormat(
+        pattern = "yyyy-MM-dd'T'HH:mm:ss[.SSSSSSSSS]XXX",
+        without = JsonFormat.Feature.ADJUST_DATES_TO_CONTEXT_TIME_ZONE
+    )
     OffsetDateTime checkinOpenAt,
 
     @NotNull
-    @JsonFormat(without = JsonFormat.Feature.ADJUST_DATES_TO_CONTEXT_TIME_ZONE)
+    @JsonFormat(
+        pattern = "yyyy-MM-dd'T'HH:mm:ss[.SSSSSSSSS]XXX",
+        without = JsonFormat.Feature.ADJUST_DATES_TO_CONTEXT_TIME_ZONE
+    )
     OffsetDateTime checkinCloseAt,
 
     @NotNull
