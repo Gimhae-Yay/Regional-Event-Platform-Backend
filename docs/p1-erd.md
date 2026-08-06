@@ -413,8 +413,10 @@ erDiagram
         INT attempt_no "시도 순번: 1~3; NOT NULL"
         VARCHAR initiator_kind "시작 주체: SYSTEM|SUPER_ADMIN|PLATFORM_ADMIN; NOT NULL"
         VARCHAR portone_cancellation_id "PortOne 취소 ID; 외부 호출 전 NULL 가능"
-        VARCHAR external_status "외부 환불 상태; NOT NULL"
-        VARCHAR result_hash "외부 응답 원문 해시; NOT NULL"
+        VARCHAR outcome_kind "호출 결과: PENDING|RESPONDED|NO_RESPONSE; NOT NULL"
+        VARCHAR failure_reason_code "응답 미수신 사유: TIMEOUT|CONNECTION|NETWORK|UNKNOWN; NO_RESPONSE일 때만 NOT NULL"
+        VARCHAR external_status "외부 환불 상태; RESPONDED일 때만 NOT NULL"
+        VARCHAR result_hash "외부 응답 원문 해시; RESPONDED일 때만 NOT NULL"
         TIMESTAMP attempted_at "외부 환불 시도 시각; NOT NULL"
     }
 ```
@@ -627,14 +629,17 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 | 테이블 | 핵심 열 | 책임 |
 | --- | --- | --- |
 | `refund` | `refund_id`, `payment_id`, `amount`, `status`, `requested_at`, `completed_at` | 승인 결제 한 건의 전액 환불 현재 상태 |
-| `refund_attempt` | `refund_attempt_id`, `refund_id`, `attempt_no`, `initiator_kind`, 외부 취소 ID·상태·결과 해시·시각 | 외부 환불 호출의 개별 시도 |
+| `refund_attempt` | `refund_attempt_id`, `refund_id`, `attempt_no`, `initiator_kind`, 호출 결과·응답 미수신 사유·외부 취소 ID·상태·결과 해시·시각 | 외부 환불 호출의 개별 시도 |
 
 | 무결성 | 규칙 |
 | --- | --- |
 | 환불 수 | `UNIQUE (payment_id)` — 승인 결제당 환불은 최대 한 건 |
 | 금액 | `refund.amount = reservation_price_snapshot.final_amount` |
 | 시도 번호 | `UNIQUE (refund_id, attempt_no)`, `1 ≤ attempt_no ≤ 3` |
+| 호출 이력 | 외부 호출 직전에 `PENDING` 시도 행을 먼저 만들고 `attempt_no`를 점유한다. 응답 수신은 `RESPONDED`, 타임아웃·연결·네트워크 실패처럼 응답을 받지 못한 호출은 `NO_RESPONSE`로 확정한다. `NO_RESPONSE`도 시도 횟수에 포함한다. |
+| 응답 값 | `RESPONDED`이면 `external_status`, `result_hash`는 모두 NOT NULL이고 `failure_reason_code`는 NULL이다. `NO_RESPONSE`이면 `failure_reason_code`는 NOT NULL이고 두 응답 값은 NULL이다. `PENDING`이면 셋 모두 NULL이다. |
 | 재시도 | 최초 시도는 `SYSTEM`, 이후는 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN`만. 자동 재시도 금지 |
+| 응답 미수신 | `NO_RESPONSE`는 `refund`를 `DISCREPANT`로 전이한다. PortOne 재조회 증빙으로 실제 환불 미처리가 확인된 경우에만 `FAILED`로 전이해 남은 횟수 안에서 수동 재시도할 수 있다. 성공·미확인은 각각 `SUCCEEDED`·`DISCREPANT`를 유지한다. |
 | 쿠폰 복구 | 회차 시작 전 유효 취소와 환불 성공에만 원래 만료 시각을 유지해 복구 |
 
 환불 상태 전이는 `REQUESTED → PROCESSING → SUCCEEDED | FAILED | DISCREPANT`다. 환불 성공은 `payment` 상태에 `REFUNDED`를 추가하지 않는다.
@@ -673,6 +678,8 @@ DISCREPANT payment 또는 FAILED/DISCREPANT refund
 ```
 
 수동 관리자는 외부 결제를 내부적으로 승인 처리하거나 취소된 예약을 강제로 확정하지 못한다.
+
+환불 외부 호출은 `refund_attempt(PENDING, attempt_no)`를 먼저 기록한 뒤 시작한다. 응답을 받지 못하면 해당 행을 `NO_RESPONSE`와 비밀값 없는 실패 사유로 확정하고 `refund`를 `DISCREPANT`로 전이한다. 이 시도도 총 3회에 포함하며, PortOne 재조회로 미처리가 확인되기 전에는 다음 외부 환불을 호출하지 않는다.
 
 ### 7.4 미션 자동 종료
 
@@ -715,7 +722,7 @@ PUBLISHED mission AND ends_at <= 현재 시각
 | 높음 | `payment` | `order_id`, `portone_payment_id` 유일; 홀드당 진행 중 결제 하나 |
 | 높음 | `payment_idempotency` | `(actor_user_id, operation, idempotency_key_hash)`, `payment_id` 유일; `expires_at` 정리 인덱스 |
 | 높음 | `payment_webhook` | `provider_event_id` 유일 |
-| 높음 | `refund_attempt` | `(refund_id, attempt_no)` 유일, 시도 번호 상한 |
+| 높음 | `refund_attempt` | `(refund_id, attempt_no)` 유일, `1 ≤ attempt_no ≤ 3`, `outcome_kind`별 응답 값 NULL/NOT NULL CHECK |
 | 중간 | `coupon(status, expires_at)` | 만료 배치와 내 쿠폰 목록 |
 | 중간 | `mission(status, ends_at)` | 자동 종료 후보 조회와 공개 미션 기간 판정 |
 | 중간 | `audit_event(target_type, target_id, occurred_at)` | 특권·거래 조사 |
