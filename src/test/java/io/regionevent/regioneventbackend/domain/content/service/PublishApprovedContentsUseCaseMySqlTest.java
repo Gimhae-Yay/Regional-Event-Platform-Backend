@@ -2,7 +2,9 @@ package io.regionevent.regioneventbackend.domain.content.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.when;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -16,6 +18,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +39,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEvent;
+import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventActorLinkRepository;
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventActorLinkService;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
@@ -88,6 +92,7 @@ class PublishApprovedContentsUseCaseMySqlTest extends NonTransactionalMySqlTestS
     private final ContentLogRepository contentLogRepository;
     private final ContentRevisionRepository contentRevisionRepository;
     private final AuditEventRepository auditEventRepository;
+    private final AuditEventActorLinkRepository auditEventActorLinkRepository;
     private final TransactionTemplate transactionTemplate;
     private final FailingContentService failingContentService;
     private final FailingContentLogService failingContentLogService;
@@ -95,6 +100,9 @@ class PublishApprovedContentsUseCaseMySqlTest extends NonTransactionalMySqlTestS
 
     @MockitoBean
     private ImageStorageGateway imageStorageGateway;
+
+    @MockitoBean
+    private Clock clock;
 
     @Autowired
     PublishApprovedContentsUseCaseMySqlTest(
@@ -111,6 +119,7 @@ class PublishApprovedContentsUseCaseMySqlTest extends NonTransactionalMySqlTestS
         ContentLogRepository contentLogRepository,
         ContentRevisionRepository contentRevisionRepository,
         AuditEventRepository auditEventRepository,
+        AuditEventActorLinkRepository auditEventActorLinkRepository,
         PlatformTransactionManager transactionManager,
         FailingContentService failingContentService,
         FailingContentLogService failingContentLogService,
@@ -129,10 +138,16 @@ class PublishApprovedContentsUseCaseMySqlTest extends NonTransactionalMySqlTestS
         this.contentLogRepository = contentLogRepository;
         this.contentRevisionRepository = contentRevisionRepository;
         this.auditEventRepository = auditEventRepository;
+        this.auditEventActorLinkRepository = auditEventActorLinkRepository;
         transactionTemplate = new TransactionTemplate(transactionManager);
         this.failingContentService = failingContentService;
         this.failingContentLogService = failingContentLogService;
         this.failingRecordAuditEventUseCase = failingRecordAuditEventUseCase;
+    }
+
+    @BeforeEach
+    void useSystemTimeForApplicationClock() {
+        when(clock.instant()).thenAnswer(invocation -> Instant.now());
     }
 
     @DynamicPropertySource
@@ -148,8 +163,10 @@ class PublishApprovedContentsUseCaseMySqlTest extends NonTransactionalMySqlTestS
     }
 
     @Test
-    void MySQL_현재_시각_전의_콘텐츠는_애플리케이션_처리에서_공개하지_않는다() {
-        Fixture fixture = createFixture(contentService.findCurrentDatabaseTime().plusSeconds(3_600));
+    void MySQL_현재_시각_전의_콘텐츠는_애플리케이션_시계가_앞서도_공개하지_않는다() {
+        Instant databaseNow = contentService.findCurrentDatabaseTime();
+        when(clock.instant()).thenReturn(databaseNow.plusSeconds(7_200));
+        Fixture fixture = createFixture(databaseNow.plusSeconds(3_600));
 
         PublishApprovedContentsResult result = publishApprovedContentsUseCase.publishApprovedContents();
 
@@ -184,6 +201,8 @@ class PublishApprovedContentsUseCaseMySqlTest extends NonTransactionalMySqlTestS
 
         assertThat(results.stream().mapToInt(PublishApprovedContentsResult::publishedContentCount).sum())
             .isEqualTo(1);
+        assertThat(results.stream().mapToInt(PublishApprovedContentsResult::failedContentCount).sum())
+            .isZero();
         assertThat(contentRepository.findById(fixture.contentId()))
             .hasValueSatisfying(content -> assertThat(content.getStatus()).isEqualTo(ContentStatus.PUBLISHED));
         assertPublishedStateIsRecordedOnce(fixture.contentId());
@@ -196,23 +215,23 @@ class PublishApprovedContentsUseCaseMySqlTest extends NonTransactionalMySqlTestS
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
 
-        List<String> outcomes;
+        String revisionOutcome;
+        PublishApprovedContentsResult publicationResult;
         try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
-            Future<String> publication = executorService.submit(
-                () -> publishAfterStart(ready, start).publishedContentCount() == 1 ? "PUBLISHED" : "SKIPPED"
+            Future<PublishApprovedContentsResult> publication = executorService.submit(
+                () -> publishAfterStart(ready, start)
             );
             Future<String> revision = executorService.submit(
                 () -> createRevisionAfterStart(fixture, ready, start)
             );
             assertThat(ready.await(3, TimeUnit.SECONDS)).isTrue();
             start.countDown();
-            outcomes = List.of(
-                publication.get(10, TimeUnit.SECONDS),
-                revision.get(10, TimeUnit.SECONDS)
-            );
+            publicationResult = publication.get(10, TimeUnit.SECONDS);
+            revisionOutcome = revision.get(10, TimeUnit.SECONDS);
         }
 
-        assertThat(outcomes).doesNotContain("FAILED");
+        assertThat(revisionOutcome).isIn("REVISION_CREATED", "CONFLICT");
+        assertThat(publicationResult.failedContentCount()).isZero();
         Content content = contentRepository.findById(fixture.contentId()).orElseThrow();
         long publishedLogCount = countContentLogs(fixture.contentId(), ContentLogStatus.PUBLISHED);
         long pendingLogCount = countContentLogs(fixture.contentId(), ContentLogStatus.PENDING);
@@ -226,6 +245,7 @@ class PublishApprovedContentsUseCaseMySqlTest extends NonTransactionalMySqlTestS
         }
         assertThat(contentRevisionRepository.findAll()).hasSizeLessThanOrEqualTo(1);
         assertThat(countSuccessAudits(fixture.contentId())).isEqualTo(1);
+        assertThat(countTargetAudits(fixture.contentId(), AuditEventResult.FAILURE)).isZero();
     }
 
     @Test
@@ -442,10 +462,14 @@ class PublishApprovedContentsUseCaseMySqlTest extends NonTransactionalMySqlTestS
             ));
             content.assignRepresentativeImage(imageObject, createdAt);
             contentRepository.saveAndFlush(content);
+            ContentLogStatus initialLogStatus = status == ContentStatus.PENDING
+                ? ContentLogStatus.PENDING
+                : ContentLogStatus.APPROVED;
+            AppUser initialLogActor = status == ContentStatus.PENDING ? operator : admin;
             contentLogRepository.saveAndFlush(new ContentLog(
                 content,
-                admin,
-                ContentLogStatus.APPROVED,
+                initialLogActor,
+                initialLogStatus,
                 null,
                 createdAt
             ));
@@ -475,7 +499,17 @@ class PublishApprovedContentsUseCaseMySqlTest extends NonTransactionalMySqlTestS
     }
 
     private void assertFailureAuditIsRecorded(Long contentId) {
+        AuditEvent failureAudit = auditEventRepository.findAll().stream()
+            .filter(auditEvent -> auditEvent.getTargetType() == AuditEventTargetType.CONTENT)
+            .filter(auditEvent -> contentId.equals(auditEvent.getTargetId()))
+            .filter(auditEvent -> auditEvent.getResult() == AuditEventResult.FAILURE)
+            .findFirst()
+            .orElseThrow();
         assertThat(countTargetAudits(contentId, AuditEventResult.FAILURE)).isEqualTo(1);
+        assertThat(failureAudit.getReasonCode()).isEqualTo(ErrorCode.INTERNAL_SERVER_ERROR.code());
+        assertThat(failureAudit.getActorKind()).isEqualTo("SYSTEM");
+        assertThat(failureAudit.getActorRole()).isNull();
+        assertThat(auditEventActorLinkRepository.existsById(failureAudit.getAuditEventId())).isFalse();
     }
 
     private long countContentLogs(Long contentId, ContentLogStatus status) {
