@@ -24,6 +24,7 @@ import io.regionevent.regioneventbackend.domain.content.service.DeleteContentUse
 import io.regionevent.regioneventbackend.domain.content.service.EndContentReservationsUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.OriginalContentReviewTargetPolicy;
 import io.regionevent.regioneventbackend.domain.content.service.OriginalContentReviewTargetService;
+import io.regionevent.regioneventbackend.domain.content.service.PublicCatalogCacheInvalidator;
 import io.regionevent.regioneventbackend.domain.content.service.RejectContentRevisionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.RejectContentUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.SubmitContentUseCase;
@@ -80,6 +81,11 @@ public class ContentAtomicityJpaTestConfiguration {
     @Bean
     QrTokenService qrTokenService() {
         return mock(QrTokenService.class);
+    }
+
+    @Bean
+    PublicCatalogCacheInvalidator publicCatalogCacheInvalidator() {
+        return mock(PublicCatalogCacheInvalidator.class);
     }
 
     @Bean

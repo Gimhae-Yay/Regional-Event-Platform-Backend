@@ -37,6 +37,7 @@ public class EndContentReservationsUseCase {
     private final RegionAdminAuthorizationService regionAdminAuthorizationService;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase;
+    private final PublicCatalogCacheInvalidator publicCatalogCacheInvalidator;
 
     public EndContentReservationsUseCase(
         ContentService contentService,
@@ -45,7 +46,8 @@ public class EndContentReservationsUseCase {
         CapacityHoldService capacityHoldService,
         RegionAdminAuthorizationService regionAdminAuthorizationService,
         RecordAuditEventUseCase recordAuditEventUseCase,
-        RecordFailedAuditEventUseCase recordFailedAuditEventUseCase
+        RecordFailedAuditEventUseCase recordFailedAuditEventUseCase,
+        PublicCatalogCacheInvalidator publicCatalogCacheInvalidator
     ) {
         this.contentService = contentService;
         this.contentSessionService = contentSessionService;
@@ -54,6 +56,7 @@ public class EndContentReservationsUseCase {
         this.regionAdminAuthorizationService = regionAdminAuthorizationService;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
         this.recordFailedAuditEventUseCase = recordFailedAuditEventUseCase;
+        this.publicCatalogCacheInvalidator = publicCatalogCacheInvalidator;
     }
 
     @Transactional
@@ -110,6 +113,7 @@ public class EndContentReservationsUseCase {
                 actor,
                 endedAt
             ));
+            invalidatePublicContentCacheAfterCommit(endedContent);
             return EndContentReservationsResult.from(endedContent, endedAt);
         } catch (BusinessException exception) {
             recordFailure(requestId, region, contentId, previousState, exception.getErrorCode().name(), actor);
@@ -167,6 +171,7 @@ public class EndContentReservationsUseCase {
                 null,
                 endedAt
             ));
+            invalidatePublicContentCacheAfterCommit(endedContent);
             return EndContentReservationsSystemResult.ended(
                 calculateEndingDelayMillis(contentSessions, endedAt)
             );
@@ -192,6 +197,14 @@ public class EndContentReservationsUseCase {
             .max(Instant::compareTo)
             .orElseThrow(() -> new IllegalStateException("ended content must have terminal sessions"));
         return Math.max(0L, Duration.between(lastTerminalAt, endedAt).toMillis());
+    }
+
+    private void invalidatePublicContentCacheAfterCommit(Content content) {
+        publicCatalogCacheInvalidator.invalidateContentAfterCommit(
+            content.getRegion().getRegionId(),
+            content.getContentId(),
+            content.getVersionNo()
+        );
     }
 
     private Instant findTerminalAt(ContentSession contentSession) {
