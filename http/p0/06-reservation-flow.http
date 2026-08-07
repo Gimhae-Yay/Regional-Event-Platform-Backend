@@ -1,0 +1,149 @@
+@baseUrl = http://localhost:8080
+@visitorAccessToken =
+@otherVisitorAccessToken =
+@sessionId =
+@soldOutSessionId =
+@startedSessionId =
+@holdId =
+@expiredHoldId =
+@reservationId =
+@checkedInReservationId =
+@confirmIdempotencyKey = confirm-{{$uuid}}
+@confirmConflictIdempotencyKey = confirm-conflict-{{$uuid}}
+
+# P0 예약 홀드/확정/내 예약/취소
+# 선행 조건: PUBLISHED 콘텐츠의 SCHEDULED 회차와 잔여 정원이 필요하다.
+
+### 1. 공개 회차 정보 확인
+GET {{baseUrl}}/api/v1/sessions/{{sessionId}}
+Accept: application/json
+
+### 2. 홀드 생성
+POST {{baseUrl}}/api/v1/reservations
+Authorization: Bearer {{visitorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "sessionId": "{{sessionId}}",
+  "quantity": 1
+}
+
+> {%
+client.global.set("holdId", response.body.data.holdId);
+%}
+
+### 3. sessionId 형식 오류 - 400 INVALID_INPUT 기대
+POST {{baseUrl}}/api/v1/reservations
+Authorization: Bearer {{visitorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "sessionId": "not-number",
+  "quantity": 1
+}
+
+### 4. quantity 0 - 400 INVALID_INPUT 기대
+POST {{baseUrl}}/api/v1/reservations
+Authorization: Bearer {{visitorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "sessionId": "{{sessionId}}",
+  "quantity": 0
+}
+
+### 5. 정원 부족 - 409 RESERVATION_HOLD_CONFLICT 기대
+POST {{baseUrl}}/api/v1/reservations
+Authorization: Bearer {{visitorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "sessionId": "{{soldOutSessionId}}",
+  "quantity": 1
+}
+
+### 6. 회차 시작 후 홀드 - 409 RESERVATION_HOLD_CONFLICT 기대
+POST {{baseUrl}}/api/v1/reservations
+Authorization: Bearer {{visitorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "sessionId": "{{startedSessionId}}",
+  "quantity": 1
+}
+
+### 7. 예약 확정
+POST {{baseUrl}}/api/v1/reservation-holds/{{holdId}}/confirm
+Authorization: Bearer {{visitorAccessToken}}
+Idempotency-Key: {{confirmIdempotencyKey}}
+Accept: application/json
+
+> {%
+client.global.set("reservationId", response.body.data.reservationId);
+client.global.set("reservationNo", response.body.data.reservationNo);
+%}
+
+### 8. 예약 확정 반복 - 같은 응답 기대
+POST {{baseUrl}}/api/v1/reservation-holds/{{holdId}}/confirm
+Authorization: Bearer {{visitorAccessToken}}
+Idempotency-Key: {{confirmIdempotencyKey}}
+Accept: application/json
+
+### 9. 같은 Idempotency-Key 다른 hold 요청 - 409 IDEMPOTENCY_KEY_CONFLICT 기대
+POST {{baseUrl}}/api/v1/reservation-holds/{{expiredHoldId}}/confirm
+Authorization: Bearer {{visitorAccessToken}}
+Idempotency-Key: {{confirmIdempotencyKey}}
+Accept: application/json
+
+### 10. Idempotency-Key 누락 - 400 INVALID_INPUT 기대
+POST {{baseUrl}}/api/v1/reservation-holds/{{holdId}}/confirm
+Authorization: Bearer {{visitorAccessToken}}
+Accept: application/json
+
+### 11. 만료 홀드 확정 - 409 RESERVATION_CONFIRM_CONFLICT 기대
+POST {{baseUrl}}/api/v1/reservation-holds/{{expiredHoldId}}/confirm
+Authorization: Bearer {{visitorAccessToken}}
+Idempotency-Key: {{confirmConflictIdempotencyKey}}
+Accept: application/json
+
+### 12. 내 예약 목록 조회
+GET {{baseUrl}}/api/v1/me/reservations
+Authorization: Bearer {{visitorAccessToken}}
+Accept: application/json
+
+### 13. 내 예약 상세 조회
+GET {{baseUrl}}/api/v1/me/reservations/{{reservationId}}
+Authorization: Bearer {{visitorAccessToken}}
+Accept: application/json
+
+### 14. 타인 예약 상세 조회 - 403 FORBIDDEN 기대
+GET {{baseUrl}}/api/v1/me/reservations/{{reservationId}}
+Authorization: Bearer {{otherVisitorAccessToken}}
+Accept: application/json
+
+### 15. 예약 취소
+POST {{baseUrl}}/api/v1/me/reservations/{{reservationId}}/cancel
+Authorization: Bearer {{visitorAccessToken}}
+Accept: application/json
+
+### 16. 예약 취소 반복 - 기존 취소 응답 기대
+POST {{baseUrl}}/api/v1/me/reservations/{{reservationId}}/cancel
+Authorization: Bearer {{visitorAccessToken}}
+Accept: application/json
+
+### 17. 체크인된 예약 취소 - 409 RESERVATION_CANCEL_CONFLICT 기대
+POST {{baseUrl}}/api/v1/me/reservations/{{checkedInReservationId}}/cancel
+Authorization: Bearer {{visitorAccessToken}}
+Accept: application/json
+
+# DB 확인
+# SELECT hold_id, user_id, content_session_id, quantity, status, expires_at FROM capacity_hold WHERE hold_id IN ({{holdId}}, {{expiredHoldId}});
+# SELECT reservation_id, reservation_no, user_id, content_session_id, status, cancelled_at FROM reservation WHERE reservation_id IN ({{reservationId}}, {{checkedInReservationId}});
+# SELECT session_id, remaining_capacity FROM content_session WHERE session_id IN ({{sessionId}}, {{soldOutSessionId}}, {{startedSessionId}});
+# SELECT operation, result_code, result_reservation_id, status FROM idempotency_record WHERE operation = 'RESERVATION_CONFIRM' ORDER BY idempotency_record_id DESC;
+# SELECT audit_event_id, target_type, target_id, result, reason_code FROM audit_event WHERE target_id IN ({{holdId}}, {{reservationId}}) ORDER BY audit_event_id DESC;

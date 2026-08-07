@@ -1,16 +1,22 @@
 package io.regionevent.regioneventbackend.domain.content.service;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
-import io.regionevent.regioneventbackend.domain.content.repository.PublicContentProjection;
+import io.regionevent.regioneventbackend.domain.content.repository.MyContentProjection;
+import io.regionevent.regioneventbackend.domain.content.repository.PublicContentDetailVerificationProjection;
+import io.regionevent.regioneventbackend.domain.content.repository.PublicContentListVerificationProjection;
+import io.regionevent.regioneventbackend.domain.content.repository.RegionHomeContentSessionVerificationProjection;
 import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -132,25 +138,90 @@ public class ContentService {
         );
     }
 
+    public boolean hasOwnedContent(Long userId) {
+        return contentRepository.existsByOperatorUserId(userId);
+    }
+
     public Content findPublicContent(Long contentId) {
         validateRequiredId(contentId);
-        return contentRepository.findByContentIdAndStatusAndDeletedAtIsNull(
+        return contentRepository.findPublicContentByContentId(
             contentId,
             ContentStatus.PUBLISHED
         ).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
-    public List<PublicContentProjection> findPublicContents(
+    public PublicContentDetailVerificationProjection findPublicContentDetailVerification(Long contentId) {
+        validateRequiredId(contentId);
+        return contentRepository.findPublicContentDetailVerification(
+            contentId,
+            ContentStatus.PUBLISHED
+        ).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public PublicContentStaticInfo findPublicContentStaticInfo(
+        Long regionId,
+        Long contentId,
+        int versionNo
+    ) {
+        return contentRepository.findPublicContentStaticInfo(
+            regionId,
+            contentId,
+            versionNo,
+            ContentStatus.PUBLISHED
+        ).map(PublicContentStaticInfo::from)
+            .orElseThrow(() -> new IllegalStateException("public content static info must exist after verification"));
+    }
+
+    public Content findMyContentDetail(Long contentId) {
+        validateRequiredId(contentId);
+        return contentRepository.findDetailByContentIdAndDeletedAtIsNull(contentId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    @Transactional(readOnly = true)
+    public Content findOperatorReservationListTarget(Long contentId) {
+        validateRequiredId(contentId);
+        return contentRepository.findOperatorReservationListTarget(contentId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public List<PublicContentListVerificationProjection> findPublicContentListVerifications(
         Long regionId,
         ContentType contentType,
         Boolean reservationAvailable
     ) {
-        return contentRepository.findPublicContents(
+        return contentRepository.findPublicContentListVerifications(
             regionId,
             contentType,
             reservationAvailable,
             ContentStatus.PUBLISHED,
             ContentSessionStatus.SCHEDULED
+        );
+    }
+
+    public List<RegionHomeContentSessionVerificationProjection> findRegionHomeContentSessionVerifications(
+        Long regionId
+    ) {
+        validateRequiredId(regionId);
+        return contentRepository.findRegionHomeContentSessionVerifications(
+            regionId,
+            ContentStatus.PUBLISHED,
+            ContentSessionStatus.SCHEDULED
+        );
+    }
+
+    public List<MyContentProjection> findMyContents(Long operatorUserId, Long regionId) {
+        validateRequiredId(operatorUserId);
+        validateRequiredId(regionId);
+        return contentRepository.findMyContents(operatorUserId, regionId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Content> findPendingReviewContentsByRegionId(Long regionId) {
+        validateRequiredId(regionId);
+        return contentRepository.findByRegionRegionIdAndStatusAndDeletedAtIsNullOrderByContentIdAsc(
+            regionId,
+            ContentStatus.PENDING
         );
     }
 
@@ -164,6 +235,11 @@ public class ContentService {
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
+    @Transactional(readOnly = true)
+    public List<Long> findAutoEndCandidateIds(List<ContentSessionStatus> terminalStatuses) {
+        return contentRepository.findAutoEndCandidateIds(ContentStatus.PUBLISHED, terminalStatuses);
+    }
+
     public Content findDeletionTargetForUpdate(Long contentId) {
         validateRequiredId(contentId);
         return contentRepository.findDeletionTargetForUpdate(contentId)
@@ -175,12 +251,30 @@ public class ContentService {
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
+    public List<Long> findApprovedPublicationCandidateIds() {
+        return contentRepository.findApprovedPublicationCandidateIds();
+    }
+
+    public Optional<Content> findApprovedPublicationTargetForUpdate(Long contentId) {
+        validateRequiredId(contentId);
+        return contentRepository.findApprovedPublicationTargetForUpdate(contentId);
+    }
+
+    public Instant findCurrentDatabaseTime() {
+        return toInstant(contentRepository.findCurrentEpochSeconds());
+    }
+
     public boolean lockPublishedReservationTarget(Long contentId) {
         return contentRepository.findPublishedReservationTargetIdForUpdate(contentId).isPresent();
     }
 
     public Content approve(Content content) {
         content.approve();
+        return contentRepository.saveAndFlush(content);
+    }
+
+    public Content publish(Content content) {
+        content.publish();
         return contentRepository.saveAndFlush(content);
     }
 
@@ -261,6 +355,11 @@ public class ContentService {
         }
         content.suspend();
         return content;
+    }
+
+    private Instant toInstant(BigDecimal epochSeconds) {
+        long seconds = epochSeconds.longValue();
+        return Instant.ofEpochSecond(seconds, epochSeconds.remainder(BigDecimal.ONE).movePointRight(9).longValue());
     }
 
     private void validateRequiredId(Long id) {

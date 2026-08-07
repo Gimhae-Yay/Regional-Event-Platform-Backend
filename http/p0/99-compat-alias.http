@@ -1,0 +1,48 @@
+@baseUrl = http://localhost:8080
+@operatorAccessToken =
+@regionAdminAccessToken =
+@contentId =
+@qrExceptionId =
+
+# 호환 alias 최소 확인
+# 목적:
+# - /api/v1 없는 호환 경로가 라우팅되는지만 별도로 확인한다.
+# - 상태 변경을 피하기 위해 체크인 alias는 실패 입력으로만 호출한다.
+
+### 1. QR 예외 목록 alias 조회 - 200 OK 기대
+GET {{baseUrl}}/region-admin/qr-exceptions?size=20
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+### 2. QR 예외 상세 alias 조회 - 200 OK 기대
+GET {{baseUrl}}/region-admin/qr-exceptions/{{qrExceptionId}}
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+### 3. 운영자 콘텐츠 상세 alias 조회 - 200 OK 기대
+GET {{baseUrl}}/operator/contents/{{contentId}}
+Authorization: Bearer {{operatorAccessToken}}
+Accept: application/json
+
+### 4. QR 체크인 alias 라우팅 확인 - 변조 QR, 400 QR_VERIFICATION_FAILED 기대
+POST {{baseUrl}}/operator/check-ins
+Authorization: Bearer {{operatorAccessToken}}
+Idempotency-Key: alias-qr-{{$uuid}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "qrToken": "invalid.qr.token"
+}
+
+### 5. 수동 체크인 alias 라우팅 확인 - 빈 예약번호, 400 INVALID_INPUT 기대
+POST {{baseUrl}}/operator/check-ins/manual
+Authorization: Bearer {{operatorAccessToken}}
+Idempotency-Key: alias-manual-{{$uuid}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reservationNo": "",
+  "reason": "QR_SCAN_FAILED"
+}

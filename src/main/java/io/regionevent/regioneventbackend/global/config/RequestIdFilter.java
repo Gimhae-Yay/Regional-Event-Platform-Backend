@@ -21,6 +21,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class RequestIdFilter extends OncePerRequestFilter {
 
     public static final String REQUEST_ID_ATTRIBUTE = "requestId";
+    public static final String REQUEST_LOG_URI_ATTRIBUTE = "requestLogUri";
     private static final String REQUEST_ID_MDC_KEY = "requestId";
     private static final Logger log = LoggerFactory.getLogger(RequestIdFilter.class);
 
@@ -44,10 +45,15 @@ public class RequestIdFilter extends OncePerRequestFilter {
             log.info(
                 "HTTP request completed. method={}, uri={}, status={}",
                 request.getMethod(),
-                request.getRequestURI(),
+                requestLogUri(request),
                 response.getStatus()
             );
             MDC.remove(REQUEST_ID_MDC_KEY);
         }
+    }
+
+    private String requestLogUri(HttpServletRequest request) {
+        Object requestLogUri = request.getAttribute(REQUEST_LOG_URI_ATTRIBUTE);
+        return requestLogUri instanceof String uri ? uri : request.getRequestURI();
     }
 }

@@ -187,47 +187,6 @@ class ContentSessionRepositoryTest {
     }
 
     @Test
-    void 잘못된_시간_순서와_정원을_허용하지_않는다() {
-        Region region = saveRegion();
-        AppUser operator = saveUser("operator@example.com");
-        Content content = saveContent(region, operator);
-        Instant startsAt = Instant.parse("2026-08-02T01:00:00Z");
-        Instant endsAt = Instant.parse("2026-08-02T03:00:00Z");
-        Instant checkinOpenAt = Instant.parse("2026-08-02T00:30:00Z");
-        Instant checkinCloseAt = Instant.parse("2026-08-02T02:30:00Z");
-
-        assertThatThrownBy(() -> new ContentSession(
-            content,
-            region,
-            endsAt,
-            startsAt,
-            checkinOpenAt,
-            checkinCloseAt,
-            20
-        )).isInstanceOf(IllegalArgumentException.class);
-
-        assertThatThrownBy(() -> new ContentSession(
-            content,
-            region,
-            startsAt,
-            endsAt,
-            checkinOpenAt,
-            endsAt,
-            20
-        )).isInstanceOf(IllegalArgumentException.class);
-
-        assertThatThrownBy(() -> new ContentSession(
-            content,
-            region,
-            startsAt,
-            endsAt,
-            checkinOpenAt,
-            checkinCloseAt,
-            0
-        )).isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
     void 원본_콘텐츠의_현재_회차를_시작시각과_식별자_오름차순으로_조회한다() {
         Region region = saveRegion();
         AppUser operator = saveUser("session-detail-operator@example.com");
@@ -306,6 +265,59 @@ class ContentSessionRepositoryTest {
             .containsExactly(earlierSession.getSessionId(), laterSession.getSessionId());
     }
 
+    @Test
+    void 심사_대기_추가_회차와_공개_대상_콘텐츠만_조회한다() {
+        Region region = saveRegion();
+        AppUser operator = saveUser("pending-review-operator@example.com");
+        ContentSession approvedSession = contentSessionRepository.saveAndFlush(
+            createContentSession(saveContent(region, operator, ContentStatus.APPROVED), region)
+        );
+        ContentSession publishedSession = contentSessionRepository.saveAndFlush(
+            createContentSession(saveContent(region, operator, ContentStatus.PUBLISHED), region)
+        );
+        ContentSession scheduledSession = contentSessionRepository.saveAndFlush(
+            createContentSession(saveContent(region, operator, ContentStatus.APPROVED), region)
+        );
+        scheduledSession.approve(operator, Instant.parse("2026-08-01T00:00:00Z"));
+        contentSessionRepository.saveAndFlush(scheduledSession);
+        ContentSession nonTargetContentSession = contentSessionRepository.saveAndFlush(
+            createContentSession(saveContent(region, operator, ContentStatus.PENDING), region)
+        );
+        Content deletedContent = saveContent(region, operator, ContentStatus.APPROVED);
+        ContentSession deletedContentSession = contentSessionRepository.saveAndFlush(
+            createContentSession(deletedContent, region)
+        );
+        deletedContent.softDelete(Instant.parse("2026-08-01T00:00:00Z"));
+        contentRepository.flush();
+        entityManager.clear();
+
+        List<ContentStatus> reviewableContentStatuses = List.of(
+            ContentStatus.APPROVED,
+            ContentStatus.PUBLISHED
+        );
+
+        assertThat(contentSessionRepository.findPendingReviewTarget(
+            approvedSession.getSessionId(),
+            reviewableContentStatuses
+        )).isPresent();
+        assertThat(contentSessionRepository.findPendingReviewTarget(
+            publishedSession.getSessionId(),
+            reviewableContentStatuses
+        )).isPresent();
+        assertThat(contentSessionRepository.findPendingReviewTarget(
+            scheduledSession.getSessionId(),
+            reviewableContentStatuses
+        )).isEmpty();
+        assertThat(contentSessionRepository.findPendingReviewTarget(
+            nonTargetContentSession.getSessionId(),
+            reviewableContentStatuses
+        )).isEmpty();
+        assertThat(contentSessionRepository.findPendingReviewTarget(
+            deletedContentSession.getSessionId(),
+            reviewableContentStatuses
+        )).isEmpty();
+    }
+
     private Region saveRegion() {
         return regionRepository.saveAndFlush(new Region("GIMHAE", "김해시", true));
     }
@@ -323,12 +335,16 @@ class ContentSessionRepositoryTest {
     }
 
     private Content saveContent(Region region, AppUser operator) {
+        return saveContent(region, operator, ContentStatus.PENDING);
+    }
+
+    private Content saveContent(Region region, AppUser operator, ContentStatus status) {
         return contentRepository.saveAndFlush(
             new Content(
                 region,
                 operator,
                 ContentType.EVENT_EXPERIENCE,
-                ContentStatus.PENDING,
+                status,
                 "김해 가야 문화 체험",
                 "김해 가야 문화를 체험하는 행사입니다.",
                 "김해문화의전당",

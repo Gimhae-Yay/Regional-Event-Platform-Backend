@@ -139,6 +139,11 @@ public class IdempotencyService {
         );
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void unlinkActorByUserId(Long userId) {
+        idempotencyRecordRepository.unlinkActorByUserId(userId);
+    }
+
     private IdempotencyAcquireResult toExistingResult(IdempotencyRecord record, String requestHash) {
         if (!record.getRequestHash().equals(requestHash)) {
             return new IdempotencyAcquireResult.KeyConflict();

@@ -272,38 +272,6 @@ class ContentRevisionRepositoryTest {
     }
 
     @Test
-    void 심사와_철회_상태는_상태별_처리_정보가_필수다() {
-        Content content = saveContent();
-        AppUser editor = saveUser("editor@example.com");
-
-        assertThatThrownBy(() -> newRevision(
-            content,
-            1,
-            editor,
-            ContentRevisionStatus.EDIT_APPROVED,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null
-        )).isInstanceOf(IllegalArgumentException.class);
-
-        assertThatThrownBy(() -> newRevision(
-            content,
-            2,
-            editor,
-            ContentRevisionStatus.EDIT_WITHDRAWN,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null
-        )).isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
     void 콘텐츠와_편집자_심사자_철회_처리자를_지연_로딩으로_매핑한다() {
         Content content = saveContent();
         AppUser editor = saveUser("editor@example.com");

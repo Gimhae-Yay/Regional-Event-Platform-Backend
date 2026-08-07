@@ -98,6 +98,48 @@ class PublicContentQueryMySqlTest {
     }
 
     @Test
+    void 공개_콘텐츠_검증_정보와_정적_표시_정보를_분리해_조회한다() {
+        Content content = savePublishedContent();
+
+        PublicContentDetailVerificationProjection verification = contentRepository
+            .findPublicContentDetailVerification(content.getContentId(), ContentStatus.PUBLISHED)
+            .orElseThrow();
+        PublicContentStaticProjection staticInfo = contentRepository.findPublicContentStaticInfo(
+            content.getRegion().getRegionId(),
+            content.getContentId(),
+            content.getVersionNo(),
+            ContentStatus.PUBLISHED
+        ).orElseThrow();
+
+        assertThat(verification)
+            .extracting(
+                PublicContentDetailVerificationProjection::regionId,
+                PublicContentDetailVerificationProjection::contentId,
+                PublicContentDetailVerificationProjection::versionNo,
+                PublicContentDetailVerificationProjection::contactText
+            )
+            .containsExactly(
+                content.getRegion().getRegionId(),
+                content.getContentId(),
+                content.getVersionNo(),
+                "055-123-4567"
+            );
+        assertThat(staticInfo)
+            .extracting(
+                PublicContentStaticProjection::contentType,
+                PublicContentStaticProjection::title,
+                PublicContentStaticProjection::locationText,
+                PublicContentStaticProjection::cancellationPolicyText
+            )
+            .containsExactly(
+                ContentType.EVENT_EXPERIENCE,
+                "김해 가야 문화 체험",
+                "김해문화의전당",
+                "시작 하루 전까지 취소할 수 있습니다."
+            );
+    }
+
+    @Test
     void 예약_가능_여부는_MySQL_현재시각과_잔여_정원으로_계산한다() {
         String suffix = Long.toUnsignedString(System.nanoTime());
         Region region = regionRepository.saveAndFlush(new Region("R" + suffix, "김해시", true));
@@ -123,7 +165,7 @@ class PublicContentQueryMySqlTest {
             unavailableSession.getSessionId()
         );
 
-        List<PublicContentProjection> results = contentRepository.findPublicContents(
+        List<PublicContentListVerificationProjection> results = contentRepository.findPublicContentListVerifications(
             region.getRegionId(),
             ContentType.EVENT_EXPERIENCE,
             null,
@@ -132,10 +174,50 @@ class PublicContentQueryMySqlTest {
         );
 
         assertThat(results)
-            .extracting(PublicContentProjection::contentId)
+            .extracting(PublicContentListVerificationProjection::contentId)
             .containsExactly(unavailable.getContentId(), reservable.getContentId());
         assertThat(results)
-            .extracting(PublicContentProjection::reservationAvailable)
+            .extracting(PublicContentListVerificationProjection::reservationAvailable)
+            .containsExactly(false, true);
+    }
+
+    @Test
+    void 지역_홈_회차_조회는_MySQL_현재시각과_공개_범위로_후보를_제한한다() {
+        String suffix = Long.toUnsignedString(System.nanoTime());
+        Region publicRegion = regionRepository.saveAndFlush(new Region("HOME-" + suffix, "김해시", true));
+        Region privateRegion = regionRepository.saveAndFlush(new Region("PRIVATE-" + suffix, "비공개 지역", false));
+        AppUser operator = appUserRepository.saveAndFlush(new AppUser(
+            "home-operator-" + suffix + "@example.com",
+            "hashed-password",
+            "운영자",
+            "010-1234-5678",
+            AppUserStatus.ACTIVE
+        ));
+        Content ongoing = savePublishedContent(publicRegion, operator, "진행 콘텐츠");
+        Content upcoming = savePublishedContent(publicRegion, operator, "임박 콘텐츠");
+        Content ended = savePublishedContent(publicRegion, operator, "종료 회차 콘텐츠");
+        Content privateContent = savePublishedContent(privateRegion, operator, "비공개 지역 콘텐츠");
+        Instant now = Instant.now();
+        saveScheduledSession(ongoing, publicRegion, operator, now.minusSeconds(1_800), 1);
+        saveScheduledSession(upcoming, publicRegion, operator, now.plusSeconds(3_600), 1);
+        saveScheduledSession(ended, publicRegion, operator, now.minusSeconds(7_200), 1);
+        saveScheduledSession(privateContent, privateRegion, operator, now.plusSeconds(3_600), 1);
+
+        List<RegionHomeContentSessionVerificationProjection> results = contentRepository
+            .findRegionHomeContentSessionVerifications(
+                publicRegion.getRegionId(),
+                ContentStatus.PUBLISHED,
+                ContentSessionStatus.SCHEDULED
+            );
+
+        assertThat(results)
+            .extracting(RegionHomeContentSessionVerificationProjection::contentId)
+            .containsExactly(ongoing.getContentId(), upcoming.getContentId());
+        assertThat(results)
+            .extracting(RegionHomeContentSessionVerificationProjection::ongoing)
+            .containsExactly(true, false);
+        assertThat(results)
+            .extracting(RegionHomeContentSessionVerificationProjection::reservationAvailable)
             .containsExactly(false, true);
     }
 

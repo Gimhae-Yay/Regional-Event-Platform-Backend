@@ -442,6 +442,10 @@ erDiagram
   `content.status` 값이 아니며, 자동 공개·종료 같은 시스템 처리는 `actor_id = NULL`로 기록한다.
 - 실제 공개 시각은 `status = PUBLISHED`인 `content_log` 행의 `date`다. `content.publish_at`은 공개 예정 시각이며,
   별도 `content.published_at` 현재 상태 컬럼은 두지 않는다.
+- 소프트 삭제되지 않은 `PUBLISHED` 콘텐츠에 연결된 회차가 하나 이상이고 모든 회차가 `COMPLETED`, `CANCELLED`,
+  `REJECTED` 중 하나이면 시스템이 `PUBLISHED → ENDED`를 조건부로 적용한다. `PENDING` 또는 `SCHEDULED` 회차가
+  있으면 종료하지 않는다. 실제 종료 시각은 `status = ENDED`인 `content_log` 행의 `date`이며, 별도 콘텐츠 종료
+  예정 시각이나 `content.ended_at` 현재 상태 컬럼을 두지 않는다.
 - `REJECTED`, `SUSPENDED`, `WITHDRAWN`, `DELETED` 로그는 `reason`이 필수다. 방문자에게 보이는 중단·철회 안내는
   해당 콘텐츠의 최신 `SUSPENDED` 또는 `WITHDRAWN` 로그의 `reason`에서 파생한다.
 - 소프트 삭제는 콘텐츠 상태가 아니지만 `PENDING` 또는 `APPROVED`에서 `content.deleted_at`을 설정하고,
@@ -983,7 +987,6 @@ SQL의 단순 cascade가 아래 업무 순서를 대신해서는 안 된다.
 | 역할 중첩 | 한 사용자의 복수 역할 허용·금지 | 역할별 한 행은 허용하되 상호 배타 제약 없음 |
 | 승인된 `publish_at` 변경 요청 | 관리자 승인 시 직접 갱신할지, 요청·심사 상태를 저장할지 | 별도 엔티티 또는 후보 시각을 추정하지 않음 |
 | 전체 콘텐츠 철회 요청 | 운영자 요청의 보관, 승인·반려·재시도 모델 | 승인 후 현재 상태와 감사만 표현 |
-| 콘텐츠 종료 판정 기준 | 모든 회차 종결, 별도 종료일 또는 정상 종료의 구체 조건 | `content_log.status = ENDED`의 `date`만 기록하고 별도 `ended_at` 컬럼은 두지 않음 |
 
 이 표의 항목을 임의 구현하지 않는다. 되돌리기 어렵거나 여러 도메인에 영향을 주는 선택은 ADR로 먼저 확정하고,
 API 요청·응답에 영향을 주는 항목은 [API 명세서](api/api-specification.md)를 함께 갱신한다.

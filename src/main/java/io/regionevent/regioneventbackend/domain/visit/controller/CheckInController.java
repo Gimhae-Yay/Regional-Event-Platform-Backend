@@ -58,7 +58,7 @@ public class CheckInController {
         ).toResponseEntity();
     }
 
-    @PostMapping("/api/v1/operator/check-ins/manual")
+    @PostMapping({"/api/v1/operator/check-ins/manual", "/operator/check-ins/manual"})
     public ResponseEntity<ApiResponse<CheckInResponse>> checkInManually(
         Authentication authentication,
         @Valid @RequestBody ManualCheckInRequest request,

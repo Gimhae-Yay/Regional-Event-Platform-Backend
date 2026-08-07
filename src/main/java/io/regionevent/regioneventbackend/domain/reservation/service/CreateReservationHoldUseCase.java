@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
+import io.regionevent.regioneventbackend.domain.content.service.ContentService;
 import io.regionevent.regioneventbackend.domain.content.service.ContentSessionService;
 import io.regionevent.regioneventbackend.domain.reservation.dto.CreateReservationHoldRequest;
 import io.regionevent.regioneventbackend.domain.reservation.dto.CreateReservationHoldResponse;
@@ -24,17 +25,20 @@ public class CreateReservationHoldUseCase {
     private static final Duration HOLD_DURATION = Duration.ofMinutes(10);
 
     private final AppUserService appUserService;
+    private final ContentService contentService;
     private final ContentSessionService contentSessionService;
     private final CapacityHoldService capacityHoldService;
     private final Clock clock;
 
     public CreateReservationHoldUseCase(
         AppUserService appUserService,
+        ContentService contentService,
         ContentSessionService contentSessionService,
         CapacityHoldService capacityHoldService,
         Clock clock
     ) {
         this.appUserService = appUserService;
+        this.contentService = contentService;
         this.contentSessionService = contentSessionService;
         this.capacityHoldService = capacityHoldService;
         this.clock = clock;
@@ -43,8 +47,13 @@ public class CreateReservationHoldUseCase {
     @Transactional
     public CreateReservationHoldResponse create(Long userId, CreateReservationHoldRequest request) {
         Long sessionId = toPositiveSessionId(request.sessionId());
-        AppUser user = appUserService.findActiveUser(userId);
-        ContentSession contentSession = contentSessionService.findPublicSession(sessionId);
+        AppUser user = appUserService.findActiveUserForUpdate(userId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+        Long contentId = contentSessionService.findPublicContentId(sessionId);
+        if (!contentService.lockPublishedReservationTarget(contentId)) {
+            throw new BusinessException(ErrorCode.RESERVATION_HOLD_CONFLICT);
+        }
+        ContentSession contentSession = contentSessionService.findForUpdate(sessionId);
         Instant createdAt = clock.instant().truncatedTo(ChronoUnit.MICROS);
 
         contentSessionService.reserveCapacity(sessionId, request.quantity());

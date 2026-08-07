@@ -35,15 +35,16 @@ description: Pull Request, 현재 브랜치 또는 로컬 변경 전체를 연�
 
 1. 가장 가까운 `AGENTS.md`와 저장소 지침
 2. PR 설명, 연결 이슈, 수용 기준, PR 템플릿과 기존 리뷰
-3. 변경과 직접 관련된 승인된 ADR
-4. 제품 범위와 수용 기준은 `docs/local-stamp-platform-prd.md`
-5. 첫 파일럿의 콘텐츠·방문 모델 경계는 `docs/local-stamp-pilot-scope-and-content-model-memo.md`
-6. 선정 기술과 설계 원칙은 `docs/local-stamp-platform-tech-stack.md`
-7. 문서 충돌 여부는 필요할 때 `docs/document-consistency-review.md`
+3. 변경 API의 공통 계약은 `docs/api/common/README.md`와 연결된 공통 명세, 엔드포인트 계약은 `docs/api/<문서-분류>/<도메인>/*.md`에서 실제 대응 명세를 확인한다. 여기서 문서 분류는 `p0`, `future`처럼 `docs/api/` 하위 API 명세를 구분하는 최상위 디렉터리 이름이다.
+4. 변경 도메인의 구현 계약은 `docs/` 하위의 실제 대응 명세를 확인한다. API 문서 분류와 구현 명세 경로가 1:1로 대응한다고 가정하지 않으며, 대응 명세가 불명확하거나 없으면 경로를 추정하지 않고 `구현 계약 확인 필요`로 분리한다.
+5. 엔터티 관계, 컬럼, 제약·인덱스, migration 정합성은 `docs/erd.md`
+6. 변경과 직접 관련된 승인된 ADR
+7. 제품 범위·보안·동시성·정합성 정책 확인이 필요한 경우에만 `docs/local-stamp-platform-prd.md`
+8. 의존성·설정 또는 기술 선택 검토가 필요한 경우에만 `docs/local-stamp-platform-tech-stack.md`
 
 - 연결 이슈나 승인된 ADR이 기존 문서를 의도적으로 대체하면 적용 근거를 리뷰에 적는다.
 - 문서 간 충돌이 아직 해결되지 않았으면 임의 정책을 강제하지 않고 `정책 확인 필요`로 분리한다.
-- 제안서·기획 검토·페르소나는 배경을 이해하는 데만 사용하고, 최신 PRD·파일럿 메모와 충돌하면 구현 계약으로 간주하지 않는다.
+- 제안서·과거 기획 문서는 배경 이해에만 사용한다. 구현 계약은 변경 API 명세서, 도메인 구현 명세서 및 ERD를 우선 기준으로 판별하며, 이들 문서 간 충돌은 AGENTS.md의 문서 충돌 우선순위를 따른다.
 
 ### 3. 전체 변경과 주변 맥락 수집
 
@@ -139,13 +140,31 @@ findings를 가장 먼저 심각도순으로 작성한다. 각 finding에 다음
 
 1. 기존 리뷰와 중복되지 않는지 다시 확인한다.
 2. 먼저 대화에 게시할 본문과 판정을 보여 주거나, 사용자가 본문까지 위임했다면 작성한 내용을 그대로 사용한다.
-3. 하나의 종합 리뷰로 게시하고 게시 결과를 확인한다.
-4. 사용자가 리뷰 상태까지 지정하지 않았다면 `COMMENT`로 게시한다. 임의로 `APPROVE` 또는 `REQUEST_CHANGES`를 선택하지 않는다.
+3. 한글을 포함한 게시 본문은 인라인 `--body`나 표준 입력으로 전달하지 않는다. 임시 파일을 UTF-8(무BOM)로 명시 저장하고 `--body-file`로만 전달한다. PowerShell에서는 `[System.IO.File]::WriteAllText()`와 `New-Object System.Text.UTF8Encoding($false)`를 사용한다.
+4. 하나의 종합 리뷰로 게시한 뒤 GitHub API에서 게시된 리뷰 본문을 재조회한다. UTF-8 콘솔 출력으로 확인하고, 작성한 본문과 한글이 동일하게 보존됐는지 확인한다. 콘솔 표시가 깨졌다면 게시 성공으로 판단하지 않는다.
+5. 인코딩이 깨진 게시물을 발견하면 새 리뷰를 추가하지 않는다. 해당 리뷰를 수정하거나 삭제한 뒤 UTF-8 파일로 다시 게시하고 재검증한다.
+6. 사용자가 리뷰 상태까지 지정하지 않았다면 `COMMENT`로 게시한다. 임의로 `APPROVE` 또는 `REQUEST_CHANGES`를 선택하지 않는다.
 
 예시:
 
-```text
-gh pr review <PR> --comment --body-file <review-file>
+```powershell
+$reviewBody = @'
+### [P1] 예시 제목
+본문을 UTF-8로 게시한다.
+'@
+$reviewFile = Join-Path ([System.IO.Path]::GetTempPath()) "codex-review-$([guid]::NewGuid()).md"
+try {
+    [System.IO.File]::WriteAllText(
+        $reviewFile,
+        $reviewBody,
+        (New-Object System.Text.UTF8Encoding($false))
+    )
+    gh pr review <PR> --comment --body-file $reviewFile
+} finally {
+    Remove-Item -LiteralPath $reviewFile -ErrorAction SilentlyContinue
+}
 ```
+
+게시 후에는 해당 PR의 리뷰를 GitHub API로 다시 조회해 작성 본문과 비교한다. 조회 명령도 PowerShell의 출력 인코딩을 UTF-8로 설정한 뒤 실행한다.
 
 로컬 변경 리뷰에는 외부 게시를 시도하지 않는다.

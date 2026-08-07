@@ -3,10 +3,11 @@
 | 항목 | 내용 |
 | --- | --- |
 | 상위 명세 | [로컬스탬프 P0 명세](../p0-spec.md) |
-| 분할 기준 원문 | [로컬스탬프 제품 PRD v1.6](../local-stamp-platform-prd.md) |
 | 소유 범위 | 지역 탐색, 콘텐츠·회차 등록, 승인, 자동 공개, 수정, 중단, 철회, 종료, 삭제, 회차 운영 상태 |
+| API 명세 | [콘텐츠 카탈로그 API](../api/p0/content-catalog/), [콘텐츠 API](../api/p0/content/), [지역 콘텐츠 API](../api/p0/region-content/) |
+| 데이터 모델 | [ERD](../erd.md) |
 
-> 이 문서는 원문을 기반으로 현재 P0 명세와 채택 ADR을 반영한 지역·콘텐츠·회차 구현 계약이다.
+> 이 문서는 지역·콘텐츠·회차 정책의 단일 기준이며, 현재 P0 명세와 채택 ADR을 반영한 구현 계약이다.
 
 ## FR-02. 지역 선택과 콘텐츠 탐색
 
@@ -15,7 +16,6 @@
 | 문서 | 적용 범위 |
 | --- | --- |
 | [P0 명세](../p0-spec.md#7-기능-요구사항과-소유-문서) | `FR-02` 범위와 공개 콘텐츠 탐색 기준 |
-| [제품 PRD](../local-stamp-platform-prd.md#82-콘텐츠-정책) | 지역 선택·콘텐츠 탐색 원문 정책 |
 | [ADR-0020](../adr/0020-merge-event-experience-details-into-content-and-revision.md#결정) | 행사·체험 필드를 콘텐츠와 수정본에 통합하는 P0 모델 |
 | [정원 홀드·무료 예약](reservation.md#rsv-04) | 상세 화면에 표시할 P0 무료 예약 취소 정책 |
 | [인증·프로필](auth-profile.md#prv-02) | 탈퇴 회원 후기를 공통 표시로 노출하는 기준 |
@@ -50,7 +50,7 @@
 7. 승인된 공개 예정 시각이 되면 시스템이 콘텐츠를 한 번만 `PUBLISHED`로 전환하고 지역 홈과 목록에 노출한다.
 8. `APPROVED` 또는 `PUBLISHED` 콘텐츠의 운영자는 추가 회차를 `PENDING`으로 생성하거나 기존 회차 변경안을 별도 심사 요청으로 제출할 수 있다.
    생성 회차는 승인 뒤 `SCHEDULED`가 되고, 심사 중·반려된 수정 요청은 기존 회차와 콘텐츠 공개 상태를 바꾸지 않는다.
-9. 모든 회차가 `COMPLETED` 또는 `CANCELLED`가 된 뒤 종료일이 지나거나 정상 종료 처리되면 예약 접수와 노출을 종료한다.
+9. 연결된 회차가 하나 이상이고 모든 회차가 `COMPLETED`, `CANCELLED`, `REJECTED` 중 하나이면 시스템이 콘텐츠를 한 번만 `ENDED`로 전환해 예약 접수와 노출을 종료한다. `PENDING` 또는 `SCHEDULED` 회차가 있으면 종료하지 않으며, 지역 관리자는 같은 조건에서 스케줄러 실행을 기다리지 않고 정상 종료 처리할 수 있다.
 
 #### 예외 흐름
 
@@ -91,7 +91,6 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 
 | 문서 | 적용 범위 |
 | --- | --- |
-| [제품 PRD](../local-stamp-platform-prd.md#82-콘텐츠-정책) | 콘텐츠·회차 등록과 승인 요청 원문 정책 |
 | [인증·프로필](auth-profile.md#fr-09-운영자-승인정보-마스킹) | 운영자 승인 상태, 담당 지역과 최초 소유자 설정 |
 | [ADR-0002](../adr/0002-isolate-regions-in-a-shared-schema.md#결정) | 지역 범위와 저장된 소유 관계의 검증 |
 | [ADR-0020](../adr/0020-merge-event-experience-details-into-content-and-revision.md#결정) | 행사·체험 필드를 통합한 콘텐츠·수정본·회차의 모델 경계 |
@@ -126,11 +125,14 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 
 | 문서 | 적용 범위 |
 | --- | --- |
-| [제품 PRD](../local-stamp-platform-prd.md#82-콘텐츠-정책) | 승인, 공개 예정 시각, 종료 원문 정책 |
 | [인증·프로필](auth-profile.md#fr-01-인증역할지역-권한) | 담당 지역 관리자와 소유 운영자의 권한 경계 |
 | [정원 홀드·무료 예약](reservation.md#rsv-06) | 회차 취소 시 활성 홀드·확정 예약 처리 |
 | [P0 명세](../p0-spec.md#88-감사-및-운영-로그) | 승인·자동 공개·종료 처리자와 상태 이력 감사 |
 | [ADR-0021](../adr/0021-record-content-reasons-in-content-log.md#결정) | 콘텐츠 사유를 상태 로그에 기록하고 현재 상태와 분리하는 모델 |
+| [ADR-0059](../adr/0059-automatically-end-content-after-all-sessions-terminate.md#결정) | 모든 회차 종결을 기준으로 한 콘텐츠 자동 종료와 조정 스케줄러 |
+| [ADR-0060](../adr/0060-serialize-content-ending-and-session-creation-with-content-lock.md#결정) | 자동·수동 종료와 추가 회차 생성을 같은 콘텐츠 행 잠금으로 처리하는 규칙 |
+| [ADR-0061](../adr/0061-treat-rejected-sessions-as-terminal-for-content-ending.md#결정) | `REJECTED` 회차를 콘텐츠 종료 판정의 종결 상태로 처리하는 규칙 |
+| [ADR-0062](../adr/0062-coordinate-content-ending-with-usecase.md#결정) | 별도 Scheduler와 수동 Controller가 같은 종료 UseCase를 호출하고 콘텐츠 한 건 단위 트랜잭션을 사용하는 규칙 |
 
 ### 기능 범위
 
@@ -139,8 +141,9 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
   사유와 함께 반려하며, 수정 승인 시에는 대상 회차가 아직 시작 전인지, 버전이 일치하는지, 활성 홀드와
   `CONFIRMED`·`CHECKED_IN` 예약이 없는지를 다시 확인한 뒤에만 반영한다.
 - 시스템은 승인된 공개 예정 시각에 콘텐츠를 한 번만 자동 공개한다.
-- 모든 회차가 `COMPLETED` 또는 `CANCELLED`가 된 뒤 종료일이 지나거나 정상 종료되면
-  예약 접수와 노출을 종료하고 상태 이력을 남긴다.
+- 연결된 회차가 하나 이상이고 모든 회차가 `COMPLETED`, `CANCELLED`, `REJECTED` 중 하나이면 시스템이 콘텐츠를
+  한 번만 자동 종료한다. `PENDING` 또는 `SCHEDULED` 회차가 있으면 종료하지 않는다.
+  지역 관리자의 정상 종료 요청은 같은 조건에서 스케줄러 실행을 기다리지 않고 동일한 상태 전이와 이력을 남긴다.
 
 ### 승인·자동 공개·종료 정책
 
@@ -157,12 +160,20 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 이때 원본은 `APPROVED → PENDING`으로 전이해 기존 `publish_at`에 따른 자동 공개를 차단한다.
 수정본 승인 시 후보 `publish_at`을 원본에 반영하고 `PENDING → APPROVED`로 재승인한다.
 수정본 반려·철회 시 원본은 `PENDING`으로 유지하며 자동 공개를 재개하지 않는다.
-모든 회차가 `COMPLETED` 또는 `CANCELLED`가 된 뒤 종료일이 지나거나 정상 종료 처리되면 `ENDED`로 전환하고
-신규 예약 접수와 노출을 종료한다. 기존 `CONFIRMED` 예약을 취소해야 하면 먼저 명시적으로 회차를 취소한다.
+연결된 회차가 하나 이상이고 모든 회차가 `COMPLETED`, `CANCELLED`, `REJECTED` 중 하나이면 시스템이 콘텐츠를
+한 번만 `ENDED`로 전환하고 신규 예약 접수와 노출을 종료한다. `PENDING` 또는 `SCHEDULED` 회차가 있으면 종료하지
+않는다. 지역 관리자의 정상 종료 요청은 같은 조건에서 스케줄러 실행을 기다리지 않고 동일 전이를 수행한다. 기존
+`CONFIRMED` 예약을 취소해야 하면 먼저 명시적으로 회차를 취소한다.
+자동·수동 종료와 추가 회차 생성은 같은 `content` 행을 먼저 잠그고, 잠금을 얻은 뒤 콘텐츠와 전체 회차 상태를
+다시 확인한다. 따라서 `ENDED` 콘텐츠와 새 `PENDING` 회차를 함께 커밋할 수 없다.
+자동 종료의 `@Scheduled` 실행은 별도 Scheduler가 담당하고, Scheduler와 수동 Controller는 같은
+`EndContentReservationsUseCase`를 호출한다. UseCase는 콘텐츠 한 건마다 트랜잭션을 열어 각 Service의 작업을
+조정하며, Scheduler와 Controller는 개별 Service를 직접 호출하지 않는다.
 
 ### 완료 기준
 
 - [AC-08 승인·자동 공개](../p0-spec.md#9-테스트-및-출시-수용-기준)
+- [AC-19 모든 회차 종결 콘텐츠 자동 종료](../p0-spec.md#9-테스트-및-출시-수용-기준)
 
 ## FR-14. 콘텐츠 수정·중단·삭제
 
@@ -170,7 +181,6 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 
 | 문서                                                                             | 적용 범위                       |
 |--------------------------------------------------------------------------------|-----------------------------|
-| [제품 PRD](../local-stamp-platform-prd.md#82-콘텐츠-정책)                             | 수정 심사, 중단, 철회와 삭제 원문 정책     |
 | [인증·프로필](auth-profile.md#fr-01-인증역할지역-권한)                                      | 담당 지역·소유 관계 기반의 변경 권한       |
 | [ADR-0011](../adr/0011-bootstrap-operator-ownership-on-content-creation.md#결정) | 저장된 최초 소유 관계를 기준으로 한 운영자 권한 |
 | [ADR-0020](../adr/0020-merge-event-experience-details-into-content-and-revision.md#결정) | 행사·체험 후보 필드를 수정본에 통합하는 모델 |

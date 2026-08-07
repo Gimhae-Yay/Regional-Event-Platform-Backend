@@ -20,6 +20,51 @@ public interface ContentSessionRepository extends JpaRepository<ContentSession, 
 
     List<ContentSession> findByContentContentIdOrderByStartsAtAscSessionIdAsc(Long contentId);
 
+    @EntityGraph(attributePaths = {"content", "content.region", "content.operator", "region"})
+    @Query("""
+        SELECT contentSession
+        FROM ContentSession contentSession
+        WHERE contentSession.region.regionId = :regionId
+            AND contentSession.status = :sessionStatus
+            AND contentSession.content.deletedAt IS NULL
+            AND contentSession.content.status IN :contentStatuses
+        ORDER BY contentSession.createdAt ASC, contentSession.sessionId ASC
+        """)
+    List<ContentSession> findPendingReviewCandidatesByRegionId(
+        @Param("regionId") Long regionId,
+        @Param("sessionStatus") ContentSessionStatus sessionStatus,
+        @Param("contentStatuses") List<ContentStatus> contentStatuses
+    );
+
+    @Query("""
+        SELECT contentSession.content.contentId
+        FROM ContentSession contentSession
+        WHERE contentSession.sessionId = :sessionId
+        """)
+    Optional<Long> findContentIdBySessionId(@Param("sessionId") Long sessionId);
+
+    @Query("""
+        SELECT contentSession.content.contentId
+        FROM ContentSession contentSession
+        WHERE contentSession.sessionId = :sessionId
+            AND contentSession.content.status = :contentStatus
+        """)
+    Optional<Long> findPublicContentIdBySessionId(
+        @Param("sessionId") Long sessionId,
+        @Param("contentStatus") ContentStatus contentStatus
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT contentSession
+        FROM ContentSession contentSession
+        JOIN FETCH contentSession.content content
+        JOIN FETCH content.region
+        WHERE contentSession.sessionId = :sessionId
+            AND content.deletedAt IS NULL
+        """)
+    Optional<ContentSession> findApprovalTargetBySessionIdForUpdate(@Param("sessionId") Long sessionId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT contentSession
@@ -43,6 +88,45 @@ public interface ContentSessionRepository extends JpaRepository<ContentSession, 
         ContentStatus contentStatus
     );
 
+    @EntityGraph(attributePaths = {"content", "content.operator", "region"})
+    @Query("""
+        SELECT contentSession FROM ContentSession contentSession
+        WHERE contentSession.sessionId = :sessionId
+          AND contentSession.status = io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus.PENDING
+          AND contentSession.content.deletedAt IS NULL
+          AND contentSession.content.status IN :contentStatuses
+        """)
+    Optional<ContentSession> findPendingReviewTarget(
+        @Param("sessionId") Long sessionId,
+        @Param("contentStatuses") List<ContentStatus> contentStatuses
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = {"content", "content.region", "region"})
+    @Query("""
+        SELECT contentSession
+        FROM ContentSession contentSession
+        WHERE contentSession.sessionId = :sessionId
+            AND contentSession.content.deletedAt IS NULL
+        """)
+    Optional<ContentSession> findRejectTargetForUpdate(@Param("sessionId") Long sessionId);
+
+    @EntityGraph(attributePaths = {"content", "region"})
+    @Query("""
+        SELECT contentSession
+        FROM ContentSession contentSession
+        WHERE contentSession.sessionId = :sessionId
+            AND contentSession.content.contentId = :contentId
+            AND contentSession.region.regionId = :regionId
+            AND contentSession.status IN :reservationListStatuses
+        """)
+    Optional<ContentSession> findOperatorReservationListTarget(
+        @Param("sessionId") Long sessionId,
+        @Param("contentId") Long contentId,
+        @Param("regionId") Long regionId,
+        @Param("reservationListStatuses") List<ContentSessionStatus> reservationListStatuses
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT contentSession
@@ -50,6 +134,23 @@ public interface ContentSessionRepository extends JpaRepository<ContentSession, 
         WHERE contentSession.sessionId = :sessionId
         """)
     Optional<ContentSession> findBySessionIdForUpdate(@Param("sessionId") Long sessionId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT contentSession
+        FROM ContentSession contentSession
+        WHERE contentSession.sessionId = :sessionId
+            AND contentSession.content.deletedAt IS NULL
+        """)
+    Optional<ContentSession> findRevisionTargetForUpdate(@Param("sessionId") Long sessionId);
+
+    @Query(value = """
+        SELECT COUNT(*)
+        FROM content_session
+        WHERE session_id = :sessionId
+            AND starts_at > CURRENT_TIMESTAMP
+        """, nativeQuery = true)
+    long countBeforeStartByDatabaseTime(@Param("sessionId") Long sessionId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @EntityGraph(attributePaths = {"content", "content.operator", "region"})

@@ -3,6 +3,8 @@ package io.regionevent.regioneventbackend.domain.operator.service;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.operator.entity.OperatorApplication;
 import io.regionevent.regioneventbackend.domain.operator.entity.OperatorApplicationStatus;
@@ -79,4 +81,8 @@ public class OperatorApplicationService {
         ).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void cancelAndUnlinkByApplicantUserId(Long userId) {
+        operatorApplicationRepository.cancelAndUnlinkByApplicantUserId(userId);
+    }
 }

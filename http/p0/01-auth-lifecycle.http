@@ -1,0 +1,160 @@
+@baseUrl = http://localhost:8080
+@email = auth{{$timestamp}}@example.com
+@password = Test!23456
+@invalidEmail = invalid-email
+@invalidPassword = short
+@phone = 01012345678
+@invalidPhone = 010-1234
+
+# P0 계정/토큰 세션 관리
+# 선행 조건: region 기본 데이터가 존재해야 한다.
+# 응답 헤더 캡처가 동작하지 않으면 Authorization 헤더의 "Bearer " 뒤 값을 visitorAccessToken에,
+# Set-Cookie 헤더의 refreshToken=... 부분을 visitorRefreshCookie에 수동으로 복사한다.
+
+### 1. 회원가입 - VISITOR
+POST {{baseUrl}}/api/v1/auth/signup
+Content-Type: application/json
+Accept: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}",
+  "name": "인증 생명주기 방문자",
+  "phone": "{{phone}}",
+  "requestedRole": "VISITOR"
+}
+
+> {%
+client.global.set("visitorUserId", response.body.data.userId);
+%}
+
+### 2. 중복 이메일 회원가입 - 409 DUPLICATE_LOGIN_IDENTIFIER 기대
+POST {{baseUrl}}/api/v1/auth/signup
+Content-Type: application/json
+Accept: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}",
+  "name": "중복 가입",
+  "phone": "01099998888",
+  "requestedRole": "VISITOR"
+}
+
+### 3. 형식 오류 - 이메일/비밀번호/전화번호 400 INVALID_INPUT 기대
+POST {{baseUrl}}/api/v1/auth/signup
+Content-Type: application/json
+Accept: application/json
+
+{
+  "email": "{{invalidEmail}}",
+  "password": "{{invalidPassword}}",
+  "name": "형식 오류",
+  "phone": "{{invalidPhone}}",
+  "requestedRole": "VISITOR"
+}
+
+### 4. 로그인
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+> {%
+const authorization = response.headers.valueOf("Authorization");
+const setCookie = response.headers.valueOf("Set-Cookie");
+client.global.set("visitorAccessToken", authorization.replace("Bearer ", ""));
+client.global.set("visitorRefreshCookie", setCookie.split(";")[0]);
+client.global.set("visitorRefreshCookieBeforeRotation", setCookie.split(";")[0]);
+%}
+
+### 5. 잘못된 자격증명 - 401 INVALID_CREDENTIALS 기대
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "email": "{{email}}",
+  "password": "Wrong!23456"
+}
+
+### 6. me 조회 - 인증 필요 API 성공
+GET {{baseUrl}}/api/v1/me
+Authorization: Bearer {{visitorAccessToken}}
+Accept: application/json
+
+### 7. me 조회 - 토큰 누락 401 UNAUTHENTICATED 기대
+GET {{baseUrl}}/api/v1/me
+Accept: application/json
+
+### 8. refresh - cookie 기반 Access Token 재발급
+POST {{baseUrl}}/api/v1/auth/refresh
+Cookie: {{visitorRefreshCookie}}
+Accept: application/json
+
+> {%
+const authorization = response.headers.valueOf("Authorization");
+const setCookie = response.headers.valueOf("Set-Cookie");
+client.global.set("visitorAccessToken", authorization.replace("Bearer ", ""));
+client.global.set("visitorRefreshCookie", setCookie.split(";")[0]);
+%}
+
+### 9. refresh cookie 재사용 - 401 UNAUTHENTICATED 기대
+POST {{baseUrl}}/api/v1/auth/refresh
+Cookie: {{visitorRefreshCookieBeforeRotation}}
+Accept: application/json
+
+### 10. refresh cookie 누락 - 401 UNAUTHENTICATED 기대
+POST {{baseUrl}}/api/v1/auth/refresh
+Accept: application/json
+
+### 11. logout
+POST {{baseUrl}}/api/v1/auth/logout
+Cookie: {{visitorRefreshCookie}}
+Accept: application/json
+
+### 12. logout 반복 - 200 OK 기대
+POST {{baseUrl}}/api/v1/auth/logout
+Cookie: {{visitorRefreshCookie}}
+Accept: application/json
+
+### 13. logout 이후 refresh - 401 UNAUTHENTICATED 기대
+POST {{baseUrl}}/api/v1/auth/refresh
+Cookie: {{visitorRefreshCookie}}
+Accept: application/json
+
+### 14. 재로그인 - 탈퇴 검증용 Access Token 재발급
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+> {%
+const authorization = response.headers.valueOf("Authorization");
+const setCookie = response.headers.valueOf("Set-Cookie");
+client.global.set("visitorAccessToken", authorization.replace("Bearer ", ""));
+client.global.set("visitorRefreshCookie", setCookie.split(";")[0]);
+%}
+
+### 15. 회원탈퇴
+DELETE {{baseUrl}}/api/v1/auth/delete
+Authorization: Bearer {{visitorAccessToken}}
+Accept: application/json
+
+### 16. 탈퇴 후 me 접근 - 401 또는 403 기대
+GET {{baseUrl}}/api/v1/me
+Authorization: Bearer {{visitorAccessToken}}
+Accept: application/json
+
+# DB 확인
+# SELECT user_id, login_identifier, status FROM app_user WHERE login_identifier = '{{email}}';
+# SELECT user_id, role, region_id, revoked_at FROM user_role_assignment WHERE user_id = {{visitorUserId}};
+# Redis 확인 예: redis-cli --scan --pattern 'refresh:*'

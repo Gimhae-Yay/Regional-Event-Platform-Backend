@@ -92,6 +92,11 @@ public class CapacityHoldService {
         return releasedQuantity;
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean hasActiveHoldForUpdate(Long sessionId) {
+        return !capacityHoldRepository.findActiveBySessionIdForUpdate(sessionId).isEmpty();
+    }
+
     @Transactional(readOnly = true)
     public List<Long> findExpiredActiveHoldIds() {
         return capacityHoldRepository.findExpiredActiveHoldIds();
@@ -113,6 +118,17 @@ public class CapacityHoldService {
         validateInvalidationReason(invalidationReason);
         capacityHoldRepository.findActiveHoldIdsByContentId(contentId)
             .forEach(holdId -> invalidateAndReleaseCapacityIfActive(holdId, invalidationReason));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void invalidateActiveHoldsForWithdrawal(Long userId) {
+        capacityHoldRepository.findActiveHoldIdsByUserId(userId)
+            .forEach(holdId -> invalidateAndReleaseCapacityIfActive(holdId, "USER_WITHDRAWAL"));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void unlinkUserByUserId(Long userId) {
+        capacityHoldRepository.unlinkUserByUserId(userId);
     }
 
     @Transactional(propagation = Propagation.MANDATORY, readOnly = true)

@@ -3,6 +3,8 @@ package io.regionevent.regioneventbackend.domain.region.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,5 +47,39 @@ class RegionRepositoryTest {
         assertThatThrownBy(
             () -> regionRepository.saveAndFlush(new Region("GIMHAE", "다른 지역", false))
         ).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void 공개_지역_검증_정보를_이름과_지역_식별자_오름차순으로_조회한다() {
+        Region privateRegion = regionRepository.saveAndFlush(new Region("PRIVATE", "Aardvark", false));
+        Region beta = regionRepository.saveAndFlush(new Region("BETA", "Beta", true));
+        Region firstSameName = regionRepository.saveAndFlush(new Region("SAME_ONE", "Same", true));
+        Region secondSameName = regionRepository.saveAndFlush(new Region("SAME_TWO", "Same", true));
+
+        List<PublicRegionVerificationProjection> regions = regionRepository.findPublicRegionVerifications();
+
+        assertThat(regions)
+            .extracting(PublicRegionVerificationProjection::regionId)
+            .containsExactly(
+                beta.getRegionId(),
+                firstSameName.getRegionId(),
+                secondSameName.getRegionId()
+            );
+        assertThat(regions)
+            .extracting(PublicRegionVerificationProjection::regionId)
+            .doesNotContain(privateRegion.getRegionId());
+    }
+
+    @Test
+    void 공개_지역_정적_표시_정보를_별도로_조회한다() {
+        Region region = regionRepository.saveAndFlush(new Region("GIMHAE", "김해시", true));
+
+        PublicRegionStaticProjection staticInfo = regionRepository.findPublicRegionStaticInfo(
+            region.getRegionId()
+        ).orElseThrow();
+
+        assertThat(staticInfo).isEqualTo(
+            new PublicRegionStaticProjection(region.getRegionId(), "GIMHAE", "김해시")
+        );
     }
 }

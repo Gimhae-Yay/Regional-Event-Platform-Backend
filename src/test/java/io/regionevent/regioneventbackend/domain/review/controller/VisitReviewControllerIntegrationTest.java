@@ -5,21 +5,30 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -45,11 +54,17 @@ import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationSt
 import io.regionevent.regioneventbackend.domain.reservation.repository.CapacityHoldRepository;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationRepository;
 import io.regionevent.regioneventbackend.domain.review.dto.CreateVisitReviewRequest;
+import io.regionevent.regioneventbackend.domain.review.dto.UpdateReviewRequest;
 import io.regionevent.regioneventbackend.domain.review.entity.Review;
 import io.regionevent.regioneventbackend.domain.review.entity.ReviewStatus;
 import io.regionevent.regioneventbackend.domain.review.repository.ReviewRepository;
 import io.regionevent.regioneventbackend.domain.review.service.CreateVisitReviewUseCase;
+import io.regionevent.regioneventbackend.domain.review.service.DeleteReviewUseCase;
 import io.regionevent.regioneventbackend.domain.review.service.ReviewService;
+import io.regionevent.regioneventbackend.domain.review.service.ReviewOriginalPurgeResult;
+import io.regionevent.regioneventbackend.domain.review.service.ReviewOriginalPurgeScheduler;
+import io.regionevent.regioneventbackend.domain.review.service.ReviewOriginalPurgeService;
+import io.regionevent.regioneventbackend.domain.review.service.UpdateReviewUseCase;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
@@ -85,7 +100,9 @@ class VisitReviewControllerIntegrationTest {
     private final UserRoleAssignmentService userRoleAssignmentService;
     private final VisitService visitService;
     private final ReviewService reviewService;
+    private final ReviewOriginalPurgeService reviewOriginalPurgeService;
     private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase;
+    private final Clock clock;
     private final TransactionTemplate transactionTemplate;
 
     @Autowired
@@ -107,7 +124,9 @@ class VisitReviewControllerIntegrationTest {
         UserRoleAssignmentService userRoleAssignmentService,
         VisitService visitService,
         ReviewService reviewService,
+        ReviewOriginalPurgeService reviewOriginalPurgeService,
         RecordFailedAuditEventUseCase recordFailedAuditEventUseCase,
+        Clock clock,
         PlatformTransactionManager transactionManager
     ) {
         this.mockMvc = mockMvc;
@@ -127,7 +146,9 @@ class VisitReviewControllerIntegrationTest {
         this.userRoleAssignmentService = userRoleAssignmentService;
         this.visitService = visitService;
         this.reviewService = reviewService;
+        this.reviewOriginalPurgeService = reviewOriginalPurgeService;
         this.recordFailedAuditEventUseCase = recordFailedAuditEventUseCase;
+        this.clock = clock;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
@@ -150,6 +171,126 @@ class VisitReviewControllerIntegrationTest {
             .filteredOn(event -> event.getTargetType() == AuditEventTargetType.REVIEW)
             .filteredOn(event -> event.getResult() == AuditEventResult.SUCCESS)
             .anySatisfy(event -> assertThat(event.getNextState()).isEqualTo(ReviewStatus.PUBLISHED.name()));
+    }
+
+    @Test
+    void updateReview_updatesProvidedFieldAndRecordsSuccessAudit() throws Exception {
+        Fixture fixture = createFixture(true);
+        Review review = createPublishedReview(fixture, 5, "수정 전 후기");
+
+        performUpdate(fixture.user(), review.getReviewId(), """
+            {
+              "reviewText": "  수정한 후기  "
+            }
+            """)
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.statusCode").value(200))
+            .andExpect(jsonPath("$.code").value("SUCCESS"))
+            .andExpect(jsonPath("$.message").value("후기 수정에 성공했습니다."))
+            .andExpect(jsonPath("$.data.reviewId").value(review.getReviewId().toString()))
+            .andExpect(jsonPath("$.data.rating").value(5))
+            .andExpect(jsonPath("$.data.reviewText").value("수정한 후기"));
+
+        Review updatedReview = reviewRepository.findById(review.getReviewId()).orElseThrow();
+        assertThat(updatedReview.getRating()).isEqualTo(5);
+        assertThat(updatedReview.getReviewText()).isEqualTo("수정한 후기");
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(event -> event.getTargetType() == AuditEventTargetType.REVIEW)
+            .filteredOn(event -> event.getResult() == AuditEventResult.SUCCESS)
+            .anySatisfy(event -> assertThat(event.getTargetId()).isEqualTo(review.getReviewId()));
+    }
+
+    @Test
+    void updateReview_whenNoFieldIsProvided_returnsInvalidInputWithoutMutation() throws Exception {
+        Fixture fixture = createFixture(true);
+        Review review = createPublishedReview(fixture, 5, "수정 전 후기");
+        long failureAuditCountBefore = countReviewFailureAudits();
+
+        performUpdate(fixture.user(), review.getReviewId(), "{}")
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        Review unchangedReview = reviewRepository.findById(review.getReviewId()).orElseThrow();
+        assertThat(unchangedReview.getRating()).isEqualTo(5);
+        assertThat(unchangedReview.getReviewText()).isEqualTo("수정 전 후기");
+        assertThat(countReviewFailureAudits()).isEqualTo(failureAuditCountBefore);
+    }
+
+    @Test
+    void updateReview_whenAuthorDiffers_returnsForbiddenWithoutMutation() throws Exception {
+        Fixture fixture = createFixture(true);
+        Review review = createPublishedReview(fixture, 5, "수정 전 후기");
+        AppUser anotherVisitor = saveUser("another-visitor-" + System.nanoTime() + "@example.com", true);
+
+        performUpdate(anotherVisitor, review.getReviewId(), """
+            {
+              "rating": 4
+            }
+            """)
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        assertThat(reviewRepository.findById(review.getReviewId()).orElseThrow().getRating()).isEqualTo(5);
+    }
+
+    @Test
+    void updateReview_whenThirtyDaysHaveElapsed_returnsForbiddenWithoutMutation() throws Exception {
+        Fixture fixture = createFixture(true);
+        Review review = createPublishedReview(fixture, 5, "수정 전 후기");
+        long failureAuditCountBefore = countReviewFailureAudits();
+        jdbcTemplate.update(
+            "UPDATE review SET created_at = DATEADD('DAY', -30, CURRENT_TIMESTAMP(6)) WHERE review_id = ?",
+            review.getReviewId()
+        );
+
+        performUpdate(fixture.user(), review.getReviewId(), """
+            {
+              "rating": 4
+            }
+            """)
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        assertThat(reviewRepository.findById(review.getReviewId()).orElseThrow().getRating()).isEqualTo(5);
+        assertThat(countReviewFailureAudits()).isEqualTo(failureAuditCountBefore + 1);
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(event -> event.getTargetType() == AuditEventTargetType.REVIEW)
+            .filteredOn(event -> event.getResult() == AuditEventResult.FAILURE)
+            .filteredOn(event -> review.getReviewId().equals(event.getTargetId()))
+            .anySatisfy(event -> assertThat(event.getRegion().getRegionId())
+                .isEqualTo(fixture.region().getRegionId()));
+    }
+
+    @Test
+    void updateReview_whenSuccessAuditRecordingFails_rollsBackReview() {
+        Fixture fixture = createFixture(true);
+        Review review = createPublishedReview(fixture, 5, "수정 전 후기");
+        long failureAuditCountBefore = countReviewFailureAudits();
+        RecordAuditEventUseCase rejectingAuditEventUseCase = mock(RecordAuditEventUseCase.class);
+        doThrow(new IllegalStateException("audit storage failure"))
+            .when(rejectingAuditEventUseCase)
+            .record(any(AuditEventCommand.class));
+        UpdateReviewUseCase useCase = new UpdateReviewUseCase(
+            appUserService,
+            userRoleAssignmentService,
+            reviewService,
+            rejectingAuditEventUseCase,
+            recordFailedAuditEventUseCase
+        );
+        UpdateReviewRequest request = new UpdateReviewRequest();
+        request.setRating(4);
+
+        assertThatThrownBy(() -> transactionTemplate.executeWithoutResult(transactionStatus ->
+            useCase.update(
+                fixture.user().getUserId(),
+                review.getReviewId(),
+                request,
+                UUID.randomUUID()
+            )
+        )).isInstanceOf(IllegalStateException.class);
+
+        assertThat(reviewRepository.findById(review.getReviewId()).orElseThrow().getRating()).isEqualTo(5);
+        assertThat(countReviewFailureAudits()).isEqualTo(failureAuditCountBefore + 1);
     }
 
     @Test
@@ -374,6 +515,240 @@ class VisitReviewControllerIntegrationTest {
         assertThat(countReviews(fixture.visit().getVisitId())).isZero();
     }
 
+    @Test
+    void deleteReview_deletesPublishedReviewAndRecordsSuccessAudit() throws Exception {
+        Fixture fixture = createFixture(true);
+        Review review = savePublishedReview(fixture);
+
+        performDelete(fixture.user(), review.getReviewId())
+            .andExpect(status().isNoContent());
+
+        assertThat(reviewRepository.findById(review.getReviewId()))
+            .hasValueSatisfying(deletedReview -> {
+                assertThat(deletedReview.getStatus()).isEqualTo(ReviewStatus.DELETED);
+                assertThat(deletedReview.getDeletedAt()).isNotNull();
+            });
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(event -> event.getTargetType() == AuditEventTargetType.REVIEW)
+            .filteredOn(event -> review.getReviewId().equals(event.getTargetId()))
+            .filteredOn(event -> event.getResult() == AuditEventResult.SUCCESS)
+            .anySatisfy(event -> {
+                assertThat(event.getPreviousState()).isEqualTo(ReviewStatus.PUBLISHED.name());
+                assertThat(event.getNextState()).isEqualTo(ReviewStatus.DELETED.name());
+            });
+    }
+
+    @Test
+    void deleteReview_whenPathIsInvalid_doesNotChangeReviewOrRecordAudit() throws Exception {
+        Fixture fixture = createFixture(true);
+        Review review = savePublishedReview(fixture);
+        long auditCountBefore = auditEventRepository.count();
+
+        performDelete(fixture.user(), "not-a-number")
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+
+        assertThat(reviewRepository.findById(review.getReviewId()))
+            .hasValueSatisfying(savedReview -> assertThat(savedReview.getStatus()).isEqualTo(ReviewStatus.PUBLISHED));
+        assertThat(auditEventRepository.count()).isEqualTo(auditCountBefore);
+    }
+
+    @Test
+    void deleteReview_whenUnauthenticatedOrNotAuthor_returnsForbiddenWithoutDeletingAndRecordsActorLink() throws Exception {
+        Fixture fixture = createFixture(true);
+        Review review = savePublishedReview(fixture);
+        AppUser anotherUser = saveUser("another-visitor-" + System.nanoTime() + "@example.com", true);
+
+        mockMvc.perform(delete("/api/v1/reviews/{reviewId}", review.getReviewId()))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+        performDelete(anotherUser, review.getReviewId())
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        assertThat(reviewRepository.findById(review.getReviewId()))
+            .hasValueSatisfying(savedReview -> assertThat(savedReview.getStatus()).isEqualTo(ReviewStatus.PUBLISHED));
+        Long failureAuditEventId = auditEventRepository.findAll()
+            .stream()
+            .filter(event -> event.getTargetType() == AuditEventTargetType.REVIEW)
+            .filter(event -> review.getReviewId().equals(event.getTargetId()))
+            .filter(event -> event.getResult() == AuditEventResult.FAILURE)
+            .findFirst()
+            .orElseThrow()
+            .getAuditEventId();
+
+        assertThat(jdbcTemplate.queryForObject(
+            "SELECT user_id FROM audit_event_actor_link WHERE audit_event_id = ?",
+            Long.class,
+            failureAuditEventId
+        )).isEqualTo(anotherUser.getUserId());
+    }
+
+    @Test
+    void deleteReview_whenAuthorIsWithdrawing_returnsForbiddenWithoutDeleting() throws Exception {
+        Fixture fixture = createFixture(AppUserStatus.WITHDRAWING, true);
+        Review review = savePublishedReview(fixture);
+
+        performDelete(fixture.user(), review.getReviewId())
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        assertThat(reviewRepository.findById(review.getReviewId()))
+            .hasValueSatisfying(savedReview -> assertThat(savedReview.getStatus()).isEqualTo(ReviewStatus.PUBLISHED));
+    }
+
+    @Test
+    void deleteReview_whenAlreadyDeleted_returnsNotFoundWithoutNewAudit() throws Exception {
+        Fixture fixture = createFixture(true);
+        Review review = reviewRepository.saveAndFlush(new Review(
+            fixture.region(),
+            fixture.visit(),
+            fixture.user(),
+            fixture.content(),
+            5,
+            "이미 삭제된 후기",
+            ReviewStatus.DELETED,
+            Instant.now()
+        ));
+        long auditCountBefore = auditEventRepository.count();
+
+        performDelete(fixture.user(), review.getReviewId())
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+
+        assertThat(auditEventRepository.count()).isEqualTo(auditCountBefore);
+    }
+
+    @Test
+    void purgeDeletedReviewOriginals_purgesOnlyEligibleReviewAndIsRepeatable() {
+        Review eligibleReview = savePublishedReview(createFixture(true));
+        Review notExpiredReview = savePublishedReview(createFixture(true));
+        Review publishedReview = savePublishedReview(createFixture(true));
+        Fixture purgedFixture = createFixture(true);
+        Review alreadyPurgedReview = reviewRepository.saveAndFlush(new Review(
+            purgedFixture.region(),
+            purgedFixture.visit(),
+            purgedFixture.user(),
+            purgedFixture.content(),
+            null,
+            null,
+            ReviewStatus.DELETED,
+            Instant.now().minusSeconds(31L * 24 * 60 * 60)
+        ));
+        markReviewDeletedDaysAgo(eligibleReview, 30);
+        markReviewDeletedDaysAgo(notExpiredReview, 29);
+
+        ReviewOriginalPurgeResult firstResult = reviewOriginalPurgeService.purgeDeletedReviewOriginals();
+        ReviewOriginalPurgeResult secondResult = reviewOriginalPurgeService.purgeDeletedReviewOriginals();
+
+        assertThat(firstResult.purgedReviewCount()).isEqualTo(1);
+        assertThat(secondResult.purgedReviewCount()).isZero();
+        assertThat(reviewRepository.findById(eligibleReview.getReviewId()))
+            .hasValueSatisfying(review -> {
+                assertThat(review.getRating()).isNull();
+                assertThat(review.getReviewText()).isNull();
+                assertThat(review.getStatus()).isEqualTo(ReviewStatus.DELETED);
+            });
+        assertThat(reviewRepository.findById(notExpiredReview.getReviewId()))
+            .hasValueSatisfying(review -> assertThat(review.getRating()).isEqualTo(5));
+        assertThat(reviewRepository.findById(publishedReview.getReviewId()))
+            .hasValueSatisfying(review -> assertThat(review.getReviewText()).isNotBlank());
+        assertThat(reviewRepository.findById(alreadyPurgedReview.getReviewId()))
+            .hasValueSatisfying(review -> {
+                assertThat(review.getRating()).isNull();
+                assertThat(review.getReviewText()).isNull();
+            });
+    }
+
+    @Test
+    void purgeDeletedReviewOriginals_whenBatchFails_rollsBackAndRetries() {
+        Review review = savePublishedReview(createFixture(true));
+        markReviewDeletedDaysAgo(review, 30);
+        jdbcTemplate.update("DELETE FROM review WHERE rating IS NULL AND review_text IS NULL");
+        jdbcTemplate.execute("ALTER TABLE review ALTER COLUMN review_text SET NOT NULL");
+
+        try {
+            assertThatThrownBy(reviewOriginalPurgeService::purgeDeletedReviewOriginals)
+                .isInstanceOf(RuntimeException.class);
+            assertThat(reviewRepository.findById(review.getReviewId()))
+                .hasValueSatisfying(savedReview -> assertThat(savedReview.getReviewText()).isNotBlank());
+        } finally {
+            jdbcTemplate.execute("ALTER TABLE review ALTER COLUMN review_text DROP NOT NULL");
+        }
+
+        assertThat(reviewOriginalPurgeService.purgeDeletedReviewOriginals().purgedReviewCount()).isEqualTo(1);
+        assertThat(reviewRepository.findById(review.getReviewId()))
+            .hasValueSatisfying(savedReview -> assertThat(savedReview.getReviewText()).isNull());
+    }
+
+    @Test
+    @Timeout(10)
+    void purgeDeletedReviewOriginals_whenConcurrent_purgesOriginalOnce() throws Exception {
+        Review review = savePublishedReview(createFixture(true));
+        markReviewDeletedDaysAgo(review, 30);
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<ReviewOriginalPurgeResult> first = executorService.submit(
+                (Callable<ReviewOriginalPurgeResult>) reviewOriginalPurgeService::purgeDeletedReviewOriginals
+            );
+            Future<ReviewOriginalPurgeResult> second = executorService.submit(
+                (Callable<ReviewOriginalPurgeResult>) reviewOriginalPurgeService::purgeDeletedReviewOriginals
+            );
+
+            assertThat(first.get().purgedReviewCount() + second.get().purgedReviewCount()).isEqualTo(1);
+        }
+
+        assertThat(reviewRepository.findById(review.getReviewId()))
+            .hasValueSatisfying(savedReview -> {
+                assertThat(savedReview.getRating()).isNull();
+                assertThat(savedReview.getReviewText()).isNull();
+                assertThat(savedReview.getStatus()).isEqualTo(ReviewStatus.DELETED);
+            });
+    }
+
+    @Test
+    void reviewOriginalPurgeScheduler_runsAtKoreaMidnight() throws NoSuchMethodException {
+        Scheduled scheduled = ReviewOriginalPurgeScheduler.class
+            .getDeclaredMethod("purgeDeletedReviewOriginals")
+            .getAnnotation(Scheduled.class);
+
+        assertThat(scheduled.cron()).isEqualTo("0 0 0 * * *");
+        assertThat(scheduled.zone()).isEqualTo("Asia/Seoul");
+    }
+
+    @Test
+    void deleteReview_whenSuccessAuditRecordingFails_rollsBackDeletion() {
+        Fixture fixture = createFixture(true);
+        Review review = savePublishedReview(fixture);
+        RecordAuditEventUseCase rejectingAuditEventUseCase = mock(RecordAuditEventUseCase.class);
+        doThrow(new IllegalStateException("audit storage failure"))
+            .when(rejectingAuditEventUseCase)
+            .record(any(AuditEventCommand.class));
+        DeleteReviewUseCase useCase = new DeleteReviewUseCase(
+            appUserService,
+            userRoleAssignmentService,
+            reviewService,
+            rejectingAuditEventUseCase,
+            recordFailedAuditEventUseCase,
+            clock
+        );
+
+        assertThatThrownBy(() -> transactionTemplate.executeWithoutResult(transactionStatus ->
+            useCase.delete(fixture.user().getUserId(), review.getReviewId(), UUID.randomUUID())
+        )).isInstanceOf(IllegalStateException.class);
+
+        assertThat(reviewRepository.findById(review.getReviewId()))
+            .hasValueSatisfying(savedReview -> assertThat(savedReview.getStatus()).isEqualTo(ReviewStatus.PUBLISHED));
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(event -> review.getReviewId().equals(event.getTargetId()))
+            .singleElement()
+            .satisfies(event -> {
+                assertThat(event.getResult()).isEqualTo(AuditEventResult.FAILURE);
+                assertThat(event.getPreviousState()).isEqualTo(ReviewStatus.PUBLISHED.name());
+                assertThat(event.getNextState()).isNull();
+            });
+    }
+
     private org.springframework.test.web.servlet.ResultActions performCreate(
         AppUser user,
         Long visitId,
@@ -381,6 +756,30 @@ class VisitReviewControllerIntegrationTest {
         String reviewText
     ) throws Exception {
         return performCreate(user, visitId.toString(), rating, reviewText);
+    }
+
+    private org.springframework.test.web.servlet.ResultActions performUpdate(
+        AppUser user,
+        Long reviewId,
+        String requestBody
+    ) throws Exception {
+        return mockMvc.perform(patch("/api/v1/reviews/{reviewId}", reviewId)
+            .header("Authorization", "Bearer " + jwtAccessTokenService.issue(user.getUserId()))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(requestBody));
+    }
+
+    private Review createPublishedReview(Fixture fixture, int rating, String reviewText) {
+        return reviewRepository.saveAndFlush(new Review(
+            fixture.region(),
+            fixture.visit(),
+            fixture.user(),
+            fixture.content(),
+            rating,
+            reviewText,
+            ReviewStatus.PUBLISHED,
+            null
+        ));
     }
 
     private org.springframework.test.web.servlet.ResultActions performCreate(
@@ -397,7 +796,43 @@ class VisitReviewControllerIntegrationTest {
                   "rating": %d,
                   "reviewText": "%s"
                 }
-                """.formatted(rating, reviewText)));
+            """.formatted(rating, reviewText)));
+    }
+
+    private org.springframework.test.web.servlet.ResultActions performDelete(
+        AppUser user,
+        Long reviewId
+    ) throws Exception {
+        return performDelete(user, reviewId.toString());
+    }
+
+    private org.springframework.test.web.servlet.ResultActions performDelete(
+        AppUser user,
+        String reviewId
+    ) throws Exception {
+        return mockMvc.perform(delete("/api/v1/reviews/{reviewId}", reviewId)
+            .header("Authorization", "Bearer " + jwtAccessTokenService.issue(user.getUserId())));
+    }
+
+    private Review savePublishedReview(Fixture fixture) {
+        return reviewRepository.saveAndFlush(new Review(
+            fixture.region(),
+            fixture.visit(),
+            fixture.user(),
+            fixture.content(),
+            5,
+            "삭제할 후기",
+            ReviewStatus.PUBLISHED,
+            null
+        ));
+    }
+
+    private void markReviewDeletedDaysAgo(Review review, int daysAgo) {
+        jdbcTemplate.update(
+            "UPDATE review SET status = 'DELETED', deleted_at = DATEADD('DAY', ?, CURRENT_TIMESTAMP(6)) WHERE review_id = ?",
+            -daysAgo,
+            review.getReviewId()
+        );
     }
 
     private Fixture createFixture(boolean assignVisitorRole) {

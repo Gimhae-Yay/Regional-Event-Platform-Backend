@@ -27,6 +27,10 @@ import io.regionevent.regioneventbackend.global.security.qr.QrTokenService;
 public class ReservationService {
 
     private static final int IDENTIFIER_GENERATION_MAX_ATTEMPTS = 5;
+    private static final List<ReservationStatus> REVISION_BLOCKING_STATUSES = List.of(
+        ReservationStatus.CONFIRMED,
+        ReservationStatus.CHECKED_IN
+    );
 
     private final ReservationRepository reservationRepository;
     private final ReservationIdentifierGenerator reservationIdentifierGenerator;
@@ -80,6 +84,23 @@ public class ReservationService {
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<Reservation> findByReservationNoForCheckIn(String reservationNo) {
         return reservationRepository.findByReservationNo(reservationNo);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<ManualCheckInLookup> findManualCheckInLookup(String reservationNo) {
+        return reservationRepository.findManualCheckInLookupByReservationNo(reservationNo)
+            .map(projection -> new ManualCheckInLookup(
+                projection.getReservationId(),
+                projection.getReservationRegion(),
+                projection.getContentRegionId(),
+                projection.getOperatorId()
+            ));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Reservation findByReservationNoForAuthorizedLookup(String reservationNo) {
+        return reservationRepository.findByReservationNoForAuthorizedLookup(reservationNo)
+            .orElseThrow(() -> new IllegalStateException("reservation read data disappeared"));
     }
 
     @Transactional(readOnly = true)
@@ -171,6 +192,17 @@ public class ReservationService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
+    public void cancelConfirmedReservationsForWithdrawal(Long userId) {
+        reservationRepository.findConfirmedReservationIdsByUserId(userId)
+            .forEach(reservationRepository::cancelForWithdrawal);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void unlinkUserByUserId(Long userId) {
+        reservationRepository.unlinkUserByUserId(userId);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
     public int cancelUncheckedInReservationsForSession(
         ContentSession contentSession,
         String cancellationReason,
@@ -204,6 +236,14 @@ public class ReservationService {
             .map(this::expireIfNoShowEligible)
             .flatMap(Optional::stream)
             .toList();
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean hasRevisionBlockingReservationForUpdate(Long sessionId) {
+        return !reservationRepository.findBySessionIdAndStatusInForUpdate(
+            sessionId,
+            REVISION_BLOCKING_STATUSES
+        ).isEmpty();
     }
 
     private boolean insertConfirmed(
@@ -253,5 +293,13 @@ public class ReservationService {
     }
 
     public record ReservationCancellationLockTarget(Long sessionId) {
+    }
+
+    public record ManualCheckInLookup(
+        Long reservationId,
+        Region reservationRegion,
+        Long contentRegionId,
+        Long operatorId
+    ) {
     }
 }

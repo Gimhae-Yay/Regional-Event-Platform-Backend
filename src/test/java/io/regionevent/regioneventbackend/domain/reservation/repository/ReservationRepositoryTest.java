@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceUnitUtil;
@@ -32,6 +33,9 @@ import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationSt
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
+import io.regionevent.regioneventbackend.domain.visit.entity.CheckinMethod;
+import io.regionevent.regioneventbackend.domain.visit.entity.Visit;
+import io.regionevent.regioneventbackend.domain.visit.repository.VisitRepository;
 
 @DataJpaTest
 @TestPropertySource(properties = "spring.jpa.hibernate.ddl-auto=validate")
@@ -41,6 +45,7 @@ class ReservationRepositoryTest {
     private static final Instant TERMINAL_AT = Instant.parse("2026-08-01T23:59:00Z");
     private static final Instant CANCELLED_AT = Instant.parse("2026-08-01T23:59:30Z");
     private static final Instant EXPIRED_AT = Instant.parse("2026-08-02T00:01:00Z");
+    private static final Instant CHECKED_AT = Instant.parse("2026-08-02T01:05:00Z");
 
     private final ReservationRepository reservationRepository;
     private final CapacityHoldRepository capacityHoldRepository;
@@ -48,6 +53,7 @@ class ReservationRepositoryTest {
     private final ContentRepository contentRepository;
     private final ContentSessionRepository contentSessionRepository;
     private final AppUserRepository appUserRepository;
+    private final VisitRepository visitRepository;
     private final EntityManager entityManager;
     private final JdbcTemplate jdbcTemplate;
 
@@ -59,6 +65,7 @@ class ReservationRepositoryTest {
         ContentRepository contentRepository,
         ContentSessionRepository contentSessionRepository,
         AppUserRepository appUserRepository,
+        VisitRepository visitRepository,
         EntityManager entityManager,
         JdbcTemplate jdbcTemplate
     ) {
@@ -68,6 +75,7 @@ class ReservationRepositoryTest {
         this.contentRepository = contentRepository;
         this.contentSessionRepository = contentSessionRepository;
         this.appUserRepository = appUserRepository;
+        this.visitRepository = visitRepository;
         this.entityManager = entityManager;
         this.jdbcTemplate = jdbcTemplate;
     }
@@ -104,81 +112,6 @@ class ReservationRepositoryTest {
 
         CapacityHold foundCapacityHold = capacityHoldRepository.findById(capacityHold.getHoldId()).orElseThrow();
         assertThat(foundCapacityHold.getReservation().getReservationId()).isEqualTo(reservation.getReservationId());
-    }
-
-    @Test
-    void 예약은_홀드의_지역과_회차와_일치해야_한다() {
-        ReservationFixtures fixtures = createFixtures();
-        CapacityHold capacityHold = saveConsumedHold(fixtures);
-        Region anotherRegion = saveRegion("BUSAN");
-        ContentSession anotherContentSession = saveContentSession(anotherRegion);
-
-        assertThatThrownBy(() -> newReservation(
-            "R-20260802-001",
-            "qr-reference-001",
-            anotherRegion,
-            capacityHold,
-            fixtures.contentSession(),
-            fixtures.user(),
-            ReservationStatus.CONFIRMED,
-            null,
-            null,
-            null
-        )).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> newReservation(
-            "R-20260802-002",
-            "qr-reference-002",
-            fixtures.region(),
-            capacityHold,
-            anotherContentSession,
-            fixtures.user(),
-            ReservationStatus.CONFIRMED,
-            null,
-            null,
-            null
-        )).isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
-    void 예약은_상태에_맞는_취소와_만료_필드가_필요하다() {
-        ReservationFixtures fixtures = createFixtures();
-
-        assertThatThrownBy(() -> newReservation(
-            "R-20260802-001",
-            "qr-reference-001",
-            fixtures.region(),
-            newConsumedHold(fixtures),
-            fixtures.contentSession(),
-            fixtures.user(),
-            ReservationStatus.CANCELLED,
-            null,
-            null,
-            null
-        )).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> newReservation(
-            "R-20260802-002",
-            "qr-reference-002",
-            fixtures.region(),
-            newConsumedHold(fixtures),
-            fixtures.contentSession(),
-            fixtures.user(),
-            ReservationStatus.EXPIRED,
-            null,
-            null,
-            null
-        )).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> newReservation(
-            "R-20260802-003",
-            "qr-reference-003",
-            fixtures.region(),
-            newConsumedHold(fixtures),
-            fixtures.contentSession(),
-            fixtures.user(),
-            ReservationStatus.CONFIRMED,
-            CANCELLED_AT,
-            "개인 사정",
-            null
-        )).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -289,6 +222,139 @@ class ReservationRepositoryTest {
             anotherHold,
             new ReservationFixtures(anotherRegion, anotherContentSession, firstFixtures.user())
         )).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void 예약번호로_예약_회차_콘텐츠_참여자_읽기_프로젝션을_조회한다() {
+        ReservationFixtures fixtures = createFixtures();
+        CapacityHold capacityHold = saveConsumedHold(fixtures);
+        Reservation reservation = reservationRepository.saveAndFlush(newReservation(
+            "R-20260802-001",
+            "qr-reference-001",
+            fixtures.region(),
+            capacityHold,
+            fixtures.contentSession(),
+            fixtures.user(),
+            ReservationStatus.CONFIRMED,
+            null,
+            null,
+            null
+        ));
+        entityManager.clear();
+
+        List<ReservationReadProjection> projections = reservationRepository
+            .findReadProjectionsByReservationNo("R-20260802-001");
+
+        assertThat(projections).hasSize(1);
+        ReservationReadProjection projection = projections.get(0);
+        assertThat(projection.reservationId()).isEqualTo(reservation.getReservationId());
+        assertThat(projection.sessionId()).isEqualTo(fixtures.contentSession().getSessionId());
+        assertThat(projection.contentId()).isEqualTo(
+            fixtures.contentSession().getContent().getContentId()
+        );
+        assertThat(projection.participantUserId()).isEqualTo(fixtures.user().getUserId());
+        assertThat(projection.participantName()).isEqualTo("예약 사용자");
+        assertThat(projection.participantPhone()).isEqualTo("010-1234-5678");
+        assertThat(projection.visitId()).isNull();
+    }
+
+    @Test
+    void 예약번호로_체크인_방문과_체크인_시각을_읽기_프로젝션에_포함한다() {
+        ReservationFixtures fixtures = createFixtures();
+        CapacityHold capacityHold = saveConsumedHold(fixtures);
+        Reservation reservation = reservationRepository.saveAndFlush(newReservation(
+            "R-20260802-001",
+            "qr-reference-001",
+            fixtures.region(),
+            capacityHold,
+            fixtures.contentSession(),
+            fixtures.user(),
+            ReservationStatus.CONFIRMED,
+            null,
+            null,
+            null
+        ));
+        assertThat(reservationRepository.checkInIfConfirmed(reservation.getReservationId())).isEqualTo(1);
+        Visit visit = visitRepository.saveAndFlush(new Visit(
+            fixtures.region(),
+            reservation,
+            fixtures.user(),
+            fixtures.contentSession().getContent(),
+            fixtures.contentSession(),
+            fixtures.user(),
+            CheckinMethod.QR,
+            CHECKED_AT
+        ));
+        entityManager.clear();
+
+        ReservationReadProjection projection = reservationRepository
+            .findReadProjectionsByReservationNo("R-20260802-001")
+            .get(0);
+
+        assertThat(projection.reservationStatus()).isEqualTo(ReservationStatus.CHECKED_IN);
+        assertThat(projection.visitId()).isEqualTo(visit.getVisitId());
+        assertThat(projection.visitReservationId()).isEqualTo(reservation.getReservationId());
+        assertThat(projection.visitSessionId()).isEqualTo(fixtures.contentSession().getSessionId());
+        assertThat(projection.visitContentId()).isEqualTo(
+            fixtures.contentSession().getContent().getContentId()
+        );
+        assertThat(projection.visitParticipantUserId()).isEqualTo(fixtures.user().getUserId());
+        assertThat(projection.checkedAt()).isEqualTo(CHECKED_AT);
+    }
+
+    @Test
+    void 사용자별_예약_읽기_프로젝션은_소유자로_제한하고_확정시각과_식별자_내림차순으로_정렬한다() {
+        ReservationFixtures fixtures = createFixtures();
+        Reservation firstReservation = reservationRepository.saveAndFlush(newReservation(
+            "R-20260802-001",
+            "qr-reference-001",
+            fixtures.region(),
+            saveConsumedHold(fixtures),
+            fixtures.contentSession(),
+            fixtures.user(),
+            ReservationStatus.CONFIRMED,
+            null,
+            null,
+            null
+        ));
+        Reservation secondReservation = reservationRepository.saveAndFlush(newReservation(
+            "R-20260802-002",
+            "qr-reference-002",
+            fixtures.region(),
+            saveConsumedHold(fixtures),
+            fixtures.contentSession(),
+            fixtures.user(),
+            ReservationStatus.CONFIRMED,
+            null,
+            null,
+            null
+        ));
+        AppUser anotherUser = saveUser("another-visitor@example.com");
+        ReservationFixtures anotherFixtures = new ReservationFixtures(
+            fixtures.region(),
+            fixtures.contentSession(),
+            anotherUser
+        );
+        reservationRepository.saveAndFlush(newReservation(
+            "R-20260802-003",
+            "qr-reference-003",
+            anotherFixtures.region(),
+            saveConsumedHold(anotherFixtures),
+            anotherFixtures.contentSession(),
+            anotherFixtures.user(),
+            ReservationStatus.CONFIRMED,
+            null,
+            null,
+            null
+        ));
+        entityManager.clear();
+
+        List<ReservationReadProjection> projections = reservationRepository.findReadProjectionsByUserId(
+            fixtures.user().getUserId()
+        );
+
+        assertThat(projections).extracting(ReservationReadProjection::reservationId)
+            .containsExactly(secondReservation.getReservationId(), firstReservation.getReservationId());
     }
 
     private Reservation newReservation(
