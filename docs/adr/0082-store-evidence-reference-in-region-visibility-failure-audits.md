@@ -1,4 +1,4 @@
-# ADR-0078: 지역 공개 여부 전환 실패 감사에 요청 증빙 참조를 저장
+# ADR-0082: 지역 공개 여부 전환 실패 감사에 요청 증빙 참조를 저장
 
 - 상태: 채택됨
 - 기록 유형: 신규
@@ -7,7 +7,7 @@
 - 관련 요구사항: [전체관리자](../p1/platform-admin.md)의 `ADM-05`, [P1 명세](../p1-spec.md)의 7.4 권한·감사·개인정보
 - 관련 단계: 단계 3. 확장 의사결정
 - 관련 이슈: 없음
-- 대체 대상: [ADR-0072](0072-use-allowlisted-reason-codes-for-region-changes.md)의 공개 여부 상태 조건 실패 증빙 저장 범위, [ADR-0074](0074-treat-repeated-region-visibility-as-no-op-success.md)의 실패 감사 필드 범위
+- 대체 대상: [ADR-0076](0076-use-allowlisted-reason-codes-for-region-changes.md)의 공개 여부 상태 조건 실패 증빙 저장 범위, [ADR-0078](0078-treat-repeated-region-visibility-as-no-op-success.md)의 실패 감사 필드 범위
 
 ## 맥락
 

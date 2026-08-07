@@ -1,4 +1,4 @@
-# ADR-0081: 지역 증빙 참조를 1~500자 자유 문자열로 유지
+# ADR-0085: 지역 증빙 참조를 1~500자 자유 문자열로 유지
 
 - 상태: 채택됨
 - 기록 유형: 신규
@@ -7,7 +7,7 @@
 - 관련 요구사항: [전체관리자](../p1/platform-admin.md)의 `ADM-05`, [P1 명세](../p1-spec.md)의 7.4 권한·감사·개인정보
 - 관련 단계: 단계 3. 확장 의사결정
 - 관련 이슈: 없음
-- 대체 대상: [ADR-0078](0078-store-evidence-reference-in-region-visibility-failure-audits.md)의 `evidenceReference` 비밀값·개인정보 자동 검증 전제
+- 대체 대상: [ADR-0082](0082-store-evidence-reference-in-region-visibility-failure-audits.md)의 `evidenceReference` 비밀값·개인정보 자동 검증 전제
 
 ## 맥락
 
@@ -52,7 +52,7 @@
 API 응답에는 `evidenceReference`를 포함하지 않는다. 감사 저장 장애를 포함한 구조화 로그와 운영 알림에도 요청
 `evidenceReference`를 포함하지 않는다.
 
-이 결정은 ADR-0078의 실패 감사 저장 여부와 저장 위치를 변경하지 않으며, 그 ADR의 비밀값·개인정보 검증 전제만
+이 결정은 ADR-0082의 실패 감사 저장 여부와 저장 위치를 변경하지 않으며, 그 ADR의 비밀값·개인정보 검증 전제만
 대체한다.
 
 ## 결과와 트레이드오프

@@ -5,7 +5,7 @@
 | 대상 릴리스 | P1 |
 | 관련 요구사항 | `P1-FR-09`, `ADM-02`, `ADM-05` |
 | 소유 도메인 | 지역 |
-| 기준 문서 | [지역 API](region.md), [전체관리자](../../../p1/platform-admin.md), [P1 명세](../../../p1-spec.md), [P0 ERD](../../../erd.md), [P1 ERD](../../../p1-erd.md), [ADR-0065](../../../adr/0065-use-is-public-for-region-availability-and-history-roles.md), [ADR-0074](../../../adr/0074-treat-repeated-region-visibility-as-no-op-success.md), [ADR-0078](../../../adr/0078-store-evidence-reference-in-region-visibility-failure-audits.md), [ADR-0081](../../../adr/0081-keep-region-evidence-reference-as-free-string.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [지역 API](region.md), [전체관리자](../../../p1/platform-admin.md), [P1 명세](../../../p1-spec.md), [P0 ERD](../../../erd.md), [P1 ERD](../../../p1-erd.md), [ADR-0065](../../../adr/0065-use-is-public-for-region-availability-and-history-roles.md), [ADR-0078](../../../adr/0078-treat-repeated-region-visibility-as-no-op-success.md), [ADR-0082](../../../adr/0082-store-evidence-reference-in-region-visibility-failure-audits.md), [ADR-0085](../../../adr/0085-keep-region-evidence-reference-as-free-string.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 

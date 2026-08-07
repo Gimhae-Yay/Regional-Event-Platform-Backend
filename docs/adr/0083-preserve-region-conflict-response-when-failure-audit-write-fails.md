@@ -1,4 +1,4 @@
-# ADR-0079: 지역 전환 실패 감사 저장 장애에도 원래 충돌 응답을 유지
+# ADR-0083: 지역 전환 실패 감사 저장 장애에도 원래 충돌 응답을 유지
 
 - 상태: 채택됨
 - 기록 유형: 신규
@@ -7,11 +7,11 @@
 - 관련 요구사항: [전체관리자](../p1/platform-admin.md)의 `P1-FR-09`, `ADM-02`, `ADM-05`
 - 관련 단계: 단계 3. 확장 의사결정
 - 관련 이슈: 없음
-- 대체 대상: [ADR-0078](0078-store-evidence-reference-in-region-visibility-failure-audits.md)의 실패 감사 저장 자체가 실패한 경우의 응답·관측 범위
+- 대체 대상: [ADR-0082](0082-store-evidence-reference-in-region-visibility-failure-audits.md)의 실패 감사 저장 자체가 실패한 경우의 응답·관측 범위
 
 ## 맥락
 
-[ADR-0078](0078-store-evidence-reference-in-region-visibility-failure-audits.md)은 비삭제 콘텐츠 조건으로 거부된
+[ADR-0082](0082-store-evidence-reference-in-region-visibility-failure-audits.md)은 비삭제 콘텐츠 조건으로 거부된
 지역 공개 여부 변경을 롤백한 뒤, 실패 감사 이벤트를 별도 트랜잭션으로 기록하도록 정했다. 그러나 별도 감사
 트랜잭션 자체가 실패했을 때 원래 `409 REGION_AVAILABILITY_CONFLICT`를 유지할지 `500`으로 바꿀지와 감사 누락을
 어떻게 관찰할지는 정하지 않았다.

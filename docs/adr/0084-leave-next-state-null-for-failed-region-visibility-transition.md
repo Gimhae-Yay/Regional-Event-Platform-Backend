@@ -1,4 +1,4 @@
-# ADR-0080: 실패한 지역 공개 여부 전환의 다음 상태를 비워 둔다
+# ADR-0084: 실패한 지역 공개 여부 전환의 다음 상태를 비워 둔다
 
 - 상태: 채택됨
 - 기록 유형: 신규
@@ -7,11 +7,11 @@
 - 관련 요구사항: [전체관리자](../p1/platform-admin.md)의 `P1-FR-09`, `ADM-02`, `ADM-05`
 - 관련 단계: 단계 3. 확장 의사결정
 - 관련 이슈: 없음
-- 대체 대상: [ADR-0078](0078-store-evidence-reference-in-region-visibility-failure-audits.md)의 실패 감사 현재·목표 공개 여부 저장 범위
+- 대체 대상: [ADR-0082](0082-store-evidence-reference-in-region-visibility-failure-audits.md)의 실패 감사 현재·목표 공개 여부 저장 범위
 
 ## 맥락
 
-[ADR-0078](0078-store-evidence-reference-in-region-visibility-failure-audits.md)은 비삭제 콘텐츠 조건으로 거부된
+[ADR-0082](0082-store-evidence-reference-in-region-visibility-failure-audits.md)은 비삭제 콘텐츠 조건으로 거부된
 지역 공개 여부 변경의 실패 감사에 현재 공개 여부와 요청 목표를 포함하도록 정했지만, 이를
 `audit_event.previous_state`와 `next_state`에 어떻게 매핑할지는 확정하지 않았다.
 
@@ -26,7 +26,7 @@ P0 `audit_event`는 상태 전이 기준 기록이며, [ADR-0063](0063-record-fa
 - 성공·실패 감사의 `next_state` 의미를 다르게 사용하지 않아야 한다.
 - 현재 확인한 상태와 서버 실패 원인만으로 거부 사건을 재현할 수 있어야 한다.
 - 공통 감사 스키마에 시도 목표 상태를 위한 새 열을 추가하지 않아야 한다.
-- 실패 감사의 증빙·처리자·트랜잭션·응답 계약은 ADR-0078·0079를 유지해야 한다.
+- 실패 감사의 증빙·처리자·트랜잭션·응답 계약은 ADR-0082·0083을 유지해야 한다.
 
 ## 검토한 선택지
 
@@ -51,7 +51,7 @@ P0 `audit_event`는 상태 전이 기준 기록이며, [ADR-0063](0063-record-fa
 콘텐츠가 있는 공개 지역의 `true → false` 요청에만 사용하므로 요청 목표 `false`는 오류 코드와 API 문맥에서
 추론한다. 요청 목표를 `next_state`에 저장하지 않는다.
 
-ADR-0078의 검증된 요청 `evidence_reference`, 처리자·대상·시각·`requestId` 저장과 ADR-0079의 감사 저장 장애
+ADR-0082의 검증된 요청 `evidence_reference`, 처리자·대상·시각·`requestId` 저장과 ADR-0083의 감사 저장 장애
 처리는 변경하지 않는다. 실제 상태 전이에 성공한 감사는 이전·이후 `is_public` 값을 각각 `previous_state`,
 `next_state`에 계속 저장한다.
 
@@ -80,7 +80,7 @@ P1 지역 공개 여부 변경 API가 구현 전이므로 기존 감사 데이�
 
 - 비삭제 콘텐츠가 있는 공개 지역의 `true → false` 요청이 409이고 지역 상태가 `true`로 유지되는지 확인한다.
 - 실패 감사가 `previous_state = true`, `next_state = NULL`, `result = FAILURE`인지 확인한다.
-- 실패 감사의 서버 코드, 증빙 참조, 처리자·대상·시각·`requestId`가 ADR-0078과 일치하는지 확인한다.
+- 실패 감사의 서버 코드, 증빙 참조, 처리자·대상·시각·`requestId`가 ADR-0082와 일치하는지 확인한다.
 - 성공한 `false → true`, `true → false` 전이는 실제 이전·이후 값을 `previous_state`, `next_state`에 저장하는지 확인한다.
 - 감사 조회·집계가 `result = SUCCESS`인 행만 실제 전이로 계산하는지 확인한다.
 

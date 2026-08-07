@@ -5,7 +5,7 @@
 | 대상 릴리스 | P1 |
 | 관련 요구사항 | `P1-FR-09`, `ADM-02`, `ADM-05` |
 | 소유 도메인 | 지역 |
-| 기준 문서 | [전체관리자](../../../p1/platform-admin.md), [P1 명세](../../../p1-spec.md), [P0 ERD](../../../erd.md), [P1 ERD](../../../p1-erd.md), [ADR-0064](../../../adr/0064-separate-privileged-account-class-from-ordinary-roles.md), [ADR-0065](../../../adr/0065-use-is-public-for-region-availability-and-history-roles.md), [ADR-0073](../../../adr/0073-normalize-region-code-to-uppercase.md), [ADR-0074](../../../adr/0074-treat-repeated-region-visibility-as-no-op-success.md), [ADR-0078](../../../adr/0078-store-evidence-reference-in-region-visibility-failure-audits.md), [ADR-0081](../../../adr/0081-keep-region-evidence-reference-as-free-string.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [전체관리자](../../../p1/platform-admin.md), [P1 명세](../../../p1-spec.md), [P0 ERD](../../../erd.md), [P1 ERD](../../../p1-erd.md), [ADR-0064](../../../adr/0064-separate-privileged-account-class-from-ordinary-roles.md), [ADR-0065](../../../adr/0065-use-is-public-for-region-availability-and-history-roles.md), [ADR-0077](../../../adr/0077-normalize-region-code-to-uppercase.md), [ADR-0078](../../../adr/0078-treat-repeated-region-visibility-as-no-op-success.md), [ADR-0082](../../../adr/0082-store-evidence-reference-in-region-visibility-failure-audits.md), [ADR-0085](../../../adr/0085-keep-region-evidence-reference-as-free-string.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
@@ -22,7 +22,7 @@ P1은 별도 지역 운영 상태를 추가하지 않는다. `region.is_public =
 
 | 계약 | 확정 모델 | 적용 규칙 |
 | --- | --- | --- |
-| 지역 생성·조회 | P0 `region`과 `region(region_code)` 유일 제약을 재사용한다. `region_code`는 최대 50자, `name`은 최대 100자다. | 새 지역은 `is_public = false`로 생성한다. `region_code`는 앞뒤 공백 제거와 내부 공백 거부 뒤 [ADR-0073](../../../adr/0073-normalize-region-code-to-uppercase.md)의 대문자 정규형으로 저장·응답한다. |
+| 지역 생성·조회 | P0 `region`과 `region(region_code)` 유일 제약을 재사용한다. `region_code`는 최대 50자, `name`은 최대 100자다. | 새 지역은 `is_public = false`로 생성한다. `region_code`는 앞뒤 공백 제거와 내부 공백 거부 뒤 [ADR-0077](../../../adr/0077-normalize-region-code-to-uppercase.md)의 대문자 정규형으로 저장·응답한다. |
 | 지역 공개 여부 | 별도 상태 컬럼 없이 P0 `region.is_public`을 재사용한다. | `false → true`는 공개·운영 전환이고, `true → false`는 비삭제 콘텐츠가 없는 지역의 운영 전 노출 취소에만 사용한다. 콘텐츠 운영 이력이 있는 지역의 운영 종료·비공개는 P1에서 제공하지 않는다. 현재 값과 같은 목표 상태의 요청은 `200 OK` 무변경 성공으로 처리하고 감사 이벤트를 만들지 않는다. |
 | 전체관리자 권한 | `app_user.account_kind = PRIVILEGED`와 별도 `platform_admin_assignment`를 사용한다. | 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN`만 세 API를 호출할 수 있다. 일반 `user_role_assignment`와 겸임하지 않는다. |
 | 변경 사유·증빙 | `audit_event.reason_code`와 P1의 nullable `evidence_reference`를 사용한다. | 지역 변경 API는 허용 사유 코드와 증빙 참조를 모두 필수로 받는다. `evidenceReference`는 앞뒤 공백 제거 후 1~500자 자유 문자열이며 서버는 출처·형식·민감정보를 판별하지 않는다. 호출자는 개인정보·토큰·비밀값을 포함하지 않아야 한다. 실제 상태 전이에 성공하면 요청 사유와 증빙을 성공 감사에 저장한다. 비삭제 콘텐츠 조건 실패에는 `previous_state = true`, `next_state = NULL`, 서버 실패 코드와 요청 증빙을 실패 감사에 저장하고, 동일 상태 무변경 성공에서는 저장하지 않는다. 공통 감사 테이블의 nullable 제약을 지역 변경 요청의 선택 입력으로 해석하지 않는다. |

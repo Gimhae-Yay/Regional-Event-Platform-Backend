@@ -1,4 +1,4 @@
-# ADR-0077: 지역 비공개 전환을 콘텐츠 운영 전 노출 취소로 제한
+# ADR-0081: 지역 비공개 전환을 콘텐츠 운영 전 노출 취소로 제한
 
 - 상태: 채택됨
 - 기록 유형: 신규
@@ -7,7 +7,7 @@
 - 관련 요구사항: [전체관리자](../p1/platform-admin.md)의 `P1-FR-09`, `ADM-02`
 - 관련 단계: 단계 3. 확장 의사결정
 - 관련 이슈: 없음
-- 대체 대상: [ADR-0072](0072-use-allowlisted-reason-codes-for-region-changes.md)의 비공개 전환 `REGION_OPERATION_ENDED` 허용 범위
+- 대체 대상: [ADR-0076](0076-use-allowlisted-reason-codes-for-region-changes.md)의 비공개 전환 `REGION_OPERATION_ENDED` 허용 범위
 
 ## 맥락
 
@@ -16,7 +16,7 @@
 소프트 삭제하지 않고 이력으로 보존한다. 따라서 콘텐츠를 한 번이라도 공개한 지역은 비삭제 콘텐츠가 계속 남아
 P1의 `true → false` 전이 조건을 충족할 수 없다.
 
-그러나 ADR-0072는 비공개 전환 사유로 `REGION_OPERATION_ENDED`를 허용했다. 현재 데이터 수명주기에서 실행할 수
+그러나 ADR-0076은 비공개 전환 사유로 `REGION_OPERATION_ENDED`를 허용했다. 현재 데이터 수명주기에서 실행할 수
 없는 운영 종료 사유를 공개 계약에 두면 클라이언트가 가능한 전이로 오해하고, 재시도해도 성공할 수 없는 요청을
 반복하게 된다.
 
