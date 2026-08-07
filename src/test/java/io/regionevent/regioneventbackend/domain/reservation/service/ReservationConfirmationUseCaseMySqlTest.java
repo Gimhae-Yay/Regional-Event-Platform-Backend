@@ -5,16 +5,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -34,6 +40,8 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentSessionRepository;
 import io.regionevent.regioneventbackend.domain.content.service.CancelContentSessionUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.ContentService;
+import io.regionevent.regioneventbackend.domain.content.service.ContentSessionService;
 import io.regionevent.regioneventbackend.domain.idempotency.entity.IdempotencyRecordStatus;
 import io.regionevent.regioneventbackend.domain.idempotency.repository.IdempotencyRecordRepository;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
@@ -41,6 +49,8 @@ import io.regionevent.regioneventbackend.domain.region.repository.RegionReposito
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
+import io.regionevent.regioneventbackend.domain.reservation.dto.CreateReservationHoldRequest;
+import io.regionevent.regioneventbackend.domain.reservation.dto.CreateReservationHoldResponse;
 import io.regionevent.regioneventbackend.domain.reservation.repository.CapacityHoldRepository;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationRepository;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -49,6 +59,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
 import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
@@ -56,9 +67,11 @@ import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 @SpringBootTest
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
+@Import(ReservationConfirmationUseCaseMySqlTest.ReservationLockOrderConfig.class)
 class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
 
     private final ReservationConfirmationUseCase reservationConfirmationUseCase;
+    private final CreateReservationHoldUseCase createReservationHoldUseCase;
     private final CancelContentSessionUseCase cancelContentSessionUseCase;
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
@@ -70,10 +83,12 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
     private final IdempotencyRecordRepository idempotencyRecordRepository;
     private final AuditEventRepository auditEventRepository;
     private final TransactionTemplate transactionTemplate;
+    private final ReservationLockOrderTracker reservationLockOrderTracker;
 
     @Autowired
     ReservationConfirmationUseCaseMySqlTest(
         ReservationConfirmationUseCase reservationConfirmationUseCase,
+        CreateReservationHoldUseCase createReservationHoldUseCase,
         CancelContentSessionUseCase cancelContentSessionUseCase,
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
@@ -84,9 +99,11 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
         ReservationRepository reservationRepository,
         IdempotencyRecordRepository idempotencyRecordRepository,
         AuditEventRepository auditEventRepository,
+        ReservationLockOrderTracker reservationLockOrderTracker,
         PlatformTransactionManager transactionManager
     ) {
         this.reservationConfirmationUseCase = reservationConfirmationUseCase;
+        this.createReservationHoldUseCase = createReservationHoldUseCase;
         this.cancelContentSessionUseCase = cancelContentSessionUseCase;
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
@@ -97,6 +114,7 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
         this.reservationRepository = reservationRepository;
         this.idempotencyRecordRepository = idempotencyRecordRepository;
         this.auditEventRepository = auditEventRepository;
+        this.reservationLockOrderTracker = reservationLockOrderTracker;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
@@ -223,6 +241,117 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
         assertSessionCancellationTerminalState(fixture);
     }
 
+    @Test
+    @Timeout(10)
+    void 홀드생성과_예약확정이_동시에_실행되어도_잠금순서에따라_완료되고_정원이_일치한다() throws Exception {
+        ConcurrentFixture fixture = createConcurrentFixture(2);
+        reservationLockOrderTracker.prepare(
+            fixture.contentSession().getContent().getContentId(),
+            fixture.contentSession().getSessionId()
+        );
+
+        try {
+            try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+                Future<CreateReservationHoldResponse> createFuture = executorService.submit(
+                    () -> reservationLockOrderTracker.runAsHoldCreate(() -> createReservationHoldUseCase.create(
+                        fixture.holdCreator().getUserId(),
+                        new CreateReservationHoldRequest(fixture.contentSession().getSessionId().toString(), 1)
+                    ))
+                );
+                assertThat(reservationLockOrderTracker.awaitHoldCreateContentLock()).isTrue();
+
+                Future<ReservationConfirmationResult> confirmFuture = executorService.submit(
+                    () -> reservationLockOrderTracker.runAsReservationConfirm(() -> reservationConfirmationUseCase.confirm(
+                        fixture.holdOwner().getUserId(),
+                        fixture.capacityHold().getHoldId().toString(),
+                        "hold-confirm-race-" + System.nanoTime(),
+                        UUID.randomUUID()
+                    ))
+                );
+                assertThat(reservationLockOrderTracker.awaitReservationConfirmContentLockAttempt()).isTrue();
+
+                reservationLockOrderTracker.releaseHoldCreateSessionLock();
+                assertThat(createFuture.get(5, TimeUnit.SECONDS)).isNotNull();
+                assertThat(confirmFuture.get(5, TimeUnit.SECONDS).isSuccessful()).isTrue();
+            }
+
+            assertThat(reservationLockOrderTracker.holdCreateLockOrder())
+                .containsExactly(ReservationLockTarget.CONTENT, ReservationLockTarget.CONTENT_SESSION);
+            assertThat(reservationLockOrderTracker.reservationConfirmLockOrder())
+                .containsExactly(ReservationLockTarget.CONTENT, ReservationLockTarget.CONTENT_SESSION);
+        } finally {
+            reservationLockOrderTracker.releaseHoldCreateSessionLock();
+            reservationLockOrderTracker.reset();
+        }
+
+        transactionTemplate.executeWithoutResult(status -> {
+            ContentSession session = contentSessionRepository.findById(fixture.contentSession().getSessionId())
+                .orElseThrow();
+            assertThat(session.getRemainingCapacity()).isZero();
+            assertThat(capacityHoldRepository.findAll())
+                .filteredOn(hold -> hold.getContentSession().getSessionId().equals(session.getSessionId()))
+                .extracting(CapacityHold::getStatus)
+                .containsExactlyInAnyOrder(CapacityHoldStatus.ACTIVE, CapacityHoldStatus.CONSUMED);
+            assertThat(reservationRepository.findAll())
+                .filteredOn(reservation -> reservation.getContentSession().getSessionId().equals(session.getSessionId()))
+                .extracting(reservation -> reservation.getStatus())
+                .containsExactly(ReservationStatus.CONFIRMED);
+        });
+    }
+
+    @Test
+    @Timeout(10)
+    void 홀드생성과_예약확정을_동시에_시작하면_시스템예외없이_정합성을_유지한다() throws Exception {
+        ConcurrentFixture fixture = createConcurrentFixture(1);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+
+        List<MixedReservationOperationResult> results;
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<MixedReservationOperationResult> holdCreation = executorService.submit(
+                () -> createHoldAfterStart(fixture, ready, start)
+            );
+            Future<MixedReservationOperationResult> reservationConfirmation = executorService.submit(
+                () -> confirmHoldAfterStart(fixture, ready, start)
+            );
+
+            assertThat(ready.await(3, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            results = List.of(
+                holdCreation.get(5, TimeUnit.SECONDS),
+                reservationConfirmation.get(5, TimeUnit.SECONDS)
+            );
+        }
+
+        assertThat(results).allSatisfy(result -> assertThat(result.systemFailure()).isNull());
+        assertThat(results)
+            .filteredOn(MixedReservationOperationResult::isSuccessful)
+            .singleElement()
+            .satisfies(result -> assertThat(result.operation())
+                .isEqualTo(MixedReservationOperation.RESERVATION_CONFIRMATION));
+        assertThat(results)
+            .filteredOn(result -> !result.isSuccessful())
+            .singleElement()
+            .satisfies(result -> {
+                assertThat(result.operation()).isEqualTo(MixedReservationOperation.HOLD_CREATION);
+                assertThat(result.errorCode()).isEqualTo(ErrorCode.RESERVATION_HOLD_CONFLICT);
+            });
+
+        transactionTemplate.executeWithoutResult(status -> {
+            ContentSession session = contentSessionRepository.findById(fixture.contentSession().getSessionId())
+                .orElseThrow();
+            assertThat(session.getRemainingCapacity()).isZero();
+            assertThat(capacityHoldRepository.findAll())
+                .filteredOn(hold -> hold.getContentSession().getSessionId().equals(session.getSessionId()))
+                .singleElement()
+                .satisfies(hold -> assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.CONSUMED));
+            assertThat(reservationRepository.findAll())
+                .filteredOn(reservation -> reservation.getContentSession().getSessionId().equals(session.getSessionId()))
+                .extracting(reservation -> reservation.getStatus())
+                .containsExactly(ReservationStatus.CONFIRMED);
+        });
+    }
+
     private List<ReservationConfirmationResult> confirmConcurrently(
         Fixture fixture,
         String firstIdempotencyKey,
@@ -258,6 +387,63 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
             idempotencyKey,
             UUID.randomUUID()
         );
+    }
+
+    private MixedReservationOperationResult createHoldAfterStart(
+        ConcurrentFixture fixture,
+        CountDownLatch ready,
+        CountDownLatch start
+    ) {
+        ready.countDown();
+        await(start);
+
+        try {
+            createReservationHoldUseCase.create(
+                fixture.holdCreator().getUserId(),
+                new CreateReservationHoldRequest(fixture.contentSession().getSessionId().toString(), 1)
+            );
+            return MixedReservationOperationResult.success(MixedReservationOperation.HOLD_CREATION);
+        } catch (BusinessException exception) {
+            return MixedReservationOperationResult.businessFailure(
+                MixedReservationOperation.HOLD_CREATION,
+                exception.getErrorCode()
+            );
+        } catch (RuntimeException exception) {
+            return MixedReservationOperationResult.systemFailure(
+                MixedReservationOperation.HOLD_CREATION,
+                exception
+            );
+        }
+    }
+
+    private MixedReservationOperationResult confirmHoldAfterStart(
+        ConcurrentFixture fixture,
+        CountDownLatch ready,
+        CountDownLatch start
+    ) {
+        ready.countDown();
+        await(start);
+
+        try {
+            ReservationConfirmationResult result = reservationConfirmationUseCase.confirm(
+                fixture.holdOwner().getUserId(),
+                fixture.capacityHold().getHoldId().toString(),
+                "mixed-hold-confirm-" + System.nanoTime(),
+                UUID.randomUUID()
+            );
+            if (result.isSuccessful()) {
+                return MixedReservationOperationResult.success(MixedReservationOperation.RESERVATION_CONFIRMATION);
+            }
+            return MixedReservationOperationResult.businessFailure(
+                MixedReservationOperation.RESERVATION_CONFIRMATION,
+                result.errorCode()
+            );
+        } catch (RuntimeException exception) {
+            return MixedReservationOperationResult.systemFailure(
+                MixedReservationOperation.RESERVATION_CONFIRMATION,
+                exception
+            );
+        }
     }
 
     private Void cancelAfterStart(
@@ -408,6 +594,84 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
         });
     }
 
+    private ConcurrentFixture createConcurrentFixture(int capacity) {
+        return transactionTemplate.execute(status -> {
+            String suffix = Long.toUnsignedString(System.nanoTime());
+            Instant now = Instant.now();
+            Region region = regionRepository.save(new Region("R" + suffix, "김해시", true));
+            AppUser holdOwner = appUserRepository.save(new AppUser(
+                "owner-" + suffix + "@example.com",
+                "hashed-password",
+                "홀드 소유자",
+                "010-1234-5678",
+                AppUserStatus.ACTIVE
+            ));
+            userRoleAssignmentRepository.save(new UserRoleAssignment(holdOwner, UserRole.VISITOR, null));
+            AppUser holdCreator = appUserRepository.save(new AppUser(
+                "creator-" + suffix + "@example.com",
+                "hashed-password",
+                "홀드 생성자",
+                "010-2345-6789",
+                AppUserStatus.ACTIVE
+            ));
+            userRoleAssignmentRepository.save(new UserRoleAssignment(holdCreator, UserRole.VISITOR, null));
+            AppUser operator = appUserRepository.save(new AppUser(
+                "operator-" + suffix + "@example.com",
+                "hashed-password",
+                "운영자",
+                "010-9876-5432",
+                AppUserStatus.ACTIVE
+            ));
+            userRoleAssignmentRepository.save(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
+            Content content = contentRepository.save(new Content(
+                region,
+                operator,
+                ContentType.EVENT_EXPERIENCE,
+                ContentStatus.PUBLISHED,
+                "김해 가야 문화 체험",
+                "김해 가야 문화를 체험하는 행사입니다.",
+                "김해문화의전당",
+                "매일 10:00~18:00",
+                "055-123-4567",
+                "안내를 따라주세요.",
+                "만 7세 이상",
+                "편한 복장",
+                "시작 하루 전까지 취소할 수 있습니다.",
+                now
+            ));
+            ContentSession contentSession = new ContentSession(
+                content,
+                region,
+                now.plusSeconds(3_600),
+                now.plusSeconds(10_800),
+                now.plusSeconds(1_800),
+                now.plusSeconds(9_000),
+                capacity
+            );
+            contentSession.approve(operator, now);
+            ContentSession savedSession = contentSessionRepository.saveAndFlush(contentSession);
+            contentSessionRepository.decreaseRemainingCapacityIfReservable(
+                savedSession.getSessionId(),
+                1,
+                ContentStatus.PUBLISHED,
+                ContentSessionStatus.SCHEDULED
+            );
+            CapacityHold capacityHold = capacityHoldRepository.save(new CapacityHold(
+                region,
+                savedSession,
+                holdOwner,
+                1,
+                CapacityHoldStatus.ACTIVE,
+                now.plusSeconds(600),
+                null,
+                null,
+                null,
+                now
+            ));
+            return new ConcurrentFixture(holdOwner, holdCreator, savedSession, capacityHold);
+        });
+    }
+
     private void await(CountDownLatch latch) {
         try {
             if (!latch.await(5, TimeUnit.SECONDS)) {
@@ -425,5 +689,259 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
     }
 
     private record Fixture(AppUser user, AppUser operator, ContentSession contentSession, CapacityHold capacityHold) {
+    }
+
+    private record ConcurrentFixture(
+        AppUser holdOwner,
+        AppUser holdCreator,
+        ContentSession contentSession,
+        CapacityHold capacityHold
+    ) {
+    }
+
+    private record MixedReservationOperationResult(
+        MixedReservationOperation operation,
+        ErrorCode errorCode,
+        RuntimeException systemFailure
+    ) {
+
+        private static MixedReservationOperationResult success(MixedReservationOperation operation) {
+            return new MixedReservationOperationResult(operation, null, null);
+        }
+
+        private static MixedReservationOperationResult businessFailure(
+            MixedReservationOperation operation,
+            ErrorCode errorCode
+        ) {
+            return new MixedReservationOperationResult(operation, errorCode, null);
+        }
+
+        private static MixedReservationOperationResult systemFailure(
+            MixedReservationOperation operation,
+            RuntimeException systemFailure
+        ) {
+            return new MixedReservationOperationResult(operation, null, systemFailure);
+        }
+
+        private boolean isSuccessful() {
+            return errorCode == null && systemFailure == null;
+        }
+    }
+
+    private enum MixedReservationOperation {
+        HOLD_CREATION,
+        RESERVATION_CONFIRMATION
+    }
+
+    @TestConfiguration
+    static class ReservationLockOrderConfig {
+
+        @Bean
+        ReservationLockOrderTracker reservationLockOrderTracker() {
+            return new ReservationLockOrderTracker();
+        }
+
+        @Bean
+        @Primary
+        LockTrackingContentService lockTrackingContentService(
+            ContentRepository contentRepository,
+            ReservationLockOrderTracker reservationLockOrderTracker
+        ) {
+            return new LockTrackingContentService(contentRepository, reservationLockOrderTracker);
+        }
+
+        @Bean
+        @Primary
+        LockTrackingContentSessionService lockTrackingContentSessionService(
+            ContentSessionRepository contentSessionRepository,
+            ReservationLockOrderTracker reservationLockOrderTracker
+        ) {
+            return new LockTrackingContentSessionService(contentSessionRepository, reservationLockOrderTracker);
+        }
+    }
+
+    static class LockTrackingContentService extends ContentService {
+
+        private final ReservationLockOrderTracker reservationLockOrderTracker;
+
+        LockTrackingContentService(
+            ContentRepository contentRepository,
+            ReservationLockOrderTracker reservationLockOrderTracker
+        ) {
+            super(contentRepository);
+            this.reservationLockOrderTracker = reservationLockOrderTracker;
+        }
+
+        @Override
+        public boolean lockPublishedReservationTarget(Long contentId) {
+            reservationLockOrderTracker.recordReservationConfirmContentLockAttempt(contentId);
+            boolean locked = super.lockPublishedReservationTarget(contentId);
+            reservationLockOrderTracker.recordContentLock(contentId);
+            return locked;
+        }
+    }
+
+    static class LockTrackingContentSessionService extends ContentSessionService {
+
+        private final ReservationLockOrderTracker reservationLockOrderTracker;
+
+        LockTrackingContentSessionService(
+            ContentSessionRepository contentSessionRepository,
+            ReservationLockOrderTracker reservationLockOrderTracker
+        ) {
+            super(contentSessionRepository);
+            this.reservationLockOrderTracker = reservationLockOrderTracker;
+        }
+
+        @Override
+        @Transactional(propagation = Propagation.MANDATORY)
+        public ContentSession findForUpdate(Long sessionId) {
+            ContentSession contentSession = super.findForUpdate(sessionId);
+            reservationLockOrderTracker.recordHoldCreateSessionLock(sessionId);
+            return contentSession;
+        }
+
+        @Override
+        public boolean lockConfirmableReservationTarget(Long sessionId) {
+            boolean locked = super.lockConfirmableReservationTarget(sessionId);
+            reservationLockOrderTracker.recordReservationConfirmSessionLock(sessionId);
+            return locked;
+        }
+    }
+
+    static class ReservationLockOrderTracker {
+
+        private final ThreadLocal<ReservationLockOperation> currentOperation = new ThreadLocal<>();
+        private final List<ReservationLockTarget> holdCreateLockOrder = new CopyOnWriteArrayList<>();
+        private final List<ReservationLockTarget> reservationConfirmLockOrder = new CopyOnWriteArrayList<>();
+        private volatile Long targetContentId;
+        private volatile Long targetSessionId;
+        private volatile CountDownLatch holdCreateContentLocked = new CountDownLatch(1);
+        private volatile CountDownLatch allowHoldCreateSessionLock = new CountDownLatch(1);
+        private volatile CountDownLatch reservationConfirmContentLockAttempted = new CountDownLatch(1);
+
+        void prepare(Long contentId, Long sessionId) {
+            targetContentId = contentId;
+            targetSessionId = sessionId;
+            holdCreateLockOrder.clear();
+            reservationConfirmLockOrder.clear();
+            holdCreateContentLocked = new CountDownLatch(1);
+            allowHoldCreateSessionLock = new CountDownLatch(1);
+            reservationConfirmContentLockAttempted = new CountDownLatch(1);
+        }
+
+        void reset() {
+            targetContentId = null;
+            targetSessionId = null;
+            currentOperation.remove();
+        }
+
+        <T> T runAsHoldCreate(Supplier<T> action) {
+            return runAs(ReservationLockOperation.HOLD_CREATE, action);
+        }
+
+        <T> T runAsReservationConfirm(Supplier<T> action) {
+            return runAs(ReservationLockOperation.RESERVATION_CONFIRM, action);
+        }
+
+        boolean awaitHoldCreateContentLock() throws InterruptedException {
+            return holdCreateContentLocked.await(3, TimeUnit.SECONDS);
+        }
+
+        boolean awaitReservationConfirmContentLockAttempt() throws InterruptedException {
+            return reservationConfirmContentLockAttempted.await(3, TimeUnit.SECONDS);
+        }
+
+        void releaseHoldCreateSessionLock() {
+            allowHoldCreateSessionLock.countDown();
+        }
+
+        List<ReservationLockTarget> holdCreateLockOrder() {
+            return List.copyOf(holdCreateLockOrder);
+        }
+
+        List<ReservationLockTarget> reservationConfirmLockOrder() {
+            return List.copyOf(reservationConfirmLockOrder);
+        }
+
+        void recordReservationConfirmContentLockAttempt(Long contentId) {
+            if (isReservationConfirmContent(contentId)) {
+                reservationConfirmContentLockAttempted.countDown();
+            }
+        }
+
+        void recordContentLock(Long contentId) {
+            if (isHoldCreateContent(contentId)) {
+                holdCreateLockOrder.add(ReservationLockTarget.CONTENT);
+                holdCreateContentLocked.countDown();
+                await(allowHoldCreateSessionLock);
+                return;
+            }
+            if (isReservationConfirmContent(contentId)) {
+                reservationConfirmLockOrder.add(ReservationLockTarget.CONTENT);
+            }
+        }
+
+        void recordHoldCreateSessionLock(Long sessionId) {
+            if (isHoldCreateSession(sessionId)) {
+                holdCreateLockOrder.add(ReservationLockTarget.CONTENT_SESSION);
+            }
+        }
+
+        void recordReservationConfirmSessionLock(Long sessionId) {
+            if (isReservationConfirmSession(sessionId)) {
+                reservationConfirmLockOrder.add(ReservationLockTarget.CONTENT_SESSION);
+            }
+        }
+
+        private <T> T runAs(ReservationLockOperation operation, Supplier<T> action) {
+            currentOperation.set(operation);
+            try {
+                return action.get();
+            } finally {
+                currentOperation.remove();
+            }
+        }
+
+        private boolean isHoldCreateContent(Long contentId) {
+            return currentOperation.get() == ReservationLockOperation.HOLD_CREATE
+                && contentId.equals(targetContentId);
+        }
+
+        private boolean isHoldCreateSession(Long sessionId) {
+            return currentOperation.get() == ReservationLockOperation.HOLD_CREATE
+                && sessionId.equals(targetSessionId);
+        }
+
+        private boolean isReservationConfirmContent(Long contentId) {
+            return currentOperation.get() == ReservationLockOperation.RESERVATION_CONFIRM
+                && contentId.equals(targetContentId);
+        }
+
+        private boolean isReservationConfirmSession(Long sessionId) {
+            return currentOperation.get() == ReservationLockOperation.RESERVATION_CONFIRM
+                && sessionId.equals(targetSessionId);
+        }
+
+        private void await(CountDownLatch latch) {
+            try {
+                if (!latch.await(5, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("reservation lock order test latch timed out");
+                }
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("reservation lock order test interrupted", exception);
+            }
+        }
+    }
+
+    private enum ReservationLockOperation {
+        HOLD_CREATE,
+        RESERVATION_CONFIRM
+    }
+
+    private enum ReservationLockTarget {
+        CONTENT,
+        CONTENT_SESSION
     }
 }
