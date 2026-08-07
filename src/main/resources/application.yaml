@@ -46,6 +46,10 @@ content:
     fixed-delay: PT1M
 
 management:
+  endpoint:
+    health:
+      show-components: never
+      show-details: never
   endpoints:
     web:
       exposure:
