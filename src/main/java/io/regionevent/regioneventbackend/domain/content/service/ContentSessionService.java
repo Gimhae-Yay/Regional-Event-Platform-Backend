@@ -107,6 +107,14 @@ public class ContentSessionService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
+    public Long findPublicContentId(Long sessionId) {
+        return contentSessionRepository.findPublicContentIdBySessionId(
+            sessionId,
+            ContentStatus.PUBLISHED
+        ).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
     public ContentSession findApprovalTargetForUpdate(Long sessionId) {
         return contentSessionRepository.findApprovalTargetBySessionIdForUpdate(sessionId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
@@ -148,7 +156,12 @@ public class ContentSessionService {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void lockForUpdate(Long sessionId) {
-        contentSessionRepository.findBySessionIdForUpdate(sessionId)
+        findForUpdate(sessionId);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ContentSession findForUpdate(Long sessionId) {
+        return contentSessionRepository.findBySessionIdForUpdate(sessionId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 

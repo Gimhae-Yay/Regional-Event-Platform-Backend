@@ -1,0 +1,68 @@
+@baseUrl = http://localhost:8080
+@regionAdminAccessToken =
+@otherRegionAdminAccessToken =
+@reservationNo =
+@missingReservationNo = R99999999NOTFOUND
+@qrExceptionId =
+
+# P0 지역 관리자 예약·QR 예외 모니터링
+# 선행 조건:
+# - regionAdminAccessToken은 대상 예약/QR 예외와 같은 region의 REGION_ADMIN 토큰이어야 한다.
+# - reservationNo는 담당 지역 예약번호여야 한다.
+# - qrExceptionId는 담당 지역의 QR 예외 audit_event_id여야 한다.
+
+### 1. 지역 관리자 예약번호 보조 조회 - 200 OK 기대
+GET {{baseUrl}}/api/v1/region-admin/reservations/search?reservationNo={{reservationNo}}
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+### 2. 지역 관리자 예약번호 보조 조회 - reservationNo 누락, 400 INVALID_INPUT 기대
+GET {{baseUrl}}/api/v1/region-admin/reservations/search
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+### 3. 지역 관리자 예약번호 보조 조회 - 존재하지 않는 예약번호, 404 NOT_FOUND 기대
+GET {{baseUrl}}/api/v1/region-admin/reservations/search?reservationNo={{missingReservationNo}}
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+### 4. 타 지역 관리자 예약번호 보조 조회 - 403 FORBIDDEN 또는 404 NOT_FOUND 기대
+GET {{baseUrl}}/api/v1/region-admin/reservations/search?reservationNo={{reservationNo}}
+Authorization: Bearer {{otherRegionAdminAccessToken}}
+Accept: application/json
+
+### 5. QR 예외 목록 조회 - 200 OK 기대
+GET {{baseUrl}}/api/v1/region-admin/qr-exceptions?size=20
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+> {%
+const exceptions = response.body.data.exceptions || [];
+if (exceptions.length > 0) {
+  client.global.set("qrExceptionId", exceptions[0].exceptionId);
+}
+%}
+
+### 6. QR 예외 목록 조회 - size 0, 400 INVALID_INPUT 기대
+GET {{baseUrl}}/api/v1/region-admin/qr-exceptions?size=0
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+### 7. QR 예외 상세 조회 - 200 OK 기대
+GET {{baseUrl}}/api/v1/region-admin/qr-exceptions/{{qrExceptionId}}
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+### 8. QR 예외 상세 조회 - 잘못된 exceptionId, 400 INVALID_TYPE 기대
+GET {{baseUrl}}/api/v1/region-admin/qr-exceptions/not-number
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+### 9. 타 지역 관리자 QR 예외 상세 조회 - 403 FORBIDDEN 또는 404 NOT_FOUND 기대
+GET {{baseUrl}}/api/v1/region-admin/qr-exceptions/{{qrExceptionId}}
+Authorization: Bearer {{otherRegionAdminAccessToken}}
+Accept: application/json
+
+# DB 확인
+# SELECT reservation_id, reservation_no, region_id, status FROM reservation WHERE reservation_no = '{{reservationNo}}';
+# SELECT audit_event_id, region_id, target_type, target_id, result, reason_code FROM audit_event WHERE audit_event_id = {{qrExceptionId}};

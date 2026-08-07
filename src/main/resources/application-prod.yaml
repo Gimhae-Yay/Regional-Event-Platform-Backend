@@ -1,0 +1,15 @@
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:}
+    username: ${SPRING_DATASOURCE_USERNAME:}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  h2:
+    console:
+      enabled: false
+
+storage:
+  s3:
+    enabled: ${STORAGE_S3_ENABLED:false}
+    bucket-name: ${STORAGE_S3_BUCKET_NAME:}
+    region: ${STORAGE_S3_REGION:}

@@ -120,6 +120,15 @@ class SecurityConfigIntegrationTest {
     }
 
     @Test
+    void healthEndpoint_withoutAccessToken_returnsHealthStatusWithoutDetails() throws Exception {
+        mockMvc.perform(get("/actuator/health"))
+            .andExpect(result -> assertThat(result.getResponse().getStatus())
+                .isNotIn(401, 403))
+            .andExpect(jsonPath("$.status").exists())
+            .andExpect(jsonPath("$.components").doesNotExist());
+    }
+
+    @Test
     void protectedPath_withRefreshTokenCookieOnly_returnsUnauthenticatedResponse() throws Exception {
         mockMvc.perform(get("/test/protected")
                 .cookie(new Cookie("refreshToken", "refresh-token")))
