@@ -4,7 +4,7 @@
 - 기록 유형: 신규
 - 기록일: 2026-07-29
 - 결정일: 2026-07-29
-- 관련 요구사항: [P0 명세](../p0-spec.md#82-설계-원칙)의 Redis 사용 범위, [인증·프로필](../p0/auth-profile.md#fr-01-인증역할지역-권한)의 `PRV-02`, [제품 PRD](../local-stamp-platform-prd.md#103-설계-원칙)의 Redis 사용 범위
+- 관련 요구사항: [P0 명세](../p0-spec.md#82-설계-원칙)의 Redis 사용 범위, [인증·프로필](../p0/auth-profile.md#fr-01-인증역할지역-권한)의 `PRV-02`, [토큰 갱신 API](../api/p0/auth-profile/refresh.md)의 Redis 계약
 - 관련 단계: 단계 0. 정책·설계 확정, 단계 1. MVP 구현·검증
 - 관련 이슈: 없음
 - 대체 대상: [ADR-0005](0005-use-jwt-access-and-rotating-refresh-tokens.md)의 Refresh Token 수명주기 저장소 선택과 해시·계열·교체 관계 영속 방식, [ADR-0017](0017-serialize-withdrawal-with-conditional-user-state.md)의 Refresh Token 계열 폐기를 MySQL 트랜잭션 안에서 처리하고 외부 I/O를 배제하는 범위

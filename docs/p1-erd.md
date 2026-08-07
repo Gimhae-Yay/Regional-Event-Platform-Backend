@@ -2,7 +2,7 @@
 
 > 상태: 정책 반영 초안
 > 작성일: 2026-08-05
-> 근거: [P1 정책 결정 로그](p1-policy-decision-log.md)와 채택 ADR-0064~ADR-0071
+> 근거: [P1 정책 결정 로그](p1-policy-decision-log.md), P1 도메인별 정책 문서와 각 문서가 연결한 채택 핵심 ADR
 > 범위: P0 ERD를 대체하지 않는다. P1에서 추가·변경되는 논리 테이블, 제약, 상태 전이와 P0 재사용 경계만 정의한다.
 
 ## 1. 기준과 범위
@@ -13,6 +13,7 @@
 - `docs/p1/stampbook.md`, `docs/p1/regional-mission.md`, `docs/p1/coupon.md`
 - `docs/p1/payment-refund.md`, `docs/p1/platform-admin.md`
 - `docs/adr/0012-retain-author-unlinked-reviews-and-visits-after-withdrawal.md`
+- 각 P1 정책 문서가 연결한 핵심 ADR. 지역 결정의 핵심·세부·보정 기록 분류는 `docs/p1/platform-admin.md`를 따른다.
 
 P1은 다음 P0 사실을 변경하지 않고 재사용한다.
 
@@ -262,7 +263,7 @@ erDiagram
         BIGINT region_id FK "적용 지역; NOT NULL"
         VARCHAR issuance_type "발급 경로: VISIT|MISSION_REWARD|STAMPBOOK_COMPLETION; NOT NULL"
         BIGINT discount_amount "정액 할인 금액; NOT NULL"
-        INT valid_days "발급 뒤 유효 일수; NOT NULL"
+        INT valid_days "발급 뒤 유효 일수; 1~365; NOT NULL"
         VARCHAR status "상태: DRAFT|PENDING_REVIEW|PUBLISHED|ENDED; NOT NULL"
     }
     coupon {
@@ -464,7 +465,11 @@ P0의 복합 PK `(user_id, role)`를 `role_assignment_id`로 대체한다. 역�
 
 ### 4.4 `region`
 
-새 열을 추가하지 않는다. `is_public = true → false`는 비삭제 콘텐츠가 하나도 없을 때만 허용한다. `SUSPENDED` 같은 새 상태를 도입하지 않는다.
+새 열을 추가하지 않으며 `SUSPENDED` 같은 새 상태를 도입하지 않는다.
+
+`region_code`는 입력의 앞뒤 공백을 제거하고 내부 공백과 비 ASCII 문자를 거부한 뒤 `Locale.ROOT` 기준 대문자로 변환한 정규형만 저장한다. 저장 정규식은 `^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*$`이고 길이는 1자 이상 50자 이하다. P1 지역 생성 API를 활성화하기 전에 기존 값을 같은 정규형으로 변환했을 때 충돌하는지 검사한다. 충돌이 있으면 배포를 중단해 데이터를 정리하고, 충돌이 없으면 비정규 값을 한 번 이관한다. API·초기화·migration을 포함한 모든 저장 경로는 같은 정규화 검증을 거치며, MySQL에는 대소문자를 구분하는 `REGEXP_LIKE(region_code, '^[A-Z][A-Z0-9]*(-[A-Z0-9]+)*$', 'c')` CHECK로 저장 불변식을 강제한다.
+
+`is_public = true → false`는 비삭제 콘텐츠가 하나도 없는 지역의 운영 전 공개 노출 취소에만 허용한다. 공개 이후 콘텐츠는 삭제하지 않으므로 콘텐츠 운영 이력이 있는 지역의 운영 종료·비공개는 P1에서 제공하지 않는다. 공개 여부 변경은 같은 트랜잭션에서 대상 `region` 행을 쓰기 잠금으로 조회한 뒤 현재 값을 비교한다. 현재 값과 요청 값이 같으면 지역 행과 `updated_at`을 변경하지 않고 성공·실패 감사 이벤트도 만들지 않는다. 실제 상태 전이는 성공 감사 이벤트와 같은 트랜잭션으로 커밋한다. 같은 목표 상태의 동시 요청은 지역 행 잠금으로 직렬화하여 첫 요청만 실제 상태 전이와 성공 감사를 만들고 나머지는 무변경 성공으로 처리한다.
 
 ### 4.5 `audit_event` 확장
 
@@ -472,10 +477,14 @@ P0의 복합 PK `(user_id, role)`를 `role_assignment_id`로 대체한다. 역�
 | --- | --- |
 | `target_type` | 기존 P0 값에 `PLATFORM_ADMIN_ASSIGNMENT`, `USER_ROLE_ASSIGNMENT`, `STAMPBOOK`, `MISSION`, `COUPON_POLICY`, `COUPON`, `RESERVATION_PRICE_SNAPSHOT`, `PAYMENT`, `REFUND`, `PAYMENT_DISCREPANCY`를 추가 |
 | `reason` | P1 수명주기·운영 명령의 사유 원문. 스탬프북·미션·쿠폰 정책의 생성·수정·심사 요청·승인·반려·종료에서는 앞뒤 공백 제거 뒤 1~500자이며 NOT NULL, 그 외 이벤트는 nullable |
-| `evidence_reference` | 특권 변경·수동 거래 처리의 비밀값 없는 증빙 참조. nullable |
+| `evidence_reference` | `VARCHAR(500) NULL`. 특권 변경·수동 거래 처리 이벤트에서는 NOT NULL, 그 외 기존 P0 이벤트는 nullable. 지역 API는 앞뒤 공백 제거 후 1~500자 자유 문자열을 저장하며 서버가 출처·형식·민감정보를 판별하지 않는다. 개인정보·토큰·비밀값 미포함은 호출자 운영 책임이다. |
 | `audit_event_actor_link` | 활성 actor에만 만든다. 탈퇴 전 제거한다. |
 
 `target_id`에는 `app_user.user_id`를 저장하지 않는다. 고권한 계정 변경의 대상은 `platform_admin_assignment`이다. P0의 90일 공통 감사 보관 기간을 특권·거래 감사에도 그대로 적용할지는 [미확정 항목](#11-미확정-연결-정책)에 남긴다.
+
+지역 공개 여부 변경이 비삭제 콘텐츠 조건으로 거부되면 변경 트랜잭션 롤백 뒤 별도 트랜잭션에서 실패 감사를 기록한다. 실패 감사는 `previous_state = true`, `next_state = NULL`, `result = FAILURE`, 서버 판정 `reason_code = REGION_AVAILABILITY_CONFLICT`와 검증된 요청 `evidence_reference`, 대상 지역, 활성 처리자, 처리 시각과 `requestId`를 포함한다. 요청 목표 `false`와 업무 사유 코드는 실패 감사의 상태·사유 필드에 저장하지 않는다.
+
+실패 감사 저장 자체가 실패해도 원래 `409 REGION_AVAILABILITY_CONFLICT`와 지역 미변경 결과를 유지하며 원래 변경과 감사 저장을 요청 처리 경로에서 자동 재시도하지 않는다. 애플리케이션 경계에는 `requestId`, 대상 지역과 서버 실패 코드만 포함한 비개인 구조화 로그를 한 번 기록해 운영 알림 대상으로 삼고 요청 사유와 증빙 참조는 로그·알림에 포함하지 않는다.
 
 ## 5. 혜택 도메인
 
@@ -491,7 +500,10 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 - 콘텐츠 운영자가 담당 범위에서 작성·검토 요청한다.
 - 담당 지역 관리자가 승인해야 `PUBLISHED`가 된다.
 - 공개 뒤 핵심 값은 수정하지 않고 종료만 허용한다.
-- 전이는 대상·처리자·사유·시각·요청 ID와 함께 감사한다.
+- 성공 전이는 대상·처리자·사유·시각·요청 ID를 가진 성공 감사 이벤트와 같은 트랜잭션으로 기록한다.
+- 서버 데이터로 대상과 처리자를 안전하게 식별한 뒤 권한·상태·도메인 조건 거부 또는 처리 실패가 발생하면
+  원래 트랜잭션을 롤백한 뒤 같은 요청 ID와 비개인 실패 코드를 가진 실패 감사 이벤트를 독립 트랜잭션으로 기록한다.
+  실패 감사 기록도 실패하면 구조화 로그로 관찰한다.
 
 ### 5.2 스탬프북
 
@@ -531,19 +543,23 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 | 조건 유형 | 저장 규칙 |
 | --- | --- |
 | `VISIT_COUNT` | `required_visit_count > 0`, 목표 콘텐츠 행 없음. 참여 뒤 같은 지역의 모든 유효 방문을 센다. |
-| `CONTENT_SET` | `required_visit_count IS NULL`, 목표 콘텐츠 행이 하나 이상. 지정 콘텐츠를 각각 한 번 방문해야 완료한다. |
+| `CONTENT_SET` | `required_visit_count IS NULL`, 목표 콘텐츠 행이 하나 이상. 지정 콘텐츠마다 최초 유효 방문만 반영하고 모두 한 번씩 방문해야 완료한다. |
 
 | 무결성 | 규칙 |
 | --- | --- |
 | 예정 종료 | `ends_at`은 필수다. `PUBLISHED` 전이 때 `published_at < ends_at`를 검증하며, 공개 뒤 수정하지 않는다. |
-| 보상 정책 | 작성·검토 때 `coupon_policy.region_id = mission.region_id`와 `issuance_type = MISSION_REWARD`를 검증한다. `PUBLISHED` 전이 때 잠근 정책도 `PUBLISHED`여야 한다. |
+| 대상 콘텐츠 | `CONTENT_SET` 생성·수정은 `content.region_id = mission.region_id AND content.deleted_at IS NULL`인 행만 `content_id` 오름차순으로 잠가 연결한다. 승인에서는 보상 정책, 미션, 지역 뒤 모든 대상 콘텐츠를 같은 순서로 잠그고 `deleted_at IS NULL AND status = PUBLISHED`를 재검증한다. 하나라도 불일치하면 `PUBLISHED` 전이를 거부한다. `VISIT_COUNT`는 대상 콘텐츠 행을 두지 않는다. |
+| 보상 정책 | 작성·수정·검토 요청 때 `coupon_policy.region_id = mission.region_id`, `issuance_type = MISSION_REWARD`, `status IN (DRAFT, PENDING_REVIEW, PUBLISHED)`를 검증하고 `ENDED` 정책 연결을 거부한다. 검토 요청은 최초 조회한 정책 행을 먼저 잠그고 미션 행을 잠근다. 승인은 정책 행, 미션 행, 지역 행 순서로 잠근다. 두 전이 모두 `mission.reward_coupon_policy_id`가 잠근 정책과 같은지 재검증하고, 연결이 달라졌으면 전이를 거부한다. `PUBLISHED` 전이 때 잠근 정책도 `PUBLISHED`이고 지역은 `is_public = true`여야 한다. |
 | 자동 종료 | 종료 작업은 `status = PUBLISHED AND ends_at <= 현재 시각`인 행만 `ENDED`로 조건부 전이하고, 그 실제 처리 시각을 `ended_at`에 기록한다. |
 | 참여 멱등성 | `UNIQUE (mission_id, user_id)`로 사용자·미션당 참여 행을 하나만 허용한다. 중복 키 요청은 기존 참여 결과를 반환한다. |
-| 보상 수령 멱등성 | `UNIQUE (mission_participation_id)`로 참여당 보상 수령 행을 하나만 허용한다. 중복 키 요청은 기존 수령 결과를 반환한다. |
+| 보상 수령 멱등성 | `UNIQUE (mission_participation_id)`로 참여당 보상 수령 행을 하나만 허용한다. 중복 키 요청은 미션 종료 뒤에도 기존 수령 결과를 반환하되 새 보상 효과를 만들지 않는다. |
 | 보상 정책 고정 | `mission_reward_claim.coupon_policy_id = mission.reward_coupon_policy_id`를 보상 수령 생성과 같은 조건부 쓰기로 검증한다. |
-| 진행도 | `UNIQUE (mission_participation_id, visit_id)`로 같은 참여에 같은 방문을 두 번 반영하지 않는다. |
+| 보상 수령 시한 | 신규 수령은 모든 잠금 획득 직후 고정한 `operation_at`에 대해 `mission.status = PUBLISHED AND mission.ends_at > operation_at`일 때만 허용한다. 수동·자동 종료 또는 `ends_at` 도달과 동시에 완료·미수령 참여자의 권리가 만료되며 유예 기간과 수동 지급을 두지 않는다. |
+| 진행도 | `visit.user_id = mission_participation.user_id`, `visit.region_id = mission.region_id`, `visit.checked_at >= mission_participation.joined_at`을 검증한다. `UNIQUE (mission_participation_id, visit_id)`로 같은 참여에 같은 방문을 두 번 반영하지 않는다. `VISIT_COUNT`는 서로 다른 방문이면 같은 콘텐츠 재방문도 허용한다. `CONTENT_SET`은 잠근 참여에서 같은 `content_id`의 기존 근거가 없는 경우에만 조건부 삽입한다. |
 
-같은 유효 방문은 조건을 만족하는 여러 공개 미션에 각각 반영할 수 있다. `mission_progress.content_id`를 유지하므로 `visit.content_id = mission_progress.content_id`와 `visit.user_id = mission_participation.user_id`를 함께 검증한다. 참여·진행도 반영은 모두 `status = PUBLISHED AND ends_at > 현재 시각`인 미션에만 허용한다. 따라서 종료 작업이 지연돼도 종료 시각 뒤 신규 참여·진행도는 생기지 않는다.
+같은 유효 방문은 조건을 만족하는 여러 공개 미션에 각각 반영할 수 있다. 방문자 공개 목록·상세와 신규 참여는 `region.is_public = true`인 지역에만 허용하며 비공개 지역은 대상 부재와 동일하게 처리한다. 신규 참여는 미션 행을 먼저 잠근 뒤 해당 지역 행을 잠그고, 모든 잠금 획득 직후 DB 현재 시각을 한 번만 읽어 `operation_at`으로 고정한다. 지역 공개 여부와 `status = PUBLISHED AND ends_at > operation_at`을 재검증한 뒤 `joined_at = operation_at`으로 기록해 지역 비공개 전환과 직렬화한다. `mission_progress.content_id`를 유지하므로 `visit.content_id = mission_progress.content_id`, `visit.user_id = mission_participation.user_id`, `visit.region_id = mission.region_id`, `visit.checked_at >= mission_participation.joined_at`을 함께 검증한다. 참여·진행도 반영·수동 종료·자동 종료는 모두 `mission` 행을 `PESSIMISTIC_WRITE`로 먼저 잠근다. 그 뒤 참여 행이 필요하면 `mission_participation_id` 오름차순으로 잠근다. 진행도 반영은 모든 잠금 획득 직후 DB 현재 시각을 한 번만 읽어 `operation_at`으로 고정하고 `status = PUBLISHED AND ends_at > operation_at`과 참여 `IN_PROGRESS`를 재검증한다. 진행 근거의 `recorded_at`과 완료 전이의 `completed_at`은 같은 `operation_at`으로 기록하며, 종료는 잠금 획득 뒤 종료 조건을 재검증한다. `CONTENT_SET` 진행도는 이 참여 잠금을 보유한 상태에서 같은 콘텐츠 근거의 존재 여부를 확인하고, 이미 있으면 새 `mission_progress`를 만들지 않는 정상 무변경 처리로 종료한다. 따라서 여러 인스턴스가 같은 콘텐츠의 서로 다른 방문을 동시에 전달해도 콘텐츠 하나는 진행도 한 칸만 채운다. `VISIT_COUNT`는 같은 잠금 아래 서로 다른 `visit_id`를 각각 삽입하므로 같은 콘텐츠 재방문도 별도 유효 방문으로 센다. 종료 작업이 지연되거나 진행도 반영과 경합해도 종료 시각 뒤 신규 참여·진행도 또는 `ENDED_INCOMPLETE`의 완료 전이는 생기지 않는다.
+
+신규 보상 수령은 기존 수령 결과가 없는 경우에만 `coupon_policy`, `mission`, `mission_participation` 순서로 행을 잠근다. 모든 잠금 획득 직후 DB 현재 시각을 한 번만 읽어 `operation_at`으로 고정하고, 정책의 지역·발급 경로·`PUBLISHED` 상태, 미션의 `PUBLISHED` 상태와 `ends_at > operation_at`, 참여 소유자와 `COMPLETED` 상태를 다시 검증한다. 수령 생성과 수동·자동 종료가 경합하면 미션 잠금을 먼저 얻어 유효 조건을 확인한 처리만 커밋하며, 종료 또는 `ends_at` 도달 뒤에는 기존 수령 결과 재조회 외의 신규 보상 효과를 만들지 않는다.
 
 ### 5.4 쿠폰 정책과 쿠폰
 
@@ -569,9 +585,16 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 
 `issuance_identity_hash`는 서버가 발급 경로별로 결정적으로 계산한다. `VISIT`은 `(coupon_policy_id, recipient_user_id)`, `MISSION_REWARD`는 `(coupon_policy_id, recipient_user_id, mission_reward_claim_id)`, `STAMPBOOK_COMPLETION`은 `(coupon_policy_id, recipient_user_id, stampbook_reward_grant_id)`를 입력으로 사용한다. `UNIQUE (issuance_identity_hash)`와 `UNIQUE (coupon_id)`가 같은 발급을 한 쿠폰으로 수렴시킨다. 추가로 `UNIQUE (mission_reward_claim_id)`, `UNIQUE (stampbook_reward_grant_id)`를 둔다.
 
-새 쿠폰 발급은 `coupon_policy` 행을 잠근 뒤 `status = PUBLISHED`일 때만 시작한다. `DRAFT`·`PENDING_REVIEW`·`ENDED` 정책은 발급 근거가 될 수 없다. 쿠폰 생성·발급 이력·최초 `AVAILABLE` 상태 이력은 이 검증과 같은 트랜잭션으로 처리한다. 발급 식별 키 충돌은 기존 쿠폰과 발급 이력을 반환하며, 서로 다른 재전달 식별자가 와도 새 쿠폰을 만들지 않는다.
+`coupon_policy.valid_days`에는 `CHECK (valid_days BETWEEN 1 AND 365)`를 둔다. 새 쿠폰 발급은 `coupon_policy` 행을 잠근 뒤 `status = PUBLISHED`이고 `valid_days BETWEEN 1 AND 365`일 때만 시작한다. `DRAFT`·`PENDING_REVIEW`·`ENDED` 정책 또는 허용 범위를 벗어난 유효 일수는 발급 근거가 될 수 없다. 쿠폰 생성·발급 이력·최초 `AVAILABLE` 상태 이력은 이 검증과 같은 트랜잭션으로 처리한다. 발급 식별 키 충돌은 기존 쿠폰과 발급 이력을 반환하며, 서로 다른 재전달 식별자가 와도 새 쿠폰을 만들지 않는다.
 
-`coupon_policy`는 이를 완료 보상으로 참조하는 `PUBLISHED` 스탬프북 또는 미션이 하나라도 있으면 `ENDED`로 전이할 수 없다. 먼저 해당 스탬프북·미션을 종료해야 한다. 이 제약은 완료했지만 아직 수령하지 않은 사용자에게 발급 불가능한 보상을 남기지 않으며, 이미 발급된 쿠폰은 정책 종료 뒤에도 자체 만료 시각까지 사용할 수 있게 한다.
+미션 보상 수령 발급은 수령 자격 검증에 사용한 `operation_at`을 `mission_reward_claim.claimed_at`,
+`coupon.issued_at`, `coupon_issuance.issued_at`, 최초 `coupon_status_history.occurred_at`에 같은 값으로 기록한다.
+`coupon.expires_at`은 이 `operation_at`에 `coupon_policy.valid_days`일을 더한 시각이며,
+`DB 현재 시각 < coupon.expires_at`일 때만 유효하다. 최초 상태 이력은 `previous_status = null`,
+`next_status = AVAILABLE`, `reason_code = MISSION_REWARD_ISSUED`, `actor_kind = USER`로 기록한다.
+동일 보상 수령의 멱등 재요청은 저장된 쿠폰·발급·최초 상태 이력을 반환하고 새 상태 이력을 만들지 않는다.
+
+`coupon_policy`는 이를 완료 보상으로 참조하는 `PUBLISHED` 스탬프북 또는 미션이 하나라도 있으면 `ENDED`로 전이할 수 없다. 먼저 해당 스탬프북·미션을 종료해야 한다. 미션 완료자의 미수령 권리는 미션 종료와 동시에 만료되므로 종료된 미션 때문에 정책 종료를 추가로 차단하지 않는다. 이미 발급된 쿠폰은 정책 종료 뒤에도 자체 만료 시각까지 사용할 수 있다.
 
 쿠폰 상태 전이는 다음과 같다.
 
@@ -701,10 +724,11 @@ DISCREPANT payment 또는 FAILED/DISCREPANT refund
 PUBLISHED mission AND ends_at <= 현재 시각
   → status = ENDED, ended_at = 실제 처리 시각으로 조건부 전이
   → 미완료 participation은 ENDED_INCOMPLETE로 전이
+  → 완료·미수령 participation의 신규 보상 수령 권리는 만료
   → audit_event 기록
 ```
 
-참여·진행도 반영은 `ends_at`을 함께 검사하므로, 종료 배치가 늦게 실행돼도 예정 종료 시각 뒤에는 새 참여·진행도가 허용되지 않는다.
+참여·진행도 반영과 신규 보상 수령은 `ends_at`을 함께 검사하므로, 종료 배치가 늦게 실행돼도 예정 종료 시각 뒤에는 새 참여·진행도·보상 수령이 허용되지 않는다.
 
 ## 8. 회원 탈퇴와 비식별화
 
@@ -716,7 +740,7 @@ PUBLISHED mission AND ends_at <= 현재 시각
 | 스탬프·미션 진행·근거 | `user_id`를 제거하고 비개인 진행 사실·방문 근거 유지 |
 | 결제·환불 | 법정 보관용 분리 거래 기록을 제외한 운영 DB의 `user_id` 제거. `payment_idempotency.actor_user_id`는 `app_user` FK가 아닌 생성 당시 식별값으로 종결·만료 정리 전만 유지 |
 | 권한 배정 | 활성 고권한·운영 역할은 먼저 종결. 이력의 `user_id`는 제거 |
-| 감사 | `audit_event_actor_link` 제거. `target_id`는 처음부터 사용자 ID를 저장하지 않음 |
+| 감사 | `audit_event_actor_link` 제거. `target_id`는 처음부터 사용자 ID를 저장하지 않고 조회 표시는 공통 `WITHDRAWN_MEMBER`로 파생 |
 
 탈퇴 완료 뒤 새 계정이 과거 쿠폰·진행·권한을 되찾는 경로를 만들지 않는다.
 
@@ -724,6 +748,7 @@ PUBLISHED mission AND ends_at <= 현재 시각
 
 | 우선순위 | 대상 | 제약·인덱스 |
 | --- | --- | --- |
+| 높음 | `region` | 기존 `UNIQUE (region_code)`를 유지하고 대소문자를 구분하는 정규형 CHECK로 `^[A-Z][A-Z0-9]*(-[A-Z0-9]+)*$` 저장을 강제. P1 활성화 전 기존 데이터 정규형 검사·이관 |
 | 높음 | `platform_admin_assignment` | 활성 고권한 사용자당 한 배정, 활성 슈퍼 최소 한 명은 조건부 쓰기로 보호 |
 | 높음 | `user_role_assignment` | 활성 역할의 사용자·역할·지역 범위 유일성, 지역·상태 조회 인덱스 |
 | 높음 | `stampbook_progress`, `stamp_earn` | `UNIQUE (stampbook_id, user_id)`, `UNIQUE (stampbook_progress_id, visit_id)`, 콘텐츠별 적립 유일 제약 |
@@ -758,11 +783,11 @@ MySQL의 조건부 유일 제약이 필요한 활성 배정·진행 중 결제�
 
 다음은 테이블 구조가 아니라 이미 확정된 정책들 사이의 권리 경계를 정하는 항목이다. 구현·프로젝트 기준 문서 반영 전에 사용자 결정을 받아야 한다.
 
-1. 종료된 미션에서 이미 `COMPLETED`지만 아직 보상 수령을 요청하지 않은 사용자의 수령 가능 기간
-2. P0 공통 감사의 90일 보관 기간을 고권한·거래 감사에도 적용할지, 별도 보관 기간을 둘지
+1. P0 공통 감사의 90일 보관 기간을 고권한·거래 감사에도 적용할지, 별도 보관 기간을 둘지
 
 ## 12. 프로젝트 반영 순서
 
-1. 위 미확정 연결 정책을 결정한다.
-2. 프로젝트의 P1 정책 문서·API 계약과 이 ERD의 상태·제약을 같은 변경에서 일치시킨다.
-3. 그 뒤 migration·코드·통합 테스트를 구현한다.
+1. 각 P1 정책 문서가 연결한 핵심 ADR의 상태·제약과 현재 API 계약을 반영한다.
+2. 위 미확정 연결 정책을 결정한다.
+3. 프로젝트의 P1 정책 문서·API 계약과 이 ERD의 상태·제약을 같은 변경에서 일치시킨다.
+4. 그 뒤 migration·코드·통합 테스트를 구현한다.

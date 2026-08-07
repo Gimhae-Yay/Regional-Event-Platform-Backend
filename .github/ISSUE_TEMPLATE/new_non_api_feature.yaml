@@ -1,0 +1,68 @@
+name: 비-API 기능(Feature) 생성
+description: API 엔드포인트나 재현 가능한 Bug와 무관한 프로젝트·플랫폼 역량 하나의 비-API Feature를 생성합니다.
+title: "[FEATURE] "
+type: Feature
+labels:
+  - NEED_TRIAGE
+  - New Feature
+projects:
+  - Gimhae-Yay/1
+assignees: []
+
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: 문서·CI·개발 절차 Task를 통해 독립적으로 달성하고 검증할 프로젝트·플랫폼 역량 하나를 요약해 주세요.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reference-documentation
+    attributes:
+      label: Reference Documentation
+      description: 이 비-API Feature의 범위와 완료 조건을 확정한 기준 문서의 원격 커밋 permalink를 줄마다 하나씩 입력해 주세요.
+      placeholder: |
+        https://github.com/OWNER/REPOSITORY/blob/COMMIT_SHA/path/to/document.md
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: 현재 문제, 포함 범위, 제외 범위와 완료 후 달라지는 상태를 구체적으로 설명해 주세요.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: 문서 링크 검사, CI 실행 결과, 명령 출력 또는 절차 점검으로 확인할 수 있는 완료 조건을 체크박스 형식으로 작성해 주세요.
+      placeholder: |
+        - [ ] 완료 조건 1
+        - [ ] 완료 조건 2
+    validations:
+      required: true
+
+  - type: textarea
+    id: todo
+    attributes:
+      label: TODO
+      description: 비-API Feature를 완성하는 직속 하위 Task와 각 Task의 독립적인 결과를 체크박스 형식으로 작성해 주세요.
+      placeholder: |
+        - [ ] 문서 Task: 검증 가능한 결과
+        - [ ] CI Task: 검증 가능한 결과
+        - [ ] 개발 절차 Task: 검증 가능한 결과
+    validations:
+      required: true
+
+  - type: textarea
+    id: other
+    attributes:
+      label: Other
+      description: 선행 관계, 기존 Feature·Bug와의 경계, 중복 검토 결과와 기타 특이사항을 작성해 주세요.
+    validations:
+      required: false
