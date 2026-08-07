@@ -85,7 +85,6 @@ $variables = @{
     p0SoldOutContentId = '900001'
     p0SoldOutSessionId = '910002'
     p0StartedSessionId = '910003'
-    p0ReservationHoldId = '940001'
     p0ExpiredHoldId = '940002'
     p0ReservationId = '930001'
     p0CheckedInReservationId = '930003'
