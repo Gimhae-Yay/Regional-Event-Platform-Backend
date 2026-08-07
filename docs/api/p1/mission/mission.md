@@ -5,7 +5,7 @@
 | 대상 릴리스 | P1 |
 | 관련 요구사항 | `P1-FR-03`, `P1-FR-04`, `MSN-01`, `MSN-02`, `MSN-03`, `MSN-04`, `MSN-05`, `P1-AC-03`, `P1-AC-04` |
 | 소유 도메인 | 미션 |
-| 기준 문서 | [지역 미션](../../../p1/regional-mission.md), [P1 명세](../../../p1-spec.md), [P1 ERD](../../../p1-erd.md), [ADR-0066](../../../adr/0066-require-regional-admin-approval-for-p1-benefit-publication.md), [ADR-0067](../../../adr/0067-model-stampbook-and-mission-progress-from-immutable-visits.md), [ADR-0068](../../../adr/0068-use-immutable-coupon-lifecycle-and-evidence-sources.md), [ADR-0072](../../../adr/0072-validate-mission-target-content-availability-before-publication.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [지역 미션](../../../p1/regional-mission.md), [P1 명세](../../../p1-spec.md), [P1 ERD](../../../p1-erd.md), [ADR-0066](../../../adr/0066-require-regional-admin-approval-for-p1-benefit-publication.md), [ADR-0067](../../../adr/0067-model-stampbook-and-mission-progress-from-immutable-visits.md), [ADR-0068](../../../adr/0068-use-immutable-coupon-lifecycle-and-evidence-sources.md), [ADR-0088](../../../adr/0088-validate-mission-target-content-availability-before-publication.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
