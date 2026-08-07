@@ -26,11 +26,11 @@
 | --- | --- | --- |
 | P1-FR-08, PAY-06 | `GET /api/v1/me/refunds` | `refund` |
 | P1-FR-08, PAY-06 | `GET /api/v1/me/refunds/{refundId}` | `refund` |
-| P1-FR-08, P1-FR-10, PAY-05, ADM-04 | `POST /api/v1/platform-admin/payments/{paymentId}/refund` | `payment`, `refund`, `refund_attempt`, `coupon_redemption`, `payment_discrepancy`, `payment_discrepancy_action` |
+| P1-FR-08, P1-FR-10, PAY-05, ADM-04 | `POST /api/v1/platform-admin/payments/{paymentId}/refund` | `payment`, `refund`, `refund_attempt`, `coupon`, `coupon_redemption`, `coupon_status_history`, `payment_discrepancy`, `payment_discrepancy_action` |
 | P1-FR-10, ADM-04 | `GET /api/v1/platform-admin/refund-failures` | `refund`, `payment` |
 | P1-FR-10, ADM-04 | `GET /api/v1/platform-admin/refund-failures/{refundId}` | `refund`, `refund_attempt`, `payment` |
-| P1-FR-10, ADM-04 | `POST /api/v1/platform-admin/refund-failures/{refundId}/manual-actions` | `refund`, `refund_attempt` |
-| P1-FR-08, PAY-07, ADM-04 | `POST /api/v1/platform-admin/refunds/{refundId}/retry` | `refund`, `refund_attempt` |
+| P1-FR-10, ADM-04 | `POST /api/v1/platform-admin/refund-failures/{refundId}/manual-actions` | `refund`, `refund_attempt`, `coupon`, `coupon_redemption`, `coupon_status_history` |
+| P1-FR-08, PAY-07, ADM-04 | `POST /api/v1/platform-admin/refunds/{refundId}/retry` | `refund`, `refund_attempt`, `coupon`, `coupon_redemption`, `coupon_status_history` |
 
 ## 2. 공통 계약 참조
 
@@ -42,6 +42,17 @@
 | 멱등성 | [ADR-0070](../../../adr/0070-use-full-refund-with-bounded-manual-retry-and-discrepancy-closure.md) | 수동 환불은 `refund.payment_id` 유일성(결제당 최대 한 건)으로 자연 멱등하며 별도 `Idempotency-Key`를 받지 않는다. 이미 환불이 있으면 새로 만들지 않고 기존 상태를 반환한다. |
 | 감사 이력 | [P1 ERD](../../../p1-erd.md), [ADR-0071](../../../adr/0071-deidentify-p1-benefit-data-on-withdrawal-and-extend-common-audit.md) | 환불 상태 전이는 대상·처리자·이전·이후 상태·사유·증빙 참조·시각과 서버가 부여한 `requestId`를 함께 감사한다. `requestId`는 응답에 노출하지 않는다. PortOne 원문, 결제 비밀값과 전체 결제수단 정보는 저장하지 않는다. |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | 이 도메인의 모든 목록 API는 단순 목록이며 P0 관례에 따라 페이지네이션, 커서와 사용자 지정 정렬을 제공하지 않는다. |
+
+### 쿠폰 복구 계약
+
+수동 환불, 환불 재시도, 환불 실패 수동 조치와 1분 고정 지연 복구 작업 중 어느 경로에서든 `refund.status`가
+최초로 `SUCCEEDED`가 되면 다음 계약을 같은 상태 반영 트랜잭션에 적용한다.
+
+1. 환불에 연결된 예약이 `CANCELLED`이고 `reservation.cancelled_at < content_session.starts_at`인지 검증한다. 회차 시작 전 사용자·운영자 취소가 아니거나 확정 예약이 없는 결제 불일치 환불은 쿠폰을 복구하지 않는다.
+2. 가격 스냅샷에 적용 쿠폰이 있으면 예약의 `hold_id`와 가격 스냅샷의 `hold_id`, 사용 이력의 `reservation_id`·`price_snapshot_id`·`coupon_id`가 각각 환불 대상 예약·스냅샷·적용 쿠폰과 일치하는지 검증한다. 연결된 `coupon_redemption`이 `CONFIRMED`, 쿠폰이 `USED`인 경우에만 복구하며, 적용 쿠폰이 없으면 쿠폰 처리 없이 환불만 확정한다.
+3. `coupon_redemption`을 `REVERSED`로 전이하고 환불 식별자, 반전 사유와 반전 시각을 기록한다. 쿠폰은 원래 `expires_at`이 MySQL 기준 복구 시각보다 미래면 `AVAILABLE`, 그렇지 않으면 `EXPIRED`로 전이하고 `coupon_status_history`를 남긴다.
+4. 같은 환불·취소 근거로 이미 `REVERSED`인 사용 이력은 새 반전 이력이나 쿠폰 상태 전이를 만들지 않는다. 환불 재요청·재시도·수동 확정·복구 작업의 중복 실행도 최초 복구 결과로 수렴한다.
+5. 환불 `SUCCEEDED` 전이, 사용 이력 반전, 쿠폰 상태 전이·상태 이력과 `REFUND`, `COUPON` 감사 이벤트는 같은 `requestId`로 하나의 MySQL 트랜잭션에서 커밋한다.
 
 ## 기능별 API 명세
 

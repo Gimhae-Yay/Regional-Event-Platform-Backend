@@ -12,7 +12,7 @@
 활성 회원이 본인이 생성한 활성 `capacity_hold`에 대해 유료 결제를 생성한다. 최초 요청은 홀드에 연결된
 불변 `reservation_price_snapshot`을 만들고, 최종 금액이 양수이면 내부 결제 시도(`payment`, `PENDING`)를
 생성한다. 최종 금액이 0원이면 PortOne을 호출하지 않고 P0 무료 예약 확정 흐름으로 즉시 예약을 확정한다
-(`ADR-0069`). 이 API는 예약을 확정하지 않는다. 양수 결제의 예약 확정은
+(`ADR-0069`). 이 API는 0원 예약만 즉시 확정하며, 양수 결제의 예약 확정은
 [PortOne 결제 웹훅 수신](receive-portone-webhook.md)에서만 처리한다.
 
 이 API는 영속 멱등 처리 대상이다. 동일한 `Idempotency-Key`와 동일한 요청 의미의 재시도는 최초 처리 결과를
@@ -22,7 +22,7 @@
 
 | 요구사항 | HTTP 계약 | 주요 데이터 |
 | --- | --- | --- |
-| P1-FR-07, PAY-01 | `POST /api/v1/me/reservation-holds/{holdId}/payments` | `capacity_hold`, `reservation_price_snapshot`, `payment`, `payment_idempotency`, `coupon` |
+| P1-FR-07, PAY-01 | `POST /api/v1/me/reservation-holds/{holdId}/payments` | `capacity_hold`, `reservation_price_snapshot`, `payment`, `payment_idempotency`, `coupon`, `coupon_status_history`, `coupon_redemption` |
 
 ## 2. 공통 계약 참조
 
@@ -143,7 +143,7 @@ Accept: application/json
 }
 ```
 
-동일한 `Idempotency-Key`와 `holdId`로 완료된 요청을 재시도한 경우에도 최초 성공과 동일한 결과를 `201 Created`로 반환한다.
+동일한 `Idempotency-Key`, `holdId`, `couponId`로 완료된 요청을 재시도한 경우에도 최초 성공과 동일한 결과를 `201 Created`로 반환한다. 쿠폰을 적용하지 않은 요청은 `couponId = null`을 요청 의미에 포함한다.
 
 #### Response Field
 
@@ -182,9 +182,9 @@ Accept: application/json
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 결제·스냅샷·멱등 기록을 생성하지 않는다. |
 | `403` | `FORBIDDEN` | 인증 주체가 활성 회원이 아니거나 대상 홀드의 소유자가 아니다. 결제·스냅샷·멱등 기록을 생성하지 않는다. |
 | `404` | `NOT_FOUND` | 대상 홀드 또는 요청한 쿠폰이 없다. 결제·스냅샷·멱등 기록을 생성하지 않는다. |
-| `409` | `IDEMPOTENCY_KEY_CONFLICT` | 같은 회원의 `PAYMENT_CREATE` 명령에서 이미 다른 `holdId`에 사용한 `Idempotency-Key`다. 새 결제를 만들지 않으며 새 요청에는 새 키를 사용해야 한다. |
-| `409` | `IDEMPOTENCY_REQUEST_IN_PROGRESS` | 같은 회원·키·홀드의 최초 요청이 아직 처리 중이다. 새 결제를 만들지 않으며 동일 키로 재시도할 수 있다. |
-| `409` | `PAYMENT_HOLD_CONFLICT` | 홀드가 유효한 `ACTIVE`가 아니거나(만료·소비·무효화), 홀드에 다른 `Idempotency-Key`의 진행 중 `PENDING` 결제가 이미 있거나, 요청한 쿠폰이 사용 가능한 상태가 아니다. 결제·스냅샷을 생성하지 않으며 동일 상태에서 재시도해도 성공하지 않는다. |
+| `409` | `IDEMPOTENCY_KEY_CONFLICT` | 같은 회원의 `PAYMENT_CREATE` 명령에서 이미 다른 `holdId` 또는 `couponId` 조합에 사용한 `Idempotency-Key`다. 새 결제를 만들지 않으며 새 요청에는 새 키를 사용해야 한다. |
+| `409` | `IDEMPOTENCY_REQUEST_IN_PROGRESS` | 같은 회원·키·`holdId`·`couponId`의 최초 요청이 아직 처리 중이다. 새 결제를 만들지 않으며 동일 키로 재시도할 수 있다. |
+| `409` | `PAYMENT_HOLD_CONFLICT` | 홀드가 유효한 `ACTIVE`가 아니거나(만료·소비·무효화), 홀드에 다른 `Idempotency-Key`의 진행 중 `PENDING` 결제가 이미 있거나, 요청한 쿠폰이 사용 가능한 상태가 아니거나, 기존 불변 가격 스냅샷의 쿠폰 선택과 요청의 `couponId`가 다르다. 결제·스냅샷을 생성하지 않으며 동일 상태에서 재시도해도 성공하지 않는다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 예상하지 못한 서버 오류가 발생했다. 트랜잭션이 커밋되지 않은 경우 결제·스냅샷·멱등 기록을 생성하지 않으며 일시적 장애라면 동일한 `Idempotency-Key`로 재시도할 수 있다. |
 
 #### Error Response Body
@@ -202,16 +202,18 @@ Accept: application/json
 
 1. 인증 주체는 `ACTIVE` 상태의 회원이며 대상 홀드의 `user_id`와 일치해야 한다.
 2. `holdId`, `Idempotency-Key`의 필수 여부와 형식을 먼저 검증한다.
-3. 멱등 키의 논리 유일 범위는 `(actor_user_id, operation = PAYMENT_CREATE, idempotency_key_hash)`다. 같은 키·같은 `request_hash`면 `payment_idempotency`에 연결된 기존 결제 또는 0원 확정 결과를 재구성해 반환하고 새 스냅샷·결제·멱등 작업을 실행하지 않는다. 같은 키·다른 요청 해시는 `409 IDEMPOTENCY_KEY_CONFLICT`로 거부한다.
+3. 멱등 키의 논리 유일 범위는 `(actor_user_id, operation = PAYMENT_CREATE, idempotency_key_hash)`다. `request_hash`는 정규화한 `(holdId, couponId)`로 계산하고 쿠폰을 적용하지 않으면 `couponId = null`을 포함한다. 같은 키·같은 요청 해시면 `payment_idempotency`에 연결된 기존 결제 또는 0원 확정 결과를 재구성해 반환하고 새 스냅샷·결제·멱등 작업을 실행하지 않는다. 같은 키·다른 요청 해시는 `409 IDEMPOTENCY_KEY_CONFLICT`로 거부한다.
 4. 대상 홀드는 유효한 `ACTIVE` 상태여야 하고 `expires_at`이 MySQL 기준 현재 시각보다 미래여야 한다.
 5. 홀드에 이미 다른 `Idempotency-Key`로 생성된 진행 중 `PENDING` 결제가 있으면 새 결제를 만들지 않고 `409 PAYMENT_HOLD_CONFLICT`로 거부한다. 홀드당 진행 중 결제는 최대 하나다.
 6. 홀드에 아직 `reservation_price_snapshot`이 없으면 이 요청에서 한 번만 생성한다(`UNIQUE (hold_id)`). 같은 홀드의 재시도는 항상 같은 스냅샷을 사용한다.
-7. `couponId`를 제공하면 쿠폰이 인증 회원 소유이고 `AVAILABLE` 상태이며 스냅샷 대상 콘텐츠의 지역과 일치하는지 검증한 뒤 `RESERVED`로 전이하고 스냅샷에 연결한다. 한 스냅샷에는 쿠폰을 최대 하나만 연결한다.
+7. `couponId`를 제공하면 쿠폰이 인증 회원 소유이고 `AVAILABLE` 상태이며 만료 전이고, 정책 콘텐츠·지역이 홀드 회차와 일치하며 기본 금액이 최소 결제 금액 이상인지 검증한다. 검증에 성공하면 `AVAILABLE → RESERVED`와 상태 이력을 기록하고 스냅샷에 연결한다. 기존 스냅샷을 재사용하면 요청 `couponId`는 기존 적용 쿠폰과 `null` 여부까지 같아야 하며 한 스냅샷에는 쿠폰을 최대 하나만 연결한다.
 8. `final_amount = base_amount - discount_amount`를 계산한다.
 9. `final_amount > 0`이면 `order_id`를 발급하고 `payment(PENDING)`을 생성해 스냅샷·홀드에 연결한다. PortOne은 호출하지 않는다. 클라이언트는 응답의 `orderId`로 PortOne 결제 절차를 계속한다.
-10. `final_amount = 0`이면 `payment` 행을 만들지 않고 P0 무료 예약 확정 흐름을 그대로 사용해 홀드를 `CONSUMED`로 전환하고 `CONFIRMED` 예약을 생성한다. 쿠폰을 적용했으면 같은 트랜잭션에서 `coupon_redemption(CONFIRMED)`도 생성한다.
-11. 스냅샷 생성(또는 재사용), 쿠폰 상태 전이, 결제 생성 또는 0원 확정과 멱등 기록 점유는 하나의 MySQL 트랜잭션에서 커밋한다.
-12. 오류가 발생하면 스냅샷·결제·쿠폰 전이·예약을 반영하지 않는다.
-13. `payment.hold_id`, `payment.reservation_price_snapshot_id`는 `NOT NULL`이며 홀드당 진행 중 `PENDING` 결제는 유일하다. `payment_idempotency`의 `(actor_user_id, operation, idempotency_key_hash)`는 유일하며 `actor_user_id`는 `app_user`를 참조하지 않는 비-FK 식별값이다.
-14. 0원 확정 성공은 P0와 동일하게 `CAPACITY_HOLD`, `RESERVATION` 감사 이벤트 두 건을 같은 `requestId`로 기록한다. 양수 결제 생성 성공은 결제 시도만 기록하며 예약 관련 감사 이벤트는 [PortOne 결제 웹훅 수신](receive-portone-webhook.md)에서 기록한다.
-15. 결제 종결 시 `payment_idempotency.expires_at = payment.finalized_at + 24시간`으로 정하며, 만료한 종결 기록만 정리한다.
+10. `final_amount = 0`이면 `payment` 행을 만들지 않는다. P0 무료 예약 확정의 도메인 잠금·조건부 전이 규칙을 재사용하되 P0 공개 확정 API를 호출하지 않고, 홀드를 `CONSUMED`로 전환해 `CONFIRMED` 예약을 생성한다. 쿠폰을 적용했으면 같은 트랜잭션에서 `RESERVED → USED`, 상태 이력과 `coupon_redemption(CONFIRMED)`도 기록한다.
+11. 도메인 행 잠금과 조건부 전이는 `content → content_session → capacity_hold → reservation_price_snapshot → payment → coupon` 순서를 따른다. 생성할 행은 해당 위치에서 유일 제약을 사용하고, 존재하는 행은 잠금 획득 뒤 상태·소유권·유효 시각을 다시 검증한다. 없는 `payment` 또는 쿠폰을 적용하지 않는 경우 해당 단계를 건너뛴다.
+12. `payment_idempotency` 점유, 스냅샷 생성 또는 재사용, 쿠폰 상태 전이, 양수 결제 생성 또는 0원 예약 확정은 하나의 MySQL 트랜잭션에서 커밋한다. 멱등 키 점유는 도메인 행 잠금 순서에 포함하지 않는다.
+13. 이 API는 PortOne을 호출하지 않으며 외부 호출을 기다리는 동안 데이터베이스 잠금을 유지하지 않는다.
+14. 오류가 발생하면 스냅샷·결제·쿠폰 전이·예약을 반영하지 않는다.
+15. `payment.hold_id`, `payment.reservation_price_snapshot_id`는 `NOT NULL`이며 홀드당 진행 중 `PENDING` 결제는 유일하다. `payment_idempotency`의 `(actor_user_id, operation, idempotency_key_hash)`는 유일하며 `actor_user_id`는 `app_user`를 참조하지 않는 비-FK 식별값이다.
+16. 0원 확정 성공은 P0와 동일하게 `CAPACITY_HOLD`, `RESERVATION` 감사 이벤트 두 건을 같은 `requestId`로 기록하고 쿠폰 상태 전이를 함께 감사한다. 양수 결제 생성 성공은 결제 시도와 쿠폰 선점을 기록하며 예약 관련 감사 이벤트는 [PortOne 결제 웹훅 수신](receive-portone-webhook.md)에서 기록한다.
+17. 양수 결제는 결제 종결 시 `payment_idempotency.expires_at = payment.finalized_at + 24시간`, 0원 확정은 예약 확정 완료 시각부터 24시간으로 정하며 만료한 종결 기록만 정리한다.

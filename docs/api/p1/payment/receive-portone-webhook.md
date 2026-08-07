@@ -25,7 +25,7 @@ PortOne이 결제 이벤트를 서버 간 호출로 통지하면 서명을 검�
 
 | 요구사항 | HTTP 계약 | 주요 데이터 |
 | --- | --- | --- |
-| P1-FR-07, PAY-02, PAY-03, PAY-04 | `POST /api/v1/webhooks/portone` | `payment_webhook`, `payment`, `payment_verification`, `capacity_hold`, `reservation`, `coupon_redemption`, `payment_discrepancy` |
+| P1-FR-07, PAY-02, PAY-03, PAY-04 | `POST /api/v1/webhooks/portone` | `payment_webhook`, `payment`, `payment_verification`, `capacity_hold`, `reservation`, `coupon`, `coupon_status_history`, `coupon_redemption`, `payment_discrepancy` |
 
 ## 2. 공통 계약 참조
 
@@ -130,7 +130,7 @@ Content-Type: application/json; charset=UTF-8
 | --- | --- | --- |
 | `400` | `INVALID_JSON` | 요청 본문이 JSON 형식이 아니거나 필수 필드가 없다. `payment_webhook`을 생성하지 않는다. |
 | `401` | `WEBHOOK_SIGNATURE_INVALID` | 서명 헤더가 없거나 검증에 실패했다. `payment_webhook`을 생성하지 않고 어떤 도메인 상태도 변경하지 않는다. |
-| `500` | `INTERNAL_SERVER_ERROR` | `PENDING` 결제의 PortOne 조회 자체가 타임아웃·연결 실패·5xx로 끝났거나 예상하지 못한 서버 오류가 발생했다. `payment_webhook`·`payment_verification`을 남기지 않고 결제·예약 상태를 변경하지 않으며, PortOne이 이 응답을 받으면 웹훅을 재전송하므로 이후 조회를 다시 시도할 수 있다. |
+| `500` | `INTERNAL_SERVER_ERROR` | `PENDING` 또는 홀드 종결로 `EXPIRED`가 된 결제의 PortOne 조회 자체가 타임아웃·연결 실패·5xx로 끝났거나 예상하지 못한 서버 오류가 발생했다. `payment_webhook`·`payment_verification`을 남기지 않고 결제·예약 상태를 변경하지 않으며, PortOne이 이 응답을 받으면 웹훅을 재전송하므로 이후 조회를 다시 시도할 수 있다. |
 
 #### Error Response Body
 
@@ -148,17 +148,20 @@ Content-Type: application/json; charset=UTF-8
 1. 서명 검증에 실패하면 `payment_webhook`을 생성하지 않고 결제·예약 상태를 변경하지 않는다.
 2. `eventId`(`provider_event_id`)가 이미 처리된 값이면 새로운 도메인 처리를 실행하지 않고 `200 OK`를 반환한다(`UNIQUE (provider_event_id)`).
 3. `paymentId`(`order_id`)로 대상 결제를 찾지 못하면 `payment_webhook.payment_id = null`로 수신·인증 결과를 기록하고 `200 OK`를 반환한다.
-4. 대상 결제를 찾았고 이미 종결 상태(`APPROVED`, `DECLINED`, `CANCELLED`, `EXPIRED`, `DISCREPANT`)이면 PortOne을 다시 조회하지 않고 저장된 상태를 유지한다. 홀드·예약·쿠폰을 다시 변경하지 않는다.
-5. 대상 결제가 `PENDING`이면 서버가 `payment.order_id`로 PortOne V2 거래를 조회한다. 조회 자체가 타임아웃·연결 실패·5xx로 끝나면 `payment_webhook`·`payment_verification`을 남기지 않고 트랜잭션을 커밋하지 않은 채 `500 INTERNAL_SERVER_ERROR`로 응답해 PortOne의 재전송을 유도한다. 조회에 성공해 응답을 받으면 사용한 외부 응답 요약과 판정 결과를 `payment_verification`에 기록한다.
-6. 검증은 외부 거래 식별자, 금액, 통화, 주문 식별자와 홀드·가격 스냅샷 대상의 일치 여부를 확인한다. 하나라도 다르면 성공 상태로 전이하지 않는다.
-7. PortOne이 아직 완료되지 않은 거래를 보고하면 `payment.status`는 `PENDING`을 유지한다.
-8. PortOne이 명시적 거절을 보고하면 `payment.status`를 `DECLINED`로 전이한다. 예약은 생성하지 않으며 홀드는 소비하지 않는다.
-9. 검증에 성공하면 같은 트랜잭션에서 홀드를 `ACTIVE → CONSUMED`로 전이하고 `CONFIRMED` 예약을 생성하며, 스냅샷에 적용 쿠폰이 있으면 `coupon_redemption(CONFIRMED)`을 생성하고, `payment.status`를 `APPROVED`로 전이한다.
-10. 늦은 승인(홀드가 이미 만료·소비·무효화된 뒤의 외부 성공)이거나 금액·주문 식별자·대상이 일치하지 않으면 예약을 되살리거나 강제로 확정하지 않고 `payment.status`를 `DISCREPANT`로 전이한 뒤 `discrepancy_type`(`LATE_APPROVAL`, `AMOUNT_MISMATCH`, `ORDER_MISMATCH`, `TARGET_MISMATCH` 중 해당하는 값)과 함께 `payment_discrepancy`를 생성한다.
-11. 같은 결제에 대한 웹훅 이벤트가 재전송되거나 순서가 뒤바뀌어 동시에 도착해도 결제 행 잠금 또는 조건부 전이로 하나의 처리만 상태를 변경하고 나머지는 그 결과를 그대로 따른다.
-12. 외부 서비스 지연·실패가 발생해도 PortOne 응답을 기다리는 동안 다른 요청을 막는 장시간 데이터베이스 잠금을 유지하지 않는다.
-13. 서명이 유효하고 PortOne 조회가 필요 없거나 조회에 성공했다면 결제 종결·검증 결과와 무관하게 항상 `200 OK`로 응답한다. 검증 로직 내부에서 발생한 불일치는 `DISCREPANT` 전이와 `payment_discrepancy` 생성으로 처리하며 이 API의 HTTP 응답 자체를 오류로 바꾸지 않는다. 5번의 PortOne 조회 자체 실패만 예외로 `500`을 반환한다.
-14. 검증 성공에 따른 홀드 소비·예약 생성은 P0와 동일하게 `CAPACITY_HOLD`, `RESERVATION` 감사 이벤트 두 건을 같은 `requestId`로 기록하고, 결제 승인은 `PAYMENT` 감사 이벤트로 함께 기록한다.
-15. `DISCREPANT` 전이는 원본 외부 응답 해시와 내부 판정 결과를 `payment_verification`에 남기고 `payment_discrepancy`를 생성하는 것으로 대체하며, 예약·홀드 상태를 임의로 확정하지 않는다.
-16. 웹훅 원문, 서명 원문, PortOne 원문과 비밀값과 전체 결제수단 정보는 저장하지 않는다. `payment_webhook`에는 정규화한 필드, 인증 결과, 처리 결과와 원문 해시만 남긴다.
-17. 서명 검증 실패는 감사 대상 상태 변경이 없으므로 `audit_event`를 생성하지 않고 구조화 로그로만 관찰한다.
+4. 대상 결제를 찾았고 이미 종결 상태가 `APPROVED`, `DECLINED`, `CANCELLED`, `DISCREPANT`이면 PortOne을 다시 조회하지 않고 저장된 상태를 유지한다. 홀드·예약·쿠폰을 다시 변경하지 않는다. 홀드 종결 작업이 만든 `EXPIRED`는 늦은 외부 성공 확인 대상이므로 이 조기 반환에 포함하지 않는다.
+5. 대상 결제가 `PENDING` 또는 홀드 종결로 `EXPIRED`가 된 상태면 데이터베이스 행 잠금을 획득하기 전에 `payment.order_id`로 PortOne V2 거래를 조회한다. 조회 자체가 타임아웃·연결 실패·5xx로 끝나면 `payment_webhook`·`payment_verification`을 남기지 않고 `500 INTERNAL_SERVER_ERROR`로 응답해 PortOne의 재전송을 유도한다.
+6. 조회에 성공하면 외부 거래 식별자, 금액, 통화, 주문 식별자와 홀드·가격 스냅샷 대상의 일치 여부를 검증해 외부 응답 요약과 판정 결과를 준비한다. 준비한 결과는 14번의 상태 반영 트랜잭션에서 `payment_verification`에 기록하며, 하나라도 다르면 성공 상태로 전이하지 않는다.
+7. 외부 조회 뒤 상태 반영 트랜잭션의 도메인 행 잠금과 조건부 전이는 `content → content_session → capacity_hold → reservation_price_snapshot → payment → coupon` 순서를 따른다. 잠금 획득 뒤 콘텐츠·회차·홀드·스냅샷 연결과 결제·쿠폰 상태를 다시 검증하며, 쿠폰을 적용하지 않은 경우 마지막 단계를 건너뛴다.
+8. 결제 행을 잠근 시점에 `APPROVED`, `DECLINED`, `CANCELLED`, `DISCREPANT`이면 새 도메인 처리를 실행하지 않고 저장된 결과를 따른다. `PENDING` 또는 홀드 종결로 `EXPIRED`가 된 상태면 조회 결과에 따른 전이를 계속한다.
+9. PortOne이 아직 완료되지 않은 거래를 보고하면 기존 결제가 `PENDING`일 때만 `PENDING`과 쿠폰 선점을 유지한다. 기존 결제가 `EXPIRED`이면 결제 종결과 이미 수행한 쿠폰 선점 해제를 유지한다.
+10. PortOne이 명시적 거절을 보고하면 기존 결제가 `PENDING`일 때 예약과 홀드를 변경하지 않고 `payment.status`를 `DECLINED`로 전이하며, 스냅샷에 `RESERVED` 쿠폰이 있으면 원래 만료 시각 전에는 `AVAILABLE`, 지났으면 `EXPIRED`로 전이하고 상태 이력을 기록한다. 기존 결제가 `EXPIRED`이면 결제와 쿠폰의 종결 결과를 유지한다.
+11. 검증에 성공하면 같은 트랜잭션에서 홀드를 `ACTIVE → CONSUMED`로 전이하고 `CONFIRMED` 예약을 생성하며 `payment.status`를 `APPROVED`로 전이한다. 스냅샷에 적용 쿠폰이 있으면 같은 스냅샷에 선점된 `RESERVED`인지 확인한 뒤 `RESERVED → USED`, 상태 이력과 `coupon_redemption(CONFIRMED)`을 함께 기록한다.
+12. 늦은 승인(홀드가 이미 만료·소비·무효화됐거나 결제가 홀드 종결로 `EXPIRED`가 된 뒤의 외부 성공)이거나 금액·주문 식별자·대상이 일치하지 않으면 예약을 되살리거나 강제로 확정하지 않고 `payment.status`를 `DISCREPANT`로 전이한 뒤 `discrepancy_type`(`LATE_APPROVAL`, `AMOUNT_MISMATCH`, `ORDER_MISMATCH`, `TARGET_MISMATCH` 중 해당하는 값)과 함께 `payment_discrepancy`를 생성한다. 확정 예약이 없고 스냅샷의 쿠폰이 아직 `RESERVED`이면 만료 여부에 따라 `AVAILABLE` 또는 `EXPIRED`로 선점을 해제한다. 홀드 종결에서 이미 선점을 해제했다면 새 쿠폰 전이를 만들지 않는다.
+13. 같은 결제에 대한 웹훅 이벤트가 재전송되거나 순서가 뒤바뀌어 동시에 도착해도 잠금과 조건부 전이로 하나의 처리만 결제·홀드·예약·쿠폰 상태를 변경하고 나머지는 그 결과를 그대로 따른다.
+14. 결제 상태 전이, 홀드 소비, 예약 생성, 쿠폰 상태와 사용 이력 또는 선점 해제, 웹훅·검증·불일치 기록은 해당 결과별 하나의 MySQL 트랜잭션에서 커밋한다.
+15. 외부 서비스 지연·실패가 발생해도 PortOne 응답을 기다리는 동안 데이터베이스 잠금을 유지하지 않는다.
+16. 서명이 유효하고 PortOne 조회가 필요 없거나 조회에 성공했다면 결제 종결·검증 결과와 무관하게 항상 `200 OK`로 응답한다. 검증 로직 내부에서 발생한 불일치는 `DISCREPANT` 전이와 `payment_discrepancy` 생성으로 처리하며 이 API의 HTTP 응답 자체를 오류로 바꾸지 않는다. 5번의 PortOne 조회 자체 실패만 예외로 `500`을 반환한다.
+17. 검증 성공에 따른 홀드 소비·예약 생성은 P0와 동일하게 `CAPACITY_HOLD`, `RESERVATION` 감사 이벤트 두 건을 같은 `requestId`로 기록하고, 결제 승인과 쿠폰 상태 전이는 각각 `PAYMENT`, `COUPON` 감사 이벤트로 함께 기록한다.
+18. `DECLINED`·`DISCREPANT` 전이와 쿠폰 선점 해제도 같은 `requestId`로 감사한다. `DISCREPANT`는 원본 외부 응답 해시와 내부 판정 결과를 `payment_verification`에 남기고 `payment_discrepancy`를 생성하며 예약·홀드 상태를 임의로 확정하지 않는다.
+19. 웹훅 원문, 서명 원문, PortOne 원문과 비밀값과 전체 결제수단 정보는 저장하지 않는다. `payment_webhook`에는 정규화한 필드, 인증 결과, 처리 결과와 원문 해시만 남긴다.
+20. 서명 검증 실패는 감사 대상 상태 변경이 없으므로 `audit_event`를 생성하지 않고 구조화 로그로만 관찰한다.

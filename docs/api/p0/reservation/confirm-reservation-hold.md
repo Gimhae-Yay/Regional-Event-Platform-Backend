@@ -1,6 +1,7 @@
 ## 4. 활성 홀드의 무료 예약 확정
 
 활성 회원이 자신이 생성한 유효한 `ACTIVE` 홀드를 무료 예약으로 한 번만 확정한다.
+P1 가격 스냅샷, 결제 또는 선점 쿠폰이 연결된 홀드는 이 API로 확정하지 않고 해당 P1 확정 흐름에서 처리한다.
 성공하면 정원을 추가로 차감하지 않고 홀드를 `CONSUMED`로 전환하며 `CONFIRMED` 예약을 생성한다.
 
 예약 확정은 영속 멱등 처리 대상이다. 동일한 `Idempotency-Key`와 `holdId`를 재전송하면 최초 성공 결과를 반환한다.
@@ -108,7 +109,7 @@ Accept: application/json
 | `404` | `NOT_FOUND` | 대상 홀드를 찾을 수 없다. 멱등 기록, 홀드와 예약은 변경하지 않으며 홀드 식별자를 확인한 뒤 재시도할 수 있다. |
 | `409` | `IDEMPOTENCY_KEY_CONFLICT` | 같은 회원의 `RESERVATION_CONFIRM` 명령에서 이미 다른 `holdId`에 사용한 `Idempotency-Key`다. 새 예약을 만들지 않으며 같은 키로 재시도할 수 없고 새 요청에는 새 키를 사용해야 한다. |
 | `409` | `IDEMPOTENCY_REQUEST_IN_PROGRESS` | 같은 회원·키·홀드의 최초 요청이 아직 처리 중이다. 새 예약을 만들지 않으며 동일 키로 재시도할 수 있다. |
-| `409` | `RESERVATION_CONFIRM_CONFLICT` | 홀드가 유효한 `ACTIVE`가 아니거나, 회원·콘텐츠·회차가 예약 가능하지 않거나, 회차 시작 시각이 도래했거나, 다른 확정·만료·무효화 전이가 먼저 성공했다. 예약은 생성하지 않으며 동일 상태에서 재시도해도 성공하지 않으므로 상태를 확인한 뒤 새 홀드 생성 여부를 판단해야 한다. |
+| `409` | `RESERVATION_CONFIRM_CONFLICT` | 홀드가 유효한 `ACTIVE`가 아니거나, 회원·콘텐츠·회차가 예약 가능하지 않거나, 회차 시작 시각이 도래했거나, P1 가격 스냅샷·결제·선점 쿠폰이 연결됐거나, 다른 확정·만료·무효화 전이가 먼저 성공했다. 예약은 생성하지 않으며 동일 상태에서 재시도해도 성공하지 않으므로 상태를 확인한 뒤 새 홀드 생성 여부를 판단해야 한다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 예약 확정 중 예상하지 못한 서버 오류가 발생했다. 트랜잭션이 커밋되지 않은 경우 멱등 성공 기록, 홀드와 예약은 변경하지 않으며 일시적 장애라면 동일한 `Idempotency-Key`로 재시도할 수 있다. |
 
 #### Error Response Body
@@ -132,7 +133,7 @@ Accept: application/json
 6. 같은 멱등 키에 다른 `holdId`를 요청하면 `409 IDEMPOTENCY_KEY_CONFLICT`로 거부한다.
 7. 같은 멱등 키와 같은 `holdId`의 최초 요청이 `PROCESSING`이면 `409 IDEMPOTENCY_REQUEST_IN_PROGRESS`로 응답한다. DB 대기 제한은 운영 설정으로 짧게 관리하며, 제한을 넘긴 뒤에도 새 도메인 작업을 실행하거나 `PROCESSING` 기록을 자동 탈취하지 않는다.
 8. 대상 홀드는 유효한 `ACTIVE` 상태여야 하고 `expires_at`이 MySQL 기준 현재 시각보다 미래여야 한다.
-9. 예약 확정은 콘텐츠·회차·홀드 상태 전이와 관련된 잠금 및 조건부 전이를 `content → content_session → capacity_hold` 순서로 수행한다. `content`와 `content_session` 잠금을 획득한 뒤 대상 콘텐츠가 `PUBLISHED`, 회차가 `SCHEDULED`이고 MySQL 기준 현재 시각이 회차 시작 전인지 다시 확인한다.
+9. 예약 확정은 콘텐츠·회차·홀드 상태 전이와 관련된 잠금 및 조건부 전이를 `content → content_session → capacity_hold` 순서로 수행한다. `content`와 `content_session` 잠금을 획득한 뒤 대상 콘텐츠가 `PUBLISHED`, 회차가 `SCHEDULED`이고 MySQL 기준 현재 시각이 회차 시작 전인지 다시 확인한다. `capacity_hold` 잠금을 획득한 뒤에는 P1 가격 스냅샷, 결제 또는 선점 쿠폰 연결이 없는지 다시 확인하며 하나라도 있으면 `409 RESERVATION_CONFIRM_CONFLICT`로 거부하고 홀드를 소비하지 않는다.
 10. 유효한 홀드는 `ACTIVE → CONSUMED`으로 조건부 전이하고, 같은 트랜잭션에서 `CONFIRMED` 예약을 한 건 생성한다.
 11. 예약은 홀드의 `region_id`, `session_id`, `user_id`와 일치시킨다. `reservation.hold_id`의 유일 제약으로 한 홀드당 예약을 최대 한 건만 허용한다.
 12. 예약 확정은 홀드 생성 시 이미 확보한 정원을 소비하므로 `content_session.remaining_capacity`를 추가로 차감하거나 복구하지 않는다.

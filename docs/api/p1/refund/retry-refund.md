@@ -17,7 +17,7 @@
 
 | 요구사항 | HTTP 계약 | 주요 데이터 |
 | --- | --- | --- |
-| P1-FR-08, PAY-07, ADM-04 | `POST /api/v1/platform-admin/refunds/{refundId}/retry` | `refund`, `refund_attempt` |
+| P1-FR-08, PAY-07, ADM-04 | `POST /api/v1/platform-admin/refunds/{refundId}/retry` | `refund`, `refund_attempt`, `coupon`, `coupon_redemption`, `coupon_status_history` |
 
 ## 2. 공통 계약 참조
 
@@ -132,9 +132,9 @@ Accept: application/json
 2. 대상 환불은 `FAILED`여야 한다. `DISCREPANT`는 [환불 실패 수동 조치](resolve-refund-failure.md)로 먼저 `FAILED`를 확정해야 하며, 그 외 상태는 `409 REFUND_STATE_CONFLICT`로 거부한다.
 3. 기존 `refund_attempt`의 최대 `attempt_no`가 3이면 더 이상 재시도할 수 없고 `409 REFUND_STATE_CONFLICT`로 거부한다.
 4. 외부 호출 직전에 `refund_attempt(PENDING, attempt_no = 기존 최대값 + 1)`를 기록해 시도 번호를 점유한다. PortOne 환불 호출의 최대 응답 대기 시간은 30초다.
-5. 응답을 받으면 외부 상태와 응답 원문 해시를 저장해 `RESPONDED`로 확정한다. 성공이면 `refund`를 `SUCCEEDED`로 전이하고 `completed_at`을 기록하며, 명시적 실패면 `FAILED`를 유지한다.
+5. 응답을 받으면 외부 상태와 응답 원문 해시를 저장해 `RESPONDED`로 확정한다. 성공이면 `refund`를 `SUCCEEDED`로 전이하고 `completed_at`을 기록하며 [환불 공통 쿠폰 복구 계약](refund.md#쿠폰-복구-계약)을 같은 상태 반영 트랜잭션에 적용한다. 명시적 실패면 `FAILED`를 유지하고 쿠폰을 복구하지 않는다.
 6. 타임아웃·연결 단절·네트워크 실패처럼 응답을 받지 못하면 응답 값은 저장하지 않고 비밀값 없는 실패 사유와 함께 `NO_RESPONSE`로 확정하며, `refund`를 `DISCREPANT`로 전이한다. 이 시도도 총 3회에 포함되며, 다음 재시도 전에 수동 조치로 다시 확정해야 한다.
-7. 응답 확정 전 프로세스가 종료돼 `PENDING`으로 남은 시도는 이 API가 아니라 1분 고정 지연 복구 작업이 PortOne 재조회로 같은 시도 행을 확정하며, 새 `attempt_no`나 외부 호출을 만들지 않는다.
+7. 응답 확정 전 프로세스가 종료돼 `PENDING`으로 남은 시도는 이 API가 아니라 1분 고정 지연 복구 작업이 PortOne 재조회로 같은 시도 행을 확정하며, 새 `attempt_no`나 외부 호출을 만들지 않는다. 재조회 결과가 최초 `SUCCEEDED`면 같은 상태 반영 트랜잭션에 [환불 공통 쿠폰 복구 계약](refund.md#쿠폰-복구-계약)을 적용한다.
 8. 이중 승인은 적용하지 않는다. 처리자 1명의 요청만으로 재시도가 확정된다.
-9. 재시도와 서버가 부여한 `requestId`를 포함한 `REFUND` 감사 이력은 하나의 트랜잭션으로 처리한다.
+9. 재시도와 서버가 부여한 `requestId`를 포함한 `REFUND` 감사 이력을 처리하고, 쿠폰을 복구한 경우 같은 `requestId`의 `COUPON` 감사 이력을 함께 기록한다.
 10. 결제 비밀값, PortOne 원문과 전체 결제수단 정보는 저장하지 않는다.

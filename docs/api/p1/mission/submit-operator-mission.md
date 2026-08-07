@@ -77,7 +77,7 @@ Accept: application/json
 2. 미션 잠금 획득 뒤 현재 `rewardCouponPolicyId`가 잠근 정책 식별자와 같은지 다시 확인한다. 동시 수정으로 연결이
    달라졌으면 다른 정책을 추가로 잠그지 않고 `409 MISSION_STATE_CONFLICT`로 종료한다.
 3. 현재 상태가 `DRAFT`이고 공개 조건과 보상 정의가 확정됐는지 검증한다. 보상 정책은 미션과 같은 지역,
-   `issuance_type = MISSION_REWARD`, 상태가 `DRAFT`, `PENDING_REVIEW`, `PUBLISHED`
+   `issuance_type = MISSION_REWARD`, 상태가 `DRAFT`, `PUBLISHED`
    중 하나여야 한다. 제출 뒤 정책 상태가 바뀌면 승인 API에서 다시 검증한다.
 4. 성공 시 미션 상태와 `DRAFT → PENDING_REVIEW`, `reason_code = MISSION_SUBMITTED`인 감사 이벤트를
    같은 트랜잭션으로 기록한다.
