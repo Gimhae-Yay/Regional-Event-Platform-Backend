@@ -1,3 +1,5 @@
+name: regional-event
+
 services:
   api:
     image: ${API_IMAGE:?API_IMAGE must be set}
