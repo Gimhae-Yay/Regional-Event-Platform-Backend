@@ -16,6 +16,9 @@ services:
       QR_ACTIVE_KEY_ID: ${QR_ACTIVE_KEY_ID:?QR_ACTIVE_KEY_ID must be set}
       QR_ACTIVE_KEY: ${QR_ACTIVE_KEY:?QR_ACTIVE_KEY must be set}
       QR_TOKEN_TTL: ${QR_TOKEN_TTL:?QR_TOKEN_TTL must be set}
+      STORAGE_S3_ENABLED: ${STORAGE_S3_ENABLED:-false}
+      STORAGE_S3_BUCKET_NAME: ${STORAGE_S3_BUCKET_NAME:-}
+      STORAGE_S3_REGION: ${STORAGE_S3_REGION:-}
     ports:
       - "${API_PORT:-8080}:8080"
     depends_on:
