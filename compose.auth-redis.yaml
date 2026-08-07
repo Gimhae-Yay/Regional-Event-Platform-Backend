@@ -3,6 +3,7 @@ services:
     image: ${API_IMAGE:?API_IMAGE must be set}
     restart: unless-stopped
     environment:
+      SPRING_PROFILES_ACTIVE: prod
       AUTH_REDIS_HOST: auth-redis
       AUTH_REDIS_PORT: 6379
       SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:?SPRING_DATASOURCE_URL must be set}
@@ -15,6 +16,9 @@ services:
       QR_ACTIVE_KEY_ID: ${QR_ACTIVE_KEY_ID:?QR_ACTIVE_KEY_ID must be set}
       QR_ACTIVE_KEY: ${QR_ACTIVE_KEY:?QR_ACTIVE_KEY must be set}
       QR_TOKEN_TTL: ${QR_TOKEN_TTL:?QR_TOKEN_TTL must be set}
+      STORAGE_S3_ENABLED: ${STORAGE_S3_ENABLED:-false}
+      STORAGE_S3_BUCKET_NAME: ${STORAGE_S3_BUCKET_NAME:-}
+      STORAGE_S3_REGION: ${STORAGE_S3_REGION:-}
     ports:
       - "${API_PORT:-8080}:8080"
     depends_on:
