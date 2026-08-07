@@ -1,0 +1,59 @@
+@baseUrl = http://localhost:8080
+@operatorAccessToken =
+@otherOperatorAccessToken =
+@contentId =
+@sessionId =
+@reservationNo =
+@missingReservationNo = R99999999NOTFOUND
+
+# P0 운영자 예약 관리
+# 선행 조건:
+# - operatorAccessToken은 대상 콘텐츠 소유 운영자의 토큰이어야 한다.
+# - contentId는 운영자가 소유한 콘텐츠, sessionId는 해당 콘텐츠의 SCHEDULED/COMPLETED/CANCELLED 회차여야 한다.
+# - reservationNo는 대상 운영자가 조회할 수 있는 예약번호여야 한다.
+
+### 1. 운영자 회차별 예약 목록 조회 - 200 OK 기대
+GET {{baseUrl}}/api/v1/operator/contents/{{contentId}}/reservations?sessionId={{sessionId}}
+Authorization: Bearer {{operatorAccessToken}}
+Accept: application/json
+
+### 2. 운영자 회차별 예약 목록 조회 - sessionId 누락, 400 INVALID_INPUT 기대
+GET {{baseUrl}}/api/v1/operator/contents/{{contentId}}/reservations
+Authorization: Bearer {{operatorAccessToken}}
+Accept: application/json
+
+### 3. 운영자 회차별 예약 목록 조회 - 잘못된 contentId, 400 INVALID_INPUT 기대
+GET {{baseUrl}}/api/v1/operator/contents/not-number/reservations?sessionId={{sessionId}}
+Authorization: Bearer {{operatorAccessToken}}
+Accept: application/json
+
+### 4. 타 운영자 회차별 예약 목록 조회 - 403 FORBIDDEN 또는 404 NOT_FOUND 기대
+GET {{baseUrl}}/api/v1/operator/contents/{{contentId}}/reservations?sessionId={{sessionId}}
+Authorization: Bearer {{otherOperatorAccessToken}}
+Accept: application/json
+
+### 5. 운영자 예약번호 보조 조회 - 200 OK 기대
+GET {{baseUrl}}/api/v1/operator/reservations/search?reservationNo={{reservationNo}}
+Authorization: Bearer {{operatorAccessToken}}
+Accept: application/json
+
+### 6. 운영자 예약번호 보조 조회 - reservationNo 공백, 400 INVALID_INPUT 기대
+GET {{baseUrl}}/api/v1/operator/reservations/search?reservationNo=
+Authorization: Bearer {{operatorAccessToken}}
+Accept: application/json
+
+### 7. 운영자 예약번호 보조 조회 - 존재하지 않는 예약번호, 404 NOT_FOUND 기대
+GET {{baseUrl}}/api/v1/operator/reservations/search?reservationNo={{missingReservationNo}}
+Authorization: Bearer {{operatorAccessToken}}
+Accept: application/json
+
+### 8. 타 운영자 예약번호 보조 조회 - 403 FORBIDDEN 또는 404 NOT_FOUND 기대
+GET {{baseUrl}}/api/v1/operator/reservations/search?reservationNo={{reservationNo}}
+Authorization: Bearer {{otherOperatorAccessToken}}
+Accept: application/json
+
+# DB 확인
+# SELECT reservation_id, reservation_no, session_id, user_id, status FROM reservation WHERE reservation_no = '{{reservationNo}}';
+# SELECT session_id, content_id, status FROM content_session WHERE session_id = {{sessionId}};
+# SELECT content_id, operator_id, region_id, status FROM content WHERE content_id = {{contentId}};
+# SELECT audit_event_id, target_type, target_id, result, reason_code FROM audit_event WHERE target_type = 'RESERVATION' ORDER BY audit_event_id DESC;

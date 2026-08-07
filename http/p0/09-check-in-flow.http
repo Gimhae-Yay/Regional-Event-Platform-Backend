@@ -1,0 +1,179 @@
+@baseUrl = http://localhost:8080
+@visitorAccessToken =
+@otherVisitorAccessToken =
+@operatorAccessToken =
+@otherOperatorAccessToken =
+@reservationId =
+@cancelledReservationNo =
+@completedSessionReservationNo =
+@manualReservationNo =
+@qrToken =
+@tamperedQrToken = invalid.qr.token
+@qrCheckInIdempotencyKey = qr-check-in-{{$uuid}}
+@manualCheckInIdempotencyKey = manual-check-in-{{$uuid}}
+@manualDuplicateIdempotencyKey = manual-duplicate-{{$uuid}}
+
+# P0 QR 발급/QR 체크인/수동 체크인
+# 선행 조건:
+# - reservationId는 QR 체크인용 CONFIRMED 예약 ID여야 한다.
+# - manualReservationNo는 수동 체크인용 별도 CONFIRMED 예약번호여야 한다.
+# - 두 정상 체크인 대상은 서로 다른 예약이어야 한다.
+# - 체크인 가능 시간대, 콘텐츠 소유 운영자 토큰이 필요하다.
+
+### 1. 내 예약 QR 조회
+GET {{baseUrl}}/api/v1/me/reservations/{{reservationId}}/qr
+Authorization: Bearer {{visitorAccessToken}}
+Accept: application/json
+
+> {%
+client.global.set("qrToken", response.body.data.qrToken);
+%}
+
+### 2. 타인 예약 QR 조회 - 403 FORBIDDEN 기대
+GET {{baseUrl}}/api/v1/me/reservations/{{reservationId}}/qr
+Authorization: Bearer {{otherVisitorAccessToken}}
+Accept: application/json
+
+### 3. QR 체크인
+POST {{baseUrl}}/api/v1/operator/check-ins
+Authorization: Bearer {{operatorAccessToken}}
+Idempotency-Key: {{qrCheckInIdempotencyKey}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "qrToken": "{{qrToken}}"
+}
+
+### 4. QR 체크인 반복 - 같은 응답 기대
+POST {{baseUrl}}/api/v1/operator/check-ins
+Authorization: Bearer {{operatorAccessToken}}
+Idempotency-Key: {{qrCheckInIdempotencyKey}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "qrToken": "{{qrToken}}"
+}
+
+### 5. QR 변조 - 400 QR_VERIFICATION_FAILED 기대
+POST {{baseUrl}}/api/v1/operator/check-ins
+Authorization: Bearer {{operatorAccessToken}}
+Idempotency-Key: tampered-{{$uuid}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "qrToken": "{{tamperedQrToken}}"
+}
+
+### 6. QR 체크인 Idempotency-Key 누락 - 400 INVALID_INPUT 기대
+POST {{baseUrl}}/api/v1/operator/check-ins
+Authorization: Bearer {{operatorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "qrToken": "{{qrToken}}"
+}
+
+### 7. 타 운영자 QR 체크인 - 403 FORBIDDEN 또는 409 CHECK_IN_CONFLICT 기대
+POST {{baseUrl}}/api/v1/operator/check-ins
+Authorization: Bearer {{otherOperatorAccessToken}}
+Idempotency-Key: other-operator-{{$uuid}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "qrToken": "{{qrToken}}"
+}
+
+### 8. 예약번호 수동 체크인
+POST {{baseUrl}}/api/v1/operator/check-ins/manual
+Authorization: Bearer {{operatorAccessToken}}
+Idempotency-Key: {{manualCheckInIdempotencyKey}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reservationNo": "{{manualReservationNo}}",
+  "reason": "QR_SCAN_FAILED"
+}
+
+### 9. 예약번호 수동 체크인 반복 - 같은 응답 기대
+POST {{baseUrl}}/api/v1/operator/check-ins/manual
+Authorization: Bearer {{operatorAccessToken}}
+Idempotency-Key: {{manualCheckInIdempotencyKey}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reservationNo": "{{manualReservationNo}}",
+  "reason": "QR_SCAN_FAILED"
+}
+
+### 10. 수동 사유 누락 - 400 INVALID_INPUT 기대
+POST {{baseUrl}}/api/v1/operator/check-ins/manual
+Authorization: Bearer {{operatorAccessToken}}
+Idempotency-Key: reason-missing-{{$uuid}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reservationNo": "{{manualReservationNo}}",
+  "reason": ""
+}
+
+### 11. 같은 Idempotency-Key 다른 요청 - 409 IDEMPOTENCY_KEY_CONFLICT 기대
+POST {{baseUrl}}/api/v1/operator/check-ins/manual
+Authorization: Bearer {{operatorAccessToken}}
+Idempotency-Key: {{manualDuplicateIdempotencyKey}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reservationNo": "{{manualReservationNo}}",
+  "reason": "QR_SCAN_FAILED"
+}
+
+### 12. 같은 Idempotency-Key 다른 예약번호 - 409 IDEMPOTENCY_KEY_CONFLICT 기대
+POST {{baseUrl}}/api/v1/operator/check-ins/manual
+Authorization: Bearer {{operatorAccessToken}}
+Idempotency-Key: {{manualDuplicateIdempotencyKey}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reservationNo": "{{cancelledReservationNo}}",
+  "reason": "QR_SCAN_FAILED"
+}
+
+### 13. 취소 예약 수동 체크인 - 409 CHECK_IN_CONFLICT 기대
+POST {{baseUrl}}/api/v1/operator/check-ins/manual
+Authorization: Bearer {{operatorAccessToken}}
+Idempotency-Key: cancelled-{{$uuid}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reservationNo": "{{cancelledReservationNo}}",
+  "reason": "QR_SCAN_FAILED"
+}
+
+### 14. 완료 회차 예약 수동 체크인 - 409 CHECK_IN_CONFLICT 기대
+POST {{baseUrl}}/api/v1/operator/check-ins/manual
+Authorization: Bearer {{operatorAccessToken}}
+Idempotency-Key: completed-session-{{$uuid}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reservationNo": "{{completedSessionReservationNo}}",
+  "reason": "QR_SCAN_FAILED"
+}
+
+# DB 확인
+# SELECT reservation_id, reservation_no, status FROM reservation WHERE reservation_id = {{reservationId}} OR reservation_no IN ('{{manualReservationNo}}', '{{cancelledReservationNo}}', '{{completedSessionReservationNo}}');
+# SELECT visit_id, reservation_id, checkin_method, checked_at FROM visit WHERE reservation_id = {{reservationId}};
+# SELECT operation, result_code, result_visit_id, status FROM idempotency_record WHERE operation LIKE '%CHECK_IN%' ORDER BY idempotency_record_id DESC;
+# SELECT audit_event_id, region_id, target_type, target_id, result, reason_code FROM audit_event WHERE reason_code LIKE 'QR_CHECK_IN_%' OR reason_code LIKE 'MANUAL_CHECK_IN_%' ORDER BY audit_event_id DESC;
