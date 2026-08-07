@@ -3,7 +3,7 @@ name: 배포
 on:
   push:
     branches:
-      - dev
+      - main
   workflow_dispatch:
 
 permissions:
@@ -11,7 +11,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: deploy-dev
+  group: deploy-main
   cancel-in-progress: false
 
 env:
@@ -22,6 +22,7 @@ env:
 
 jobs:
   deploy:
+    if: github.ref == 'refs/heads/main'
     name: ECR 이미지 배포 및 EC2 검증
     runs-on: ubuntu-latest
     timeout-minutes: 30
