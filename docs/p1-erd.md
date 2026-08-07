@@ -2,7 +2,7 @@
 
 > 상태: 정책 반영 초안
 > 작성일: 2026-08-05
-> 근거: [P1 정책 결정 로그](p1-policy-decision-log.md)와 제안 ADR-0064~ADR-0071
+> 근거: [P1 정책 결정 로그](p1-policy-decision-log.md)와 채택 ADR-0064~ADR-0071
 > 범위: P0 ERD를 대체하지 않는다. P1에서 추가·변경되는 논리 테이블, 제약, 상태 전이와 P0 재사용 경계만 정의한다.
 
 ## 1. 기준과 범위
@@ -471,6 +471,7 @@ P0의 복합 PK `(user_id, role)`를 `role_assignment_id`로 대체한다. 역�
 | 추가·확장 항목 | 규칙 |
 | --- | --- |
 | `target_type` | 기존 P0 값에 `PLATFORM_ADMIN_ASSIGNMENT`, `USER_ROLE_ASSIGNMENT`, `STAMPBOOK`, `MISSION`, `COUPON_POLICY`, `COUPON`, `RESERVATION_PRICE_SNAPSHOT`, `PAYMENT`, `REFUND`, `PAYMENT_DISCREPANCY`를 추가 |
+| `reason` | P1 수명주기·운영 명령의 사유 원문. 스탬프북·미션·쿠폰 정책의 생성·수정·심사 요청·승인·반려·종료에서는 앞뒤 공백 제거 뒤 1~500자이며 NOT NULL, 그 외 이벤트는 nullable |
 | `evidence_reference` | 특권 변경·수동 거래 처리의 비밀값 없는 증빙 참조. nullable |
 | `audit_event_actor_link` | 활성 actor에만 만든다. 탈퇴 전 제거한다. |
 
@@ -762,7 +763,6 @@ MySQL의 조건부 유일 제약이 필요한 활성 배정·진행 중 결제�
 
 ## 12. 프로젝트 반영 순서
 
-1. ADR-0064~ADR-0071의 상태를 프로젝트 채택 절차에 맞춰 확정한다.
-2. 위 미확정 연결 정책을 결정한다.
-3. 프로젝트의 P1 정책 문서·API 계약과 이 ERD의 상태·제약을 같은 변경에서 일치시킨다.
-4. 그 뒤 migration·코드·통합 테스트를 구현한다.
+1. 위 미확정 연결 정책을 결정한다.
+2. 프로젝트의 P1 정책 문서·API 계약과 이 ERD의 상태·제약을 같은 변경에서 일치시킨다.
+3. 그 뒤 migration·코드·통합 테스트를 구현한다.
