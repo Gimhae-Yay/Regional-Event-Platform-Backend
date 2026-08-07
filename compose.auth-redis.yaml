@@ -3,6 +3,7 @@ services:
     image: ${API_IMAGE:?API_IMAGE must be set}
     restart: unless-stopped
     environment:
+      SPRING_PROFILES_ACTIVE: prod
       AUTH_REDIS_HOST: auth-redis
       AUTH_REDIS_PORT: 6379
       SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:?SPRING_DATASOURCE_URL must be set}
