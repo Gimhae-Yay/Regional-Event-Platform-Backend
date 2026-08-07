@@ -4,7 +4,7 @@
 - 기록 유형: 신규
 - 기록일: 2026-07-29
 - 결정일: 2026-07-29
-- 관련 요구사항: [PRD](../local-stamp-platform-prd.md)의 `FR-03`, `FR-14`, `CON-02`, `CON-05`
+- 관련 요구사항: [지역·콘텐츠 카탈로그](../p0/content-catalog.md)의 `FR-03`·`FR-14` 이미지 정책과 [대표 이미지 업로드 API](../api/p0/content/upload-representative-image.md)
 - 관련 단계: 단계 0. 정책·설계 확정, 단계 1. MVP 구현·검증
 - 관련 이슈: [#50](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/50), [#76](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/pull/76)
 - 대체 대상: [ADR-0029](0029-rebuild-initial-p0-flyway-schema.md)의 `V1__initial_p0_schema.sql` 내 대표 이미지 연결 테이블 구성과 이후 이관 범위

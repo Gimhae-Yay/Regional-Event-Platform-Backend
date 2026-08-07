@@ -4,7 +4,7 @@
 - 기록 유형: 신규
 - 기록일: 2026-08-07
 - 결정일: 2026-08-07
-- 관련 요구사항: [기술 스택](../local-stamp-platform-tech-stack.md)의 DB·배포, [제품 PRD](../local-stamp-platform-prd.md#103-설계-원칙)의 MySQL 최종 정합성
+- 관련 요구사항: [기술 스택](../local-stamp-platform-tech-stack.md)의 DB·배포와 [P0 명세](../p0-spec.md#82-설계-원칙)의 MySQL 최종 정합성
 - 관련 단계: 단계 1. MVP 구현·검증
 - 관련 이슈: [#471 ECR 이미지 기반 EC2 Compose 배포 자동화 및 운영 검증](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/471)
 - 대체 대상: 없음

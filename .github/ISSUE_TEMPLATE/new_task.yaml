@@ -17,6 +17,22 @@ body:
     validations:
       required: true
 
+  - type: dropdown
+    id: work-type
+    attributes:
+      label: 작업 성격
+      description: 구현 모드와 작업 브랜치 type을 정하는 라벨을 정확히 하나 선택해 주세요.
+      multiple: false
+      options:
+        - New Feature
+        - Fix
+        - Refactor
+        - Test
+        - Docs
+        - Chore
+    validations:
+      required: true
+
   - type: textarea
     id: api-documentation
     attributes:

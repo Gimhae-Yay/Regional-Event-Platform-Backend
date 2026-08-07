@@ -5,7 +5,7 @@
 - 상태: 완료
 - 개선 유형: 성능, 안정성, 유지보수성
 - 범위: Issue #299의 MySQL 통합 테스트 15개와 `dev`에서 추가 확인한 3개
-- 관련 요구사항: [FR-01~FR-11과 AC-01~AC-18](../local-stamp-platform-prd.md#12-테스트-및-출시-수용-기준)
+- 관련 요구사항: [P0 명세의 기능 요구사항과 테스트·출시 수용 기준](../p0-spec.md#9-테스트-및-출시-수용-기준), [내부 API 명세서](../api/api-specification.md)
 - 관련 단계: 단계 1. MVP 구현·검증
 - 기준 시각·시간대: 2026-08-03, Asia/Seoul
 - Before revision: `ac74e5c5e15f2d54040a5a7c7ce5f3b34a89d283`
