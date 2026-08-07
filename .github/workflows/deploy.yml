@@ -142,13 +142,27 @@ jobs:
           for _ in {1..36}; do
             if command -v docker >/dev/null 2>&1 && test -f /opt/regional-event/compose.yaml; then
               cd /opt/regional-event
-              running_services="$(docker compose --env-file .env -f compose.yaml ps --status running --services | sort || true)"
+              running_services="$(
+                docker ps \
+                  --filter 'status=running' \
+                  --filter 'label=com.docker.compose.project=regional-event' \
+                  --format '{{.Label "com.docker.compose.service"}}' | sort
+              )"
               if printf '%s\n' "$running_services" | grep -Fx api >/dev/null \
                 && printf '%s\n' "$running_services" | grep -Fx auth-redis >/dev/null \
                 && test "$(printf '%s\n' "$running_services" | sed '/^$/d' | wc -l)" -eq 2; then
-                health_body="$(curl --fail --silent --show-error --max-time 5 http://localhost:8080/actuator/health || true)"
-                if test "$health_body" = '{"status":"UP"}'; then
-                  exit 0
+                redis_container_id="$(
+                  docker ps -q \
+                    --filter 'status=running' \
+                    --filter 'label=com.docker.compose.project=regional-event' \
+                    --filter 'label=com.docker.compose.service=auth-redis'
+                )"
+                if test -n "$redis_container_id" \
+                  && test "$(docker exec "$redis_container_id" redis-cli ping)" = 'PONG'; then
+                  health_body="$(curl --fail --silent --show-error --max-time 5 http://localhost:8080/actuator/health || true)"
+                  if test "$health_body" = '{"status":"UP"}'; then
+                    exit 0
+                  fi
                 fi
               fi
             fi
