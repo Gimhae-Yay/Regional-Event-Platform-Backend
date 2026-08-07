@@ -41,3 +41,7 @@ out/
 
 ## MacOS
 .DS_Store
+
+### k6 results ###
+performance/k6/results/*
+!performance/k6/results/.gitkeep
