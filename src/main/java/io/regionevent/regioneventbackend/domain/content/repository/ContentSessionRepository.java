@@ -43,6 +43,17 @@ public interface ContentSessionRepository extends JpaRepository<ContentSession, 
         """)
     Optional<Long> findContentIdBySessionId(@Param("sessionId") Long sessionId);
 
+    @Query("""
+        SELECT contentSession.content.contentId
+        FROM ContentSession contentSession
+        WHERE contentSession.sessionId = :sessionId
+            AND contentSession.content.status = :contentStatus
+        """)
+    Optional<Long> findPublicContentIdBySessionId(
+        @Param("sessionId") Long sessionId,
+        @Param("contentStatus") ContentStatus contentStatus
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT contentSession
