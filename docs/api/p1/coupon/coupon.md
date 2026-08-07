@@ -15,6 +15,8 @@
 
 P1 쿠폰은 정책이 가리키는 콘텐츠의 유료 예약에 적용하는 정액 할인으로 한정한다. 발급 근거는 `VISIT`, `MISSION_REWARD`,
 `STAMPBOOK_COMPLETION` 중 하나다. 방문은 정책·수령자, 미션·스탬프북은 정책·수령자·보상 근거가 같은 반복 요청을 하나의 쿠폰으로 수렴시킨다.
+`MISSION_REWARD` 발급은 [미션 완료 보상 수령](../mission/claim-mission-reward.md)이 소유하며, 범용 쿠폰 발급 요청은
+방문과 스탬프북 완료 보상만 처리한다.
 
 ### 요구사항 추적
 
@@ -54,7 +56,7 @@ P1 쿠폰은 정책이 가리키는 콘텐츠의 유료 예약에 적용하는 �
 | 쿠폰 정책 수정 | `PATCH /operator/coupon-policies/{couponPolicyId}` | [update-coupon-policy.md](update-coupon-policy.md) |
 | 쿠폰 정책 공개 | `POST /operator/coupon-policies/{couponPolicyId}/publish` | [publish-coupon-policy.md](publish-coupon-policy.md) |
 | 쿠폰 정책 종료 | `POST /operator/coupon-policies/{couponPolicyId}/end` | [end-coupon-policy.md](end-coupon-policy.md) |
-| 쿠폰 발급 요청 | `POST /coupon-policies/{couponPolicyId}/coupons` | [issue-coupon.md](issue-coupon.md) |
+| 방문·스탬프북 쿠폰 발급 요청 | `POST /coupon-policies/{couponPolicyId}/coupons` | [issue-coupon.md](issue-coupon.md) |
 
 ### 결제 연계 API
 

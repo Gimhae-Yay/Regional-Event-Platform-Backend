@@ -54,7 +54,7 @@ Accept: application/json
 | `description` | String or null | N | 포함하면 설명을 변경한다. `null` 또는 빈 문자열은 설명 제거를 의미한다. 생략하면 기존 값을 유지한다. |
 | `discountAmount` | Number | N | 포함하면 정액 할인 금액을 변경한다. 1 이상 정수이며 `null`을 허용하지 않는다. |
 | `minimumPaymentAmount` | Number | N | 포함하면 최소 결제 금액을 변경한다. 0 이상 정수이며 `null`을 허용하지 않는다. |
-| `validDaysAfterIssue` | Number | N | 포함하면 발급 후 유효 일수를 변경한다. 1 이상 정수이며 `null`을 허용하지 않는다. |
+| `validDaysAfterIssue` | Number | N | 포함하면 발급 후 유효 일수를 변경한다. 1 이상 365 이하 정수이며 `null`을 허용하지 않는다. |
 | `issueStartsAt` | String | N | 포함하면 발급 가능 시작 시각을 변경한다. UTC ISO 8601 일시이며 `null`을 허용하지 않는다. |
 | `issueEndsAt` | String | N | 포함하면 발급 가능 종료 시각을 변경한다. UTC ISO 8601 일시이며 `null`을 허용하지 않는다. |
 | `totalIssueLimit` | Number or null | N | 포함하면 정책 전체 발급 한도를 변경한다. `null`은 한도 제거를 의미하고 값은 1 이상 정수다. |
@@ -133,5 +133,6 @@ Accept: application/json
 1. 인증 주체는 `ACTIVE` 회원이고 현재 `OPERATOR` 역할이어야 하며, 인증 주체와 대상 정책의 `contentId`가 가리키는 콘텐츠는 `region_id`가 같고 인증 주체가 해당 콘텐츠를 소유해야 한다.
 2. 대상 정책은 `DRAFT` 상태여야 한다.
 3. `contentId`, `regionId`, `issueSourceType`은 수정하지 않는다. 다른 콘텐츠나 발급 경로가 필요하면 새 정책을 생성한다.
-4. 요청에 포함된 필드만 변경한 뒤 `discountAmount >= 1`, `minimumPaymentAmount >= discountAmount`, `issueStartsAt < issueEndsAt`를 검증한다.
+4. 요청에 포함된 필드만 변경한 뒤 `discountAmount >= 1`, `minimumPaymentAmount >= discountAmount`,
+   `1 <= validDaysAfterIssue <= 365`, `issueStartsAt < issueEndsAt`를 검증한다.
 5. 수정 이력에는 처리자, 이전 값, 이후 값, 수정 사유와 수정 시각을 기록한다.

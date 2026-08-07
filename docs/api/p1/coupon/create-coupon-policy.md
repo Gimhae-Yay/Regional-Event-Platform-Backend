@@ -62,7 +62,7 @@ Accept: application/json
 | `issueSourceType` | String | Y | `VISIT`, `MISSION_REWARD`, `STAMPBOOK_COMPLETION` 중 하나 |
 | `discountAmount` | Number | Y | 정액 할인 금액. 1 이상 정수 |
 | `minimumPaymentAmount` | Number | Y | 최소 결제 금액. 0 이상 정수 |
-| `validDaysAfterIssue` | Number | Y | 발급 후 유효 일수. 1 이상 정수 |
+| `validDaysAfterIssue` | Number | Y | 발급 후 유효 일수. 1 이상 365 이하 정수 |
 | `issueStartsAt` | String | Y | 발급 가능 시작 시각. UTC ISO 8601 일시 |
 | `issueEndsAt` | String | Y | 발급 가능 종료 시각. UTC ISO 8601 일시. `issueStartsAt`보다 뒤여야 한다. |
 | `totalIssueLimit` | Number or null | N | 정책 전체 발급 한도. `null`이면 한도를 두지 않는다. 값이 있으면 1 이상 정수 |
@@ -148,7 +148,7 @@ Accept: application/json
 ### 처리 규칙
 
 1. 인증 주체는 `ACTIVE` 회원이고 현재 `OPERATOR` 역할이어야 하며, 인증 주체와 대상 `contentId`의 콘텐츠는 `region_id`가 같고 인증 주체가 해당 콘텐츠를 소유해야 한다. 정책의 `regionId`는 콘텐츠에서 계산한다.
-2. 정액 할인 금액은 1 이상, 최소 결제 금액은 0 이상이어야 한다.
+2. 정액 할인 금액은 1 이상, 최소 결제 금액은 0 이상이며 발급 후 유효 일수는 1 이상 365 이하여야 한다.
 3. `minimumPaymentAmount`는 `discountAmount`보다 크거나 같아야 한다.
 4. 생성 성공 시 정책 상태는 `DRAFT`로 기록한다.
 5. 생성 이력에는 처리자, 대상 콘텐츠·지역, 생성 사유와 생성 시각을 기록한다.

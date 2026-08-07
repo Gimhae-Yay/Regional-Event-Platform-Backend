@@ -25,7 +25,7 @@
 
 | 전이 | 처리 주체와 조건 |
 | --- | --- |
-| 발급 → `AVAILABLE` | 쿠폰 발급 요청이 쿠폰·발급 이력·상태 이력을 같은 트랜잭션에서 생성한다. |
+| 발급 → `AVAILABLE` | 방문·스탬프북은 [쿠폰 발급 요청](issue-coupon.md)이, 미션 보상은 [미션 완료 보상 수령](../mission/claim-mission-reward.md)이 쿠폰·발급 이력·최초 상태 이력을 같은 트랜잭션에서 생성한다. |
 | `AVAILABLE → RESERVED` | [결제 생성](../payment/create-payment.md)이 가격 스냅샷에 쿠폰과 할인 금액을 고정하면서 같은 트랜잭션에서 선점한다. |
 | `RESERVED → USED` | 최종 금액이 0원이면 [결제 생성](../payment/create-payment.md), 양수이면 서버 검증에 성공한 [PortOne 웹훅](../payment/receive-portone-webhook.md)이 홀드 소비·`CONFIRMED` 예약·`coupon_redemption(CONFIRMED)`과 같은 트랜잭션에서 전이한다. 선점 뒤 원래 만료 시각이 지나도 홀드가 유효한 `ACTIVE`이면 확정할 수 있다. |
 | `RESERVED → AVAILABLE` | 결제 거절·취소·만료 또는 홀드 만료·무효화로 예약 확정 전에 체크아웃이 종료되고 원래 만료 시각 전이면 해당 종결 처리가 선점을 해제한다. 홀드 만료·무효화는 [홀드 만료·무효화 작업](../../p0/reservation/expire-or-invalidate-holds.md)이 연결된 `PENDING` 결제를 `EXPIRED`로 종결하면서 함께 처리한다. |

@@ -90,7 +90,7 @@ Accept: application/json
    같으면 해당 정책 행을 한 번만 잠근다. 그 뒤 미션 행을 잠근다.
 3. 잠금 획득 뒤 미션 상태가 `DRAFT`이고 현재 보상 정책 연결이 최초 조회 결과와 같은지 다시 확인한다.
    조건이 달라졌으면 미션을 변경하지 않고 `409 MISSION_STATE_CONFLICT`를 반환한다.
-4. 요청한 보상 정책의 지역·발급 경로와 `DRAFT`, `PENDING_REVIEW`, `PUBLISHED` 허용 상태를 생성 API와
+4. 요청한 보상 정책의 지역·발급 경로와 `DRAFT`, `PUBLISHED` 허용 상태를 생성 API와
    동일하게 검증한다.
 5. `CONTENT_SET`이면 요청한 대상 콘텐츠 행을 `contentId` 오름차순으로 잠근 뒤 모두 미션과 같은 지역이고
    `deleted_at IS NULL`인지 검증한다. 작성 단계에서는 콘텐츠 상태를 제한하지 않는다.
