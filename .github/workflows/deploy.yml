@@ -160,7 +160,8 @@ jobs:
                 if test -n "$redis_container_id" \
                   && test "$(docker exec "$redis_container_id" redis-cli ping)" = 'PONG'; then
                   health_body="$(curl --fail --silent --show-error --max-time 5 http://localhost:8080/actuator/health || true)"
-                  if test "$health_body" = '{"status":"UP"}'; then
+                  if printf '%s' "$health_body" \
+                    | grep -Eq '"status"[[:space:]]*:[[:space:]]*"UP"'; then
                     exit 0
                   fi
                 fi
