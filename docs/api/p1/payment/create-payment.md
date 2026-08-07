@@ -13,7 +13,7 @@
 불변 `reservation_price_snapshot`을 만들고, 최종 금액이 양수이면 내부 결제 시도(`payment`, `PENDING`)를
 생성한다. 최종 금액이 0원이면 PortOne을 호출하지 않고 P0 무료 예약 확정 흐름으로 즉시 예약을 확정한다
 (`ADR-0069`). 이 API는 예약을 확정하지 않는다. 양수 결제의 예약 확정은
-[서버 결제 승인 확인](confirm-payment.md)에서만 처리한다.
+[PortOne 결제 웹훅 수신](receive-portone-webhook.md)에서만 처리한다.
 
 이 API는 영속 멱등 처리 대상이다. 동일한 `Idempotency-Key`와 동일한 요청 의미의 재시도는 최초 처리 결과를
 반환한다.
@@ -213,5 +213,5 @@ Accept: application/json
 11. 스냅샷 생성(또는 재사용), 쿠폰 상태 전이, 결제 생성 또는 0원 확정과 멱등 기록 점유는 하나의 MySQL 트랜잭션에서 커밋한다.
 12. 오류가 발생하면 스냅샷·결제·쿠폰 전이·예약을 반영하지 않는다.
 13. `payment.hold_id`, `payment.reservation_price_snapshot_id`는 `NOT NULL`이며 홀드당 진행 중 `PENDING` 결제는 유일하다. `payment_idempotency`의 `(actor_user_id, operation, idempotency_key_hash)`는 유일하며 `actor_user_id`는 `app_user`를 참조하지 않는 비-FK 식별값이다.
-14. 0원 확정 성공은 P0와 동일하게 `CAPACITY_HOLD`, `RESERVATION` 감사 이벤트 두 건을 같은 `requestId`로 기록한다. 양수 결제 생성 성공은 결제 시도만 기록하며 예약 관련 감사 이벤트는 [서버 결제 승인 확인](confirm-payment.md)에서 기록한다.
+14. 0원 확정 성공은 P0와 동일하게 `CAPACITY_HOLD`, `RESERVATION` 감사 이벤트 두 건을 같은 `requestId`로 기록한다. 양수 결제 생성 성공은 결제 시도만 기록하며 예약 관련 감사 이벤트는 [PortOne 결제 웹훅 수신](receive-portone-webhook.md)에서 기록한다.
 15. 결제 종결 시 `payment_idempotency.expires_at = payment.finalized_at + 24시간`으로 정하며, 만료한 종결 기록만 정리한다.
