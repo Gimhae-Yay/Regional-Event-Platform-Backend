@@ -3,7 +3,7 @@
 | 항목 | 내용 |
 | --- | --- |
 | 상위 명세 | [로컬스탬프 P1 명세](../p1-spec.md) |
-| 관련 결정 | [ADR-0064 고권한 계정 분리](../adr/0064-separate-privileged-account-class-from-ordinary-roles.md), [ADR-0065 지역 공개·역할 이력](../adr/0065-use-is-public-for-region-availability-and-history-roles.md), [ADR-0070 거래 예외 처리](../adr/0070-use-full-refund-with-bounded-manual-retry-and-discrepancy-closure.md), [ADR-0071 탈퇴 비식별화·감사](../adr/0071-deidentify-p1-benefit-data-on-withdrawal-and-extend-common-audit.md) |
+| 관련 결정 | [ADR-0064 고권한 계정 분리](../adr/0064-separate-privileged-account-class-from-ordinary-roles.md), [ADR-0065 지역 공개·역할 이력](../adr/0065-use-is-public-for-region-availability-and-history-roles.md), [ADR-0070 거래 예외 처리](../adr/0070-use-full-refund-with-bounded-manual-retry-and-discrepancy-closure.md), [ADR-0071 탈퇴 비식별화·감사](../adr/0071-deidentify-p1-benefit-data-on-withdrawal-and-extend-common-audit.md), [ADR-0072 지역 변경 사유 코드](../adr/0072-use-allowlisted-reason-codes-for-region-changes.md), [ADR-0073 지역 코드 대문자 정규화](../adr/0073-normalize-region-code-to-uppercase.md), [ADR-0074 동일 공개 여부 무변경 성공](../adr/0074-treat-repeated-region-visibility-as-no-op-success.md), [ADR-0075 실제 상태 전이 성공 감사](../adr/0075-limit-region-success-audits-to-state-transitions.md), [ADR-0076 지역 코드 공백 처리](../adr/0076-trim-region-code-outer-whitespace.md) |
 | 소유 범위 | 전체관리자 계정, 지역, 관리자 역할, 결제 불일치·환불 실패 수동 처리 |
 | API 명세 | [API 명세서](../api/api-specification.md) |
 | 데이터 모델 | [P0 ERD](../erd.md), [P1 ERD](../p1-erd.md) |
@@ -38,7 +38,7 @@
 
 1. 전체관리자가 새 지역 생성, 기존 지역 공개 여부 변경 또는 지역 관리자 역할 변경을 요청한다.
 2. 시스템은 처리자 활성 배정, 지역 식별자 중복과 `is_public` 전이 조건을 검증한다. 비삭제 콘텐츠가 하나라도 있는 공개 지역은 비공개로 바꿀 수 없다.
-3. 시스템은 지역 변경과 감사 이력을 함께 저장한다.
+3. 시스템은 실제 지역 변경과 감사 이력을 함께 저장한다. 동일한 공개 여부 요청은 현재 지역을 반환하고 변경·감사 이력을 만들지 않는다.
 4. 전체관리자가 `ORDINARY` 대상 사용자에게 지역 관리자 역할을 임명하거나 기존 역할을 회수한다.
 5. 시스템은 대상 사용자, 담당 지역, 활성 역할과 충돌 여부를 검증한다. 비삭제 콘텐츠가 있는 지역에서는 마지막 활성 지역 관리자를 회수할 수 없다.
 6. 시스템은 `ACTIVE` 또는 `REVOKED` 역할 연결과 감사 이력을 함께 저장한다.
@@ -84,6 +84,7 @@
 - `ADM-02`:
   지역은 별도 운영 상태를 만들지 않고 `is_public = false`를 비공개·준비, `true`를 공개·운영으로 사용한다. 지역 생성·공개 여부 변경은 전체관리자 전용 유스케이스에서만 수행한다.
   비삭제 콘텐츠가 하나라도 있는 공개 지역은 비공개로 전환할 수 없다.
+  공개 여부 변경은 지역 행을 잠근 뒤 처리하며 현재 값과 같은 요청은 `200 OK` 무변경 성공으로 처리한다. 이때 지역 행과 `updated_at`을 변경하지 않고 감사 이벤트도 만들지 않는다. 실제 상태 전이와 성공 감사만 같은 트랜잭션으로 커밋한다.
 - `ADM-03`:
   관리자 역할의 임명·회수는 `user_role_assignment`에 `ACTIVE`·`REVOKED` 이력으로 남기며 대상 사용자와 담당 지역의 관계를 검증한다.
   한 지역에는 복수의 활성 지역 관리자를 둘 수 있지만, 비삭제 콘텐츠가 있는 지역에서 마지막 활성 지역 관리자를 회수할 수 없다. 역할 변경으로 다른 지역 또는 콘텐츠 소유 권한이 암묵적으로 확대되지 않는다.
