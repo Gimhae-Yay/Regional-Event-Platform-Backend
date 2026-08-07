@@ -103,7 +103,7 @@ Accept: application/json
 1. 인증 주체의 담당 지역을 미션 지역으로 고정한다.
 2. `VISIT_COUNT`는 양의 `requiredVisitCount`와 대상 콘텐츠 없음, `CONTENT_SET`은 중복 없는 하나 이상의 대상 콘텐츠와 `requiredVisitCount = null`을 검증한다. 중복 식별자를 임의로 제거하지 않고 `400 INVALID_INPUT`으로 거부한다.
 3. 보상 쿠폰 정책 행을 잠근 뒤 지역과 발급 경로, 상태를 검증한다. 미션과 같은 지역이고
-   `issuance_type = MISSION_REWARD`이며 상태가 `DRAFT`, `PENDING_REVIEW`, `PUBLISHED` 중 하나인 정책만 연결한다.
+   `issuance_type = MISSION_REWARD`이며 상태가 `DRAFT`, `PUBLISHED` 중 하나인 정책만 연결한다.
 4. `CONTENT_SET`이면 중복을 검증한 대상 콘텐츠 행을 `contentId` 오름차순으로 잠근다. 모든 대상 콘텐츠가 미션과
    같은 지역이고 `deleted_at IS NULL`인지 확인하며, 작성 단계에서는 콘텐츠 상태를 제한하지 않는다.
 5. `ENDED` 쿠폰 정책은 종료된 시점부터 새 미션에 연결하지 않는다.

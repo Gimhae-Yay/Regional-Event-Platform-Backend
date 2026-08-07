@@ -40,6 +40,9 @@ P1 API 명세는 `docs/p1/` 소유 문서와 `docs/p1-spec.md`를 기능·정책
 | --- | --- | --- | --- |
 | 지역 | [지역 API 명세서](p1/region/region.md) | [전체관리자](../p1/platform-admin.md), [P1 명세](../p1-spec.md), [P0 ERD](../erd.md), [P1 ERD](../p1-erd.md) | 지역 생성, 지역 공개 여부 변경, 전체 지역 조회 |
 | 지역 미션 | [지역 미션 API 명세서](p1/mission/mission.md) | [지역 미션](../p1/regional-mission.md) | 미션 생성·수정·검토 요청·승인 즉시 공개·반려·종료, 공개 조회, 참여, 진행도, 보상 수령, 자동 종료 Scheduler |
+| 쿠폰 | [쿠폰 API 명세서](p1/coupon/coupon.md) | [쿠폰](../p1/coupon.md) | 쿠폰 정책 생성·수정·공개·종료, 발급, 내 쿠폰 조회, 사용 가능 판단, 결제 연계 사용 확정, 사용 이력 |
+| 결제 | [결제 API 명세서](p1/payment/payment.md) | [유료 결제·환불](../p1/payment-refund.md) | 결제 생성, 웹훅 승인 확인, 결제 상태와 불일치 운영 |
+| 환불 | [환불 API 명세서](p1/refund/refund.md) | [유료 결제·환불](../p1/payment-refund.md) | 환불 생성·조회, 실패 조회·재시도·종결 |
 
 ## 새 도메인 API 명세 추가
 

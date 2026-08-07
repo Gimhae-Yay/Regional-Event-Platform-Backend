@@ -17,7 +17,7 @@
 
 | 요구사항 | HTTP 계약 | 주요 데이터 |
 | --- | --- | --- |
-| P1-FR-10, ADM-04 | `POST /api/v1/platform-admin/refund-failures/{refundId}/manual-actions` | `refund`, `refund_attempt` |
+| P1-FR-10, ADM-04 | `POST /api/v1/platform-admin/refund-failures/{refundId}/manual-actions` | `refund`, `refund_attempt`, `coupon`, `coupon_redemption`, `coupon_status_history` |
 
 ## 2. 공통 계약 참조
 
@@ -146,9 +146,9 @@ Accept: application/json
 
 1. 인증 주체는 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN` 배정을 가져야 한다. 콘텐츠 운영자와 지역 관리자는 이 API를 호출할 수 없다.
 2. 대상 환불은 `DISCREPANT`여야 한다. `REQUESTED`, `PROCESSING`, `SUCCEEDED`, `FAILED`이면 `409 REFUND_STATE_CONFLICT`로 거부해 이미 확정된 건을 중복 처리하지 않는다.
-3. `confirmedStatus = SUCCEEDED`이면 `refund.status`를 `SUCCEEDED`로 전이하고 `completed_at`을 기록한다. 이후 재시도할 수 없다.
+3. `confirmedStatus = SUCCEEDED`이면 `refund.status`를 `SUCCEEDED`로 전이하고 `completed_at`을 기록한 뒤 [환불 공통 쿠폰 복구 계약](refund.md#쿠폰-복구-계약)을 같은 상태 반영 트랜잭션에 적용한다. 이후 재시도할 수 없다.
 4. `confirmedStatus = FAILED`이면 `refund.status`를 `FAILED`로 전이한다. `completed_at`은 기록하지 않으며, 남은 시도 횟수 안에서 [환불 재시도](retry-refund.md)를 사용할 수 있다.
 5. 이 조치는 새 외부 호출을 만들지 않는다. 기존 `refund_attempt` 이력은 덮어쓰지 않고 그대로 보존한다.
 6. 이중 승인은 적용하지 않는다. 처리자 1명의 요청만으로 확정된다.
-7. 조치와 서버가 부여한 `requestId`를 포함한 `REFUND` 감사 이력은 하나의 트랜잭션으로 처리한다.
+7. 조치와 서버가 부여한 `requestId`를 포함한 `REFUND` 감사 이력을 처리하고, 쿠폰을 복구한 경우 같은 `requestId`의 `COUPON` 감사 이력을 함께 기록한다.
 8. 결제 비밀값, PortOne 원문과 전체 결제수단 정보는 `evidenceReference`나 감사 이력에 기록하지 않는다.
