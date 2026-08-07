@@ -1,0 +1,70 @@
+package io.regionevent.regioneventbackend.domain.content.service;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import io.regionevent.regioneventbackend.domain.content.repository.PublicContentDetailVerificationProjection;
+import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
+import io.regionevent.regioneventbackend.domain.image.service.RepresentativeImageViewUrl;
+import io.regionevent.regioneventbackend.domain.image.service.RepresentativeImageViewUrlService;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
+
+@Service
+public class GetPublicContentUseCase {
+
+    private final ContentService contentService;
+    private final PublicContentCacheAside publicContentCacheAside;
+    private final RepresentativeImageViewUrlService representativeImageViewUrlService;
+
+    public GetPublicContentUseCase(
+        ContentService contentService,
+        PublicContentCacheAside publicContentCacheAside,
+        RepresentativeImageViewUrlService representativeImageViewUrlService
+    ) {
+        this.contentService = contentService;
+        this.publicContentCacheAside = publicContentCacheAside;
+        this.representativeImageViewUrlService = representativeImageViewUrlService;
+    }
+
+    @Transactional(readOnly = true)
+    public PublicContentDetailResult get(Long contentId) {
+        PublicContentDetailVerificationProjection content = contentService.findPublicContentDetailVerification(contentId);
+        PublicContentStaticInfo staticInfo = publicContentCacheAside.resolveContent(
+            content.regionId(),
+            content.contentId(),
+            content.versionNo(),
+            () -> contentService.findPublicContentStaticInfo(
+                content.regionId(),
+                content.contentId(),
+                content.versionNo()
+            )
+        );
+        RepresentativeImageViewUrl representativeImageViewUrl = createRepresentativeImageViewUrl(content);
+        return new PublicContentDetailResult(
+            staticInfo.contentId(),
+            staticInfo.contentType(),
+            staticInfo.title(),
+            staticInfo.description(),
+            representativeImageViewUrl.url(),
+            representativeImageViewUrl.expiresAt(),
+            staticInfo.locationText(),
+            staticInfo.operatingHoursText(),
+            content.contactText(),
+            staticInfo.precautions(),
+            staticInfo.ageRequirement(),
+            staticInfo.materials(),
+            staticInfo.cancellationPolicyText()
+        );
+    }
+
+    private RepresentativeImageViewUrl createRepresentativeImageViewUrl(
+        PublicContentDetailVerificationProjection content
+    ) {
+        ImageObject representativeImageObject = content.representativeImageObject();
+        if (representativeImageObject == null || content.representativeImageAssignedAt() == null) {
+            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
+        }
+        return representativeImageViewUrlService.createViewUrl(representativeImageObject);
+    }
+}

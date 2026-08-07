@@ -1,0 +1,178 @@
+package io.regionevent.regioneventbackend.domain.content.controller;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+
+import java.time.Instant;
+import java.util.UUID;
+
+import jakarta.persistence.EntityManager;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
+import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
+import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
+import io.regionevent.regioneventbackend.domain.content.entity.Content;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentRevision;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentRevisionStatus;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
+import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
+import io.regionevent.regioneventbackend.domain.content.repository.ContentRevisionRepository;
+import io.regionevent.regioneventbackend.domain.content.service.RejectContentRevisionUseCase;
+import io.regionevent.regioneventbackend.domain.region.entity.Region;
+import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
+import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
+import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
+import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
+import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
+import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
+import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.support.jpa.AtomicityJpaTestConfiguration;
+import io.regionevent.regioneventbackend.support.jpa.CleanH2Database;
+
+@DataJpaTest
+@Import(AtomicityJpaTestConfiguration.class)
+@Transactional(propagation = Propagation.NOT_SUPPORTED)
+@CleanH2Database
+class ContentRevisionRejectionAuditAtomicityTest {
+
+    private final RejectContentRevisionUseCase rejectContentRevisionUseCase;
+    private final RegionRepository regionRepository;
+    private final AppUserRepository appUserRepository;
+    private final UserRoleAssignmentRepository userRoleAssignmentRepository;
+    private final ContentRepository contentRepository;
+    private final ContentRevisionRepository contentRevisionRepository;
+    private final AuditEventRepository auditEventRepository;
+    private final EntityManager entityManager;
+
+    @MockitoBean
+    private RecordAuditEventUseCase recordAuditEventUseCase;
+
+    @Autowired
+    ContentRevisionRejectionAuditAtomicityTest(
+        RejectContentRevisionUseCase rejectContentRevisionUseCase,
+        RegionRepository regionRepository,
+        AppUserRepository appUserRepository,
+        UserRoleAssignmentRepository userRoleAssignmentRepository,
+        ContentRepository contentRepository,
+        ContentRevisionRepository contentRevisionRepository,
+        AuditEventRepository auditEventRepository,
+        EntityManager entityManager
+    ) {
+        this.rejectContentRevisionUseCase = rejectContentRevisionUseCase;
+        this.regionRepository = regionRepository;
+        this.appUserRepository = appUserRepository;
+        this.userRoleAssignmentRepository = userRoleAssignmentRepository;
+        this.contentRepository = contentRepository;
+        this.contentRevisionRepository = contentRevisionRepository;
+        this.auditEventRepository = auditEventRepository;
+        this.entityManager = entityManager;
+    }
+
+    @Test
+    void rejectContentRevision_whenAuditRecordingFails_rollsBackRevisionTransition() {
+        Fixture fixture = createFixture();
+        doThrow(new IllegalStateException("audit storage failure"))
+            .when(recordAuditEventUseCase)
+            .record(any(AuditEventCommand.class));
+
+        assertThatThrownBy(() -> rejectContentRevisionUseCase.reject(
+            fixture.admin().getUserId(),
+            fixture.revision().getContentRevisionId(),
+            "반려 사유",
+            UUID.randomUUID()
+        )).isInstanceOf(IllegalStateException.class);
+
+        entityManager.clear();
+        ContentRevision unchangedRevision = contentRevisionRepository.findById(
+            fixture.revision().getContentRevisionId()
+        ).orElseThrow();
+        Content unchangedContent = contentRepository.findById(fixture.content().getContentId()).orElseThrow();
+        assertThat(unchangedRevision.getStatus()).isEqualTo(ContentRevisionStatus.EDIT_REQUESTED);
+        assertThat(unchangedRevision.getReviewedAt()).isNull();
+        assertThat(unchangedRevision.getReviewedBy()).isNull();
+        assertThat(unchangedRevision.getReviewReason()).isNull();
+        assertThat(unchangedContent.getStatus()).isEqualTo(ContentStatus.PUBLISHED);
+        assertThat(unchangedContent.getTitle()).isEqualTo("원본 제목");
+        assertThat(auditEventRepository.count()).isZero();
+    }
+
+    private Fixture createFixture() {
+        String suffix = Long.toUnsignedString(System.nanoTime());
+        Region region = regionRepository.saveAndFlush(new Region("R" + suffix, "김해시", true));
+        AppUser admin = saveUser("admin-" + suffix);
+        userRoleAssignmentRepository.saveAndFlush(
+            new UserRoleAssignment(admin, UserRole.REGION_ADMIN, region)
+        );
+        AppUser operator = saveUser("operator-" + suffix);
+        Content content = contentRepository.saveAndFlush(new Content(
+            region,
+            operator,
+            ContentType.EVENT_EXPERIENCE,
+            ContentStatus.PUBLISHED,
+            "원본 제목",
+            "원본 설명",
+            "원본 장소",
+            "원본 운영 시간",
+            "055-1234-5678",
+            "원본 주의사항",
+            "만 7세 이상",
+            "편한 복장",
+            "원본 취소 정책",
+            Instant.parse("2026-08-05T00:00:00Z")
+        ));
+        ContentRevision revision = contentRevisionRepository.saveAndFlush(new ContentRevision(
+            content,
+            1,
+            content.getVersionNo(),
+            operator,
+            ContentRevisionStatus.EDIT_REQUESTED,
+            "후보 제목",
+            "후보 설명",
+            "후보 장소",
+            "후보 운영 시간",
+            "055-9876-5432",
+            "후보 주의사항",
+            "만 8세 이상",
+            "운동화",
+            "후보 취소 정책",
+            null,
+            Instant.parse("2026-08-01T00:00:00Z"),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+        ));
+        return new Fixture(admin, content, revision);
+    }
+
+    private AppUser saveUser(String identifierPrefix) {
+        String suffix = Long.toUnsignedString(System.nanoTime());
+        return appUserRepository.saveAndFlush(new AppUser(
+            identifierPrefix + suffix + "@example.com",
+            "hashed-password",
+            "사용자",
+            "010-1234-5678",
+            AppUserStatus.ACTIVE
+        ));
+    }
+
+    private record Fixture(
+        AppUser admin,
+        Content content,
+        ContentRevision revision
+    ) {
+    }
+}

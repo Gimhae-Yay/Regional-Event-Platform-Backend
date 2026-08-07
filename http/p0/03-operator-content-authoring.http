@@ -1,0 +1,415 @@
+@baseUrl = http://localhost:8080
+@operatorAccessToken =
+@otherOperatorAccessToken =
+@authoringImageObjectId =
+@authoringUpdateImageObjectId =
+@authoringRevisionImageObjectId =
+@authoringContentId =
+@publishedContentId = 900001
+@authoringRevisionId =
+@rejectedRevisionId = 920003
+@rejectedContentId = 920002
+@cancelSessionId = 920021
+@modifiableSessionId = 920022
+@publishAt = 2026-09-15T09:00:00+09:00
+@sessionStartsAt = 2026-09-16T10:00:00+09:00
+@sessionEndsAt = 2026-09-16T12:00:00+09:00
+@checkinOpenAt = 2026-09-16T09:30:00+09:00
+@checkinCloseAt = 2026-09-16T10:30:00+09:00
+@authoringNewSessionId =
+@newSessionStartsAt = 2026-09-23T10:00:00+09:00
+@newSessionEndsAt = 2026-09-23T12:00:00+09:00
+@newSessionCheckinOpenAt = 2026-09-23T09:30:00+09:00
+@newSessionCheckinCloseAt = 2026-09-23T10:30:00+09:00
+@changeRequestStartsAt = 2026-09-30T10:00:00+09:00
+@changeRequestEndsAt = 2026-09-30T12:00:00+09:00
+@changeRequestCheckinOpenAt = 2026-09-30T09:30:00+09:00
+@changeRequestCheckinCloseAt = 2026-09-30T10:30:00+09:00
+@validChecksum = AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+
+# P0 운영자 콘텐츠 작성·수정·회차 관리
+# 선행 조건:
+# - operatorAccessToken은 승인된 OPERATOR 토큰이어야 한다.
+# - otherOperatorAccessToken은 다른 운영자 토큰이어야 한다.
+# - publishedContentId는 operatorAccessToken 소유의 PUBLISHED 콘텐츠여야 한다.
+# - rejectedContentId는 operatorAccessToken 소유의 REJECTED 콘텐츠여야 한다.
+# - rejectedRevisionId는 operatorAccessToken 소유 콘텐츠의 EDIT_REJECTED 수정본이어야 한다.
+# - cancelSessionId는 operatorAccessToken 소유 콘텐츠의 SCHEDULED 회차여야 한다.
+# - modifiableSessionId는 operatorAccessToken 소유 PUBLISHED 콘텐츠의 미래 SCHEDULED 회차이며, PENDING 수정 요청이 없어야 한다.
+# - 실제 S3를 쓰는 환경에서는 presigned URL 응답 후 업로드 헤더로 파일 업로드가 필요하다.
+
+### 1. 대표 이미지 업로드 URL 발급 - 201 CREATED 기대
+POST {{baseUrl}}/api/v1/operator/uploads/presigned-url
+Authorization: Bearer {{operatorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "mediaType": "image/jpeg",
+  "byteSize": 1024,
+  "checksum": "{{validChecksum}}",
+  "usage": "CONTENT_REPRESENTATIVE"
+}
+
+> {%
+client.variables.file.set("authoringImageObjectId", response.body.data.imageObjectId);
+%}
+
+### 2. 콘텐츠 생성 - 201 CREATED 기대
+POST {{baseUrl}}/api/v1/operator/contents
+Authorization: Bearer {{operatorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "김해 가야문화 체험",
+  "description": "가야 문화를 체험하는 행사입니다.",
+  "locationText": "김해시 가야의길 190",
+  "operatingHoursText": "매주 토요일 10:00~16:00",
+  "contactText": "055-000-0000",
+  "precautions": "편한 복장으로 참여해 주세요.",
+  "ageRequirement": "초등학생 이상",
+  "materials": "필기구",
+  "cancellationPolicyText": "회차 시작 전까지 예약 취소가 가능합니다.",
+  "publishAt": "{{publishAt}}",
+  "representativeImageObjectId": "{{authoringImageObjectId}}",
+  "sessions": [
+    {
+      "startsAt": "{{sessionStartsAt}}",
+      "endsAt": "{{sessionEndsAt}}",
+      "checkinOpenAt": "{{checkinOpenAt}}",
+      "checkinCloseAt": "{{checkinCloseAt}}",
+      "capacity": 20
+    }
+  ]
+}
+
+> {%
+client.variables.file.set("authoringContentId", response.body.data.contentId);
+%}
+
+### 3. 내 콘텐츠 목록 조회 - 200 OK 기대
+GET {{baseUrl}}/api/v1/operator/contents
+Authorization: Bearer {{operatorAccessToken}}
+Accept: application/json
+
+### 4. 내 콘텐츠 상세 조회 - 200 OK 기대
+GET {{baseUrl}}/api/v1/operator/contents/{{authoringContentId}}
+Authorization: Bearer {{operatorAccessToken}}
+Accept: application/json
+
+### 5. 타 운영자 콘텐츠 상세 조회 - 403 FORBIDDEN 기대
+GET {{baseUrl}}/api/v1/operator/contents/{{authoringContentId}}
+Authorization: Bearer {{otherOperatorAccessToken}}
+Accept: application/json
+
+### 6. 콘텐츠 생성 - 필수 필드 누락, 400 INVALID_INPUT 기대
+POST {{baseUrl}}/api/v1/operator/contents
+Authorization: Bearer {{operatorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "",
+  "description": "필수 필드 누락",
+  "locationText": "김해시",
+  "operatingHoursText": "10:00~16:00",
+  "contactText": "055-000-0000",
+  "precautions": "없음",
+  "ageRequirement": "전체",
+  "materials": "없음",
+  "cancellationPolicyText": "회차 시작 전 취소",
+  "publishAt": "{{publishAt}}",
+  "representativeImageObjectId": "{{authoringImageObjectId}}",
+  "sessions": []
+}
+
+### 7. 콘텐츠 생성 - 255자 제한 초과, 400 INVALID_INPUT 기대
+POST {{baseUrl}}/api/v1/operator/contents
+Authorization: Bearer {{operatorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "description": "제목 길이 초과",
+  "locationText": "김해시",
+  "operatingHoursText": "10:00~16:00",
+  "contactText": "055-000-0000",
+  "precautions": "없음",
+  "ageRequirement": "전체",
+  "materials": "없음",
+  "cancellationPolicyText": "회차 시작 전 취소",
+  "publishAt": "{{publishAt}}",
+  "representativeImageObjectId": "{{authoringImageObjectId}}",
+  "sessions": [
+    {
+      "startsAt": "{{sessionStartsAt}}",
+      "endsAt": "{{sessionEndsAt}}",
+      "checkinOpenAt": "{{checkinOpenAt}}",
+      "checkinCloseAt": "{{checkinCloseAt}}",
+      "capacity": 20
+    }
+  ]
+}
+
+### 8. 콘텐츠 생성 - 회차 시간 순서 오류, 400 INVALID_INPUT 기대
+POST {{baseUrl}}/api/v1/operator/contents
+Authorization: Bearer {{operatorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "시간 오류 콘텐츠",
+  "description": "회차 종료가 시작보다 빠릅니다.",
+  "locationText": "김해시",
+  "operatingHoursText": "10:00~16:00",
+  "contactText": "055-000-0000",
+  "precautions": "없음",
+  "ageRequirement": "전체",
+  "materials": "없음",
+  "cancellationPolicyText": "회차 시작 전 취소",
+  "publishAt": "{{publishAt}}",
+  "representativeImageObjectId": "{{authoringImageObjectId}}",
+  "sessions": [
+    {
+      "startsAt": "{{sessionEndsAt}}",
+      "endsAt": "{{sessionStartsAt}}",
+      "checkinOpenAt": "{{checkinOpenAt}}",
+      "checkinCloseAt": "{{checkinCloseAt}}",
+      "capacity": 20
+    }
+  ]
+}
+
+### 9. 콘텐츠 생성 - capacity 0, 400 INVALID_INPUT 기대
+POST {{baseUrl}}/api/v1/operator/contents
+Authorization: Bearer {{operatorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "정원 오류 콘텐츠",
+  "description": "정원이 0입니다.",
+  "locationText": "김해시",
+  "operatingHoursText": "10:00~16:00",
+  "contactText": "055-000-0000",
+  "precautions": "없음",
+  "ageRequirement": "전체",
+  "materials": "없음",
+  "cancellationPolicyText": "회차 시작 전 취소",
+  "publishAt": "{{publishAt}}",
+  "representativeImageObjectId": "{{authoringImageObjectId}}",
+  "sessions": [
+    {
+      "startsAt": "{{sessionStartsAt}}",
+      "endsAt": "{{sessionEndsAt}}",
+      "checkinOpenAt": "{{checkinOpenAt}}",
+      "checkinCloseAt": "{{checkinCloseAt}}",
+      "capacity": 0
+    }
+  ]
+}
+
+### 10. 반려 콘텐츠 수정용 대표 이미지 업로드 URL 발급 - 201 CREATED 기대
+POST {{baseUrl}}/api/v1/operator/uploads/presigned-url
+Authorization: Bearer {{operatorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "mediaType": "image/jpeg",
+  "byteSize": 1024,
+  "checksum": "{{validChecksum}}",
+  "usage": "CONTENT_REPRESENTATIVE"
+}
+
+> {%
+client.variables.file.set("authoringUpdateImageObjectId", response.body.data.imageObjectId);
+%}
+
+### 11. 반려 콘텐츠 수정 - 200 OK 기대
+PUT {{baseUrl}}/api/v1/operator/contents/{{rejectedContentId}}
+Authorization: Bearer {{operatorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "수정된 김해 가야문화 체험",
+  "description": "반려 사유를 반영한 행사 소개입니다.",
+  "locationText": "김해시 가야의길 190",
+  "operatingHoursText": "매주 토요일 10:00~16:00",
+  "contactText": "055-000-0000",
+  "precautions": "편한 복장으로 참여해 주세요.",
+  "ageRequirement": "초등학생 이상",
+  "materials": "필기구",
+  "cancellationPolicyText": "회차 시작 전까지 예약 취소가 가능합니다.",
+  "publishAt": "{{publishAt}}",
+  "representativeImageObjectId": "{{authoringUpdateImageObjectId}}"
+}
+
+### 12. 반려 콘텐츠 재제출 - 200 OK 기대
+POST {{baseUrl}}/api/v1/operator/contents/{{rejectedContentId}}/submit
+Authorization: Bearer {{operatorAccessToken}}
+Accept: application/json
+
+### 13. 반려 콘텐츠 재제출 반복 - 409 CONTENT_STATE_CONFLICT 기대
+POST {{baseUrl}}/api/v1/operator/contents/{{rejectedContentId}}/submit
+Authorization: Bearer {{operatorAccessToken}}
+Accept: application/json
+
+### 14. 콘텐츠 수정본 생성용 대표 이미지 업로드 URL 발급 - 201 CREATED 기대
+POST {{baseUrl}}/api/v1/operator/uploads/presigned-url
+Authorization: Bearer {{operatorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "mediaType": "image/jpeg",
+  "byteSize": 1024,
+  "checksum": "{{validChecksum}}",
+  "usage": "CONTENT_REPRESENTATIVE"
+}
+
+> {%
+client.variables.file.set("authoringRevisionImageObjectId", response.body.data.imageObjectId);
+%}
+
+### 15. 콘텐츠 수정본 생성 - PUBLISHED 콘텐츠에서 201 CREATED 기대
+POST {{baseUrl}}/api/v1/operator/contents/{{publishedContentId}}/revisions
+Authorization: Bearer {{operatorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "김해 가야문화 체험 수정 요청",
+  "description": "공개 콘텐츠 수정 요청입니다.",
+  "locationText": "김해시 가야의길 190",
+  "operatingHoursText": "매주 토요일 10:00~17:00",
+  "contactText": "055-000-0000",
+  "precautions": "편한 복장으로 참여해 주세요.",
+  "ageRequirement": "초등학생 이상",
+  "materials": "필기구",
+  "cancellationPolicyText": "회차 시작 전까지 예약 취소가 가능합니다.",
+  "representativeImageObjectId": "{{authoringRevisionImageObjectId}}"
+}
+
+> {%
+client.variables.file.set("authoringRevisionId", response.body.data.revisionId);
+%}
+
+### 16. 반려된 콘텐츠 수정본 수정 - 200 OK 기대
+PUT {{baseUrl}}/api/v1/operator/content-revisions/{{rejectedRevisionId}}
+Authorization: Bearer {{operatorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "김해 가야문화 체험 수정 요청 보완",
+  "description": "수정본 내용을 보완합니다.",
+  "locationText": "김해시 가야의길 190",
+  "operatingHoursText": "매주 토요일 10:00~17:00",
+  "contactText": "055-000-0000",
+  "precautions": "편한 복장으로 참여해 주세요.",
+  "ageRequirement": "초등학생 이상",
+  "materials": "필기구",
+  "cancellationPolicyText": "회차 시작 전까지 예약 취소가 가능합니다."
+}
+
+### 17. 콘텐츠 수정본 철회 - 200 OK 기대
+POST {{baseUrl}}/api/v1/operator/content-revisions/{{authoringRevisionId}}/withdraw
+Authorization: Bearer {{operatorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": "운영자 요청으로 철회"
+}
+
+### 18. 콘텐츠 수정본 철회 반복 - 기존 철회 결과 200 OK 기대
+POST {{baseUrl}}/api/v1/operator/content-revisions/{{authoringRevisionId}}/withdraw
+Authorization: Bearer {{operatorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": "운영자 요청으로 철회"
+}
+
+### 19. 운영자 회차 추가 생성 - APPROVED 또는 PUBLISHED 콘텐츠에서 201 CREATED 기대
+POST {{baseUrl}}/api/v1/operator/contents/{{publishedContentId}}/sessions
+Authorization: Bearer {{operatorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "startsAt": "{{newSessionStartsAt}}",
+  "endsAt": "{{newSessionEndsAt}}",
+  "checkinOpenAt": "{{newSessionCheckinOpenAt}}",
+  "checkinCloseAt": "{{newSessionCheckinCloseAt}}",
+  "capacity": 20
+}
+
+> {%
+client.variables.file.set("authoringNewSessionId", response.body.data.sessionId);
+%}
+
+### 20. 운영자 회차 추가 생성 - capacity 0, 400 INVALID_INPUT 기대
+POST {{baseUrl}}/api/v1/operator/contents/{{publishedContentId}}/sessions
+Authorization: Bearer {{operatorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "startsAt": "{{newSessionStartsAt}}",
+  "endsAt": "{{newSessionEndsAt}}",
+  "checkinOpenAt": "{{newSessionCheckinOpenAt}}",
+  "checkinCloseAt": "{{newSessionCheckinCloseAt}}",
+  "capacity": 0
+}
+
+### 21. 운영자 회차 수정 요청 생성 - 미래 SCHEDULED 회차에서 201 CREATED 기대
+POST {{baseUrl}}/api/v1/operator/sessions/{{modifiableSessionId}}/change-requests
+Authorization: Bearer {{operatorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "startsAt": "{{changeRequestStartsAt}}",
+  "endsAt": "{{changeRequestEndsAt}}",
+  "checkinOpenAt": "{{changeRequestCheckinOpenAt}}",
+  "checkinCloseAt": "{{changeRequestCheckinCloseAt}}",
+  "capacity": 25
+}
+
+> {%
+client.global.set("p0SessionRevisionId", response.body.data.revisionId);
+%}
+
+### 22. 운영자 회차 취소 - SCHEDULED 회차에서 200 OK 기대
+POST {{baseUrl}}/api/v1/operator/sessions/{{cancelSessionId}}/cancel
+Authorization: Bearer {{operatorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "cancellationReason": "운영자 사정으로 회차를 취소합니다."
+}
+
+### 23. 운영자 회차 취소 - 사유 공백, 400 INVALID_INPUT 기대
+POST {{baseUrl}}/api/v1/operator/sessions/{{cancelSessionId}}/cancel
+Authorization: Bearer {{operatorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "cancellationReason": " "
+}
+
+# DB 확인
+# SELECT content_id, operator_id, region_id, status, deleted_at FROM content WHERE content_id IN ({{authoringContentId}}, {{publishedContentId}}, {{rejectedContentId}});
+# SELECT session_id, content_id, status, capacity, remaining_capacity FROM content_session WHERE content_id IN ({{authoringContentId}}, {{publishedContentId}}, {{rejectedContentId}}) OR session_id IN ({{authoringNewSessionId}}, {{cancelSessionId}}, {{modifiableSessionId}});
+# SELECT content_revision_id, content_id, status FROM content_revision WHERE content_revision_id IN ({{authoringRevisionId}}, {{rejectedRevisionId}});
+# SELECT session_revision_id, target_session_id, status FROM session_revision WHERE session_revision_id = {{p0SessionRevisionId}};
+# SELECT image_object_id, created_by_user_id, lifecycle_status FROM image_object WHERE image_object_id = {{authoringImageObjectId}};
+# SELECT content_log_id, content_id, status, reason FROM content_log WHERE content_id IN ({{authoringContentId}}, {{publishedContentId}}, {{rejectedContentId}}) ORDER BY content_log_id;

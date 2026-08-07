@@ -1,0 +1,61 @@
+name: 버그 리포트
+description: 테스트 중 버그 발견시에 상세히 기록을 남기고 수정하기 위한 이슈
+title: "[BUG ISSUE] "
+type: Bug
+labels:
+  - NEED_TRIAGE
+projects:
+  - Gimhae-Yay/1
+assignees: []
+
+body:
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: 버그가 발견된 환경을 서술해 주세요. (local, prod 등)
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: 발견한 버그에 대해서 설명해주세요.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Test Sequence
+      description: 어떻게 테스트를 진행 하였는지 서술해 주세요.
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: 예상 결과를 서술해주세요.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: 실제 결과를 서술해주세요.
+    validations:
+      required: true
+
+  - type: upload
+    id: screenshots-logs
+    attributes:
+      label: Screenshots / Logs
+      description: 버그와 관련된 스크린샷이나 로그 파일을 업로드 해주세요.
+    validations:
+      required: false
+      accept: ".png,.jpg,.jpeg,.gif,.webp,.log,.txt"

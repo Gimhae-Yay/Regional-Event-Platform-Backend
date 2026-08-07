@@ -1,0 +1,166 @@
+package io.regionevent.regioneventbackend.infra.storage;
+
+import java.time.Clock;
+import java.time.Duration;
+
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+
+import io.regionevent.regioneventbackend.domain.image.service.ImageStorageGateway;
+import io.regionevent.regioneventbackend.domain.image.service.ImageStorageGateway.PresignedUpload;
+import io.regionevent.regioneventbackend.domain.image.service.ImageStorageGateway.PresignedViewUrl;
+import io.regionevent.regioneventbackend.domain.image.service.ImageStorageGateway.StoredObjectMetadata;
+import io.regionevent.regioneventbackend.domain.image.service.ImageStorageException;
+
+@Configuration
+@EnableConfigurationProperties({
+    ImageStorageConfig.S3StorageProperties.class,
+    ImageStorageConfig.FakeStorageProperties.class
+})
+public class ImageStorageConfig {
+
+    @Bean
+    @ConditionalOnMissingBean(S3Client.class)
+    @ConditionalOnProperty(prefix = "storage.s3", name = "enabled", havingValue = "true")
+    public S3Client imageStorageS3Client(S3StorageProperties properties) {
+        return S3Client.builder()
+            .region(Region.of(requireNotBlank(properties.region(), "storage.s3.region")))
+            .build();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(S3Presigner.class)
+    @ConditionalOnProperty(prefix = "storage.s3", name = "enabled", havingValue = "true")
+    public S3Presigner imageStorageS3Presigner(S3StorageProperties properties) {
+        return S3Presigner.builder()
+            .region(Region.of(requireNotBlank(properties.region(), "storage.s3.region")))
+            .build();
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "storage.s3", name = "enabled", havingValue = "true")
+    public ImageStorageGateway s3ImageStorageGateway(
+        S3StorageProperties properties,
+        Clock clock,
+        S3Client s3Client,
+        S3Presigner s3Presigner
+    ) {
+        return new S3ImageStorageClient(
+            requireNotBlank(properties.bucketName(), "storage.s3.bucket-name"),
+            clock,
+            properties.presignedPutUrlTtl(),
+            properties.presignedGetUrlTtl(),
+            s3Client,
+            s3Presigner
+        );
+    }
+
+    @Bean
+    @ConditionalOnExpression("${storage.fake.enabled:false} && !${storage.s3.enabled:false}")
+    public ImageStorageGateway fakeImageStorageGateway(
+        FakeStorageProperties properties,
+        Clock clock
+    ) {
+        return new FakeImageStorageClient(
+            requireNotBlank(properties.baseUrl(), "storage.fake.base-url"),
+            clock,
+            properties.presignedUrlTtl()
+        );
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(ImageStorageGateway.class)
+    public ImageStorageGateway disabledImageStorageGateway() {
+        return new DisabledImageStorageClient();
+    }
+
+    private static String requireNotBlank(String value, String name) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalStateException(name + " must not be null or blank");
+        }
+        return value;
+    }
+
+    private static ImageStorageException imageStorageDisabled() {
+        return new ImageStorageException("Image storage is disabled");
+    }
+
+    @ConfigurationProperties(prefix = "storage.s3")
+    public record S3StorageProperties(
+        boolean enabled,
+        String bucketName,
+        String region,
+        Duration presignedPutUrlTtl,
+        Duration presignedGetUrlTtl
+    ) {
+
+        private static final Duration DEFAULT_PRESIGNED_PUT_URL_TTL = Duration.ofMinutes(10);
+        private static final Duration DEFAULT_PRESIGNED_GET_URL_TTL = Duration.ofMinutes(5);
+
+        public S3StorageProperties {
+            if (presignedPutUrlTtl == null) {
+                presignedPutUrlTtl = DEFAULT_PRESIGNED_PUT_URL_TTL;
+            }
+            if (presignedGetUrlTtl == null) {
+                presignedGetUrlTtl = DEFAULT_PRESIGNED_GET_URL_TTL;
+            }
+        }
+    }
+
+    @ConfigurationProperties(prefix = "storage.fake")
+    public record FakeStorageProperties(
+        boolean enabled,
+        String baseUrl,
+        Duration presignedUrlTtl
+    ) {
+
+        private static final String DEFAULT_BASE_URL = "https://example.invalid/local-image-storage";
+        private static final Duration DEFAULT_PRESIGNED_URL_TTL = Duration.ofMinutes(5);
+
+        public FakeStorageProperties {
+            if (baseUrl == null || baseUrl.isBlank()) {
+                baseUrl = DEFAULT_BASE_URL;
+            }
+            if (presignedUrlTtl == null) {
+                presignedUrlTtl = DEFAULT_PRESIGNED_URL_TTL;
+            }
+        }
+    }
+
+    private static class DisabledImageStorageClient implements ImageStorageGateway {
+
+        @Override
+        public PresignedUpload createPresignedPutUpload(
+            String objectKey,
+            String mediaType,
+            long byteSize,
+            String checksum
+        ) {
+            throw imageStorageDisabled();
+        }
+
+        @Override
+        public StoredObjectMetadata findMetadata(String objectKey) {
+            throw imageStorageDisabled();
+        }
+
+        @Override
+        public PresignedViewUrl createPresignedGetUrl(String objectKey) {
+            throw imageStorageDisabled();
+        }
+
+        @Override
+        public void delete(String objectKey) {
+            throw imageStorageDisabled();
+        }
+    }
+}
