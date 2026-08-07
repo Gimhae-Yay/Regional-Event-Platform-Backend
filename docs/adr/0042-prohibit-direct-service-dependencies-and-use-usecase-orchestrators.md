@@ -4,7 +4,7 @@
 - 기록 유형: 신규
 - 기록일: 2026-07-30
 - 결정일: 2026-07-30
-- 관련 요구사항: [기술 구성과 설계 원칙](../local-stamp-platform-prd.md#10-기술-구성과-설계-원칙)
+- 관련 요구사항: [P0 명세](../p0-spec.md#82-설계-원칙)와 [내부 API 명세서](../api/api-specification.md)의 도메인 계약
 - 관련 단계: 단계 0. 정책·설계 확정
 - 관련 이슈: 없음
 - 대체 대상: [ADR-0008](0008-evolve-clean-architecture-by-use-case.md#결정)의 Service 간 협력과 UseCase 도입 기준

@@ -8,8 +8,9 @@
 | Access Token 응답 헤더 | 로그인·토큰 갱신 성공 응답은 `Authorization: Bearer <accessToken>` 헤더를 포함한다. |
 | Refresh Token 전달 | 로그인 성공 응답은 `Set-Cookie: refreshToken=<refreshToken>; Max-Age=1209600; Path=/api/v1/auth; HttpOnly; Secure; SameSite=Strict`를 포함한다. 토큰 갱신 성공 응답의 `Max-Age`는 최초 로그인부터 14일인 계열 절대 만료까지 남은 전체 초다. `Domain`은 생략해 호스트 전용 쿠키로 유지하며 Refresh Token은 JSON·`Authorization` 헤더에 넣지 않는다. |
 | 갱신·로그아웃 순서 | 브라우저 클라이언트는 갱신과 로그아웃을 하나의 인증 상태 전이로 직렬화한다. 로그아웃 전 진행 중인 갱신이 끝나면 최신 Cookie로 로그아웃을 요청하며, 로그아웃이 끝날 때까지 새 갱신을 시작하지 않는다. |
-| 인증 제외 API | `POST /api/v1/auth/signup`, `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `GET /api/v1/regions`, `GET /api/v1/regions/{regionId}/home`, `GET /api/v1/contents`, `GET /api/v1/contents/{contentId}`, `GET /api/v1/contents/{contentId}/reviews`, `GET /api/v1/contents/{contentId}/sessions`, `GET /api/v1/sessions/{sessionId}`, `GET /api/v1/regions/{regionId}/missions`, `GET /api/v1/missions/{missionId}` |
+| 인증 제외 API | `POST /api/v1/auth/signup`, `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `GET /api/v1/regions`, `GET /api/v1/regions/{regionId}/home`, `GET /api/v1/contents`, `GET /api/v1/contents/{contentId}`, `GET /api/v1/contents/{contentId}/reviews`, `GET /api/v1/contents/{contentId}/sessions`, `GET /api/v1/sessions/{sessionId}`, `GET /api/v1/regions/{regionId}/missions`, `GET /api/v1/missions/{missionId}`, `POST /api/v1/webhooks/portone` |
 | 선택 인증 API | `GET /api/v1/regions/{regionId}/missions`, `GET /api/v1/missions/{missionId}`. 헤더를 생략하면 공개 데이터만, 유효한 Access Token을 보내면 본인 참여 요약을 함께 반환한다. |
+| 배포 상태 확인 | `GET /actuator/health`는 Docker Compose와 ASG의 무인증 상태 확인만을 위해 허용한다. 응답은 구성 요소·예외·상세 정보를 포함하지 않으며, `GET /actuator/metrics/**`를 포함한 나머지 Actuator 엔드포인트는 Access Token 인증이 필요하다. |
 | 토큰 만료·무효  | `401 Unauthorized`, `UNAUTHENTICATED`                         |
 
 Refresh Token은 `Path=/api/v1/auth` 범위의 인증 API에서만 수신하며 보호 업무 API의 인증 수단으로 사용할 수 없다.
@@ -19,6 +20,8 @@ Refresh Token은 `Path=/api/v1/auth` 범위의 인증 API에서만 수신하며 
 출처를 지원하려면 CSRF 방어·허용 Origin 정책을 ADR과 인증 API 명세에 먼저 확정한다.
 교차 사이트 요구로 `SameSite=Strict`를 변경하려면 CSRF 방어와 함께 후속 ADR과 인증 API 명세를 먼저 갱신한다.
 인증 제외 API를 추가하거나 제거할 때는 이 표와 해당 도메인 API 명세를 같은 변경에서 갱신한다.
+선택 인증 API에 `Authorization` 헤더가 없으면 익명 요청으로 처리한다. 헤더가 있으면 일반 인증 API와 같은 방식으로
+검증하며, 형식이 잘못됐거나 만료·무효인 Access Token은 익명으로 낮추지 않고 `401 UNAUTHENTICATED`로 거부한다.
 선택 인증 API에 `Authorization` 헤더가 없으면 익명 요청으로 처리한다. 헤더가 있으면 일반 인증 API와 같은 방식으로
 검증하며, 형식이 잘못됐거나 만료·무효인 Access Token은 익명으로 낮추지 않고 `401 UNAUTHENTICATED`로 거부한다.
 
