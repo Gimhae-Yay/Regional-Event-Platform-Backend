@@ -54,6 +54,16 @@ public class ContentLogService {
         ));
     }
 
+    public ContentLog recordPublished(Content content, Instant publishedAt) {
+        return contentLogRepository.saveAndFlush(new ContentLog(
+            content,
+            null,
+            ContentLogStatus.PUBLISHED,
+            null,
+            publishedAt
+        ));
+    }
+
     public ContentLog recordRejected(
         Content content,
         AppUser actor,
@@ -124,7 +134,10 @@ public class ContentLogService {
     }
 
     public ContentLog findLatestEnded(Long contentId) {
-        return contentLogRepository.findLatestEnded(contentId)
+        return contentLogRepository.findTopByContentContentIdAndStatusOrderByDateDescIdDesc(
+            contentId,
+            ContentLogStatus.ENDED
+        )
             .orElseThrow(() -> new IllegalStateException("ended content log must exist"));
     }
 }

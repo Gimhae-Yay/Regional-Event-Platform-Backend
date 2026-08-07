@@ -13,6 +13,7 @@ import io.regionevent.regioneventbackend.domain.audit.service.AuditEventService;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.ApproveContentRevisionUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.ApproveContentSessionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.ApproveContentUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.CancelContentSessionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.ContentLogService;
@@ -23,6 +24,7 @@ import io.regionevent.regioneventbackend.domain.content.service.DeleteContentUse
 import io.regionevent.regioneventbackend.domain.content.service.EndContentReservationsUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.OriginalContentReviewTargetPolicy;
 import io.regionevent.regioneventbackend.domain.content.service.OriginalContentReviewTargetService;
+import io.regionevent.regioneventbackend.domain.content.service.PublicCatalogCacheInvalidator;
 import io.regionevent.regioneventbackend.domain.content.service.RejectContentRevisionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.RejectContentUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.SubmitContentUseCase;
@@ -39,6 +41,7 @@ import io.regionevent.regioneventbackend.global.security.qr.QrTokenService;
 @TestConfiguration
 @Import({
     ApproveContentUseCase.class,
+    ApproveContentSessionUseCase.class,
     DeleteContentUseCase.class,
     RejectContentUseCase.class,
     ApproveContentRevisionUseCase.class,
@@ -78,6 +81,11 @@ public class ContentAtomicityJpaTestConfiguration {
     @Bean
     QrTokenService qrTokenService() {
         return mock(QrTokenService.class);
+    }
+
+    @Bean
+    PublicCatalogCacheInvalidator publicCatalogCacheInvalidator() {
+        return mock(PublicCatalogCacheInvalidator.class);
     }
 
     @Bean

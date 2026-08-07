@@ -108,6 +108,53 @@ class SessionRevisionRepositoryTest {
     }
 
     @Test
+    void 심사_대기_미삭제_수정_요청_상세만_관계와_함께_조회한다() {
+        SessionRevisionFixtures fixtures = createFixtures();
+        SessionRevision sessionRevision = sessionRevisionRepository.saveAndFlush(newRevision(
+            fixtures,
+            SessionRevisionStatus.PENDING,
+            null,
+            null,
+            null
+        ));
+        SessionRevision rejectedRevision = sessionRevisionRepository.saveAndFlush(newRevision(
+            fixtures,
+            SessionRevisionStatus.REJECTED,
+            REVIEWED_AT,
+            fixtures.reviewedBy(),
+            "체크인 가능 시간을 다시 확인해 주세요."
+        ));
+        entityManager.clear();
+
+        SessionRevision foundSessionRevision = sessionRevisionRepository.findPendingReviewDetailById(
+            sessionRevision.getSessionRevisionId(),
+            SessionRevisionStatus.PENDING
+        ).orElseThrow();
+        PersistenceUnitUtil persistenceUnitUtil = entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
+
+        assertThat(persistenceUnitUtil.isLoaded(foundSessionRevision, "content")).isTrue();
+        assertThat(persistenceUnitUtil.isLoaded(foundSessionRevision, "region")).isTrue();
+        assertThat(persistenceUnitUtil.isLoaded(foundSessionRevision, "targetSession")).isTrue();
+        assertThat(persistenceUnitUtil.isLoaded(foundSessionRevision, "requestedBy")).isTrue();
+        assertThat(foundSessionRevision.getContent().getRegion().getRegionId())
+            .isEqualTo(fixtures.region().getRegionId());
+        assertThat(foundSessionRevision.getTargetSession().getContent().getContentId())
+            .isEqualTo(fixtures.content().getContentId());
+        assertThat(sessionRevisionRepository.findPendingReviewDetailById(
+            rejectedRevision.getSessionRevisionId(),
+            SessionRevisionStatus.PENDING
+        )).isEmpty();
+        Content deletedContent = contentRepository.findById(fixtures.content().getContentId()).orElseThrow();
+        deletedContent.softDelete(SUBMITTED_AT);
+        contentRepository.saveAndFlush(deletedContent);
+        entityManager.clear();
+        assertThat(sessionRevisionRepository.findPendingReviewDetailById(
+            sessionRevision.getSessionRevisionId(),
+            SessionRevisionStatus.PENDING
+        )).isEmpty();
+    }
+
+    @Test
     void 승인과_반려_상태에_심사_정보를_저장한다() {
         SessionRevisionFixtures fixtures = createFixtures();
 
@@ -167,6 +214,27 @@ class SessionRevisionRepositoryTest {
             fixtures.reviewedBy(),
             "  "
         )).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void 대상_회차당_심사대기_수정_요청은_하나만_저장한다() {
+        SessionRevisionFixtures fixtures = createFixtures();
+
+        sessionRevisionRepository.saveAndFlush(newRevision(
+            fixtures,
+            SessionRevisionStatus.PENDING,
+            null,
+            null,
+            null
+        ));
+
+        assertThatThrownBy(() -> sessionRevisionRepository.saveAndFlush(newRevision(
+            fixtures,
+            SessionRevisionStatus.PENDING,
+            null,
+            null,
+            null
+        ))).isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test

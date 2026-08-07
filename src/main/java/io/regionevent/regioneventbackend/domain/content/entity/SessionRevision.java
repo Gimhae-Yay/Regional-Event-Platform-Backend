@@ -258,6 +258,15 @@ public class SessionRevision {
         return createdAt;
     }
 
+    public void approve(AppUser reviewer, Instant reviewedAt) {
+        if (status != SessionRevisionStatus.PENDING) {
+            throw new IllegalStateException("session revision must be pending");
+        }
+        this.status = SessionRevisionStatus.APPROVED;
+        this.reviewedBy = requireNotNull(reviewer, "reviewer");
+        this.reviewedAt = requireNotNull(reviewedAt, "reviewedAt");
+    }
+
     private void validateTargetSession() {
         if (targetSession.getStatus() != ContentSessionStatus.SCHEDULED) {
             throw new IllegalArgumentException("targetSession must be scheduled");

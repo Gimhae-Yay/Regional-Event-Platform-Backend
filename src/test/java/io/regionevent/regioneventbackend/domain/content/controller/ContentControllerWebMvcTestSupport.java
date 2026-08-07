@@ -22,11 +22,14 @@ import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 import io.regionevent.regioneventbackend.domain.content.service.ApproveContentRevisionUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.ApproveContentSessionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.ApproveContentUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.CancelContentSessionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.ContentSessionService;
 import io.regionevent.regioneventbackend.domain.content.service.CreateContentRevisionUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.CreateContentSessionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.CreateContentUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.CreateSessionRevisionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.DeleteContentUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.EndContentReservationsUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetContentHistoryUseCase;
@@ -35,11 +38,16 @@ import io.regionevent.regioneventbackend.domain.content.service.GetMyContentUseC
 import io.regionevent.regioneventbackend.domain.content.service.GetOriginalContentReviewDetailUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetPendingContentsUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetPendingContentRevisionsUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.GetPendingSessionReviewDetailUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.GetPendingSessionRevisionsUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetPublicContentSessionsUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetPublicContentUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetPublicContentsUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.GetSessionRevisionReviewDetailUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.RejectContentRevisionUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.RejectContentSessionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.RejectContentUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.RejectSessionRevisionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.SubmitContentUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.UpdateContentRevisionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.UpdateMyContentUseCase;
@@ -70,6 +78,9 @@ abstract class ContentControllerWebMvcTestSupport {
     protected ApproveContentRevisionUseCase approveContentRevisionUseCase;
 
     @MockitoBean
+    protected ApproveContentSessionUseCase approveContentSessionUseCase;
+
+    @MockitoBean
     protected ApproveContentUseCase approveContentUseCase;
 
     @MockitoBean
@@ -80,6 +91,12 @@ abstract class ContentControllerWebMvcTestSupport {
 
     @MockitoBean
     protected CreateContentRevisionUseCase createContentRevisionUseCase;
+
+    @MockitoBean
+    protected CreateContentSessionUseCase createContentSessionUseCase;
+
+    @MockitoBean
+    protected CreateSessionRevisionUseCase createSessionRevisionUseCase;
 
     @MockitoBean
     protected CreateContentUseCase createContentUseCase;
@@ -109,6 +126,12 @@ abstract class ContentControllerWebMvcTestSupport {
     protected GetPendingContentRevisionsUseCase getPendingContentRevisionsUseCase;
 
     @MockitoBean
+    protected GetPendingSessionReviewDetailUseCase getPendingSessionReviewDetailUseCase;
+
+    @MockitoBean
+    protected GetPendingSessionRevisionsUseCase getPendingSessionRevisionsUseCase;
+
+    @MockitoBean
     protected GetPublicContentSessionsUseCase getPublicContentSessionsUseCase;
 
     @MockitoBean
@@ -118,10 +141,19 @@ abstract class ContentControllerWebMvcTestSupport {
     protected GetPublicContentsUseCase getPublicContentsUseCase;
 
     @MockitoBean
+    protected GetSessionRevisionReviewDetailUseCase getSessionRevisionReviewDetailUseCase;
+
+    @MockitoBean
     protected RejectContentRevisionUseCase rejectContentRevisionUseCase;
 
     @MockitoBean
+    protected RejectContentSessionUseCase rejectContentSessionUseCase;
+
+    @MockitoBean
     protected RejectContentUseCase rejectContentUseCase;
+
+    @MockitoBean
+    protected RejectSessionRevisionUseCase rejectSessionRevisionUseCase;
 
     @MockitoBean
     protected SubmitContentUseCase submitContentUseCase;

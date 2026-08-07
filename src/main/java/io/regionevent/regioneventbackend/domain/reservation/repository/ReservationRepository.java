@@ -321,6 +321,19 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
         """)
     List<Reservation> findConfirmedBySessionIdForUpdate(@Param("sessionId") Long sessionId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT reservation
+        FROM Reservation reservation
+        WHERE reservation.contentSession.sessionId = :sessionId
+            AND reservation.status IN :statuses
+        ORDER BY reservation.reservationId ASC
+        """)
+    List<Reservation> findBySessionIdAndStatusInForUpdate(
+        @Param("sessionId") Long sessionId,
+        @Param("statuses") List<ReservationStatus> statuses
+    );
+
     @Query("""
         SELECT CASE WHEN COUNT(contentSession) > 0 THEN true ELSE false END
         FROM ContentSession contentSession

@@ -60,7 +60,7 @@ Accept: application/json
   "startsAt": "2026-08-22T10:00:00+09:00",
   "endsAt": "2026-08-22T12:00:00+09:00",
   "checkinOpenAt": "2026-08-22T09:30:00+09:00",
-  "checkinCloseAt": "2026-08-22T12:30:00+09:00",
+  "checkinCloseAt": "2026-08-22T11:30:00+09:00",
   "capacity": 30
 }
 ```
@@ -90,7 +90,7 @@ Accept: application/json
   "startsAt": "2026-08-22T10:00:00+09:00",
   "endsAt": "2026-08-22T12:00:00+09:00",
   "checkinOpenAt": "2026-08-22T09:30:00+09:00",
-  "checkinCloseAt": "2026-08-22T12:30:00+09:00",
+  "checkinCloseAt": "2026-08-22T11:30:00+09:00",
   "capacity": 30
 }
 ```
@@ -100,9 +100,9 @@ Accept: application/json
 | Name | Type | Required | Description |
 | --- | --- | --- |
 | `startsAt` | String | Y | API 공통 규칙에 따른 `Asia/Seoul` 일정 시각이다. 현재 시각과 콘텐츠의 `publishAt` 이후이고 `endsAt`보다 앞서야 한다. |
-| `endsAt` | String | Y | API 공통 규칙에 따른 `Asia/Seoul` 일정 시각이다. `startsAt`보다 뒤고 `checkinCloseAt`보다 늦지 않아야 한다. |
+| `endsAt` | String | Y | API 공통 규칙에 따른 `Asia/Seoul` 일정 시각이다. `startsAt`과 `checkinCloseAt`보다 뒤여야 한다. |
 | `checkinOpenAt` | String | Y | API 공통 규칙에 따른 `Asia/Seoul` 일정 시각이다. `checkinCloseAt`보다 앞서야 한다. |
-| `checkinCloseAt` | String | Y | API 공통 규칙에 따른 `Asia/Seoul` 일정 시각이다. `endsAt`보다 이르면 안 된다. |
+| `checkinCloseAt` | String | Y | API 공통 규칙에 따른 `Asia/Seoul` 일정 시각이다. `checkinOpenAt`보다 뒤고 `endsAt`보다 앞서야 한다. |
 | `capacity` | Integer | Y | 1 이상의 정수다. |
 
 ### 처리 규칙
@@ -145,7 +145,7 @@ Accept: application/json
     "startsAt": "2026-08-22T10:00:00+09:00",
     "endsAt": "2026-08-22T12:00:00+09:00",
     "checkinOpenAt": "2026-08-22T09:30:00+09:00",
-    "checkinCloseAt": "2026-08-22T12:30:00+09:00",
+    "checkinCloseAt": "2026-08-22T11:30:00+09:00",
     "capacity": 30,
     "requestedAt": "2026-08-01T01:00:00Z"
   }

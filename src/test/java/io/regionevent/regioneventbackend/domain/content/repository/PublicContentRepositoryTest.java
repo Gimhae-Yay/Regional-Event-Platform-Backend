@@ -16,7 +16,7 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
-import io.regionevent.regioneventbackend.domain.content.repository.PublicContentProjection;
+import io.regionevent.regioneventbackend.domain.content.repository.PublicContentListVerificationProjection;
 import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
 import io.regionevent.regioneventbackend.domain.image.repository.ImageObjectRepository;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
@@ -68,7 +68,7 @@ class PublicContentRepositoryTest {
         saveScheduledSession(second, region, operator, Instant.now().plusSeconds(3_600), 0);
         saveScheduledSession(earlier, region, operator, Instant.now().minusSeconds(3_600), 10);
 
-        List<PublicContentProjection> results = contentRepository.findPublicContents(
+        List<PublicContentListVerificationProjection> results = contentRepository.findPublicContentListVerifications(
             region.getRegionId(),
             null,
             null,
@@ -77,11 +77,37 @@ class PublicContentRepositoryTest {
         );
 
         assertThat(results)
-            .extracting(PublicContentProjection::contentId)
+            .extracting(PublicContentListVerificationProjection::contentId)
             .containsExactly(second.getContentId(), first.getContentId(), earlier.getContentId());
         assertThat(results)
-            .extracting(PublicContentProjection::reservationAvailable)
+            .extracting(PublicContentListVerificationProjection::reservationAvailable)
             .containsExactly(false, true, false);
+        assertThat(results)
+            .extracting(PublicContentListVerificationProjection::regionId)
+            .containsOnly(region.getRegionId());
+        assertThat(results)
+            .extracting(PublicContentListVerificationProjection::versionNo)
+            .containsOnly(0);
+    }
+
+    @Test
+    void 공개_콘텐츠_단건_조회는_공개_지역의_현재_공개본만_반환한다() {
+        Region publicRegion = saveRegion("DETAIL-PUBLIC");
+        Region privateRegion = regionRepository.saveAndFlush(
+            new Region("REGION-DETAIL-PRIVATE", "비공개 지역", false)
+        );
+        AppUser operator = saveUser();
+        Content publicContent = saveContent(publicRegion, operator, "공개 콘텐츠", SAME_PUBLISH_AT);
+        Content privateContent = saveContent(privateRegion, operator, "비공개 콘텐츠", SAME_PUBLISH_AT);
+
+        assertThat(contentRepository.findPublicContentByContentId(
+            publicContent.getContentId(),
+            ContentStatus.PUBLISHED
+        )).contains(publicContent);
+        assertThat(contentRepository.findPublicContentByContentId(
+            privateContent.getContentId(),
+            ContentStatus.PUBLISHED
+        )).isEmpty();
     }
 
     @Test
@@ -93,14 +119,14 @@ class PublicContentRepositoryTest {
         saveScheduledSession(reservable, region, operator, Instant.now().plusSeconds(3_600), 10);
         saveScheduledSession(unavailable, region, operator, Instant.now().plusSeconds(3_600), 0);
 
-        List<PublicContentProjection> reservableResults = contentRepository.findPublicContents(
+        List<PublicContentListVerificationProjection> reservableResults = contentRepository.findPublicContentListVerifications(
             region.getRegionId(),
             ContentType.EVENT_EXPERIENCE,
             true,
             ContentStatus.PUBLISHED,
             ContentSessionStatus.SCHEDULED
         );
-        List<PublicContentProjection> unavailableResults = contentRepository.findPublicContents(
+        List<PublicContentListVerificationProjection> unavailableResults = contentRepository.findPublicContentListVerifications(
             region.getRegionId(),
             ContentType.EVENT_EXPERIENCE,
             false,
@@ -109,11 +135,44 @@ class PublicContentRepositoryTest {
         );
 
         assertThat(reservableResults)
-            .extracting(PublicContentProjection::contentId)
+            .extracting(PublicContentListVerificationProjection::contentId)
             .containsExactly(reservable.getContentId());
         assertThat(unavailableResults)
-            .extracting(PublicContentProjection::contentId)
+            .extracting(PublicContentListVerificationProjection::contentId)
             .containsExactly(unavailable.getContentId());
+    }
+
+    @Test
+    void 지역_홈_후보는_공개_지역의_진행_또는_향후_SCHEDULED_회차만_MySQL_현재시각으로_조회한다() {
+        Region publicRegion = saveRegion("HOME-PUBLIC");
+        Region privateRegion = regionRepository.saveAndFlush(new Region("HOME-PRIVATE", "비공개 지역", false));
+        AppUser operator = saveUser();
+        Content ongoing = saveContent(publicRegion, operator, "진행 콘텐츠", SAME_PUBLISH_AT);
+        Content upcoming = saveContent(publicRegion, operator, "임박 콘텐츠", SAME_PUBLISH_AT);
+        Content ended = saveContent(publicRegion, operator, "종료 회차 콘텐츠", SAME_PUBLISH_AT);
+        Content privateContent = saveContent(privateRegion, operator, "비공개 지역 콘텐츠", SAME_PUBLISH_AT);
+        Instant now = Instant.now();
+        saveScheduledSession(ongoing, publicRegion, operator, now.minusSeconds(1_800), 10);
+        saveScheduledSession(upcoming, publicRegion, operator, now.plusSeconds(3_600), 0);
+        saveScheduledSession(ended, publicRegion, operator, now.minusSeconds(7_200), 10);
+        saveScheduledSession(privateContent, privateRegion, operator, now.plusSeconds(3_600), 10);
+
+        List<RegionHomeContentSessionVerificationProjection> results = contentRepository
+            .findRegionHomeContentSessionVerifications(
+                publicRegion.getRegionId(),
+                ContentStatus.PUBLISHED,
+                ContentSessionStatus.SCHEDULED
+            );
+
+        assertThat(results)
+            .extracting(RegionHomeContentSessionVerificationProjection::contentId)
+            .containsExactly(ongoing.getContentId(), upcoming.getContentId());
+        assertThat(results)
+            .extracting(RegionHomeContentSessionVerificationProjection::ongoing)
+            .containsExactly(true, false);
+        assertThat(results)
+            .extracting(RegionHomeContentSessionVerificationProjection::reservationAvailable)
+            .containsExactly(false, false);
     }
 
     private Region saveRegion(String suffix) {

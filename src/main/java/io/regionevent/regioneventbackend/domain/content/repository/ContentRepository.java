@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.content.repository;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -20,14 +21,36 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 
 public interface ContentRepository extends JpaRepository<Content, Long> {
 
+    @Query("""
+        SELECT content.contentId
+        FROM Content content
+        WHERE content.status = :contentStatus
+            AND content.deletedAt IS NULL
+            AND EXISTS (
+                SELECT contentSession.sessionId
+                FROM ContentSession contentSession
+                WHERE contentSession.content = content
+            )
+            AND NOT EXISTS (
+                SELECT contentSession.sessionId
+                FROM ContentSession contentSession
+                WHERE contentSession.content = content
+                    AND contentSession.status NOT IN :terminalStatuses
+            )
+        ORDER BY content.contentId ASC
+        """)
+    List<Long> findAutoEndCandidateIds(
+        @Param("contentStatus") ContentStatus contentStatus,
+        @Param("terminalStatuses") List<ContentSessionStatus> terminalStatuses
+    );
+
     boolean existsByOperatorUserId(Long userId);
 
     @Query("""
-        SELECT new io.regionevent.regioneventbackend.domain.content.repository.PublicContentProjection(
+        SELECT new io.regionevent.regioneventbackend.domain.content.repository.PublicContentListVerificationProjection(
+            content.region.regionId,
             content.contentId,
-            content.contentType,
-            content.title,
-            content.locationText,
+            content.versionNo,
             representativeImageObject,
             content.representativeImageAssignedAt,
             CASE WHEN EXISTS (
@@ -72,12 +95,111 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
             )
         ORDER BY content.publishAt DESC, content.contentId DESC
         """)
-    List<PublicContentProjection> findPublicContents(
+    List<PublicContentListVerificationProjection> findPublicContentListVerifications(
         @Param("regionId") Long regionId,
         @Param("contentType") ContentType contentType,
         @Param("reservationAvailable") Boolean reservationAvailable,
         @Param("contentStatus") ContentStatus contentStatus,
         @Param("sessionStatus") ContentSessionStatus sessionStatus
+    );
+
+    @Query("""
+        SELECT new io.regionevent.regioneventbackend.domain.content.repository.RegionHomeContentSessionVerificationProjection(
+            content.region.regionId,
+            content.contentId,
+            content.versionNo,
+            representativeImageObject,
+            content.representativeImageAssignedAt,
+            contentSession.sessionId,
+            contentSession.startsAt,
+            contentSession.endsAt,
+            contentSession.remainingCapacity,
+            CASE WHEN EXISTS (
+                SELECT futureSession.sessionId
+                FROM ContentSession futureSession
+                WHERE futureSession.content = content
+                    AND futureSession.region.regionId = :regionId
+                    AND futureSession.status = :sessionStatus
+                    AND futureSession.startsAt > CURRENT_TIMESTAMP
+                    AND futureSession.remainingCapacity > 0
+            ) THEN true ELSE false END,
+            CASE WHEN contentSession.startsAt <= CURRENT_TIMESTAMP
+                    AND CURRENT_TIMESTAMP < contentSession.endsAt
+                THEN true ELSE false END
+        )
+        FROM ContentSession contentSession
+        JOIN contentSession.content content
+        LEFT JOIN content.representativeImageObject representativeImageObject
+        WHERE content.region.regionId = :regionId
+            AND contentSession.region.regionId = :regionId
+            AND content.region.isPublic = true
+            AND content.status = :contentStatus
+            AND content.deletedAt IS NULL
+            AND contentSession.status = :sessionStatus
+            AND (
+                (
+                    contentSession.startsAt <= CURRENT_TIMESTAMP
+                    AND CURRENT_TIMESTAMP < contentSession.endsAt
+                )
+                OR contentSession.startsAt > CURRENT_TIMESTAMP
+            )
+        ORDER BY content.contentId ASC, contentSession.startsAt ASC, contentSession.sessionId ASC
+        """)
+    List<RegionHomeContentSessionVerificationProjection> findRegionHomeContentSessionVerifications(
+        @Param("regionId") Long regionId,
+        @Param("contentStatus") ContentStatus contentStatus,
+        @Param("sessionStatus") ContentSessionStatus sessionStatus
+    );
+
+    @Query("""
+        SELECT new io.regionevent.regioneventbackend.domain.content.repository.PublicContentDetailVerificationProjection(
+            content.region.regionId,
+            content.contentId,
+            content.versionNo,
+            representativeImageObject,
+            content.representativeImageAssignedAt,
+            content.contactText
+        )
+        FROM Content content
+        LEFT JOIN content.representativeImageObject representativeImageObject
+        WHERE content.contentId = :contentId
+            AND content.status = :contentStatus
+            AND content.deletedAt IS NULL
+            AND content.region.isPublic = true
+        """)
+    Optional<PublicContentDetailVerificationProjection> findPublicContentDetailVerification(
+        @Param("contentId") Long contentId,
+        @Param("contentStatus") ContentStatus contentStatus
+    );
+
+    @Query("""
+        SELECT new io.regionevent.regioneventbackend.domain.content.repository.PublicContentStaticProjection(
+            content.region.regionId,
+            content.contentId,
+            content.versionNo,
+            content.contentType,
+            content.title,
+            content.description,
+            content.locationText,
+            content.operatingHoursText,
+            content.precautions,
+            content.ageRequirement,
+            content.materials,
+            content.cancellationPolicyText
+        )
+        FROM Content content
+        WHERE content.region.regionId = :regionId
+            AND content.contentId = :contentId
+            AND content.versionNo = :versionNo
+            AND content.status = :contentStatus
+            AND content.deletedAt IS NULL
+            AND content.region.isPublic = true
+        """)
+    Optional<PublicContentStaticProjection> findPublicContentStaticInfo(
+        @Param("regionId") Long regionId,
+        @Param("contentId") Long contentId,
+        @Param("versionNo") int versionNo,
+        @Param("contentStatus") ContentStatus contentStatus
     );
 
     @Query("""
@@ -111,10 +233,18 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
         """)
     Optional<Content> findOperatorReservationListTarget(@Param("contentId") Long contentId);
 
-    @EntityGraph(attributePaths = "representativeImageObject")
-    Optional<Content> findByContentIdAndStatusAndDeletedAtIsNull(
-        Long contentId,
-        ContentStatus status
+    @EntityGraph(attributePaths = {"region", "representativeImageObject"})
+    @Query("""
+        SELECT content
+        FROM Content content
+        WHERE content.contentId = :contentId
+            AND content.status = :status
+            AND content.deletedAt IS NULL
+            AND content.region.isPublic = true
+        """)
+    Optional<Content> findPublicContentByContentId(
+        @Param("contentId") Long contentId,
+        @Param("status") ContentStatus status
     );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -184,6 +314,31 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
             AND content.deletedAt IS NULL
         """)
     Optional<Content> findSuspendTargetForUpdate(@Param("contentId") Long contentId);
+
+    @Query(value = """
+        SELECT content_id
+        FROM content
+        WHERE status = 'APPROVED'
+            AND deleted_at IS NULL
+            AND publish_at <= CURRENT_TIMESTAMP(6)
+        ORDER BY content_id ASC
+        """, nativeQuery = true)
+    List<Long> findApprovedPublicationCandidateIds();
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = "region")
+    @Query("""
+        SELECT content
+        FROM Content content
+        WHERE content.contentId = :contentId
+            AND content.status = io.regionevent.regioneventbackend.domain.content.entity.ContentStatus.APPROVED
+            AND content.deletedAt IS NULL
+            AND content.publishAt <= CURRENT_TIMESTAMP
+        """)
+    Optional<Content> findApprovedPublicationTargetForUpdate(@Param("contentId") Long contentId);
+
+    @Query(value = "SELECT UNIX_TIMESTAMP(CURRENT_TIMESTAMP(6))", nativeQuery = true)
+    BigDecimal findCurrentEpochSeconds();
 
     @Query(value = """
         SELECT content_id
