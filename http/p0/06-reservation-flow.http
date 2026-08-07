@@ -1,13 +1,13 @@
 @baseUrl = http://localhost:8080
-@visitorAccessToken =
-@otherVisitorAccessToken =
-@sessionId =
-@soldOutSessionId =
-@startedSessionId =
-@holdId =
-@expiredHoldId =
-@reservationId =
-@checkedInReservationId =
+@visitorAccessToken = {{p0VisitorAccessToken}}
+@otherVisitorAccessToken = {{p0OtherVisitorAccessToken}}
+@sessionId = {{p0ScheduledSessionId}}
+@soldOutSessionId = {{p0SoldOutSessionId}}
+@startedSessionId = {{p0StartedSessionId}}
+@holdId = {{p0ReservationHoldId}}
+@expiredHoldId = {{p0ExpiredHoldId}}
+@reservationId = {{p0ReservationId}}
+@checkedInReservationId = {{p0CheckedInReservationId}}
 @confirmIdempotencyKey = confirm-{{$uuid}}
 @confirmConflictIdempotencyKey = confirm-conflict-{{$uuid}}
 

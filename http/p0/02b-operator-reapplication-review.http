@@ -4,10 +4,8 @@
 @reapplyEmail = reapply-operator-{{$timestamp}}@example.com
 @reapplyPassword = Test!23456
 @reapplyPhone = 01033334444
-@regionAdminAccessToken =
-@otherRegionAdminAccessToken =
-@rejectedOperatorApplicationId =
-@reappliedOperatorApplicationId =
+@regionAdminAccessToken = {{p0RegionAdminAccessToken}}
+@otherRegionAdminAccessToken = {{p0OtherRegionAdminAccessToken}}
 
 # P0 운영자 반려 후 재신청·심사
 # 선행 조건:
