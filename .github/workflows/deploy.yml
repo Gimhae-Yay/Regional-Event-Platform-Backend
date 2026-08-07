@@ -192,18 +192,33 @@ jobs:
           INSTANCE_ID: ${{ steps.new-instance.outputs.instance_id }}
         run: |
           set -euo pipefail
-          target_group_arn="$(aws autoscaling describe-auto-scaling-groups \
+          target_group_arns="$(aws autoscaling describe-auto-scaling-groups \
             --auto-scaling-group-names "$AUTO_SCALING_GROUP_NAME" \
-            --query 'AutoScalingGroups[0].TargetGroupARNs[0]' \
-            --output text)"
-          test -n "$target_group_arn" && test "$target_group_arn" != "None"
+            --query 'AutoScalingGroups[0].TargetGroupARNs' \
+            --output text \
+            | tr '\t' '\n' \
+            | sed '/^$/d; /^None$/d')"
+          if test -z "$target_group_arns"; then
+            echo "ASG에 연결된 ALB 대상 그룹이 없습니다: $AUTO_SCALING_GROUP_NAME" >&2
+            exit 1
+          fi
+
           for _ in {1..36}; do
-            state="$(aws elbv2 describe-target-health \
-              --target-group-arn "$target_group_arn" \
-              --targets "Id=$INSTANCE_ID" \
-              --query 'TargetHealthDescriptions[0].TargetHealth.State' \
-              --output text)"
-            if test "$state" = "healthy"; then
+            all_targets_healthy=true
+            while IFS= read -r target_group_arn; do
+              target_health="$(aws elbv2 describe-target-health \
+                --target-group-arn "$target_group_arn" \
+                --query "TargetHealthDescriptions[?Target.Id=='$INSTANCE_ID'].TargetHealth.{State:State,Reason:Reason,Description:Description}" \
+                --output json)"
+              state="$(jq -r '.[0].State // "unregistered"' <<< "$target_health")"
+              reason="$(jq -r '.[0].Reason // "대상 미등록"' <<< "$target_health")"
+              description="$(jq -r '.[0].Description // "대상 그룹에 인스턴스가 등록되지 않았습니다."' <<< "$target_health")"
+              echo "대상 그룹=$target_group_arn 상태=$state 사유=$reason 설명=$description"
+              if test "$state" != "healthy"; then
+                all_targets_healthy=false
+              fi
+            done <<< "$target_group_arns"
+            if test "$all_targets_healthy" = true; then
               exit 0
             fi
             sleep 10

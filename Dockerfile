@@ -12,7 +12,7 @@ RUN chmod +x gradlew
 
 COPY src src
 
-RUN ./gradlew --no-daemon bootJar
+RUN ./gradlew --no-daemon bootJar -x test
 
 FROM amazoncorretto:21-al2023-headless
 
