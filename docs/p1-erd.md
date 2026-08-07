@@ -219,11 +219,12 @@ erDiagram
 
 ### 3.4 쿠폰 발급과 사용
 
-`mission_reward_claim`, `stampbook_reward_grant`는 [스탬프북](#32-스탬프북)과 [지역 미션](#33-지역-미션) 그림에서 전체 열을 확인한다. 이 그림에서는 세 발급 근거 중 정확히 하나만 `coupon_issuance`에 연결된다는 점을 보여 준다. `app_user`, `region`, `visit`, `reservation`은 P0 재사용 테이블이며, 모든 외래 키의 부모를 관계선과 PK로 표시한다.
+`mission_reward_claim`, `stampbook_reward_grant`는 [스탬프북](#32-스탬프북)과 [지역 미션](#33-지역-미션) 그림에서 전체 열을 확인한다. 이 그림에서는 세 발급 근거 중 정확히 하나만 `coupon_issuance`에 연결된다는 점을 보여 준다. `app_user`, `region`, `content`, `visit`, `reservation`은 P0 재사용 테이블이며, 모든 외래 키의 부모를 관계선과 PK로 표시한다.
 
 ```mermaid
 erDiagram
-    region ||--o{ coupon_policy : scopes
+    region ||--o{ coupon_policy : same_region
+    content ||--o{ coupon_policy : applies_to
     coupon_policy ||--o{ coupon : governs
     coupon_policy ||--o{ coupon_issuance : issues
     app_user ||--o{ coupon : owns
@@ -243,6 +244,11 @@ erDiagram
     region {
         BIGINT region_id PK "P0 지역 식별자; NOT NULL"
     }
+    content {
+        BIGINT content_id PK "P0 적용 콘텐츠 식별자; NOT NULL"
+        BIGINT region_id FK "P0 콘텐츠 지역; NOT NULL"
+        BIGINT operator_id FK "P0 콘텐츠 소유 운영자; NOT NULL"
+    }
     visit {
         BIGINT visit_id PK "P0 유효 방문 식별자; NOT NULL"
     }
@@ -260,11 +266,21 @@ erDiagram
     }
     coupon_policy {
         BIGINT coupon_policy_id PK "쿠폰 정책 식별자; NOT NULL"
-        BIGINT region_id FK "적용 지역; NOT NULL"
+        BIGINT content_id FK "적용 콘텐츠; NOT NULL"
+        BIGINT region_id FK "콘텐츠와 같은 지역; NOT NULL"
+        VARCHAR name "정책 이름; NOT NULL"
+        VARCHAR description "정책 설명; NULL 가능"
         VARCHAR issuance_type "발급 경로: VISIT|MISSION_REWARD|STAMPBOOK_COMPLETION; NOT NULL"
         BIGINT discount_amount "정액 할인 금액; NOT NULL"
+        BIGINT minimum_payment_amount "최소 결제 금액; NOT NULL"
         INT valid_days "발급 뒤 유효 일수; 1~365; NOT NULL"
-        VARCHAR status "상태: DRAFT|PENDING_REVIEW|PUBLISHED|ENDED; NOT NULL"
+        TIMESTAMP issue_starts_at "발급 가능 시작 시각; NOT NULL"
+        TIMESTAMP issue_ends_at "발급 가능 종료 시각; NOT NULL"
+        BIGINT total_issue_limit "정책 전체 발급 한도; 무제한이면 NULL"
+        BIGINT issued_count "현재 발급 사용량; 기본값 0; NOT NULL"
+        VARCHAR status "상태: DRAFT|PUBLISHED|ENDED; NOT NULL"
+        TIMESTAMP published_at "공개 시각; 공개 전 NULL"
+        TIMESTAMP ended_at "종료 시각; 종료 전 NULL"
     }
     coupon {
         BIGINT coupon_id PK "발급 쿠폰 식별자; NOT NULL"
@@ -311,6 +327,8 @@ erDiagram
 
 ```mermaid
 erDiagram
+    content ||--|{ content_session : schedules
+    content_session ||--o{ capacity_hold : holds
     capacity_hold ||--o| reservation_price_snapshot : snapshots
     coupon o|--o{ reservation_price_snapshot : applies
     capacity_hold ||--o{ payment : starts
@@ -327,10 +345,19 @@ erDiagram
     app_user {
         BIGINT user_id PK "P0 사용자 식별자; NOT NULL"
     }
+    content {
+        BIGINT content_id PK "P0 콘텐츠 식별자; NOT NULL"
+        BIGINT region_id FK "P0 콘텐츠 지역; NOT NULL"
+    }
+    content_session {
+        BIGINT session_id PK "P0 회차 식별자; NOT NULL"
+        BIGINT content_id FK "P0 회차 콘텐츠; NOT NULL"
+    }
     capacity_hold {
         BIGINT hold_id PK "P0 정원 홀드 식별자; NOT NULL"
         BIGINT user_id FK "P0 홀드 소유자; NOT NULL"
         BIGINT region_id FK "P0 홀드 지역; NOT NULL"
+        BIGINT session_id FK "P0 홀드 회차; NOT NULL"
     }
     reservation {
         BIGINT reservation_id PK "P0 확정 예약 식별자; NOT NULL"
@@ -476,7 +503,7 @@ P0의 복합 PK `(user_id, role)`를 `role_assignment_id`로 대체한다. 역�
 | 추가·확장 항목 | 규칙 |
 | --- | --- |
 | `target_type` | 기존 P0 값에 `PLATFORM_ADMIN_ASSIGNMENT`, `USER_ROLE_ASSIGNMENT`, `STAMPBOOK`, `MISSION`, `COUPON_POLICY`, `COUPON`, `RESERVATION_PRICE_SNAPSHOT`, `PAYMENT`, `REFUND`, `PAYMENT_DISCREPANCY`를 추가 |
-| `reason` | P1 수명주기·운영 명령의 사유 원문. 스탬프북·미션·쿠폰 정책의 생성·수정·심사 요청·승인·반려·종료에서는 앞뒤 공백 제거 뒤 1~500자이며 NOT NULL, 그 외 이벤트는 nullable |
+| `reason` | P1 수명주기·운영 명령의 사유 원문. 스탬프북·미션의 생성·수정·심사 요청·승인·반려·종료와 쿠폰 정책의 생성·수정·공개·종료에서는 앞뒤 공백 제거 뒤 1~500자이며 NOT NULL, 그 외 이벤트는 nullable |
 | `evidence_reference` | `VARCHAR(500) NULL`. 특권 변경·수동 거래 처리 이벤트에서는 NOT NULL, 그 외 기존 P0 이벤트는 nullable. 지역 API는 앞뒤 공백 제거 후 1~500자 자유 문자열을 저장하며 서버가 출처·형식·민감정보를 판별하지 않는다. 개인정보·토큰·비밀값 미포함은 호출자 운영 책임이다. |
 | `audit_event_actor_link` | 활성 actor에만 만든다. 탈퇴 전 제거한다. |
 
@@ -488,9 +515,9 @@ P0의 복합 PK `(user_id, role)`를 `role_assignment_id`로 대체한다. 역�
 
 ## 5. 혜택 도메인
 
-### 5.1 공개 정책 공통 수명주기
+### 5.1 공개 정책 수명주기
 
-`stampbook`, `mission`, `coupon_policy`는 공통으로 다음 상태를 사용한다.
+`stampbook`, `mission`은 지역 관리자 검토를 포함한 다음 상태를 사용한다.
 
 ```text
 DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
@@ -504,6 +531,9 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 - 서버 데이터로 대상과 처리자를 안전하게 식별한 뒤 권한·상태·도메인 조건 거부 또는 처리 실패가 발생하면
   원래 트랜잭션을 롤백한 뒤 같은 요청 ID와 비개인 실패 코드를 가진 실패 감사 이벤트를 독립 트랜잭션으로 기록한다.
   실패 감사 기록도 실패하면 구조화 로그로 관찰한다.
+
+`coupon_policy`는 콘텐츠 소유 운영자가 직접 공개하므로 `DRAFT → PUBLISHED → ENDED`를 사용한다. `DRAFT`에서만
+핵심 값을 수정하고, 공개·종료 처리도 정책 콘텐츠의 현재 소유 운영자만 수행한다.
 
 ### 5.2 스탬프북
 
@@ -549,7 +579,7 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 | --- | --- |
 | 예정 종료 | `ends_at`은 필수다. `PUBLISHED` 전이 때 `published_at < ends_at`를 검증하며, 공개 뒤 수정하지 않는다. |
 | 대상 콘텐츠 | `CONTENT_SET` 생성·수정은 `content.region_id = mission.region_id AND content.deleted_at IS NULL`인 행만 `content_id` 오름차순으로 잠가 연결한다. 승인에서는 보상 정책, 미션, 지역 뒤 모든 대상 콘텐츠를 같은 순서로 잠그고 `deleted_at IS NULL AND status = PUBLISHED`를 재검증한다. 하나라도 불일치하면 `PUBLISHED` 전이를 거부한다. `VISIT_COUNT`는 대상 콘텐츠 행을 두지 않는다. |
-| 보상 정책 | 작성·수정·검토 요청 때 `coupon_policy.region_id = mission.region_id`, `issuance_type = MISSION_REWARD`, `status IN (DRAFT, PENDING_REVIEW, PUBLISHED)`를 검증하고 `ENDED` 정책 연결을 거부한다. 검토 요청은 최초 조회한 정책 행을 먼저 잠그고 미션 행을 잠근다. 승인은 정책 행, 미션 행, 지역 행 순서로 잠근다. 두 전이 모두 `mission.reward_coupon_policy_id`가 잠근 정책과 같은지 재검증하고, 연결이 달라졌으면 전이를 거부한다. `PUBLISHED` 전이 때 잠근 정책도 `PUBLISHED`이고 지역은 `is_public = true`여야 한다. |
+| 보상 정책 | 작성·수정·검토 요청 때 `coupon_policy.region_id = mission.region_id`, `issuance_type = MISSION_REWARD`, `status IN (DRAFT, PUBLISHED)`를 검증하고 `ENDED` 정책 연결을 거부한다. 검토 요청은 최초 조회한 정책 행을 먼저 잠그고 미션 행을 잠근다. 승인은 정책 행, 미션 행, 지역 행 순서로 잠근다. 두 전이 모두 `mission.reward_coupon_policy_id`가 잠근 정책과 같은지 재검증하고, 연결이 달라졌으면 전이를 거부한다. `PUBLISHED` 전이 때 잠근 정책도 `PUBLISHED`이고 지역은 `is_public = true`여야 한다. |
 | 자동 종료 | 종료 작업은 `status = PUBLISHED AND ends_at <= 현재 시각`인 행만 `ENDED`로 조건부 전이하고, 그 실제 처리 시각을 `ended_at`에 기록한다. |
 | 참여 멱등성 | `UNIQUE (mission_id, user_id)`로 사용자·미션당 참여 행을 하나만 허용한다. 중복 키 요청은 기존 참여 결과를 반환한다. |
 | 보상 수령 멱등성 | `UNIQUE (mission_participation_id)`로 참여당 보상 수령 행을 하나만 허용한다. 중복 키 요청은 미션 종료 뒤에도 기존 수령 결과를 반환하되 새 보상 효과를 만들지 않는다. |
@@ -559,13 +589,13 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 
 같은 유효 방문은 조건을 만족하는 여러 공개 미션에 각각 반영할 수 있다. 방문자 공개 목록·상세와 신규 참여는 `region.is_public = true`인 지역에만 허용하며 비공개 지역은 대상 부재와 동일하게 처리한다. 신규 참여는 미션 행을 먼저 잠근 뒤 해당 지역 행을 잠그고, 모든 잠금 획득 직후 DB 현재 시각을 한 번만 읽어 `operation_at`으로 고정한다. 지역 공개 여부와 `status = PUBLISHED AND ends_at > operation_at`을 재검증한 뒤 `joined_at = operation_at`으로 기록해 지역 비공개 전환과 직렬화한다. `mission_progress.content_id`를 유지하므로 `visit.content_id = mission_progress.content_id`, `visit.user_id = mission_participation.user_id`, `visit.region_id = mission.region_id`, `visit.checked_at >= mission_participation.joined_at`을 함께 검증한다. 참여·진행도 반영·수동 종료·자동 종료는 모두 `mission` 행을 `PESSIMISTIC_WRITE`로 먼저 잠근다. 그 뒤 참여 행이 필요하면 `mission_participation_id` 오름차순으로 잠근다. 진행도 반영은 모든 잠금 획득 직후 DB 현재 시각을 한 번만 읽어 `operation_at`으로 고정하고 `status = PUBLISHED AND ends_at > operation_at`과 참여 `IN_PROGRESS`를 재검증한다. 진행 근거의 `recorded_at`과 완료 전이의 `completed_at`은 같은 `operation_at`으로 기록하며, 종료는 잠금 획득 뒤 종료 조건을 재검증한다. `CONTENT_SET` 진행도는 이 참여 잠금을 보유한 상태에서 같은 콘텐츠 근거의 존재 여부를 확인하고, 이미 있으면 새 `mission_progress`를 만들지 않는 정상 무변경 처리로 종료한다. 따라서 여러 인스턴스가 같은 콘텐츠의 서로 다른 방문을 동시에 전달해도 콘텐츠 하나는 진행도 한 칸만 채운다. `VISIT_COUNT`는 같은 잠금 아래 서로 다른 `visit_id`를 각각 삽입하므로 같은 콘텐츠 재방문도 별도 유효 방문으로 센다. 종료 작업이 지연되거나 진행도 반영과 경합해도 종료 시각 뒤 신규 참여·진행도 또는 `ENDED_INCOMPLETE`의 완료 전이는 생기지 않는다.
 
-신규 보상 수령은 기존 수령 결과가 없는 경우에만 `coupon_policy`, `mission`, `mission_participation` 순서로 행을 잠근다. 모든 잠금 획득 직후 DB 현재 시각을 한 번만 읽어 `operation_at`으로 고정하고, 정책의 지역·발급 경로·`PUBLISHED` 상태, 미션의 `PUBLISHED` 상태와 `ends_at > operation_at`, 참여 소유자와 `COMPLETED` 상태를 다시 검증한다. 수령 생성과 수동·자동 종료가 경합하면 미션 잠금을 먼저 얻어 유효 조건을 확인한 처리만 커밋하며, 종료 또는 `ends_at` 도달 뒤에는 기존 수령 결과 재조회 외의 신규 보상 효과를 만들지 않는다.
+신규 보상 수령은 기존 수령 결과가 없는 경우에만 `coupon_policy`, `mission`, `mission_participation` 순서로 행을 잠근다. 모든 잠금 획득 직후 DB 현재 시각을 한 번만 읽어 `operation_at`으로 고정하고, 정책의 지역·발급 경로·`PUBLISHED` 상태·발급 가능 기간·전체 발급 한도, 미션의 `PUBLISHED` 상태와 `ends_at > operation_at`, 참여 소유자와 `COMPLETED` 상태를 다시 검증한다. 수령 생성과 수동·자동 종료가 경합하면 미션 잠금을 먼저 얻어 유효 조건을 확인한 처리만 커밋하며, 종료 또는 `ends_at` 도달 뒤에는 기존 수령 결과 재조회 외의 신규 보상 효과를 만들지 않는다.
 
 ### 5.4 쿠폰 정책과 쿠폰
 
 | 테이블 | 핵심 열 | 책임 |
 | --- | --- | --- |
-| `coupon_policy` | `coupon_policy_id`, `region_id`, `issuance_type`, `discount_amount`, `valid_days`, 상태 | 지역 전체 유료 콘텐츠에 적용되는 정액 할인·발급 규칙 |
+| `coupon_policy` | `coupon_policy_id`, `content_id`, `region_id`, 이름·설명, `issuance_type`, 할인·최소 결제 금액, 유효 일수, 발급 기간·한도·사용량, 상태·공개·종료 시각 | 콘텐츠 하나의 유료 예약에 적용되는 정액 할인·발급 규칙 |
 | `coupon` | `coupon_id`, `coupon_policy_id`, `user_id`, `status`, `issued_at`, `expires_at` | 사용자가 보유한 현재 쿠폰 상태 |
 | `coupon_issuance` | `coupon_issuance_id`, `coupon_id`, `coupon_policy_id`, `recipient_user_id`, 발급 근거 FK 3종, 발급 식별 키, `issued_at` | 발급 근거와 중복 지급 차단 |
 | `coupon_status_history` | `coupon_status_history_id`, `coupon_id`, 이전·이후 상태, 사유, actor 종류, 시각 | 모든 쿠폰 상태 전이의 추가 전용 이력 |
@@ -575,17 +605,37 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 
 | 값 | 발급 근거 | 추가 제한 |
 | --- | --- | --- |
-| `VISIT` | `coupon_issuance.visit_id` | 사용자당 정책별 한 장만 발급 |
+| `VISIT` | `coupon_issuance.visit_id` | 정책 콘텐츠의 유효 방문을 근거로 사용자당 정책별 한 장만 발급 |
 | `MISSION_REWARD` | `coupon_issuance.mission_reward_claim_id` | 연결 미션 보상 수령 결과당 한 장 |
 | `STAMPBOOK_COMPLETION` | `coupon_issuance.stampbook_reward_grant_id` | 연결 스탬프북 완료 보상당 한 장 |
 
+`coupon_policy.content_id`는 P0 `content.content_id`를 참조한다. `(content_id, region_id)`는
+`content(content_id, region_id)`의 `UNIQUE` 후보 키를 참조하는 복합 FK로 지역 일치를 강제하며 두 값은 정책 생성 뒤
+수정하지 않는다. 정책에 별도 소유자 컬럼을 중복 저장하지 않고 `content.operator_id`를 현재 소유자로 사용한다.
+생성·수정·공개·종료는 정책과 콘텐츠를 잠근 뒤 인증 주체가 `content.operator_id`와 일치하고 해당 지역의 활성
+`OPERATOR` 역할을 가졌는지 조건부 쓰기로 검증한다.
+
+`discount_amount >= 1`, `minimum_payment_amount >= discount_amount`, `valid_days BETWEEN 1 AND 365`,
+`issue_starts_at < issue_ends_at`, `total_issue_limit IS NULL OR total_issue_limit >= 1`, `issued_count >= 0`을 CHECK로
+강제한다. 한도가 있으면 `issued_count <= total_issue_limit`이며 신규 쿠폰·발급 이력 생성과 `issued_count` 증가는
+잠근 정책에서 같은 트랜잭션으로 처리한다. `DRAFT`는 `published_at IS NULL AND ended_at IS NULL`, `PUBLISHED`는
+`published_at IS NOT NULL AND ended_at IS NULL`, `ENDED`는 `published_at IS NOT NULL AND ended_at IS NOT NULL`이어야 한다.
+
 `coupon_issuance`에는 세 근거 FK 중 정확히 하나만 존재해야 한다. 근거 유형은 정책의 `issuance_type`과 같고, `coupon_policy_id`·`recipient_user_id`는 연결한 `coupon`의 정책·소유자와 각각 일치해야 한다.
 
-발급 근거와 정책·수령자도 일치해야 한다. `VISIT`은 `visit.user_id = recipient_user_id`를, `MISSION_REWARD`는 수령 행의 `coupon_policy_id = mission.reward_coupon_policy_id`·참여 사용자 일치를, `STAMPBOOK_COMPLETION`은 완료 보상 행의 `coupon_policy_id = stampbook.reward_coupon_policy_id`·진행 사용자 일치를 각각 검증한다.
+발급 근거와 정책·수령자도 일치해야 한다. `VISIT`은 `visit.user_id = recipient_user_id`,
+`visit.content_id = coupon_policy.content_id`, `visit.region_id = coupon_policy.region_id`를 검증한다.
+`MISSION_REWARD`는 수령 행의 `coupon_policy_id = mission.reward_coupon_policy_id`·참여 사용자·정책 지역 일치를,
+`STAMPBOOK_COMPLETION`은 완료 보상 행의 `coupon_policy_id = stampbook.reward_coupon_policy_id`·진행 사용자·정책 지역
+일치를 각각 검증한다.
 
 `issuance_identity_hash`는 서버가 발급 경로별로 결정적으로 계산한다. `VISIT`은 `(coupon_policy_id, recipient_user_id)`, `MISSION_REWARD`는 `(coupon_policy_id, recipient_user_id, mission_reward_claim_id)`, `STAMPBOOK_COMPLETION`은 `(coupon_policy_id, recipient_user_id, stampbook_reward_grant_id)`를 입력으로 사용한다. `UNIQUE (issuance_identity_hash)`와 `UNIQUE (coupon_id)`가 같은 발급을 한 쿠폰으로 수렴시킨다. 추가로 `UNIQUE (mission_reward_claim_id)`, `UNIQUE (stampbook_reward_grant_id)`를 둔다.
 
-`coupon_policy.valid_days`에는 `CHECK (valid_days BETWEEN 1 AND 365)`를 둔다. 새 쿠폰 발급은 `coupon_policy` 행을 잠근 뒤 `status = PUBLISHED`이고 `valid_days BETWEEN 1 AND 365`일 때만 시작한다. `DRAFT`·`PENDING_REVIEW`·`ENDED` 정책 또는 허용 범위를 벗어난 유효 일수는 발급 근거가 될 수 없다. 쿠폰 생성·발급 이력·최초 `AVAILABLE` 상태 이력은 이 검증과 같은 트랜잭션으로 처리한다. 발급 식별 키 충돌은 기존 쿠폰과 발급 이력을 반환하며, 서로 다른 재전달 식별자가 와도 새 쿠폰을 만들지 않는다.
+새 쿠폰 발급은 `coupon_policy` 행을 잠근 뒤 `status = PUBLISHED`,
+`issue_starts_at <= operation_at <= issue_ends_at`, `valid_days BETWEEN 1 AND 365`이고 전체 발급 한도가 남았을 때만
+시작한다. `DRAFT`·`ENDED` 정책 또는 발급 기간·유효 일수·한도를 벗어난 정책은 신규 발급 근거가 될 수 없다.
+쿠폰 생성·발급 이력·최초 `AVAILABLE` 상태 이력·`issued_count` 증가는 이 검증과 같은 트랜잭션으로 처리한다.
+발급 식별 키 충돌은 기존 쿠폰과 발급 이력을 반환하며 발급 사용량을 추가로 늘리지 않는다.
 
 미션 보상 수령 발급은 수령 자격 검증에 사용한 `operation_at`을 `mission_reward_claim.claimed_at`,
 `coupon.issued_at`, `coupon_issuance.issued_at`, 최초 `coupon_status_history.occurred_at`에 같은 값으로 기록한다.
@@ -621,7 +671,13 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 
 `UNIQUE (hold_id)`이다. 같은 홀드의 결제 재시도는 같은 스냅샷을 사용한다. 쿠폰은 최대 하나만 연결할 수 있고, `base_amount - discount_amount = final_amount`, `final_amount >= 0`을 만족한다.
 
-쿠폰을 적용하면 홀드를 잠근 뒤 `coupon.user_id = capacity_hold.user_id`, `coupon_policy.region_id = capacity_hold.region_id`, 쿠폰 `AVAILABLE` 상태와 `expires_at > 현재 시각`을 모두 검증한다. 이미 발급된 쿠폰은 정책 종료 뒤에도 자체 만료 시각까지 사용하므로, 이 사용 검증에서 `coupon_policy.status`를 다시 `PUBLISHED`로 요구하지 않는다.
+쿠폰을 적용하면 결제 API와 같이 `content → content_session → capacity_hold → reservation_price_snapshot → payment → coupon`
+순서로 존재하는 행을 잠근 뒤 연결된 정책을 조회해
+`capacity_hold.session_id = content_session.session_id`, `coupon_policy.content_id = content_session.content_id`,
+`coupon_policy.region_id = content.region_id = capacity_hold.region_id`, `coupon.user_id = capacity_hold.user_id`, 쿠폰
+`AVAILABLE` 상태와 `expires_at > 현재 시각`을 모두 검증한다. 정책 콘텐츠와 홀드 회차 콘텐츠 일치는 여러 테이블을
+가로지르므로 스냅샷·쿠폰 선점의 같은 트랜잭션에서 조건부 쓰기와 통합 테스트로 강제한다. 이미 발급된 쿠폰은 정책 종료
+뒤에도 자체 만료 시각까지 사용하므로, 이 사용 검증에서 `coupon_policy.status`를 다시 `PUBLISHED`로 요구하지 않는다.
 
 새 스냅샷은 홀드 잠금·쿠폰의 조건부 `AVAILABLE → RESERVED` 전이·스냅샷 삽입을 같은 트랜잭션에서 처리한다. 같은 홀드의 스냅샷이 있으면 이를 반환하고 쿠폰 상태를 다시 바꾸지 않는다. 조건부 전이에 실패하면 스냅샷을 만들지 않는다. 스냅샷에 쿠폰이 있고 최종 금액이 0이면 이 트랜잭션에서 홀드 소비·`reservation(CONFIRMED)`·쿠폰 `USED`·`coupon_redemption(CONFIRMED)`을 함께 처리한다. 양수 금액은 서버 검증 승인 때 같은 네 변경을 같은 트랜잭션으로 처리한다.
 
@@ -756,9 +812,10 @@ PUBLISHED mission AND ends_at <= 현재 시각
 | 높음 | `mission_participation` | `UNIQUE (mission_id, user_id)` — 사용자·미션당 참여 하나 |
 | 높음 | `mission_reward_claim` | `UNIQUE (mission_participation_id)` — 참여당 보상 수령 하나, 원본 `mission.reward_coupon_policy_id` 일치 조건부 쓰기 |
 | 높음 | `stampbook_reward_grant` | `UNIQUE (stampbook_progress_id)`, 원본 `stampbook.reward_coupon_policy_id` 일치 조건부 쓰기 |
-| 높음 | `coupon_issuance` | `coupon_id`, 발급 식별 키, `mission_reward_claim_id`, `stampbook_reward_grant_id` 유일; 세 FK 중 정확히 하나 CHECK |
+| 높음 | `coupon_policy` | `content_id` FK, `(content_id, region_id)` 복합 FK, 금액·기간·유효 일수·발급 한도·상태별 시각 CHECK; 정책 작업 시 `content.operator_id` 소유권 조건부 쓰기 |
+| 높음 | `coupon_issuance` | `coupon_id`, 발급 식별 키, `mission_reward_claim_id`, `stampbook_reward_grant_id` 유일; 세 FK 중 정확히 하나 CHECK; 방문 근거의 콘텐츠·지역과 정책 일치 |
 | 높음 | `coupon_redemption` | `UNIQUE (reservation_id)`, `UNIQUE (reservation_price_snapshot_id)`, 쿠폰당 `CONFIRMED` 행 하나를 위한 조건부 유일 제약, 상태·`reversed_at` CHECK, 스냅샷·쿠폰 복합 FK |
-| 높음 | `reservation_price_snapshot` | `UNIQUE (hold_id)`, `(reservation_price_snapshot_id, coupon_id)` 유일 복합 키, 금액 CHECK |
+| 높음 | `reservation_price_snapshot` | `UNIQUE (hold_id)`, `(reservation_price_snapshot_id, coupon_id)` 유일 복합 키, 금액 CHECK; 쿠폰 정책 콘텐츠·지역과 홀드 회차 콘텐츠·지역 일치 조건부 쓰기 |
 | 높음 | `payment` | `order_id`, `portone_payment_id` 유일; 홀드당 진행 중 결제 하나 |
 | 높음 | `payment_idempotency` | `(actor_user_id, operation, idempotency_key_hash)`, `payment_id` 유일; `actor_user_id`는 비-FK; `expires_at` 정리 인덱스 |
 | 높음 | `payment_webhook` | `provider_event_id` 유일 |
