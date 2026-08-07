@@ -145,7 +145,7 @@ Accept: application/json
 3. 이미 `CANCELLED`인 예약의 재요청은 새 정원 복구나 새 환불 효과를 만들지 않고 현재 예약·환불 상태를 그대로 반환해, 같은 요청의 재시도가 중복 효과를 만들지 않게 한다(`refund.payment_id` 자연 멱등 재사용).
 4. 조건을 만족하면 같은 트랜잭션에서 예약을 `CONFIRMED → CANCELLED`로 전환하고, 성공한 최초 전이에서만 정원을 한 번 복구한다(`RSV-04`, [ADR-0001](../../../adr/0001-use-mysql-conditional-update-for-capacity-consistency.md)).
 5. 취소 대상 결제가 `APPROVED` 또는 `DISCREPANT`면 같은 트랜잭션에서 [수동 환불 API](../refund/create-refund.md#3-수동-환불) 처리 규칙 5~7번과 동일하게 환불을 시작한다: `refund(REQUESTED)` 생성 뒤 즉시 `PROCESSING`으로 전이하고, 외부 호출 직전에 `refund_attempt(PENDING, attempt_no=1)`를 기록해 PortOne 취소를 호출한다(최대 응답 대기 30초). 응답 결과에 따라 `SUCCEEDED`·`FAILED`·`DISCREPANT`로 확정한다.
-6. 대상 결제의 가격 스냅샷에 적용 쿠폰이 있으면 같은 트랜잭션에서 `coupon_redemption`을 복구 가능한 상태로 되돌린다([수동 환불 API](../refund/create-refund.md#3-수동-환불) 8번과 동일).
+6. 5번에서 환불이 `SUCCEEDED`로 전이하는 경우에 한해, 대상 결제의 가격 스냅샷에 적용 쿠폰이 있으면 같은 트랜잭션에서 `coupon_redemption`을 복구 가능한 상태로 되돌린다([수동 환불 API](../refund/create-refund.md#3-수동-환불) 8번과 동일). `FAILED` 또는 `DISCREPANT`로 전이하면 쿠폰을 복구하지 않는다.
 7. 이 API는 결제를 승인 처리하거나 환불 실패를 수동으로 재처리하지 않는다. 환불이 `FAILED` 또는 `DISCREPANT`로 종결되면 이후 재시도·수동 조치는 전체관리자 절차([환불 재시도](../refund/retry-refund.md), [환불 실패 수동 조치](../refund/resolve-refund-failure.md))를 따른다.
 8. 예약 취소와 서버가 부여한 `requestId`를 포함한 `RESERVATION` 감사 이력, 환불을 시작한 경우의 `REFUND` 감사 이력은 하나의 트랜잭션으로 처리한다.
 9. 결제 비밀값, PortOne 원문과 전체 결제수단 정보는 저장하지 않는다.

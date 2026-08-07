@@ -158,7 +158,7 @@ Accept: application/json
 5. 최초 요청이면 `refund(REQUESTED)`를 생성한 뒤 즉시 `PROCESSING`으로 전이하고, 외부 호출 직전에 `refund_attempt(PENDING, attempt_no=1)`를 기록해 시도 번호를 점유한다. PortOne 환불 호출의 최대 응답 대기 시간은 30초다.
 6. 응답을 받으면 외부 상태와 응답 원문 해시를 저장해 `RESPONDED`로 확정한다. 성공이면 `refund`를 `SUCCEEDED`로 전이하고 `completed_at`을 기록하며, 명시적 실패면 `FAILED`로 전이한다.
 7. 타임아웃·연결 단절·네트워크 실패처럼 응답을 받지 못하면 응답 값은 저장하지 않고 비밀값 없는 실패 사유와 함께 `NO_RESPONSE`로 확정하며, `refund`를 `DISCREPANT`로 전이한다. 이 시도도 총 3회에 포함된다.
-8. 대상 결제의 가격 스냅샷에 적용 쿠폰이 있으면 같은 트랜잭션에서 `coupon_redemption`을 복구 가능한 상태로 되돌린다.
+8. 6번에서 `refund`가 `SUCCEEDED`로 전이하는 경우에 한해, 대상 결제의 가격 스냅샷에 적용 쿠폰이 있으면 같은 트랜잭션에서 `coupon_redemption`을 복구 가능한 상태로 되돌린다. `FAILED` 또는 `DISCREPANT`로 전이하면 쿠폰을 복구하지 않는다.
 9. 대상 결제에 연결된 `OPEN` 상태 `payment_discrepancy`가 있으면, 같은 트랜잭션에서 `payment_discrepancy.status`를 `REFUND_REQUESTED`로 전이하고 `action = FULL_REFUND_REQUEST`, `evidenceReference`, `reason`을 포함한 `payment_discrepancy_action`을 생성한다.
 10. 이 API는 결제를 승인 처리하거나 취소된 예약을 강제로 확정하지 않으며, 예약 상태 자체는 예약 도메인의 취소 API가 별도로 관리한다.
 11. 이중 승인은 적용하지 않는다. 처리자 1명의 요청만으로 환불 시작이 확정된다.
