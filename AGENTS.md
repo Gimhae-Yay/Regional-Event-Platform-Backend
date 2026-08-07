@@ -19,9 +19,9 @@
 
 1. 요청 범위와 변경 대상을 확인한다.
 2. **모든 구현과 리뷰 전에 `docs/code-convention.md` 전체를 읽고 반드시 적용한다.** 컨벤션을 바꿀 때는 이 파일이 아니라 `docs/code-convention.md`를 수정한다.
-3. 아래 표의 관련 기준 문서와 작업 범위에 대응하는 `docs/local-stamp-platform-prd.md` 항목 또는 연결된 이슈를 읽는다.
+3. 아래 표의 관련 기준 문서와 작업 범위에 대응하는 내부 API 명세·도메인 정책 문서 또는 연결된 이슈를 읽는다.
 4. 설계 결정이 필요하면 선택지를 비교해 사용자 결정을 받은 뒤 `docs/adr`에 기록한다.
-5. 구현 단계는 전용 스킬 없이 진행한다. 연결된 GitHub 이슈의 완료 조건을 구현 계약으로 삼고, `docs/code-convention.md`와 이 문서의 작업 원칙을 벗어나지 않는다.
+5. 구현 단계는 연결된 GitHub 이슈의 완료 조건을 구현 계약으로 삼고, `docs/code-convention.md`와 이 문서의 작업 원칙을 벗어나지 않는다.
 6. 코드, 테스트, migration, 설정과 의존성의 현재 상태를 확인한 뒤 문서에 확정된 범위만 변경한다.
 7. 깃허브 Task 타입의 TODO 체크리스트를 사용해 구현 완료를 표시한다.
 8. 브랜치를 생성하거나 커밋·PR 작업을 시작하기 전에 `docs/git-convention.md`를 확인한다.
@@ -32,7 +32,8 @@
 
 | 상황     | 스킬명               | 규칙                                                                 |
 |--------|-------------------|--------------------------------------------------------------------|
-| 이슈 생성  | `issue-create`    | PRD를 기준으로 기반 이슈를 만들고 API마다 이슈를 하나씩 만든다.                            |
+| 이슈 생성  | `issue-create`    | API Feature는 엔드포인트마다 하나를 만든다. API 엔드포인트나 재현 가능한 Bug와 무관한 문서·CI·개발 절차 Task에 새 부모가 필요하면, 독립적으로 검증 가능한 프로젝트·플랫폼 역량마다 비-API Feature 하나를 만들고 Feature·Bug를 직속 하위 Task로 분해한다. |
+| Task 구현 | `task-implementation` | Task의 작업 성격에 맞는 문서·프로덕션 코드·테스트 모드로 구현하고 검증한다.                 |
 | 커밋     | `commit`          | 구현된 내용을 `type: 한국어 설명` 형식으로 커밋한다.                                  |
 | PR 생성  | `pr-create`       | 기능 PR은 `feature`에서 `dev`로 생성한다.                                    |
 | PR 리뷰  | `review`          | 리뷰는 읽기 전용으로 수행하고, 사용자가 게시를 요청하면 COMMENT로 해당 PR에 남긴다.               |
@@ -48,8 +49,8 @@
 |----------------------------------------------------------------------------------------|---------------------------------------------------------------|
 | 확정된 기술 결정·설계 근거                                                                        | `docs/adr/`                                                   |
 | 기술 스택·설계 원칙                                                                            | `docs/local-stamp-platform-tech-stack.md`                     |
-| 제품 범위, 보안·동시성·정합성·Redis 정책                                                             | `docs/local-stamp-platform-prd.md`                            |
-| API 요청·응답, validation, status, 에러 코드                                                   | `docs/api/common/README.md`, `docs/api/<도메인>.md`              |
+| 제품 범위, 보안·동시성·정합성·Redis 정책                                                             | `docs/p0-spec.md`, `docs/p1-spec.md`, `docs/p0/`, `docs/p1/`    |
+| API 요청·응답, validation, status, 에러 코드                                                   | `docs/api/api-specification.md`, `docs/api/common/`, `docs/api/p0/`, `docs/api/p1/` |
 | 엔티티, 테이블, 관계, 컬럼, DB 제약·인덱스                                                            | `docs/erd.md`                                                 |
 | 패키지 구조, 계층별 책임, Controller·Service·UseCase·Repository 의존성, Service 간 직접 의존, UseCase 명명 | `docs/ARCHITECTURE.md`                                        |
 | Java 코드 스타일, 명명, 소스 구성, Java·Spring·JPA, 트랜잭션, null, 예외·로깅, 테스트                        | `docs/code-convention.md`                                     |

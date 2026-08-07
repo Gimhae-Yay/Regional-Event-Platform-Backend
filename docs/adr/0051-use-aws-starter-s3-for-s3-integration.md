@@ -4,7 +4,7 @@
 - 기록 유형: 신규
 - 기록일: 2026-07-31
 - 결정일: 2026-07-31
-- 관련 요구사항: [PRD](../local-stamp-platform-prd.md)의 `FR-03`, `FR-14`, `AUTH-01`, `CON-02`, `CON-05`
+- 관련 요구사항: [지역·콘텐츠 카탈로그](../p0/content-catalog.md)의 `FR-03`·`FR-14` 이미지 정책과 [대표 이미지 업로드 API](../api/p0/content/upload-representative-image.md)의 저장소 계약
 - 관련 단계: 단계 1. MVP 구현·검증
 - 관련 이슈: [#164](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/164)
 - 대체 대상: 없음

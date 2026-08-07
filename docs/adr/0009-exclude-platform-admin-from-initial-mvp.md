@@ -4,7 +4,7 @@
 - 기록 유형: 신규
 - 기록일: 2026-07-25
 - 결정일: 2026-07-25
-- 관련 요구사항: [PRD의 현재 무료 예약 MVP 범위](../local-stamp-platform-prd.md#4-현재-무료-예약-mvp-범위), [FR-01](../local-stamp-platform-prd.md#7-기능-요구사항), [US-05](../local-stamp-platform-prd.md#us-05-지역-관리자가-운영-예외를-처리한다), [AUTH-04](../local-stamp-platform-prd.md#81-권한개인정보-정책), [P0 인증·프로필](../p0/auth-profile.md)
+- 관련 요구사항: [P0 명세](../p0-spec.md)의 무료 예약 MVP 범위·최소 운영 도구, [인증·프로필](../p0/auth-profile.md)의 권한 정책과 [인증·프로필 API](../api/p0/auth-profile/auth-profile.md)
 - 관련 단계: 단계 0. 정책·설계 확정, 단계 1. MVP 구현·검증
 - 관련 이슈: 없음
 - 대체 대상: [ADR-0002](0002-isolate-regions-in-a-shared-schema.md)의 초기 MVP 전체 관리자, 지역 범위 우회와 전체 관리자 전용 유스케이스 결정 부분, [ADR-0005](0005-use-jwt-access-and-rotating-refresh-tokens.md)의 초기 MVP 역할 집합에 전체 관리자를 포함한 부분
@@ -89,7 +89,7 @@ ADR-0005는 초기 역할 집합에 전체 관리자를 포함했다. 제품 범
 수정하고 기존·수정 결과를 함께 추적한다.
 
 출시 전에 전체 관리자가 필요해지면 이 ADR을 직접 수정하지 않는다. 필요 근거와 권한 범위를 비교한 새 ADR로
-대체하고 PRD, P0 범위, API·DB 계약과 테스트를 함께 갱신한다.
+대체하고 P0/P1 범위, 내부 API·DB 계약과 테스트를 함께 갱신한다.
 
 ## 검증 방법
 
