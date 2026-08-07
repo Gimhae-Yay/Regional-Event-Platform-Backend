@@ -1,4 +1,4 @@
-# ADR-0073: 슈퍼관리자만 고권한 계정을 생성·비활성화한다
+# ADR-0087: 슈퍼관리자만 고권한 계정을 생성·비활성화한다
 
 - 상태: 채택됨
 - 기록 유형: 고급
@@ -6,7 +6,7 @@
 - 결정일: 2026-08-06
 - 관련 요구사항: [P1-FR-09](../p1-spec.md#6-기능-요구사항과-소유-문서), [ADM-01](../p1/platform-admin.md#3-전체관리자-정책), [ADM-05](../p1/platform-admin.md#3-전체관리자-정책)
 - 관련 단계: 단계 1. MVP 구현·검증
-- 관련 ADR: [ADR-0072](0072-apply-separated-privileged-account-model-to-platform-admin-api.md)
+- 관련 ADR: [ADR-0086](0086-apply-separated-privileged-account-model-to-platform-admin-api.md)
 
 ## 맥락
 

@@ -5,7 +5,7 @@
 | 대상 릴리스 | P1 |
 | 관련 요구사항 | [P1-FR-09](../../../p1-spec.md#6-기능-요구사항과-소유-문서), `ADM-01`, `ADM-05` |
 | 소유 도메인 | 전체관리자 |
-| 기준 문서 | [전체관리자 API](platform-admin.md), [전체관리자](../../../p1/platform-admin.md), [P1 ERD](../../../p1-erd.md), [ADR-0073](../../../adr/0073-bootstrap-and-inactivate-privileged-admin-accounts.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [전체관리자 API](platform-admin.md), [전체관리자](../../../p1/platform-admin.md), [P1 ERD](../../../p1-erd.md), [ADR-0087](../../../adr/0087-bootstrap-and-inactivate-privileged-admin-accounts.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
