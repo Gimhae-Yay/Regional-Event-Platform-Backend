@@ -39,6 +39,7 @@ P1 API 명세는 `docs/p1/` 소유 문서와 `docs/p1-spec.md`를 기능·정책
 | 도메인 | 도메인 API 명세서 | 기능·정책 기준 문서 | 주요 범위 |
 | --- | --- | --- | --- |
 | 지역 | [지역 API 명세서](p1/region/region.md) | [전체관리자](../p1/platform-admin.md), [P1 명세](../p1-spec.md), [P0 ERD](../erd.md), [P1 ERD](../p1-erd.md) | 지역 생성, 지역 공개 여부 변경, 전체 지역 조회 |
+| 지역 미션 | [지역 미션 API 명세서](p1/mission/mission.md) | [지역 미션](../p1/regional-mission.md) | 미션 생성·수정·검토 요청·승인 즉시 공개·반려·종료, 공개 조회, 참여, 진행도, 보상 수령, 자동 종료 Scheduler |
 
 ## 새 도메인 API 명세 추가
 
