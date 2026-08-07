@@ -1,6 +1,8 @@
-FROM eclipse-temurin:21-jdk-jammy AS build
+FROM amazoncorretto:21-al2023 AS build
 
 WORKDIR /workspace
+
+RUN dnf install -y findutils && dnf clean all
 
 COPY gradlew .
 COPY gradle gradle
@@ -12,15 +14,13 @@ COPY src src
 
 RUN ./gradlew --no-daemon bootJar
 
-FROM eclipse-temurin:21-jre-jammy
+FROM amazoncorretto:21-al2023-headless
 
 WORKDIR /app
 
-RUN groupadd --system spring && useradd --system --gid spring --create-home spring
+COPY --chown=10001:10001 --from=build /workspace/build/libs/*.jar app.jar
 
-COPY --chown=spring:spring --from=build /workspace/build/libs/*.jar app.jar
-
-USER spring:spring
+USER 10001:10001
 
 EXPOSE 8080
 
