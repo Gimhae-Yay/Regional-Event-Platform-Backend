@@ -59,6 +59,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
 import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
@@ -243,7 +244,7 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
     @Test
     @Timeout(10)
     void 홀드생성과_예약확정이_동시에_실행되어도_잠금순서에따라_완료되고_정원이_일치한다() throws Exception {
-        ConcurrentFixture fixture = createConcurrentFixture();
+        ConcurrentFixture fixture = createConcurrentFixture(2);
         reservationLockOrderTracker.prepare(
             fixture.contentSession().getContent().getContentId(),
             fixture.contentSession().getSessionId()
@@ -298,6 +299,59 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
         });
     }
 
+    @Test
+    @Timeout(10)
+    void 홀드생성과_예약확정을_동시에_시작하면_시스템예외없이_정합성을_유지한다() throws Exception {
+        ConcurrentFixture fixture = createConcurrentFixture(1);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+
+        List<MixedReservationOperationResult> results;
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<MixedReservationOperationResult> holdCreation = executorService.submit(
+                () -> createHoldAfterStart(fixture, ready, start)
+            );
+            Future<MixedReservationOperationResult> reservationConfirmation = executorService.submit(
+                () -> confirmHoldAfterStart(fixture, ready, start)
+            );
+
+            assertThat(ready.await(3, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            results = List.of(
+                holdCreation.get(5, TimeUnit.SECONDS),
+                reservationConfirmation.get(5, TimeUnit.SECONDS)
+            );
+        }
+
+        assertThat(results).allSatisfy(result -> assertThat(result.systemFailure()).isNull());
+        assertThat(results)
+            .filteredOn(MixedReservationOperationResult::isSuccessful)
+            .singleElement()
+            .satisfies(result -> assertThat(result.operation())
+                .isEqualTo(MixedReservationOperation.RESERVATION_CONFIRMATION));
+        assertThat(results)
+            .filteredOn(result -> !result.isSuccessful())
+            .singleElement()
+            .satisfies(result -> {
+                assertThat(result.operation()).isEqualTo(MixedReservationOperation.HOLD_CREATION);
+                assertThat(result.errorCode()).isEqualTo(ErrorCode.RESERVATION_HOLD_CONFLICT);
+            });
+
+        transactionTemplate.executeWithoutResult(status -> {
+            ContentSession session = contentSessionRepository.findById(fixture.contentSession().getSessionId())
+                .orElseThrow();
+            assertThat(session.getRemainingCapacity()).isZero();
+            assertThat(capacityHoldRepository.findAll())
+                .filteredOn(hold -> hold.getContentSession().getSessionId().equals(session.getSessionId()))
+                .singleElement()
+                .satisfies(hold -> assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.CONSUMED));
+            assertThat(reservationRepository.findAll())
+                .filteredOn(reservation -> reservation.getContentSession().getSessionId().equals(session.getSessionId()))
+                .extracting(reservation -> reservation.getStatus())
+                .containsExactly(ReservationStatus.CONFIRMED);
+        });
+    }
+
     private List<ReservationConfirmationResult> confirmConcurrently(
         Fixture fixture,
         String firstIdempotencyKey,
@@ -333,6 +387,63 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
             idempotencyKey,
             UUID.randomUUID()
         );
+    }
+
+    private MixedReservationOperationResult createHoldAfterStart(
+        ConcurrentFixture fixture,
+        CountDownLatch ready,
+        CountDownLatch start
+    ) {
+        ready.countDown();
+        await(start);
+
+        try {
+            createReservationHoldUseCase.create(
+                fixture.holdCreator().getUserId(),
+                new CreateReservationHoldRequest(fixture.contentSession().getSessionId().toString(), 1)
+            );
+            return MixedReservationOperationResult.success(MixedReservationOperation.HOLD_CREATION);
+        } catch (BusinessException exception) {
+            return MixedReservationOperationResult.businessFailure(
+                MixedReservationOperation.HOLD_CREATION,
+                exception.getErrorCode()
+            );
+        } catch (RuntimeException exception) {
+            return MixedReservationOperationResult.systemFailure(
+                MixedReservationOperation.HOLD_CREATION,
+                exception
+            );
+        }
+    }
+
+    private MixedReservationOperationResult confirmHoldAfterStart(
+        ConcurrentFixture fixture,
+        CountDownLatch ready,
+        CountDownLatch start
+    ) {
+        ready.countDown();
+        await(start);
+
+        try {
+            ReservationConfirmationResult result = reservationConfirmationUseCase.confirm(
+                fixture.holdOwner().getUserId(),
+                fixture.capacityHold().getHoldId().toString(),
+                "mixed-hold-confirm-" + System.nanoTime(),
+                UUID.randomUUID()
+            );
+            if (result.isSuccessful()) {
+                return MixedReservationOperationResult.success(MixedReservationOperation.RESERVATION_CONFIRMATION);
+            }
+            return MixedReservationOperationResult.businessFailure(
+                MixedReservationOperation.RESERVATION_CONFIRMATION,
+                result.errorCode()
+            );
+        } catch (RuntimeException exception) {
+            return MixedReservationOperationResult.systemFailure(
+                MixedReservationOperation.RESERVATION_CONFIRMATION,
+                exception
+            );
+        }
     }
 
     private Void cancelAfterStart(
@@ -483,7 +594,7 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
         });
     }
 
-    private ConcurrentFixture createConcurrentFixture() {
+    private ConcurrentFixture createConcurrentFixture(int capacity) {
         return transactionTemplate.execute(status -> {
             String suffix = Long.toUnsignedString(System.nanoTime());
             Instant now = Instant.now();
@@ -535,7 +646,7 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
                 now.plusSeconds(10_800),
                 now.plusSeconds(1_800),
                 now.plusSeconds(9_000),
-                2
+                capacity
             );
             contentSession.approve(operator, now);
             ContentSession savedSession = contentSessionRepository.saveAndFlush(contentSession);
@@ -586,6 +697,40 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
         ContentSession contentSession,
         CapacityHold capacityHold
     ) {
+    }
+
+    private record MixedReservationOperationResult(
+        MixedReservationOperation operation,
+        ErrorCode errorCode,
+        RuntimeException systemFailure
+    ) {
+
+        private static MixedReservationOperationResult success(MixedReservationOperation operation) {
+            return new MixedReservationOperationResult(operation, null, null);
+        }
+
+        private static MixedReservationOperationResult businessFailure(
+            MixedReservationOperation operation,
+            ErrorCode errorCode
+        ) {
+            return new MixedReservationOperationResult(operation, errorCode, null);
+        }
+
+        private static MixedReservationOperationResult systemFailure(
+            MixedReservationOperation operation,
+            RuntimeException systemFailure
+        ) {
+            return new MixedReservationOperationResult(operation, null, systemFailure);
+        }
+
+        private boolean isSuccessful() {
+            return errorCode == null && systemFailure == null;
+        }
+    }
+
+    private enum MixedReservationOperation {
+        HOLD_CREATION,
+        RESERVATION_CONFIRMATION
     }
 
     @TestConfiguration
