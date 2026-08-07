@@ -64,6 +64,24 @@ class ImageStorageConfigTest {
     }
 
     @Test
+    void imageStorageGateway_storageS3AndFakeEnabled_createsS3GatewayOnly() {
+        contextRunner
+            .withPropertyValues(
+                "storage.s3.enabled=true",
+                "storage.s3.bucket-name=bucket",
+                "storage.s3.region=ap-northeast-2",
+                "storage.fake.enabled=true",
+                "storage.fake.base-url=http://localhost:8080/fake-images"
+            )
+            .run(context -> {
+                assertThat(context).hasSingleBean(ImageStorageGateway.class);
+                assertThat(context).hasSingleBean(S3Client.class);
+                assertThat(context).hasSingleBean(S3Presigner.class);
+                assertThat(context.getBean(ImageStorageGateway.class)).isInstanceOf(S3ImageStorageClient.class);
+            });
+    }
+
+    @Test
     void s3StorageProperties_whenUrlTtlsAreMissing_usesDefaults() {
         ImageStorageConfig.S3StorageProperties properties = new ImageStorageConfig.S3StorageProperties(
             true,

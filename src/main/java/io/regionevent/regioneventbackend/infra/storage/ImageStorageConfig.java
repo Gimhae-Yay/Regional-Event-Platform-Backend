@@ -3,6 +3,7 @@ package io.regionevent.regioneventbackend.infra.storage;
 import java.time.Clock;
 import java.time.Duration;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -64,7 +65,7 @@ public class ImageStorageConfig {
     }
 
     @Bean
-    @ConditionalOnProperty(prefix = "storage.fake", name = "enabled", havingValue = "true")
+    @ConditionalOnExpression("${storage.fake.enabled:false} && !${storage.s3.enabled:false}")
     public ImageStorageGateway fakeImageStorageGateway(
         FakeStorageProperties properties,
         Clock clock

@@ -1,10 +1,10 @@
+import { fail } from 'k6';
 import { Counter } from 'k6/metrics';
 
 import {
   apiBaseUrl,
   csvEnv,
   env,
-  minExpectedOutcomeRate,
   requiredEnv,
   scenarioDuration,
   scenarioP95Threshold,
@@ -24,14 +24,29 @@ const businessCodes = [
   'IDEMPOTENCY_KEY_CONFLICT',
   'IDEMPOTENCY_REQUEST_IN_PROGRESS',
 ];
+const concurrencyVus = scenarioVus(scenarioName, 2);
+const maxDuration = scenarioDuration(scenarioName);
+
+if (!Number.isInteger(concurrencyVus) || concurrencyVus < 2) {
+  fail(`PERF_${scenarioName}_VUS must be an integer greater than or equal to 2`);
+}
+
 const qrCheckinSuccessCount = new Counter('qr_checkin_success_count');
+const qrCheckinConflictCount = new Counter('qr_checkin_conflict_count');
 
 export const options = {
-  vus: scenarioVus(scenarioName),
-  duration: scenarioDuration(scenarioName),
+  scenarios: {
+    qr_checkin_same_reservation: {
+      executor: 'per-vu-iterations',
+      vus: concurrencyVus,
+      iterations: 1,
+      maxDuration,
+    },
+  },
   thresholds: {
-    expected_outcome_rate: [`rate>=${minExpectedOutcomeRate()}`],
-    qr_checkin_success_count: ['count>0'],
+    expected_outcome_rate: ['rate==1'],
+    qr_checkin_success_count: ['count==1'],
+    qr_checkin_conflict_count: [`count==${concurrencyVus - 1}`],
     system_failure_rate: ['rate==0'],
     unexpected_failure_rate: ['rate==0'],
     [`http_req_duration{test:${testTag}}`]: [`p(95)<${scenarioP95Threshold(scenarioName)}`],
@@ -52,8 +67,8 @@ export function handleSummary(data) {
     testTag,
     baseUrl: env('PERF_BASE_URL', ''),
     apiBase,
-    vus: options.vus,
-    duration: options.duration,
+    vus: concurrencyVus,
+    duration: maxDuration,
     visitorTokens: 1,
     operatorTokens: 1,
     reservationId,
@@ -97,5 +112,7 @@ export default function (data) {
   );
   if (outcome.success) {
     qrCheckinSuccessCount.add(1, commonTags);
+  } else if (outcome.code === 'CHECK_IN_CONFLICT') {
+    qrCheckinConflictCount.add(1, commonTags);
   }
 }
