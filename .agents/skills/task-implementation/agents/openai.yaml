@@ -1,0 +1,4 @@
+interface:
+  display_name: "Task 구현"
+  short_description: "Task 계약을 지키며 안전하게 구현하고 검증합니다"
+  default_prompt: "$task-implementation으로 GitHub Task를 구현하고, Task 번호 또는 URL이 없으면 먼저 요청해줘."

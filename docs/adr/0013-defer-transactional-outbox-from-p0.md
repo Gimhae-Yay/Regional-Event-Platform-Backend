@@ -4,7 +4,7 @@
 - 기록 유형: 소급
 - 기록일: 2026-07-28
 - 결정일: 2026-07-27
-- 관련 요구사항: [P0 명세](../p0-spec.md)의 5.2 비목표와 [8.8 감사 및 운영 로그](../p0-spec.md#88-감사-및-운영-로그), [PRD](../local-stamp-platform-prd.md)의 `FR-12`
+- 관련 요구사항: [P0 명세](../p0-spec.md)의 5.2 비목표와 [8.8 감사 및 운영 로그](../p0-spec.md#88-감사-및-운영-로그)
 - 관련 단계: 단계 0. 정책·설계 확정, 단계 1. MVP 구현·검증
 - 관련 이슈: 없음
 - 대체 대상: [ADR-0007](0007-use-transactional-outbox-with-spring-scheduler.md)의 P0 단계 Outbox 저장·Scheduler 폴링·외부 전달·재시도·소비자 멱등성·정리·관측 적용 부분, [ADR-0008](0008-evolve-clean-architecture-by-use-case.md)의 P0에서 거래와 Outbox 저장 원자성 및 Outbox 흐름을 전제한 참조 부분

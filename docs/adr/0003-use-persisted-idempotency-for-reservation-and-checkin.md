@@ -4,7 +4,7 @@
 - 기록 유형: 신규
 - 기록일: 2026-07-23
 - 결정일: 2026-07-23
-- 관련 요구사항: [PRD의 FR-06, FR-07, US-01, US-03](../local-stamp-platform-prd.md#8-기능-요구사항)
+- 관련 요구사항: [정원 홀드·무료 예약](../p0/reservation.md)의 `FR-06`·`US-01`, [예약 QR·체크인](../p0/check-in.md)의 `FR-07`·`US-03` 및 각 [예약](../api/p0/reservation/reservation.md)·[체크인](../api/p0/check-in/check-in.md) 내부 API의 멱등성 계약
 - 관련 단계: 단계 1. MVP 구현·검증
 - 관련 이슈: 없음
 - 대체 대상: 없음

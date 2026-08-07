@@ -1,0 +1,55 @@
+name: API 기능(Feature) 생성
+description: 확정된 API 명세 하나에 정의된 API 엔드포인트 하나의 API Feature를 생성합니다.
+title: "[FEATURE] "
+type: Feature
+labels:
+  - NEED_TRIAGE
+  - New Feature
+projects:
+  - Gimhae-Yay/1
+assignees: []
+
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: HTTP 메서드와 경로를 포함해 API Feature가 제공할 사용자 관찰 가능 결과를 요약해 주세요.
+    validations:
+      required: true
+
+  - type: input
+    id: api-documentation
+    attributes:
+      label: API Documentation
+      description: 대상 엔드포인트 하나만 정의하는 확정 API 명세의 원격 커밋 permalink 하나를 입력해 주세요.
+      placeholder: https://github.com/OWNER/REPOSITORY/blob/COMMIT_SHA/docs/api/path/to-api.md
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: API 명세에 확정된 인증·인가, 요청·응답, 상태 전이, 오류와 정합성 범위를 설명해 주세요.
+    validations:
+      required: true
+
+  - type: textarea
+    id: todo
+    attributes:
+      label: TODO
+      description: API Feature의 검증 가능한 완료 조건을 체크박스 형식으로 작성해 주세요.
+      placeholder: |
+        - [ ] TODO 1
+        - [ ] TODO 2
+    validations:
+      required: true
+
+  - type: textarea
+    id: other
+    attributes:
+      label: Other
+      description: 선행 관계, 제외 범위와 API 명세 외의 보조 근거를 작성해 주세요.
+    validations:
+      required: false
