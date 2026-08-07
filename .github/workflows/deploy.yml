@@ -53,13 +53,21 @@ jobs:
             --push \
             .
 
-      - name: 새 인스턴스가 사용할 이미지 태그 기록
+      - name: 새 인스턴스가 사용할 런타임 구성 기록
         run: |
           set -euo pipefail
+          compose_file="compose.auth-redis.yaml"
+          compose_size="$(wc -c < "$compose_file")"
+          test "$compose_size" -le 4096
           aws ssm put-parameter \
             --name "$DEPLOYMENT_PARAMETER_PREFIX/API_IMAGE_TAG" \
             --type String \
             --value "$GITHUB_SHA" \
+            --overwrite
+          aws ssm put-parameter \
+            --name "$DEPLOYMENT_PARAMETER_PREFIX/COMPOSE_FILE" \
+            --type String \
+            --value "$(< "$compose_file")" \
             --overwrite
 
       - name: 기존 ASG 인스턴스 종료
