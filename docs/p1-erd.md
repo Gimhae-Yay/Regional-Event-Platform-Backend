@@ -2,7 +2,7 @@
 
 > 상태: 정책 반영 초안
 > 작성일: 2026-08-05
-> 근거: [P1 정책 결정 로그](p1-policy-decision-log.md)와 채택 ADR-0064~ADR-0071
+> 근거: [P1 정책 결정 로그](p1-policy-decision-log.md), P1 도메인별 정책 문서와 각 문서가 연결한 채택 핵심 ADR
 > 범위: P0 ERD를 대체하지 않는다. P1에서 추가·변경되는 논리 테이블, 제약, 상태 전이와 P0 재사용 경계만 정의한다.
 
 ## 1. 기준과 범위
@@ -13,6 +13,7 @@
 - `docs/p1/stampbook.md`, `docs/p1/regional-mission.md`, `docs/p1/coupon.md`
 - `docs/p1/payment-refund.md`, `docs/p1/platform-admin.md`
 - `docs/adr/0012-retain-author-unlinked-reviews-and-visits-after-withdrawal.md`
+- 각 P1 정책 문서가 연결한 핵심 ADR. 지역 결정의 핵심·세부·보정 기록 분류는 `docs/p1/platform-admin.md`를 따른다.
 
 P1은 다음 P0 사실을 변경하지 않고 재사용한다.
 
@@ -464,7 +465,11 @@ P0의 복합 PK `(user_id, role)`를 `role_assignment_id`로 대체한다. 역�
 
 ### 4.4 `region`
 
-새 열을 추가하지 않는다. `is_public = true → false`는 비삭제 콘텐츠가 하나도 없을 때만 허용한다. `SUSPENDED` 같은 새 상태를 도입하지 않는다.
+새 열을 추가하지 않으며 `SUSPENDED` 같은 새 상태를 도입하지 않는다.
+
+`region_code`는 입력의 앞뒤 공백을 제거하고 내부 공백과 비 ASCII 문자를 거부한 뒤 `Locale.ROOT` 기준 대문자로 변환한 정규형만 저장한다. 저장 정규식은 `^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*$`이고 길이는 1자 이상 50자 이하다. P1 지역 생성 API를 활성화하기 전에 기존 값을 같은 정규형으로 변환했을 때 충돌하는지 검사한다. 충돌이 있으면 배포를 중단해 데이터를 정리하고, 충돌이 없으면 비정규 값을 한 번 이관한다. API·초기화·migration을 포함한 모든 저장 경로는 같은 정규화 검증을 거치며, MySQL에는 대소문자를 구분하는 `REGEXP_LIKE(region_code, '^[A-Z][A-Z0-9]*(-[A-Z0-9]+)*$', 'c')` CHECK로 저장 불변식을 강제한다.
+
+`is_public = true → false`는 비삭제 콘텐츠가 하나도 없는 지역의 운영 전 공개 노출 취소에만 허용한다. 공개 이후 콘텐츠는 삭제하지 않으므로 콘텐츠 운영 이력이 있는 지역의 운영 종료·비공개는 P1에서 제공하지 않는다. 공개 여부 변경은 같은 트랜잭션에서 대상 `region` 행을 쓰기 잠금으로 조회한 뒤 현재 값을 비교한다. 현재 값과 요청 값이 같으면 지역 행과 `updated_at`을 변경하지 않고 성공·실패 감사 이벤트도 만들지 않는다. 실제 상태 전이는 성공 감사 이벤트와 같은 트랜잭션으로 커밋한다. 같은 목표 상태의 동시 요청은 지역 행 잠금으로 직렬화하여 첫 요청만 실제 상태 전이와 성공 감사를 만들고 나머지는 무변경 성공으로 처리한다.
 
 ### 4.5 `audit_event` 확장
 
@@ -472,10 +477,14 @@ P0의 복합 PK `(user_id, role)`를 `role_assignment_id`로 대체한다. 역�
 | --- | --- |
 | `target_type` | 기존 P0 값에 `PLATFORM_ADMIN_ASSIGNMENT`, `USER_ROLE_ASSIGNMENT`, `STAMPBOOK`, `MISSION`, `COUPON_POLICY`, `COUPON`, `RESERVATION_PRICE_SNAPSHOT`, `PAYMENT`, `REFUND`, `PAYMENT_DISCREPANCY`를 추가 |
 | `reason` | P1 수명주기·운영 명령의 사유 원문. 스탬프북·미션·쿠폰 정책의 생성·수정·심사 요청·승인·반려·종료에서는 앞뒤 공백 제거 뒤 1~500자이며 NOT NULL, 그 외 이벤트는 nullable |
-| `evidence_reference` | 특권 변경·수동 거래 처리의 비밀값 없는 증빙 참조. 특권 변경·수동 거래 처리 이벤트에서는 NOT NULL, 그 외 기존 P0 이벤트는 nullable |
+| `evidence_reference` | `VARCHAR(500) NULL`. 특권 변경·수동 거래 처리 이벤트에서는 NOT NULL, 그 외 기존 P0 이벤트는 nullable. 지역 API는 앞뒤 공백 제거 후 1~500자 자유 문자열을 저장하며 서버가 출처·형식·민감정보를 판별하지 않는다. 개인정보·토큰·비밀값 미포함은 호출자 운영 책임이다. |
 | `audit_event_actor_link` | 활성 actor에만 만든다. 탈퇴 전 제거한다. |
 
 `target_id`에는 `app_user.user_id`를 저장하지 않는다. 고권한 계정 변경의 대상은 `platform_admin_assignment`이다. P0의 90일 공통 감사 보관 기간을 특권·거래 감사에도 그대로 적용할지는 [미확정 항목](#11-미확정-연결-정책)에 남긴다.
+
+지역 공개 여부 변경이 비삭제 콘텐츠 조건으로 거부되면 변경 트랜잭션 롤백 뒤 별도 트랜잭션에서 실패 감사를 기록한다. 실패 감사는 `previous_state = true`, `next_state = NULL`, `result = FAILURE`, 서버 판정 `reason_code = REGION_AVAILABILITY_CONFLICT`와 검증된 요청 `evidence_reference`, 대상 지역, 활성 처리자, 처리 시각과 `requestId`를 포함한다. 요청 목표 `false`와 업무 사유 코드는 실패 감사의 상태·사유 필드에 저장하지 않는다.
+
+실패 감사 저장 자체가 실패해도 원래 `409 REGION_AVAILABILITY_CONFLICT`와 지역 미변경 결과를 유지하며 원래 변경과 감사 저장을 요청 처리 경로에서 자동 재시도하지 않는다. 애플리케이션 경계에는 `requestId`, 대상 지역과 서버 실패 코드만 포함한 비개인 구조화 로그를 한 번 기록해 운영 알림 대상으로 삼고 요청 사유와 증빙 참조는 로그·알림에 포함하지 않는다.
 
 ## 5. 혜택 도메인
 
@@ -724,6 +733,7 @@ PUBLISHED mission AND ends_at <= 현재 시각
 
 | 우선순위 | 대상 | 제약·인덱스 |
 | --- | --- | --- |
+| 높음 | `region` | 기존 `UNIQUE (region_code)`를 유지하고 대소문자를 구분하는 정규형 CHECK로 `^[A-Z][A-Z0-9]*(-[A-Z0-9]+)*$` 저장을 강제. P1 활성화 전 기존 데이터 정규형 검사·이관 |
 | 높음 | `platform_admin_assignment` | 활성 고권한 사용자당 한 배정, 활성 슈퍼 최소 한 명은 조건부 쓰기로 보호 |
 | 높음 | `user_role_assignment` | 활성 역할의 사용자·역할·지역 범위 유일성, 지역·상태 조회 인덱스 |
 | 높음 | `stampbook_progress`, `stamp_earn` | `UNIQUE (stampbook_id, user_id)`, `UNIQUE (stampbook_progress_id, visit_id)`, 콘텐츠별 적립 유일 제약 |
@@ -763,6 +773,7 @@ MySQL의 조건부 유일 제약이 필요한 활성 배정·진행 중 결제�
 
 ## 12. 프로젝트 반영 순서
 
-1. 위 미확정 연결 정책을 결정한다.
-2. 프로젝트의 P1 정책 문서·API 계약과 이 ERD의 상태·제약을 같은 변경에서 일치시킨다.
-3. 그 뒤 migration·코드·통합 테스트를 구현한다.
+1. 각 P1 정책 문서가 연결한 핵심 ADR의 상태·제약과 현재 API 계약을 반영한다.
+2. 위 미확정 연결 정책을 결정한다.
+3. 프로젝트의 P1 정책 문서·API 계약과 이 ERD의 상태·제약을 같은 변경에서 일치시킨다.
+4. 그 뒤 migration·코드·통합 테스트를 구현한다.
