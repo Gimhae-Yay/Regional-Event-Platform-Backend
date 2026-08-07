@@ -3,7 +3,7 @@
 | 항목 | 내용 |
 | --- | --- |
 | 상위 명세 | [로컬스탬프 P1 명세](../p1-spec.md) |
-| 관련 결정 | [ADR-0064 고권한 계정 분리](../adr/0064-separate-privileged-account-class-from-ordinary-roles.md), [ADR-0065 지역 공개·역할 이력](../adr/0065-use-is-public-for-region-availability-and-history-roles.md), [ADR-0070 거래 예외 처리](../adr/0070-use-full-refund-with-bounded-manual-retry-and-discrepancy-closure.md), [ADR-0071 탈퇴 비식별화·감사](../adr/0071-deidentify-p1-benefit-data-on-withdrawal-and-extend-common-audit.md), [ADR-0072 지역 변경 사유 코드](../adr/0072-use-allowlisted-reason-codes-for-region-changes.md), [ADR-0073 지역 코드 대문자 정규화](../adr/0073-normalize-region-code-to-uppercase.md), [ADR-0074 동일 공개 여부 무변경 성공](../adr/0074-treat-repeated-region-visibility-as-no-op-success.md), [ADR-0075 실제 상태 전이 성공 감사](../adr/0075-limit-region-success-audits-to-state-transitions.md), [ADR-0076 지역 코드 공백 처리](../adr/0076-trim-region-code-outer-whitespace.md), [ADR-0077 운영 전 지역 비공개](../adr/0077-limit-region-hiding-to-pre-operation.md), [ADR-0078 전환 실패 증빙 감사](../adr/0078-store-evidence-reference-in-region-visibility-failure-audits.md) |
+| 관련 결정 | [ADR-0064 고권한 계정 분리](../adr/0064-separate-privileged-account-class-from-ordinary-roles.md), [ADR-0065 지역 공개·역할 이력](../adr/0065-use-is-public-for-region-availability-and-history-roles.md), [ADR-0070 거래 예외 처리](../adr/0070-use-full-refund-with-bounded-manual-retry-and-discrepancy-closure.md), [ADR-0071 탈퇴 비식별화·감사](../adr/0071-deidentify-p1-benefit-data-on-withdrawal-and-extend-common-audit.md), [ADR-0072 지역 변경 사유 코드](../adr/0072-use-allowlisted-reason-codes-for-region-changes.md), [ADR-0073 지역 코드 대문자 정규화](../adr/0073-normalize-region-code-to-uppercase.md), [ADR-0074 동일 공개 여부 무변경 성공](../adr/0074-treat-repeated-region-visibility-as-no-op-success.md), [ADR-0075 실제 상태 전이 성공 감사](../adr/0075-limit-region-success-audits-to-state-transitions.md), [ADR-0076 지역 코드 공백 처리](../adr/0076-trim-region-code-outer-whitespace.md), [ADR-0077 운영 전 지역 비공개](../adr/0077-limit-region-hiding-to-pre-operation.md), [ADR-0078 전환 실패 증빙 감사](../adr/0078-store-evidence-reference-in-region-visibility-failure-audits.md), [ADR-0079 실패 감사 저장 장애 응답](../adr/0079-preserve-region-conflict-response-when-failure-audit-write-fails.md), [ADR-0080 실패 감사 다음 상태 없음](../adr/0080-leave-next-state-null-for-failed-region-visibility-transition.md), [ADR-0081 지역 증빙 참조 자유 문자열](../adr/0081-keep-region-evidence-reference-as-free-string.md) |
 | 소유 범위 | 전체관리자 계정, 지역, 관리자 역할, 결제 불일치·환불 실패 수동 처리 |
 | API 명세 | [API 명세서](../api/api-specification.md) |
 | 데이터 모델 | [P0 ERD](../erd.md), [P1 ERD](../p1-erd.md) |
@@ -85,7 +85,8 @@
   지역은 별도 운영 상태를 만들지 않고 `is_public = false`를 비공개·준비, `true`를 공개·운영으로 사용한다. 지역 생성·공개 여부 변경은 전체관리자 전용 유스케이스에서만 수행한다.
   비삭제 콘텐츠가 하나라도 있는 공개 지역은 비공개로 전환할 수 없다. 공개 이후 콘텐츠는 삭제하지 않으므로 콘텐츠 운영 이력이 있는 지역의 운영 종료·비공개는 P1에서 제공하지 않는다.
   공개 여부 변경은 지역 행을 잠근 뒤 처리하며 현재 값과 같은 요청은 `200 OK` 무변경 성공으로 처리한다. 이때 지역 행과 `updated_at`을 변경하지 않고 감사 이벤트도 만들지 않는다. 실제 상태 전이와 성공 감사만 같은 트랜잭션으로 커밋한다.
-  비삭제 콘텐츠 조건 실패는 변경 롤백 뒤 서버 실패 코드와 검증된 요청 증빙 참조를 가진 실패 감사로 기록한다.
+  비삭제 콘텐츠 조건 실패는 변경 롤백 뒤 `previous_state = true`, `next_state = NULL`, 서버 실패 코드와 검증된 요청 증빙 참조를 가진 실패 감사로 기록한다.
+  실패 감사 저장 자체가 실패해도 원래 `409 REGION_AVAILABILITY_CONFLICT`와 지역 미변경 결과를 유지하며, 비개인 구조화 로그를 한 번 기록해 운영 알림 대상으로 삼는다.
 - `ADM-03`:
   관리자 역할의 임명·회수는 `user_role_assignment`에 `ACTIVE`·`REVOKED` 이력으로 남기며 대상 사용자와 담당 지역의 관계를 검증한다.
   한 지역에는 복수의 활성 지역 관리자를 둘 수 있지만, 비삭제 콘텐츠가 있는 지역에서 마지막 활성 지역 관리자를 회수할 수 없다. 역할 변경으로 다른 지역 또는 콘텐츠 소유 권한이 암묵적으로 확대되지 않는다.
@@ -94,6 +95,7 @@
   이중 승인은 P1에서 적용하지 않는다. `FAILED` 환불의 재시도는 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN`만 수행하고 총 외부 호출은 3회를 넘길 수 없다.
 - `ADM-05`:
   전체관리자 계정·지역·역할·거래 예외의 모든 변경에는 actor, 대상, 이전·이후 상태, 증빙 참조, 사유, 시각과 `requestId`를 남긴다. 비밀번호, 토큰, 결제 비밀값과 전체 결제수단 정보는 기록하지 않는다.
+  지역 변경의 `evidenceReference`는 앞뒤 공백 제거 후 1~500자 자유 문자열로 받는다. 개인정보·토큰·비밀값 미포함은 호출자 운영 책임이며 서버는 내용이나 출처를 자동 판별하지 않는다. API 응답과 구조화 로그·운영 알림에는 이 값을 포함하지 않는다.
 
 ## 4. 구현 전 잔여 확정 항목
 

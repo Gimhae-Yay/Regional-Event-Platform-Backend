@@ -2,7 +2,7 @@
 
 > 상태: 정책 반영 초안
 > 작성일: 2026-08-05
-> 근거: [P1 정책 결정 로그](p1-policy-decision-log.md)와 채택 ADR-0064~ADR-0078
+> 근거: [P1 정책 결정 로그](p1-policy-decision-log.md)와 채택 ADR-0064~ADR-0081
 > 범위: P0 ERD를 대체하지 않는다. P1에서 추가·변경되는 논리 테이블, 제약, 상태 전이와 P0 재사용 경계만 정의한다.
 
 ## 1. 기준과 범위
@@ -13,7 +13,7 @@
 - `docs/p1/stampbook.md`, `docs/p1/regional-mission.md`, `docs/p1/coupon.md`
 - `docs/p1/payment-refund.md`, `docs/p1/platform-admin.md`
 - `docs/adr/0012-retain-author-unlinked-reviews-and-visits-after-withdrawal.md`
-- `docs/adr/0064-separate-privileged-account-class-from-ordinary-roles.md`부터 `docs/adr/0078-store-evidence-reference-in-region-visibility-failure-audits.md`까지의 채택 결정
+- `docs/adr/0064-separate-privileged-account-class-from-ordinary-roles.md`부터 `docs/adr/0081-keep-region-evidence-reference-as-free-string.md`까지의 채택 결정
 
 P1은 다음 P0 사실을 변경하지 않고 재사용한다.
 
@@ -476,12 +476,14 @@ P0의 복합 PK `(user_id, role)`를 `role_assignment_id`로 대체한다. 역�
 | 추가·확장 항목 | 규칙 |
 | --- | --- |
 | `target_type` | 기존 P0 값에 `PLATFORM_ADMIN_ASSIGNMENT`, `USER_ROLE_ASSIGNMENT`, `STAMPBOOK`, `MISSION`, `COUPON_POLICY`, `COUPON`, `RESERVATION_PRICE_SNAPSHOT`, `PAYMENT`, `REFUND`, `PAYMENT_DISCREPANCY`를 추가 |
-| `evidence_reference` | 특권 변경·수동 거래 처리의 비밀값 없는 증빙 참조. nullable |
+| `evidence_reference` | `VARCHAR(500) NULL`. 특권 변경·수동 거래 처리의 증빙 참조. 지역 API는 앞뒤 공백 제거 후 1~500자 자유 문자열을 저장하며 서버가 출처·형식·민감정보를 판별하지 않는다. 개인정보·토큰·비밀값 미포함은 호출자 운영 책임이다. |
 | `audit_event_actor_link` | 활성 actor에만 만든다. 탈퇴 전 제거한다. |
 
 `target_id`에는 `app_user.user_id`를 저장하지 않는다. 고권한 계정 변경의 대상은 `platform_admin_assignment`이다. P0의 90일 공통 감사 보관 기간을 특권·거래 감사에도 그대로 적용할지는 [미확정 항목](#11-미확정-연결-정책)에 남긴다.
 
-지역 공개 여부 변경이 비삭제 콘텐츠 조건으로 거부되면 변경 트랜잭션 롤백 뒤 별도 트랜잭션에서 실패 감사를 기록한다. 실패 감사는 서버 판정 `reason_code = REGION_AVAILABILITY_CONFLICT`와 검증된 요청 `evidence_reference`, 대상 지역, 현재·목표 공개 여부, 활성 처리자, 처리 시각과 `requestId`를 포함한다. 요청의 업무 사유 코드는 실패 원인으로 저장하지 않는다.
+지역 공개 여부 변경이 비삭제 콘텐츠 조건으로 거부되면 변경 트랜잭션 롤백 뒤 별도 트랜잭션에서 실패 감사를 기록한다. 실패 감사는 `previous_state = true`, `next_state = NULL`, `result = FAILURE`, 서버 판정 `reason_code = REGION_AVAILABILITY_CONFLICT`와 검증된 요청 `evidence_reference`, 대상 지역, 활성 처리자, 처리 시각과 `requestId`를 포함한다. 요청 목표 `false`와 업무 사유 코드는 실패 감사의 상태·사유 필드에 저장하지 않는다.
+
+실패 감사 저장 자체가 실패해도 원래 `409 REGION_AVAILABILITY_CONFLICT`와 지역 미변경 결과를 유지하며 원래 변경과 감사 저장을 요청 처리 경로에서 자동 재시도하지 않는다. 애플리케이션 경계에는 `requestId`, 대상 지역과 서버 실패 코드만 포함한 비개인 구조화 로그를 한 번 기록해 운영 알림 대상으로 삼고 요청 사유와 증빙 참조는 로그·알림에 포함하지 않는다.
 
 ## 5. 혜택 도메인
 
@@ -770,7 +772,7 @@ MySQL의 조건부 유일 제약이 필요한 활성 배정·진행 중 결제�
 
 ## 12. 프로젝트 반영 순서
 
-1. 채택된 ADR-0064~ADR-0078의 상태·제약을 P1 정책과 API 계약에 반영한다.
+1. 채택된 ADR-0064~ADR-0081의 상태·제약을 P1 정책과 API 계약에 반영한다.
 2. 위 미확정 연결 정책을 결정한다.
 3. 프로젝트의 P1 정책 문서·API 계약과 이 ERD의 상태·제약을 같은 변경에서 일치시킨다.
 4. 그 뒤 migration·코드·통합 테스트를 구현한다.
