@@ -2,7 +2,7 @@
 
 > 상태: 정책 반영 초안
 > 작성일: 2026-08-05
-> 근거: [P1 정책 결정 로그](p1-policy-decision-log.md)와 채택 ADR-0064~ADR-0081
+> 근거: [P1 정책 결정 로그](p1-policy-decision-log.md), P1 도메인별 정책 문서와 각 문서가 연결한 핵심 ADR
 > 범위: P0 ERD를 대체하지 않는다. P1에서 추가·변경되는 논리 테이블, 제약, 상태 전이와 P0 재사용 경계만 정의한다.
 
 ## 1. 기준과 범위
@@ -13,7 +13,7 @@
 - `docs/p1/stampbook.md`, `docs/p1/regional-mission.md`, `docs/p1/coupon.md`
 - `docs/p1/payment-refund.md`, `docs/p1/platform-admin.md`
 - `docs/adr/0012-retain-author-unlinked-reviews-and-visits-after-withdrawal.md`
-- `docs/adr/0064-separate-privileged-account-class-from-ordinary-roles.md`부터 `docs/adr/0081-keep-region-evidence-reference-as-free-string.md`까지의 채택 결정
+- 각 P1 정책 문서가 연결한 핵심 ADR. 지역 결정의 핵심·세부·보정 기록 분류는 `docs/p1/platform-admin.md`를 따른다.
 
 P1은 다음 P0 사실을 변경하지 않고 재사용한다.
 
@@ -772,7 +772,7 @@ MySQL의 조건부 유일 제약이 필요한 활성 배정·진행 중 결제�
 
 ## 12. 프로젝트 반영 순서
 
-1. 채택된 ADR-0064~ADR-0081의 상태·제약을 P1 정책과 API 계약에 반영한다.
+1. 각 P1 정책 문서가 연결한 핵심 ADR의 상태·제약과 현재 API 계약을 반영한다.
 2. 위 미확정 연결 정책을 결정한다.
 3. 프로젝트의 P1 정책 문서·API 계약과 이 ERD의 상태·제약을 같은 변경에서 일치시킨다.
 4. 그 뒤 migration·코드·통합 테스트를 구현한다.

@@ -3,13 +3,15 @@
 | 항목 | 내용 |
 | --- | --- |
 | 상위 명세 | [로컬스탬프 P1 명세](../p1-spec.md) |
-| 관련 결정 | [ADR-0064 고권한 계정 분리](../adr/0064-separate-privileged-account-class-from-ordinary-roles.md), [ADR-0065 지역 공개·역할 이력](../adr/0065-use-is-public-for-region-availability-and-history-roles.md), [ADR-0070 거래 예외 처리](../adr/0070-use-full-refund-with-bounded-manual-retry-and-discrepancy-closure.md), [ADR-0071 탈퇴 비식별화·감사](../adr/0071-deidentify-p1-benefit-data-on-withdrawal-and-extend-common-audit.md), [ADR-0072 지역 변경 사유 코드](../adr/0072-use-allowlisted-reason-codes-for-region-changes.md), [ADR-0073 지역 코드 대문자 정규화](../adr/0073-normalize-region-code-to-uppercase.md), [ADR-0074 동일 공개 여부 무변경 성공](../adr/0074-treat-repeated-region-visibility-as-no-op-success.md), [ADR-0075 실제 상태 전이 성공 감사](../adr/0075-limit-region-success-audits-to-state-transitions.md), [ADR-0076 지역 코드 공백 처리](../adr/0076-trim-region-code-outer-whitespace.md), [ADR-0077 운영 전 지역 비공개](../adr/0077-limit-region-hiding-to-pre-operation.md), [ADR-0078 전환 실패 증빙 감사](../adr/0078-store-evidence-reference-in-region-visibility-failure-audits.md), [ADR-0079 실패 감사 저장 장애 응답](../adr/0079-preserve-region-conflict-response-when-failure-audit-write-fails.md), [ADR-0080 실패 감사 다음 상태 없음](../adr/0080-leave-next-state-null-for-failed-region-visibility-transition.md), [ADR-0081 지역 증빙 참조 자유 문자열](../adr/0081-keep-region-evidence-reference-as-free-string.md) |
+| 관련 핵심 결정 | [ADR-0064 고권한 계정 분리](../adr/0064-separate-privileged-account-class-from-ordinary-roles.md), [ADR-0065 지역 공개·역할 이력](../adr/0065-use-is-public-for-region-availability-and-history-roles.md), [ADR-0070 거래 예외 처리](../adr/0070-use-full-refund-with-bounded-manual-retry-and-discrepancy-closure.md), [ADR-0071 탈퇴 비식별화·감사](../adr/0071-deidentify-p1-benefit-data-on-withdrawal-and-extend-common-audit.md), [ADR-0073 지역 코드 대문자 정규화](../adr/0073-normalize-region-code-to-uppercase.md), [ADR-0074 동일 공개 여부 무변경 성공](../adr/0074-treat-repeated-region-visibility-as-no-op-success.md), [ADR-0078 전환 실패 증빙 감사](../adr/0078-store-evidence-reference-in-region-visibility-failure-audits.md), [ADR-0081 지역 증빙 참조 자유 문자열](../adr/0081-keep-region-evidence-reference-as-free-string.md) |
+| 지역 세부·보정 기록 | [ADR-0072 지역 변경 사유 코드](../adr/0072-use-allowlisted-reason-codes-for-region-changes.md), [ADR-0075 실제 상태 전이 성공 감사](../adr/0075-limit-region-success-audits-to-state-transitions.md), [ADR-0076 지역 코드 공백 처리](../adr/0076-trim-region-code-outer-whitespace.md), [ADR-0077 운영 전 지역 비공개](../adr/0077-limit-region-hiding-to-pre-operation.md), [ADR-0079 실패 감사 저장 장애 응답](../adr/0079-preserve-region-conflict-response-when-failure-audit-write-fails.md), [ADR-0080 실패 감사 다음 상태 없음](../adr/0080-leave-next-state-null-for-failed-region-visibility-transition.md) |
 | 소유 범위 | 전체관리자 계정, 지역, 관리자 역할, 결제 불일치·환불 실패 수동 처리 |
 | API 명세 | [API 명세서](../api/api-specification.md) |
 | 데이터 모델 | [P0 ERD](../erd.md), [P1 ERD](../p1-erd.md) |
 
 > 이 문서는 P1 전체관리자 정책의 단일 기준이다. P1은 계정 분류와 별도 고권한 배정으로 전역 권한을 도입하며,
 > 일반 역할과 고권한을 한 계정에 겸임하지 않는다.
+> 지역 세부·보정 기록은 결정 과정을 보존하며, 현재 구현 계약은 이 문서와 지역 API 명세·P1 ERD를 기준으로 해석한다.
 
 ## 1. 범위
 
