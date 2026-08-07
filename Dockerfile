@@ -1,4 +1,4 @@
-FROM amazoncorretto:21-al2023 AS build
+FROM --platform=$BUILDPLATFORM amazoncorretto:21-al2023 AS build
 
 WORKDIR /workspace
 
