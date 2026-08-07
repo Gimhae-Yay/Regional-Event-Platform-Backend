@@ -3,7 +3,7 @@
 | 항목 | 내용 |
 | --- | --- |
 | 상위 명세 | [로컬스탬프 P1 명세](../p1-spec.md) |
-| 관련 결정 | [ADR-0064 고권한 계정 분리](../adr/0064-separate-privileged-account-class-from-ordinary-roles.md), [ADR-0065 지역 공개·역할 이력](../adr/0065-use-is-public-for-region-availability-and-history-roles.md), [ADR-0070 거래 예외 처리](../adr/0070-use-full-refund-with-bounded-manual-retry-and-discrepancy-closure.md), [ADR-0071 탈퇴 비식별화·감사](../adr/0071-deidentify-p1-benefit-data-on-withdrawal-and-extend-common-audit.md), [ADR-0072 지역 변경 사유 코드](../adr/0072-use-allowlisted-reason-codes-for-region-changes.md), [ADR-0073 지역 코드 대문자 정규화](../adr/0073-normalize-region-code-to-uppercase.md), [ADR-0074 동일 공개 여부 무변경 성공](../adr/0074-treat-repeated-region-visibility-as-no-op-success.md), [ADR-0075 실제 상태 전이 성공 감사](../adr/0075-limit-region-success-audits-to-state-transitions.md), [ADR-0076 지역 코드 공백 처리](../adr/0076-trim-region-code-outer-whitespace.md) |
+| 관련 결정 | [ADR-0064 고권한 계정 분리](../adr/0064-separate-privileged-account-class-from-ordinary-roles.md), [ADR-0065 지역 공개·역할 이력](../adr/0065-use-is-public-for-region-availability-and-history-roles.md), [ADR-0070 거래 예외 처리](../adr/0070-use-full-refund-with-bounded-manual-retry-and-discrepancy-closure.md), [ADR-0071 탈퇴 비식별화·감사](../adr/0071-deidentify-p1-benefit-data-on-withdrawal-and-extend-common-audit.md), [ADR-0072 지역 변경 사유 코드](../adr/0072-use-allowlisted-reason-codes-for-region-changes.md), [ADR-0073 지역 코드 대문자 정규화](../adr/0073-normalize-region-code-to-uppercase.md), [ADR-0074 동일 공개 여부 무변경 성공](../adr/0074-treat-repeated-region-visibility-as-no-op-success.md), [ADR-0075 실제 상태 전이 성공 감사](../adr/0075-limit-region-success-audits-to-state-transitions.md), [ADR-0076 지역 코드 공백 처리](../adr/0076-trim-region-code-outer-whitespace.md), [ADR-0077 운영 전 지역 비공개](../adr/0077-limit-region-hiding-to-pre-operation.md), [ADR-0078 전환 실패 증빙 감사](../adr/0078-store-evidence-reference-in-region-visibility-failure-audits.md) |
 | 소유 범위 | 전체관리자 계정, 지역, 관리자 역할, 결제 불일치·환불 실패 수동 처리 |
 | API 명세 | [API 명세서](../api/api-specification.md) |
 | 데이터 모델 | [P0 ERD](../erd.md), [P1 ERD](../p1-erd.md) |
@@ -16,7 +16,7 @@
 ### P1-FR-09. 전체관리자와 지역·역할 관리
 
 - `PRIVILEGED` 계정에 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN` 고권한 배정을 생성하고 비활성화한다.
-- 지역을 생성·조회하고 기존 `is_public`을 비공개·준비 또는 공개·운영 상태로 변경한다.
+- 지역을 생성·조회하고 기존 `is_public`으로 공개 전 준비 지역의 노출 여부를 변경한다. 콘텐츠 운영 이력이 있는 지역의 운영 종료·비공개는 P1에서 제공하지 않는다.
 - `ORDINARY` 계정에 지역 관리자 역할을 이력형으로 임명하고 회수한다.
 - 모든 특권 변경은 대상, 처리자, 사유와 시각을 감사 이력으로 남긴다.
 
@@ -37,7 +37,7 @@
 #### 기본 흐름
 
 1. 전체관리자가 새 지역 생성, 기존 지역 공개 여부 변경 또는 지역 관리자 역할 변경을 요청한다.
-2. 시스템은 처리자 활성 배정, 지역 식별자 중복과 `is_public` 전이 조건을 검증한다. 비삭제 콘텐츠가 하나라도 있는 공개 지역은 비공개로 바꿀 수 없다.
+2. 시스템은 처리자 활성 배정, 지역 식별자 중복과 `is_public` 전이 조건을 검증한다. 비공개 전환은 비삭제 콘텐츠가 없는 지역의 운영 전 공개 노출 취소에만 허용한다.
 3. 시스템은 실제 지역 변경과 감사 이력을 함께 저장한다. 동일한 공개 여부 요청은 현재 지역을 반환하고 변경·감사 이력을 만들지 않는다.
 4. 전체관리자가 `ORDINARY` 대상 사용자에게 지역 관리자 역할을 임명하거나 기존 역할을 회수한다.
 5. 시스템은 대상 사용자, 담당 지역, 활성 역할과 충돌 여부를 검증한다. 비삭제 콘텐츠가 있는 지역에서는 마지막 활성 지역 관리자를 회수할 수 없다.
@@ -83,8 +83,9 @@
   최초 슈퍼관리자는 배포 bootstrap으로 한 번만 생성한다. 비활성 고권한 계정도 일반 계정으로 전환하지 않으며, 비활성화된 계정의 새 특권 요청은 허용하지 않는다.
 - `ADM-02`:
   지역은 별도 운영 상태를 만들지 않고 `is_public = false`를 비공개·준비, `true`를 공개·운영으로 사용한다. 지역 생성·공개 여부 변경은 전체관리자 전용 유스케이스에서만 수행한다.
-  비삭제 콘텐츠가 하나라도 있는 공개 지역은 비공개로 전환할 수 없다.
+  비삭제 콘텐츠가 하나라도 있는 공개 지역은 비공개로 전환할 수 없다. 공개 이후 콘텐츠는 삭제하지 않으므로 콘텐츠 운영 이력이 있는 지역의 운영 종료·비공개는 P1에서 제공하지 않는다.
   공개 여부 변경은 지역 행을 잠근 뒤 처리하며 현재 값과 같은 요청은 `200 OK` 무변경 성공으로 처리한다. 이때 지역 행과 `updated_at`을 변경하지 않고 감사 이벤트도 만들지 않는다. 실제 상태 전이와 성공 감사만 같은 트랜잭션으로 커밋한다.
+  비삭제 콘텐츠 조건 실패는 변경 롤백 뒤 서버 실패 코드와 검증된 요청 증빙 참조를 가진 실패 감사로 기록한다.
 - `ADM-03`:
   관리자 역할의 임명·회수는 `user_role_assignment`에 `ACTIVE`·`REVOKED` 이력으로 남기며 대상 사용자와 담당 지역의 관계를 검증한다.
   한 지역에는 복수의 활성 지역 관리자를 둘 수 있지만, 비삭제 콘텐츠가 있는 지역에서 마지막 활성 지역 관리자를 회수할 수 없다. 역할 변경으로 다른 지역 또는 콘텐츠 소유 권한이 암묵적으로 확대되지 않는다.
@@ -107,7 +108,7 @@
 | 데이터 | 핵심 식별·연결 정보 | 용도 |
 | --- | --- | --- |
 | 고권한 계정·배정 | `app_user.account_kind`, `platform_admin_assignment_id`, `user_id`, 등급·상태·생성·비활성화 정보 | 일반 역할과 분리한 전역 관리 권한 |
-| 지역 | `region_id`, 지역 식별 정보, `is_public`, 상태 변경 감사 | 지역 공개·운영 수명주기 |
+| 지역 | `region_id`, 지역 식별 정보, `is_public`, 상태 변경 감사 | 지역 생성·조회와 운영 전 공개 노출 관리 |
 | 관리자 역할 연결 | `role_assignment_id`, `user_id`, `region_id`, 역할, `ACTIVE`·`REVOKED`, 임명·회수 정보 | 이력형 지역 관리자 권한 |
 | 특권 감사 이력 | actor, 대상, 변경 전후, 사유, 증빙 참조, 시각 | 권한·지역 변경 재현 |
 | 거래 예외 처리 | 결제 또는 환불, 예외 유형, 증빙, 조치, 처리자, 결과 | 수동 운영 처리 |

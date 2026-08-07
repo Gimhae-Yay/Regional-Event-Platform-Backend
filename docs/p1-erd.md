@@ -2,7 +2,7 @@
 
 > 상태: 정책 반영 초안
 > 작성일: 2026-08-05
-> 근거: [P1 정책 결정 로그](p1-policy-decision-log.md)와 채택 ADR-0064~ADR-0076
+> 근거: [P1 정책 결정 로그](p1-policy-decision-log.md)와 채택 ADR-0064~ADR-0078
 > 범위: P0 ERD를 대체하지 않는다. P1에서 추가·변경되는 논리 테이블, 제약, 상태 전이와 P0 재사용 경계만 정의한다.
 
 ## 1. 기준과 범위
@@ -13,7 +13,7 @@
 - `docs/p1/stampbook.md`, `docs/p1/regional-mission.md`, `docs/p1/coupon.md`
 - `docs/p1/payment-refund.md`, `docs/p1/platform-admin.md`
 - `docs/adr/0012-retain-author-unlinked-reviews-and-visits-after-withdrawal.md`
-- `docs/adr/0064-separate-privileged-account-class-from-ordinary-roles.md`부터 `docs/adr/0076-trim-region-code-outer-whitespace.md`까지의 채택 결정
+- `docs/adr/0064-separate-privileged-account-class-from-ordinary-roles.md`부터 `docs/adr/0078-store-evidence-reference-in-region-visibility-failure-audits.md`까지의 채택 결정
 
 P1은 다음 P0 사실을 변경하지 않고 재사용한다.
 
@@ -469,7 +469,7 @@ P0의 복합 PK `(user_id, role)`를 `role_assignment_id`로 대체한다. 역�
 
 `region_code`는 입력의 앞뒤 공백을 제거하고 내부 공백과 비 ASCII 문자를 거부한 뒤 `Locale.ROOT` 기준 대문자로 변환한 정규형만 저장한다. 저장 정규식은 `^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*$`이고 길이는 1자 이상 50자 이하다. P1 지역 생성 API를 활성화하기 전에 기존 값을 같은 정규형으로 변환했을 때 충돌하는지 검사한다. 충돌이 있으면 배포를 중단해 데이터를 정리하고, 충돌이 없으면 비정규 값을 한 번 이관한다. API·초기화·migration을 포함한 모든 저장 경로는 같은 정규화 검증을 거치며, MySQL에는 대소문자를 구분하는 `REGEXP_LIKE(region_code, '^[A-Z][A-Z0-9]*(-[A-Z0-9]+)*$', 'c')` CHECK로 저장 불변식을 강제한다.
 
-`is_public = true → false`는 비삭제 콘텐츠가 하나도 없을 때만 허용한다. 공개 여부 변경은 같은 트랜잭션에서 대상 `region` 행을 쓰기 잠금으로 조회한 뒤 현재 값을 비교한다. 현재 값과 요청 값이 같으면 지역 행과 `updated_at`을 변경하지 않고 성공·실패 감사 이벤트도 만들지 않는다. 실제 상태 전이는 성공 감사 이벤트와 같은 트랜잭션으로 커밋한다. 같은 목표 상태의 동시 요청은 지역 행 잠금으로 직렬화하여 첫 요청만 실제 상태 전이와 성공 감사를 만들고 나머지는 무변경 성공으로 처리한다.
+`is_public = true → false`는 비삭제 콘텐츠가 하나도 없는 지역의 운영 전 공개 노출 취소에만 허용한다. 공개 이후 콘텐츠는 삭제하지 않으므로 콘텐츠 운영 이력이 있는 지역의 운영 종료·비공개는 P1에서 제공하지 않는다. 공개 여부 변경은 같은 트랜잭션에서 대상 `region` 행을 쓰기 잠금으로 조회한 뒤 현재 값을 비교한다. 현재 값과 요청 값이 같으면 지역 행과 `updated_at`을 변경하지 않고 성공·실패 감사 이벤트도 만들지 않는다. 실제 상태 전이는 성공 감사 이벤트와 같은 트랜잭션으로 커밋한다. 같은 목표 상태의 동시 요청은 지역 행 잠금으로 직렬화하여 첫 요청만 실제 상태 전이와 성공 감사를 만들고 나머지는 무변경 성공으로 처리한다.
 
 ### 4.5 `audit_event` 확장
 
@@ -480,6 +480,8 @@ P0의 복합 PK `(user_id, role)`를 `role_assignment_id`로 대체한다. 역�
 | `audit_event_actor_link` | 활성 actor에만 만든다. 탈퇴 전 제거한다. |
 
 `target_id`에는 `app_user.user_id`를 저장하지 않는다. 고권한 계정 변경의 대상은 `platform_admin_assignment`이다. P0의 90일 공통 감사 보관 기간을 특권·거래 감사에도 그대로 적용할지는 [미확정 항목](#11-미확정-연결-정책)에 남긴다.
+
+지역 공개 여부 변경이 비삭제 콘텐츠 조건으로 거부되면 변경 트랜잭션 롤백 뒤 별도 트랜잭션에서 실패 감사를 기록한다. 실패 감사는 서버 판정 `reason_code = REGION_AVAILABILITY_CONFLICT`와 검증된 요청 `evidence_reference`, 대상 지역, 현재·목표 공개 여부, 활성 처리자, 처리 시각과 `requestId`를 포함한다. 요청의 업무 사유 코드는 실패 원인으로 저장하지 않는다.
 
 ## 5. 혜택 도메인
 
@@ -768,7 +770,7 @@ MySQL의 조건부 유일 제약이 필요한 활성 배정·진행 중 결제�
 
 ## 12. 프로젝트 반영 순서
 
-1. 채택된 ADR-0064~ADR-0076의 상태·제약을 P1 정책과 API 계약에 반영한다.
+1. 채택된 ADR-0064~ADR-0078의 상태·제약을 P1 정책과 API 계약에 반영한다.
 2. 위 미확정 연결 정책을 결정한다.
 3. 프로젝트의 P1 정책 문서·API 계약과 이 ERD의 상태·제약을 같은 변경에서 일치시킨다.
 4. 그 뒤 migration·코드·통합 테스트를 구현한다.
