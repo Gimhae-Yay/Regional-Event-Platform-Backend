@@ -5,7 +5,7 @@
 - 상태: 로컬 검증 완료, CI 확인 대기
 - 개선 유형: 유지보수성, 안정성
 - 범위: Repository·mapping·migration `@DataJpaTest` 19개의 DB 계약을 유지하면서, 영속성 컨텍스트가 필요 없는 객체 생성·상태 전이 검증을 단위 테스트로 이전한다.
-- 관련 요구사항: [PRD 테스트 및 출시 수용 기준](../local-stamp-platform-prd.md#12-테스트-및-출시-수용-기준)의 `AC-01`~`AC-18`, GitHub #407
+- 관련 요구사항: [P0 명세의 테스트 및 출시 수용 기준](../p0-spec.md#9-테스트-및-출시-수용-기준)의 `AC-01`~`AC-18`, [내부 API 명세서](../api/api-specification.md), GitHub #407
 - 관련 단계: 단계 1. MVP 구현·검증
 - 기준 시각·시간대: 2026-08-04 KST
 - Before revision: `10eaf661af2597fae4d2b18c6a9289e9209c0f64`

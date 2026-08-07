@@ -12,7 +12,7 @@
 | 유스케이스 경계·Port·Adapter 전환 | [ADR-0008](adr/0008-evolve-clean-architecture-by-use-case.md) |
 | Service 간 직접 의존·Repository 의존성 범위·UseCase 명명·컴포넌트 역할 | [ADR-0042](adr/0042-prohibit-direct-service-dependencies-and-use-usecase-orchestrators.md) |
 | API 응답·오류·페이지네이션 | [API 공통 계약](api/common/README.md) |
-| 제품 정책 | [PRD 정책 카탈로그](local-stamp-platform-prd.md#8-정책-카탈로그) |
+| 제품 정책 | [P0 명세](p0-spec.md)·[P1 명세](p1-spec.md)의 소유 정책과 [내부 API 명세서](api/api-specification.md) |
 | 실제 버전·의존성 | [build.gradle](../build.gradle) |
 
 - 이 규칙은 `src/main/java`, `src/test/java`에 적용한다.
@@ -67,7 +67,7 @@
 - 쓰기 트랜잭션은 유스케이스를 실행하는 UseCase 또는 Service의 공개 메서드에 둔다. 조회는
   `@Transactional(readOnly = true)`를 사용한다.
 - 외부 API를 트랜잭션 안에서 호출하면 타임아웃, 재시도, 멱등성과 락 점유 시간을 검토한다.
-- 도메인별 동시성·멱등성 요구사항은 [PRD 정책 카탈로그](local-stamp-platform-prd.md#8-정책-카탈로그)를 따른다.
+- 도메인별 동시성·멱등성 요구사항은 [P0 명세](p0-spec.md) 또는 [P1 명세](p1-spec.md)의 소유 정책과 [내부 API 명세서](api/api-specification.md)를 따른다.
 
 ### 3.3 도메인과 API 경계
 
@@ -104,7 +104,7 @@
 ### 5.1 예외
 
 - 공개 오류 필드·상태·코드·메시지는 [응답·오류 공통 계약](api/common/response-and-error.md), 실패 판정은
-  [PRD 정책 카탈로그](local-stamp-platform-prd.md#8-정책-카탈로그)를 따른다. 프로덕션 코드 구현 또는 테스트 전용 Task에서 계약 오류나 불일치가 확인되면 계약 문서와 코드를 같은 Task에서 변경하지 않는다. 재현 근거가 확인된 구현·계약 불일치는 `issue-create` 절차로 Bug Issue 초안을 만들고, 사용자 승인 뒤 현재 스프린트에 생성·배정한다. 정책이 미확정이면 `adr`로 전환하고, 동작에 영향을 주지 않는 문서 오류는 `Docs` Task로 분리한다. 원인이 불명확하면 먼저 `troubleshooting` 절차를 따른다.
+  [P0 명세](p0-spec.md) 또는 [P1 명세](p1-spec.md)의 소유 정책과 해당 내부 API 명세를 따른다. 프로덕션 코드 구현 또는 테스트 전용 Task에서 계약 오류나 불일치가 확인되면 계약 문서와 코드를 같은 Task에서 변경하지 않는다. 재현 근거가 확인된 구현·계약 불일치는 `issue-create` 절차로 Bug Issue 초안을 만들고, 사용자 승인 뒤 현재 스프린트에 생성·배정한다. 정책이 미확정이면 `adr`로 전환하고, 동작에 영향을 주지 않는 문서 오류는 `Docs` Task로 분리한다. 원인이 불명확하면 먼저 `troubleshooting` 절차를 따른다.
 - 예상 가능한 정책 위반은 전역 `ErrorCode`를 가진 `BusinessException`으로 표현하며, 오류 코드별 예외 하위 타입이나
   도메인별 오류 enum을 만들지 않는다.
 - 도메인 객체는 `ResponseEntity`, `HttpStatus`, 오류 응답 DTO를 직접 생성하지 않는다.
@@ -123,7 +123,7 @@
 - 처리되지 않은 시스템 예외는 애플리케이션 경계에서 한 번만 `error`로 기록하고 스택 트레이스를 포함한다.
   하위 계층에서 기록한 예외를 다시 기록하지 않는다.
 - `requestId`, 도메인 식별자·상태 전이의 구조화 로그와 비밀값·개인정보의 비노출은
-  [PRD 정책 카탈로그](local-stamp-platform-prd.md#8-정책-카탈로그)를 따른다. 엔티티 전체는 로그에 남기지 않는다.
+  [P0 명세](p0-spec.md) 또는 [P1 명세](p1-spec.md)의 소유 정책과 해당 내부 API 명세를 따른다. 엔티티 전체는 로그에 남기지 않는다.
 
 ## 6. 주석, 테스트와 리뷰
 

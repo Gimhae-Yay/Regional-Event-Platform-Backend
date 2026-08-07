@@ -19,7 +19,7 @@
 
 1. 요청 범위와 변경 대상을 확인한다.
 2. **모든 구현과 리뷰 전에 `docs/code-convention.md` 전체를 읽고 반드시 적용한다.** 컨벤션을 바꿀 때는 이 파일이 아니라 `docs/code-convention.md`를 수정한다.
-3. 아래 표의 관련 기준 문서와 작업 범위에 대응하는 `docs/local-stamp-platform-prd.md` 항목 또는 연결된 이슈를 읽는다.
+3. 아래 표의 관련 기준 문서와 작업 범위에 대응하는 내부 API 명세·도메인 정책 문서 또는 연결된 이슈를 읽는다.
 4. 설계 결정이 필요하면 선택지를 비교해 사용자 결정을 받은 뒤 `docs/adr`에 기록한다.
 5. 구현 단계는 연결된 GitHub 이슈의 완료 조건을 구현 계약으로 삼고, `docs/code-convention.md`와 이 문서의 작업 원칙을 벗어나지 않는다.
 6. 코드, 테스트, migration, 설정과 의존성의 현재 상태를 확인한 뒤 문서에 확정된 범위만 변경한다.
@@ -49,8 +49,8 @@
 |----------------------------------------------------------------------------------------|---------------------------------------------------------------|
 | 확정된 기술 결정·설계 근거                                                                        | `docs/adr/`                                                   |
 | 기술 스택·설계 원칙                                                                            | `docs/local-stamp-platform-tech-stack.md`                     |
-| 제품 범위, 보안·동시성·정합성·Redis 정책                                                             | `docs/local-stamp-platform-prd.md`                            |
-| API 요청·응답, validation, status, 에러 코드                                                   | `docs/api/common/README.md`, `docs/api/<도메인>.md`              |
+| 제품 범위, 보안·동시성·정합성·Redis 정책                                                             | `docs/p0-spec.md`, `docs/p1-spec.md`, `docs/p0/`, `docs/p1/`    |
+| API 요청·응답, validation, status, 에러 코드                                                   | `docs/api/api-specification.md`, `docs/api/common/`, `docs/api/p0/`, `docs/api/p1/` |
 | 엔티티, 테이블, 관계, 컬럼, DB 제약·인덱스                                                            | `docs/erd.md`                                                 |
 | 패키지 구조, 계층별 책임, Controller·Service·UseCase·Repository 의존성, Service 간 직접 의존, UseCase 명명 | `docs/ARCHITECTURE.md`                                        |
 | Java 코드 스타일, 명명, 소스 구성, Java·Spring·JPA, 트랜잭션, null, 예외·로깅, 테스트                        | `docs/code-convention.md`                                     |

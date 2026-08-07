@@ -7,7 +7,7 @@
 | 상태 | 해결 |
 | 영향 | Issue #299 구현의 PR CI가 일시 실패해 회귀 검증과 성능 판정이 지연됨 |
 | 최초 확인 시각·시간대 | 2026-08-03 13:41 KST |
-| 관련 요구사항·이슈 | Issue #299, PRD FR-01~FR-11 및 AC-01~AC-18 |
+| 관련 요구사항·이슈 | Issue #299, P0 명세 FR-01~FR-11 및 AC-01~AC-18, 내부 API 명세 |
 | revision·브랜치 | `e0deca4dc2fcc4e778c1b7c3234c8302104de021`, `test/299-shared-mysql-containers` |
 | 환경·프로필 | GitHub Actions `ubuntu-latest`, Amazon Corretto 21, MySQL 8.0.42 |
 

@@ -4,7 +4,7 @@
 - 기록 유형: 신규
 - 기록일: 2026-07-29
 - 결정일: 2026-07-29
-- 관련 요구사항: [제품 PRD](../local-stamp-platform-prd.md#103-설계-원칙)의 Redis 사용 범위, [지역·콘텐츠 카탈로그](../p0/content-catalog.md#fr-02-지역-선택과-콘텐츠-탐색)의 공개 콘텐츠 탐색, [기술 스택](../local-stamp-platform-tech-stack.md)의 공개 콘텐츠 캐시 원칙
+- 관련 요구사항: [P0 명세](../p0-spec.md#82-설계-원칙)의 Redis 사용 범위, [지역·콘텐츠 카탈로그](../p0/content-catalog.md#fr-02-지역-선택과-콘텐츠-탐색)의 공개 콘텐츠 탐색, [지역·콘텐츠 카탈로그 API 명세서](../api/p0/content-catalog/content-catalog.md)와 [기술 스택](../local-stamp-platform-tech-stack.md)의 공개 콘텐츠 캐시 원칙
 - 관련 단계: 단계 0. 정책·설계 확정, 단계 1. MVP 구현·검증
 - 관련 이슈: 없음
 - 대체 대상: 없음

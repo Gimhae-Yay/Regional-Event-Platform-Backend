@@ -4,7 +4,7 @@
 - 기록 유형: 소급
 - 기록일: 2026-07-23
 - 결정일: 2026-07-21
-- 관련 요구사항: [PRD의 FR-02, FR-03, FR-04](../local-stamp-platform-prd.md#8-기능-요구사항)
+- 관련 요구사항: [지역·콘텐츠 카탈로그](../p0/content-catalog.md)의 `FR-02`·`FR-03`·`FR-04`와 [지역·콘텐츠 카탈로그 API 명세서](../api/p0/content-catalog/content-catalog.md)
 - 관련 단계: 단계 1. MVP 구현·검증
 - 관련 이슈: 없음
 - 대체 대상: 없음
