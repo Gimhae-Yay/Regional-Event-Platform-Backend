@@ -21,7 +21,7 @@
 
 | 요구사항 | HTTP 계약 | 주요 데이터 |
 | --- | --- | --- |
-| P1-FR-08, PAY-05, RSV-04 | `POST /api/v1/me/reservations/{reservationId}/cancel` | `reservation`, `payment`, `refund`, `refund_attempt`, `coupon_redemption` |
+| P1-FR-08, PAY-05, RSV-04 | `POST /api/v1/me/reservations/{reservationId}/cancel` | `reservation`, `reservation_price_snapshot`, `payment`, `refund`, `refund_attempt`, `coupon`, `coupon_redemption`, `coupon_status_history` |
 
 ## 2. 공통 계약 참조
 

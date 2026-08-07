@@ -28,10 +28,10 @@
 | 발급 → `AVAILABLE` | 쿠폰 발급 요청이 쿠폰·발급 이력·상태 이력을 같은 트랜잭션에서 생성한다. |
 | `AVAILABLE → RESERVED` | [결제 생성](../payment/create-payment.md)이 가격 스냅샷에 쿠폰과 할인 금액을 고정하면서 같은 트랜잭션에서 선점한다. |
 | `RESERVED → USED` | 최종 금액이 0원이면 [결제 생성](../payment/create-payment.md), 양수이면 서버 검증에 성공한 [PortOne 웹훅](../payment/receive-portone-webhook.md)이 홀드 소비·`CONFIRMED` 예약·`coupon_redemption(CONFIRMED)`과 같은 트랜잭션에서 전이한다. 선점 뒤 원래 만료 시각이 지나도 홀드가 유효한 `ACTIVE`이면 확정할 수 있다. |
-| `RESERVED → AVAILABLE` | 결제 거절·취소·만료 또는 홀드 만료·무효화로 예약 확정 전에 체크아웃이 종료되고 원래 만료 시각 전이면 해당 종결 처리가 선점을 해제한다. |
+| `RESERVED → AVAILABLE` | 결제 거절·취소·만료 또는 홀드 만료·무효화로 예약 확정 전에 체크아웃이 종료되고 원래 만료 시각 전이면 해당 종결 처리가 선점을 해제한다. 홀드 만료·무효화는 [홀드 만료·무효화 작업](../../p0/reservation/expire-or-invalidate-holds.md)이 연결된 `PENDING` 결제를 `EXPIRED`로 종결하면서 함께 처리한다. |
 | `AVAILABLE → EXPIRED` | 만료 작업이 원래 만료 시각이 지난 미사용 쿠폰을 전이하고 상태 이력을 남긴다. |
 | `RESERVED → EXPIRED` | 결제 또는 홀드의 종결 처리 시 원래 만료 시각이 지났으면 선점 해제 처리가 전이하고 상태 이력을 남긴다. |
-| `USED → AVAILABLE·EXPIRED` | 회차 시작 전 사용자·운영자 취소의 전액 환불 완료 처리가 사용 이력을 `REVERSED`로 남기고 만료 여부에 따라 복구한다. |
+| `USED → AVAILABLE·EXPIRED` | 최종 금액 0원 예약은 회차 시작 전 취소 성공 시, 양수 결제 예약은 회차 시작 전 취소의 전액 환불이 최초 `SUCCEEDED`로 확정될 때 사용 이력을 `REVERSED`로 남기고 원래 만료 여부에 따라 복구한다. 모든 환불 성공 경로는 [환불 공통 쿠폰 복구 계약](../refund/refund.md#쿠폰-복구-계약)을 따른다. |
 | 현재 상태 → `INVALIDATED` | 별도로 확정된 운영 보정만 허용한다. 이번 API 목록에는 공개 무효화 명령을 제공하지 않는다. |
 
 `AVAILABLE → USED` 직접 전이와 별도 쿠폰 사용 확정 HTTP 요청은 허용하지 않는다. 모든 전이는 원인, 처리자 또는 시스템 주체와 처리 시각을 상태 이력에 기록한다.
