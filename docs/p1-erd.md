@@ -2,7 +2,7 @@
 
 > 상태: 정책 반영 초안
 > 작성일: 2026-08-05
-> 근거: [P1 정책 결정 로그](p1-policy-decision-log.md), P1 도메인별 정책 문서와 각 문서가 연결한 핵심 ADR
+> 근거: [P1 정책 결정 로그](p1-policy-decision-log.md), P1 도메인별 정책 문서와 각 문서가 연결한 채택 핵심 ADR
 > 범위: P0 ERD를 대체하지 않는다. P1에서 추가·변경되는 논리 테이블, 제약, 상태 전이와 P0 재사용 경계만 정의한다.
 
 ## 1. 기준과 범위
@@ -476,6 +476,7 @@ P0의 복합 PK `(user_id, role)`를 `role_assignment_id`로 대체한다. 역�
 | 추가·확장 항목 | 규칙 |
 | --- | --- |
 | `target_type` | 기존 P0 값에 `PLATFORM_ADMIN_ASSIGNMENT`, `USER_ROLE_ASSIGNMENT`, `STAMPBOOK`, `MISSION`, `COUPON_POLICY`, `COUPON`, `RESERVATION_PRICE_SNAPSHOT`, `PAYMENT`, `REFUND`, `PAYMENT_DISCREPANCY`를 추가 |
+| `reason` | P1 수명주기·운영 명령의 사유 원문. 스탬프북·미션·쿠폰 정책의 생성·수정·심사 요청·승인·반려·종료에서는 앞뒤 공백 제거 뒤 1~500자이며 NOT NULL, 그 외 이벤트는 nullable |
 | `evidence_reference` | `VARCHAR(500) NULL`. 특권 변경·수동 거래 처리의 증빙 참조. 지역 API는 앞뒤 공백 제거 후 1~500자 자유 문자열을 저장하며 서버가 출처·형식·민감정보를 판별하지 않는다. 개인정보·토큰·비밀값 미포함은 호출자 운영 책임이다. |
 | `audit_event_actor_link` | 활성 actor에만 만든다. 탈퇴 전 제거한다. |
 
