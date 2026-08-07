@@ -9,7 +9,7 @@
 
 ## 1. 개요
 
-이 문서는 쿠폰 정책 운영, 쿠폰 발급, 내 쿠폰 조회, 사용 가능 판단, 사용 확정과 사용 이력 조회를 HTTP API 계약으로 구체화한다.
+이 문서는 쿠폰 정책 운영, 쿠폰 발급, 내 쿠폰 조회, 사용 가능 판단과 사용 이력 조회를 HTTP API 계약으로 구체화한다.
 요청·응답의 공통 형식, 인증, 시간·식별자 표현과 오류 구조는 `common/` 문서를 단일 출처로 삼으며,
 이 문서에는 쿠폰 API에만 적용되는 값과 규칙만 작성한다.
 
@@ -26,10 +26,11 @@ P1 쿠폰은 정책이 가리키는 콘텐츠의 유료 예약에 적용하는 �
 | `P1-FR-05`, `CPN-01` | `POST /operator/coupon-policies/{couponPolicyId}/end` | `coupon_policy.status`, `coupon_policy_history` |
 | `P1-FR-06`, `CPN-02`, `CPN-05` | `POST /coupon-policies/{couponPolicyId}/coupons` | `coupon`, `coupon_issuance`, `coupon_status_history` |
 | `P1-FR-06`, `CPN-03` | `GET /me/coupons` | `coupon`, `coupon_policy` |
-| `P1-FR-06`, `CPN-03`, `CPN-04` | `GET /me/coupons/available` | `coupon`, `coupon_policy`, `capacity_hold`, `price_snapshot` |
+| `P1-FR-06`, `CPN-03`, `CPN-04` | `GET /me/coupons/available` | `coupon`, `coupon_policy`, `capacity_hold`, `content_session` |
 | `P1-FR-06`, `CPN-03`, `CPN-05` | `GET /me/coupons/{couponId}` | `coupon`, `coupon_policy`, `coupon_status_history` |
-| `P1-FR-06`, `CPN-04`, `CPN-05` | `POST /me/coupons/{couponId}/use` | `coupon`, `coupon_redemption`, `capacity_hold`, `reservation`, `price_snapshot`, `coupon_status_history` |
 | `P1-FR-06`, `CPN-05` | `GET /me/coupons/{couponId}/usage-history` | `coupon_redemption`, `coupon_status_history` |
+| `P1-FR-06`, `CPN-04`, `CPN-05` | `POST /me/reservation-holds/{holdId}/payments` | `reservation_price_snapshot`, `coupon`, `coupon_status_history`, `coupon_redemption` |
+| `P1-FR-06`, `CPN-04`, `CPN-05` | `POST /webhooks/portone` | `payment`, `reservation`, `coupon`, `coupon_status_history`, `coupon_redemption` |
 
 ## 2. 공통 계약 참조
 
@@ -49,9 +50,19 @@ P1 쿠폰은 정책이 가리키는 콘텐츠의 유료 예약에 적용하는 �
 | 사용 가능한 내 쿠폰 목록 조회 | `GET /me/coupons/available` | [list-my-available-coupons.md](list-my-available-coupons.md) |
 | 내 쿠폰 상세 조회 | `GET /me/coupons/{couponId}` | [get-my-coupon.md](get-my-coupon.md) |
 | 내 쿠폰 사용 이력 조회 | `GET /me/coupons/{couponId}/usage-history` | [get-my-coupon-usage-history.md](get-my-coupon-usage-history.md) |
-| 쿠폰 사용 확정 | `POST /me/coupons/{couponId}/use` | [use-my-coupon.md](use-my-coupon.md) |
 | 쿠폰 정책 생성 | `POST /operator/coupon-policies` | [create-coupon-policy.md](create-coupon-policy.md) |
 | 쿠폰 정책 수정 | `PATCH /operator/coupon-policies/{couponPolicyId}` | [update-coupon-policy.md](update-coupon-policy.md) |
 | 쿠폰 정책 공개 | `POST /operator/coupon-policies/{couponPolicyId}/publish` | [publish-coupon-policy.md](publish-coupon-policy.md) |
 | 쿠폰 정책 종료 | `POST /operator/coupon-policies/{couponPolicyId}/end` | [end-coupon-policy.md](end-coupon-policy.md) |
 | 쿠폰 발급 요청 | `POST /coupon-policies/{couponPolicyId}/coupons` | [issue-coupon.md](issue-coupon.md) |
+
+### 결제 연계 API
+
+쿠폰 선택·선점과 사용 확정은 결제 도메인이 소유한다. 클라이언트는 결제 생성 요청의 `couponId`로 쿠폰을 선택한다.
+최종 금액이 0원이면 결제 생성에서, 양수이면 서버 검증에 성공한 PortOne 웹훅에서 쿠폰 사용을 확정한다.
+별도 쿠폰 사용 확정 HTTP API는 제공하지 않는다.
+
+| 기능 | API 경로 | 명세 |
+| --- | --- | --- |
+| 가격 스냅샷 생성·쿠폰 선점·0원 사용 확정 | `POST /me/reservation-holds/{holdId}/payments` | [결제 생성](../payment/create-payment.md) |
+| 양수 결제 승인·쿠폰 사용 확정 | `POST /webhooks/portone` | [PortOne 결제 웹훅 수신](../payment/receive-portone-webhook.md) |
