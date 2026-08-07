@@ -145,8 +145,30 @@ jobs:
             --parameters "$(jq -nc --rawfile command /tmp/verify-compose-stack.sh '{commands: [$command]}')" \
             --query 'Command.CommandId' \
             --output text)"
-          aws ssm wait command-executed --command-id "$command_id" --instance-id "$INSTANCE_ID"
-          aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID"
+          for _ in {1..48}; do
+            status="$(aws ssm get-command-invocation \
+              --command-id "$command_id" \
+              --instance-id "$INSTANCE_ID" \
+              --query 'Status' \
+              --output text 2>/dev/null || true)"
+            case "$status" in
+              Success)
+                aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID"
+                exit 0
+                ;;
+              Pending|InProgress|Delayed|Cancelling|"")
+                sleep 10
+                ;;
+              *)
+                aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" || true
+                echo "Compose 원격 검증이 실패했습니다. 상태: $status" >&2
+                exit 1
+                ;;
+            esac
+          done
+          aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" || true
+          echo "Compose 원격 검증 시간이 초과되었습니다." >&2
+          exit 1
 
       - name: ALB 대상 Health 검증
         env:
