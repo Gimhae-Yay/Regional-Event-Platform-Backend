@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.test.context.TestPropertySource;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
@@ -165,6 +166,23 @@ class MissionRepositoryTest {
     }
 
     @Test
+    void 콘텐츠_세트_미션은_대상_콘텐츠_없이_저장할_수_없다() {
+        Region region = saveRegion("GIMHAE");
+        Content rewardContent = saveContent(region, "reward");
+        CouponPolicy rewardCouponPolicy = saveMissionRewardCouponPolicy(rewardContent, region);
+
+        assertThatThrownBy(() -> missionRepository.saveAndFlush(new Mission(
+            region,
+            MissionConditionType.CONTENT_SET,
+            null,
+            rewardCouponPolicy,
+            MISSION_ENDS_AT
+        ))).isInstanceOf(InvalidDataAccessApiUsageException.class)
+            .hasMessage("CONTENT_SET requires at least one target content")
+            .hasCauseInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
     void 미션은_동일_지역의_MISSION_REWARD_쿠폰_정책과_대상_콘텐츠만_참조한다() {
         Region region = saveRegion("GIMHAE");
         Region anotherRegion = saveRegion("BUSAN");
@@ -213,17 +231,20 @@ class MissionRepositoryTest {
     void 삭제된_콘텐츠는_콘텐츠_세트_미션의_대상으로_연결하거나_저장할_수_없다() {
         Region region = saveRegion("GIMHAE");
         Content rewardContent = saveContent(region, "reward");
+        Content validTargetContent = saveContent(region, "valid-target");
         Content deletedTargetContent = saveContent(region, "deleted-target", ContentStatus.APPROVED);
         deletedTargetContent.softDelete(CONTENT_DELETED_AT);
         contentRepository.saveAndFlush(deletedTargetContent);
         CouponPolicy rewardCouponPolicy = saveMissionRewardCouponPolicy(rewardContent, region);
-        Mission mission = missionRepository.saveAndFlush(new Mission(
+        Mission mission = new Mission(
             region,
             MissionConditionType.CONTENT_SET,
             null,
             rewardCouponPolicy,
             MISSION_ENDS_AT
-        ));
+        );
+        mission.addTargetContent(validTargetContent);
+        missionRepository.saveAndFlush(mission);
 
         assertThatThrownBy(() -> mission.addTargetContent(deletedTargetContent))
             .isInstanceOf(IllegalStateException.class)

@@ -18,6 +18,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponIssuanceType;
@@ -134,6 +135,13 @@ public class Mission {
         this.rewardCouponPolicy = validateRewardCouponPolicy(rewardCouponPolicy, region);
         this.endsAt = requireNotNull(endsAt, "endsAt");
         this.status = MissionStatus.DRAFT;
+    }
+
+    @PrePersist
+    protected void validateTargetContentsBeforePersist() {
+        if (conditionType == MissionConditionType.CONTENT_SET && targetContents.isEmpty()) {
+            throw new IllegalStateException("CONTENT_SET requires at least one target content");
+        }
     }
 
     public MissionTargetContent addTargetContent(Content content) {
