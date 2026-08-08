@@ -23,7 +23,7 @@ class InitialP0SchemaMigrationTest {
     }
 
     @Test
-    void 빈_데이터베이스에_V1부터_V18까지_현재_스키마를_생성한다() {
+    void 빈_데이터베이스에_V1부터_V20까지_현재_스키마를_생성한다() {
         List<String> appliedVersions = jdbcTemplate.queryForList(
             "SELECT \"version\" FROM \"flyway_schema_history\" WHERE \"version\" IS NOT NULL AND \"success\" = TRUE",
             String.class
@@ -51,6 +51,15 @@ class InitialP0SchemaMigrationTest {
                 FROM information_schema.columns
                 WHERE table_schema = 'PUBLIC'
                   AND table_name = 'CONTENT'
+                """,
+            String.class
+        );
+        List<String> appUserColumnNames = jdbcTemplate.queryForList(
+            """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'PUBLIC'
+                  AND table_name = 'APP_USER'
                 """,
             String.class
         );
@@ -127,7 +136,9 @@ class InitialP0SchemaMigrationTest {
             "15",
             "16",
             "17",
-            "18"
+            "18",
+            "19",
+            "20"
         );
         assertThat(tableNames).contains(
             "REGION",
@@ -148,8 +159,11 @@ class InitialP0SchemaMigrationTest {
             "AUDIT_EVENT",
             "AUDIT_EVENT_ACTOR_LINK",
             "COUPON_POLICY",
+            "PLATFORM_ADMIN_ASSIGNMENT",
             "MISSION",
-            "MISSION_TARGET_CONTENT"
+            "MISSION_TARGET_CONTENT",
+            "STAMPBOOK",
+            "STAMPBOOK_CONTENT"
         );
         assertThat(tableNames).doesNotContain(
             "CONTENT_REPRESENTATIVE_IMAGE",
@@ -182,6 +196,9 @@ class InitialP0SchemaMigrationTest {
             "FK_COUPON_POLICY_CONTENT_REGION",
             "FK_COUPON_POLICY_REGION",
             "CK_COUPON_POLICY_STATUS_TIMESTAMPS",
+            "CK_APP_USER_ACCOUNT_KIND",
+            "FK_PLATFORM_ADMIN_ASSIGNMENT_USER",
+            "CK_PLATFORM_ADMIN_ASSIGNMENT_INACTIVATION",
             "FK_MISSION_REGION",
             "FK_MISSION_REWARD_COUPON_POLICY",
             "CK_MISSION_CONDITION_TYPE",
@@ -189,8 +206,14 @@ class InitialP0SchemaMigrationTest {
             "CK_MISSION_STATUS",
             "CK_MISSION_STATUS_TIMESTAMPS",
             "FK_MISSION_TARGET_CONTENT_MISSION",
-            "FK_MISSION_TARGET_CONTENT_CONTENT"
+            "FK_MISSION_TARGET_CONTENT_CONTENT",
+            "FK_STAMPBOOK_REGION",
+            "FK_STAMPBOOK_REWARD_COUPON_POLICY",
+            "CK_STAMPBOOK_STATUS_TIMESTAMPS",
+            "FK_STAMPBOOK_CONTENT_STAMPBOOK",
+            "FK_STAMPBOOK_CONTENT_CONTENT"
         );
+        assertThat(appUserColumnNames).contains("ACCOUNT_KIND");
         assertThat(contentColumnNames).contains(
             "REPRESENTATIVE_IMAGE_OBJECT_ID",
             "REPRESENTATIVE_IMAGE_ASSIGNED_AT"

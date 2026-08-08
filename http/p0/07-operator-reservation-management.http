@@ -1,9 +1,9 @@
 @baseUrl = http://localhost:8080
-@operatorAccessToken =
-@otherOperatorAccessToken =
-@contentId =
-@sessionId =
-@reservationNo =
+@operatorAccessToken = {{p0OperatorAccessToken}}
+@otherOperatorAccessToken = {{p0OtherOperatorAccessToken}}
+@contentId = {{p0PublishedContentId}}
+@sessionId = {{p0ScheduledSessionId}}
+@reservationNo = {{p0ManualReservationNo}}
 @missingReservationNo = R99999999NOTFOUND
 
 # P0 운영자 예약 관리
