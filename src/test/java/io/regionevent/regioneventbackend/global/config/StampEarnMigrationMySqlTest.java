@@ -45,7 +45,7 @@ class StampEarnMigrationMySqlTest {
 
         assertThat(tableCount).isEqualTo(1);
         assertThat(constraintNames).contains(
-            "pk_stamp_earn",
+            "PRIMARY",
             "uk_stamp_earn_progress_visit",
             "uk_stamp_earn_progress_content",
             "fk_stamp_earn_progress",
