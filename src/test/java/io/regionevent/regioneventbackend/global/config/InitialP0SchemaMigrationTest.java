@@ -140,7 +140,8 @@ class InitialP0SchemaMigrationTest {
             "19",
             "20",
             "21",
-            "22"
+            "22",
+            "23"
         );
         assertThat(tableNames).contains(
             "REGION",
@@ -167,6 +168,7 @@ class InitialP0SchemaMigrationTest {
             "STAMPBOOK",
             "STAMPBOOK_CONTENT",
             "STAMPBOOK_PROGRESS",
+            "STAMPBOOK_REWARD_GRANT",
             "STAMP_EARN"
         );
         assertThat(tableNames).doesNotContain(
@@ -222,6 +224,10 @@ class InitialP0SchemaMigrationTest {
             "FK_STAMPBOOK_PROGRESS_USER",
             "CK_STAMPBOOK_PROGRESS_STATUS",
             "CK_STAMPBOOK_PROGRESS_STATUS_COMPLETED_AT",
+            "PK_STAMPBOOK_REWARD_GRANT",
+            "UK_STAMPBOOK_REWARD_GRANT_PROGRESS",
+            "FK_STAMPBOOK_REWARD_GRANT_PROGRESS",
+            "FK_STAMPBOOK_REWARD_GRANT_COUPON_POLICY",
             "PK_STAMP_EARN",
             "UK_STAMP_EARN_PROGRESS_VISIT",
             "UK_STAMP_EARN_PROGRESS_CONTENT",
