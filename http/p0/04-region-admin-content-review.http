@@ -1,6 +1,6 @@
 @baseUrl = http://localhost:8080
-@regionAdminAccessToken =
-@otherRegionAdminAccessToken =
+@regionAdminAccessToken = {{p0RegionAdminAccessToken}}
+@otherRegionAdminAccessToken = {{p0OtherRegionAdminAccessToken}}
 @pendingContentId = 920002
 @rejectContentId = 920001
 @publishedContentId = 900001

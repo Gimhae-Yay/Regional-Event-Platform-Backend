@@ -1,9 +1,9 @@
 @baseUrl = http://localhost:8080
 @regionId = 900001
-@publishedContentId =
-@scheduledSessionId =
-@soldOutContentId =
-@soldOutSessionId =
+@publishedContentId = {{p0PublishedContentId}}
+@scheduledSessionId = {{p0ScheduledSessionId}}
+@soldOutContentId = {{p0SoldOutContentId}}
+@soldOutSessionId = {{p0SoldOutSessionId}}
 
 # P0 공개 탐색·지역 홈·회차·후기 조회
 # 선행 조건:
