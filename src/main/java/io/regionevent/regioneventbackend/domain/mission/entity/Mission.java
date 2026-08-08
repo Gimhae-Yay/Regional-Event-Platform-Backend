@@ -137,7 +137,6 @@ public class Mission {
     }
 
     public MissionTargetContent addTargetContent(Content content) {
-        validateContentSetCondition(this);
         MissionTargetContent targetContent = new MissionTargetContent(this, content);
         targetContents.add(targetContent);
         return targetContent;
@@ -221,13 +220,17 @@ public class Mission {
         }
     }
 
-    static void validateContentRegion(
+    static void validateTargetContent(
         Mission mission,
         Content content
     ) {
+        validateContentSetCondition(mission);
         requireNotNull(mission, "mission");
         requireNotNull(content, "content");
         validateSameRegion(mission.region, content.getRegion(), "content");
+        if (content.getDeletedAt() != null) {
+            throw new IllegalStateException("soft deleted content cannot be a mission target");
+        }
     }
 
     private static void validateSameRegion(

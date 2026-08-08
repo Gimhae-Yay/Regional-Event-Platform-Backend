@@ -37,6 +37,7 @@ import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepositor
 class MissionRepositoryTest {
 
     private static final Instant CONTENT_PUBLISHED_AT = Instant.parse("2026-08-01T00:00:00Z");
+    private static final Instant CONTENT_DELETED_AT = Instant.parse("2026-08-02T00:00:00Z");
     private static final Instant COUPON_ISSUE_ENDS_AT = Instant.parse("2026-08-31T23:59:59Z");
     private static final Instant MISSION_ENDS_AT = Instant.parse("2026-09-01T00:00:00Z");
 
@@ -208,6 +209,31 @@ class MissionRepositoryTest {
             .hasMessage("rewardCouponPolicy must use MISSION_REWARD issuance type");
     }
 
+    @Test
+    void 삭제된_콘텐츠는_콘텐츠_세트_미션의_대상으로_연결하거나_저장할_수_없다() {
+        Region region = saveRegion("GIMHAE");
+        Content rewardContent = saveContent(region, "reward");
+        Content deletedTargetContent = saveContent(region, "deleted-target", ContentStatus.APPROVED);
+        deletedTargetContent.softDelete(CONTENT_DELETED_AT);
+        contentRepository.saveAndFlush(deletedTargetContent);
+        CouponPolicy rewardCouponPolicy = saveMissionRewardCouponPolicy(rewardContent, region);
+        Mission mission = missionRepository.saveAndFlush(new Mission(
+            region,
+            MissionConditionType.CONTENT_SET,
+            null,
+            rewardCouponPolicy,
+            MISSION_ENDS_AT
+        ));
+
+        assertThatThrownBy(() -> mission.addTargetContent(deletedTargetContent))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("soft deleted content cannot be a mission target");
+        assertThatThrownBy(() -> missionTargetContentRepository.saveAndFlush(
+            new MissionTargetContent(mission, deletedTargetContent)
+        )).isInstanceOf(IllegalStateException.class)
+            .hasMessage("soft deleted content cannot be a mission target");
+    }
+
     private Region saveRegion(String regionCode) {
         return regionRepository.saveAndFlush(new Region(regionCode, regionCode + "시", true));
     }
@@ -215,6 +241,14 @@ class MissionRepositoryTest {
     private Content saveContent(
         Region region,
         String suffix
+    ) {
+        return saveContent(region, suffix, ContentStatus.PUBLISHED);
+    }
+
+    private Content saveContent(
+        Region region,
+        String suffix,
+        ContentStatus status
     ) {
         AppUser operator = appUserRepository.saveAndFlush(new AppUser(
             "operator-" + region.getRegionCode() + "-" + suffix + "@example.com",
@@ -227,7 +261,7 @@ class MissionRepositoryTest {
             region,
             operator,
             ContentType.EVENT_EXPERIENCE,
-            ContentStatus.PUBLISHED,
+            status,
             suffix + " 콘텐츠",
             "미션 대상 콘텐츠 영속성 검증을 위한 설명입니다.",
             "김해문화의전당",
