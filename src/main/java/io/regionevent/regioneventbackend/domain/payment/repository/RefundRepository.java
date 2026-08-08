@@ -1,0 +1,25 @@
+package io.regionevent.regioneventbackend.domain.payment.repository;
+
+import java.util.Optional;
+
+import jakarta.persistence.LockModeType;
+
+import org.springframework.data.jpa.repository.EntityGraph;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import io.regionevent.regioneventbackend.domain.payment.entity.Refund;
+
+public interface RefundRepository extends JpaRepository<Refund, Long> {
+
+    @EntityGraph(attributePaths = {"payment", "payment.reservationPriceSnapshot"})
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT refund
+        FROM Refund refund
+        WHERE refund.payment.paymentId = :paymentId
+        """)
+    Optional<Refund> findByPaymentIdForUpdate(@Param("paymentId") Long paymentId);
+}
