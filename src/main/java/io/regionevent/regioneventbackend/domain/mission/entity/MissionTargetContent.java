@@ -45,6 +45,7 @@ public class MissionTargetContent {
     ) {
         this.mission = requireNotNull(mission, "mission");
         this.content = requireNotNull(content, "content");
+        Mission.validateContentSetCondition(mission);
         Mission.validateContentRegion(mission, content);
         this.id = new MissionTargetContentId(null, null);
     }

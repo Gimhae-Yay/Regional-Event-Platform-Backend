@@ -141,6 +141,10 @@ class MissionRepositoryTest {
         assertThatThrownBy(() -> foundMission.addTargetContent(targetContent))
             .isInstanceOf(IllegalStateException.class)
             .hasMessage("only CONTENT_SET can add target contents");
+        assertThatThrownBy(() -> missionTargetContentRepository.saveAndFlush(
+            new MissionTargetContent(foundMission, targetContent)
+        )).isInstanceOf(IllegalStateException.class)
+            .hasMessage("only CONTENT_SET can add target contents");
         assertThatThrownBy(() -> new Mission(
             region,
             MissionConditionType.VISIT_COUNT,

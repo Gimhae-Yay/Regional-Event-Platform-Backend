@@ -137,7 +137,7 @@ public class Mission {
     }
 
     public MissionTargetContent addTargetContent(Content content) {
-        validateContentSetCondition();
+        validateContentSetCondition(this);
         MissionTargetContent targetContent = new MissionTargetContent(this, content);
         targetContents.add(targetContent);
         return targetContent;
@@ -214,8 +214,9 @@ public class Mission {
         return validatedRewardCouponPolicy;
     }
 
-    private void validateContentSetCondition() {
-        if (conditionType != MissionConditionType.CONTENT_SET) {
+    static void validateContentSetCondition(Mission mission) {
+        requireNotNull(mission, "mission");
+        if (mission.conditionType != MissionConditionType.CONTENT_SET) {
             throw new IllegalStateException("only CONTENT_SET can add target contents");
         }
     }
