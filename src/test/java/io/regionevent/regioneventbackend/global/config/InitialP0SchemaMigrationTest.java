@@ -23,7 +23,7 @@ class InitialP0SchemaMigrationTest {
     }
 
     @Test
-    void 빈_데이터베이스에_V1부터_V20까지_현재_스키마를_생성한다() {
+    void 빈_데이터베이스에_V1부터_V21까지_현재_스키마를_생성한다() {
         List<String> appliedVersions = jdbcTemplate.queryForList(
             "SELECT \"version\" FROM \"flyway_schema_history\" WHERE \"version\" IS NOT NULL AND \"success\" = TRUE",
             String.class
@@ -138,7 +138,8 @@ class InitialP0SchemaMigrationTest {
             "17",
             "18",
             "19",
-            "20"
+            "20",
+            "21"
         );
         assertThat(tableNames).contains(
             "REGION",
