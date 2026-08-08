@@ -24,7 +24,6 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
-import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentId;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService.AuthorizedOperator;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -89,10 +88,10 @@ class CreateContentSessionUseCaseTest {
         AppUser user = mock(AppUser.class);
         Region region = mock(Region.class);
         UserRoleAssignment assignment = mock(UserRoleAssignment.class);
-        UserRoleAssignmentId assignmentId = mock(UserRoleAssignmentId.class);
+        Long assignmentId = 1L;
         when(user.getUserId()).thenReturn(USER_ID);
         when(region.getRegionId()).thenReturn(REGION_ID);
-        when(assignment.getId()).thenReturn(assignmentId);
+        when(assignment.getRoleAssignmentId()).thenReturn(assignmentId);
         return new AuthorizedOperator(user, region, assignment);
     }
 

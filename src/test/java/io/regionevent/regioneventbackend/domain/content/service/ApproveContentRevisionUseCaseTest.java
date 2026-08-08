@@ -29,7 +29,6 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
-import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentId;
 import io.regionevent.regioneventbackend.domain.user.service.RegionAdminAuthorizationService;
 
 class ApproveContentRevisionUseCaseTest {
@@ -120,8 +119,8 @@ class ApproveContentRevisionUseCaseTest {
         when(content.getPublishAt()).thenReturn(PUBLISH_AT);
         when(region.getRegionId()).thenReturn(REGION_ID);
         when(reviewerAssignment.getAppUser()).thenReturn(reviewer);
-        when(reviewerAssignment.getId())
-            .thenReturn(new UserRoleAssignmentId(USER_ID, UserRole.REGION_ADMIN));
+        when(reviewerAssignment.getRoleAssignmentId())
+            .thenReturn(1L);
         when(reviewer.getStatus()).thenReturn(AppUserStatus.ACTIVE);
         return new Fixture(revision, content, reviewer, reviewerAssignment);
     }

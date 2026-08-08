@@ -14,7 +14,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
-import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentId;
+import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
@@ -118,11 +118,12 @@ class OperatorAuthorizationServiceTest {
     }
 
     private void givenAuthorizationAssignment(Optional<UserRoleAssignment> assignment) {
-        when(userRoleAssignmentRepository.findByIdUserIdAndIdRoleAndAppUserStatus(
-            OPERATOR_USER_ID,
-            UserRole.OPERATOR,
-            AppUserStatus.ACTIVE
-        )).thenReturn(assignment);
+        when(userRoleAssignmentRepository.findByAppUserUserIdAndRoleAndStatusAndAppUserStatus(
+                OPERATOR_USER_ID,
+                UserRole.OPERATOR,
+                UserRoleAssignmentStatus.ACTIVE,
+                AppUserStatus.ACTIVE
+            )).thenReturn(assignment);
     }
 
     private UserRoleAssignment assignment(Long userId, Long regionId) {
@@ -131,7 +132,7 @@ class OperatorAuthorizationServiceTest {
         Region assignedRegion = regionId == null ? null : region(regionId);
         when(assignment.getAppUser()).thenReturn(appUser);
         when(assignment.getRegion()).thenReturn(assignedRegion);
-        when(assignment.getId()).thenReturn(new UserRoleAssignmentId(userId, UserRole.OPERATOR));
+        when(assignment.getRoleAssignmentId()).thenReturn(1L);
         return assignment;
     }
 

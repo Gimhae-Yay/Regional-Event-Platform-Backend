@@ -90,6 +90,24 @@ class InitialP0SchemaMigrationTest {
                 """,
             String.class
         );
+        List<String> userRoleAssignmentColumnNames = jdbcTemplate.queryForList(
+            """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'PUBLIC'
+                  AND table_name = 'USER_ROLE_ASSIGNMENT'
+                """,
+            String.class
+        );
+        List<String> userRoleAssignmentIndexNames = jdbcTemplate.queryForList(
+            """
+                SELECT index_name
+                FROM information_schema.indexes
+                WHERE table_schema = 'PUBLIC'
+                  AND table_name = 'USER_ROLE_ASSIGNMENT'
+                """,
+            String.class
+        );
 
         assertThat(appliedVersions).containsExactly(
             "1",
@@ -184,6 +202,17 @@ class InitialP0SchemaMigrationTest {
             "REJECT_REASON"
         );
         assertThat(capacityHoldIndexNames).contains("IDX_CAPACITY_HOLD_STATUS_EXPIRES_AT");
+        assertThat(userRoleAssignmentColumnNames).contains(
+            "ROLE_ASSIGNMENT_ID",
+            "STATUS",
+            "REVOKED_AT",
+            "REVOKE_REASON_CODE",
+            "ACTIVE_USER_ID"
+        );
+        assertThat(userRoleAssignmentIndexNames).contains(
+            "UK_USER_ROLE_ASSIGNMENT_ACTIVE_USER_ROLE",
+            "IDX_USER_ROLE_ASSIGNMENT_REGION_STATUS"
+        );
         assertThat(imageObjectColumnNames).contains(
             "CREATED_BY_USER_ID",
             "REGION_ID",

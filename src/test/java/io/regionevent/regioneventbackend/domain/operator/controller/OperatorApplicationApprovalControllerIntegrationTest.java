@@ -27,6 +27,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
+import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
@@ -87,8 +88,11 @@ class OperatorApplicationApprovalControllerIntegrationTest {
             .orElseThrow();
         assertThat(approved.getStatus()).isEqualTo(OperatorApplicationStatus.APPROVED);
         assertThat(approved.getInspectedUser().getUserId()).isEqualTo(fixture.admin().getUserId());
-        assertThat(userRoleAssignmentRepository.findByIdUserIdAndIdRoleAndAppUserStatus(
-            fixture.applicant().getUserId(), UserRole.OPERATOR, AppUserStatus.ACTIVE
+        assertThat(userRoleAssignmentRepository.findByAppUserUserIdAndRoleAndStatusAndAppUserStatus(
+            fixture.applicant().getUserId(),
+            UserRole.OPERATOR,
+            UserRoleAssignmentStatus.ACTIVE,
+            AppUserStatus.ACTIVE
         )).hasValueSatisfying(assignment ->
             assertThat(assignment.getRegion().getRegionId()).isEqualTo(fixture.region().getRegionId())
         );

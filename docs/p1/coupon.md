@@ -8,7 +8,8 @@
 | 데이터 모델 | [P0 ERD](../erd.md), [P1 ERD](../p1-erd.md) |
 
 > 이 문서는 P1 쿠폰 정책의 단일 기준이다. 쿠폰 적용 범위, 할인 방식, 발급 근거와 취소·환불 복구 규칙은
-> `CPN-01`~`CPN-05`와 [ADR-0068](../adr/0068-use-immutable-coupon-lifecycle-and-evidence-sources.md)에 확정한다.
+> `CPN-01`~`CPN-05`, [ADR-0068](../adr/0068-use-immutable-coupon-lifecycle-and-evidence-sources.md)과
+> [ADR-0089](../adr/0089-separate-coupon-policy-publication-lifecycle.md)에 확정한다.
 
 ## 1. 범위
 
