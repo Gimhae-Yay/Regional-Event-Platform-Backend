@@ -11,20 +11,20 @@ CREATE TABLE stampbook (
     CONSTRAINT fk_stampbook_reward_coupon_policy
         FOREIGN KEY (reward_coupon_policy_id) REFERENCES coupon_policy (coupon_policy_id),
     CONSTRAINT ck_stampbook_status
-        CHECK (status REGEXP '^(DRAFT|PENDING_REVIEW|PUBLISHED|ENDED)$'),
+        CHECK (REGEXP_LIKE(status, '^(DRAFT|PENDING_REVIEW|PUBLISHED|ENDED)$', 'c')),
     CONSTRAINT ck_stampbook_status_timestamps
         CHECK (
             CASE
-                WHEN status = 'DRAFT'
+                WHEN REGEXP_LIKE(status, '^DRAFT$', 'c')
                     AND published_at IS NULL
                     AND ended_at IS NULL THEN 1
-                WHEN status = 'PENDING_REVIEW'
+                WHEN REGEXP_LIKE(status, '^PENDING_REVIEW$', 'c')
                     AND published_at IS NULL
                     AND ended_at IS NULL THEN 1
-                WHEN status = 'PUBLISHED'
+                WHEN REGEXP_LIKE(status, '^PUBLISHED$', 'c')
                     AND published_at IS NOT NULL
                     AND ended_at IS NULL THEN 1
-                WHEN status = 'ENDED'
+                WHEN REGEXP_LIKE(status, '^ENDED$', 'c')
                     AND published_at IS NOT NULL
                     AND ended_at IS NOT NULL THEN 1
                 ELSE 0
