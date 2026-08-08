@@ -4,8 +4,9 @@
 @operatorEmail = initial-operator-{{$timestamp}}@example.com
 @operatorPassword = Test!23456
 @operatorPhone = 01022223333
-@regionAdminAccessToken = {{p0RegionAdminAccessToken}}
-@otherRegionAdminAccessToken = {{p0OtherRegionAdminAccessToken}}
+@regionAdminAccessToken =
+@otherRegionAdminAccessToken =
+@initialOperatorApplicationId =
 
 # P0 운영자 최초 신청·심사
 # 선행 조건:

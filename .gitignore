@@ -6,8 +6,6 @@ build/
 !**/src/test/**/build/
 
 **/application-local.properties
-**/application-local.yaml
-compose.yaml
 
 ### STS ###
 .apt_generated

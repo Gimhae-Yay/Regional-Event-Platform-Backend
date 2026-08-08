@@ -1,8 +1,9 @@
 @baseUrl = http://localhost:8080
-@regionAdminAccessToken = {{p0RegionAdminAccessToken}}
-@otherRegionAdminAccessToken = {{p0OtherRegionAdminAccessToken}}
-@reservationNo = {{p0ManualReservationNo}}
+@regionAdminAccessToken =
+@otherRegionAdminAccessToken =
+@reservationNo =
 @missingReservationNo = R99999999NOTFOUND
+@qrExceptionId =
 
 # P0 지역 관리자 예약·QR 예외 모니터링
 # 선행 조건:

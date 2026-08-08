@@ -1,8 +1,8 @@
 @baseUrl = http://localhost:8080
-@operatorAccessToken = {{p0OperatorAccessToken}}
-@regionAdminAccessToken = {{p0RegionAdminAccessToken}}
-@contentId = {{p0PublishedContentId}}
-@qrExceptionId = {{p0QrExceptionId}}
+@operatorAccessToken =
+@regionAdminAccessToken =
+@contentId =
+@qrExceptionId =
 
 # 호환 alias 최소 확인
 # 목적:

@@ -4,11 +4,11 @@ import java.time.Instant;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.EnumType;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -43,10 +43,6 @@ public class AppUser {
     private String phone;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "account_kind", nullable = false, length = 30, updatable = false)
-    private AppUserAccountKind accountKind;
-
-    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)
     private AppUserStatus status;
 
@@ -66,29 +62,10 @@ public class AppUser {
         String phone,
         AppUserStatus status
     ) {
-        this(
-            loginIdentifier,
-            passwordHash,
-            name,
-            phone,
-            AppUserAccountKind.ORDINARY,
-            status
-        );
-    }
-
-    public AppUser(
-        String loginIdentifier,
-        String passwordHash,
-        String name,
-        String phone,
-        AppUserAccountKind accountKind,
-        AppUserStatus status
-    ) {
         this.loginIdentifier = validateRequiredText(loginIdentifier, "loginIdentifier");
         this.passwordHash = validateRequiredText(passwordHash, "passwordHash");
         this.name = validateRequiredText(name, "name");
         this.phone = validateRequiredText(phone, "phone");
-        this.accountKind = validateAccountKind(accountKind);
         this.status = validateStatus(status);
     }
 
@@ -124,10 +101,6 @@ public class AppUser {
         return phone;
     }
 
-    public AppUserAccountKind getAccountKind() {
-        return accountKind;
-    }
-
     public AppUserStatus getStatus() {
         return status;
     }
@@ -159,12 +132,5 @@ public class AppUser {
             throw new IllegalArgumentException("status must not be null");
         }
         return status;
-    }
-
-    private static AppUserAccountKind validateAccountKind(AppUserAccountKind accountKind) {
-        if (accountKind == null) {
-            throw new IllegalArgumentException("accountKind must not be null");
-        }
-        return accountKind;
     }
 }
