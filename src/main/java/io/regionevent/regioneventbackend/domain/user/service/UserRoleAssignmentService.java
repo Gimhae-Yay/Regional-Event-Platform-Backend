@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.user.service;
 
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 
@@ -17,6 +18,8 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 @Service
 public class UserRoleAssignmentService {
+
+    private static final String USER_WITHDRAWAL = "USER_WITHDRAWAL";
 
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
 
@@ -72,7 +75,13 @@ public class UserRoleAssignmentService {
         return roles.contains(UserRole.OPERATOR) || roles.contains(UserRole.REGION_ADMIN);
     }
 
-    public void deleteAllByUserId(Long userId) {
-        userRoleAssignmentRepository.deleteByAppUserUserId(userId);
+    public void revokeAndUnlinkAllByUserId(Long userId, Instant revokedAt) {
+        userRoleAssignmentRepository.findAllByAppUserUserId(userId)
+            .forEach(assignment -> {
+                if (assignment.getStatus() == UserRoleAssignmentStatus.ACTIVE) {
+                    assignment.revoke(revokedAt, USER_WITHDRAWAL);
+                }
+                assignment.unlinkAppUser();
+            });
     }
 }

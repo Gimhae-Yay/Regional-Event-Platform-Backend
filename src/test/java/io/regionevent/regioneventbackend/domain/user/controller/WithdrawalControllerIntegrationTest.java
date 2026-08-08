@@ -154,6 +154,18 @@ class WithdrawalControllerIntegrationTest {
 
         assertThat(appUserRepository.findById(fixture.user().getUserId())).isEmpty();
         assertThat(userRoleAssignmentRepository.findAllByAppUserUserIdAndStatus(fixture.user().getUserId(), UserRoleAssignmentStatus.ACTIVE)).isEmpty();
+        assertThat(userRoleAssignmentRepository.findById(fixture.visitorRoleAssignment().getRoleAssignmentId()))
+            .hasValueSatisfying(assignment -> {
+                assertThat(assignment.getStatus()).isEqualTo(UserRoleAssignmentStatus.REVOKED);
+                assertThat(assignment.getRevokedAt()).isNotNull();
+                assertThat(assignment.getRevokeReasonCode()).isEqualTo("USER_WITHDRAWAL");
+                assertThat(assignment.getAppUser()).isNull();
+            });
+        assertThat(userRoleAssignmentRepository.findById(fixture.revokedOperatorRoleAssignment().getRoleAssignmentId()))
+            .hasValueSatisfying(assignment -> {
+                assertThat(assignment.getStatus()).isEqualTo(UserRoleAssignmentStatus.REVOKED);
+                assertThat(assignment.getAppUser()).isNull();
+            });
         assertThat(operatorApplicationRepository.findById(fixture.application().getOperatorApplicationId()))
             .hasValueSatisfying(application -> {
                 assertThat(application.getStatus()).isEqualTo(OperatorApplicationStatus.CANCELLED);
@@ -270,7 +282,12 @@ class WithdrawalControllerIntegrationTest {
         AppUser owner = saveUser("owner@example.com", AppUserStatus.ACTIVE);
         AppUser reviewer = saveUser("reviewer@example.com", AppUserStatus.ACTIVE);
         Region region = regionRepository.saveAndFlush(new Region("GIMHAE", "김해시", true));
-        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(user, UserRole.VISITOR, null));
+        UserRoleAssignment visitorRoleAssignment = userRoleAssignmentRepository.saveAndFlush(
+            new UserRoleAssignment(user, UserRole.VISITOR, null)
+        );
+        UserRoleAssignment revokedOperatorRoleAssignment = new UserRoleAssignment(user, UserRole.OPERATOR, region);
+        revokedOperatorRoleAssignment.revoke(NOW, "OPERATOR_REVOCATION");
+        revokedOperatorRoleAssignment = userRoleAssignmentRepository.saveAndFlush(revokedOperatorRoleAssignment);
 
         Content content = contentRepository.saveAndFlush(content(region, owner));
         ContentSession contentSession = new ContentSession(
@@ -375,7 +392,9 @@ class WithdrawalControllerIntegrationTest {
             visit,
             review,
             idempotencyRecord,
-            auditEvent
+            auditEvent,
+            visitorRoleAssignment,
+            revokedOperatorRoleAssignment
         );
     }
 
@@ -421,7 +440,9 @@ class WithdrawalControllerIntegrationTest {
         Visit visit,
         Review review,
         IdempotencyRecord idempotencyRecord,
-        AuditEvent auditEvent
+        AuditEvent auditEvent,
+        UserRoleAssignment visitorRoleAssignment,
+        UserRoleAssignment revokedOperatorRoleAssignment
     ) {
     }
 

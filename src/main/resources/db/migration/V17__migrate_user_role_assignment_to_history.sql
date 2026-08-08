@@ -12,7 +12,7 @@ CREATE TABLE user_role_assignment_v2 (
     ),
     CONSTRAINT pk_user_role_assignment_v2 PRIMARY KEY (role_assignment_id),
     CONSTRAINT fk_user_role_assignment_v2_user
-        FOREIGN KEY (user_id) REFERENCES app_user (user_id),
+        FOREIGN KEY (user_id) REFERENCES app_user (user_id) ON DELETE SET NULL,
     CONSTRAINT fk_user_role_assignment_v2_region
         FOREIGN KEY (region_id) REFERENCES region (region_id),
     CONSTRAINT ck_user_role_assignment_v2_role

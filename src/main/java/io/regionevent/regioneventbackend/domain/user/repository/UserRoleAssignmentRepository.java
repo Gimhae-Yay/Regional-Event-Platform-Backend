@@ -21,6 +21,8 @@ public interface UserRoleAssignmentRepository extends JpaRepository<UserRoleAssi
         UserRoleAssignmentStatus status
     );
 
+    List<UserRoleAssignment> findAllByAppUserUserId(Long userId);
+
     @EntityGraph(attributePaths = "region")
     Optional<UserRoleAssignment> findByAppUserUserIdAndRoleAndStatusAndAppUserStatus(
         Long userId,
@@ -38,5 +40,4 @@ public interface UserRoleAssignmentRepository extends JpaRepository<UserRoleAssi
         """)
     long countActiveRegionAdminsByRegionRegionId(@Param("regionId") Long regionId);
 
-    void deleteByAppUserUserId(Long userId);
 }

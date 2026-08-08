@@ -114,6 +114,13 @@ public class UserRoleAssignment {
         this.revokeReasonCode = revokeReasonCode;
     }
 
+    public void unlinkAppUser() {
+        if (status != UserRoleAssignmentStatus.REVOKED) {
+            throw new IllegalStateException("only revoked role assignment can be unlinked");
+        }
+        appUser = null;
+    }
+
     private static AppUser validateAppUser(AppUser appUser) {
         if (appUser == null) {
             throw new IllegalArgumentException("appUser must not be null");
