@@ -28,9 +28,12 @@ CREATE TABLE mission (
     CONSTRAINT ck_mission_status_timestamps
         CHECK (
             CASE
-                WHEN (status = 'DRAFT' OR status = 'PENDING_REVIEW')
-                    AND published_at IS NULL
-                    AND ended_at IS NULL THEN 1
+        WHEN status = 'DRAFT'
+            AND published_at IS NULL
+            AND ended_at IS NULL THEN 1
+        WHEN status = 'PENDING_REVIEW'
+            AND published_at IS NULL
+            AND ended_at IS NULL THEN 1
                 WHEN status = 'PUBLISHED'
                     AND published_at IS NOT NULL
                     AND published_at < ends_at

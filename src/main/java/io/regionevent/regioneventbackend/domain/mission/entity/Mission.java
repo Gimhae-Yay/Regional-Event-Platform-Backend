@@ -52,7 +52,10 @@ import io.regionevent.regioneventbackend.domain.region.entity.Region;
             name = "ck_mission_status_timestamps",
             constraint = """
                 CASE
-                    WHEN (status = 'DRAFT' OR status = 'PENDING_REVIEW')
+                    WHEN status = 'DRAFT'
+                        AND published_at IS NULL
+                        AND ended_at IS NULL THEN 1
+                    WHEN status = 'PENDING_REVIEW'
                         AND published_at IS NULL
                         AND ended_at IS NULL THEN 1
                     WHEN status = 'PUBLISHED'
