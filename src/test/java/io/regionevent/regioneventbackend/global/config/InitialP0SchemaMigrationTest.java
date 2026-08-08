@@ -23,7 +23,7 @@ class InitialP0SchemaMigrationTest {
     }
 
     @Test
-    void 빈_데이터베이스에_V1부터_V16까지_현재_스키마를_생성한다() {
+    void 빈_데이터베이스에_V1부터_V17까지_현재_스키마를_생성한다() {
         List<String> appliedVersions = jdbcTemplate.queryForList(
             "SELECT \"version\" FROM \"flyway_schema_history\" WHERE \"version\" IS NOT NULL AND \"success\" = TRUE",
             String.class
@@ -107,7 +107,8 @@ class InitialP0SchemaMigrationTest {
             "13",
             "14",
             "15",
-            "16"
+            "16",
+            "17"
         );
         assertThat(tableNames).contains(
             "REGION",
@@ -127,7 +128,9 @@ class InitialP0SchemaMigrationTest {
             "REVIEW",
             "AUDIT_EVENT",
             "AUDIT_EVENT_ACTOR_LINK",
-            "COUPON_POLICY"
+            "COUPON_POLICY",
+            "STAMPBOOK",
+            "STAMPBOOK_CONTENT"
         );
         assertThat(tableNames).doesNotContain(
             "CONTENT_REPRESENTATIVE_IMAGE",
@@ -159,7 +162,12 @@ class InitialP0SchemaMigrationTest {
             "CK_CONTENT_REVISION_REVIEWED",
             "FK_COUPON_POLICY_CONTENT_REGION",
             "FK_COUPON_POLICY_REGION",
-            "CK_COUPON_POLICY_STATUS_TIMESTAMPS"
+            "CK_COUPON_POLICY_STATUS_TIMESTAMPS",
+            "FK_STAMPBOOK_REGION",
+            "FK_STAMPBOOK_REWARD_COUPON_POLICY",
+            "CK_STAMPBOOK_STATUS_TIMESTAMPS",
+            "FK_STAMPBOOK_CONTENT_STAMPBOOK",
+            "FK_STAMPBOOK_CONTENT_CONTENT"
         );
         assertThat(contentColumnNames).contains(
             "REPRESENTATIVE_IMAGE_OBJECT_ID",
