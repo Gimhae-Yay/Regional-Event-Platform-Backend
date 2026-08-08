@@ -23,7 +23,7 @@ class InitialP0SchemaMigrationTest {
     }
 
     @Test
-    void 빈_데이터베이스에_V1부터_V22까지_현재_스키마를_생성한다() {
+    void 빈_데이터베이스에_V1부터_V24까지_현재_스키마를_생성한다() {
         List<String> appliedVersions = jdbcTemplate.queryForList(
             "SELECT \"version\" FROM \"flyway_schema_history\" WHERE \"version\" IS NOT NULL AND \"success\" = TRUE",
             String.class
@@ -141,7 +141,8 @@ class InitialP0SchemaMigrationTest {
             "20",
             "21",
             "22",
-            "23"
+            "23",
+            "24"
         );
         assertThat(tableNames).contains(
             "REGION",
@@ -169,6 +170,8 @@ class InitialP0SchemaMigrationTest {
             "STAMPBOOK_CONTENT",
             "STAMPBOOK_PROGRESS",
             "STAMPBOOK_REWARD_GRANT",
+            "MISSION_PARTICIPATION",
+            "MISSION_PROGRESS",
             "STAMP_EARN"
         );
         assertThat(tableNames).doesNotContain(
@@ -228,6 +231,16 @@ class InitialP0SchemaMigrationTest {
             "UK_STAMPBOOK_REWARD_GRANT_PROGRESS",
             "FK_STAMPBOOK_REWARD_GRANT_PROGRESS",
             "FK_STAMPBOOK_REWARD_GRANT_COUPON_POLICY",
+            "PK_MISSION_PARTICIPATION",
+            "UK_MISSION_PARTICIPATION_MISSION_USER",
+            "FK_MISSION_PARTICIPATION_MISSION",
+            "FK_MISSION_PARTICIPATION_USER",
+            "CK_MISSION_PARTICIPATION_STATUS",
+            "CK_MISSION_PARTICIPATION_STATUS_COMPLETED_AT",
+            "PK_MISSION_PROGRESS",
+            "FK_MISSION_PROGRESS_PARTICIPATION",
+            "FK_MISSION_PROGRESS_VISIT",
+            "FK_MISSION_PROGRESS_CONTENT",
             "PK_STAMP_EARN",
             "UK_STAMP_EARN_PROGRESS_VISIT",
             "UK_STAMP_EARN_PROGRESS_CONTENT",
