@@ -532,7 +532,8 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
   원래 트랜잭션을 롤백한 뒤 같은 요청 ID와 비개인 실패 코드를 가진 실패 감사 이벤트를 독립 트랜잭션으로 기록한다.
   실패 감사 기록도 실패하면 구조화 로그로 관찰한다.
 
-`coupon_policy`는 콘텐츠 소유 운영자가 직접 공개하므로 `DRAFT → PUBLISHED → ENDED`를 사용한다. `DRAFT`에서만
+`coupon_policy`는 [ADR-0089](adr/0089-separate-coupon-policy-publication-lifecycle.md)에 따라 콘텐츠 소유 운영자가
+직접 공개하므로 `DRAFT → PUBLISHED → ENDED`를 사용한다. `DRAFT`에서만
 핵심 값을 수정하고, 공개·종료 처리도 정책 콘텐츠의 현재 소유 운영자만 수행한다.
 
 ### 5.2 스탬프북
