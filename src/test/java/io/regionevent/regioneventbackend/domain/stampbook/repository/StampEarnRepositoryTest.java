@@ -232,6 +232,36 @@ class StampEarnRepositoryTest {
     }
 
     @Test
+    void 탈퇴_뒤_사용자_연결이_없는_진행과_방문으로_스탬프_적립을_생성할_수_없다() {
+        StampEarnFixtures fixtures = createFixtures();
+        AppUser anotherUser = saveUser("another-visitor@example.com");
+        Visit anotherUserVisit = saveVisit(
+            fixtures,
+            fixtures.stampbookContent(),
+            anotherUser,
+            "another-user"
+        );
+
+        visitRepository.unlinkAuthorByUserId(anotherUser.getUserId());
+        appUserRepository.deleteById(fixtures.user().getUserId());
+        appUserRepository.flush();
+
+        StampbookProgress unlinkedProgress = stampbookProgressRepository
+            .findById(fixtures.progress().getStampbookProgressId())
+            .orElseThrow();
+        Visit unlinkedVisit = visitRepository.findById(anotherUserVisit.getVisitId()).orElseThrow();
+
+        assertThat(unlinkedProgress.getUser()).isNull();
+        assertThat(unlinkedVisit.getUser()).isNull();
+        assertThatThrownBy(() -> new StampEarn(
+            unlinkedProgress,
+            unlinkedVisit,
+            fixtures.stampbookContent(),
+            FIRST_EARNED_AT
+        )).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void 스탬프_적립_근거는_방문_콘텐츠와_적립_콘텐츠의_일치를_검증한다() {
         StampEarnFixtures fixtures = createFixtures();
         Content anotherContent = saveContent(fixtures.region(), "another-content");

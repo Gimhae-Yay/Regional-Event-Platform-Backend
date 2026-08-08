@@ -122,11 +122,11 @@ public class StampEarn {
         AppUser actual,
         String fieldName
     ) {
-        if (expected == actual) {
-            return;
-        }
         if (expected == null || actual == null) {
             throw new IllegalArgumentException(fieldName + " must match stampbook progress and visit");
+        }
+        if (expected == actual) {
+            return;
         }
         Long expectedId = expected.getUserId();
         Long actualId = actual.getUserId();
