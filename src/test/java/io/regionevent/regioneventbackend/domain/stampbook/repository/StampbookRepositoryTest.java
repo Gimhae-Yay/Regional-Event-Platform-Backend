@@ -155,6 +155,22 @@ class StampbookRepositoryTest {
         )).isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    @Test
+    void 서로_다른_지역의_콘텐츠는_스탬프북에_연결할_수_없다() {
+        Region stampbookRegion = saveRegion("GIMHAE");
+        Content stampbookContent = saveContent(stampbookRegion);
+        CouponPolicy couponPolicy = saveRewardCouponPolicy(stampbookContent, stampbookRegion);
+        Stampbook stampbook = stampbookRepository.saveAndFlush(
+            new Stampbook(stampbookRegion, couponPolicy)
+        );
+        Region otherRegion = saveRegion("BUSAN");
+        Content otherRegionContent = saveContent(otherRegion);
+
+        assertThatThrownBy(() -> new StampbookContent(stampbook, otherRegionContent))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("content must belong to stampbook region");
+    }
+
     private void insertStampbook(
         Long regionId,
         Long rewardCouponPolicyId,

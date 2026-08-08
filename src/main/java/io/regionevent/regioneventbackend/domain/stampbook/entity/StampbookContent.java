@@ -46,6 +46,7 @@ public class StampbookContent {
         this.id = new StampbookContentId(null, null);
         this.stampbook = requireNotNull(stampbook, "stampbook");
         this.content = requireNotNull(content, "content");
+        validateContentRegion(stampbook, content);
     }
 
     public StampbookContentId getId() {
@@ -58,6 +59,18 @@ public class StampbookContent {
 
     public Content getContent() {
         return content;
+    }
+
+    private static void validateContentRegion(
+        Stampbook stampbook,
+        Content content
+    ) {
+        Long stampbookRegionId = stampbook.getRegion().getRegionId();
+        Long contentRegionId = content.getRegion().getRegionId();
+        if (stampbookRegionId != null && contentRegionId != null
+            && !stampbookRegionId.equals(contentRegionId)) {
+            throw new IllegalArgumentException("content must belong to stampbook region");
+        }
     }
 
     private static <T> T requireNotNull(
