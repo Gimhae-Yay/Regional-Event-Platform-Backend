@@ -30,7 +30,7 @@
 ### 선행 조건
 
 - `feature/589-regional-mission-definition-persistence` 브랜치
-- V17 migration과 `MissionDefinitionMigrationTest`가 아직 커밋되지 않은 상태
+- V18 migration과 `MissionDefinitionMigrationTest`가 아직 커밋되지 않은 상태
 
 ### 명령·요청·입력
 
@@ -72,7 +72,7 @@
 - 근거: 실패한 CHECK에 `status IN ('DRAFT', 'PENDING_REVIEW')`가 포함됐다.
 - 참일 때의 예측: `IN`을 명시 OR 비교로 바꾸면 동일 INSERT가 성공한다.
 - 반증 조건: 명시 OR 비교에서도 동일 실패가 난다.
-- 검증 방법: V17 CHECK의 해당 표현만 명시 OR 비교로 바꾸고 대상 테스트를 실행한다.
+- 검증 방법: V18 CHECK의 해당 표현만 명시 OR 비교로 바꾸고 대상 테스트를 실행한다.
 - 결과: 동일 CHECK 위반이 재현됐다.
 - 판정: 기각.
 
@@ -105,7 +105,7 @@
 ## 해결 또는 완화
 
 - 선택한 방법: Flyway와 검증 SQL이 하나의 물리 H2 연결을 공유하도록 `SingleConnectionDataSource`를 사용했다.
-- 변경 파일: `MissionDefinitionMigrationTest`, V17 migration, `Mission` 엔티티의 상태 시각 CHECK 표현.
+- 변경 파일: `MissionDefinitionMigrationTest`, V18 migration, `Mission` 엔티티의 상태 시각 CHECK 표현.
 - 정책·계약 변경 여부: 없음. `DRAFT`·`PENDING_REVIEW`의 시각 null 규칙을 `CASE ... END = 1`으로 명시해 SQL `UNKNOWN`을 차단했다.
 
 ## Before/After 검증
@@ -130,5 +130,5 @@ MySQL Testcontainers 검증은 Docker 실행 환경에서 별도로 확인해야
 
 ## 관련 자료
 
-- `src/main/resources/db/migration/V17__create_mission_definition_tables.sql`
+- `src/main/resources/db/migration/V18__create_mission_definition_tables.sql`
 - `src/test/java/io/regionevent/regioneventbackend/global/config/MissionDefinitionMigrationTest.java`
