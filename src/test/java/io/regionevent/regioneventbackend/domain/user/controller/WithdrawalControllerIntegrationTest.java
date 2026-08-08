@@ -62,6 +62,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
+import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 import io.regionevent.regioneventbackend.domain.visit.entity.CheckinMethod;
@@ -152,7 +153,7 @@ class WithdrawalControllerIntegrationTest {
             .andExpect(header().string(HttpHeaders.SET_COOKIE, org.hamcrest.Matchers.containsString("SameSite=Strict")));
 
         assertThat(appUserRepository.findById(fixture.user().getUserId())).isEmpty();
-        assertThat(userRoleAssignmentRepository.findAllByIdUserId(fixture.user().getUserId())).isEmpty();
+        assertThat(userRoleAssignmentRepository.findAllByAppUserUserIdAndStatus(fixture.user().getUserId(), UserRoleAssignmentStatus.ACTIVE)).isEmpty();
         assertThat(operatorApplicationRepository.findById(fixture.application().getOperatorApplicationId()))
             .hasValueSatisfying(application -> {
                 assertThat(application.getStatus()).isEqualTo(OperatorApplicationStatus.CANCELLED);

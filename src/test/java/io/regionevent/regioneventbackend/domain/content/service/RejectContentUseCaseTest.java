@@ -27,7 +27,6 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
-import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentId;
 import io.regionevent.regioneventbackend.domain.user.service.RegionAdminAuthorizationService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
@@ -79,8 +78,8 @@ class RejectContentUseCaseTest {
         when(pendingContent.getStatus()).thenReturn(ContentStatus.PENDING);
         when(region.getRegionId()).thenReturn(REGION_ID);
         when(regionAdminAuthorizationService.authorize(USER_ID, REGION_ID)).thenReturn(reviewerAssignment);
-        when(reviewerAssignment.getId())
-            .thenReturn(new UserRoleAssignmentId(USER_ID, UserRole.REGION_ADMIN));
+        when(reviewerAssignment.getRoleAssignmentId())
+            .thenReturn(1L);
         when(reviewerAssignment.getAppUser()).thenReturn(reviewer);
         when(reviewer.getStatus()).thenReturn(AppUserStatus.ACTIVE);
         when(originalContentReviewTargetService.findByContentId(CONTENT_ID))

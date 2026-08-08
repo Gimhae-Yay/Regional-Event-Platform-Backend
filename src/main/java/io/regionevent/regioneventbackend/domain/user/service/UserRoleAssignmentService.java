@@ -10,6 +10,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
+import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
@@ -39,24 +40,29 @@ public class UserRoleAssignmentService {
     }
 
     public List<UserRoleAssignment> findRoleAssignmentsByUserId(Long userId) {
-        return userRoleAssignmentRepository.findAllByIdUserId(userId)
+        return userRoleAssignmentRepository.findAllByAppUserUserIdAndStatus(
+                userId,
+                UserRoleAssignmentStatus.ACTIVE
+            )
             .stream()
             .sorted(Comparator.comparing(UserRoleAssignment::getRole))
             .toList();
     }
 
     public UserRoleAssignment findActiveVisitor(Long userId) {
-        return userRoleAssignmentRepository.findByIdUserIdAndIdRoleAndAppUserStatus(
+        return userRoleAssignmentRepository.findByAppUserUserIdAndRoleAndStatusAndAppUserStatus(
             userId,
             UserRole.VISITOR,
+            UserRoleAssignmentStatus.ACTIVE,
             AppUserStatus.ACTIVE
         ).orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
     }
 
     public UserRoleAssignment findActiveOperator(Long userId) {
-        return userRoleAssignmentRepository.findByIdUserIdAndIdRoleAndAppUserStatus(
+        return userRoleAssignmentRepository.findByAppUserUserIdAndRoleAndStatusAndAppUserStatus(
             userId,
             UserRole.OPERATOR,
+            UserRoleAssignmentStatus.ACTIVE,
             AppUserStatus.ACTIVE
         ).orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
     }
@@ -67,6 +73,6 @@ public class UserRoleAssignmentService {
     }
 
     public void deleteAllByUserId(Long userId) {
-        userRoleAssignmentRepository.deleteByIdUserId(userId);
+        userRoleAssignmentRepository.deleteByAppUserUserId(userId);
     }
 }
