@@ -13,11 +13,8 @@ CREATE TABLE platform_admin_assignment (
     granted_at TIMESTAMP(6) NOT NULL,
     inactivated_at TIMESTAMP(6),
     inactive_reason_code VARCHAR(255),
-    active_user_id BIGINT GENERATED ALWAYS AS (
-        CASE WHEN status = 'ACTIVE' THEN user_id ELSE NULL END
-    ),
     CONSTRAINT pk_platform_admin_assignment PRIMARY KEY (platform_admin_assignment_id),
-    CONSTRAINT uk_platform_admin_assignment_active_user UNIQUE (active_user_id),
+    CONSTRAINT uk_platform_admin_assignment_user UNIQUE (user_id),
     CONSTRAINT fk_platform_admin_assignment_user
         FOREIGN KEY (user_id) REFERENCES app_user (user_id) ON DELETE SET NULL,
     CONSTRAINT ck_platform_admin_assignment_grade

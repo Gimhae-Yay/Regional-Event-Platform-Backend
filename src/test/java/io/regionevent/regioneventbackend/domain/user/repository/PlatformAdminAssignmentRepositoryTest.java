@@ -85,11 +85,13 @@ class PlatformAdminAssignmentRepositoryTest {
     }
 
     @Test
-    void 사용자당_활성_고권한_배정은_하나만_저장한다() {
+    void 비활성화된_고권한_계정은_새_배정을_만들지_않는다() {
         AppUser appUser = savePrivilegedUser(AppUserStatus.ACTIVE);
-        platformAdminAssignmentRepository.saveAndFlush(
+        PlatformAdminAssignment assignment = platformAdminAssignmentRepository.saveAndFlush(
             new PlatformAdminAssignment(appUser, PlatformAdminGrade.SUPER_ADMIN)
         );
+        assignment.inactivate(Instant.parse("2026-08-08T00:00:00Z"), "ADMIN_ACCOUNT_INACTIVATION");
+        platformAdminAssignmentRepository.saveAndFlush(assignment);
 
         assertThatThrownBy(() -> platformAdminAssignmentRepository.saveAndFlush(
             new PlatformAdminAssignment(appUser, PlatformAdminGrade.PLATFORM_ADMIN)
