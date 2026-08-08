@@ -23,7 +23,7 @@ class InitialP0SchemaMigrationTest {
     }
 
     @Test
-    void 빈_데이터베이스에_V1부터_V16까지_현재_스키마를_생성한다() {
+    void 빈_데이터베이스에_V1부터_V17까지_현재_스키마를_생성한다() {
         List<String> appliedVersions = jdbcTemplate.queryForList(
             "SELECT \"version\" FROM \"flyway_schema_history\" WHERE \"version\" IS NOT NULL AND \"success\" = TRUE",
             String.class
@@ -90,6 +90,24 @@ class InitialP0SchemaMigrationTest {
                 """,
             String.class
         );
+        List<String> userRoleAssignmentColumnNames = jdbcTemplate.queryForList(
+            """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'PUBLIC'
+                  AND table_name = 'USER_ROLE_ASSIGNMENT'
+                """,
+            String.class
+        );
+        List<String> userRoleAssignmentIndexNames = jdbcTemplate.queryForList(
+            """
+                SELECT index_name
+                FROM information_schema.indexes
+                WHERE table_schema = 'PUBLIC'
+                  AND table_name = 'USER_ROLE_ASSIGNMENT'
+                """,
+            String.class
+        );
 
         assertThat(appliedVersions).containsExactly(
             "1",
@@ -107,7 +125,8 @@ class InitialP0SchemaMigrationTest {
             "13",
             "14",
             "15",
-            "16"
+            "16",
+            "17"
         );
         assertThat(tableNames).contains(
             "REGION",
@@ -176,6 +195,17 @@ class InitialP0SchemaMigrationTest {
             "REJECT_REASON"
         );
         assertThat(capacityHoldIndexNames).contains("IDX_CAPACITY_HOLD_STATUS_EXPIRES_AT");
+        assertThat(userRoleAssignmentColumnNames).contains(
+            "ROLE_ASSIGNMENT_ID",
+            "STATUS",
+            "REVOKED_AT",
+            "REVOKE_REASON_CODE",
+            "ACTIVE_USER_ID"
+        );
+        assertThat(userRoleAssignmentIndexNames).contains(
+            "UK_USER_ROLE_ASSIGNMENT_ACTIVE_USER_ROLE",
+            "IDX_USER_ROLE_ASSIGNMENT_REGION_STATUS"
+        );
         assertThat(imageObjectColumnNames).contains(
             "CREATED_BY_USER_ID",
             "REGION_ID",
