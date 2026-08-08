@@ -19,7 +19,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
-import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentId;
+import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentStatus;
 
 @DataJpaTest
 @TestPropertySource(properties = {
@@ -46,7 +46,7 @@ class UserRoleAssignmentRepositoryTest {
     }
 
     @Test
-    void 복합키로_방문자_역할을_저장하고_조회한다() {
+    void 단일_식별자로_방문자_역할을_저장하고_조회한다() {
         AppUser appUser = saveUser("visitor@example.com");
         UserRoleAssignment assignment = userRoleAssignmentRepository.saveAndFlush(
             new UserRoleAssignment(appUser, UserRole.VISITOR, null)
@@ -54,11 +54,11 @@ class UserRoleAssignmentRepositoryTest {
         entityManager.clear();
 
         UserRoleAssignment foundAssignment = userRoleAssignmentRepository.findById(
-            new UserRoleAssignmentId(appUser.getUserId(), UserRole.VISITOR)
+            assignment.getRoleAssignmentId()
         ).orElseThrow();
 
         assertThat(assignment.getGrantedAt()).isNotNull();
-        assertThat(foundAssignment.getId().getUserId()).isEqualTo(appUser.getUserId());
+        assertThat(foundAssignment.getRoleAssignmentId()).isEqualTo(assignment.getRoleAssignmentId());
         assertThat(foundAssignment.getRole()).isEqualTo(UserRole.VISITOR);
         assertThat(foundAssignment.getRegion()).isNull();
         assertThat(Hibernate.isInitialized(foundAssignment.getAppUser())).isFalse();
@@ -74,7 +74,7 @@ class UserRoleAssignmentRepositoryTest {
         );
         entityManager.clear();
         operatorAssignment = userRoleAssignmentRepository.findById(
-            new UserRoleAssignmentId(appUser.getUserId(), UserRole.OPERATOR)
+            operatorAssignment.getRoleAssignmentId()
         ).orElseThrow();
 
         assertThat(operatorAssignment.getRole()).isEqualTo(UserRole.OPERATOR);
@@ -128,9 +128,10 @@ class UserRoleAssignmentRepositoryTest {
         entityManager.clear();
 
         UserRoleAssignment assignment = userRoleAssignmentRepository
-            .findByIdUserIdAndIdRoleAndAppUserStatus(
+            .findByAppUserUserIdAndRoleAndStatusAndAppUserStatus(
                 appUser.getUserId(),
                 UserRole.REGION_ADMIN,
+                UserRoleAssignmentStatus.ACTIVE,
                 AppUserStatus.ACTIVE
             )
             .orElseThrow();
@@ -143,11 +144,12 @@ class UserRoleAssignmentRepositoryTest {
 
     @Test
     void 존재하지_않는_회원은_지역관리자로_조회되지_않는다() {
-        assertThat(userRoleAssignmentRepository.findByIdUserIdAndIdRoleAndAppUserStatus(
-            Long.MAX_VALUE,
-            UserRole.REGION_ADMIN,
-            AppUserStatus.ACTIVE
-        )).isEmpty();
+        assertThat(userRoleAssignmentRepository.findByAppUserUserIdAndRoleAndStatusAndAppUserStatus(
+                Long.MAX_VALUE,
+                UserRole.REGION_ADMIN,
+                UserRoleAssignmentStatus.ACTIVE,
+                AppUserStatus.ACTIVE
+            )).isEmpty();
     }
 
     @Test
@@ -159,9 +161,10 @@ class UserRoleAssignmentRepositoryTest {
         );
         entityManager.clear();
 
-        assertThat(userRoleAssignmentRepository.findByIdUserIdAndIdRoleAndAppUserStatus(
+        assertThat(userRoleAssignmentRepository.findByAppUserUserIdAndRoleAndStatusAndAppUserStatus(
             appUser.getUserId(),
             UserRole.REGION_ADMIN,
+            UserRoleAssignmentStatus.ACTIVE,
             AppUserStatus.ACTIVE
         )).isEmpty();
     }
@@ -174,9 +177,10 @@ class UserRoleAssignmentRepositoryTest {
         );
         entityManager.clear();
 
-        assertThat(userRoleAssignmentRepository.findByIdUserIdAndIdRoleAndAppUserStatus(
+        assertThat(userRoleAssignmentRepository.findByAppUserUserIdAndRoleAndStatusAndAppUserStatus(
             appUser.getUserId(),
             UserRole.REGION_ADMIN,
+            UserRoleAssignmentStatus.ACTIVE,
             AppUserStatus.ACTIVE
         )).isEmpty();
     }
@@ -191,9 +195,10 @@ class UserRoleAssignmentRepositoryTest {
         entityManager.clear();
 
         UserRoleAssignment assignment = userRoleAssignmentRepository
-            .findByIdUserIdAndIdRoleAndAppUserStatus(
+            .findByAppUserUserIdAndRoleAndStatusAndAppUserStatus(
                 appUser.getUserId(),
                 UserRole.OPERATOR,
+                UserRoleAssignmentStatus.ACTIVE,
                 AppUserStatus.ACTIVE
             )
             .orElseThrow();
@@ -212,9 +217,10 @@ class UserRoleAssignmentRepositoryTest {
         );
         entityManager.clear();
 
-        assertThat(userRoleAssignmentRepository.findByIdUserIdAndIdRoleAndAppUserStatus(
+        assertThat(userRoleAssignmentRepository.findByAppUserUserIdAndRoleAndStatusAndAppUserStatus(
             appUser.getUserId(),
             UserRole.OPERATOR,
+            UserRoleAssignmentStatus.ACTIVE,
             AppUserStatus.ACTIVE
         )).isEmpty();
     }
@@ -228,9 +234,10 @@ class UserRoleAssignmentRepositoryTest {
         );
         entityManager.clear();
 
-        assertThat(userRoleAssignmentRepository.findByIdUserIdAndIdRoleAndAppUserStatus(
+        assertThat(userRoleAssignmentRepository.findByAppUserUserIdAndRoleAndStatusAndAppUserStatus(
             appUser.getUserId(),
             UserRole.OPERATOR,
+            UserRoleAssignmentStatus.ACTIVE,
             AppUserStatus.ACTIVE
         )).isEmpty();
     }

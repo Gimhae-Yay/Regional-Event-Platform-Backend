@@ -23,7 +23,6 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
-import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentId;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService.AuthorizedOperator;
 
@@ -65,7 +64,7 @@ class SubmitContentUseCaseTest {
         when(operator.getUserId()).thenReturn(USER_ID);
         when(operator.getStatus()).thenReturn(AppUserStatus.ACTIVE);
         when(region.getRegionId()).thenReturn(REGION_ID);
-        when(assignment.getId()).thenReturn(new UserRoleAssignmentId(USER_ID, UserRole.OPERATOR));
+        when(assignment.getRoleAssignmentId()).thenReturn(1L);
         when(assignment.getAppUser()).thenReturn(operator);
         AuthorizedOperator authorizedOperator = new AuthorizedOperator(operator, region, assignment);
         when(operatorAuthorizationService.requireAuthorizedOperator(USER_ID)).thenReturn(authorizedOperator);

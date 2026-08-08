@@ -15,6 +15,7 @@ import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
+import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
@@ -101,11 +102,12 @@ class RegionAdminAuthorizationServiceTest {
     }
 
     private void givenAuthorizationAssignment(Optional<UserRoleAssignment> assignment) {
-        when(userRoleAssignmentRepository.findByIdUserIdAndIdRoleAndAppUserStatus(
-            USER_ID,
-            UserRole.REGION_ADMIN,
-            AppUserStatus.ACTIVE
-        )).thenReturn(assignment);
+        when(userRoleAssignmentRepository.findByAppUserUserIdAndRoleAndStatusAndAppUserStatus(
+                USER_ID,
+                UserRole.REGION_ADMIN,
+                UserRoleAssignmentStatus.ACTIVE,
+                AppUserStatus.ACTIVE
+            )).thenReturn(assignment);
     }
 
     private UserRoleAssignment assignmentInRegion(Long regionId) {

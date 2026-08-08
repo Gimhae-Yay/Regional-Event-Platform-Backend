@@ -8,6 +8,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
+import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
@@ -26,9 +27,10 @@ public class OperatorAuthorizationService {
     @Transactional(readOnly = true)
     public AuthorizedOperator requireAuthorizedOperator(Long userId) {
         UserRoleAssignment assignment = userRoleAssignmentRepository
-            .findByIdUserIdAndIdRoleAndAppUserStatus(
+            .findByAppUserUserIdAndRoleAndStatusAndAppUserStatus(
                 userId,
                 UserRole.OPERATOR,
+                UserRoleAssignmentStatus.ACTIVE,
                 AppUserStatus.ACTIVE
             )
             .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
@@ -71,7 +73,7 @@ public class OperatorAuthorizationService {
             if (region == null || region.getRegionId() == null) {
                 throw new BusinessException(ErrorCode.FORBIDDEN);
             }
-            if (roleAssignment == null || roleAssignment.getId() == null) {
+            if (roleAssignment == null || roleAssignment.getRoleAssignmentId() == null) {
                 throw new BusinessException(ErrorCode.FORBIDDEN);
             }
         }

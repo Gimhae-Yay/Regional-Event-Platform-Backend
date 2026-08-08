@@ -30,7 +30,6 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
-import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentId;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService.AuthorizedOperator;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -172,7 +171,7 @@ class WithdrawContentRevisionUseCaseTest {
         when(operator.getUserId()).thenReturn(USER_ID);
         when(operator.getStatus()).thenReturn(AppUserStatus.ACTIVE);
         when(operatorAssignment.getAppUser()).thenReturn(operator);
-        when(operatorAssignment.getId()).thenReturn(new UserRoleAssignmentId(USER_ID, UserRole.OPERATOR));
+        when(operatorAssignment.getRoleAssignmentId()).thenReturn(1L);
         when(operatorAssignment.getRole()).thenReturn(UserRole.OPERATOR);
         AuthorizedOperator authorizedOperator = new AuthorizedOperator(operator, region, operatorAssignment);
         return new Fixture(revision, content, region, operator, operatorAssignment, authorizedOperator);
