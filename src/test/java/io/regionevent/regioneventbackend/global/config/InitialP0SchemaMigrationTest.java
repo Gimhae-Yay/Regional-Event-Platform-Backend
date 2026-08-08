@@ -23,7 +23,7 @@ class InitialP0SchemaMigrationTest {
     }
 
     @Test
-    void 빈_데이터베이스에_V1부터_V20까지_현재_스키마를_생성한다() {
+    void 빈_데이터베이스에_V1부터_V21까지_현재_스키마를_생성한다() {
         List<String> appliedVersions = jdbcTemplate.queryForList(
             "SELECT \"version\" FROM \"flyway_schema_history\" WHERE \"version\" IS NOT NULL AND \"success\" = TRUE",
             String.class
@@ -138,7 +138,8 @@ class InitialP0SchemaMigrationTest {
             "17",
             "18",
             "19",
-            "20"
+            "20",
+            "21"
         );
         assertThat(tableNames).contains(
             "REGION",
@@ -163,7 +164,8 @@ class InitialP0SchemaMigrationTest {
             "MISSION",
             "MISSION_TARGET_CONTENT",
             "STAMPBOOK",
-            "STAMPBOOK_CONTENT"
+            "STAMPBOOK_CONTENT",
+            "STAMPBOOK_PROGRESS"
         );
         assertThat(tableNames).doesNotContain(
             "CONTENT_REPRESENTATIVE_IMAGE",
@@ -211,7 +213,13 @@ class InitialP0SchemaMigrationTest {
             "FK_STAMPBOOK_REWARD_COUPON_POLICY",
             "CK_STAMPBOOK_STATUS_TIMESTAMPS",
             "FK_STAMPBOOK_CONTENT_STAMPBOOK",
-            "FK_STAMPBOOK_CONTENT_CONTENT"
+            "FK_STAMPBOOK_CONTENT_CONTENT",
+            "PK_STAMPBOOK_PROGRESS",
+            "UK_STAMPBOOK_PROGRESS_STAMPBOOK_USER",
+            "FK_STAMPBOOK_PROGRESS_STAMPBOOK",
+            "FK_STAMPBOOK_PROGRESS_USER",
+            "CK_STAMPBOOK_PROGRESS_STATUS",
+            "CK_STAMPBOOK_PROGRESS_STATUS_COMPLETED_AT"
         );
         assertThat(appUserColumnNames).contains("ACCOUNT_KIND");
         assertThat(contentColumnNames).contains(
