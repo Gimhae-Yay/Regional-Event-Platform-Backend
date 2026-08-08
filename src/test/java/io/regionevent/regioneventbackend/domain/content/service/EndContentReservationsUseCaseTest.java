@@ -23,7 +23,6 @@ import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHold
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
-import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentId;
 import io.regionevent.regioneventbackend.domain.user.service.RegionAdminAuthorizationService;
 
 class EndContentReservationsUseCaseTest {
@@ -138,12 +137,12 @@ class EndContentReservationsUseCaseTest {
 
     private UserRoleAssignment activeRegionAdmin() {
         AppUser appUser = mock(AppUser.class);
-        UserRoleAssignmentId assignmentId = mock(UserRoleAssignmentId.class);
+        Long assignmentId = 1L;
         UserRoleAssignment assignment = mock(UserRoleAssignment.class);
         when(appUser.getStatus()).thenReturn(AppUserStatus.ACTIVE);
-        when(assignmentId.getUserId()).thenReturn(ADMIN_ID);
-        when(assignment.getId()).thenReturn(assignmentId);
+        when(assignment.getRoleAssignmentId()).thenReturn(assignmentId);
         when(assignment.getAppUser()).thenReturn(appUser);
+        when(appUser.getUserId()).thenReturn(ADMIN_ID);
         return assignment;
     }
 }

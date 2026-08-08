@@ -26,7 +26,6 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
-import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentId;
 import io.regionevent.regioneventbackend.domain.user.service.RegionAdminAuthorizationService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
@@ -65,7 +64,7 @@ class RejectContentSessionUseCaseTest {
         when(pendingSession.getRegion()).thenReturn(region);
         when(region.getRegionId()).thenReturn(REGION_ID);
         when(regionAdminAuthorizationService.authorize(USER_ID, REGION_ID)).thenReturn(reviewer);
-        when(reviewer.getId()).thenReturn(new UserRoleAssignmentId(USER_ID, UserRole.REGION_ADMIN));
+        when(reviewer.getRoleAssignmentId()).thenReturn(1L);
         when(reviewer.getAppUser()).thenReturn(reviewerUser);
         when(reviewerUser.getStatus()).thenReturn(AppUserStatus.ACTIVE);
         when(contentSessionService.reject(pendingSession, reviewerUser, EXPECTED_REVIEWED_AT, "보완 필요"))

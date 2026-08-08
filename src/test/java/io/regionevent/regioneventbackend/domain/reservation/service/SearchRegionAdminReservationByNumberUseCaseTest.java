@@ -27,7 +27,6 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
-import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentId;
 import io.regionevent.regioneventbackend.domain.user.service.RegionAdminAuthorizationService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
@@ -166,8 +165,8 @@ class SearchRegionAdminReservationByNumberUseCaseTest {
             UserRoleAssignment roleAssignment = mock(UserRoleAssignment.class);
 
             when(regionAdmin.getStatus()).thenReturn(AppUserStatus.ACTIVE);
-            when(roleAssignment.getId()).thenReturn(
-                new UserRoleAssignmentId(REGION_ADMIN_USER_ID, UserRole.REGION_ADMIN)
+            when(roleAssignment.getRoleAssignmentId()).thenReturn(
+                1L
             );
             when(roleAssignment.getAppUser()).thenReturn(regionAdmin);
             when(roleAssignment.getRole()).thenReturn(UserRole.REGION_ADMIN);

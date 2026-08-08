@@ -31,6 +31,7 @@ import io.regionevent.regioneventbackend.domain.region.repository.RegionReposito
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
+import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 
@@ -97,7 +98,7 @@ class SignupControllerIntegrationTest {
         assertThat(user.getPhone()).isEqualTo("01012345678");
         assertThat(user.getStatus()).isEqualTo(AppUserStatus.ACTIVE);
         assertThat(passwordEncoder.matches("LocalStamp!2026", user.getPasswordHash())).isTrue();
-        assertThat(userRoleAssignmentRepository.findAllByIdUserId(user.getUserId()))
+        assertThat(userRoleAssignmentRepository.findAllByAppUserUserIdAndStatus(user.getUserId(), UserRoleAssignmentStatus.ACTIVE))
             .singleElement()
             .satisfies(assignment -> {
                 assertThat(assignment.getRole()).isEqualTo(UserRole.VISITOR);
@@ -130,7 +131,7 @@ class SignupControllerIntegrationTest {
             .andExpect(jsonPath("$.data.operatorApplicationStatus").value("PENDING"));
 
         var user = findUser(OPERATOR_EMAIL);
-        assertThat(userRoleAssignmentRepository.findAllByIdUserId(user.getUserId())).isEmpty();
+        assertThat(userRoleAssignmentRepository.findAllByAppUserUserIdAndStatus(user.getUserId(), UserRoleAssignmentStatus.ACTIVE)).isEmpty();
         assertThat(operatorApplicationRepository.findAll())
             .filteredOn(application -> application.getApplicant().getUserId().equals(user.getUserId()))
             .singleElement()
@@ -237,7 +238,7 @@ class SignupControllerIntegrationTest {
             .andExpect(jsonPath("$.code").value("DUPLICATE_LOGIN_IDENTIFIER"));
 
         var user = findUser(DUPLICATE_EMAIL);
-        assertThat(userRoleAssignmentRepository.findAllByIdUserId(user.getUserId())).singleElement();
+        assertThat(userRoleAssignmentRepository.findAllByAppUserUserIdAndStatus(user.getUserId(), UserRoleAssignmentStatus.ACTIVE)).singleElement();
     }
 
     @Test
@@ -287,7 +288,7 @@ class SignupControllerIntegrationTest {
                 .satisfies(result -> assertThat(result.getResponse().getContentAsString())
                     .contains("DUPLICATE_LOGIN_IDENTIFIER"));
             var user = findUser(CONCURRENT_EMAIL);
-            assertThat(userRoleAssignmentRepository.findAllByIdUserId(user.getUserId())).singleElement();
+            assertThat(userRoleAssignmentRepository.findAllByAppUserUserIdAndStatus(user.getUserId(), UserRoleAssignmentStatus.ACTIVE)).singleElement();
         } finally {
             start.countDown();
             executorService.shutdownNow();
@@ -295,7 +296,7 @@ class SignupControllerIntegrationTest {
                 .filter(user -> user.getLoginIdentifier().equals(CONCURRENT_EMAIL))
                 .findFirst()
                 .ifPresent(user -> {
-                    userRoleAssignmentRepository.deleteAll(userRoleAssignmentRepository.findAllByIdUserId(user.getUserId()));
+                    userRoleAssignmentRepository.deleteAll(userRoleAssignmentRepository.findAllByAppUserUserIdAndStatus(user.getUserId(), UserRoleAssignmentStatus.ACTIVE));
                     appUserRepository.delete(user);
                 });
         }

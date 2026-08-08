@@ -48,6 +48,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
+import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 import io.regionevent.regioneventbackend.support.jpa.AtomicityJpaTestConfiguration;
@@ -137,7 +138,7 @@ class SubmitContentAuditAtomicityTest {
         imageObjectRepository.deleteAllByIdInBatch(createdImageObjectIds);
         for (Long userId : createdUserIds) {
             userRoleAssignmentRepository.deleteAllInBatch(
-                userRoleAssignmentRepository.findAllByIdUserId(userId)
+                userRoleAssignmentRepository.findAllByAppUserUserIdAndStatus(userId, UserRoleAssignmentStatus.ACTIVE)
             );
         }
         appUserRepository.deleteAllByIdInBatch(createdUserIds);

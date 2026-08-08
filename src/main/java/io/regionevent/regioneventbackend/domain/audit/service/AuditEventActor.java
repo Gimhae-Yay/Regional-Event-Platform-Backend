@@ -11,8 +11,9 @@ public record AuditEventActor(
 
     public AuditEventActor {
         if (roleAssignment == null
-            || roleAssignment.getId() == null
-            || roleAssignment.getId().getUserId() == null) {
+            || roleAssignment.getRoleAssignmentId() == null
+            || roleAssignment.getAppUser() == null
+            || roleAssignment.getAppUser().getUserId() == null) {
             throw new IllegalArgumentException("roleAssignment must be persisted");
         }
         if (roleAssignment.getAppUser().getStatus() != AppUserStatus.ACTIVE) {

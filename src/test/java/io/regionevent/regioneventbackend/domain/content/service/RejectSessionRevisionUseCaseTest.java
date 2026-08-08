@@ -28,7 +28,6 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
-import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentId;
 import io.regionevent.regioneventbackend.domain.user.service.RegionAdminAuthorizationService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
@@ -139,7 +138,7 @@ class RejectSessionRevisionUseCaseTest {
     private UserRoleAssignment reviewerAssignment() {
         UserRoleAssignment assignment = mock(UserRoleAssignment.class);
         AppUser reviewer = mock(AppUser.class);
-        when(assignment.getId()).thenReturn(new UserRoleAssignmentId(USER_ID, UserRole.REGION_ADMIN));
+        when(assignment.getRoleAssignmentId()).thenReturn(1L);
         when(assignment.getAppUser()).thenReturn(reviewer);
         when(reviewer.getStatus()).thenReturn(AppUserStatus.ACTIVE);
         return assignment;
