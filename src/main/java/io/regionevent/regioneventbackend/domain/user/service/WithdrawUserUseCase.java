@@ -1,5 +1,7 @@
 package io.regionevent.regioneventbackend.domain.user.service;
 
+import java.time.Clock;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,6 +32,7 @@ public class WithdrawUserUseCase {
     private final ReviewService reviewService;
     private final IdempotencyService idempotencyService;
     private final AuditEventActorLinkService auditEventActorLinkService;
+    private final Clock clock;
 
     public WithdrawUserUseCase(
         AppUserService appUserService,
@@ -42,7 +45,8 @@ public class WithdrawUserUseCase {
         VisitService visitService,
         ReviewService reviewService,
         IdempotencyService idempotencyService,
-        AuditEventActorLinkService auditEventActorLinkService
+        AuditEventActorLinkService auditEventActorLinkService,
+        Clock clock
     ) {
         this.appUserService = appUserService;
         this.userRoleAssignmentService = userRoleAssignmentService;
@@ -55,6 +59,7 @@ public class WithdrawUserUseCase {
         this.reviewService = reviewService;
         this.idempotencyService = idempotencyService;
         this.auditEventActorLinkService = auditEventActorLinkService;
+        this.clock = clock;
     }
 
     @Transactional
@@ -74,7 +79,7 @@ public class WithdrawUserUseCase {
         reviewService.unlinkAuthorByUserId(userId);
         idempotencyService.unlinkActorByUserId(userId);
         auditEventActorLinkService.deleteByActorUserId(userId);
-        userRoleAssignmentService.deleteAllByUserId(userId);
+        userRoleAssignmentService.revokeAndUnlinkAllByUserId(userId, clock.instant());
         appUserService.delete(user);
     }
 
