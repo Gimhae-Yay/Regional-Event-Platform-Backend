@@ -17,6 +17,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
+import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationPriceSnapshot;
 
@@ -104,6 +105,7 @@ public class CouponRedemption {
         );
         validateSnapshotCoupon(reservationPriceSnapshot, coupon);
         this.reservation = requireNotNull(reservation, "reservation");
+        validateReservationHold(reservationPriceSnapshot, reservation);
         this.status = CouponRedemptionStatus.CONFIRMED;
         this.redeemedAt = requireNotNull(redeemedAt, "redeemedAt");
     }
@@ -146,6 +148,23 @@ public class CouponRedemption {
             Long couponId = coupon.getCouponId();
             if (snapshotCouponId == null || !snapshotCouponId.equals(couponId)) {
                 throw new IllegalArgumentException("coupon must match reservationPriceSnapshot coupon");
+            }
+        }
+    }
+
+    private static void validateReservationHold(
+        ReservationPriceSnapshot reservationPriceSnapshot,
+        Reservation reservation
+    ) {
+        CapacityHold snapshotHold = reservationPriceSnapshot.getCapacityHold();
+        CapacityHold reservationHold = reservation.getCapacityHold();
+        if (snapshotHold != reservationHold) {
+            Long snapshotHoldId = snapshotHold.getHoldId();
+            Long reservationHoldId = reservationHold.getHoldId();
+            if (snapshotHoldId == null || !snapshotHoldId.equals(reservationHoldId)) {
+                throw new IllegalArgumentException(
+                    "reservation must belong to reservationPriceSnapshot capacityHold"
+                );
             }
         }
     }

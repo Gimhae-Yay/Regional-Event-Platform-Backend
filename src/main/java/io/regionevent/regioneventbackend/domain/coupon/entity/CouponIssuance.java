@@ -16,7 +16,9 @@ import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
+import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionRewardClaim;
+import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookRewardGrant;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.visit.entity.Visit;
@@ -125,7 +127,7 @@ public class CouponIssuance {
         this.missionRewardClaim = missionRewardClaim;
         this.stampbookRewardGrant = stampbookRewardGrant;
         validateCouponOwnership(coupon, couponPolicy, recipientUser);
-        validateSource(couponPolicy, visit, missionRewardClaim, stampbookRewardGrant);
+        validateSource(couponPolicy, recipientUser, visit, missionRewardClaim, stampbookRewardGrant);
         this.issuanceIdentityHash = requireNotBlank(issuanceIdentityHash, "issuanceIdentityHash");
         this.issuedAt = requireNotNull(issuedAt, "issuedAt");
     }
@@ -181,6 +183,7 @@ public class CouponIssuance {
 
     private static void validateSource(
         CouponPolicy couponPolicy,
+        AppUser recipientUser,
         Visit visit,
         MissionRewardClaim missionRewardClaim,
         StampbookRewardGrant stampbookRewardGrant
@@ -192,12 +195,75 @@ public class CouponIssuance {
         if (visit != null && couponPolicy.getIssuanceType() != CouponIssuanceType.VISIT) {
             throw new IllegalArgumentException("visit source requires VISIT coupon policy");
         }
+        if (visit != null) {
+            validateVisitSource(couponPolicy, recipientUser, visit);
+        }
         if (missionRewardClaim != null && couponPolicy.getIssuanceType() != CouponIssuanceType.MISSION_REWARD) {
             throw new IllegalArgumentException("mission reward source requires MISSION_REWARD coupon policy");
+        }
+        if (missionRewardClaim != null) {
+            validateMissionRewardSource(couponPolicy, recipientUser, missionRewardClaim);
         }
         if (stampbookRewardGrant != null
             && couponPolicy.getIssuanceType() != CouponIssuanceType.STAMPBOOK_COMPLETION) {
             throw new IllegalArgumentException("stampbook reward source requires STAMPBOOK_COMPLETION coupon policy");
+        }
+        if (stampbookRewardGrant != null) {
+            validateStampbookRewardSource(couponPolicy, recipientUser, stampbookRewardGrant);
+        }
+    }
+
+    private static void validateVisitSource(
+        CouponPolicy couponPolicy,
+        AppUser recipientUser,
+        Visit visit
+    ) {
+        if (!isSameUser(visit.getUser(), recipientUser)) {
+            throw new IllegalArgumentException("visit user must match recipientUser");
+        }
+        if (!isSameContent(visit.getContent(), couponPolicy.getContent())) {
+            throw new IllegalArgumentException("visit content must match couponPolicy content");
+        }
+        if (!isSameRegion(visit.getRegion(), couponPolicy.getRegion())) {
+            throw new IllegalArgumentException("visit region must match couponPolicy region");
+        }
+    }
+
+    private static void validateMissionRewardSource(
+        CouponPolicy couponPolicy,
+        AppUser recipientUser,
+        MissionRewardClaim missionRewardClaim
+    ) {
+        if (!isSameCouponPolicy(missionRewardClaim.getCouponPolicy(), couponPolicy)) {
+            throw new IllegalArgumentException("mission reward couponPolicy must match couponPolicy");
+        }
+        if (!isSameUser(missionRewardClaim.getMissionParticipation().getUser(), recipientUser)) {
+            throw new IllegalArgumentException("mission reward user must match recipientUser");
+        }
+        if (!isSameRegion(
+            missionRewardClaim.getMissionParticipation().getMission().getRegion(),
+            couponPolicy.getRegion()
+        )) {
+            throw new IllegalArgumentException("mission reward region must match couponPolicy region");
+        }
+    }
+
+    private static void validateStampbookRewardSource(
+        CouponPolicy couponPolicy,
+        AppUser recipientUser,
+        StampbookRewardGrant stampbookRewardGrant
+    ) {
+        if (!isSameCouponPolicy(stampbookRewardGrant.getCouponPolicy(), couponPolicy)) {
+            throw new IllegalArgumentException("stampbook reward couponPolicy must match couponPolicy");
+        }
+        if (!isSameUser(stampbookRewardGrant.getStampbookProgress().getUser(), recipientUser)) {
+            throw new IllegalArgumentException("stampbook reward user must match recipientUser");
+        }
+        if (!isSameRegion(
+            stampbookRewardGrant.getStampbookProgress().getStampbook().getRegion(),
+            couponPolicy.getRegion()
+        )) {
+            throw new IllegalArgumentException("stampbook reward region must match couponPolicy region");
         }
     }
 
@@ -218,10 +284,43 @@ public class CouponIssuance {
         if (firstCouponPolicy == secondCouponPolicy) {
             return true;
         }
+        if (firstCouponPolicy == null || secondCouponPolicy == null) {
+            return false;
+        }
         Long firstCouponPolicyId = firstCouponPolicy.getCouponPolicyId();
         Long secondCouponPolicyId = secondCouponPolicy.getCouponPolicyId();
         return firstCouponPolicyId != null
             && firstCouponPolicyId.equals(secondCouponPolicyId);
+    }
+
+    private static boolean isSameContent(
+        Content firstContent,
+        Content secondContent
+    ) {
+        if (firstContent == secondContent) {
+            return true;
+        }
+        if (firstContent == null || secondContent == null) {
+            return false;
+        }
+        Long firstContentId = firstContent.getContentId();
+        Long secondContentId = secondContent.getContentId();
+        return firstContentId != null && firstContentId.equals(secondContentId);
+    }
+
+    private static boolean isSameRegion(
+        Region firstRegion,
+        Region secondRegion
+    ) {
+        if (firstRegion == secondRegion) {
+            return true;
+        }
+        if (firstRegion == null || secondRegion == null) {
+            return false;
+        }
+        Long firstRegionId = firstRegion.getRegionId();
+        Long secondRegionId = secondRegion.getRegionId();
+        return firstRegionId != null && firstRegionId.equals(secondRegionId);
     }
 
     private static boolean isSameUser(
@@ -230,6 +329,9 @@ public class CouponIssuance {
     ) {
         if (firstUser == secondUser) {
             return true;
+        }
+        if (firstUser == null || secondUser == null) {
+            return false;
         }
         Long firstUserId = firstUser.getUserId();
         Long secondUserId = secondUser.getUserId();

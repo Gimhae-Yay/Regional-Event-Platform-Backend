@@ -67,10 +67,7 @@ public class Refund {
         Instant requestedAt
     ) {
         this.payment = requireNotNull(payment, "payment");
-        if (amount < 0) {
-            throw new IllegalArgumentException("amount must not be negative");
-        }
-        this.amount = amount;
+        this.amount = validateAmount(payment, amount);
         this.status = RefundStatus.REQUESTED;
         this.requestedAt = requireNotNull(requestedAt, "requestedAt");
     }
@@ -97,6 +94,17 @@ public class Refund {
 
     public Instant getCompletedAt() {
         return completedAt;
+    }
+
+    private static long validateAmount(
+        Payment payment,
+        long amount
+    ) {
+        long finalAmount = payment.getReservationPriceSnapshot().getFinalAmount();
+        if (amount != finalAmount) {
+            throw new IllegalArgumentException("amount must match payment reservationPriceSnapshot finalAmount");
+        }
+        return amount;
     }
 
     private static <T> T requireNotNull(

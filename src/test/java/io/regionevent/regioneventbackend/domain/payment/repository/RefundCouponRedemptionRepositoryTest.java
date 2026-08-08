@@ -106,7 +106,7 @@ class RefundCouponRedemptionRepositoryTest {
         ));
         Refund refund = refundRepository.saveAndFlush(new Refund(
             fixtures.payment(),
-            10_000,
+            fixtures.reservationPriceSnapshot().getFinalAmount(),
             CREATED_AT
         ));
         RefundAttempt attempt = refundAttemptRepository.saveAndFlush(new RefundAttempt(
@@ -152,7 +152,7 @@ class RefundCouponRedemptionRepositoryTest {
         RefundFixtures fixtures = createRefundFixtures();
         Refund refund = refundRepository.saveAndFlush(new Refund(
             fixtures.payment(),
-            10_000,
+            fixtures.reservationPriceSnapshot().getFinalAmount(),
             CREATED_AT
         ));
 
