@@ -142,6 +142,10 @@ public class ContentService {
         return contentRepository.existsByOperatorUserId(userId);
     }
 
+    public boolean hasUndeletedContentInRegion(Long regionId) {
+        return contentRepository.existsByRegionRegionIdAndDeletedAtIsNull(regionId);
+    }
+
     public Content findPublicContent(Long contentId) {
         validateRequiredId(contentId);
         return contentRepository.findPublicContentByContentId(
