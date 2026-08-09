@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -24,6 +25,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import io.regionevent.regioneventbackend.domain.region.service.CreateRegionResult;
 import io.regionevent.regioneventbackend.domain.region.service.CreateRegionUseCase;
 import io.regionevent.regioneventbackend.domain.region.service.CreateRegionUseCase.CreateRegionCommand;
+import io.regionevent.regioneventbackend.domain.region.service.UpdateRegionStatusResult;
+import io.regionevent.regioneventbackend.domain.region.service.UpdateRegionStatusUseCase;
+import io.regionevent.regioneventbackend.domain.region.service.UpdateRegionStatusUseCase.UpdateRegionStatusCommand;
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -38,6 +42,7 @@ class PlatformAdminRegionControllerWebMvcTest {
 
     private static final Long AUTHENTICATED_USER_ID = 101L;
     private static final Instant CREATED_AT = Instant.parse("2026-08-09T00:00:00Z");
+    private static final Instant UPDATED_AT = Instant.parse("2026-08-09T01:00:00Z");
 
     @Autowired
     private MockMvc mockMvc;
@@ -47,6 +52,9 @@ class PlatformAdminRegionControllerWebMvcTest {
 
     @MockitoBean
     private CreateRegionUseCase createRegionUseCase;
+
+    @MockitoBean
+    private UpdateRegionStatusUseCase updateRegionStatusUseCase;
 
     @MockitoBean
     private RefreshTokenStore refreshTokenStore;
@@ -120,6 +128,85 @@ class PlatformAdminRegionControllerWebMvcTest {
             .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
     }
 
+    @Test
+    void updateRegionStatus_유효한요청_상태변경응답을반환한다() throws Exception {
+        when(updateRegionStatusUseCase.update(eq(AUTHENTICATED_USER_ID), eq(11L), any(), any()))
+            .thenReturn(updateResult());
+
+        mockMvc.perform(authenticated(patch("/api/v1/platform-admin/regions/11/status"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(validStatusRequest()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.statusCode").value(200))
+            .andExpect(jsonPath("$.code").value("SUCCESS"))
+            .andExpect(jsonPath("$.message").value("지역 공개 여부 요청을 처리했습니다."))
+            .andExpect(jsonPath("$.data.regionId").value("11"))
+            .andExpect(jsonPath("$.data.regionCode").value("JEONJU"))
+            .andExpect(jsonPath("$.data.name").value("전주시"))
+            .andExpect(jsonPath("$.data.isPublic").value(true))
+            .andExpect(jsonPath("$.data.updatedAt").value("2026-08-09T01:00:00Z"));
+
+        verify(updateRegionStatusUseCase).update(
+            eq(AUTHENTICATED_USER_ID),
+            eq(11L),
+            eq(new UpdateRegionStatusCommand(
+                true,
+                "REGION_LAUNCH",
+                "OPS-2026-0805-REGION-03"
+            )),
+            any()
+        );
+    }
+
+    @Test
+    void updateRegionStatus_잘못된요청_유스케이스를호출하지않는다() throws Exception {
+        mockMvc.perform(authenticated(patch("/api/v1/platform-admin/regions/11/status"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "isPublic": true,
+                      "reasonCode": "REGION_LAUNCH",
+                      "evidenceReference": " "
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        verifyNoInteractions(updateRegionStatusUseCase);
+    }
+
+    @Test
+    void updateRegionStatus_잘못된지역식별자_계약된타입오류를반환한다() throws Exception {
+        mockMvc.perform(authenticated(patch("/api/v1/platform-admin/regions/invalid/status"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(validStatusRequest()))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+
+        verifyNoInteractions(updateRegionStatusUseCase);
+    }
+
+    @Test
+    void updateRegionStatus_콘텐츠존재충돌_계약된충돌오류를반환한다() throws Exception {
+        when(updateRegionStatusUseCase.update(eq(AUTHENTICATED_USER_ID), eq(11L), any(), any()))
+            .thenThrow(new BusinessException(ErrorCode.REGION_AVAILABILITY_CONFLICT));
+
+        mockMvc.perform(authenticated(patch("/api/v1/platform-admin/regions/11/status"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(privateStatusRequest()))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code").value("REGION_AVAILABILITY_CONFLICT"));
+    }
+
+    @Test
+    void updateRegionStatus_인증정보없음_미인증오류를반환한다() throws Exception {
+        mockMvc.perform(patch("/api/v1/platform-admin/regions/11/status")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(validStatusRequest()))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+    }
+
     private CreateRegionResult result() {
         return new CreateRegionResult(
             11L,
@@ -137,6 +224,36 @@ class PlatformAdminRegionControllerWebMvcTest {
               "regionCode": "  jeonju  ",
               "name": "  전주시  ",
               "reasonCode": "PILOT_REGION_ADDITION",
+              "evidenceReference": "OPS-2026-0805-REGION-03"
+            }
+        """;
+    }
+
+    private UpdateRegionStatusResult updateResult() {
+        return new UpdateRegionStatusResult(
+            11L,
+            "JEONJU",
+            "전주시",
+            true,
+            UPDATED_AT
+        );
+    }
+
+    private String validStatusRequest() {
+        return """
+            {
+              "isPublic": true,
+              "reasonCode": "  REGION_LAUNCH  ",
+              "evidenceReference": "  OPS-2026-0805-REGION-03  "
+            }
+            """;
+    }
+
+    private String privateStatusRequest() {
+        return """
+            {
+              "isPublic": false,
+              "reasonCode": "REGION_PREPARATION",
               "evidenceReference": "OPS-2026-0805-REGION-03"
             }
             """;
