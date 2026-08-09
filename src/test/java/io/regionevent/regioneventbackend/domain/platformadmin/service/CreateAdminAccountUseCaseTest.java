@@ -6,9 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
@@ -37,8 +35,7 @@ class CreateAdminAccountUseCaseTest {
             authorizationService,
             appUserService,
             assignmentService,
-            auditEventUseCase,
-            Clock.fixed(now, ZoneOffset.UTC)
+            auditEventUseCase
         );
         PlatformAdminAssignment actor = platformAdminAssignment(10L, 100L, PlatformAdminGrade.SUPER_ADMIN);
         AppUser user = mock(AppUser.class);
@@ -47,6 +44,7 @@ class CreateAdminAccountUseCaseTest {
         when(assignment.getPlatformAdminAssignmentId()).thenReturn(201L);
         when(assignment.getGrade()).thenReturn(PlatformAdminGrade.PLATFORM_ADMIN);
         when(assignment.getStatus()).thenReturn(PlatformAdminAssignmentStatus.ACTIVE);
+        when(assignment.getGrantedAt()).thenReturn(now);
         when(authorizationService.requireAuthorizedSuperAdmin(100L)).thenReturn(actor);
         when(appUserService.createActivePrivilegedUser(any(), any(), any(), any())).thenReturn(user);
         when(assignmentService.createActiveAssignment(user, PlatformAdminGrade.PLATFORM_ADMIN)).thenReturn(assignment);

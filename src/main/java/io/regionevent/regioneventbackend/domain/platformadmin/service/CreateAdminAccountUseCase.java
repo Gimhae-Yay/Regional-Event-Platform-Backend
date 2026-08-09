@@ -1,7 +1,6 @@
 package io.regionevent.regioneventbackend.domain.platformadmin.service;
 
 import java.nio.charset.StandardCharsets;
-import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -31,20 +30,16 @@ public class CreateAdminAccountUseCase {
     private final AppUserService appUserService;
     private final PlatformAdminAssignmentService platformAdminAssignmentService;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
-    private final Clock clock;
-
     public CreateAdminAccountUseCase(
         PlatformAdminAuthorizationService platformAdminAuthorizationService,
         AppUserService appUserService,
         PlatformAdminAssignmentService platformAdminAssignmentService,
-        RecordAuditEventUseCase recordAuditEventUseCase,
-        Clock clock
+        RecordAuditEventUseCase recordAuditEventUseCase
     ) {
         this.platformAdminAuthorizationService = platformAdminAuthorizationService;
         this.appUserService = appUserService;
         this.platformAdminAssignmentService = platformAdminAssignmentService;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
-        this.clock = clock;
     }
 
     @Transactional
@@ -63,7 +58,7 @@ public class CreateAdminAccountUseCase {
             command.phone()
         );
         PlatformAdminAssignment assignment = platformAdminAssignmentService.createActiveAssignment(user, grade);
-        Instant createdAt = clock.instant();
+        Instant createdAt = assignment.getGrantedAt();
         recordAuditEventUseCase.record(new AuditEventCommand(
             requestId,
             null,

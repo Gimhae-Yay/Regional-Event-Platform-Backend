@@ -46,8 +46,8 @@ public record AuditEventCommand(
             throw new IllegalArgumentException("result must not be null");
         }
         validateSuccessfulStateTransition(result, targetId, nextState);
+        reasonCode = normalizeOptionalText(reasonCode, MAX_REASON_CODE_LENGTH, "reasonCode");
         validateFailedAuditReasonCode(result, reasonCode);
-        validateOptionalCode(reasonCode, MAX_REASON_CODE_LENGTH, "reasonCode");
         reason = normalizeOptionalReason(reason);
         evidenceReference = normalizeOptionalEvidenceReference(evidenceReference);
         validatePrivilegedChangeEvidenceReference(targetType, evidenceReference);
@@ -164,15 +164,23 @@ public record AuditEventCommand(
     }
 
     private static String normalizeOptionalReason(String reason) {
-        if (reason == null) {
+        return normalizeOptionalText(reason, 500, "reason");
+    }
+
+    private static String normalizeOptionalText(
+        String value,
+        int maxLength,
+        String fieldName
+    ) {
+        if (value == null) {
             return null;
         }
 
-        String normalizedReason = reason.strip();
-        if (normalizedReason.isEmpty() || normalizedReason.length() > 500) {
-            throw new IllegalArgumentException("reason must be between 1 and 500 characters");
+        String normalizedValue = value.strip();
+        if (normalizedValue.isEmpty() || normalizedValue.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + " must be between 1 and " + maxLength + " characters");
         }
-        return normalizedReason;
+        return normalizedValue;
     }
 
     private static void validatePrivilegedChangeEvidenceReference(

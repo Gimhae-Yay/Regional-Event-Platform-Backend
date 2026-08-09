@@ -129,7 +129,7 @@ class CreateAdminAccountControllerWebMvcTest {
               "name": "관리자",
               "phone": "010-1234-5678",
               "grade": "PLATFORM_ADMIN",
-              "reasonCode": "ADMIN_ACCOUNT_CREATION",
+              "reasonCode": "account-creation/v1",
               "evidenceReference": "OPS-2026-0806-001"
             }
             """;

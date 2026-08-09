@@ -25,6 +25,7 @@ class AuditEventCommandTest {
             () -> new AuditEventCommandTest().실패_감사_이벤트는_대상과_상태_미확정을_허용한다(),
             () -> new AuditEventCommandTest().실패_감사_이벤트는_사유_코드가_없으면_생성할_수_없다(),
             () -> new AuditEventCommandTest().실패_감사_이벤트는_공백_사유_코드를_허용하지_않는다(),
+            () -> new AuditEventCommandTest().사유_코드는_형식_제한_없이_앞뒤_공백을_제거한다(),
             () -> new AuditEventCommandTest().증빙_참조는_앞뒤_공백을_제거해_보존한다(),
             () -> new AuditEventCommandTest().증빙_참조는_공백만_있거나_500자를_초과하면_거부한다(),
             () -> new AuditEventCommandTest().특권_변경_감사_이벤트는_증빙_참조가_필수다()
@@ -65,6 +66,18 @@ class AuditEventCommandTest {
         assertThatIllegalArgumentException().isThrownBy(
             () -> createCommand(AuditEventResult.FAILURE, null, null, null, " ")
         );
+    }
+
+    void 사유_코드는_형식_제한_없이_앞뒤_공백을_제거한다() {
+        AuditEventCommand command = createCommand(
+            AuditEventResult.SUCCESS,
+            101L,
+            null,
+            "PENDING",
+            "  account-creation/v1  "
+        );
+
+        assertThat(command.reasonCode()).isEqualTo("account-creation/v1");
     }
 
     void 증빙_참조는_앞뒤_공백을_제거해_보존한다() {
