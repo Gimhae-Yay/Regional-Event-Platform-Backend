@@ -105,6 +105,30 @@ class CouponIssueControllerIntegrationTest {
     }
 
     @Test
+    void 쿠폰_발급은_문자열_이외의_요청_필드를_거부한다() throws Exception {
+        mockMvc.perform(authenticated(post("/api/v1/coupon-policies/200/coupons"))
+                .contentType(APPLICATION_JSON)
+                .content("{\"issueSourceType\":0,\"sourceId\":300}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+
+        verify(couponIssueUseCase, never()).issue(any(), any(), any(), any());
+    }
+
+    @Test
+    void 쿠폰_발급은_지원하지_않는_문자열_발급_경로를_거부한다() throws Exception {
+        for (String issueSourceType : new String[]{"0", "OTHER"}) {
+            mockMvc.perform(authenticated(post("/api/v1/coupon-policies/200/coupons"))
+                    .contentType(APPLICATION_JSON)
+                    .content("{\"issueSourceType\":\"" + issueSourceType + "\",\"sourceId\":\"300\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        }
+
+        verify(couponIssueUseCase, never()).issue(any(), any(), any(), any());
+    }
+
+    @Test
     void 쿠폰_발급은_업무_오류를_계약한_상태로_반환한다() throws Exception {
         when(couponIssueUseCase.issue(
             eq(AUTHENTICATED_USER_ID),

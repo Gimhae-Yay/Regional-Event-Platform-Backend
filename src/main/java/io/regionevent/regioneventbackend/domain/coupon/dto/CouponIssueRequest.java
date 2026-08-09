@@ -1,12 +1,11 @@
 package io.regionevent.regioneventbackend.domain.coupon.dto;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 
-import io.regionevent.regioneventbackend.domain.coupon.entity.CouponIssuanceType;
+import tools.jackson.databind.annotation.JsonDeserialize;
 
 public record CouponIssueRequest(
-    @NotNull CouponIssuanceType issueSourceType,
-    @NotBlank String sourceId
+    @NotBlank @JsonDeserialize(using = StrictStringDeserializer.class) String issueSourceType,
+    @NotBlank @JsonDeserialize(using = StrictStringDeserializer.class) String sourceId
 ) {
 }

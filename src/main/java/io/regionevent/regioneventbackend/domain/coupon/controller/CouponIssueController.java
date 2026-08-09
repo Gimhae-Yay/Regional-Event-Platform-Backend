@@ -44,7 +44,7 @@ public class CouponIssueController {
         @Valid @RequestBody CouponIssueRequest request,
         @RequestAttribute(RequestIdFilter.REQUEST_ID_ATTRIBUTE) String requestId
     ) {
-        CouponIssuanceType issueSourceType = request.issueSourceType();
+        CouponIssuanceType issueSourceType = toIssueSourceType(request.issueSourceType());
         if (issueSourceType == CouponIssuanceType.MISSION_REWARD) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
@@ -67,6 +67,14 @@ public class CouponIssueController {
         try {
             return Long.valueOf(value);
         } catch (NumberFormatException exception) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, exception);
+        }
+    }
+
+    private CouponIssuanceType toIssueSourceType(String value) {
+        try {
+            return CouponIssuanceType.valueOf(value);
+        } catch (IllegalArgumentException exception) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, exception);
         }
     }

@@ -24,6 +24,11 @@ public class CouponIssuanceService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<CouponIssuance> findByIdentityHashForUpdate(String issuanceIdentityHash) {
+        return couponIssuanceRepository.findByIssuanceIdentityHashForUpdate(issuanceIdentityHash);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
     public CouponIssuance create(CouponIssuance couponIssuance) {
         return couponIssuanceRepository.saveAndFlush(couponIssuance);
     }

@@ -63,7 +63,6 @@ import io.regionevent.regioneventbackend.support.jpa.CleanH2Database;
 @DataJpaTest
 @Import({
     CouponIssueUseCase.class,
-    CouponIssueTransactionService.class,
     CouponIssueDuplicateReadService.class,
     CouponPolicyService.class,
     CouponService.class,

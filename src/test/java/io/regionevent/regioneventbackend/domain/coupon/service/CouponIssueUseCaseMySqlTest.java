@@ -83,7 +83,6 @@ import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({
     CouponIssueUseCase.class,
-    CouponIssueTransactionService.class,
     CouponIssueDuplicateReadService.class,
     CouponPolicyService.class,
     CouponService.class,
@@ -197,6 +196,30 @@ class CouponIssueUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
     }
 
     @Test
+    @Timeout(10)
+    void 발급_한도가_하나여도_같은_방문_동시_요청은_기존_쿠폰으로_수렴한다() throws Exception {
+        Fixture fixture = createFixture(1L);
+        CountDownLatch start = new CountDownLatch(1);
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<CouponIssueResult> first = executorService.submit(() -> issueAfterStart(fixture, start));
+            Future<CouponIssueResult> second = executorService.submit(() -> issueAfterStart(fixture, start));
+            start.countDown();
+
+            CouponIssueResult firstResult = first.get(5, TimeUnit.SECONDS);
+            CouponIssueResult secondResult = second.get(5, TimeUnit.SECONDS);
+
+            assertThat(firstResult.duplicate()).isNotEqualTo(secondResult.duplicate());
+            assertThat(firstResult.couponId()).isEqualTo(secondResult.couponId());
+        }
+
+        assertThat(couponRepository.count()).isOne();
+        assertThat(couponIssuanceRepository.count()).isOne();
+        assertThat(couponPolicyRepository.findById(fixture.couponPolicy().getCouponPolicyId()))
+            .hasValueSatisfying(policy -> assertThat(policy.getIssuedCount()).isOne());
+    }
+
+    @Test
     void 스탬프북_완료_보상은_본인에게만_발급한다() {
         StampbookFixture fixture = createStampbookFixture();
 
@@ -289,10 +312,18 @@ class CouponIssueUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
     }
 
     private Fixture createFixture() {
-        return createFixture(true);
+        return createFixture(true, 10L);
+    }
+
+    private Fixture createFixture(long totalIssueLimit) {
+        return createFixture(true, totalIssueLimit);
     }
 
     private Fixture createFixture(boolean published) {
+        return createFixture(published, 10L);
+    }
+
+    private Fixture createFixture(boolean published, long totalIssueLimit) {
         return inTransaction(() -> {
             String suffix = Long.toUnsignedString(System.nanoTime());
             Region region = regionRepository.saveAndFlush(new Region("R" + suffix, "김해시", true));
@@ -320,7 +351,7 @@ class CouponIssueUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
             ));
             CouponPolicy couponPolicy = couponPolicyRepository.saveAndFlush(new CouponPolicy(
                 content, region, "방문 쿠폰", null, CouponIssuanceType.VISIT,
-                3_000L, 10_000L, 30, NOW.minusSeconds(1), NOW.plusSeconds(3_600), 10L
+                3_000L, 10_000L, 30, NOW.minusSeconds(1), NOW.plusSeconds(3_600), totalIssueLimit
             ));
             if (published) {
                 couponPolicy.publish(NOW.minusSeconds(1));
