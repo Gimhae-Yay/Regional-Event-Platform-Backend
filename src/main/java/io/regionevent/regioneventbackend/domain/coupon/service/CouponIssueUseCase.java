@@ -12,16 +12,13 @@ public class CouponIssueUseCase {
 
     private final CouponIssueTransactionService couponIssueTransactionService;
     private final CouponIssueDuplicateReadService couponIssueDuplicateReadService;
-    private final CouponIssuanceHasher couponIssuanceHasher;
 
     public CouponIssueUseCase(
         CouponIssueTransactionService couponIssueTransactionService,
-        CouponIssueDuplicateReadService couponIssueDuplicateReadService,
-        CouponIssuanceHasher couponIssuanceHasher
+        CouponIssueDuplicateReadService couponIssueDuplicateReadService
     ) {
         this.couponIssueTransactionService = couponIssueTransactionService;
         this.couponIssueDuplicateReadService = couponIssueDuplicateReadService;
-        this.couponIssuanceHasher = couponIssuanceHasher;
     }
 
     public CouponIssueResult issue(
@@ -39,8 +36,8 @@ public class CouponIssueUseCase {
 
     private String identityHash(Long userId, Long couponPolicyId, CouponIssueCommand command) {
         return switch (command.issueSourceType()) {
-            case VISIT -> couponIssuanceHasher.hashVisitIssue(couponPolicyId, userId);
-            case STAMPBOOK_COMPLETION -> couponIssuanceHasher.hashStampbookCompletionIssue(
+            case VISIT -> CouponIssuanceHasher.hashVisitIssue(couponPolicyId, userId);
+            case STAMPBOOK_COMPLETION -> CouponIssuanceHasher.hashStampbookCompletionIssue(
                 couponPolicyId,
                 command.sourceId()
             );

@@ -26,11 +26,9 @@ class CouponIssueUseCaseTest {
     private final CouponIssueDuplicateReadService couponIssueDuplicateReadService = mock(
         CouponIssueDuplicateReadService.class
     );
-    private final CouponIssuanceHasher couponIssuanceHasher = mock(CouponIssuanceHasher.class);
     private final CouponIssueUseCase useCase = new CouponIssueUseCase(
         couponIssueTransactionService,
-        couponIssueDuplicateReadService,
-        couponIssuanceHasher
+        couponIssueDuplicateReadService
     );
 
     @Test
@@ -48,13 +46,13 @@ class CouponIssueUseCaseTest {
         CouponIssueResult duplicateResult = result(true);
         when(couponIssueTransactionService.issue(USER_ID, POLICY_ID, command))
             .thenThrow(new DataIntegrityViolationException("duplicate"));
-        when(couponIssuanceHasher.hashVisitIssue(POLICY_ID, USER_ID)).thenReturn("identity");
-        when(couponIssueDuplicateReadService.find("identity")).thenReturn(Optional.of(duplicateResult));
+        String identityHash = CouponIssuanceHasher.hashVisitIssue(POLICY_ID, USER_ID);
+        when(couponIssueDuplicateReadService.find(identityHash)).thenReturn(Optional.of(duplicateResult));
 
         CouponIssueResult result = useCase.issue(USER_ID, POLICY_ID, command);
 
         assertThat(result).isSameAs(duplicateResult);
-        verify(couponIssueDuplicateReadService).find("identity");
+        verify(couponIssueDuplicateReadService).find(identityHash);
     }
 
     private CouponIssueUseCase.CouponIssueCommand command() {

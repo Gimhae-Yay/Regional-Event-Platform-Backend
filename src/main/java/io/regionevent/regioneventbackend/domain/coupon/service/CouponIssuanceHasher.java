@@ -5,16 +5,16 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
-import org.springframework.stereotype.Component;
+public final class CouponIssuanceHasher {
 
-@Component
-public class CouponIssuanceHasher {
+    private CouponIssuanceHasher() {
+    }
 
-    public String hashVisitIssue(Long couponPolicyId, Long userId) {
+    public static String hashVisitIssue(Long couponPolicyId, Long userId) {
         return hash("couponPolicyId=%d;userId=%d;sourceType=VISIT".formatted(couponPolicyId, userId));
     }
 
-    public String hashStampbookCompletionIssue(Long couponPolicyId, Long stampbookRewardGrantId) {
+    public static String hashStampbookCompletionIssue(Long couponPolicyId, Long stampbookRewardGrantId) {
         return hash(
             "couponPolicyId=%d;stampbookRewardGrantId=%d;sourceType=STAMPBOOK_COMPLETION".formatted(
                 couponPolicyId,
@@ -23,7 +23,7 @@ public class CouponIssuanceHasher {
         );
     }
 
-    private String hash(String value) {
+    private static String hash(String value) {
         try {
             return HexFormat.of().formatHex(
                 MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8))

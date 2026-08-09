@@ -72,7 +72,6 @@ import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
     CouponService.class,
     CouponIssuanceService.class,
     CouponStatusHistoryService.class,
-    CouponIssuanceHasher.class,
     VisitService.class,
     StampbookRewardGrantService.class,
     AppUserService.class,

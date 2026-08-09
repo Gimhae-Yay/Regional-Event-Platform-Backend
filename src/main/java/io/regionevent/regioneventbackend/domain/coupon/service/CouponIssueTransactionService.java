@@ -33,7 +33,6 @@ public class CouponIssueTransactionService {
     private final CouponIssuanceService couponIssuanceService;
     private final CouponService couponService;
     private final CouponStatusHistoryService couponStatusHistoryService;
-    private final CouponIssuanceHasher couponIssuanceHasher;
     private final Clock clock;
 
     public CouponIssueTransactionService(
@@ -44,7 +43,6 @@ public class CouponIssueTransactionService {
         CouponIssuanceService couponIssuanceService,
         CouponService couponService,
         CouponStatusHistoryService couponStatusHistoryService,
-        CouponIssuanceHasher couponIssuanceHasher,
         Clock clock
     ) {
         this.appUserService = appUserService;
@@ -54,7 +52,6 @@ public class CouponIssueTransactionService {
         this.couponIssuanceService = couponIssuanceService;
         this.couponService = couponService;
         this.couponStatusHistoryService = couponStatusHistoryService;
-        this.couponIssuanceHasher = couponIssuanceHasher;
         this.clock = clock;
     }
 
@@ -116,7 +113,7 @@ public class CouponIssueTransactionService {
             throw new BusinessException(ErrorCode.COUPON_ISSUE_CONFLICT);
         }
         return new IssueSource(
-            couponIssuanceHasher.hashVisitIssue(couponPolicy.getCouponPolicyId(), user.getUserId()), visit, null
+            CouponIssuanceHasher.hashVisitIssue(couponPolicy.getCouponPolicyId(), user.getUserId()), visit, null
         );
     }
 
@@ -141,7 +138,7 @@ public class CouponIssueTransactionService {
             throw new BusinessException(ErrorCode.COUPON_ISSUE_CONFLICT);
         }
         return new IssueSource(
-            couponIssuanceHasher.hashStampbookCompletionIssue(
+            CouponIssuanceHasher.hashStampbookCompletionIssue(
                 couponPolicy.getCouponPolicyId(), grant.getStampbookRewardGrantId()
             ),
             null,
