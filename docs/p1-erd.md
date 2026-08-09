@@ -333,7 +333,8 @@ erDiagram
     coupon o|--o{ reservation_price_snapshot : applies
     capacity_hold ||--o{ payment : starts
     reservation_price_snapshot ||--o{ payment : fixes_price
-    payment_idempotency o|--o| payment : returns
+    payment_idempotency o|--o| payment : returns_paid_result
+    payment_idempotency o|--o| reservation : returns_zero_amount_result
     payment o|--o| reservation : confirms
     payment ||--o{ payment_verification : verifies
     payment o|--o{ payment_webhook : receives
@@ -392,7 +393,8 @@ erDiagram
         VARCHAR idempotency_key_hash "Idempotency-Key 해시; NOT NULL; UNIQUE(actor·operation 조합)"
         VARCHAR request_hash "정규화한 결제 생성 요청 해시; NOT NULL"
         VARCHAR status "처리 상태: PROCESSING|SUCCEEDED|FAILED; NOT NULL"
-        BIGINT payment_id FK "성공한 결제 생성 결과; 처리 중·실패면 NULL; UNIQUE"
+        BIGINT payment_id FK "양수 결제 생성 성공 결과; 0원·처리 중·실패면 NULL; UNIQUE"
+        BIGINT reservation_id FK "0원 예약 확정 성공 결과; 양수·처리 중·실패면 NULL; UNIQUE"
         TIMESTAMP completed_at "결제 생성 요청 완료 시각; 처리 중 NULL 가능"
         TIMESTAMP expires_at "결제 종결 뒤 24시간 만료; PENDING 결제면 NULL"
     }
@@ -671,7 +673,7 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 | --- | --- | --- |
 | `reservation_price_snapshot` | `reservation_price_snapshot_id`, `hold_id`, `coupon_id`, `base_amount`, `discount_amount`, `final_amount`, `currency`, `created_at` | 홀드 기준 가격·쿠폰·최종 금액의 불변 스냅샷 |
 
-`UNIQUE (hold_id)`이다. 같은 홀드의 결제 재시도는 같은 스냅샷을 사용한다. 쿠폰은 최대 하나만 연결할 수 있고, `base_amount - discount_amount = final_amount`, `final_amount >= 0`을 만족한다.
+`base_amount`는 홀드가 속한 콘텐츠의 `reservation_price`를 결제 생성 시 잠가 읽은 정수 KRW 값이다. `UNIQUE (hold_id)`이다. 같은 홀드의 결제 재시도는 같은 스냅샷을 사용한다. 쿠폰은 최대 하나만 연결할 수 있고, `base_amount - discount_amount = final_amount`, `final_amount >= 0`을 만족한다.
 
 쿠폰을 적용하면 결제 API와 같이 `content → content_session → capacity_hold → reservation_price_snapshot → payment → coupon`
 순서로 존재하는 행을 잠근 뒤 연결된 정책을 조회해
@@ -688,7 +690,7 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 | 테이블 | 핵심 열 | 책임 |
 | --- | --- | --- |
 | `payment` | `payment_id`, `hold_id`, `reservation_price_snapshot_id`, `reservation_id`, `order_id`, `portone_payment_id`, 상태·종결 시각 | 외부 결제가 필요한 내부 결제 시도 |
-| `payment_idempotency` | `payment_idempotency_id`, 요청자·연산·키·요청 해시, 처리 상태, `payment_id`, 만료 시각 | 결제 생성 요청의 동시 실행·재시도 결과 |
+| `payment_idempotency` | `payment_idempotency_id`, 요청자·연산·키·요청 해시, 처리 상태, `payment_id` 또는 `reservation_id`, 만료 시각 | 결제 생성 요청의 동시 실행·재시도 결과 |
 | `payment_verification` | `payment_verification_id`, `payment_id`, 검증 원인·관측 금액·통화·주문 ID·외부 상태·내부 판정·해시 | 서버 조회 결과와 판정 근거 |
 | `payment_webhook` | `payment_webhook_id`, `provider_event_id`, `payment_id`, 인증·처리 결과·원문 해시·수신 시각 | 웹훅 재전송 차단과 처리 감사 |
 | `payment_discrepancy` | `payment_discrepancy_id`, `payment_id`, 유형·상태·관측 시각 | 결제 불일치의 현재 조사 상태 |
@@ -700,9 +702,9 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 | PortOne 거래 | 값이 존재하면 `UNIQUE (portone_payment_id)` |
 | 홀드 연결 | 모든 결제는 `hold_id`와 가격 스냅샷을 반드시 가진다. 예약은 승인 전 nullable |
 | 진행 중 결제 | 홀드당 `PENDING` 결제는 최대 하나 |
-| 멱등 키 | `UNIQUE (actor_user_id, operation, idempotency_key_hash)`, `CHECK (operation = 'PAYMENT_CREATE')`, `UNIQUE (payment_id)`를 `payment_idempotency`에 둔다. `actor_user_id`는 FK가 아니며, 생성 시 잠근 활성 계정과 `capacity_hold.user_id`의 일치를 검증해 기록한다. |
-| 멱등 처리 | 먼저 멱등 기록을 점유하고 같은 키·같은 `request_hash`면 기존 결제 또는 진행 중 결과를 반환한다. 같은 키·다른 요청 해시는 충돌로 거부한다. 다른 키로 이미 `PENDING`인 홀드를 시작하려 하면 진행 중 오류를 반환한다. |
-| 보관 | 결제 종결 시 `expires_at = payment.finalized_at + 24시간`으로 정하고, 만료한 종결 기록만 정리한다. 결제 생성 전 실패는 `completed_at + 24시간`으로 정리한다. 탈퇴는 `app_user` 행만 파기하며, 이 비-FK 식별값·키 해시·요청 해시는 만료 전까지 그대로 두고 행 전체를 삭제한다. |
+| 멱등 키 | `UNIQUE (actor_user_id, operation, idempotency_key_hash)`, `CHECK (operation = 'PAYMENT_CREATE')`, `UNIQUE (payment_id)`, `UNIQUE (reservation_id)`를 `payment_idempotency`에 둔다. `SUCCEEDED`는 `payment_id` 또는 `reservation_id` 중 정확히 하나와 `completed_at`을 가지며, `PROCESSING`·`FAILED`는 두 결과 FK가 모두 NULL이다. `actor_user_id`는 FK가 아니며, 생성 시 잠근 활성 계정과 `capacity_hold.user_id`의 일치를 검증해 기록한다. |
+| 멱등 처리 | 먼저 멱등 기록을 점유하고 같은 키·같은 `request_hash`면 기존 양수 결제 또는 0원 확정 예약 결과를 반환한다. 같은 키·다른 요청 해시는 충돌로 거부한다. 다른 키로 이미 `PENDING`인 홀드를 시작하려 하면 진행 중 오류를 반환한다. |
+| 보관 | 양수 결제는 종결 시 `expires_at = payment.finalized_at + 24시간`, 0원 확정은 예약 확정 완료 시각부터 24시간으로 정하고, 만료한 종결 기록만 정리한다. 결제 생성 전 실패는 `completed_at + 24시간`으로 정리한다. 탈퇴는 `app_user` 행만 파기하며, 이 비-FK 식별값·키 해시·요청 해시는 만료 전까지 그대로 두고 행 전체를 삭제한다. |
 | 웹훅 | `UNIQUE (provider_event_id)`. 결제 연결을 찾지 못해도 수신·인증 결과는 남긴다. |
 
 결제 상태는 다음과 같다.
@@ -759,6 +761,7 @@ ACTIVE capacity_hold
 ACTIVE capacity_hold
   → reservation_price_snapshot(final_amount = 0) 생성
   → hold CONSUMED + reservation CONFIRMED + 적용 쿠폰이면 USED + coupon_redemption(CONFIRMED)
+  → payment_idempotency에 reservation_id 연결 후 24시간 보관
 ```
 
 P0 무료 예약 확정 흐름을 사용하며 `payment`·PortOne 호출·웹훅 행을 만들지 않는다.
@@ -819,7 +822,7 @@ PUBLISHED mission AND ends_at <= 현재 시각
 | 높음 | `coupon_redemption` | `UNIQUE (reservation_id)`, `UNIQUE (reservation_price_snapshot_id)`, 쿠폰당 `CONFIRMED` 행 하나를 위한 조건부 유일 제약, 상태·`reversed_at` CHECK, 스냅샷·쿠폰 복합 FK |
 | 높음 | `reservation_price_snapshot` | `UNIQUE (hold_id)`, `(reservation_price_snapshot_id, coupon_id)` 유일 복합 키, 금액 CHECK; 쿠폰 정책 콘텐츠·지역과 홀드 회차 콘텐츠·지역 일치 조건부 쓰기 |
 | 높음 | `payment` | `order_id`, `portone_payment_id` 유일; 홀드당 진행 중 결제 하나 |
-| 높음 | `payment_idempotency` | `(actor_user_id, operation, idempotency_key_hash)`, `payment_id` 유일; `actor_user_id`는 비-FK; `expires_at` 정리 인덱스 |
+| 높음 | `payment_idempotency` | `(actor_user_id, operation, idempotency_key_hash)`, `payment_id`·`reservation_id` 각각 유일, 성공 시 두 결과 FK 중 정확히 하나; `actor_user_id`는 비-FK; `expires_at` 정리 인덱스 |
 | 높음 | `payment_webhook` | `provider_event_id` 유일 |
 | 높음 | `refund_attempt` | `(refund_id, attempt_no)` 유일, `1 ≤ attempt_no ≤ 3`, `outcome_kind`별 응답 값 NULL/NOT NULL CHECK, `(outcome_kind, attempted_at)` 복구 후보 인덱스 |
 | 중간 | `coupon(status, expires_at)` | 만료 배치와 내 쿠폰 목록 |

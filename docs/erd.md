@@ -307,6 +307,7 @@ erDiagram
         string age_requirement
         text materials
         text cancellation_policy_text
+        bigint reservation_price "예약 기본 금액(KRW, 0 이상)"
         timestamp publish_at
         timestamp representative_image_assigned_at "nullable"
         timestamp deleted_at "nullable"
@@ -383,6 +384,7 @@ erDiagram
         string age_requirement
         text materials
         text cancellation_policy_text
+        bigint reservation_price "후보 예약 기본 금액(KRW, 0 이상)"
         timestamp publish_at "공개 전 수정본에서 필수, 공개 콘텐츠 수정본에서는 nullable"
         timestamp candidate_image_assigned_at "nullable"
         timestamp submitted_at

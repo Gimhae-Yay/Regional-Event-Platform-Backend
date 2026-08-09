@@ -56,6 +56,7 @@ Accept: application/json
   "ageRequirement": "초등학생 이상",
   "materials": "필기도구",
   "cancellationPolicyText": "회차 시작 전까지 예약 전체 취소가 가능합니다.",
+  "reservationPrice": 20000,
   "publishAt": "2026-08-20T09:00:00+09:00",
   "representativeImageObjectId": "301"
 }
@@ -98,6 +99,7 @@ Accept: application/json
 | `ageRequirement` | String | Y | 비어 있지 않은 연령 조건 |
 | `materials` | String | Y | 비어 있지 않은 준비물 |
 | `cancellationPolicyText` | String | Y | P0 무료 예약 취소 정책을 안내하는 비어 있지 않은 문구 |
+| `reservationPrice` | Integer | Y | 원본 콘텐츠 가격 변경 후보를 포함한 모든 회차의 예약 기본 금액이다. 정수 KRW이며 0 이상이다. |
 | `publishAt` | String | 조건부 | `APPROVED` 원본 또는 공개 전 수정 심사로 `PENDING`인 원본에는 필수인 새 공개 예정 시각이다. `PUBLISHED` 원본에서는 제공할 수 없으며 수정본에 `NULL`로 저장한다. |
 | `representativeImageObjectId` | String | N | 이미지 변경 시에만 제공하는 양의 10진 문자열인 이미 존재하는 `ACTIVE` 이미지 객체 식별자. 연결 전 대표 이미지 업로드 URL 발급 API의 연결 검증 조건을 모두 확인한다. |
 
@@ -168,5 +170,5 @@ Accept: application/json
 2. `PUBLISHED` 원본에는 `publishAt`을 제공할 수 없으며 수정본의 후보 `publish_at`은 `NULL`이다. 수정본 생성은 원본의 상태·내용·대표 이미지 연결과 공개 조회 결과를 변경하지 않는다.
 3. `APPROVED` 원본에는 `publishAt`이 필수다. 서버는 수정본 생성, 원본 `APPROVED → PENDING` 전이, `PENDING` 상태 로그와 성공 감사 기록을 하나의 트랜잭션으로 처리한다.
 4. `PENDING` 원본은 활성 수정본이 없고 직전 공개 전 수정 요청의 `APPROVED → PENDING` 이력이 있을 때만 재보완 후보를 만들 수 있으며, `publishAt`이 필수다. 최초 등록 후의 일반 `PENDING` 콘텐츠는 이 API로 수정본을 만들 수 없다.
-5. 서버는 모든 후보 필드를 검증해 수정본에 저장한다. `representativeImageObjectId`가 있으면 [대표 이미지 S3 업로드 URL 발급](upload-representative-image.md)의 연결 검증 조건을 모두 만족하는 이미지 객체만 후보 대표 이미지로 연결한다.
+5. 서버는 모든 후보 필드와 0 이상 정수 KRW `reservationPrice`를 검증해 수정본에 저장한다. 수정본 승인 전 원본 가격은 바뀌지 않고, 승인된 후보 가격만 원본에 반영한다. 이미 생성된 결제 가격 스냅샷은 가격 변경으로 수정하지 않는다. `representativeImageObjectId`가 있으면 [대표 이미지 S3 업로드 URL 발급](upload-representative-image.md)의 연결 검증 조건을 모두 만족하는 이미지 객체만 후보 대표 이미지로 연결한다.
 6. 이미지 객체 ID를 생략하면 현재 원본 대표 이미지 객체와 연결 시각을 수정본에 스냅샷으로 저장한다.
