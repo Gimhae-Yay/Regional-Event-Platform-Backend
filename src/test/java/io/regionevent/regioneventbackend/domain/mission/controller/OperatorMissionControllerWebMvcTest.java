@@ -1,6 +1,5 @@
 package io.regionevent.regioneventbackend.domain.mission.controller;
 
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
