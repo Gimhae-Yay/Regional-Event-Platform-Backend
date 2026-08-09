@@ -97,4 +97,8 @@ public class Region {
     public Instant getUpdatedAt() {
         return updatedAt;
     }
+
+    public void changeVisibility(boolean isPublic) {
+        this.isPublic = isPublic;
+    }
 }
