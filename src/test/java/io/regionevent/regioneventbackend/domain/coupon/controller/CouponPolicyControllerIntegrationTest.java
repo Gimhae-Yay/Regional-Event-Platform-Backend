@@ -128,6 +128,17 @@ class CouponPolicyControllerIntegrationTest {
     }
 
     @Test
+    void 쿠폰_정책_생성_필드타입이_다르면_타입오류를_응답한다() throws Exception {
+        mockMvc.perform(authenticated(post("/api/v1/operator/coupon-policies"))
+                .contentType(APPLICATION_JSON)
+                .content(VALID_REQUEST.replace("\"discountAmount\": 3000", "\"discountAmount\": {}")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+
+        verify(createCouponPolicyUseCase, never()).create(any(), any(), any());
+    }
+
+    @Test
     void 쿠폰_정책_생성_권한과_상태오류를_공통_오류로_응답한다() throws Exception {
         expectBusinessError(ErrorCode.FORBIDDEN, 403, "FORBIDDEN");
         expectBusinessError(ErrorCode.NOT_FOUND, 404, "NOT_FOUND");

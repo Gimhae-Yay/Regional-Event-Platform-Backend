@@ -8,12 +8,15 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.inOrder;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.service.ContentService;
@@ -25,6 +28,7 @@ import io.regionevent.regioneventbackend.domain.coupon.service.CouponPolicyServi
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
+import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService.AuthorizedOperator;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -40,11 +44,13 @@ class CreateCouponPolicyUseCaseTest {
     private final OperatorAuthorizationService operatorAuthorizationService = mock(
         OperatorAuthorizationService.class
     );
+    private final AppUserService appUserService = mock(AppUserService.class);
     private final ContentService contentService = mock(ContentService.class);
     private final CouponPolicyService couponPolicyService = mock(CouponPolicyService.class);
     private final Clock clock = mock(Clock.class);
     private final CreateCouponPolicyUseCase useCase = new CreateCouponPolicyUseCase(
         operatorAuthorizationService,
+        appUserService,
         contentService,
         couponPolicyService,
         clock
@@ -56,7 +62,8 @@ class CreateCouponPolicyUseCaseTest {
         Region region = mock(Region.class);
         CouponPolicy couponPolicy = couponPolicy(content, region);
         AuthorizedOperator operator = authorizedOperator();
-        when(operatorAuthorizationService.requireAuthorizedOperator(USER_ID)).thenReturn(operator);
+        when(appUserService.findActiveUserForUpdate(USER_ID)).thenReturn(Optional.of(operator.user()));
+        when(operatorAuthorizationService.requireAuthorizedOperatorForUpdate(USER_ID)).thenReturn(operator);
         when(contentService.findOwnedContentForRevisionCreation(CONTENT_ID, USER_ID, REGION_ID))
             .thenReturn(content);
         when(content.getRegion()).thenReturn(region);
@@ -74,6 +81,11 @@ class CreateCouponPolicyUseCaseTest {
         assertThat(result.couponPolicyId()).isEqualTo(300L);
         assertThat(result.status()).isEqualTo(CouponPolicyStatus.DRAFT);
         assertThat(result.createdAt()).isEqualTo(CREATED_AT);
+
+        InOrder lockOrder = inOrder(appUserService, operatorAuthorizationService, contentService);
+        lockOrder.verify(appUserService).findActiveUserForUpdate(USER_ID);
+        lockOrder.verify(operatorAuthorizationService).requireAuthorizedOperatorForUpdate(USER_ID);
+        lockOrder.verify(contentService).findOwnedContentForRevisionCreation(CONTENT_ID, USER_ID, REGION_ID);
     }
 
     @Test
@@ -96,7 +108,8 @@ class CreateCouponPolicyUseCaseTest {
                 assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.COUPON_POLICY_CONFLICT)
             );
 
-        verify(operatorAuthorizationService, never()).requireAuthorizedOperator(any());
+        verify(appUserService, never()).findActiveUserForUpdate(any());
+        verify(operatorAuthorizationService, never()).requireAuthorizedOperatorForUpdate(any());
         verify(couponPolicyService, never()).create(any());
     }
 
@@ -120,7 +133,21 @@ class CreateCouponPolicyUseCaseTest {
                 assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT)
             );
 
-        verify(operatorAuthorizationService, never()).requireAuthorizedOperator(any());
+        verify(appUserService, never()).findActiveUserForUpdate(any());
+        verify(operatorAuthorizationService, never()).requireAuthorizedOperatorForUpdate(any());
+        verify(couponPolicyService, never()).create(any());
+    }
+
+    @Test
+    void create_활성_회원이_아니면_권한오류를_반환한다() {
+        when(appUserService.findActiveUserForUpdate(USER_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> useCase.create(USER_ID, CONTENT_ID, request()))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN)
+            );
+
+        verify(operatorAuthorizationService, never()).requireAuthorizedOperatorForUpdate(any());
         verify(couponPolicyService, never()).create(any());
     }
 

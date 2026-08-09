@@ -13,6 +13,7 @@ import io.regionevent.regioneventbackend.domain.coupon.dto.CreateCouponPolicyReq
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponIssuanceType;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicy;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponPolicyService.CreateCouponPolicyCommand;
+import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService.AuthorizedOperator;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -27,17 +28,20 @@ public class CreateCouponPolicyUseCase {
     private static final int MAXIMUM_VALID_DAYS = 365;
 
     private final OperatorAuthorizationService operatorAuthorizationService;
+    private final AppUserService appUserService;
     private final ContentService contentService;
     private final CouponPolicyService couponPolicyService;
     private final Clock clock;
 
     public CreateCouponPolicyUseCase(
         OperatorAuthorizationService operatorAuthorizationService,
+        AppUserService appUserService,
         ContentService contentService,
         CouponPolicyService couponPolicyService,
         Clock clock
     ) {
         this.operatorAuthorizationService = operatorAuthorizationService;
+        this.appUserService = appUserService;
         this.contentService = contentService;
         this.couponPolicyService = couponPolicyService;
         this.clock = clock;
@@ -50,7 +54,9 @@ public class CreateCouponPolicyUseCase {
         CreateCouponPolicyRequest request
     ) {
         CouponIssuanceType issueSourceType = validateRequest(request);
-        AuthorizedOperator operator = operatorAuthorizationService.requireAuthorizedOperator(userId);
+        appUserService.findActiveUserForUpdate(userId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+        AuthorizedOperator operator = operatorAuthorizationService.requireAuthorizedOperatorForUpdate(userId);
         Content content = contentService.findOwnedContentForRevisionCreation(
             contentId,
             operator.user().getUserId(),
