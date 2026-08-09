@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 import jakarta.persistence.EntityManager;
@@ -289,7 +290,7 @@ class ImageObjectCleanupServiceTest {
     }
 
     private ImageObject saveUploadCandidate(String objectKey, Instant uploadExpiresAt) {
-        Region region = regionRepository.saveAndFlush(new Region("REGION-" + objectKey.hashCode(), "Region", true));
+        Region region = regionRepository.saveAndFlush(new Region(toRegionCode("REGION", objectKey), "Region", true));
         AppUser operator = saveUser("operator-" + objectKey.hashCode() + "@example.com");
         return imageObjectRepository.saveAndFlush(ImageObject.createUploadCandidate(
             objectKey,
@@ -315,7 +316,7 @@ class ImageObjectCleanupServiceTest {
     }
 
     private Content saveContent(String uniqueSuffix) {
-        Region region = regionRepository.saveAndFlush(new Region("CONTENT-" + uniqueSuffix, "Region", true));
+        Region region = regionRepository.saveAndFlush(new Region(toRegionCode("CONTENT", uniqueSuffix), "Region", true));
         AppUser operator = saveUser("content-operator-" + uniqueSuffix + "@example.com");
         return contentRepository.saveAndFlush(new Content(
             region,
@@ -333,6 +334,10 @@ class ImageObjectCleanupServiceTest {
             "Cancel before the event starts",
             NOW.plusSeconds(86_400)
         ));
+    }
+
+    private String toRegionCode(String prefix, String source) {
+        return prefix + "-" + Integer.toUnsignedString(source.hashCode(), 36).toUpperCase(Locale.ROOT);
     }
 
     private AppUser saveUser(String loginIdentifier) {

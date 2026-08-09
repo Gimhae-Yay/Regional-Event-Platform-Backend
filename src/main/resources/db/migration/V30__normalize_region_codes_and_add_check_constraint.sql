@@ -24,8 +24,7 @@ FROM (
 DROP TABLE region_code_normalization_validation;
 
 UPDATE region
-SET region_code = UPPER(region_code)
-WHERE region_code <> UPPER(region_code);
+SET region_code = UPPER(region_code);
 
 ALTER TABLE region
     ADD CONSTRAINT ck_region_region_code_normalized
