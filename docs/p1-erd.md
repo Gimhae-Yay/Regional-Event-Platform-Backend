@@ -764,7 +764,7 @@ ACTIVE capacity_hold
   → payment_idempotency에 reservation_id 연결 후 24시간 보관
 ```
 
-P0 무료 예약 확정 흐름을 사용하며 `payment`·PortOne 호출·웹훅 행을 만들지 않는다.
+P0 예약 확정의 콘텐츠·회차·홀드 잠금과 `ACTIVE → CONSUMED` 조건부 전이만 재사용하며, P0 공개 무료 확정 API는 호출하지 않는다. 따라서 가격 스냅샷의 `final_amount = 0`이면 원본 `content.reservation_price`가 양수여도 확정할 수 있고, `payment`·PortOne 호출·웹훅 행은 만들지 않는다.
 
 ### 7.3 결제 불일치와 환불 실패
 

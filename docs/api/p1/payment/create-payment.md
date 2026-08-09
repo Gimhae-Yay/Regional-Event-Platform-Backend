@@ -11,8 +11,8 @@
 
 활성 회원이 본인이 생성한 활성 `capacity_hold`에 대해 유료 결제를 생성한다. 최초 요청은 홀드에 연결된
 불변 `reservation_price_snapshot`을 만들고, 최종 금액이 양수이면 내부 결제 시도(`payment`, `PENDING`)를
-생성한다. 최종 금액이 0원이면 PortOne을 호출하지 않고 P0 무료 예약 확정 흐름으로 즉시 예약을 확정한다
-(`ADR-0069`). 이 API는 0원 예약만 즉시 확정하며, 양수 결제의 예약 확정은
+생성한다. 최종 금액이 0원이면 PortOne을 호출하지 않고 P0 예약 확정의 콘텐츠·회차·홀드 잠금과 조건부 전이만 재사용해 즉시 예약을 확정한다
+(`ADR-0069`). 이때 P0 공개 무료 확정 API의 `reservation_price = 0` 및 P1 연결 부재 조건은 적용하지 않는다. 이 API는 0원 예약만 즉시 확정하며, 양수 결제의 예약 확정은
 [PortOne 결제 웹훅 수신](receive-portone-webhook.md)에서만 처리한다.
 
 이 API는 영속 멱등 처리 대상이다. 동일한 `Idempotency-Key`와 동일한 요청 의미의 재시도는 최초 처리 결과를
@@ -209,7 +209,7 @@ Accept: application/json
 7. `couponId`를 제공하면 쿠폰이 인증 회원 소유이고 `AVAILABLE` 상태이며 만료 전이고, 정책 콘텐츠·지역이 홀드 회차와 일치하며 기본 금액이 최소 결제 금액 이상인지 검증한다. 검증에 성공하면 `AVAILABLE → RESERVED`와 상태 이력을 기록하고 스냅샷에 연결한다. 기존 스냅샷을 재사용하면 요청 `couponId`는 기존 적용 쿠폰과 `null` 여부까지 같아야 하며 한 스냅샷에는 쿠폰을 최대 하나만 연결한다.
 8. `final_amount = base_amount - discount_amount`를 계산한다.
 9. `final_amount > 0`이면 `order_id`를 발급하고 `payment(PENDING)`을 생성해 스냅샷·홀드에 연결한다. PortOne은 호출하지 않는다. 클라이언트는 응답의 `orderId`로 PortOne 결제 절차를 계속한다.
-10. `final_amount = 0`이면 `payment` 행을 만들지 않는다. P0 무료 예약 확정의 도메인 잠금·조건부 전이 규칙을 재사용하되 P0 공개 확정 API를 호출하지 않고, 홀드를 `CONSUMED`로 전환해 `CONFIRMED` 예약을 생성한다. 쿠폰을 적용했으면 같은 트랜잭션에서 `RESERVED → USED`, 상태 이력과 `coupon_redemption(CONFIRMED)`도 기록한다.
+10. `final_amount = 0`이면 `payment` 행을 만들지 않는다. P0 예약 확정의 `content → content_session → capacity_hold` 잠금과 `ACTIVE → CONSUMED` 조건부 전이만 재사용하되 P0 공개 확정 API를 호출하지 않는다. 잠근 가격 스냅샷의 `final_amount = 0`이면 `content.reservation_price`가 양수여도 `CONFIRMED` 예약을 생성할 수 있으며, P0 공개 API의 `reservation_price = 0` 및 P1 연결 부재 조건은 적용하지 않는다. 쿠폰을 적용했으면 같은 트랜잭션에서 `RESERVED → USED`, 상태 이력과 `coupon_redemption(CONFIRMED)`도 기록한다.
 11. 도메인 행 잠금과 조건부 전이는 `content → content_session → capacity_hold → reservation_price_snapshot → payment → coupon` 순서를 따른다. 생성할 행은 해당 위치에서 유일 제약을 사용하고, 존재하는 행은 잠금 획득 뒤 상태·소유권·유효 시각을 다시 검증한다. 없는 `payment` 또는 쿠폰을 적용하지 않는 경우 해당 단계를 건너뛴다.
 12. `payment_idempotency` 점유, 스냅샷 생성 또는 재사용, 쿠폰 상태 전이, 양수 결제 생성 또는 0원 예약 확정은 하나의 MySQL 트랜잭션에서 커밋한다. 멱등 키 점유는 도메인 행 잠금 순서에 포함하지 않는다.
 13. 이 API는 PortOne을 호출하지 않으며 외부 호출을 기다리는 동안 데이터베이스 잠금을 유지하지 않는다.
