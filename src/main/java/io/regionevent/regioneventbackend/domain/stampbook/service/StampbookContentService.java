@@ -27,4 +27,25 @@ public class StampbookContentService {
             .toList();
         stampbookContentRepository.saveAllAndFlush(stampbookContents);
     }
+
+    public List<Long> findContentIds(Long stampbookId) {
+        if (stampbookId == null || stampbookId <= 0) {
+            throw new IllegalArgumentException("stampbookId must be positive");
+        }
+        return List.copyOf(stampbookContentRepository.findContentIdsByStampbookId(stampbookId));
+    }
+
+    public void replace(
+        Stampbook stampbook,
+        List<Content> contents
+    ) {
+        if (stampbook == null || stampbook.getStampbookId() == null) {
+            throw new IllegalArgumentException("stampbook must be persisted");
+        }
+        if (contents == null || contents.isEmpty()) {
+            throw new IllegalArgumentException("contents must not be empty");
+        }
+        stampbookContentRepository.deleteByStampbookId(stampbook.getStampbookId());
+        connect(stampbook, contents);
+    }
 }

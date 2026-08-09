@@ -46,6 +46,8 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
 
     boolean existsByOperatorUserId(Long userId);
 
+    boolean existsByRegionRegionIdAndDeletedAtIsNull(Long regionId);
+
     @Query("""
         SELECT new io.regionevent.regioneventbackend.domain.content.repository.PublicContentListVerificationProjection(
             content.region.regionId,
