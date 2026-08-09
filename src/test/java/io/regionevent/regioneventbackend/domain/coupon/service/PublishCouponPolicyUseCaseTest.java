@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
@@ -150,6 +151,25 @@ class PublishCouponPolicyUseCaseTest {
             );
 
         verify(recordAuditEventUseCase, never()).record(any());
+    }
+
+    @Test
+    void publish_공개사유가_501자면_입력오류를_반환하고_상태와_감사이력을_변경하지_않는다() {
+        assertThatThrownBy(() -> useCase.publish(
+            USER_ID,
+            COUPON_POLICY_ID,
+            "가".repeat(501),
+            REQUEST_ID
+        )).isInstanceOfSatisfying(BusinessException.class, exception ->
+            assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT)
+        );
+
+        verifyNoInteractions(
+            appUserService,
+            operatorAuthorizationService,
+            couponPolicyService,
+            recordAuditEventUseCase
+        );
     }
 
     private void prepareAuthorizedOperator() {
