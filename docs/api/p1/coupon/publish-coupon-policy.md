@@ -52,7 +52,7 @@ Accept: application/json
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `reason` | String | Y | 공개 사유. 앞뒤 공백 제거 후 비어 있을 수 없다. |
+| `reason` | String | Y | 공개 사유. 앞뒤 공백 제거 후 1~500자여야 한다. |
 
 ### Response
 
