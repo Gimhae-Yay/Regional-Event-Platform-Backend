@@ -183,6 +183,35 @@ class EndStampbookUseCaseTest {
     }
 
     @Test
+    void end_대상콘텐츠소유자가아닌운영자가비공개스탬프북을종료하면권한오류를반환한다() {
+        Fixture fixture = createFixture();
+        AppUser otherOperator = createOperator(fixture.region(), "other-operator");
+        jdbcTemplate.update(
+            "UPDATE stampbook SET status = 'DRAFT', published_at = NULL WHERE stampbook_id = ?",
+            fixture.stampbook().getStampbookId()
+        );
+
+        assertThatThrownBy(() -> endStampbookUseCase.end(
+            otherOperator.getUserId(),
+            new EndStampbookCommand(fixture.stampbook().getStampbookId(), "행사 운영을 종료합니다."),
+            UUID.randomUUID()
+        )).isInstanceOf(BusinessException.class)
+            .extracting(exception -> ((BusinessException) exception).getErrorCode())
+            .isEqualTo(ErrorCode.FORBIDDEN);
+
+        assertThat(stampbookRepository.findById(fixture.stampbook().getStampbookId()))
+            .hasValueSatisfying(stampbook -> {
+                assertThat(stampbook.getStatus()).isEqualTo(StampbookStatus.DRAFT);
+                assertThat(stampbook.getPublishedAt()).isNull();
+                assertThat(stampbook.getEndedAt()).isNull();
+            });
+        assertThat(stampbookProgressRepository.findById(fixture.inProgress().getStampbookProgressId()))
+            .hasValueSatisfying(progress -> assertThat(progress.getStatus())
+                .isEqualTo(StampbookProgressStatus.IN_PROGRESS));
+        assertThat(auditEventRepository.count()).isZero();
+    }
+
+    @Test
     void end_PUBLISHED가아닌스탬프북이면상태충돌을반환하고진행을유지한다() {
         Fixture fixture = createFixture();
         jdbcTemplate.update(

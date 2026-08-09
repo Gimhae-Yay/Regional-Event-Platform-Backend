@@ -60,8 +60,8 @@ public class EndStampbookUseCase {
         AuthorizedOperator operator = operatorAuthorizationService.requireAuthorizedOperator(userId);
         Stampbook stampbook = stampbookService.findForUpdate(command.stampbookId());
         validateRegionScope(operator, stampbook);
-        stampbookService.validatePublished(stampbook);
         validateTargetContents(operator, stampbook);
+        stampbookService.validatePublished(stampbook);
 
         Instant endedAt = clock.instant();
         stampbook.end(endedAt);
