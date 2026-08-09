@@ -1,0 +1,19 @@
+ALTER TABLE audit_event
+    ADD COLUMN evidence_reference VARCHAR(500);
+
+ALTER TABLE audit_event
+    DROP CONSTRAINT ck_audit_event_target_type;
+
+ALTER TABLE audit_event
+    ADD CONSTRAINT ck_audit_event_target_type
+        CHECK (
+            target_type REGEXP '^(REGION|OPERATOR_APPLICATION|CONTENT|CONTENT_SESSION|CAPACITY_HOLD|RESERVATION|VISIT|REVIEW|PLATFORM_ADMIN_ASSIGNMENT|USER_ROLE_ASSIGNMENT|STAMPBOOK|MISSION|COUPON_POLICY|COUPON|RESERVATION_PRICE_SNAPSHOT|PAYMENT|REFUND|PAYMENT_DISCREPANCY)$'
+        );
+
+ALTER TABLE audit_event
+    ADD CONSTRAINT ck_audit_event_privileged_change_evidence_reference
+        CHECK (
+            (target_type <> 'PLATFORM_ADMIN_ASSIGNMENT'
+                AND target_type <> 'USER_ROLE_ASSIGNMENT')
+            OR evidence_reference IS NOT NULL
+        );
