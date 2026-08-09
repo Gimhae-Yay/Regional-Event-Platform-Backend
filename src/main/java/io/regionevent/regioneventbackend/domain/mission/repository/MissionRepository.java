@@ -17,6 +17,17 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
     @EntityGraph(attributePaths = {"region", "rewardCouponPolicy"})
     Optional<Mission> findByMissionId(Long missionId);
 
+    @Query("""
+        SELECT DISTINCT mission
+        FROM Mission mission
+        JOIN FETCH mission.region region
+        JOIN FETCH mission.rewardCouponPolicy rewardCouponPolicy
+        LEFT JOIN FETCH mission.targetContents targetContent
+        LEFT JOIN FETCH targetContent.content content
+        WHERE mission.missionId = :missionId
+        """)
+    Optional<Mission> findOperatorMissionDetailByMissionId(@Param("missionId") Long missionId);
+
     @EntityGraph(attributePaths = {"region", "rewardCouponPolicy"})
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""

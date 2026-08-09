@@ -120,6 +120,25 @@ public class Stampbook {
         return endedAt;
     }
 
+    public void updateRewardCouponPolicy(CouponPolicy rewardCouponPolicy) {
+        if (status != StampbookStatus.DRAFT) {
+            throw new IllegalStateException("only DRAFT stampbook can update reward coupon policy");
+        }
+        CouponPolicy validatedRewardCouponPolicy = requireNotNull(
+            rewardCouponPolicy,
+            "rewardCouponPolicy"
+        );
+        validateRewardCouponPolicy(region, validatedRewardCouponPolicy);
+        this.rewardCouponPolicy = validatedRewardCouponPolicy;
+    }
+
+    public void requestPublication() {
+        if (status != StampbookStatus.DRAFT) {
+            throw new IllegalStateException("only DRAFT stampbook can request publication");
+        }
+        status = StampbookStatus.PENDING_REVIEW;
+    }
+
     private static void validateRewardCouponPolicy(
         Region region,
         CouponPolicy rewardCouponPolicy
