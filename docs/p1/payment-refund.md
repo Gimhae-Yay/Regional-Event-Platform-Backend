@@ -9,7 +9,7 @@
 | 데이터 모델 | [P0 ERD](../erd.md), [P1 ERD](../p1-erd.md) |
 
 > 이 문서는 P1 유료 결제·환불 정책의 단일 기준이다. P1은 PortOne V2를 서버 재검증하고,
-> P0 `capacity_hold`와 불변 가격 스냅샷을 재사용한다. API·SDK 세부 버전과 웹훅 인증 파라미터는 공급자 계약으로 확정한다.
+> P0 `capacity_hold`와 불변 가격 스냅샷을 재사용한다. PortOne 세부 연동은 아래 공급자 계약을 따른다.
 
 ## 1. 범위
 
@@ -94,7 +94,9 @@
   예약 상태와 결제 상태는 분리해 관리한다. 결제 상태는 `PENDING`, `APPROVED`, `DECLINED`, `CANCELLED`, `EXPIRED`, `DISCREPANT`이고, 환불은 별도 상태로 관리한다.
   양수 결제는 서버 검증 승인 때만 홀드 소비·`reservation(CONFIRMED)` 생성·결제 `APPROVED` 전이와 적용 쿠폰 사용을 같은 트랜잭션으로 처리한다. 취소 뒤 늦은 외부 성공은 예약을 되살리지 않고 `DISCREPANT`로 기록하며, 원본 외부 응답 해시와 내부 판단 결과를 함께 추적한다.
 - `PAY-04`:
-  웹훅은 PortOne V2 연동 계약의 인증·검증 절차를 통과한 요청만 처리한다.
+  웹훅은 PortOne V2 웹훅 버전 `2024-04-25`의 Standard Webhooks HMAC-SHA256 인증·검증 절차를 통과한 요청만 처리한다.
+  원문 본문과 `webhook-id`, `webhook-timestamp`, `webhook-signature`을 검증하고 `webhook-id`를 외부 이벤트 식별자로 사용한다.
+  결제 수신 경로는 웹훅 명세에 열거한 10개 `Transaction` 이벤트만 결제·예약·쿠폰 처리 대상으로 삼는다. 정상 `BillingKey.*`와 이후 추가되는 모든 미지원 `type`(`Transaction.*` 포함)은 공통 JSON 검증 뒤 결제 필드를 요구하거나 결제 이력을 만들지 않고 `200 OK`로 끝낸다.
   같은 외부 이벤트의 재전송과 서로 다른 웹훅 이벤트의 순서 역전·동시 도착은 하나의 내부 처리 결과로 수렴해야 한다. 양수 결제 승인·예약·쿠폰 사용 확정의 HTTP 진입점은 웹훅 하나만 둔다.
 - `PAY-05`:
   취소·환불 요청은 본인 예약과 회차 시작 전 조건을 검증한다. 환불 금액은 승인 결제의 최종 금액 전체이며 부분 환불은 지원하지 않는다.
@@ -113,14 +115,30 @@
   1분이 지난 `PENDING` 시도는 PortOne 재조회로 같은 시도 행을 확정하며, 복구 확인은 재시도 횟수를 추가로 소비하지 않는다.
   P1은 총 3회, 자동 재시도 금지, 외부 호출 최대 30초, 1분 주기 `PENDING` 복구를 적용한다.
 
-## 4. 구현 전 잔여 확정 항목
+## 4. PortOne V2 공급자 계약
+
+| 항목 | 확정 계약 |
+| --- | --- |
+| 웹훅 형식 | 결제모듈 V2 웹훅 버전 `2024-04-25`, `application/json` 본문을 사용한다. 테스트와 실연동 URL·웹훅 시크릿은 PortOne 콘솔에서 서로 분리해 설정한다. |
+| 웹훅 식별·본문 | 재전송 멱등 식별자는 본문의 값이 아닌 `webhook-id` 헤더다. 모든 본문은 `type`, 이벤트 발생 시각 `timestamp`, `data.storeId`를 가진다. 웹훅 명세에 열거한 10개 결제 이벤트만 `data.paymentId`, `data.transactionId`와 취소 이벤트의 선택 `data.cancellationId`를 가진다. `BillingKey.*`는 별도 `data.billingKey` 형식이고, 이후 추가되는 미지원 `type`도 결제 필드를 보장하지 않으므로 이 결제 경로에서는 공통 검증 뒤 `200 OK`로 끝낸다. |
+| 서명 검증 | `webhook-id.webhook-timestamp.원문_본문`을 Standard Webhooks의 `v1` HMAC-SHA256 서명으로 검증한다. `webhook-signature`의 공백 구분 후보 중 하나가 일치해야 하고, `webhook-timestamp`는 현재 시각의 ±5분 안이어야 한다. |
+| 서버 SDK | JVM 구현은 `io.portone:server-sdk:0.22.0`의 `WebhookVerifier`를 사용한다. 검증기는 PortOne API Secret이 아닌 웹훅 시크릿을 받으며 HMAC-SHA256 대칭 서명만 지원한다. |
+| PortOne 거래 재조회 | V2 API의 `GET /payments/{paymentId}`를 V2 API Secret으로 조회한다. `Authorization` 헤더는 `PortOne` 접두사 뒤에 배포 환경에서 주입한 API Secret 값을 붙인다. |
+| 환경별 비밀값 | 배포 환경의 비밀 저장소에서 테스트·실연동별 `PORTONE_API_SECRET`과 `PORTONE_WEBHOOK_SECRET`을 주입한다. API Secret은 거래 조회에만, 웹훅 시크릿은 서명 검증에만 사용한다. DB·문서·로그·감사 이력에는 원문이나 값을 저장하지 않는다. |
+| 시크릿 교체 | PortOne 콘솔에서 환경별 두 번째 웹훅 시크릿을 발급하고 배포 환경의 `PORTONE_WEBHOOK_SECRET`을 새 값으로 교체한 뒤 기존 시크릿을 만료한다. PortOne이 회전 기간에 복수 `v1` 서명을 보내므로 검증기는 새 시크릿으로 하나라도 일치하는 값을 수용한다. |
+| 재전송 | PortOne은 비-`2xx`, 타임아웃, 연결 실패를 실패로 보고 최초 전송 뒤 최대 5회 재전송한다. 재전송 기본 지연은 1분·4분·16분·64분·256분이며 Full Jitter가 적용되고, 마지막 재전송 실패 뒤 전송을 종료한다. 정상 형식·서명의 웹훅에서 일시적 PortOne 거래 조회 실패에만 `500`을 반환하고, 조회 성공 또는 조회 불필요한 경우에는 `200`을 반환한다. |
+
+계약의 외부 기준은 [PortOne V2 웹훅 연동 가이드](https://developers.portone.io/opi/ko/integration/webhook/readme-v2?v=v2),
+[PortOne V2 REST API](https://developers.portone.io/api/rest-v2?v=v2),
+[PortOne JVM Server SDK 0.22.0](https://javadoc.io/static/io.portone/server-sdk/0.22.0/-port-one%20-server%20-s-d-k%20for%20-j-v-m/io.portone.sdk.server.webhook/-webhook-verifier/index.html)을 따른다.
+
+## 5. 구현 전 잔여 확정 항목
 
 | 항목 | 확정할 내용 |
 | --- | --- |
-| PortOne 세부 연동 | V2 API·SDK의 구체 버전, 인증 정보 보관 방식, 웹훅 인증·재전송 파라미터 |
 | API 계약 | 결제 생성·승인 확인·웹훅·환불 API의 요청·응답, 오류 코드와 멱등 충돌 응답 |
 
-## 5. 데이터 요구사항
+## 6. 데이터 요구사항
 
 | 데이터 | 핵심 식별·연결 정보 | 용도 |
 | --- | --- | --- |
@@ -135,7 +153,7 @@
 
 상세 엔티티, 컬럼, 관계, 고유 제약과 인덱스는 [P1 ERD](../p1-erd.md)에 확정하고, P0 재사용 테이블은 [P0 ERD](../erd.md)를 따른다.
 
-## 6. 완료 기준
+## 7. 완료 기준
 
 - [P1-AC-07 서버 승인 확인·결제 불일치 기록](../p1-spec.md#9-테스트-및-출시-수용-기준)
 - [P1-AC-08 웹훅 재전송·경합 멱등성](../p1-spec.md#9-테스트-및-출시-수용-기준)
