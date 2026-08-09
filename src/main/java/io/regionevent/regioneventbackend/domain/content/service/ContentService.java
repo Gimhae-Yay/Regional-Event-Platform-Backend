@@ -2,6 +2,7 @@ package io.regionevent.regioneventbackend.domain.content.service;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -76,6 +77,22 @@ public class ContentService {
         return content;
     }
 
+    public List<Content> findOwnedContentsForStampbookCreation(
+        List<Long> contentIds,
+        Long operatorUserId,
+        Long regionId
+    ) {
+        if (contentIds == null || contentIds.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+
+        List<Content> contents = new ArrayList<>(contentIds.size());
+        for (Long contentId : contentIds) {
+            contents.add(findOwnedContentForRevisionCreation(contentId, operatorUserId, regionId));
+        }
+        return List.copyOf(contents);
+    }
+
     public Content markPrePublicationRevisionPending(Content content) {
         if (content.getStatus() != ContentStatus.APPROVED) {
             throw new BusinessException(ErrorCode.CONTENT_STATE_CONFLICT);
@@ -140,6 +157,10 @@ public class ContentService {
 
     public boolean hasOwnedContent(Long userId) {
         return contentRepository.existsByOperatorUserId(userId);
+    }
+
+    public boolean hasUndeletedContentInRegion(Long regionId) {
+        return contentRepository.existsByRegionRegionIdAndDeletedAtIsNull(regionId);
     }
 
     public Content findPublicContent(Long contentId) {

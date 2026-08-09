@@ -1,5 +1,7 @@
 package io.regionevent.regioneventbackend.domain.user.service;
 
+import java.util.Optional;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,20 +28,38 @@ public class OperatorAuthorizationService {
 
     @Transactional(readOnly = true)
     public AuthorizedOperator requireAuthorizedOperator(Long userId) {
-        UserRoleAssignment assignment = userRoleAssignmentRepository
+        return toAuthorizedOperator(userRoleAssignmentRepository
             .findByAppUserUserIdAndRoleAndStatusAndAppUserStatus(
                 userId,
                 UserRole.OPERATOR,
                 UserRoleAssignmentStatus.ACTIVE,
                 AppUserStatus.ACTIVE
-            )
-            .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+            ));
+    }
 
-        Region assignedRegion = assignment.getRegion();
+    @Transactional
+    public AuthorizedOperator requireAuthorizedOperatorForUpdate(Long userId) {
+        return toAuthorizedOperator(userRoleAssignmentRepository
+            .findByAppUserUserIdAndRoleAndStatusAndAppUserStatusForUpdate(
+                userId,
+                UserRole.OPERATOR,
+                UserRoleAssignmentStatus.ACTIVE,
+                AppUserStatus.ACTIVE
+            ));
+    }
+
+    private AuthorizedOperator toAuthorizedOperator(Optional<UserRoleAssignment> assignment) {
+        UserRoleAssignment authorizedAssignment = assignment
+            .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+        Region assignedRegion = authorizedAssignment.getRegion();
         if (assignedRegion == null || assignedRegion.getRegionId() == null) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        return new AuthorizedOperator(assignment.getAppUser(), assignedRegion, assignment);
+        return new AuthorizedOperator(
+            authorizedAssignment.getAppUser(),
+            assignedRegion,
+            authorizedAssignment
+        );
     }
 
     @Transactional(readOnly = true)

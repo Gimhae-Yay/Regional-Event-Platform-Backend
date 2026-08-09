@@ -3,6 +3,7 @@ package io.regionevent.regioneventbackend.domain.user.service;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 
@@ -33,6 +34,40 @@ public class UserRoleAssignmentService {
 
     public void assignOperator(AppUser user, Region region) {
         userRoleAssignmentRepository.save(new UserRoleAssignment(user, UserRole.OPERATOR, region));
+    }
+
+    public UserRoleAssignment assignRegionAdmin(
+        AppUser user,
+        Region region,
+        Instant grantedAt
+    ) {
+        return userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(
+            user,
+            UserRole.REGION_ADMIN,
+            region,
+            grantedAt
+        ));
+    }
+
+    public Optional<UserRoleAssignment> findActiveRegionAdminForUpdate(Long userId) {
+        return userRoleAssignmentRepository.findActiveRoleAssignmentForUpdate(
+            userId,
+            UserRole.REGION_ADMIN,
+            UserRoleAssignmentStatus.ACTIVE
+        );
+    }
+
+    public UserRoleAssignment revoke(
+        UserRoleAssignment assignment,
+        Instant revokedAt,
+        String revokeReasonCode
+    ) {
+        assignment.revoke(revokedAt, revokeReasonCode);
+        return userRoleAssignmentRepository.saveAndFlush(assignment);
+    }
+
+    public long countActiveRegionAdmins(Long regionId) {
+        return userRoleAssignmentRepository.countActiveRegionAdminsByRegionRegionId(regionId);
     }
 
     public List<UserRole> findRolesByUserId(Long userId) {
