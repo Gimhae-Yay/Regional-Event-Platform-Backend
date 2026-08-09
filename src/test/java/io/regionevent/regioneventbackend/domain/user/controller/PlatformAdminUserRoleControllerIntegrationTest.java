@@ -75,6 +75,7 @@ class PlatformAdminUserRoleControllerIntegrationTest {
     @Test
     void 임명_무변경_재배정_회수는_역할_이력과_성공_감사를_함께_기록한다() throws Exception {
         Fixture fixture = createFixture();
+        long auditEventCountBeforeChange = auditEventRepository.count();
 
         changeRole(
             fixture.actor(),
@@ -111,7 +112,7 @@ class PlatformAdminUserRoleControllerIntegrationTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.roleAssignmentId").value(firstAssignment.getRoleAssignmentId().toString()));
 
-        assertThat(auditEventRepository.count()).isEqualTo(1);
+        assertThat(auditEventRepository.count()).isEqualTo(auditEventCountBeforeChange + 1);
 
         changeRole(
             fixture.actor(),
@@ -180,6 +181,7 @@ class PlatformAdminUserRoleControllerIntegrationTest {
     void 고권한_배정이_없는_사용자는_지역관리자_역할을_변경할_수_없다() throws Exception {
         Fixture fixture = createFixture();
         AppUser ordinaryUser = saveOrdinaryUser("ordinary");
+        long auditEventCountBeforeChange = auditEventRepository.count();
 
         changeRole(
             ordinaryUser,
@@ -192,7 +194,7 @@ class PlatformAdminUserRoleControllerIntegrationTest {
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.code").value("FORBIDDEN"));
 
-        assertThat(auditEventRepository.count()).isZero();
+        assertThat(auditEventRepository.count()).isEqualTo(auditEventCountBeforeChange);
     }
 
     private ResultActions changeRole(
