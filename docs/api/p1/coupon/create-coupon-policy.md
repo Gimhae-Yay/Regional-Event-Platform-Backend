@@ -27,8 +27,7 @@ Accept: application/json
   "validDaysAfterIssue": 30,
   "issueStartsAt": "2026-08-01T00:00:00Z",
   "issueEndsAt": "2026-08-31T14:59:59Z",
-  "totalIssueLimit": 1000,
-  "reason": "8월 재방문 혜택 운영"
+  "totalIssueLimit": 1000
 }
 ```
 
@@ -66,7 +65,6 @@ Accept: application/json
 | `issueStartsAt` | String | Y | 발급 가능 시작 시각. UTC ISO 8601 일시 |
 | `issueEndsAt` | String | Y | 발급 가능 종료 시각. UTC ISO 8601 일시. `issueStartsAt`보다 뒤여야 한다. |
 | `totalIssueLimit` | Number or null | N | 정책 전체 발급 한도. `null`이면 한도를 두지 않는다. 값이 있으면 1 이상 정수 |
-| `reason` | String | Y | 생성 사유. 앞뒤 공백 제거 후 비어 있을 수 없다. |
 
 ### Response
 
@@ -151,4 +149,3 @@ Accept: application/json
 2. 정액 할인 금액은 1 이상, 최소 결제 금액은 0 이상이며 발급 후 유효 일수는 1 이상 365 이하여야 한다.
 3. `minimumPaymentAmount`는 `discountAmount`보다 크거나 같아야 한다.
 4. 생성 성공 시 정책 상태는 `DRAFT`로 기록한다.
-5. 생성 이력에는 처리자, 대상 콘텐츠·지역, 생성 사유와 생성 시각을 기록한다.
