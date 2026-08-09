@@ -54,6 +54,7 @@ Accept: application/json
   "ageRequirement": "초등학생 이상",
   "materials": "필기도구",
   "cancellationPolicyText": "회차 시작 전까지 예약 전체 취소가 가능합니다.",
+  "reservationPrice": 20000,
   "publishAt": "2026-08-15T09:00:00+09:00",
   "representativeImageObjectId": "301"
 }
@@ -90,6 +91,7 @@ Accept: application/json
   "ageRequirement": "초등학생 이상",
   "materials": "필기도구",
   "cancellationPolicyText": "회차 시작 전까지 예약 전체 취소가 가능합니다.",
+  "reservationPrice": 20000,
   "publishAt": "2026-08-15T09:00:00+09:00",
   "representativeImageObjectId": "301"
 }
@@ -108,6 +110,7 @@ Accept: application/json
 | `ageRequirement` | String | Y | 비어 있지 않은 연령 조건 |
 | `materials` | String | Y | 비어 있지 않은 준비물 |
 | `cancellationPolicyText` | String | Y | P0 무료 예약 취소 정책을 안내하는 비어 있지 않은 문구 |
+| `reservationPrice` | Integer | Y | 콘텐츠의 모든 회차에 적용할 예약 기본 금액. 정수 KRW이며 `0` 이상 |
 | `publishAt` | String | Y | API 공통 규칙의 ISO 8601 `+09:00` 오프셋 일시인 공개 예정 시각 |
 | `representativeImageObjectId` | String | N | 교체할 경우에만 제공하는 양의 10진 문자열인 이미 존재하는 `ACTIVE` 이미지 객체 식별자. 연결 전 대표 이미지 업로드 URL 발급 API의 연결 검증 조건을 모두 확인한다. |
 
@@ -147,9 +150,9 @@ Accept: application/json
 
 | HTTP Status | Code | Description |
 | --- | --- | --- |
-| `400` | `INVALID_INPUT` | 식별자 또는 요청 필드가 누락·공백이거나 시각 형식이 올바르지 않거나, 지정한 대표 이미지 객체 연결 검증에 실패한다. 콘텐츠를 변경하지 않는다. |
+| `400` | `INVALID_INPUT` | 식별자 또는 요청 필드가 누락·공백이거나, `reservationPrice`가 0 미만이거나, 시각 형식이 올바르지 않거나, 지정한 대표 이미지 객체 연결 검증에 실패한다. 콘텐츠를 변경하지 않는다. |
 | `400` | `INVALID_JSON` | 요청 본문을 역직렬화할 수 없다. 콘텐츠를 변경하지 않는다. |
-| `400` | `INVALID_TYPE` | `representativeImageObjectId`가 `null`이 아닌 숫자·객체·배열 등 JSON 문자열이 아니다. 콘텐츠를 변경하지 않는다. |
+| `400` | `INVALID_TYPE` | `reservationPrice`가 JSON 정수가 아니거나, `representativeImageObjectId`가 `null`이 아닌 숫자·객체·배열 등 JSON 문자열이 아니다. 콘텐츠를 변경하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 콘텐츠를 변경하지 않는다. |
 | `403` | `FORBIDDEN` | 운영자 역할, 담당 지역 또는 콘텐츠 소유 관계가 없다. 콘텐츠를 변경하지 않는다. |
 | `404` | `NOT_FOUND` | 콘텐츠가 없거나 소프트 삭제됐다. 콘텐츠를 변경하지 않는다. |
@@ -173,6 +176,6 @@ Accept: application/json
 3. `contentId`, 소유자, 지역과 콘텐츠 유형은 이 API로 변경하지 않는다.
 4. `representativeImageObjectId`를 제공하면 서버는 [대표 이미지 S3 업로드 URL 발급](upload-representative-image.md)의 연결 검증 조건을 모두 만족하는 이미지 객체일 때만 현재 대표 이미지로 연결한다.
 5. `representativeImageObjectId`를 생략하거나 `null`로 제공하면 기존 대표 이미지를 유지한다. 문자열이 아닌 숫자, 객체, 배열 등은 `INVALID_TYPE`으로 거부한다.
-6. 회차·정원·체크인 창은 이 API의 수정 범위가 아니다.
+6. `reservationPrice`는 `content.reservation_price`를 함께 갱신하는 콘텐츠 공통 가격이다. 반려 콘텐츠는 `0`원·양수 가격 모두 보완한 뒤 재심사할 수 있으며, 회차·정원·체크인 창은 이 API의 수정 범위가 아니다.
 7. 이 API는 콘텐츠 상태를 변경하지 않으므로 `content_log`와 `audit_event`를 생성하지 않는다.
 8. 같은 유효 요청을 반복하면 같은 콘텐츠 필드와 이미지 연결이 유지된다.
