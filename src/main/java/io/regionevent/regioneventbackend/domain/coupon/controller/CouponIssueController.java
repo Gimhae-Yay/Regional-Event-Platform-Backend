@@ -1,12 +1,14 @@
 package io.regionevent.regioneventbackend.domain.coupon.controller;
 
 import java.util.regex.Pattern;
+import java.util.UUID;
 
 import jakarta.validation.Valid;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -17,6 +19,7 @@ import io.regionevent.regioneventbackend.domain.coupon.dto.CouponIssueRequest;
 import io.regionevent.regioneventbackend.domain.coupon.dto.CouponIssueResponse;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponIssuanceType;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponIssueUseCase;
+import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.global.response.ApiResponse;
@@ -38,7 +41,8 @@ public class CouponIssueController {
     public ResponseEntity<ApiResponse<CouponIssueResponse>> issue(
         @AuthenticationPrincipal Long userId,
         @PathVariable String couponPolicyId,
-        @Valid @RequestBody CouponIssueRequest request
+        @Valid @RequestBody CouponIssueRequest request,
+        @RequestAttribute(RequestIdFilter.REQUEST_ID_ATTRIBUTE) String requestId
     ) {
         CouponIssuanceType issueSourceType = request.issueSourceType();
         if (issueSourceType == CouponIssuanceType.MISSION_REWARD) {
@@ -50,7 +54,8 @@ public class CouponIssueController {
             CouponIssueResponse.from(couponIssueUseCase.issue(
                 userId,
                 toPositiveId(couponPolicyId),
-                new CouponIssueUseCase.CouponIssueCommand(issueSourceType, toPositiveId(request.sourceId()))
+                new CouponIssueUseCase.CouponIssueCommand(issueSourceType, toPositiveId(request.sourceId())),
+                UUID.fromString(requestId)
             ))
         ).toResponseEntity();
     }

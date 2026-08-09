@@ -1,5 +1,7 @@
 package io.regionevent.regioneventbackend.domain.coupon.service;
 
+import java.util.UUID;
+
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
@@ -24,10 +26,11 @@ public class CouponIssueUseCase {
     public CouponIssueResult issue(
         Long userId,
         Long couponPolicyId,
-        CouponIssueCommand command
+        CouponIssueCommand command,
+        UUID requestId
     ) {
         try {
-            return couponIssueTransactionService.issue(userId, couponPolicyId, command);
+            return couponIssueTransactionService.issue(userId, couponPolicyId, command, requestId);
         } catch (DataIntegrityViolationException exception) {
             return couponIssueDuplicateReadService.find(identityHash(userId, couponPolicyId, command))
                 .orElseThrow(() -> exception);

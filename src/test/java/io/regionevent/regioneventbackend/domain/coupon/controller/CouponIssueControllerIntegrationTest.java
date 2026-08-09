@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 
@@ -60,7 +61,8 @@ class CouponIssueControllerIntegrationTest {
         when(couponIssueUseCase.issue(
             eq(AUTHENTICATED_USER_ID),
             eq(COUPON_POLICY_ID),
-            any(CouponIssueUseCase.CouponIssueCommand.class)
+            any(CouponIssueUseCase.CouponIssueCommand.class),
+            any(UUID.class)
         )).thenReturn(result(false));
 
         mockMvc.perform(authenticated(post("/api/v1/coupon-policies/200/coupons"))
@@ -75,7 +77,8 @@ class CouponIssueControllerIntegrationTest {
         verify(couponIssueUseCase).issue(
             eq(AUTHENTICATED_USER_ID),
             eq(COUPON_POLICY_ID),
-            any(CouponIssueUseCase.CouponIssueCommand.class)
+            any(CouponIssueUseCase.CouponIssueCommand.class),
+            any(UUID.class)
         );
     }
 
@@ -87,7 +90,7 @@ class CouponIssueControllerIntegrationTest {
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
 
-        verify(couponIssueUseCase, never()).issue(any(), any(), any());
+        verify(couponIssueUseCase, never()).issue(any(), any(), any(), any());
     }
 
     @Test
@@ -98,7 +101,7 @@ class CouponIssueControllerIntegrationTest {
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
 
-        verify(couponIssueUseCase, never()).issue(any(), any(), any());
+        verify(couponIssueUseCase, never()).issue(any(), any(), any(), any());
     }
 
     @Test
@@ -106,7 +109,8 @@ class CouponIssueControllerIntegrationTest {
         when(couponIssueUseCase.issue(
             eq(AUTHENTICATED_USER_ID),
             eq(COUPON_POLICY_ID),
-            any(CouponIssueUseCase.CouponIssueCommand.class)
+            any(CouponIssueUseCase.CouponIssueCommand.class),
+            any(UUID.class)
         )).thenThrow(new BusinessException(ErrorCode.COUPON_POLICY_NOT_PUBLISHED));
 
         mockMvc.perform(authenticated(post("/api/v1/coupon-policies/200/coupons"))

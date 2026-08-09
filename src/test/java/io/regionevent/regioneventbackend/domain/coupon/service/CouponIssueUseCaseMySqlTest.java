@@ -7,6 +7,7 @@ import static org.mockito.Mockito.mock;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -31,6 +32,13 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
+import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
+import io.regionevent.regioneventbackend.domain.audit.service.AuditEventActorLinkService;
+import io.regionevent.regioneventbackend.domain.audit.service.AuditEventService;
+import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
+import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
@@ -81,6 +89,10 @@ import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
     CouponService.class,
     CouponIssuanceService.class,
     CouponStatusHistoryService.class,
+    AuditEventService.class,
+    AuditEventActorLinkService.class,
+    RecordAuditEventUseCase.class,
+    RecordFailedAuditEventUseCase.class,
     VisitService.class,
     StampbookRewardGrantService.class,
     AppUserService.class,
@@ -96,6 +108,7 @@ class CouponIssueUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
     private final CouponRepository couponRepository;
     private final CouponIssuanceRepository couponIssuanceRepository;
     private final CouponStatusHistoryRepository couponStatusHistoryRepository;
+    private final AuditEventRepository auditEventRepository;
     private final CouponPolicyRepository couponPolicyRepository;
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
@@ -115,6 +128,7 @@ class CouponIssueUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         CouponRepository couponRepository,
         CouponIssuanceRepository couponIssuanceRepository,
         CouponStatusHistoryRepository couponStatusHistoryRepository,
+        AuditEventRepository auditEventRepository,
         CouponPolicyRepository couponPolicyRepository,
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
@@ -132,6 +146,7 @@ class CouponIssueUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         this.couponRepository = couponRepository;
         this.couponIssuanceRepository = couponIssuanceRepository;
         this.couponStatusHistoryRepository = couponStatusHistoryRepository;
+        this.auditEventRepository = auditEventRepository;
         this.couponPolicyRepository = couponPolicyRepository;
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
@@ -172,6 +187,11 @@ class CouponIssueUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         assertThat(couponRepository.count()).isOne();
         assertThat(couponIssuanceRepository.count()).isOne();
         assertThat(couponStatusHistoryRepository.count()).isOne();
+        assertThat(auditEventRepository.findAll()).singleElement().satisfies(event -> {
+            assertThat(event.getTargetType()).isEqualTo(AuditEventTargetType.COUPON);
+            assertThat(event.getResult()).isEqualTo(AuditEventResult.SUCCESS);
+            assertThat(event.getReasonCode()).isEqualTo("COUPON_ISSUED");
+        });
         assertThat(couponPolicyRepository.findById(fixture.couponPolicy().getCouponPolicyId()))
             .hasValueSatisfying(policy -> assertThat(policy.getIssuedCount()).isOne());
     }
@@ -186,7 +206,8 @@ class CouponIssueUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
             new CouponIssueUseCase.CouponIssueCommand(
                 CouponIssuanceType.STAMPBOOK_COMPLETION,
                 fixture.rewardGrant().getStampbookRewardGrantId()
-            )
+            ),
+            UUID.randomUUID()
         );
 
         assertThat(result.duplicate()).isFalse();
@@ -197,12 +218,17 @@ class CouponIssueUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
             new CouponIssueUseCase.CouponIssueCommand(
                 CouponIssuanceType.STAMPBOOK_COMPLETION,
                 fixture.rewardGrant().getStampbookRewardGrantId()
-            )
+            ),
+            UUID.randomUUID()
         )).isInstanceOfSatisfying(BusinessException.class, exception ->
             assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN)
         );
         assertThat(couponRepository.count()).isOne();
         assertThat(couponIssuanceRepository.count()).isOne();
+        assertThat(auditEventRepository.findAll()).hasSize(2).anySatisfy(event -> {
+            assertThat(event.getResult()).isEqualTo(AuditEventResult.FAILURE);
+            assertThat(event.getReasonCode()).isEqualTo(ErrorCode.FORBIDDEN.code());
+        });
     }
 
     @Test
@@ -215,12 +241,38 @@ class CouponIssueUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         assertThatThrownBy(() -> couponIssueUseCase.issue(
             otherUser.getUserId(),
             fixture.couponPolicy().getCouponPolicyId(),
-            new CouponIssueUseCase.CouponIssueCommand(CouponIssuanceType.VISIT, fixture.visit().getVisitId())
+            new CouponIssueUseCase.CouponIssueCommand(CouponIssuanceType.VISIT, fixture.visit().getVisitId()),
+            UUID.randomUUID()
         )).isInstanceOfSatisfying(BusinessException.class, exception ->
             assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN)
         );
         assertThat(couponRepository.count()).isZero();
         assertThat(couponIssuanceRepository.count()).isZero();
+        assertThat(auditEventRepository.findAll()).singleElement().satisfies(event -> {
+            assertThat(event.getTargetType()).isEqualTo(AuditEventTargetType.COUPON);
+            assertThat(event.getResult()).isEqualTo(AuditEventResult.FAILURE);
+            assertThat(event.getReasonCode()).isEqualTo(ErrorCode.FORBIDDEN.code());
+        });
+    }
+
+    @Test
+    void 미공개_정책_발급_거부는_실패_감사_이력을_남긴다() {
+        Fixture fixture = createFixture(false);
+
+        assertThatThrownBy(() -> couponIssueUseCase.issue(
+            fixture.user().getUserId(),
+            fixture.couponPolicy().getCouponPolicyId(),
+            new CouponIssueUseCase.CouponIssueCommand(CouponIssuanceType.VISIT, fixture.visit().getVisitId()),
+            UUID.randomUUID()
+        )).isInstanceOfSatisfying(BusinessException.class, exception ->
+            assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.COUPON_POLICY_NOT_PUBLISHED)
+        );
+
+        assertThat(couponRepository.count()).isZero();
+        assertThat(auditEventRepository.findAll()).singleElement().satisfies(event -> {
+            assertThat(event.getResult()).isEqualTo(AuditEventResult.FAILURE);
+            assertThat(event.getReasonCode()).isEqualTo(ErrorCode.COUPON_POLICY_NOT_PUBLISHED.code());
+        });
     }
 
     private CouponIssueResult issueAfterStart(Fixture fixture, CountDownLatch start) {
@@ -231,11 +283,16 @@ class CouponIssueUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
             new CouponIssueUseCase.CouponIssueCommand(
                 CouponIssuanceType.VISIT,
                 fixture.visit().getVisitId()
-            )
+            ),
+            UUID.randomUUID()
         );
     }
 
     private Fixture createFixture() {
+        return createFixture(true);
+    }
+
+    private Fixture createFixture(boolean published) {
         return inTransaction(() -> {
             String suffix = Long.toUnsignedString(System.nanoTime());
             Region region = regionRepository.saveAndFlush(new Region("R" + suffix, "김해시", true));
@@ -265,8 +322,10 @@ class CouponIssueUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
                 content, region, "방문 쿠폰", null, CouponIssuanceType.VISIT,
                 3_000L, 10_000L, 30, NOW.minusSeconds(1), NOW.plusSeconds(3_600), 10L
             ));
-            couponPolicy.publish(NOW.minusSeconds(1));
-            couponPolicyRepository.saveAndFlush(couponPolicy);
+            if (published) {
+                couponPolicy.publish(NOW.minusSeconds(1));
+                couponPolicyRepository.saveAndFlush(couponPolicy);
+            }
             return new Fixture(user, visit, couponPolicy);
         });
     }

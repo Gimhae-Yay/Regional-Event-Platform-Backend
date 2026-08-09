@@ -3,10 +3,18 @@ package io.regionevent.regioneventbackend.domain.coupon.service;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.UUID;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
+import io.regionevent.regioneventbackend.domain.audit.service.AuditEventActor;
+import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
+import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
+import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.coupon.entity.Coupon;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponIssuance;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponIssuanceType;
@@ -17,6 +25,7 @@ import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookProgre
 import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookRewardGrant;
 import io.regionevent.regioneventbackend.domain.stampbook.service.StampbookRewardGrantService;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
+import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
 import io.regionevent.regioneventbackend.domain.visit.entity.Visit;
 import io.regionevent.regioneventbackend.domain.visit.service.VisitService;
@@ -33,6 +42,8 @@ public class CouponIssueTransactionService {
     private final CouponIssuanceService couponIssuanceService;
     private final CouponService couponService;
     private final CouponStatusHistoryService couponStatusHistoryService;
+    private final RecordAuditEventUseCase recordAuditEventUseCase;
+    private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase;
     private final Clock clock;
 
     public CouponIssueTransactionService(
@@ -43,6 +54,8 @@ public class CouponIssueTransactionService {
         CouponIssuanceService couponIssuanceService,
         CouponService couponService,
         CouponStatusHistoryService couponStatusHistoryService,
+        RecordAuditEventUseCase recordAuditEventUseCase,
+        RecordFailedAuditEventUseCase recordFailedAuditEventUseCase,
         Clock clock
     ) {
         this.appUserService = appUserService;
@@ -52,6 +65,8 @@ public class CouponIssueTransactionService {
         this.couponIssuanceService = couponIssuanceService;
         this.couponService = couponService;
         this.couponStatusHistoryService = couponStatusHistoryService;
+        this.recordAuditEventUseCase = recordAuditEventUseCase;
+        this.recordFailedAuditEventUseCase = recordFailedAuditEventUseCase;
         this.clock = clock;
     }
 
@@ -59,22 +74,51 @@ public class CouponIssueTransactionService {
     public CouponIssueResult issue(
         Long userId,
         Long couponPolicyId,
-        CouponIssueUseCase.CouponIssueCommand command
+        CouponIssueUseCase.CouponIssueCommand command,
+        UUID requestId
     ) {
-        AppUser user = appUserService.findActiveUser(userId);
-        CouponPolicy couponPolicy = couponPolicyService.findForIssue(couponPolicyId);
-        IssueSource issueSource = findIssueSource(couponPolicy, user, command);
+        AuditEventActor actor = null;
+        CouponPolicy couponPolicy = null;
 
-        return couponIssuanceService.findByIdentityHash(issueSource.identityHash())
-            .map(issuance -> CouponIssueResult.from(issuance.getCoupon(), true))
-            .orElseGet(() -> issueNewCoupon(couponPolicy, user, command.issueSourceType(), issueSource));
+        try {
+            AppUser user = appUserService.findActiveUser(userId);
+            actor = new AuditEventActor(user, UserRole.VISITOR);
+            couponPolicy = couponPolicyService.findForIssue(couponPolicyId);
+            IssueSource issueSource = findIssueSource(couponPolicy, user, command);
+
+            CouponIssueResult existingResult = couponIssuanceService
+                .findByIdentityHash(issueSource.identityHash())
+                .map(issuance -> CouponIssueResult.from(issuance.getCoupon(), true))
+                .orElse(null);
+            if (existingResult != null) {
+                return existingResult;
+            }
+            return issueNewCoupon(
+                couponPolicy,
+                user,
+                command.issueSourceType(),
+                issueSource,
+                actor,
+                requestId
+            );
+        } catch (BusinessException exception) {
+            recordFailure(requestId, actor, couponPolicy, exception.getErrorCode());
+            throw exception;
+        } catch (DataIntegrityViolationException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            recordFailure(requestId, actor, couponPolicy, ErrorCode.INTERNAL_SERVER_ERROR);
+            throw exception;
+        }
     }
 
     private CouponIssueResult issueNewCoupon(
         CouponPolicy couponPolicy,
         AppUser user,
         CouponIssuanceType issueSourceType,
-        IssueSource issueSource
+        IssueSource issueSource,
+        AuditEventActor actor,
+        UUID requestId
     ) {
         Instant issuedAt = clock.instant();
         couponPolicyService.issue(couponPolicy, issueSourceType, issuedAt);
@@ -87,6 +131,19 @@ public class CouponIssueTransactionService {
         ));
         couponStatusHistoryService.create(new CouponStatusHistory(
             coupon, null, CouponStatus.AVAILABLE, "COUPON_ISSUED", "USER", issuedAt
+        ));
+        recordAuditEventUseCase.record(new AuditEventCommand(
+            requestId,
+            couponPolicy.getRegion(),
+            AuditEventTargetType.COUPON,
+            coupon.getCouponId(),
+            null,
+            CouponStatus.AVAILABLE.name(),
+            AuditEventResult.SUCCESS,
+            "COUPON_ISSUED",
+            issueSource.evidenceReference(),
+            actor,
+            issuedAt
         ));
         return CouponIssueResult.from(coupon, false);
     }
@@ -115,7 +172,10 @@ public class CouponIssueTransactionService {
             throw new BusinessException(ErrorCode.COUPON_ISSUE_CONFLICT);
         }
         return new IssueSource(
-            CouponIssuanceHasher.hashVisitIssue(couponPolicy.getCouponPolicyId(), user.getUserId()), visit, null
+            CouponIssuanceHasher.hashVisitIssue(couponPolicy.getCouponPolicyId(), user.getUserId()),
+            visit,
+            null,
+            "VISIT:" + visit.getVisitId()
         );
     }
 
@@ -146,14 +206,40 @@ public class CouponIssueTransactionService {
                 couponPolicy.getCouponPolicyId(), grant.getStampbookRewardGrantId()
             ),
             null,
-            grant
+            grant,
+            "STAMPBOOK_REWARD_GRANT:" + grant.getStampbookRewardGrantId()
         );
+    }
+
+    private void recordFailure(
+        UUID requestId,
+        AuditEventActor actor,
+        CouponPolicy couponPolicy,
+        ErrorCode errorCode
+    ) {
+        recordFailedAuditEventUseCase.record(new AuditEventCommand(
+            requestId,
+            couponPolicy == null ? null : couponPolicy.getRegion(),
+            AuditEventTargetType.COUPON,
+            null,
+            couponPolicy == null ? null : couponPolicy.getStatus().name(),
+            null,
+            AuditEventResult.FAILURE,
+            errorCode.code(),
+            actor,
+            clock.instant()
+        ));
     }
 
     private boolean sameId(Long first, Long second) {
         return first != null && first.equals(second);
     }
 
-    private record IssueSource(String identityHash, Visit visit, StampbookRewardGrant stampbookRewardGrant) {
+    private record IssueSource(
+        String identityHash,
+        Visit visit,
+        StampbookRewardGrant stampbookRewardGrant,
+        String evidenceReference
+    ) {
     }
 }
