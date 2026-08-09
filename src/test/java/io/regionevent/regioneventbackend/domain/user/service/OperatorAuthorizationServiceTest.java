@@ -3,6 +3,7 @@ package io.regionevent.regioneventbackend.domain.user.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Optional;
@@ -115,6 +116,28 @@ class OperatorAuthorizationServiceTest {
         assertThat(authorizedOperator.user().getUserId()).isEqualTo(OPERATOR_USER_ID);
         assertThat(authorizedOperator.region().getRegionId()).isEqualTo(GIMHAE_REGION_ID);
         assertThat(authorizedOperator.roleAssignment()).isSameAs(assignment);
+    }
+
+    @Test
+    void 수정용_운영자_인가는_역할배정을_잠가_조회한다() {
+        UserRoleAssignment assignment = assignment(OPERATOR_USER_ID, GIMHAE_REGION_ID);
+        when(userRoleAssignmentRepository.findByAppUserUserIdAndRoleAndStatusAndAppUserStatusForUpdate(
+                OPERATOR_USER_ID,
+                UserRole.OPERATOR,
+                UserRoleAssignmentStatus.ACTIVE,
+                AppUserStatus.ACTIVE
+            )).thenReturn(Optional.of(assignment));
+
+        OperatorAuthorizationService.AuthorizedOperator authorizedOperator =
+            operatorAuthorizationService.requireAuthorizedOperatorForUpdate(OPERATOR_USER_ID);
+
+        assertThat(authorizedOperator.roleAssignment()).isSameAs(assignment);
+        verify(userRoleAssignmentRepository).findByAppUserUserIdAndRoleAndStatusAndAppUserStatusForUpdate(
+            OPERATOR_USER_ID,
+            UserRole.OPERATOR,
+            UserRoleAssignmentStatus.ACTIVE,
+            AppUserStatus.ACTIVE
+        );
     }
 
     private void givenAuthorizationAssignment(Optional<UserRoleAssignment> assignment) {

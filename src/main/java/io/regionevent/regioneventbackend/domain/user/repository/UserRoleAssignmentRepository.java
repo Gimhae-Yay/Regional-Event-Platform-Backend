@@ -49,6 +49,23 @@ public interface UserRoleAssignmentRepository extends JpaRepository<UserRoleAssi
         @Param("status") UserRoleAssignmentStatus status
     );
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = {"appUser", "region"})
+    @Query("""
+        SELECT assignment
+        FROM UserRoleAssignment assignment
+        WHERE assignment.appUser.userId = :userId
+          AND assignment.role = :role
+          AND assignment.status = :status
+          AND assignment.appUser.status = :appUserStatus
+        """)
+    Optional<UserRoleAssignment> findByAppUserUserIdAndRoleAndStatusAndAppUserStatusForUpdate(
+        @Param("userId") Long userId,
+        @Param("role") UserRole role,
+        @Param("status") UserRoleAssignmentStatus status,
+        @Param("appUserStatus") AppUserStatus appUserStatus
+    );
+
     @Query("""
         SELECT COUNT(assignment)
         FROM UserRoleAssignment assignment
