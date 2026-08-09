@@ -17,6 +17,7 @@ public record AuditEventCommand(
     String nextState,
     AuditEventResult result,
     String reasonCode,
+    String reason,
     String evidenceReference,
     AuditEventActor actor,
     Instant occurredAt
@@ -47,11 +48,41 @@ public record AuditEventCommand(
         validateSuccessfulStateTransition(result, targetId, nextState);
         validateFailedAuditReasonCode(result, reasonCode);
         validateOptionalCode(reasonCode, MAX_REASON_CODE_LENGTH, "reasonCode");
+        reason = normalizeOptionalReason(reason);
         evidenceReference = normalizeOptionalEvidenceReference(evidenceReference);
         validatePrivilegedChangeEvidenceReference(targetType, evidenceReference);
         if (occurredAt == null) {
             throw new IllegalArgumentException("occurredAt must not be null");
         }
+    }
+
+    public AuditEventCommand(
+        UUID requestId,
+        Region region,
+        AuditEventTargetType targetType,
+        Long targetId,
+        String previousState,
+        String nextState,
+        AuditEventResult result,
+        String reasonCode,
+        String evidenceReference,
+        AuditEventActor actor,
+        Instant occurredAt
+    ) {
+        this(
+            requestId,
+            region,
+            targetType,
+            targetId,
+            previousState,
+            nextState,
+            result,
+            reasonCode,
+            null,
+            evidenceReference,
+            actor,
+            occurredAt
+        );
     }
 
     public AuditEventCommand(
@@ -75,6 +106,7 @@ public record AuditEventCommand(
             nextState,
             result,
             reasonCode,
+            null,
             null,
             actor,
             occurredAt
@@ -129,6 +161,18 @@ public record AuditEventCommand(
             throw new IllegalArgumentException("evidenceReference must be between 1 and 500 characters");
         }
         return normalizedEvidenceReference;
+    }
+
+    private static String normalizeOptionalReason(String reason) {
+        if (reason == null) {
+            return null;
+        }
+
+        String normalizedReason = reason.strip();
+        if (normalizedReason.isEmpty() || normalizedReason.length() > 500) {
+            throw new IllegalArgumentException("reason must be between 1 and 500 characters");
+        }
+        return normalizedReason;
     }
 
     private static void validatePrivilegedChangeEvidenceReference(

@@ -2,6 +2,7 @@ package io.regionevent.regioneventbackend.domain.content.service;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -74,6 +75,22 @@ public class ContentService {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         return content;
+    }
+
+    public List<Content> findOwnedContentsForStampbookCreation(
+        List<Long> contentIds,
+        Long operatorUserId,
+        Long regionId
+    ) {
+        if (contentIds == null || contentIds.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+
+        List<Content> contents = new ArrayList<>(contentIds.size());
+        for (Long contentId : contentIds) {
+            contents.add(findOwnedContentForRevisionCreation(contentId, operatorUserId, regionId));
+        }
+        return List.copyOf(contents);
     }
 
     public Content markPrePublicationRevisionPending(Content content) {
