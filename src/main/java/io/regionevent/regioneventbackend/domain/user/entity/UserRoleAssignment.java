@@ -55,16 +55,28 @@ public class UserRoleAssignment {
     }
 
     public UserRoleAssignment(AppUser appUser, UserRole role, Region region) {
+        this(appUser, role, region, null);
+    }
+
+    public UserRoleAssignment(
+        AppUser appUser,
+        UserRole role,
+        Region region,
+        Instant grantedAt
+    ) {
         this.appUser = validateAppUser(appUser);
         validateRoleAndRegion(role, region);
         this.role = role;
         this.region = region;
         this.status = UserRoleAssignmentStatus.ACTIVE;
+        this.grantedAt = grantedAt;
     }
 
     @PrePersist
     protected void onCreate() {
-        grantedAt = Instant.now();
+        if (grantedAt == null) {
+            grantedAt = Instant.now();
+        }
     }
 
     public Long getRoleAssignmentId() {

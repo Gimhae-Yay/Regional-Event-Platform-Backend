@@ -25,6 +25,11 @@ public class RegionService {
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
+    public Region findRegionForUpdate(Long regionId) {
+        return regionRepository.findByRegionId(regionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
     @Transactional(readOnly = true)
     public List<PublicRegionVerificationProjection> findPublicRegionVerifications() {
         return regionRepository.findPublicRegionVerifications();
