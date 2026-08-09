@@ -22,6 +22,7 @@ import io.regionevent.regioneventbackend.domain.region.entity.Region;
 public class AuditEvent {
 
     private static final int MAX_EVIDENCE_REFERENCE_LENGTH = 500;
+    private static final int MAX_REASON_LENGTH = 500;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -58,6 +59,9 @@ public class AuditEvent {
     @Column(name = "reason_code", length = 100)
     private String reasonCode;
 
+    @Column(name = "reason", length = MAX_REASON_LENGTH)
+    private String reason;
+
     @Column(name = "evidence_reference", length = MAX_EVIDENCE_REFERENCE_LENGTH)
     private String evidenceReference;
 
@@ -82,6 +86,7 @@ public class AuditEvent {
         String nextState,
         AuditEventResult result,
         String reasonCode,
+        String reason,
         String evidenceReference,
         String actorKind,
         String actorRole,
@@ -95,10 +100,42 @@ public class AuditEvent {
         this.nextState = nextState;
         this.result = requireNotNull(result, "result");
         this.reasonCode = reasonCode;
+        this.reason = normalizeOptionalReason(reason);
         this.evidenceReference = normalizeOptionalEvidenceReference(evidenceReference);
         this.actorKind = requireNotBlank(actorKind, "actorKind");
         this.actorRole = actorRole;
         this.occurredAt = requireNotNull(occurredAt, "occurredAt");
+    }
+
+    public AuditEvent(
+        String requestId,
+        Region region,
+        AuditEventTargetType targetType,
+        Long targetId,
+        String previousState,
+        String nextState,
+        AuditEventResult result,
+        String reasonCode,
+        String evidenceReference,
+        String actorKind,
+        String actorRole,
+        Instant occurredAt
+    ) {
+        this(
+            requestId,
+            region,
+            targetType,
+            targetId,
+            previousState,
+            nextState,
+            result,
+            reasonCode,
+            null,
+            evidenceReference,
+            actorKind,
+            actorRole,
+            occurredAt
+        );
     }
 
     public AuditEvent(
@@ -123,6 +160,7 @@ public class AuditEvent {
             nextState,
             result,
             reasonCode,
+            null,
             null,
             actorKind,
             actorRole,
@@ -164,6 +202,10 @@ public class AuditEvent {
 
     public String getReasonCode() {
         return reasonCode;
+    }
+
+    public String getReason() {
+        return reason;
     }
 
     public String getEvidenceReference() {
@@ -209,5 +251,17 @@ public class AuditEvent {
             );
         }
         return normalizedEvidenceReference;
+    }
+
+    private static String normalizeOptionalReason(String reason) {
+        if (reason == null) {
+            return null;
+        }
+
+        String normalizedReason = reason.strip();
+        if (normalizedReason.isEmpty() || normalizedReason.length() > MAX_REASON_LENGTH) {
+            throw new IllegalArgumentException("reason must be between 1 and 500 characters");
+        }
+        return normalizedReason;
     }
 }
