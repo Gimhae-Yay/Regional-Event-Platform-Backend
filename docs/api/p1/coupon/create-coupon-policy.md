@@ -126,6 +126,7 @@ Accept: application/json
 | --- | --- | --- |
 | `400` | `INVALID_INPUT` | 필수값이 없거나 형식·범위가 올바르지 않다. 정책은 생성하지 않는다. |
 | `400` | `INVALID_JSON` | 요청 본문 형식이 올바르지 않다. 정책은 생성하지 않는다. |
+| `400` | `INVALID_TYPE` | 필드 값의 JSON 타입이 계약과 다르다. 정책은 생성하지 않는다. |
 | `401` | `UNAUTHENTICATED` | 인증 정보가 없거나 유효하지 않다. |
 | `403` | `FORBIDDEN` | 인증 주체가 `ACTIVE` 회원 또는 현재 `OPERATOR` 역할이 아니거나, 대상 콘텐츠와 `region_id`가 다르거나, 대상 콘텐츠를 소유하지 않는다. |
 | `404` | `NOT_FOUND` | 대상 콘텐츠를 찾을 수 없다. |
