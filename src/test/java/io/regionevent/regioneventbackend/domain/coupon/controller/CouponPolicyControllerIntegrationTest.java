@@ -1,0 +1,185 @@
+package io.regionevent.regioneventbackend.domain.coupon.controller;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.http.HttpHeaders.AUTHORIZATION;
+import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.time.Instant;
+
+import org.junit.jupiter.api.Test;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+
+import io.regionevent.regioneventbackend.domain.coupon.dto.CreateCouponPolicyRequest;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponIssuanceType;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicyStatus;
+import io.regionevent.regioneventbackend.domain.coupon.service.CreateCouponPolicyResult;
+import io.regionevent.regioneventbackend.domain.coupon.service.CreateCouponPolicyUseCase;
+import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
+import io.regionevent.regioneventbackend.global.config.SecurityConfig;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
+import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
+import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
+import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
+
+@WebMvcTest(CouponPolicyController.class)
+@Import({
+    SecurityConfig.class,
+    RequestIdFilter.class,
+    GlobalExceptionHandler.class
+})
+class CouponPolicyControllerIntegrationTest {
+
+    private static final Long AUTHENTICATED_USER_ID = 100L;
+    private static final Long CONTENT_ID = 200L;
+    private static final String VALID_REQUEST = """
+        {
+          "contentId": "200",
+          "name": "재방문 할인",
+          "description": "방문 혜택",
+          "issueSourceType": "VISIT",
+          "discountAmount": 3000,
+          "minimumPaymentAmount": 10000,
+          "validDaysAfterIssue": 30,
+          "issueStartsAt": "2026-08-01T00:00:00Z",
+          "issueEndsAt": "2026-08-31T00:00:00Z",
+          "totalIssueLimit": 1000
+        }
+        """;
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private JwtAccessTokenService jwtAccessTokenService;
+
+    @MockitoBean
+    private RefreshTokenStore refreshTokenStore;
+
+    @MockitoBean
+    private CreateCouponPolicyUseCase createCouponPolicyUseCase;
+
+    @Test
+    void 쿠폰_정책_생성_유효하면_DRAFT_정책을_응답한다() throws Exception {
+        when(createCouponPolicyUseCase.create(
+            eq(AUTHENTICATED_USER_ID),
+            eq(CONTENT_ID),
+            any(CreateCouponPolicyRequest.class)
+        )).thenReturn(result());
+
+        mockMvc.perform(authenticated(post("/api/v1/operator/coupon-policies"))
+                .contentType(APPLICATION_JSON)
+                .content(VALID_REQUEST))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.code").value("SUCCESS"))
+            .andExpect(jsonPath("$.message").value("쿠폰 정책 생성에 성공했습니다."))
+            .andExpect(jsonPath("$.data.couponPolicyId").value("300"))
+            .andExpect(jsonPath("$.data.contentId").value("200"))
+            .andExpect(jsonPath("$.data.regionId").value("10"))
+            .andExpect(jsonPath("$.data.status").value("DRAFT"))
+            .andExpect(jsonPath("$.data.issueSourceType").value("VISIT"))
+            .andExpect(jsonPath("$.data.createdAt").value("2026-08-08T00:00:00Z"));
+
+        verify(createCouponPolicyUseCase).create(
+            eq(AUTHENTICATED_USER_ID),
+            eq(CONTENT_ID),
+            any(CreateCouponPolicyRequest.class)
+        );
+    }
+
+    @Test
+    void 쿠폰_정책_생성_인증이_없으면_유스케이스를_호출하지_않는다() throws Exception {
+        mockMvc.perform(post("/api/v1/operator/coupon-policies")
+                .contentType(APPLICATION_JSON)
+                .content(VALID_REQUEST))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+
+        verify(createCouponPolicyUseCase, never()).create(any(), any(), any());
+    }
+
+    @Test
+    void 쿠폰_정책_생성_입력이_유효하지_않으면_입력오류를_응답한다() throws Exception {
+        mockMvc.perform(authenticated(post("/api/v1/operator/coupon-policies"))
+                .contentType(APPLICATION_JSON)
+                .content("{}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        mockMvc.perform(authenticated(post("/api/v1/operator/coupon-policies"))
+                .contentType(APPLICATION_JSON)
+                .content(VALID_REQUEST.replace("\"200\"", "\"0\"")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        verify(createCouponPolicyUseCase, never()).create(any(), any(), any());
+    }
+
+    @Test
+    void 쿠폰_정책_생성_필드타입이_다르면_타입오류를_응답한다() throws Exception {
+        mockMvc.perform(authenticated(post("/api/v1/operator/coupon-policies"))
+                .contentType(APPLICATION_JSON)
+                .content(VALID_REQUEST.replace("\"discountAmount\": 3000", "\"discountAmount\": {}")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+
+        verify(createCouponPolicyUseCase, never()).create(any(), any(), any());
+    }
+
+    @Test
+    void 쿠폰_정책_생성_권한과_상태오류를_공통_오류로_응답한다() throws Exception {
+        expectBusinessError(ErrorCode.FORBIDDEN, 403, "FORBIDDEN");
+        expectBusinessError(ErrorCode.NOT_FOUND, 404, "NOT_FOUND");
+        expectBusinessError(ErrorCode.COUPON_POLICY_CONFLICT, 409, "COUPON_POLICY_CONFLICT");
+    }
+
+    private void expectBusinessError(ErrorCode errorCode, int statusCode, String code) throws Exception {
+        when(createCouponPolicyUseCase.create(
+            eq(AUTHENTICATED_USER_ID),
+            eq(CONTENT_ID),
+            any(CreateCouponPolicyRequest.class)
+        )).thenThrow(new BusinessException(errorCode));
+
+        mockMvc.perform(authenticated(post("/api/v1/operator/coupon-policies"))
+                .contentType(APPLICATION_JSON)
+                .content(VALID_REQUEST))
+            .andExpect(status().is(statusCode))
+            .andExpect(jsonPath("$.code").value(code));
+    }
+
+    private CreateCouponPolicyResult result() {
+        return new CreateCouponPolicyResult(
+            300L,
+            CONTENT_ID,
+            10L,
+            "재방문 할인",
+            CouponPolicyStatus.DRAFT,
+            CouponIssuanceType.VISIT,
+            3_000L,
+            10_000L,
+            30,
+            Instant.parse("2026-08-01T00:00:00Z"),
+            Instant.parse("2026-08-31T00:00:00Z"),
+            1_000L,
+            Instant.parse("2026-08-08T00:00:00Z")
+        );
+    }
+
+    private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder authenticated(
+        org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder requestBuilder
+    ) {
+        return requestBuilder.header(AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(AUTHENTICATED_USER_ID));
+    }
+}
