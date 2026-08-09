@@ -107,8 +107,10 @@ public class CouponIssueTransactionService {
 
     private IssueSource findVisitIssueSource(CouponPolicy couponPolicy, AppUser user, Long visitId) {
         Visit visit = visitService.findForCouponIssue(visitId);
-        if (!sameId(visit.getUser() == null ? null : visit.getUser().getUserId(), user.getUserId())
-            || !sameId(visit.getContent().getContentId(), couponPolicy.getContent().getContentId())
+        if (!sameId(visit.getUser() == null ? null : visit.getUser().getUserId(), user.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        if (!sameId(visit.getContent().getContentId(), couponPolicy.getContent().getContentId())
             || !sameId(visit.getRegion().getRegionId(), couponPolicy.getRegion().getRegionId())) {
             throw new BusinessException(ErrorCode.COUPON_ISSUE_CONFLICT);
         }
@@ -123,14 +125,16 @@ public class CouponIssueTransactionService {
         Long stampbookRewardGrantId
     ) {
         StampbookRewardGrant grant = stampbookRewardGrantService.findForCouponIssue(stampbookRewardGrantId);
-        if (grant.getStampbookProgress().getStatus() != StampbookProgressStatus.COMPLETED
-            || !sameId(grant.getCouponPolicy().getCouponPolicyId(), couponPolicy.getCouponPolicyId())
-            || !sameId(
+        if (!sameId(
                 grant.getStampbookProgress().getUser() == null
                     ? null
                     : grant.getStampbookProgress().getUser().getUserId(),
                 user.getUserId()
-            )
+            )) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        if (grant.getStampbookProgress().getStatus() != StampbookProgressStatus.COMPLETED
+            || !sameId(grant.getCouponPolicy().getCouponPolicyId(), couponPolicy.getCouponPolicyId())
             || !sameId(
                 grant.getStampbookProgress().getStampbook().getRegion().getRegionId(),
                 couponPolicy.getRegion().getRegionId()

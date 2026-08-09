@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.domain.coupon.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 import java.time.Clock;
@@ -50,6 +51,12 @@ import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.reservation.repository.CapacityHoldRepository;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationRepository;
+import io.regionevent.regioneventbackend.domain.stampbook.entity.Stampbook;
+import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookProgress;
+import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookRewardGrant;
+import io.regionevent.regioneventbackend.domain.stampbook.repository.StampbookProgressRepository;
+import io.regionevent.regioneventbackend.domain.stampbook.repository.StampbookRepository;
+import io.regionevent.regioneventbackend.domain.stampbook.repository.StampbookRewardGrantRepository;
 import io.regionevent.regioneventbackend.domain.stampbook.service.StampbookRewardGrantService;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
@@ -59,6 +66,8 @@ import io.regionevent.regioneventbackend.domain.visit.entity.CheckinMethod;
 import io.regionevent.regioneventbackend.domain.visit.entity.Visit;
 import io.regionevent.regioneventbackend.domain.visit.repository.VisitRepository;
 import io.regionevent.regioneventbackend.domain.visit.service.VisitService;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
 import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 
@@ -95,6 +104,9 @@ class CouponIssueUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
     private final CapacityHoldRepository capacityHoldRepository;
     private final ReservationRepository reservationRepository;
     private final VisitRepository visitRepository;
+    private final StampbookRepository stampbookRepository;
+    private final StampbookProgressRepository stampbookProgressRepository;
+    private final StampbookRewardGrantRepository stampbookRewardGrantRepository;
     private final TransactionTemplate transactionTemplate;
 
     @Autowired
@@ -111,6 +123,9 @@ class CouponIssueUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         CapacityHoldRepository capacityHoldRepository,
         ReservationRepository reservationRepository,
         VisitRepository visitRepository,
+        StampbookRepository stampbookRepository,
+        StampbookProgressRepository stampbookProgressRepository,
+        StampbookRewardGrantRepository stampbookRewardGrantRepository,
         PlatformTransactionManager transactionManager
     ) {
         this.couponIssueUseCase = couponIssueUseCase;
@@ -125,6 +140,9 @@ class CouponIssueUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         this.capacityHoldRepository = capacityHoldRepository;
         this.reservationRepository = reservationRepository;
         this.visitRepository = visitRepository;
+        this.stampbookRepository = stampbookRepository;
+        this.stampbookProgressRepository = stampbookProgressRepository;
+        this.stampbookRewardGrantRepository = stampbookRewardGrantRepository;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
@@ -156,6 +174,53 @@ class CouponIssueUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         assertThat(couponStatusHistoryRepository.count()).isOne();
         assertThat(couponPolicyRepository.findById(fixture.couponPolicy().getCouponPolicyId()))
             .hasValueSatisfying(policy -> assertThat(policy.getIssuedCount()).isOne());
+    }
+
+    @Test
+    void 스탬프북_완료_보상은_본인에게만_발급한다() {
+        StampbookFixture fixture = createStampbookFixture();
+
+        CouponIssueResult result = couponIssueUseCase.issue(
+            fixture.owner().getUserId(),
+            fixture.couponPolicy().getCouponPolicyId(),
+            new CouponIssueUseCase.CouponIssueCommand(
+                CouponIssuanceType.STAMPBOOK_COMPLETION,
+                fixture.rewardGrant().getStampbookRewardGrantId()
+            )
+        );
+
+        assertThat(result.duplicate()).isFalse();
+        assertThat(result.issueSourceType()).isEqualTo(CouponIssuanceType.STAMPBOOK_COMPLETION);
+        assertThatThrownBy(() -> couponIssueUseCase.issue(
+            fixture.otherUser().getUserId(),
+            fixture.couponPolicy().getCouponPolicyId(),
+            new CouponIssueUseCase.CouponIssueCommand(
+                CouponIssuanceType.STAMPBOOK_COMPLETION,
+                fixture.rewardGrant().getStampbookRewardGrantId()
+            )
+        )).isInstanceOfSatisfying(BusinessException.class, exception ->
+            assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN)
+        );
+        assertThat(couponRepository.count()).isOne();
+        assertThat(couponIssuanceRepository.count()).isOne();
+    }
+
+    @Test
+    void 다른_회원의_방문으로_쿠폰을_발급할_수_없다() {
+        Fixture fixture = createFixture();
+        AppUser otherUser = inTransaction(() -> appUserRepository.saveAndFlush(
+            user("other-" + Long.toUnsignedString(System.nanoTime()) + "@example.com")
+        ));
+
+        assertThatThrownBy(() -> couponIssueUseCase.issue(
+            otherUser.getUserId(),
+            fixture.couponPolicy().getCouponPolicyId(),
+            new CouponIssueUseCase.CouponIssueCommand(CouponIssuanceType.VISIT, fixture.visit().getVisitId())
+        )).isInstanceOfSatisfying(BusinessException.class, exception ->
+            assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN)
+        );
+        assertThat(couponRepository.count()).isZero();
+        assertThat(couponIssuanceRepository.count()).isZero();
     }
 
     private CouponIssueResult issueAfterStart(Fixture fixture, CountDownLatch start) {
@@ -206,6 +271,34 @@ class CouponIssueUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         });
     }
 
+    private StampbookFixture createStampbookFixture() {
+        return inTransaction(() -> {
+            String suffix = Long.toUnsignedString(System.nanoTime());
+            Region region = regionRepository.saveAndFlush(new Region("S" + suffix, "김해시", true));
+            AppUser owner = appUserRepository.saveAndFlush(user("owner-" + suffix + "@example.com"));
+            AppUser otherUser = appUserRepository.saveAndFlush(user("other-" + suffix + "@example.com"));
+            AppUser operator = appUserRepository.saveAndFlush(user("operator-" + suffix + "@example.com"));
+            Content content = contentRepository.saveAndFlush(new Content(
+                region, operator, ContentType.EVENT_EXPERIENCE, ContentStatus.PUBLISHED,
+                "체험", "설명", "주소", "운영시간", "055-000-0000", "안내", "전체", "복장", "정책", NOW
+            ));
+            CouponPolicy couponPolicy = couponPolicyRepository.saveAndFlush(new CouponPolicy(
+                content, region, "스탬프북 쿠폰", null, CouponIssuanceType.STAMPBOOK_COMPLETION,
+                3_000L, 10_000L, 30, NOW.minusSeconds(1), NOW.plusSeconds(3_600), 10L
+            ));
+            couponPolicy.publish(NOW.minusSeconds(1));
+            couponPolicyRepository.saveAndFlush(couponPolicy);
+            Stampbook stampbook = stampbookRepository.saveAndFlush(new Stampbook(region, couponPolicy));
+            StampbookProgress progress = new StampbookProgress(stampbook, owner);
+            progress.complete(NOW);
+            progress = stampbookProgressRepository.saveAndFlush(progress);
+            StampbookRewardGrant rewardGrant = stampbookRewardGrantRepository.saveAndFlush(
+                new StampbookRewardGrant(progress, couponPolicy, NOW)
+            );
+            return new StampbookFixture(owner, otherUser, couponPolicy, rewardGrant);
+        });
+    }
+
     private AppUser user(String loginIdentifier) {
         return new AppUser(loginIdentifier, "hashed-password", "사용자", "010-1234-5678", AppUserStatus.ACTIVE);
     }
@@ -232,6 +325,14 @@ class CouponIssueUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
     }
 
     private record Fixture(AppUser user, Visit visit, CouponPolicy couponPolicy) {
+    }
+
+    private record StampbookFixture(
+        AppUser owner,
+        AppUser otherUser,
+        CouponPolicy couponPolicy,
+        StampbookRewardGrant rewardGrant
+    ) {
     }
 
     @TestConfiguration
