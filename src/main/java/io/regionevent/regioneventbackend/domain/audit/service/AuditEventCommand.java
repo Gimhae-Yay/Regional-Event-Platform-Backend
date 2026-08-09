@@ -17,6 +17,7 @@ public record AuditEventCommand(
     String nextState,
     AuditEventResult result,
     String reasonCode,
+    String evidenceReference,
     AuditEventActor actor,
     Instant occurredAt
 ) {
@@ -46,9 +47,37 @@ public record AuditEventCommand(
         validateSuccessfulStateTransition(result, targetId, nextState);
         validateFailedAuditReasonCode(result, reasonCode);
         validateOptionalCode(reasonCode, MAX_REASON_CODE_LENGTH, "reasonCode");
+        evidenceReference = normalizeOptionalEvidenceReference(evidenceReference);
         if (occurredAt == null) {
             throw new IllegalArgumentException("occurredAt must not be null");
         }
+    }
+
+    public AuditEventCommand(
+        UUID requestId,
+        Region region,
+        AuditEventTargetType targetType,
+        Long targetId,
+        String previousState,
+        String nextState,
+        AuditEventResult result,
+        String reasonCode,
+        AuditEventActor actor,
+        Instant occurredAt
+    ) {
+        this(
+            requestId,
+            region,
+            targetType,
+            targetId,
+            previousState,
+            nextState,
+            result,
+            reasonCode,
+            null,
+            actor,
+            occurredAt
+        );
     }
 
     private static void validateSuccessfulStateTransition(
@@ -87,5 +116,17 @@ public record AuditEventCommand(
         if (value.isBlank() || value.length() > maxLength || !CODE_PATTERN.matcher(value).matches()) {
             throw new IllegalArgumentException(fieldName + " must be an uppercase code");
         }
+    }
+
+    private static String normalizeOptionalEvidenceReference(String evidenceReference) {
+        if (evidenceReference == null) {
+            return null;
+        }
+
+        String normalizedEvidenceReference = evidenceReference.strip();
+        if (normalizedEvidenceReference.isEmpty() || normalizedEvidenceReference.length() > 500) {
+            throw new IllegalArgumentException("evidenceReference must be between 1 and 500 characters");
+        }
+        return normalizedEvidenceReference;
     }
 }
