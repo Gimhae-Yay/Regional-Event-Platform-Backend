@@ -7,9 +7,17 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -47,6 +55,9 @@ import io.regionevent.regioneventbackend.support.jpa.CleanH2Database;
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 @CleanH2Database
 class CreateAdminAccountUseCaseJpaTest {
+
+    private static final int CONCURRENT_REQUEST_COUNT = 2;
+    private static final long CONCURRENT_TIMEOUT_SECONDS = 5;
 
     private final CreateAdminAccountUseCase createAdminAccountUseCase;
     private final AppUserRepository appUserRepository;
@@ -111,6 +122,42 @@ class CreateAdminAccountUseCaseJpaTest {
         assertThat(platformAdminAssignmentRepository.count()).isEqualTo(assignmentCount);
     }
 
+    @Test
+    @Timeout(CONCURRENT_TIMEOUT_SECONDS)
+    void create_동일이메일동시요청이면_하나만생성하고다른요청은중복오류를반환한다() throws Exception {
+        Long superAdminUserId = createSuperAdmin();
+        long userCount = appUserRepository.count();
+        long assignmentCount = platformAdminAssignmentRepository.count();
+        when(passwordEncoder.encode(anyString())).thenReturn("password-hash");
+        ExecutorService executorService = Executors.newFixedThreadPool(CONCURRENT_REQUEST_COUNT);
+        CountDownLatch ready = new CountDownLatch(CONCURRENT_REQUEST_COUNT);
+        CountDownLatch start = new CountDownLatch(1);
+
+        try {
+            Future<Throwable> first = submitCreate(executorService, ready, start, superAdminUserId);
+            Future<Throwable> second = submitCreate(executorService, ready, start, superAdminUserId);
+
+            assertThat(ready.await(CONCURRENT_TIMEOUT_SECONDS, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            List<Throwable> results = Arrays.asList(
+                first.get(CONCURRENT_TIMEOUT_SECONDS, TimeUnit.SECONDS),
+                second.get(CONCURRENT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            );
+            assertThat(results).filteredOn(throwable -> throwable == null).hasSize(1);
+            assertThat(results).filteredOn(Throwable.class::isInstance)
+                .singleElement()
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                    assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.DUPLICATE_LOGIN_IDENTIFIER)
+                );
+            assertThat(appUserRepository.count()).isEqualTo(userCount + 1);
+            assertThat(platformAdminAssignmentRepository.count()).isEqualTo(assignmentCount + 1);
+        } finally {
+            start.countDown();
+            executorService.shutdownNow();
+        }
+    }
+
     private Long createSuperAdmin() {
         return transactionTemplate.execute(status -> {
             AppUser user = appUserRepository.save(new AppUser(
@@ -140,5 +187,23 @@ class CreateAdminAccountUseCaseJpaTest {
             ),
             UUID.randomUUID()
         );
+    }
+
+    private Future<Throwable> submitCreate(
+        ExecutorService executorService,
+        CountDownLatch ready,
+        CountDownLatch start,
+        Long superAdminUserId
+    ) {
+        return executorService.submit(() -> {
+            ready.countDown();
+            start.await(CONCURRENT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            try {
+                create(superAdminUserId, "concurrent@example.com");
+                return null;
+            } catch (Throwable throwable) {
+                return throwable;
+            }
+        });
     }
 }
