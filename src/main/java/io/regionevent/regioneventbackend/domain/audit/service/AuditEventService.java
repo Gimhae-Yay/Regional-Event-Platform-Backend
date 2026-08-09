@@ -31,8 +31,9 @@ public class AuditEventService {
             command.nextState(),
             command.result(),
             command.reasonCode(),
+            command.evidenceReference(),
             actor == null ? SYSTEM_ACTOR_KIND : USER_ACTOR_KIND,
-            actor == null ? null : actor.getRole().name(),
+            actor == null ? null : actor.getRoleName(),
             command.occurredAt()
         ));
     }

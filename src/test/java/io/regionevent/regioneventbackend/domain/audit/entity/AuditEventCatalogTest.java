@@ -22,7 +22,17 @@ class AuditEventCatalogTest {
             AuditEventTargetType.CAPACITY_HOLD,
             AuditEventTargetType.RESERVATION,
             AuditEventTargetType.VISIT,
-            AuditEventTargetType.REVIEW
+            AuditEventTargetType.REVIEW,
+            AuditEventTargetType.PLATFORM_ADMIN_ASSIGNMENT,
+            AuditEventTargetType.USER_ROLE_ASSIGNMENT,
+            AuditEventTargetType.STAMPBOOK,
+            AuditEventTargetType.MISSION,
+            AuditEventTargetType.COUPON_POLICY,
+            AuditEventTargetType.COUPON,
+            AuditEventTargetType.RESERVATION_PRICE_SNAPSHOT,
+            AuditEventTargetType.PAYMENT,
+            AuditEventTargetType.REFUND,
+            AuditEventTargetType.PAYMENT_DISCREPANCY
         );
     }
 }
