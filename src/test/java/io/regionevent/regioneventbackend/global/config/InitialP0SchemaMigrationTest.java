@@ -147,7 +147,8 @@ class InitialP0SchemaMigrationTest {
             "26",
             "27",
             "28",
-            "29"
+            "29",
+            "30"
         );
         assertThat(tableNames).contains(
             "REGION",
@@ -199,6 +200,7 @@ class InitialP0SchemaMigrationTest {
         );
         assertThat(constraintNames).contains(
             "PK_REGION",
+            "CK_REGION_REGION_CODE_NORMALIZED",
             "UK_CONTENT_REVISION_CONTENT_REVISION_NO",
             "FK_CONTENT_REPRESENTATIVE_IMAGE_OBJECT",
             "FK_CONTENT_REVISION_CANDIDATE_IMAGE_OBJECT",
