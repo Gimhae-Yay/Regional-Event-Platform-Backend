@@ -111,7 +111,7 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 
 #### `CON-02`
 
-승인된 운영자는 자신이 소유한 콘텐츠의 대표 이미지, 소개, 위치, 운영 시간, 연락처, 유의사항, 날짜·회차별 정원,
+승인된 운영자는 자신이 소유한 콘텐츠의 대표 이미지, 소개, 위치, 운영 시간, 연락처, 유의사항, 콘텐츠 공통 예약 가격, 날짜·회차별 정원,
 연령·준비물, P0 취소 정책을 안내하는 문구와 공개 예정 시각의 필수 검증을 통과해야 승인 요청할 수 있다.
 취소 기준은 고정된 무료 예약 취소 정책의 표시 문구이며, 운영자가 취소 가능 시점·인원 변경 또는
 금전·환불 정책을 변경하는 수단이 아니다.
@@ -209,10 +209,10 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 `PENDING` 콘텐츠에는 이 예외를 적용하지 않는다.
 
 공개 전 수정본 승인에는 원본 `PENDING`, 수정본 `EDIT_REQUESTED`, 기준 원본 버전 일치와 후보 `publish_at` 존재가
-필요하다. 성공 시 모든 후보 필드와 `publish_at`을 원본에 반영하고 원본을 `PENDING → APPROVED`로 전이한다.
+필요하다. 성공 시 모든 후보 필드, 후보 `reservation_price`와 `publish_at`을 원본에 반영하고 원본을 `PENDING → APPROVED`로 전이한다.
 공개 콘텐츠 수정본 승인에는 원본 `PUBLISHED`, 수정본 `EDIT_REQUESTED`, 기준 원본 버전 일치와 후보 `publish_at = NULL`이
-필요하며, 원본 상태와 `publish_at`은 변경하지 않는다. 두 경우 모두 원본 반영, 원본 버전 증가, 수정본 종결과
-감사 기록은 하나의 트랜잭션으로 처리한다.
+필요하며, 원본 상태와 `publish_at`은 변경하지 않는다. 두 경우 모두 후보 `reservation_price`를 원본에 반영하며, 원본 반영, 원본 버전 증가, 수정본 종결과
+감사 기록은 하나의 트랜잭션으로 처리한다. 이미 생성된 `reservation_price_snapshot`은 가격 변경으로 수정하지 않는다.
 
 소유 운영자는 심사 결정 전에 `EDIT_REQUESTED → EDIT_WITHDRAWN`으로 철회할 수 있고,
 철회 시각·처리자·사유를 기록하며 반복 철회 요청은 기존 결과를 반환한다.
@@ -291,8 +291,8 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 | 데이터 | 핵심 식별·연결 정보 | 용도 |
 | --- | --- | --- |
 | 지역 | `region_id`, 공개 상태 | 지역 선택과 공개 범위 |
-| 콘텐츠 | `content_id`, `region_id`, type, status, operator_id, 행사·체험 표시 필드(연령 조건·준비물·취소 안내), publish_at, deleted_at | 탐색·승인·자동 공개, 서버가 설정한 소유 관계와 공개 전 소프트 삭제 현재 상태 |
-| 콘텐츠 수정본 | `content_revision_id`, content_id, editor_id, status, 행사·체험 후보 표시 필드, 후보 `publish_at`, submitted_at, reviewed_at, withdrawn_at, withdrawn_by, withdrawal_reason | 공개·공개 전 승인본을 분리한 수정 심사·철회 |
+| 콘텐츠 | `content_id`, `region_id`, type, status, operator_id, `reservation_price`, 행사·체험 표시 필드(연령 조건·준비물·취소 안내), publish_at, deleted_at | 탐색·승인·자동 공개, 서버가 설정한 소유 관계와 공개 전 소프트 삭제 현재 상태 |
+| 콘텐츠 수정본 | `content_revision_id`, content_id, editor_id, status, 후보 `reservation_price`, 행사·체험 후보 표시 필드, 후보 `publish_at`, submitted_at, reviewed_at, withdrawn_at, withdrawn_by, withdrawal_reason | 공개·공개 전 승인본을 분리한 수정 심사·철회 |
 | 콘텐츠 상태 로그 | id, `content_id`, `actor_id`, status, reason, date | 생성·승인·자동 공개·중단·철회·종료·삭제의 처리자, 사유와 상태 변경 시각 |
 | 행사·체험 회차 | `session_id`, `content_id`, 시작·종료 시각, 정원, status, 체크인 시작·종료 시각 | 무료 예약 마감·QR 가능 단위 |
 | 회차 수정 심사 요청 | `session_revision_id`, content_id, target_session_id, 후보 일정·정원, base_session_version, status, submitted_at, reviewed_at | 기존 `SCHEDULED` 회차 변경의 심사 후보. 승인 때만 실제 회차에 반영 |

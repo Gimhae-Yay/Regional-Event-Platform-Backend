@@ -93,7 +93,7 @@ Accept: application/json
     "contentId": "10",
     "startsAt": "2026-08-15T10:00:00+09:00",
     "endsAt": "2026-08-15T12:00:00+09:00",
-    "price": 0,
+    "price": 20000,
     "remainingCapacity": 12,
     "reservable": true
   }
@@ -111,7 +111,7 @@ Accept: application/json
 | `data.contentId` | String | API 공통 규칙에 따른 공개 콘텐츠 식별자다. |
 | `data.startsAt` | String | 회차 시작 일정 시각. API 공통 규칙에 따른 `Asia/Seoul` ISO 8601 오프셋 일시다. |
 | `data.endsAt` | String | 회차 종료 일정 시각. API 공통 규칙에 따른 `Asia/Seoul` ISO 8601 오프셋 일시다. |
-| `data.price` | Integer | P0 무료 예약 가격. 원 단위 정수 `0`이다. |
+| `data.price` | Integer | 공개 콘텐츠의 현재 `content.reservation_price`인 예약 기본 금액이다. 원 단위 정수이며 `0` 이상이다. 이미 생성된 결제 가격 스냅샷은 이 조회값을 바꾸지 않는다. |
 | `data.remainingCapacity` | Integer | MySQL 조회 시점의 잔여 정원. 0 이상의 정수다. |
 | `data.reservable` | Boolean | 조회 시점에 홀드 생성 조건을 만족하면 `true`다. `true`여도 동시 요청으로 실제 홀드 생성은 실패할 수 있다. |
 
