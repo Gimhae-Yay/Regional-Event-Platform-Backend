@@ -120,6 +120,18 @@ public class Stampbook {
         return endedAt;
     }
 
+    public void updateRewardCouponPolicy(CouponPolicy rewardCouponPolicy) {
+        if (status != StampbookStatus.DRAFT) {
+            throw new IllegalStateException("only DRAFT stampbook can update reward coupon policy");
+        }
+        CouponPolicy validatedRewardCouponPolicy = requireNotNull(
+            rewardCouponPolicy,
+            "rewardCouponPolicy"
+        );
+        validateRewardCouponPolicy(region, validatedRewardCouponPolicy);
+        this.rewardCouponPolicy = validatedRewardCouponPolicy;
+    }
+
     private static void validateRewardCouponPolicy(
         Region region,
         CouponPolicy rewardCouponPolicy
