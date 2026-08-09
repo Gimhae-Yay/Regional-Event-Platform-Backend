@@ -33,6 +33,7 @@ P1 쿠폰은 정책이 가리키는 콘텐츠의 유료 예약에 적용하는 �
 | `P1-FR-06`, `CPN-05` | `GET /me/coupons/{couponId}/usage-history` | `coupon_redemption`, `coupon_status_history` |
 | `P1-FR-06`, `CPN-04`, `CPN-05` | `POST /me/reservation-holds/{holdId}/payments` | `reservation_price_snapshot`, `coupon`, `coupon_status_history`, `coupon_redemption` |
 | `P1-FR-06`, `CPN-04`, `CPN-05` | `POST /webhooks/portone` | `payment`, `reservation`, `coupon`, `coupon_status_history`, `coupon_redemption` |
+| `P1-FR-06`, `CPN-05` | 내부 스케줄러 (HTTP 없음) | `coupon`, `coupon_status_history` |
 
 ## 2. 공통 계약 참조
 
@@ -57,6 +58,7 @@ P1 쿠폰은 정책이 가리키는 콘텐츠의 유료 예약에 적용하는 �
 | 쿠폰 정책 공개 | `POST /operator/coupon-policies/{couponPolicyId}/publish` | [publish-coupon-policy.md](publish-coupon-policy.md) |
 | 쿠폰 정책 종료 | `POST /operator/coupon-policies/{couponPolicyId}/end` | [end-coupon-policy.md](end-coupon-policy.md) |
 | 방문·스탬프북 쿠폰 발급 요청 | `POST /coupon-policies/{couponPolicyId}/coupons` | [issue-coupon.md](issue-coupon.md) |
+| 쿠폰 만료 처리 | 별도 HTTP 경로 없음(스케줄러) | [expire-coupons.md](expire-coupons.md) |
 
 ### 결제 연계 API
 
