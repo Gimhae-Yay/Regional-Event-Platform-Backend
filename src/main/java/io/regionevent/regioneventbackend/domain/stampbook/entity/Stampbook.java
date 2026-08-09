@@ -139,6 +139,14 @@ public class Stampbook {
         status = StampbookStatus.PENDING_REVIEW;
     }
 
+    public void end(Instant endedAt) {
+        if (status != StampbookStatus.PUBLISHED) {
+            throw new IllegalStateException("only PUBLISHED stampbook can end");
+        }
+        this.endedAt = requireNotNull(endedAt, "endedAt");
+        status = StampbookStatus.ENDED;
+    }
+
     private static void validateRewardCouponPolicy(
         Region region,
         CouponPolicy rewardCouponPolicy
