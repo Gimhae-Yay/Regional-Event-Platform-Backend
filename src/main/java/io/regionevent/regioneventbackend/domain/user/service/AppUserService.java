@@ -7,6 +7,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
+import io.regionevent.regioneventbackend.domain.user.entity.AppUserAccountKind;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -32,19 +33,16 @@ public class AppUserService {
         String name,
         String phone
     ) {
-        validateLoginIdentifierAvailable(email);
+        return createActiveUser(email, password, name, phone, AppUserAccountKind.ORDINARY);
+    }
 
-        try {
-            return appUserRepository.saveAndFlush(new AppUser(
-                email,
-                passwordEncoder.encode(password),
-                name,
-                phone,
-                AppUserStatus.ACTIVE
-            ));
-        } catch (DataIntegrityViolationException exception) {
-            throw new BusinessException(ErrorCode.DUPLICATE_LOGIN_IDENTIFIER, exception);
-        }
+    public AppUser createActivePrivilegedUser(
+        String email,
+        String password,
+        String name,
+        String phone
+    ) {
+        return createActiveUser(email, password, name, phone, AppUserAccountKind.PRIVILEGED);
     }
 
     public AppUser authenticate(String email, String password) {
@@ -78,6 +76,29 @@ public class AppUserService {
     private void validateLoginIdentifierAvailable(String email) {
         if (appUserRepository.existsByLoginIdentifier(email)) {
             throw new BusinessException(ErrorCode.DUPLICATE_LOGIN_IDENTIFIER);
+        }
+    }
+
+    private AppUser createActiveUser(
+        String email,
+        String password,
+        String name,
+        String phone,
+        AppUserAccountKind accountKind
+    ) {
+        validateLoginIdentifierAvailable(email);
+
+        try {
+            return appUserRepository.saveAndFlush(new AppUser(
+                email,
+                passwordEncoder.encode(password),
+                name,
+                phone,
+                accountKind,
+                AppUserStatus.ACTIVE
+            ));
+        } catch (DataIntegrityViolationException exception) {
+            throw new BusinessException(ErrorCode.DUPLICATE_LOGIN_IDENTIFIER, exception);
         }
     }
 }
