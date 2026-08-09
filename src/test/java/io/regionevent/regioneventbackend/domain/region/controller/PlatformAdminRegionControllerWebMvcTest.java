@@ -1,0 +1,153 @@
+package io.regionevent.regioneventbackend.domain.region.controller;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+import static org.springframework.http.HttpHeaders.AUTHORIZATION;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.time.Instant;
+
+import org.junit.jupiter.api.Test;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+
+import io.regionevent.regioneventbackend.domain.region.service.CreateRegionResult;
+import io.regionevent.regioneventbackend.domain.region.service.CreateRegionUseCase;
+import io.regionevent.regioneventbackend.domain.region.service.CreateRegionUseCase.CreateRegionCommand;
+import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
+import io.regionevent.regioneventbackend.global.config.SecurityConfig;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
+import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
+import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
+import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
+
+@WebMvcTest(PlatformAdminRegionController.class)
+@Import({SecurityConfig.class, RequestIdFilter.class, GlobalExceptionHandler.class})
+class PlatformAdminRegionControllerWebMvcTest {
+
+    private static final Long AUTHENTICATED_USER_ID = 101L;
+    private static final Instant CREATED_AT = Instant.parse("2026-08-09T00:00:00Z");
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private JwtAccessTokenService jwtAccessTokenService;
+
+    @MockitoBean
+    private CreateRegionUseCase createRegionUseCase;
+
+    @MockitoBean
+    private RefreshTokenStore refreshTokenStore;
+
+    @Test
+    void createRegion_유효한요청_생성응답을반환한다() throws Exception {
+        when(createRegionUseCase.create(eq(AUTHENTICATED_USER_ID), any(), any())).thenReturn(result());
+
+        mockMvc.perform(authenticated(post("/api/v1/platform-admin/regions"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(validRequest()))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.statusCode").value(201))
+            .andExpect(jsonPath("$.code").value("SUCCESS"))
+            .andExpect(jsonPath("$.message").value("지역 생성에 성공했습니다."))
+            .andExpect(jsonPath("$.data.regionId").value("11"))
+            .andExpect(jsonPath("$.data.regionCode").value("JEONJU"))
+            .andExpect(jsonPath("$.data.name").value("전주시"))
+            .andExpect(jsonPath("$.data.isPublic").value(false))
+            .andExpect(jsonPath("$.data.createdAt").value("2026-08-09T00:00:00Z"))
+            .andExpect(jsonPath("$.data.updatedAt").value("2026-08-09T00:00:00Z"));
+
+        verify(createRegionUseCase).create(
+            eq(AUTHENTICATED_USER_ID),
+            eq(new CreateRegionCommand(
+                "JEONJU",
+                "전주시",
+                "PILOT_REGION_ADDITION",
+                "OPS-2026-0805-REGION-03"
+            )),
+            any()
+        );
+    }
+
+    @Test
+    void createRegion_잘못된입력_유스케이스를호출하지않는다() throws Exception {
+        mockMvc.perform(authenticated(post("/api/v1/platform-admin/regions"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "regionCode": "jeon ju",
+                      "name": "전주시",
+                      "reasonCode": "UNSUPPORTED_REASON",
+                      "evidenceReference": " "
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        verifyNoInteractions(createRegionUseCase);
+    }
+
+    @Test
+    void createRegion_중복코드_계약된충돌오류를반환한다() throws Exception {
+        when(createRegionUseCase.create(eq(AUTHENTICATED_USER_ID), any(), any()))
+            .thenThrow(new BusinessException(ErrorCode.REGION_CODE_ALREADY_EXISTS));
+
+        mockMvc.perform(authenticated(post("/api/v1/platform-admin/regions"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(validRequest()))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code").value("REGION_CODE_ALREADY_EXISTS"));
+    }
+
+    @Test
+    void createRegion_인증정보없음_미인증오류를반환한다() throws Exception {
+        mockMvc.perform(post("/api/v1/platform-admin/regions")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(validRequest()))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+    }
+
+    private CreateRegionResult result() {
+        return new CreateRegionResult(
+            11L,
+            "JEONJU",
+            "전주시",
+            false,
+            CREATED_AT,
+            CREATED_AT
+        );
+    }
+
+    private String validRequest() {
+        return """
+            {
+              "regionCode": "  jeonju  ",
+              "name": "  전주시  ",
+              "reasonCode": "PILOT_REGION_ADDITION",
+              "evidenceReference": "OPS-2026-0805-REGION-03"
+            }
+            """;
+    }
+
+    private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder authenticated(
+        org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder requestBuilder
+    ) {
+        return requestBuilder.header(
+            AUTHORIZATION,
+            "Bearer " + jwtAccessTokenService.issue(AUTHENTICATED_USER_ID)
+        );
+    }
+}
