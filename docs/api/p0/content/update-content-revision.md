@@ -177,7 +177,7 @@ Accept: application/json
 1. `contentId`, 지역, 소유자와 콘텐츠 유형은 수정본 편집으로 바꾸지 않는다.
 2. 기존 수정본의 후보 `publish_at`이 있으면 `publishAt`이 필수이며 해당 후보 값을 교체한다. 후보 `publish_at`이 `NULL`인 공개 콘텐츠 수정본은 `publishAt`을 제공할 수 없다.
 3. `representativeImageObjectId`를 제공하면 서버는 [대표 이미지 S3 업로드 URL 발급](upload-representative-image.md)의 연결 검증 조건을 모두 만족하는 이미지 객체일 때만 후보 대표 이미지로 연결한다. 제공하지 않으면 기존 후보 대표 이미지 스냅샷을 유지한다.
-4. `reservationPrice`는 모든 회차에 적용할 0 이상 정수 KRW 후보 가격이며, 편집 시 `content_revision.reservation_price`를 함께 교체한다. 이 API는 원본 `content.reservation_price`와 이미 생성된 `reservation_price_snapshot`을 변경하지 않으며, 새로 제출한 수정본의 후보 가격이 승인된 뒤에만 원본 가격을 변경한다.
+4. `reservationPrice`는 모든 회차에 적용할 0 이상 정수 KRW 후보 가격이며, 편집 시 `content_revision.reservation_price`를 함께 교체한다. 이 API는 원본 `content.reservation_price`와 이미 생성된 `reservation_price_snapshot`을 변경하지 않는다. `EDIT_REJECTED` 수정본에서 바꾼 후보 가격은 해당 수정본이 종결 상태로 남으므로 원본 가격에 반영되지 않으며, [콘텐츠 수정본 생성](create-content-revision.md) 요청으로 새로 생성한 수정본의 `reservationPrice`만 승인된 뒤 원본 가격을 변경한다.
 5. 공개 회차의 수정 가능 필드는 P0에서 확정되지 않았으므로 이 API는 회차·정원·체크인 창을 수정하지 않는다.
 6. `EDIT_REQUESTED`에서는 후보 필드가 동결된다. 심사에서 반려된 수정본은 이 API로 보완할 수 있지만 `EDIT_REJECTED` 상태는 종결 상태로 유지한다. 새 심사를 요청하려면 [콘텐츠 수정본 생성](create-content-revision.md)으로 새 수정본을 생성해야 한다.
 7. 편집은 원본 `content`와 공개 캐시의 버전을 변경하지 않는다.
