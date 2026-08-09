@@ -96,12 +96,12 @@ Content-Type: application/json
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `type` | String | Y | 이 경로가 결제 처리 대상으로 삼는 값은 `Transaction.Ready`, `Transaction.Paid`, `Transaction.VirtualAccountIssued`, `Transaction.PartialCancelled`, `Transaction.Cancelled`, `Transaction.Failed`, `Transaction.PayPending`, `Transaction.CancelPending`, `Transaction.DisputeCreated`, `Transaction.DisputeResolved`다. PortOne의 정상 `BillingKey.Ready`, `BillingKey.Issued`, `BillingKey.Failed`, `BillingKey.Deleted`, `BillingKey.Updated`와 이후 추가되는 알 수 없는 `type`은 서명·공통 JSON 검증 뒤 결제 처리 없이 `200 OK`로 끝낸다. |
+| `type` | String | Y | 이 경로가 결제 처리 대상으로 삼는 값은 `Transaction.Ready`, `Transaction.Paid`, `Transaction.VirtualAccountIssued`, `Transaction.PartialCancelled`, `Transaction.Cancelled`, `Transaction.Failed`, `Transaction.PayPending`, `Transaction.CancelPending`, `Transaction.DisputeCreated`, `Transaction.DisputeResolved`의 10개뿐이다. PortOne의 정상 `BillingKey.Ready`, `BillingKey.Issued`, `BillingKey.Failed`, `BillingKey.Deleted`, `BillingKey.Updated`와 이후 추가되는 모든 미지원 `type`(`Transaction.*` 포함)은 서명·공통 JSON 검증 뒤 결제 처리 없이 `200 OK`로 끝낸다. |
 | `timestamp` | String | Y | 이벤트 발생 시각(RFC 3339)이다. 수신 실패로 재전송돼도 값이 유지된다. |
 | `data` | Object | Y | 이벤트 세부 데이터다. |
 | `data.storeId` | String | Y | 웹훅을 발생시킨 PortOne 상점 식별자다. |
-| `data.paymentId` | String | `Transaction.*`에서 Y | 결제 생성 시 서버가 발급한 `order_id`와 같은 결제 주문 식별자다. 서버는 이 값으로 PortOne 거래를 조회한다. `BillingKey.*`와 알 수 없는 `type`에는 요구하지 않는다. |
-| `data.transactionId` | String | `Transaction.*`에서 Y | PortOne이 부여한 결제 시도 식별자다. 한 결제의 여러 시도는 서로 다른 값일 수 있다. `BillingKey.*`와 알 수 없는 `type`에는 요구하지 않는다. |
+| `data.paymentId` | String | 열거한 10개 결제 이벤트에서 Y | 결제 생성 시 서버가 발급한 `order_id`와 같은 결제 주문 식별자다. 서버는 이 값으로 PortOne 거래를 조회한다. `BillingKey.*`와 미지원 `type`에는 요구하지 않는다. |
+| `data.transactionId` | String | 열거한 10개 결제 이벤트에서 Y | PortOne이 부여한 결제 시도 식별자다. 한 결제의 여러 시도는 서로 다른 값일 수 있다. `BillingKey.*`와 미지원 `type`에는 요구하지 않는다. |
 | `data.cancellationId` | String | N | `Transaction.PartialCancelled`, `Transaction.Cancelled`, `Transaction.CancelPending`일 때만 있는 PortOne 취소 식별자다. |
 
 ### Response
@@ -125,7 +125,7 @@ Content-Type: application/json
 
 서명이 유효하고 결제 이벤트의 PortOne 조회가 필요 없거나 조회에 성공적으로 응답을 받았으면, 결제 매칭 여부·검증 결과나
 내부 처리 결과와 무관하게 `200 OK`를 반환해 PortOne의 불필요한 재전송을 막는다. 이 결제 전용 경로에 도착한
-정상 `BillingKey.*` 또는 알 수 없는 `type`은 결제 이력·도메인 상태를 만들지 않고 `200 OK`로 끝낸다. 매칭되는
+정상 `BillingKey.*` 또는 미지원 `type`(이후 추가되는 `Transaction.*` 포함)은 결제 이력·도메인 상태를 만들지 않고 `200 OK`로 끝낸다. 매칭되는
 결제를 찾지 못해도 수신·인증 결과는 `payment_webhook`에 남긴다. 단, `PENDING` 결제의 PortOne 조회 자체가
 타임아웃·연결 실패·5xx로 끝나면 `500 INTERNAL_SERVER_ERROR`로 응답한다. PortOne은 모든 비-`2xx`
 응답을 실패로 보고 최초 전송 뒤 최대 5회 재전송하므로, 정상 형식·서명의 웹훅에서 재시도가 필요한 경우는
@@ -144,7 +144,7 @@ Content-Type: application/json
 
 | HTTP Status | Code | Description |
 | --- | --- | --- |
-| `400` | `INVALID_JSON` | 서명은 유효하지만 요청 본문이 JSON 형식이 아니거나 공통 필드 `type`, `timestamp`, `data.storeId`가 없다. `Transaction.*`인 경우 `data.paymentId`, `data.transactionId`가 없을 때도 해당한다. `BillingKey.*`와 알 수 없는 `type`에는 결제 필드를 요구하지 않는다. `payment_webhook`을 생성하지 않는다. |
+| `400` | `INVALID_JSON` | 서명은 유효하지만 요청 본문이 JSON 형식이 아니거나 공통 필드 `type`, `timestamp`, `data.storeId`가 없다. 표에 열거한 10개 결제 이벤트는 `data.paymentId`, `data.transactionId`가 없을 때도 해당한다. `BillingKey.*`와 미지원 `type`에는 결제 필드를 요구하지 않는다. `payment_webhook`을 생성하지 않는다. |
 | `401` | `WEBHOOK_SIGNATURE_INVALID` | 필수 서명 헤더가 없거나 `webhook-id.webhook-timestamp.원문_본문`의 HMAC-SHA256 검증 또는 전송 시각 ±5분 검증에 실패했다. `payment_webhook`을 생성하지 않고 어떤 도메인 상태도 변경하지 않는다. |
 | `500` | `INTERNAL_SERVER_ERROR` | `PENDING` 또는 홀드 종결로 `EXPIRED`가 된 결제의 PortOne 조회 자체가 타임아웃·연결 실패·5xx로 끝났거나 예상하지 못한 서버 오류가 발생했다. `payment_webhook`·`payment_verification`을 남기지 않고 결제·예약 상태를 변경하지 않는다. PortOne은 최초 전송 뒤 1분·4분·16분·64분·256분 기본 지연의 Full Jitter 재전송을 최대 5회 수행한 뒤 종료한다. |
 
@@ -162,8 +162,8 @@ Content-Type: application/json
 ### 처리 규칙
 
 1. JSON 역직렬화 전에 수신한 원문 본문과 `webhook-id`, `webhook-timestamp`, `webhook-signature`을 그대로 사용해 `webhook-id.webhook-timestamp.원문_본문`의 HMAC-SHA256 서명을 상수 시간 비교로 검증한다. `webhook-timestamp`는 현재 시각의 ±5분 안이어야 한다. 원문 본문을 파싱 후 다시 직렬화해 서명 입력으로 사용하지 않는다.
-2. 서명 검증에 실패하면 `payment_webhook`을 생성하지 않고 결제·예약 상태를 변경하지 않는다. 검증에 성공하면 공통 필드 `type`, `timestamp`, `data.storeId`만 먼저 역직렬화·검증한다. 이 공통 JSON이 유효한 정상 `BillingKey.*` 또는 알 수 없는 `type`은 `data.paymentId`·`data.transactionId` 검증, `payment_webhook` 기록, 결제·예약·쿠폰 상태 변경 없이 `200 OK`로 끝낸다.
-3. 결제 처리 대상인 `Transaction.*`에서 `webhook-id`(`provider_event_id`)가 이미 처리된 값이면 새로운 도메인 처리를 실행하지 않고 `200 OK`를 반환한다(`UNIQUE (provider_event_id)`).
+2. 서명 검증에 실패하면 `payment_webhook`을 생성하지 않고 결제·예약 상태를 변경하지 않는다. 검증에 성공하면 공통 필드 `type`, `timestamp`, `data.storeId`만 먼저 역직렬화·검증한다. 이 공통 JSON이 유효한 정상 `BillingKey.*` 또는 미지원 `type`(이후 추가되는 `Transaction.*` 포함)은 `data.paymentId`·`data.transactionId` 검증, `payment_webhook` 기록, 결제·예약·쿠폰 상태 변경 없이 `200 OK`로 끝낸다.
+3. 표에 열거한 10개 결제 이벤트에서 `webhook-id`(`provider_event_id`)가 이미 처리된 값이면 새로운 도메인 처리를 실행하지 않고 `200 OK`를 반환한다(`UNIQUE (provider_event_id)`).
 4. `paymentId`(`order_id`)로 대상 결제를 찾지 못하면 `payment_webhook.payment_id = null`로 수신·인증 결과를 기록하고 `200 OK`를 반환한다.
 5. 대상 결제를 찾았고 이미 종결 상태가 `APPROVED`, `DECLINED`, `CANCELLED`, `DISCREPANT`이면 PortOne을 다시 조회하지 않고 저장된 상태를 유지한다. 홀드·예약·쿠폰을 다시 변경하지 않는다. 홀드 종결 작업이 만든 `EXPIRED`는 늦은 외부 성공 확인 대상이므로 이 조기 반환에 포함하지 않는다.
 6. 대상 결제가 `PENDING` 또는 홀드 종결로 `EXPIRED`가 된 상태면 데이터베이스 행 잠금을 획득하기 전에 `payment.order_id`로 PortOne V2 거래를 조회한다. 조회 자체가 타임아웃·연결 실패·5xx로 끝나면 `payment_webhook`·`payment_verification`을 남기지 않고 `500 INTERNAL_SERVER_ERROR`로 응답해 PortOne의 재전송을 유도한다.

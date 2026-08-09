@@ -96,7 +96,7 @@
 - `PAY-04`:
   웹훅은 PortOne V2 웹훅 버전 `2024-04-25`의 Standard Webhooks HMAC-SHA256 인증·검증 절차를 통과한 요청만 처리한다.
   원문 본문과 `webhook-id`, `webhook-timestamp`, `webhook-signature`을 검증하고 `webhook-id`를 외부 이벤트 식별자로 사용한다.
-  결제 수신 경로는 `Transaction.*`만 결제·예약·쿠폰 처리 대상으로 삼는다. 정상 `BillingKey.*`와 이후 추가되는 알 수 없는 `type`은 공통 JSON 검증 뒤 결제 필드를 요구하거나 결제 이력을 만들지 않고 `200 OK`로 끝낸다.
+  결제 수신 경로는 웹훅 명세에 열거한 10개 `Transaction` 이벤트만 결제·예약·쿠폰 처리 대상으로 삼는다. 정상 `BillingKey.*`와 이후 추가되는 모든 미지원 `type`(`Transaction.*` 포함)은 공통 JSON 검증 뒤 결제 필드를 요구하거나 결제 이력을 만들지 않고 `200 OK`로 끝낸다.
   같은 외부 이벤트의 재전송과 서로 다른 웹훅 이벤트의 순서 역전·동시 도착은 하나의 내부 처리 결과로 수렴해야 한다. 양수 결제 승인·예약·쿠폰 사용 확정의 HTTP 진입점은 웹훅 하나만 둔다.
 - `PAY-05`:
   취소·환불 요청은 본인 예약과 회차 시작 전 조건을 검증한다. 환불 금액은 승인 결제의 최종 금액 전체이며 부분 환불은 지원하지 않는다.
@@ -120,7 +120,7 @@
 | 항목 | 확정 계약 |
 | --- | --- |
 | 웹훅 형식 | 결제모듈 V2 웹훅 버전 `2024-04-25`, `application/json` 본문을 사용한다. 테스트와 실연동 URL·웹훅 시크릿은 PortOne 콘솔에서 서로 분리해 설정한다. |
-| 웹훅 식별·본문 | 재전송 멱등 식별자는 본문의 값이 아닌 `webhook-id` 헤더다. 모든 본문은 `type`, 이벤트 발생 시각 `timestamp`, `data.storeId`를 가진다. 결제 처리 대상 `Transaction.*`은 `data.paymentId`, `data.transactionId`와 취소 이벤트의 선택 `data.cancellationId`를 가진다. `BillingKey.*`는 별도 `data.billingKey` 형식이므로 이 결제 경로에서는 공통 검증 뒤 `200 OK`로 끝낸다. |
+| 웹훅 식별·본문 | 재전송 멱등 식별자는 본문의 값이 아닌 `webhook-id` 헤더다. 모든 본문은 `type`, 이벤트 발생 시각 `timestamp`, `data.storeId`를 가진다. 웹훅 명세에 열거한 10개 결제 이벤트만 `data.paymentId`, `data.transactionId`와 취소 이벤트의 선택 `data.cancellationId`를 가진다. `BillingKey.*`는 별도 `data.billingKey` 형식이고, 이후 추가되는 미지원 `type`도 결제 필드를 보장하지 않으므로 이 결제 경로에서는 공통 검증 뒤 `200 OK`로 끝낸다. |
 | 서명 검증 | `webhook-id.webhook-timestamp.원문_본문`을 Standard Webhooks의 `v1` HMAC-SHA256 서명으로 검증한다. `webhook-signature`의 공백 구분 후보 중 하나가 일치해야 하고, `webhook-timestamp`는 현재 시각의 ±5분 안이어야 한다. |
 | 서버 SDK | JVM 구현은 `io.portone:server-sdk:0.22.0`의 `WebhookVerifier`를 사용한다. 검증기는 PortOne API Secret이 아닌 웹훅 시크릿을 받으며 HMAC-SHA256 대칭 서명만 지원한다. |
 | PortOne 거래 재조회 | V2 API의 `GET /payments/{paymentId}`를 V2 API Secret으로 조회한다. `Authorization` 헤더는 `PortOne` 접두사 뒤에 배포 환경에서 주입한 API Secret 값을 붙인다. |
