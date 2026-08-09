@@ -171,7 +171,7 @@ class PublishCouponPolicyUseCaseMySqlTest extends NonTransactionalMySqlTestSuppo
                 assertThat(event.getPreviousState()).isEqualTo(CouponPolicyStatus.ENDED.name());
                 assertThat(event.getNextState()).isNull();
                 assertThat(event.getReasonCode()).isEqualTo(ErrorCode.COUPON_POLICY_CONFLICT.code());
-                assertThat(event.getRequestId()).isEqualTo(requestId);
+                assertThat(event.getRequestId()).isEqualTo(requestId.toString());
                 assertThat(auditEventActorLinkRepository.findById(event.getAuditEventId()))
                     .hasValueSatisfying(link ->
                         assertThat(link.getActor().getUserId()).isEqualTo(fixture.operatorId())
