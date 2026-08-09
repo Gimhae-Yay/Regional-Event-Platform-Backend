@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponIssuanceType;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicy;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicyStatus;
 import io.regionevent.regioneventbackend.domain.coupon.repository.CouponPolicyRepository;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -71,6 +72,32 @@ public class CouponPolicyService {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         return couponPolicy;
+    }
+
+    @Transactional
+    public CouponPolicy findForIssue(Long couponPolicyId) {
+        return couponPolicyRepository.findByCouponPolicyIdForUpdate(couponPolicyId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public void issue(
+        CouponPolicy couponPolicy,
+        CouponIssuanceType issueSourceType,
+        Instant issuedAt
+    ) {
+        if (couponPolicy.getIssuanceType() != issueSourceType) {
+            throw new BusinessException(ErrorCode.COUPON_ISSUE_CONFLICT);
+        }
+        if (couponPolicy.getStatus() != CouponPolicyStatus.PUBLISHED
+            || issuedAt.isBefore(couponPolicy.getIssueStartsAt())
+            || issuedAt.isAfter(couponPolicy.getIssueEndsAt())) {
+            throw new BusinessException(ErrorCode.COUPON_POLICY_NOT_PUBLISHED);
+        }
+        try {
+            couponPolicy.issue(issuedAt);
+        } catch (IllegalStateException exception) {
+            throw new BusinessException(ErrorCode.COUPON_ISSUE_CONFLICT, exception);
+        }
     }
 
     private void validateRequiredId(Long id) {
