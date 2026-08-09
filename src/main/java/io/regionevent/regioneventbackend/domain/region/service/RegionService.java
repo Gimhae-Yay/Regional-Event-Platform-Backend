@@ -36,6 +36,15 @@ public class RegionService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
+    public Region changeVisibility(
+        Region region,
+        boolean isPublic
+    ) {
+        region.changeVisibility(isPublic);
+        return regionRepository.saveAndFlush(region);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
     public Region createPrivateRegion(
         String regionCode,
         String name
