@@ -40,6 +40,20 @@ public class CouponPolicyService {
         return couponPolicyRepository.saveAndFlush(couponPolicy);
     }
 
+    public CouponPolicy findForUpdate(Long couponPolicyId) {
+        validateRequiredId(couponPolicyId);
+        return couponPolicyRepository.findByCouponPolicyIdForUpdate(couponPolicyId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public CouponPolicy publish(
+        CouponPolicy couponPolicy,
+        Instant publishedAt
+    ) {
+        couponPolicy.publish(publishedAt);
+        return couponPolicyRepository.saveAndFlush(couponPolicy);
+    }
+
     public record CreateCouponPolicyCommand(
         Content content,
         Region region,
