@@ -55,6 +55,13 @@ public class Region {
         this.isPublic = isPublic;
     }
 
+    public static Region createPrivate(
+        String regionCode,
+        String name
+    ) {
+        return new Region(regionCode, name, false);
+    }
+
     @PrePersist
     protected void onCreate() {
         Instant now = Instant.now();

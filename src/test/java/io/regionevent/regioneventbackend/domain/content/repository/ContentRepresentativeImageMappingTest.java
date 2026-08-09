@@ -3,6 +3,7 @@ package io.regionevent.regioneventbackend.domain.content.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
+import java.util.Locale;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceUnitUtil;
@@ -91,7 +92,7 @@ class ContentRepresentativeImageMappingTest {
     }
 
     private Content saveContent(String title) {
-        String uniqueKey = Integer.toHexString(title.hashCode());
+        String uniqueKey = Integer.toHexString(title.hashCode()).toUpperCase(Locale.ROOT);
         Region region = regionRepository.saveAndFlush(new Region("GIMHAE-" + uniqueKey, "김해시", true));
         AppUser operator = appUserRepository.saveAndFlush(
             new AppUser(

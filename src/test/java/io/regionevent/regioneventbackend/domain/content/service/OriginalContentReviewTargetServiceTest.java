@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -179,7 +180,7 @@ class OriginalContentReviewTargetServiceTest {
 
     private Content saveContent(String operatorLoginIdentifier) {
         Region region = regionRepository.saveAndFlush(new Region(
-            "REGION-" + operatorLoginIdentifier,
+            toRegionCode(operatorLoginIdentifier),
             "테스트 지역",
             true
         ));
@@ -215,6 +216,10 @@ class OriginalContentReviewTargetServiceTest {
             "시작 하루 전까지 취소할 수 있습니다.",
             Instant.parse("2026-08-02T00:00:00Z")
         ));
+    }
+
+    private String toRegionCode(String source) {
+        return "REGION-" + Integer.toUnsignedString(source.hashCode(), 36).toUpperCase(Locale.ROOT);
     }
 
     private ContentLog saveLog(

@@ -53,8 +53,8 @@ class RegionRepositoryTest {
     void 공개_지역_검증_정보를_이름과_지역_식별자_오름차순으로_조회한다() {
         Region privateRegion = regionRepository.saveAndFlush(new Region("PRIVATE", "Aardvark", false));
         Region beta = regionRepository.saveAndFlush(new Region("BETA", "Beta", true));
-        Region firstSameName = regionRepository.saveAndFlush(new Region("SAME_ONE", "Same", true));
-        Region secondSameName = regionRepository.saveAndFlush(new Region("SAME_TWO", "Same", true));
+        Region firstSameName = regionRepository.saveAndFlush(new Region("SAME-ONE", "Same", true));
+        Region secondSameName = regionRepository.saveAndFlush(new Region("SAME-TWO", "Same", true));
 
         List<PublicRegionVerificationProjection> regions = regionRepository.findPublicRegionVerifications();
 

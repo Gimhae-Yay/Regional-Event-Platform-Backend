@@ -14,6 +14,8 @@ import io.regionevent.regioneventbackend.domain.region.entity.Region;
 
 public interface RegionRepository extends JpaRepository<Region, Long> {
 
+    boolean existsByRegionCode(String regionCode);
+
     Optional<Region> findByRegionIdAndIsPublicTrue(Long regionId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
