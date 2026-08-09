@@ -109,7 +109,7 @@ Accept: application/json
 {
   "statusCode": 409,
   "code": "COUPON_POLICY_CONFLICT",
-  "message": "쿠폰 정책을 공개할 수 없는 상태입니다.",
+  "message": "쿠폰 정책을 처리할 수 없는 상태입니다.",
   "data": null
 }
 ```
