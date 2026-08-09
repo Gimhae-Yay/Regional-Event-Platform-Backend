@@ -75,6 +75,51 @@ class PlatformAdminAuditEventMigrationTest {
         )).isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    @Test
+    void 특권_변경_감사_이벤트는_증빙_참조_없이는_저장할_수_없다() {
+        JdbcTemplate jdbcTemplate = new JdbcTemplate(createMigratedDataSource());
+
+        List<AuditEventTargetType> privilegedChangeTargetTypes = List.of(
+            AuditEventTargetType.PLATFORM_ADMIN_ASSIGNMENT,
+            AuditEventTargetType.USER_ROLE_ASSIGNMENT
+        );
+
+        for (AuditEventTargetType targetType : privilegedChangeTargetTypes) {
+            assertThatThrownBy(() -> jdbcTemplate.update(
+                """
+                    INSERT INTO audit_event (
+                        request_id, target_type, target_id, result, actor_kind, occurred_at
+                    )
+                    VALUES (?, ?, 1, 'SUCCESS', 'SYSTEM', CURRENT_TIMESTAMP(6))
+                    """,
+                UUID.randomUUID().toString(),
+                targetType.name()
+            )).isInstanceOf(DataIntegrityViolationException.class);
+        }
+    }
+
+    @Test
+    void 기존_P0_감사_이벤트는_증빙_참조_없이_저장할_수_있다() {
+        JdbcTemplate jdbcTemplate = new JdbcTemplate(createMigratedDataSource());
+
+        jdbcTemplate.update(
+            """
+                INSERT INTO audit_event (
+                    request_id, target_type, target_id, result, actor_kind, occurred_at
+                )
+                VALUES (?, 'CONTENT', 1, 'SUCCESS', 'SYSTEM', CURRENT_TIMESTAMP(6))
+                """,
+            UUID.randomUUID().toString()
+        );
+
+        Integer auditEventCount = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM audit_event WHERE target_type = 'CONTENT'",
+            Integer.class
+        );
+
+        assertThat(auditEventCount).isEqualTo(1);
+    }
+
     private DriverManagerDataSource createMigratedDataSource() {
         DriverManagerDataSource dataSource = new DriverManagerDataSource(
             "jdbc:h2:mem:platform-admin-audit-event-" + UUID.randomUUID() + ";MODE=MySQL;DB_CLOSE_DELAY=-1",

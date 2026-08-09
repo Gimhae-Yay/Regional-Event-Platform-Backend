@@ -26,7 +26,8 @@ class AuditEventCommandTest {
             () -> new AuditEventCommandTest().실패_감사_이벤트는_사유_코드가_없으면_생성할_수_없다(),
             () -> new AuditEventCommandTest().실패_감사_이벤트는_공백_사유_코드를_허용하지_않는다(),
             () -> new AuditEventCommandTest().증빙_참조는_앞뒤_공백을_제거해_보존한다(),
-            () -> new AuditEventCommandTest().증빙_참조는_공백만_있거나_500자를_초과하면_거부한다()
+            () -> new AuditEventCommandTest().증빙_참조는_공백만_있거나_500자를_초과하면_거부한다(),
+            () -> new AuditEventCommandTest().특권_변경_감사_이벤트는_증빙_참조가_필수다()
         );
     }
 
@@ -81,6 +82,21 @@ class AuditEventCommandTest {
         );
     }
 
+    void 특권_변경_감사_이벤트는_증빙_참조가_필수다() {
+        assertThatIllegalArgumentException().isThrownBy(
+            () -> createCommandWithEvidenceReference(
+                AuditEventTargetType.PLATFORM_ADMIN_ASSIGNMENT,
+                null
+            )
+        );
+        assertThatIllegalArgumentException().isThrownBy(
+            () -> createCommandWithEvidenceReference(
+                AuditEventTargetType.USER_ROLE_ASSIGNMENT,
+                null
+            )
+        );
+    }
+
     private AuditEventCommand createCommand(
         AuditEventResult result,
         Long targetId,
@@ -112,10 +128,17 @@ class AuditEventCommandTest {
     }
 
     private AuditEventCommand createCommandWithEvidenceReference(String evidenceReference) {
+        return createCommandWithEvidenceReference(AuditEventTargetType.CONTENT, evidenceReference);
+    }
+
+    private AuditEventCommand createCommandWithEvidenceReference(
+        AuditEventTargetType targetType,
+        String evidenceReference
+    ) {
         return new AuditEventCommand(
             UUID.fromString("00000000-0000-0000-0000-000000000004"),
             null,
-            AuditEventTargetType.CONTENT,
+            targetType,
             101L,
             "PENDING",
             "PUBLISHED",

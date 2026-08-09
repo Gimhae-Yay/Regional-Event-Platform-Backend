@@ -48,6 +48,7 @@ public record AuditEventCommand(
         validateFailedAuditReasonCode(result, reasonCode);
         validateOptionalCode(reasonCode, MAX_REASON_CODE_LENGTH, "reasonCode");
         evidenceReference = normalizeOptionalEvidenceReference(evidenceReference);
+        validatePrivilegedChangeEvidenceReference(targetType, evidenceReference);
         if (occurredAt == null) {
             throw new IllegalArgumentException("occurredAt must not be null");
         }
@@ -128,5 +129,18 @@ public record AuditEventCommand(
             throw new IllegalArgumentException("evidenceReference must be between 1 and 500 characters");
         }
         return normalizedEvidenceReference;
+    }
+
+    private static void validatePrivilegedChangeEvidenceReference(
+        AuditEventTargetType targetType,
+        String evidenceReference
+    ) {
+        if ((targetType == AuditEventTargetType.PLATFORM_ADMIN_ASSIGNMENT
+            || targetType == AuditEventTargetType.USER_ROLE_ASSIGNMENT)
+            && evidenceReference == null) {
+            throw new IllegalArgumentException(
+                "privileged change audit event evidenceReference must not be null"
+            );
+        }
     }
 }
