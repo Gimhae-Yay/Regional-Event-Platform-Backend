@@ -21,6 +21,8 @@ import io.regionevent.regioneventbackend.domain.region.entity.Region;
 @Table(name = "audit_event")
 public class AuditEvent {
 
+    private static final int MAX_EVIDENCE_REFERENCE_LENGTH = 500;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "audit_event_id")
@@ -56,6 +58,9 @@ public class AuditEvent {
     @Column(name = "reason_code", length = 100)
     private String reasonCode;
 
+    @Column(name = "evidence_reference", length = MAX_EVIDENCE_REFERENCE_LENGTH)
+    private String evidenceReference;
+
     @Column(name = "actor_kind", nullable = false, length = 30)
     private String actorKind;
 
@@ -77,6 +82,7 @@ public class AuditEvent {
         String nextState,
         AuditEventResult result,
         String reasonCode,
+        String evidenceReference,
         String actorKind,
         String actorRole,
         Instant occurredAt
@@ -89,9 +95,39 @@ public class AuditEvent {
         this.nextState = nextState;
         this.result = requireNotNull(result, "result");
         this.reasonCode = reasonCode;
+        this.evidenceReference = normalizeOptionalEvidenceReference(evidenceReference);
         this.actorKind = requireNotBlank(actorKind, "actorKind");
         this.actorRole = actorRole;
         this.occurredAt = requireNotNull(occurredAt, "occurredAt");
+    }
+
+    public AuditEvent(
+        String requestId,
+        Region region,
+        AuditEventTargetType targetType,
+        Long targetId,
+        String previousState,
+        String nextState,
+        AuditEventResult result,
+        String reasonCode,
+        String actorKind,
+        String actorRole,
+        Instant occurredAt
+    ) {
+        this(
+            requestId,
+            region,
+            targetType,
+            targetId,
+            previousState,
+            nextState,
+            result,
+            reasonCode,
+            null,
+            actorKind,
+            actorRole,
+            occurredAt
+        );
     }
 
     public Long getAuditEventId() {
@@ -130,6 +166,10 @@ public class AuditEvent {
         return reasonCode;
     }
 
+    public String getEvidenceReference() {
+        return evidenceReference;
+    }
+
     public String getActorKind() {
         return actorKind;
     }
@@ -154,5 +194,20 @@ public class AuditEvent {
             throw new IllegalArgumentException(fieldName + " must not be null");
         }
         return value;
+    }
+
+    private static String normalizeOptionalEvidenceReference(String evidenceReference) {
+        if (evidenceReference == null) {
+            return null;
+        }
+
+        String normalizedEvidenceReference = evidenceReference.strip();
+        if (normalizedEvidenceReference.isEmpty()
+            || normalizedEvidenceReference.length() > MAX_EVIDENCE_REFERENCE_LENGTH) {
+            throw new IllegalArgumentException(
+                "evidenceReference must be between 1 and 500 characters"
+            );
+        }
+        return normalizedEvidenceReference;
     }
 }

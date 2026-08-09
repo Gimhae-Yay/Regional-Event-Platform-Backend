@@ -25,12 +25,13 @@ class CapacityHoldAuditEventTargetTypeMigrationTest {
                 """
                     INSERT INTO audit_event (
                         request_id, region_id, target_type, target_id, previous_state, next_state,
-                        result, reason_code, actor_kind, occurred_at
+                        result, reason_code, actor_kind, evidence_reference, occurred_at
                     )
-                    VALUES (?, NULL, ?, 1, NULL, NULL, 'SUCCESS', NULL, 'SYSTEM', CURRENT_TIMESTAMP(6))
+                    VALUES (?, NULL, ?, 1, NULL, NULL, 'SUCCESS', NULL, 'SYSTEM', ?, CURRENT_TIMESTAMP(6))
                     """,
                 UUID.randomUUID().toString(),
-                targetType.name()
+                targetType.name(),
+                "OPS-2026-0809-001"
             );
         }
 
