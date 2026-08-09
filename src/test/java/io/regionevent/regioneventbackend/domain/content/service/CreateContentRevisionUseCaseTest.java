@@ -40,7 +40,6 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
-import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentId;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService.AuthorizedOperator;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -250,7 +249,7 @@ class CreateContentRevisionUseCaseTest {
         when(user.getUserId()).thenReturn(USER_ID);
         when(user.getStatus()).thenReturn(AppUserStatus.ACTIVE);
         when(region.getRegionId()).thenReturn(REGION_ID);
-        when(assignment.getId()).thenReturn(new UserRoleAssignmentId(USER_ID, UserRole.OPERATOR));
+        when(assignment.getRoleAssignmentId()).thenReturn(1L);
         when(assignment.getAppUser()).thenReturn(user);
         when(assignment.getRole()).thenReturn(UserRole.OPERATOR);
         when(content.getContentId()).thenReturn(CONTENT_ID);

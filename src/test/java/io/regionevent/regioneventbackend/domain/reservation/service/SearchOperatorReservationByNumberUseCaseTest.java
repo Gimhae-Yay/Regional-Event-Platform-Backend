@@ -28,7 +28,6 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
-import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentId;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
@@ -181,7 +180,7 @@ class SearchOperatorReservationByNumberUseCaseTest {
 
             when(operator.getUserId()).thenReturn(OPERATOR_USER_ID);
             when(operator.getStatus()).thenReturn(AppUserStatus.ACTIVE);
-            when(roleAssignment.getId()).thenReturn(new UserRoleAssignmentId(OPERATOR_USER_ID, UserRole.OPERATOR));
+            when(roleAssignment.getRoleAssignmentId()).thenReturn(1L);
             when(roleAssignment.getAppUser()).thenReturn(operator);
             when(roleAssignment.getRole()).thenReturn(UserRole.OPERATOR);
             when(region.getRegionId()).thenReturn(100L);

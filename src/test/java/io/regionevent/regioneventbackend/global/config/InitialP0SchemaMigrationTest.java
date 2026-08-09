@@ -23,7 +23,7 @@ class InitialP0SchemaMigrationTest {
     }
 
     @Test
-    void 빈_데이터베이스에_V1부터_V14까지_현재_P0_스키마를_생성한다() {
+    void 빈_데이터베이스에_V1부터_V27까지_현재_스키마를_생성한다() {
         List<String> appliedVersions = jdbcTemplate.queryForList(
             "SELECT \"version\" FROM \"flyway_schema_history\" WHERE \"version\" IS NOT NULL AND \"success\" = TRUE",
             String.class
@@ -51,6 +51,15 @@ class InitialP0SchemaMigrationTest {
                 FROM information_schema.columns
                 WHERE table_schema = 'PUBLIC'
                   AND table_name = 'CONTENT'
+                """,
+            String.class
+        );
+        List<String> appUserColumnNames = jdbcTemplate.queryForList(
+            """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'PUBLIC'
+                  AND table_name = 'APP_USER'
                 """,
             String.class
         );
@@ -90,6 +99,24 @@ class InitialP0SchemaMigrationTest {
                 """,
             String.class
         );
+        List<String> userRoleAssignmentColumnNames = jdbcTemplate.queryForList(
+            """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'PUBLIC'
+                  AND table_name = 'USER_ROLE_ASSIGNMENT'
+                """,
+            String.class
+        );
+        List<String> userRoleAssignmentIndexNames = jdbcTemplate.queryForList(
+            """
+                SELECT index_name
+                FROM information_schema.indexes
+                WHERE table_schema = 'PUBLIC'
+                  AND table_name = 'USER_ROLE_ASSIGNMENT'
+                """,
+            String.class
+        );
 
         assertThat(appliedVersions).containsExactly(
             "1",
@@ -106,7 +133,19 @@ class InitialP0SchemaMigrationTest {
             "12",
             "13",
             "14",
-            "15"
+            "15",
+            "16",
+            "17",
+            "18",
+            "19",
+            "20",
+            "21",
+            "22",
+            "23",
+            "24",
+            "25",
+            "26",
+            "27"
         );
         assertThat(tableNames).contains(
             "REGION",
@@ -125,7 +164,32 @@ class InitialP0SchemaMigrationTest {
             "VISIT",
             "REVIEW",
             "AUDIT_EVENT",
-            "AUDIT_EVENT_ACTOR_LINK"
+            "AUDIT_EVENT_ACTOR_LINK",
+            "COUPON_POLICY",
+            "PLATFORM_ADMIN_ASSIGNMENT",
+            "MISSION",
+            "MISSION_TARGET_CONTENT",
+            "STAMPBOOK",
+            "STAMPBOOK_CONTENT",
+            "STAMPBOOK_PROGRESS",
+            "STAMPBOOK_REWARD_GRANT",
+            "MISSION_PARTICIPATION",
+            "MISSION_PROGRESS",
+            "STAMP_EARN",
+            "MISSION_REWARD_CLAIM",
+            "COUPON",
+            "COUPON_ISSUANCE",
+            "COUPON_STATUS_HISTORY",
+            "RESERVATION_PRICE_SNAPSHOT",
+            "PAYMENT",
+            "PAYMENT_IDEMPOTENCY",
+            "PAYMENT_VERIFICATION",
+            "PAYMENT_WEBHOOK",
+            "PAYMENT_DISCREPANCY",
+            "PAYMENT_DISCREPANCY_ACTION",
+            "REFUND",
+            "REFUND_ATTEMPT",
+            "COUPON_REDEMPTION"
         );
         assertThat(tableNames).doesNotContain(
             "CONTENT_REPRESENTATIVE_IMAGE",
@@ -154,8 +218,133 @@ class InitialP0SchemaMigrationTest {
             "CK_IDEMPOTENCY_RECORD_RESERVATION_RESULT",
             "CK_IDEMPOTENCY_RECORD_VISIT_RESULT",
             "CK_REVIEW_STATE",
-            "CK_CONTENT_REVISION_REVIEWED"
+            "CK_CONTENT_REVISION_REVIEWED",
+            "FK_COUPON_POLICY_CONTENT_REGION",
+            "FK_COUPON_POLICY_REGION",
+            "CK_COUPON_POLICY_STATUS_TIMESTAMPS",
+            "CK_APP_USER_ACCOUNT_KIND",
+            "FK_PLATFORM_ADMIN_ASSIGNMENT_USER",
+            "CK_PLATFORM_ADMIN_ASSIGNMENT_INACTIVATION",
+            "FK_MISSION_REGION",
+            "FK_MISSION_REWARD_COUPON_POLICY",
+            "CK_MISSION_CONDITION_TYPE",
+            "CK_MISSION_REQUIRED_VISIT_COUNT",
+            "CK_MISSION_STATUS",
+            "CK_MISSION_STATUS_TIMESTAMPS",
+            "FK_MISSION_TARGET_CONTENT_MISSION",
+            "FK_MISSION_TARGET_CONTENT_CONTENT",
+            "FK_STAMPBOOK_REGION",
+            "FK_STAMPBOOK_REWARD_COUPON_POLICY",
+            "CK_STAMPBOOK_STATUS_TIMESTAMPS",
+            "FK_STAMPBOOK_CONTENT_STAMPBOOK",
+            "FK_STAMPBOOK_CONTENT_CONTENT",
+            "PK_STAMPBOOK_PROGRESS",
+            "UK_STAMPBOOK_PROGRESS_STAMPBOOK_USER",
+            "FK_STAMPBOOK_PROGRESS_STAMPBOOK",
+            "FK_STAMPBOOK_PROGRESS_USER",
+            "CK_STAMPBOOK_PROGRESS_STATUS",
+            "CK_STAMPBOOK_PROGRESS_STATUS_COMPLETED_AT",
+            "PK_STAMPBOOK_REWARD_GRANT",
+            "UK_STAMPBOOK_REWARD_GRANT_PROGRESS",
+            "FK_STAMPBOOK_REWARD_GRANT_PROGRESS",
+            "FK_STAMPBOOK_REWARD_GRANT_COUPON_POLICY",
+            "PK_MISSION_PARTICIPATION",
+            "UK_MISSION_PARTICIPATION_MISSION_USER",
+            "FK_MISSION_PARTICIPATION_MISSION",
+            "FK_MISSION_PARTICIPATION_USER",
+            "CK_MISSION_PARTICIPATION_STATUS",
+            "CK_MISSION_PARTICIPATION_STATUS_COMPLETED_AT",
+            "PK_MISSION_PROGRESS",
+            "FK_MISSION_PROGRESS_PARTICIPATION",
+            "FK_MISSION_PROGRESS_VISIT",
+            "FK_MISSION_PROGRESS_CONTENT",
+            "PK_STAMP_EARN",
+            "UK_STAMP_EARN_PROGRESS_VISIT",
+            "UK_STAMP_EARN_PROGRESS_CONTENT",
+            "FK_STAMP_EARN_PROGRESS",
+            "FK_STAMP_EARN_VISIT",
+            "FK_STAMP_EARN_CONTENT",
+            "PK_MISSION_REWARD_CLAIM",
+            "UK_MISSION_REWARD_CLAIM_PARTICIPATION",
+            "FK_MISSION_REWARD_CLAIM_PARTICIPATION",
+            "FK_MISSION_REWARD_CLAIM_COUPON_POLICY",
+            "PK_COUPON",
+            "FK_COUPON_POLICY",
+            "FK_COUPON_USER",
+            "CK_COUPON_STATUS",
+            "PK_COUPON_ISSUANCE",
+            "UK_COUPON_ISSUANCE_COUPON",
+            "UK_COUPON_ISSUANCE_IDENTITY_HASH",
+            "UK_COUPON_ISSUANCE_MISSION_REWARD_CLAIM",
+            "UK_COUPON_ISSUANCE_STAMPBOOK_REWARD_GRANT",
+            "FK_COUPON_ISSUANCE_COUPON",
+            "FK_COUPON_ISSUANCE_COUPON_POLICY",
+            "FK_COUPON_ISSUANCE_RECIPIENT_USER",
+            "FK_COUPON_ISSUANCE_VISIT",
+            "FK_COUPON_ISSUANCE_MISSION_REWARD_CLAIM",
+            "FK_COUPON_ISSUANCE_STAMPBOOK_REWARD_GRANT",
+            "CK_COUPON_ISSUANCE_EXACTLY_ONE_SOURCE",
+            "PK_COUPON_STATUS_HISTORY",
+            "FK_COUPON_STATUS_HISTORY_COUPON",
+            "CK_COUPON_STATUS_HISTORY_PREVIOUS_STATUS",
+            "CK_COUPON_STATUS_HISTORY_NEXT_STATUS",
+            "PK_RESERVATION_PRICE_SNAPSHOT",
+            "UK_RESERVATION_PRICE_SNAPSHOT_HOLD",
+            "UK_RESERVATION_PRICE_SNAPSHOT_ID_COUPON",
+            "FK_RESERVATION_PRICE_SNAPSHOT_HOLD",
+            "FK_RESERVATION_PRICE_SNAPSHOT_COUPON",
+            "CK_RESERVATION_PRICE_SNAPSHOT_AMOUNT",
+            "PK_PAYMENT",
+            "UK_PAYMENT_ORDER",
+            "UK_PAYMENT_PORTONE_PAYMENT",
+            "UK_PAYMENT_RESERVATION",
+            "UK_PAYMENT_PENDING_HOLD",
+            "FK_PAYMENT_HOLD",
+            "FK_PAYMENT_RESERVATION_PRICE_SNAPSHOT",
+            "FK_PAYMENT_RESERVATION",
+            "CK_PAYMENT_STATUS",
+            "CK_PAYMENT_FINALIZED_AT",
+            "PK_PAYMENT_IDEMPOTENCY",
+            "UK_PAYMENT_IDEMPOTENCY_ACTOR_OPERATION_KEY",
+            "UK_PAYMENT_IDEMPOTENCY_PAYMENT",
+            "FK_PAYMENT_IDEMPOTENCY_PAYMENT",
+            "CK_PAYMENT_IDEMPOTENCY_OPERATION",
+            "CK_PAYMENT_IDEMPOTENCY_STATUS",
+            "CK_PAYMENT_IDEMPOTENCY_RESULT",
+            "PK_PAYMENT_VERIFICATION",
+            "FK_PAYMENT_VERIFICATION_PAYMENT",
+            "PK_PAYMENT_WEBHOOK",
+            "UK_PAYMENT_WEBHOOK_PROVIDER_EVENT",
+            "FK_PAYMENT_WEBHOOK_PAYMENT",
+            "PK_PAYMENT_DISCREPANCY",
+            "UK_PAYMENT_DISCREPANCY_PAYMENT",
+            "FK_PAYMENT_DISCREPANCY_PAYMENT",
+            "PK_PAYMENT_DISCREPANCY_ACTION",
+            "FK_PAYMENT_DISCREPANCY_ACTION_DISCREPANCY",
+            "PK_REFUND",
+            "UK_REFUND_PAYMENT",
+            "FK_REFUND_PAYMENT",
+            "CK_REFUND_AMOUNT",
+            "CK_REFUND_STATUS",
+            "PK_REFUND_ATTEMPT",
+            "UK_REFUND_ATTEMPT_REFUND_NO",
+            "FK_REFUND_ATTEMPT_REFUND",
+            "CK_REFUND_ATTEMPT_NO",
+            "CK_REFUND_ATTEMPT_INITIATOR_KIND",
+            "CK_REFUND_ATTEMPT_OUTCOME_KIND",
+            "CK_REFUND_ATTEMPT_FAILURE_REASON_CODE",
+            "CK_REFUND_ATTEMPT_OUTCOME_VALUES",
+            "PK_COUPON_REDEMPTION",
+            "UK_COUPON_REDEMPTION_RESERVATION",
+            "UK_COUPON_REDEMPTION_SNAPSHOT",
+            "UK_COUPON_REDEMPTION_CONFIRMED_COUPON",
+            "FK_COUPON_REDEMPTION_COUPON",
+            "FK_COUPON_REDEMPTION_SNAPSHOT_COUPON",
+            "FK_COUPON_REDEMPTION_RESERVATION",
+            "CK_COUPON_REDEMPTION_STATUS",
+            "CK_COUPON_REDEMPTION_REVERSED_AT"
         );
+        assertThat(appUserColumnNames).contains("ACCOUNT_KIND");
         assertThat(contentColumnNames).contains(
             "REPRESENTATIVE_IMAGE_OBJECT_ID",
             "REPRESENTATIVE_IMAGE_ASSIGNED_AT"
@@ -171,6 +360,17 @@ class InitialP0SchemaMigrationTest {
             "REJECT_REASON"
         );
         assertThat(capacityHoldIndexNames).contains("IDX_CAPACITY_HOLD_STATUS_EXPIRES_AT");
+        assertThat(userRoleAssignmentColumnNames).contains(
+            "ROLE_ASSIGNMENT_ID",
+            "STATUS",
+            "REVOKED_AT",
+            "REVOKE_REASON_CODE",
+            "ACTIVE_USER_ID"
+        );
+        assertThat(userRoleAssignmentIndexNames).contains(
+            "UK_USER_ROLE_ASSIGNMENT_ACTIVE_USER_ROLE",
+            "IDX_USER_ROLE_ASSIGNMENT_REGION_STATUS"
+        );
         assertThat(imageObjectColumnNames).contains(
             "CREATED_BY_USER_ID",
             "REGION_ID",

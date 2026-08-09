@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.user.service;
 
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 
@@ -10,12 +11,15 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
+import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 @Service
 public class UserRoleAssignmentService {
+
+    private static final String USER_WITHDRAWAL = "USER_WITHDRAWAL";
 
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
 
@@ -39,24 +43,29 @@ public class UserRoleAssignmentService {
     }
 
     public List<UserRoleAssignment> findRoleAssignmentsByUserId(Long userId) {
-        return userRoleAssignmentRepository.findAllByIdUserId(userId)
+        return userRoleAssignmentRepository.findAllByAppUserUserIdAndStatus(
+                userId,
+                UserRoleAssignmentStatus.ACTIVE
+            )
             .stream()
             .sorted(Comparator.comparing(UserRoleAssignment::getRole))
             .toList();
     }
 
     public UserRoleAssignment findActiveVisitor(Long userId) {
-        return userRoleAssignmentRepository.findByIdUserIdAndIdRoleAndAppUserStatus(
+        return userRoleAssignmentRepository.findByAppUserUserIdAndRoleAndStatusAndAppUserStatus(
             userId,
             UserRole.VISITOR,
+            UserRoleAssignmentStatus.ACTIVE,
             AppUserStatus.ACTIVE
         ).orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
     }
 
     public UserRoleAssignment findActiveOperator(Long userId) {
-        return userRoleAssignmentRepository.findByIdUserIdAndIdRoleAndAppUserStatus(
+        return userRoleAssignmentRepository.findByAppUserUserIdAndRoleAndStatusAndAppUserStatus(
             userId,
             UserRole.OPERATOR,
+            UserRoleAssignmentStatus.ACTIVE,
             AppUserStatus.ACTIVE
         ).orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
     }
@@ -66,7 +75,13 @@ public class UserRoleAssignmentService {
         return roles.contains(UserRole.OPERATOR) || roles.contains(UserRole.REGION_ADMIN);
     }
 
-    public void deleteAllByUserId(Long userId) {
-        userRoleAssignmentRepository.deleteByIdUserId(userId);
+    public void revokeAndUnlinkAllByUserId(Long userId, Instant revokedAt) {
+        userRoleAssignmentRepository.findAllByAppUserUserId(userId)
+            .forEach(assignment -> {
+                if (assignment.getStatus() == UserRoleAssignmentStatus.ACTIVE) {
+                    assignment.revoke(revokedAt, USER_WITHDRAWAL);
+                }
+                assignment.unlinkAppUser();
+            });
     }
 }

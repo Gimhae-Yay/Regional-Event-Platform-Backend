@@ -6,6 +6,7 @@ import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
+import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
@@ -39,9 +40,10 @@ public class RegionAdminAuthorizationService {
 
     private UserRoleAssignment requireAuthorizedAssignment(Long userId) {
         return userRoleAssignmentRepository
-            .findByIdUserIdAndIdRoleAndAppUserStatus(
+            .findByAppUserUserIdAndRoleAndStatusAndAppUserStatus(
                 userId,
                 UserRole.REGION_ADMIN,
+                UserRoleAssignmentStatus.ACTIVE,
                 AppUserStatus.ACTIVE
             )
             .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
