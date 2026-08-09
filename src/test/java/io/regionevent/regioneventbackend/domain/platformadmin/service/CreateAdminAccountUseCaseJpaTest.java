@@ -182,7 +182,7 @@ class CreateAdminAccountUseCaseJpaTest {
                 "새 관리자",
                 "01012345678",
                 "PLATFORM_ADMIN",
-                "account-creation/v1",
+                "ADMIN_ACCOUNT_CREATION",
                 "OPS-2026-0809-001"
             ),
             UUID.randomUUID()

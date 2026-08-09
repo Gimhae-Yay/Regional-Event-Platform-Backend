@@ -32,6 +32,7 @@ public record CreateAdminAccountRequest(
 
     @NotBlank
     @Size(max = 100)
+    @Pattern(regexp = "[A-Z][A-Z0-9_]*")
     String reasonCode,
 
     @NotBlank
