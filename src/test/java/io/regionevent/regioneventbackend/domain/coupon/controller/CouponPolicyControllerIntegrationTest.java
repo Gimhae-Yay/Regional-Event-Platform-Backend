@@ -197,7 +197,8 @@ class CouponPolicyControllerIntegrationTest {
                 .contentType(APPLICATION_JSON)
                 .content("{\"reason\":\"검토 완료 후 공개\"}"))
             .andExpect(status().is(statusCode))
-            .andExpect(jsonPath("$.code").value(code));
+            .andExpect(jsonPath("$.code").value(code))
+            .andExpect(jsonPath("$.message").value(errorCode.message()));
     }
 
     private void expectBusinessError(ErrorCode errorCode, int statusCode, String code) throws Exception {

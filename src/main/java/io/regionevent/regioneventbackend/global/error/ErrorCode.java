@@ -26,7 +26,7 @@ public enum ErrorCode {
     OPERATOR_APPLICATION_STATE_CONFLICT(HttpStatus.CONFLICT, "OPERATOR_APPLICATION_STATE_CONFLICT", "운영자 신청 상태가 요청과 일치하지 않습니다."),
     ROLE_ASSIGNMENT_CONFLICT(HttpStatus.CONFLICT, "ROLE_ASSIGNMENT_CONFLICT", "역할을 변경할 수 없습니다."),
     STAMPBOOK_STATE_CONFLICT(HttpStatus.CONFLICT, "STAMPBOOK_STATE_CONFLICT", "스탬프북 상태가 요청을 처리할 수 없습니다."),
-    COUPON_POLICY_CONFLICT(HttpStatus.CONFLICT, "COUPON_POLICY_CONFLICT", "쿠폰 정책을 생성할 수 없는 상태입니다."),
+    COUPON_POLICY_CONFLICT(HttpStatus.CONFLICT, "COUPON_POLICY_CONFLICT", "쿠폰 정책을 처리할 수 없는 상태입니다."),
 
     INVALID_INPUT(HttpStatus.BAD_REQUEST, "INVALID_INPUT", "요청 값이 올바르지 않습니다."),
     INVALID_JSON(HttpStatus.BAD_REQUEST, "INVALID_JSON", "요청 본문 형식이 올바르지 않습니다."),
