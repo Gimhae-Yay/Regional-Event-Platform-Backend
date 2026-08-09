@@ -39,4 +39,10 @@ public class StampbookService {
             throw new BusinessException(ErrorCode.STAMPBOOK_STATE_CONFLICT);
         }
     }
+
+    public void validatePublished(Stampbook stampbook) {
+        if (stampbook.getStatus() != StampbookStatus.PUBLISHED) {
+            throw new BusinessException(ErrorCode.STAMPBOOK_STATE_CONFLICT);
+        }
+    }
 }
