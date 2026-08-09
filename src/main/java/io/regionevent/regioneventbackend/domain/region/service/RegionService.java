@@ -69,13 +69,17 @@ public class RegionService {
         Throwable cause = exception;
         while (cause != null) {
             if (cause instanceof ConstraintViolationException constraintViolationException
-                && REGION_CODE_UNIQUE_CONSTRAINT.equals(
-                    constraintViolationException.getConstraintName()
-                )) {
+                && isRegionCodeUniqueConstraint(constraintViolationException.getConstraintName())) {
                 return true;
             }
             cause = cause.getCause();
         }
         return false;
+    }
+
+    private boolean isRegionCodeUniqueConstraint(String constraintName) {
+        return REGION_CODE_UNIQUE_CONSTRAINT.equals(constraintName)
+            || constraintName != null
+                && constraintName.endsWith("." + REGION_CODE_UNIQUE_CONSTRAINT);
     }
 }

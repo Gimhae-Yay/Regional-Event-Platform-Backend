@@ -27,6 +27,8 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
 @ExtendWith(MockitoExtension.class)
 class RegionServiceTest {
 
+    private static final String REGION_CODE_UNIQUE_CONSTRAINT = "uk_region_region_code";
+
     @Mock
     private RegionRepository regionRepository;
 
@@ -75,13 +77,30 @@ class RegionServiceTest {
             );
     }
 
+    @Test
+    void createPrivateRegion_스키마가포함된유일제약충돌_중복오류를반환한다() {
+        when(regionRepository.existsByRegionCode("JEONJU")).thenReturn(false);
+        when(regionRepository.saveAndFlush(any(Region.class))).thenThrow(
+            regionCodeConstraintViolation("region." + REGION_CODE_UNIQUE_CONSTRAINT)
+        );
+
+        assertThatThrownBy(() -> regionService.createPrivateRegion("JEONJU", "전주시"))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.REGION_CODE_ALREADY_EXISTS)
+            );
+    }
+
     private DataIntegrityViolationException regionCodeConstraintViolation() {
+        return regionCodeConstraintViolation(REGION_CODE_UNIQUE_CONSTRAINT);
+    }
+
+    private DataIntegrityViolationException regionCodeConstraintViolation(String constraintName) {
         return new DataIntegrityViolationException(
             "duplicate region code",
             new ConstraintViolationException(
                 "duplicate region code",
                 new SQLException("duplicate region code"),
-                "uk_region_region_code"
+                constraintName
             )
         );
     }
