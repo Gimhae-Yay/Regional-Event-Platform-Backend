@@ -1,9 +1,29 @@
 package io.regionevent.regioneventbackend.domain.stampbook.repository;
 
+import java.util.List;
+
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookContent;
 import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookContentId;
 
 public interface StampbookContentRepository extends JpaRepository<StampbookContent, StampbookContentId> {
+
+    @Query("""
+        SELECT stampbookContent.content.contentId
+        FROM StampbookContent stampbookContent
+        WHERE stampbookContent.stampbook.stampbookId = :stampbookId
+        ORDER BY stampbookContent.content.contentId ASC
+        """)
+    List<Long> findContentIdsByStampbookId(@Param("stampbookId") Long stampbookId);
+
+    @Modifying(flushAutomatically = true)
+    @Query("""
+        DELETE FROM StampbookContent stampbookContent
+        WHERE stampbookContent.stampbook.stampbookId = :stampbookId
+        """)
+    int deleteByStampbookId(@Param("stampbookId") Long stampbookId);
 }
