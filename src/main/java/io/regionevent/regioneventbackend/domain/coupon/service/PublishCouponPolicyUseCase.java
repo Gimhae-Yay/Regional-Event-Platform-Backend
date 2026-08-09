@@ -13,6 +13,7 @@ import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetTyp
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventActor;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
+import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicy;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicyStatus;
@@ -31,6 +32,7 @@ public class PublishCouponPolicyUseCase {
     private final OperatorAuthorizationService operatorAuthorizationService;
     private final CouponPolicyService couponPolicyService;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
+    private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase;
     private final Clock clock;
 
     public PublishCouponPolicyUseCase(
@@ -38,12 +40,14 @@ public class PublishCouponPolicyUseCase {
         OperatorAuthorizationService operatorAuthorizationService,
         CouponPolicyService couponPolicyService,
         RecordAuditEventUseCase recordAuditEventUseCase,
+        RecordFailedAuditEventUseCase recordFailedAuditEventUseCase,
         Clock clock
     ) {
         this.appUserService = appUserService;
         this.operatorAuthorizationService = operatorAuthorizationService;
         this.couponPolicyService = couponPolicyService;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
+        this.recordFailedAuditEventUseCase = recordFailedAuditEventUseCase;
         this.clock = clock;
     }
 
@@ -59,12 +63,13 @@ public class PublishCouponPolicyUseCase {
             .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
         AuthorizedOperator operator = operatorAuthorizationService.requireAuthorizedOperatorForUpdate(userId);
         CouponPolicy couponPolicy = couponPolicyService.findForUpdate(couponPolicyId);
-        validateOwnership(operator, couponPolicy);
+        validateOwnership(requestId, operator, couponPolicy);
 
         if (couponPolicy.getStatus() == CouponPolicyStatus.PUBLISHED) {
             return PublishCouponPolicyResult.from(couponPolicy);
         }
         if (couponPolicy.getStatus() != CouponPolicyStatus.DRAFT) {
+            recordFailure(requestId, operator, couponPolicy, ErrorCode.COUPON_POLICY_CONFLICT);
             throw new BusinessException(ErrorCode.COUPON_POLICY_CONFLICT);
         }
 
@@ -88,14 +93,36 @@ public class PublishCouponPolicyUseCase {
     }
 
     private void validateOwnership(
+        UUID requestId,
         AuthorizedOperator operator,
         CouponPolicy couponPolicy
     ) {
         Content content = couponPolicy.getContent();
         if (!content.isOwnedBy(operator.user().getUserId())
             || !content.isScopedTo(operator.region().getRegionId())) {
+            recordFailure(requestId, operator, couponPolicy, ErrorCode.FORBIDDEN);
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
+    }
+
+    private void recordFailure(
+        UUID requestId,
+        AuthorizedOperator operator,
+        CouponPolicy couponPolicy,
+        ErrorCode errorCode
+    ) {
+        recordFailedAuditEventUseCase.record(new AuditEventCommand(
+            requestId,
+            couponPolicy.getRegion(),
+            AuditEventTargetType.COUPON_POLICY,
+            couponPolicy.getCouponPolicyId(),
+            couponPolicy.getStatus().name(),
+            null,
+            AuditEventResult.FAILURE,
+            errorCode.code(),
+            new AuditEventActor(operator.roleAssignment()),
+            clock.instant().truncatedTo(ChronoUnit.MICROS)
+        ));
     }
 
     private String normalizeReason(String reason) {

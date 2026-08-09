@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.domain.coupon.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
 import java.util.List;
@@ -45,6 +46,8 @@ import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepositor
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
 import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 @SpringBootTest
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -135,6 +138,45 @@ class PublishCouponPolicyUseCaseMySqlTest extends NonTransactionalMySqlTestSuppo
             .singleElement();
         assertThat(auditEventActorLinkRepository.findAll()).singleElement()
             .satisfies(link -> assertThat(link.getActor().getUserId()).isEqualTo(fixture.operatorId()));
+    }
+
+    @Test
+    void publish_종료된_정책이면_실패_감사_이력을_기록하고_상태충돌을_반환한다() {
+        Fixture fixture = createFixture();
+        transactionTemplate.executeWithoutResult(status -> {
+            CouponPolicy couponPolicy = couponPolicyRepository.findById(fixture.couponPolicyId()).orElseThrow();
+            Instant now = Instant.now();
+            couponPolicy.publish(now);
+            couponPolicy.end(now.plusSeconds(1));
+        });
+        UUID requestId = UUID.randomUUID();
+
+        assertThatThrownBy(() -> publishCouponPolicyUseCase.publish(
+            fixture.operatorId(),
+            fixture.couponPolicyId(),
+            "종료된 정책 공개 시도",
+            requestId
+        )).isInstanceOfSatisfying(BusinessException.class, exception ->
+            assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.COUPON_POLICY_CONFLICT)
+        );
+
+        assertThat(couponPolicyRepository.findById(fixture.couponPolicyId()))
+            .hasValueSatisfying(policy -> assertThat(policy.getStatus()).isEqualTo(CouponPolicyStatus.ENDED));
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(event -> event.getTargetType() == AuditEventTargetType.COUPON_POLICY)
+            .singleElement()
+            .satisfies(event -> {
+                assertThat(event.getTargetId()).isEqualTo(fixture.couponPolicyId());
+                assertThat(event.getResult()).isEqualTo(AuditEventResult.FAILURE);
+                assertThat(event.getPreviousState()).isEqualTo(CouponPolicyStatus.ENDED.name());
+                assertThat(event.getNextState()).isNull();
+                assertThat(event.getReasonCode()).isEqualTo(ErrorCode.COUPON_POLICY_CONFLICT.code());
+                assertThat(event.getRequestId()).isEqualTo(requestId);
+                assertThat(auditEventActorLinkRepository.findById(event.getAuditEventId()))
+                    .hasValueSatisfying(link ->
+                        assertThat(link.getActor().getUserId()).isEqualTo(fixture.operatorId())
+                    );
+            });
     }
 
     private PublishCouponPolicyResult publishAfterStart(

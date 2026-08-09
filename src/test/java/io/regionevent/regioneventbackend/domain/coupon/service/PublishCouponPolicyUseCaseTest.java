@@ -22,6 +22,7 @@ import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
+import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicy;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicyStatus;
@@ -49,12 +50,16 @@ class PublishCouponPolicyUseCaseTest {
     );
     private final CouponPolicyService couponPolicyService = mock(CouponPolicyService.class);
     private final RecordAuditEventUseCase recordAuditEventUseCase = mock(RecordAuditEventUseCase.class);
+    private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase = mock(
+        RecordFailedAuditEventUseCase.class
+    );
     private final Clock clock = mock(Clock.class);
     private final PublishCouponPolicyUseCase useCase = new PublishCouponPolicyUseCase(
         appUserService,
         operatorAuthorizationService,
         couponPolicyService,
         recordAuditEventUseCase,
+        recordFailedAuditEventUseCase,
         clock
     );
 
@@ -105,6 +110,7 @@ class PublishCouponPolicyUseCaseTest {
         assertThat(result.status()).isEqualTo(CouponPolicyStatus.PUBLISHED);
         verify(couponPolicyService, never()).publish(any(), any());
         verify(recordAuditEventUseCase, never()).record(any());
+        verify(recordFailedAuditEventUseCase, never()).record(any());
     }
 
     @Test
@@ -121,6 +127,7 @@ class PublishCouponPolicyUseCaseTest {
 
         verify(couponPolicyService, never()).publish(any(), any());
         verify(recordAuditEventUseCase, never()).record(any());
+        verifyFailureAudit(ErrorCode.COUPON_POLICY_CONFLICT, endedPolicy);
     }
 
     @Test
@@ -137,6 +144,7 @@ class PublishCouponPolicyUseCaseTest {
 
         verify(couponPolicyService, never()).publish(any(), any());
         verify(recordAuditEventUseCase, never()).record(any());
+        verifyFailureAudit(ErrorCode.FORBIDDEN, otherOperatorPolicy);
     }
 
     @Test
@@ -168,14 +176,29 @@ class PublishCouponPolicyUseCaseTest {
             appUserService,
             operatorAuthorizationService,
             couponPolicyService,
-            recordAuditEventUseCase
+            recordAuditEventUseCase,
+            recordFailedAuditEventUseCase
         );
+    }
+
+    private void verifyFailureAudit(ErrorCode errorCode, CouponPolicy couponPolicy) {
+        ArgumentCaptor<AuditEventCommand> captor = ArgumentCaptor.forClass(AuditEventCommand.class);
+        verify(recordFailedAuditEventUseCase).record(captor.capture());
+        AuditEventCommand command = captor.getValue();
+        assertThat(command.targetType()).isEqualTo(AuditEventTargetType.COUPON_POLICY);
+        assertThat(command.targetId()).isEqualTo(COUPON_POLICY_ID);
+        assertThat(command.previousState()).isEqualTo(couponPolicy.getStatus().name());
+        assertThat(command.nextState()).isNull();
+        assertThat(command.result()).isEqualTo(AuditEventResult.FAILURE);
+        assertThat(command.reasonCode()).isEqualTo(errorCode.code());
+        assertThat(command.actor()).isNotNull();
     }
 
     private void prepareAuthorizedOperator() {
         AuthorizedOperator operator = authorizedOperator();
         when(appUserService.findActiveUserForUpdate(USER_ID)).thenReturn(Optional.of(operator.user()));
         when(operatorAuthorizationService.requireAuthorizedOperatorForUpdate(USER_ID)).thenReturn(operator);
+        when(clock.instant()).thenReturn(PUBLISHED_AT);
     }
 
     private AuthorizedOperator authorizedOperator() {
