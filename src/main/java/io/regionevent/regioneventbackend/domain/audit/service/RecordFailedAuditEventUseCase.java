@@ -61,11 +61,12 @@ public class RecordFailedAuditEventUseCase {
             });
         } catch (RuntimeException exception) {
             log.error(
-                "독립 감사 기록에 실패했습니다. requestId={}, targetType={}, targetId={}, reasonCode={}",
+                "독립 감사 기록에 실패했습니다. requestId={}, targetType={}, targetId={}, originalErrorCode={}, auditWriteResult={}",
                 command.requestId(),
                 command.targetType(),
                 command.targetId(),
                 command.reasonCode(),
+                "FAILURE",
                 exception
             );
         }
