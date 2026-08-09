@@ -179,7 +179,8 @@ public record AuditEventCommand(
         AuditEventTargetType targetType,
         String evidenceReference
     ) {
-        if ((targetType == AuditEventTargetType.PLATFORM_ADMIN_ASSIGNMENT
+        if ((targetType == AuditEventTargetType.REGION
+            || targetType == AuditEventTargetType.PLATFORM_ADMIN_ASSIGNMENT
             || targetType == AuditEventTargetType.USER_ROLE_ASSIGNMENT)
             && evidenceReference == null) {
             throw new IllegalArgumentException(
