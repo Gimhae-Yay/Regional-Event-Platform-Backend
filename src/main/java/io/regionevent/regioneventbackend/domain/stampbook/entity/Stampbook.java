@@ -132,6 +132,13 @@ public class Stampbook {
         this.rewardCouponPolicy = validatedRewardCouponPolicy;
     }
 
+    public void requestPublication() {
+        if (status != StampbookStatus.DRAFT) {
+            throw new IllegalStateException("only DRAFT stampbook can request publication");
+        }
+        status = StampbookStatus.PENDING_REVIEW;
+    }
+
     private static void validateRewardCouponPolicy(
         Region region,
         CouponPolicy rewardCouponPolicy
