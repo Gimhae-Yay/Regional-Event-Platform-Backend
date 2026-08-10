@@ -17,6 +17,8 @@ import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
+import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
+
 @Entity
 @Table(
     name = "payment_idempotency",
@@ -25,7 +27,8 @@ import jakarta.persistence.UniqueConstraint;
             name = "uk_payment_idempotency_actor_operation_key",
             columnNames = {"actor_user_id", "operation", "idempotency_key_hash"}
         ),
-        @UniqueConstraint(name = "uk_payment_idempotency_payment", columnNames = "payment_id")
+        @UniqueConstraint(name = "uk_payment_idempotency_payment", columnNames = "payment_id"),
+        @UniqueConstraint(name = "uk_payment_idempotency_reservation", columnNames = "reservation_id")
     },
     check = {
         @CheckConstraint(
@@ -39,9 +42,12 @@ import jakarta.persistence.UniqueConstraint;
         @CheckConstraint(
             name = "ck_payment_idempotency_result",
             constraint = """
-                (status = 'PROCESSING' AND payment_id IS NULL AND completed_at IS NULL)
-                OR (status = 'SUCCEEDED' AND payment_id IS NOT NULL AND completed_at IS NOT NULL)
-                OR (status = 'FAILED' AND payment_id IS NULL AND completed_at IS NOT NULL)
+                (status = 'PROCESSING' AND payment_id IS NULL AND reservation_id IS NULL AND completed_at IS NULL)
+                OR (status = 'SUCCEEDED' AND (
+                    (payment_id IS NOT NULL AND reservation_id IS NULL)
+                    OR (payment_id IS NULL AND reservation_id IS NOT NULL)
+                ) AND completed_at IS NOT NULL)
+                OR (status = 'FAILED' AND payment_id IS NULL AND reservation_id IS NULL AND completed_at IS NOT NULL)
                 """
         )
     }
@@ -77,6 +83,14 @@ public class PaymentIdempotency {
         foreignKey = @ForeignKey(name = "fk_payment_idempotency_payment")
     )
     private Payment payment;
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+        name = "reservation_id",
+        unique = true,
+        foreignKey = @ForeignKey(name = "fk_payment_idempotency_reservation")
+    )
+    private Reservation reservation;
 
     @Column(name = "completed_at")
     private Instant completedAt;
@@ -130,6 +144,10 @@ public class PaymentIdempotency {
         return payment;
     }
 
+    public Reservation getReservation() {
+        return reservation;
+    }
+
     public Instant getCompletedAt() {
         return completedAt;
     }
@@ -138,12 +156,37 @@ public class PaymentIdempotency {
         return expiresAt;
     }
 
+    public void succeedWithPayment(Payment payment, Instant completedAt, Instant expiresAt) {
+        this.payment = requireNotNull(payment, "payment");
+        this.reservation = null;
+        complete(completedAt, expiresAt);
+    }
+
+    public void succeedWithReservation(Reservation reservation, Instant completedAt, Instant expiresAt) {
+        this.payment = null;
+        this.reservation = requireNotNull(reservation, "reservation");
+        complete(completedAt, expiresAt);
+    }
+
+    private void complete(Instant completedAt, Instant expiresAt) {
+        this.status = PaymentIdempotencyStatus.SUCCEEDED;
+        this.completedAt = requireNotNull(completedAt, "completedAt");
+        this.expiresAt = requireNotNull(expiresAt, "expiresAt");
+    }
+
     private static String requireNotBlank(
         String value,
         String fieldName
     ) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(fieldName + " must not be blank");
+        }
+        return value;
+    }
+
+    private static <T> T requireNotNull(T value, String fieldName) {
+        if (value == null) {
+            throw new IllegalArgumentException(fieldName + " must not be null");
         }
         return value;
     }

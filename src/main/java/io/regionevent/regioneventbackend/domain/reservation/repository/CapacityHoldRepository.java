@@ -63,6 +63,35 @@ public interface CapacityHoldRepository extends JpaRepository<CapacityHold, Long
         @Param("userId") Long userId
     );
 
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+        UPDATE capacity_hold
+        SET status = 'CONSUMED',
+            terminal_at = CURRENT_TIMESTAMP
+        WHERE hold_id = :holdId
+            AND user_id = :userId
+            AND status = 'ACTIVE'
+            AND expires_at > CURRENT_TIMESTAMP
+            AND EXISTS (
+                SELECT 1
+                FROM content_session
+                JOIN content ON content.content_id = content_session.content_id
+                WHERE content_session.session_id = capacity_hold.session_id
+                    AND content.status = 'PUBLISHED'
+                    AND content_session.status = 'SCHEDULED'
+                    AND content_session.starts_at > CURRENT_TIMESTAMP
+            )
+            AND NOT EXISTS (
+                SELECT 1
+                FROM payment
+                WHERE hold_id = capacity_hold.hold_id
+            )
+        """, nativeQuery = true)
+    int consumeForPaidZeroIfConfirmable(
+        @Param("holdId") Long holdId,
+        @Param("userId") Long userId
+    );
+
     @Query(value = """
         SELECT hold_id
         FROM capacity_hold

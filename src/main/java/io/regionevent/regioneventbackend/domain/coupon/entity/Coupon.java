@@ -99,6 +99,20 @@ public class Coupon {
         return expiresAt;
     }
 
+    public void reserve() {
+        if (status != CouponStatus.AVAILABLE) {
+            throw new IllegalStateException("only available coupon can be reserved");
+        }
+        status = CouponStatus.RESERVED;
+    }
+
+    public void use() {
+        if (status != CouponStatus.RESERVED) {
+            throw new IllegalStateException("only reserved coupon can be used");
+        }
+        status = CouponStatus.USED;
+    }
+
     private static void validateExpiry(
         Instant issuedAt,
         Instant expiresAt

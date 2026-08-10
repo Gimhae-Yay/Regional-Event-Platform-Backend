@@ -59,6 +59,17 @@ public class CapacityHoldService {
         return capacityHold;
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public CapacityHold findActiveOwnedHoldForUpdate(Long holdId, AppUser user) {
+        CapacityHold capacityHold = capacityHoldRepository.findActiveByHoldIdForUpdate(holdId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_HOLD_CONFLICT));
+        if (capacityHold.getUser() == null
+            || !capacityHold.getUser().getUserId().equals(user.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        return capacityHold;
+    }
+
     @Transactional(
         propagation = Propagation.MANDATORY,
         noRollbackFor = ReservationConfirmationConflictException.class
@@ -68,6 +79,19 @@ public class CapacityHoldService {
             holdId,
             userId
         );
+        if (updatedCount == 0) {
+            throw new ReservationConfirmationConflictException();
+        }
+        return capacityHoldRepository.findByHoldId(holdId)
+            .orElseThrow(() -> new IllegalStateException("consumed capacity hold does not exist"));
+    }
+
+    @Transactional(
+        propagation = Propagation.MANDATORY,
+        noRollbackFor = ReservationConfirmationConflictException.class
+    )
+    public CapacityHold consumeForPaidZeroIfConfirmable(Long holdId, Long userId) {
+        int updatedCount = capacityHoldRepository.consumeForPaidZeroIfConfirmable(holdId, userId);
         if (updatedCount == 0) {
             throw new ReservationConfirmationConflictException();
         }
