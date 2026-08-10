@@ -112,6 +112,50 @@ class StampbookReadServiceTest {
             .hasMessage("stampbook progress read data is inconsistent");
     }
 
+    @Test
+    void 공개_스탬프북의_종료_미완료_진행도는_정합성_오류로_처리한다() {
+        when(stampbookRepository.findMyStampbookListProjections(
+            USER_ID,
+            StampbookStatus.PUBLISHED,
+            StampbookStatus.ENDED
+        )).thenReturn(List.of(projection(
+            101L,
+            StampbookStatus.PUBLISHED,
+            Instant.parse("2026-08-01T00:00:00Z"),
+            StampbookProgressStatus.ENDED_INCOMPLETE,
+            null,
+            1L,
+            3L,
+            Instant.parse("2026-08-02T00:00:00Z")
+        )));
+
+        assertThatThrownBy(() -> stampbookReadService.findMyStampbooks(USER_ID))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("stampbook progress read data is inconsistent");
+    }
+
+    @Test
+    void 목표_수를_채운_진행중_진행도는_정합성_오류로_처리한다() {
+        when(stampbookRepository.findMyStampbookListProjections(
+            USER_ID,
+            StampbookStatus.PUBLISHED,
+            StampbookStatus.ENDED
+        )).thenReturn(List.of(projection(
+            101L,
+            StampbookStatus.PUBLISHED,
+            Instant.parse("2026-08-01T00:00:00Z"),
+            StampbookProgressStatus.IN_PROGRESS,
+            null,
+            3L,
+            3L,
+            Instant.parse("2026-08-02T00:00:00Z")
+        )));
+
+        assertThatThrownBy(() -> stampbookReadService.findMyStampbooks(USER_ID))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("stampbook progress read data is inconsistent");
+    }
+
     private MyStampbookListProjection projection(
         Long stampbookId,
         StampbookStatus stampbookStatus,

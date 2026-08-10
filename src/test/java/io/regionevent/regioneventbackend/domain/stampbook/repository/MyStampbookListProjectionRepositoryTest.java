@@ -219,6 +219,8 @@ class MyStampbookListProjectionRepositoryTest {
         );
         saveStampEarn(region, viewer, progress, firstTarget, FIRST_EARNED_AT, "first");
         saveStampEarn(region, viewer, progress, secondTarget, LATEST_EARNED_AT, "second");
+        progress.complete(COMPLETED_AT);
+        stampbookProgressRepository.saveAndFlush(progress);
         entityManager.clear();
 
         MyStampbookListProjection projection = stampbookRepository.findMyStampbookListProjections(
@@ -234,9 +236,16 @@ class MyStampbookListProjectionRepositoryTest {
                 MyStampbookListProjection::progressStatus,
                 MyStampbookListProjection::earnedCount,
                 MyStampbookListProjection::targetCount,
+                MyStampbookListProjection::completedAt,
                 MyStampbookListProjection::lastEarnedAt
             )
-            .containsExactly(StampbookProgressStatus.IN_PROGRESS, 2L, 2L, LATEST_EARNED_AT);
+            .containsExactly(
+                StampbookProgressStatus.COMPLETED,
+                2L,
+                2L,
+                COMPLETED_AT,
+                LATEST_EARNED_AT
+            );
         assertThat(stampEarnRepository.countByStampbookProgressStampbookProgressId(
             progress.getStampbookProgressId()
         )).isEqualTo(2L);

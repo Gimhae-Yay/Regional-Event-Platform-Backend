@@ -99,8 +99,14 @@ public class StampbookReadService {
         long targetCount
     ) {
         if (earnedCount > targetCount
-            || projection.stampbookStatus() == StampbookStatus.ENDED
-                && projection.progressStatus() == StampbookProgressStatus.IN_PROGRESS
+            || projection.progressStatus() == StampbookProgressStatus.IN_PROGRESS
+                && (projection.stampbookStatus() != StampbookStatus.PUBLISHED
+                    || earnedCount >= targetCount)
+            || projection.progressStatus() == StampbookProgressStatus.COMPLETED
+                && earnedCount != targetCount
+            || projection.progressStatus() == StampbookProgressStatus.ENDED_INCOMPLETE
+                && (projection.stampbookStatus() != StampbookStatus.ENDED
+                    || earnedCount >= targetCount)
             || projection.progressStatus() == StampbookProgressStatus.COMPLETED
                 && projection.completedAt() == null
             || projection.progressStatus() != StampbookProgressStatus.COMPLETED
