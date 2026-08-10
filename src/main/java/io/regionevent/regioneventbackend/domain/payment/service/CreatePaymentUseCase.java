@@ -1,6 +1,5 @@
 package io.regionevent.regioneventbackend.domain.payment.service;
 
-import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -138,6 +137,12 @@ public class CreatePaymentUseCase {
                 java.time.Instant.now()
             ));
             idempotency.succeedWithPayment(payment, payment.getCreatedAt());
+            recordPendingPaymentAuditEvents(
+                requestId,
+                visitorActor(user),
+                payment,
+                snapshot.getCoupon()
+            );
             return CreatePaymentResponse.fromPayment(payment);
         }
         return confirmZeroAmount(idempotency, hold, snapshot, requestId, user);
@@ -247,6 +252,7 @@ public class CreatePaymentUseCase {
                 hold.getUser().getUserId()
             );
             Reservation reservation = reservationService.createConfirmed(consumedHold);
+            Coupon usedCoupon = null;
             if (snapshot.getCoupon() != null) {
                 Coupon coupon = couponService.findByCouponIdForUpdate(snapshot.getCoupon().getCouponId())
                     .orElseThrow(() -> new IllegalStateException("snapshot coupon does not exist"));
@@ -265,17 +271,19 @@ public class CreatePaymentUseCase {
                     reservation,
                     reservation.getConfirmedAt()
                 ));
+                usedCoupon = coupon;
             }
-            idempotency.succeedWithReservation(
+            paymentIdempotencyService.succeedWithReservation(
+                idempotency.getPaymentIdempotencyId(),
                 reservation,
-                reservation.getConfirmedAt(),
-                reservation.getConfirmedAt().plus(24, ChronoUnit.HOURS)
+                reservation.getConfirmedAt()
             );
             recordSuccessfulAuditEvents(
                 requestId,
-                new AuditEventActor(userRoleAssignmentService.findActiveVisitor(user.getUserId())),
+                visitorActor(user),
                 consumedHold,
-                reservation
+                reservation,
+                usedCoupon
             );
             return CreatePaymentResponse.fromReservation(reservation);
         } catch (ReservationConfirmationConflictException exception) {
@@ -331,7 +339,8 @@ public class CreatePaymentUseCase {
         UUID requestId,
         AuditEventActor actor,
         CapacityHold capacityHold,
-        Reservation reservation
+        Reservation reservation,
+        Coupon usedCoupon
     ) {
         recordAuditEventUseCase.record(new AuditEventCommand(
             requestId,
@@ -357,5 +366,57 @@ public class CreatePaymentUseCase {
             actor,
             reservation.getConfirmedAt()
         ));
+        if (usedCoupon != null) {
+            recordAuditEventUseCase.record(new AuditEventCommand(
+                requestId,
+                capacityHold.getRegion(),
+                AuditEventTargetType.COUPON,
+                usedCoupon.getCouponId(),
+                CouponStatus.RESERVED.name(),
+                CouponStatus.USED.name(),
+                AuditEventResult.SUCCESS,
+                null,
+                actor,
+                reservation.getConfirmedAt()
+            ));
+        }
+    }
+
+    private void recordPendingPaymentAuditEvents(
+        UUID requestId,
+        AuditEventActor actor,
+        Payment payment,
+        Coupon reservedCoupon
+    ) {
+        recordAuditEventUseCase.record(new AuditEventCommand(
+            requestId,
+            payment.getCapacityHold().getRegion(),
+            AuditEventTargetType.PAYMENT,
+            payment.getPaymentId(),
+            null,
+            PaymentStatus.PENDING.name(),
+            AuditEventResult.SUCCESS,
+            null,
+            actor,
+            payment.getCreatedAt()
+        ));
+        if (reservedCoupon != null) {
+            recordAuditEventUseCase.record(new AuditEventCommand(
+                requestId,
+                payment.getCapacityHold().getRegion(),
+                AuditEventTargetType.COUPON,
+                reservedCoupon.getCouponId(),
+                CouponStatus.AVAILABLE.name(),
+                CouponStatus.RESERVED.name(),
+                AuditEventResult.SUCCESS,
+                null,
+                actor,
+                payment.getCreatedAt()
+            ));
+        }
+    }
+
+    private AuditEventActor visitorActor(AppUser user) {
+        return new AuditEventActor(userRoleAssignmentService.findActiveVisitor(user.getUserId()));
     }
 }

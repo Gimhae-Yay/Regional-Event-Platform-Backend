@@ -4,17 +4,23 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -31,6 +37,7 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentSessionRepository;
+import io.regionevent.regioneventbackend.domain.content.service.ContentService;
 import io.regionevent.regioneventbackend.domain.coupon.entity.Coupon;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponIssuanceType;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicy;
@@ -70,6 +77,7 @@ import tools.jackson.databind.node.JsonNodeFactory;
 
 @SpringBootTest
 @Testcontainers(disabledWithoutDocker = true)
+@Import(CreatePaymentUseCaseMySqlTest.PaymentPriceLockSynchronizationConfiguration.class)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
 
@@ -89,6 +97,7 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
     private final ReservationRepository reservationRepository;
     private final ReservationPriceSnapshotRepository reservationPriceSnapshotRepository;
     private final AuditEventRepository auditEventRepository;
+    private final PriceLockSynchronizingContentService priceLockSynchronizingContentService;
     private final CapacityHoldService capacityHoldService;
     private final ExpirePendingPaymentForTerminatedHoldUseCase expirePendingPaymentForTerminatedHoldUseCase;
     private final PaymentIdempotencyService paymentIdempotencyService;
@@ -113,6 +122,7 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         ReservationRepository reservationRepository,
         ReservationPriceSnapshotRepository reservationPriceSnapshotRepository,
         AuditEventRepository auditEventRepository,
+        PriceLockSynchronizingContentService priceLockSynchronizingContentService,
         CapacityHoldService capacityHoldService,
         ExpirePendingPaymentForTerminatedHoldUseCase expirePendingPaymentForTerminatedHoldUseCase,
         PaymentIdempotencyService paymentIdempotencyService,
@@ -135,6 +145,7 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         this.reservationRepository = reservationRepository;
         this.reservationPriceSnapshotRepository = reservationPriceSnapshotRepository;
         this.auditEventRepository = auditEventRepository;
+        this.priceLockSynchronizingContentService = priceLockSynchronizingContentService;
         this.capacityHoldService = capacityHoldService;
         this.expirePendingPaymentForTerminatedHoldUseCase = expirePendingPaymentForTerminatedHoldUseCase;
         this.paymentIdempotencyService = paymentIdempotencyService;
@@ -151,13 +162,14 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
     void sameKeyReturnsTheSamePendingPaymentWithoutCreatingAnotherPayment() {
         Fixture fixture = createFixture();
         String key = "payment-key-" + System.nanoTime();
+        UUID requestId = UUID.randomUUID();
 
         CreatePaymentResponse first = createPaymentUseCase.create(
             fixture.user().getUserId(),
             fixture.hold().getHoldId().toString(),
             new CreatePaymentRequest(null),
             key,
-            UUID.randomUUID()
+            requestId
         );
         CreatePaymentResponse retry = createPaymentUseCase.create(
             fixture.user().getUserId(),
@@ -177,6 +189,69 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
             .filteredOn(record -> record.getActorUserId() == fixture.user().getUserId())
             .singleElement()
             .satisfies(record -> assertThat(record.getStatus()).isEqualTo(PaymentIdempotencyStatus.SUCCEEDED));
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent -> auditEvent.getRequestId().equals(requestId.toString()))
+            .singleElement()
+            .extracting(
+                auditEvent -> auditEvent.getTargetType(),
+                auditEvent -> auditEvent.getTargetId(),
+                auditEvent -> auditEvent.getPreviousState(),
+                auditEvent -> auditEvent.getNextState(),
+                auditEvent -> auditEvent.getActorKind(),
+                auditEvent -> auditEvent.getActorRole()
+            )
+            .containsExactly(
+                AuditEventTargetType.PAYMENT,
+                Long.valueOf(first.payment().paymentId()),
+                null,
+                PaymentStatus.PENDING.name(),
+                "USER",
+                UserRole.VISITOR.name()
+            );
+    }
+
+    @Test
+    void positiveAmountPaymentRecordsPaymentAndCouponReservationAuditEvents() {
+        Fixture fixture = createFixture();
+        Coupon coupon = createCoupon(fixture, 1_000);
+        UUID requestId = UUID.randomUUID();
+
+        CreatePaymentResponse response = createPaymentUseCase.create(
+            fixture.user().getUserId(),
+            fixture.hold().getHoldId().toString(),
+            new CreatePaymentRequest(JsonNodeFactory.instance.stringNode(coupon.getCouponId().toString())),
+            "payment-key-" + System.nanoTime(),
+            requestId
+        );
+
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent -> auditEvent.getRequestId().equals(requestId.toString()))
+            .extracting(
+                auditEvent -> auditEvent.getTargetType(),
+                auditEvent -> auditEvent.getTargetId(),
+                auditEvent -> auditEvent.getPreviousState(),
+                auditEvent -> auditEvent.getNextState(),
+                auditEvent -> auditEvent.getActorKind(),
+                auditEvent -> auditEvent.getActorRole()
+            )
+            .containsExactlyInAnyOrder(
+                org.assertj.core.groups.Tuple.tuple(
+                    AuditEventTargetType.PAYMENT,
+                    Long.valueOf(response.payment().paymentId()),
+                    null,
+                    PaymentStatus.PENDING.name(),
+                    "USER",
+                    UserRole.VISITOR.name()
+                ),
+                org.assertj.core.groups.Tuple.tuple(
+                    AuditEventTargetType.COUPON,
+                    coupon.getCouponId(),
+                    CouponStatus.AVAILABLE.name(),
+                    CouponStatus.RESERVED.name(),
+                    "USER",
+                    UserRole.VISITOR.name()
+                )
+            );
     }
 
     @Test
@@ -299,16 +374,26 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         Fixture fixture = createFixture();
         Coupon coupon = createCoupon(fixture, 20_000);
         UUID requestId = UUID.randomUUID();
+        String key = "payment-key-" + System.nanoTime();
 
         CreatePaymentResponse response = createPaymentUseCase.create(
             fixture.user().getUserId(),
             fixture.hold().getHoldId().toString(),
             new CreatePaymentRequest(JsonNodeFactory.instance.stringNode(coupon.getCouponId().toString())),
-            "payment-key-" + System.nanoTime(),
+            key,
             requestId
         );
 
+        CreatePaymentResponse retry = createPaymentUseCase.create(
+            fixture.user().getUserId(),
+            fixture.hold().getHoldId().toString(),
+            new CreatePaymentRequest(JsonNodeFactory.instance.stringNode(coupon.getCouponId().toString())),
+            key,
+            UUID.randomUUID()
+        );
+
         assertThat(response.requiresPayment()).isFalse();
+        assertThat(retry.reservation().reservationId()).isEqualTo(response.reservation().reservationId());
         assertThat(reservationRepository.findAll()).hasSize(1);
         assertThat(paymentRepository.findAll()).isEmpty();
         assertThat(couponRepository.findById(coupon.getCouponId())).get()
@@ -316,12 +401,37 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
             .isEqualTo(CouponStatus.USED);
         assertThat(couponStatusHistoryRepository.findAll()).hasSize(2);
         assertThat(couponRedemptionRepository.findAll()).hasSize(1);
+        assertThat(paymentIdempotencyRepository.findAll()).singleElement()
+            .satisfies(record -> {
+                assertThat(record.getStatus()).isEqualTo(PaymentIdempotencyStatus.SUCCEEDED);
+                assertThat(record.getReservation()).isNotNull();
+                assertThat(record.getExpiresAt()).isNotNull();
+            });
         assertThat(auditEventRepository.findAll())
             .filteredOn(auditEvent -> auditEvent.getRequestId().equals(requestId.toString()))
             .extracting(auditEvent -> auditEvent.getTargetType())
             .containsExactlyInAnyOrder(
                 AuditEventTargetType.CAPACITY_HOLD,
-                AuditEventTargetType.RESERVATION
+                AuditEventTargetType.RESERVATION,
+                AuditEventTargetType.COUPON
+            );
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent -> auditEvent.getRequestId().equals(requestId.toString()))
+            .filteredOn(auditEvent -> auditEvent.getTargetType() == AuditEventTargetType.COUPON)
+            .singleElement()
+            .extracting(
+                auditEvent -> auditEvent.getTargetId(),
+                auditEvent -> auditEvent.getPreviousState(),
+                auditEvent -> auditEvent.getNextState(),
+                auditEvent -> auditEvent.getActorKind(),
+                auditEvent -> auditEvent.getActorRole()
+            )
+            .containsExactly(
+                coupon.getCouponId(),
+                CouponStatus.RESERVED.name(),
+                CouponStatus.USED.name(),
+                "USER",
+                UserRole.VISITOR.name()
             );
     }
 
@@ -415,6 +525,12 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         Fixture fixture = createFixture();
         CountDownLatch priceLocked = new CountDownLatch(1);
         CountDownLatch allowPriceUpdate = new CountDownLatch(1);
+        CountDownLatch contentLoaded = new CountDownLatch(1);
+        CountDownLatch allowContentPriceLock = new CountDownLatch(1);
+        priceLockSynchronizingContentService.blockNextPriceLockAttempt(
+            contentLoaded,
+            allowContentPriceLock
+        );
 
         try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
             Future<?> priceUpdate = executorService.submit(() -> transactionTemplate.executeWithoutResult(status -> {
@@ -440,8 +556,10 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
                 "payment-key-" + System.nanoTime(),
                 UUID.randomUUID()
             ));
+            assertThat(contentLoaded.await(3, TimeUnit.SECONDS)).isTrue();
             allowPriceUpdate.countDown();
             priceUpdate.get(3, TimeUnit.SECONDS);
+            allowContentPriceLock.countDown();
             paymentCreation.get(3, TimeUnit.SECONDS);
         }
 
@@ -586,6 +704,66 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
                 now.plusSeconds(3_600)
             ));
         });
+    }
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class PaymentPriceLockSynchronizationConfiguration {
+
+        @Bean
+        @Primary
+        PriceLockSynchronizingContentService priceLockSynchronizingContentService(
+            ContentRepository contentRepository
+        ) {
+            return new PriceLockSynchronizingContentService(contentRepository);
+        }
+    }
+
+    static class PriceLockSynchronizingContentService extends ContentService {
+
+        private final AtomicReference<PriceLockBarrier> nextPriceLockBarrier = new AtomicReference<>();
+
+        PriceLockSynchronizingContentService(ContentRepository contentRepository) {
+            super(contentRepository);
+        }
+
+        void blockNextPriceLockAttempt(
+            CountDownLatch contentLoaded,
+            CountDownLatch allowContentPriceLock
+        ) {
+            if (!nextPriceLockBarrier.compareAndSet(
+                null,
+                new PriceLockBarrier(contentLoaded, allowContentPriceLock)
+            )) {
+                throw new IllegalStateException("price lock barrier is already configured");
+            }
+        }
+
+        @Override
+        public Optional<Long> findPublishedPaymentReservationPriceForUpdate(Long contentId) {
+            PriceLockBarrier barrier = nextPriceLockBarrier.getAndSet(null);
+            if (barrier != null) {
+                barrier.contentLoaded().countDown();
+                await(barrier.allowContentPriceLock());
+            }
+            return super.findPublishedPaymentReservationPriceForUpdate(contentId);
+        }
+
+        private void await(CountDownLatch latch) {
+            try {
+                if (!latch.await(3, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("content price lock was not released");
+                }
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("interrupted while waiting for content price lock", exception);
+            }
+        }
+    }
+
+    private record PriceLockBarrier(
+        CountDownLatch contentLoaded,
+        CountDownLatch allowContentPriceLock
+    ) {
     }
 
     private record Fixture(AppUser user, CapacityHold hold, Long contentId) {

@@ -12,6 +12,7 @@ import io.regionevent.regioneventbackend.domain.payment.entity.PaymentIdempotenc
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentIdempotencyOperation;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentIdempotencyStatus;
 import io.regionevent.regioneventbackend.domain.payment.repository.PaymentIdempotencyRepository;
+import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 
 @Service
 public class PaymentIdempotencyService {
@@ -51,6 +52,21 @@ public class PaymentIdempotencyService {
     public void setPaymentResultExpiration(Payment payment, Instant finalizedAt) {
         paymentIdempotencyRepository.findByPaymentPaymentIdForUpdate(payment.getPaymentId())
             .ifPresent(idempotency -> idempotency.setExpiresAtAfterPaymentFinalization(finalizedAt));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void succeedWithReservation(
+        Long paymentIdempotencyId,
+        Reservation reservation,
+        Instant completedAt
+    ) {
+        PaymentIdempotency idempotency = paymentIdempotencyRepository.findById(paymentIdempotencyId)
+            .orElseThrow(() -> new IllegalStateException("payment idempotency does not exist"));
+        idempotency.succeedWithReservation(
+            reservation,
+            completedAt,
+            completedAt.plus(24, java.time.temporal.ChronoUnit.HOURS)
+        );
     }
 
     @Transactional
