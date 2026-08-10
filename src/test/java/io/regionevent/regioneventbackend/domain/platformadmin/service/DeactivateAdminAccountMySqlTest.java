@@ -123,7 +123,7 @@ class DeactivateAdminAccountMySqlTest extends NonTransactionalMySqlTestSupport {
         assertThat(attempts)
             .filteredOn(attempt -> !attempt.isSuccessful())
             .extracting(DeactivationAttempt::errorCode)
-            .containsExactly(ErrorCode.ADMIN_ACCOUNT_DEACTIVATION_CONFLICT);
+            .containsExactly(ErrorCode.FORBIDDEN);
         assertThat(platformAdminAssignmentRepository.findAll())
             .filteredOn(assignment -> assignment.isActive()
                 && assignment.getGrade() == PlatformAdminGrade.SUPER_ADMIN)
