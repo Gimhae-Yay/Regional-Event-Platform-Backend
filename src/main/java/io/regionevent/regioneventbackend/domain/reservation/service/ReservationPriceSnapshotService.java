@@ -20,7 +20,12 @@ public class ReservationPriceSnapshotService {
         this.reservationPriceSnapshotRepository = reservationPriceSnapshotRepository;
     }
 
-    @Transactional(propagation = Propagation.MANDATORY)
+    @Transactional(readOnly = true)
+    public Optional<ReservationPriceSnapshot> findByCapacityHoldId(Long holdId) {
+        return reservationPriceSnapshotRepository.findByCapacityHoldHoldId(holdId);
+	}
+
+	@Transactional(propagation = Propagation.MANDATORY)
     public Optional<ReservationPriceSnapshot> findByHoldIdForUpdate(Long holdId) {
         return reservationPriceSnapshotRepository.findByHoldIdForUpdate(holdId);
     }

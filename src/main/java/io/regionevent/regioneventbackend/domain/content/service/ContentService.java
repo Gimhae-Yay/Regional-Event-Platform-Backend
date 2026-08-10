@@ -94,6 +94,25 @@ public class ContentService {
         return List.copyOf(contents);
     }
 
+    public List<Content> findMissionTargetContentsForUpdate(
+        List<Long> contentIds,
+        Long regionId
+    ) {
+        if (contentIds == null || contentIds.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        validateRequiredId(regionId);
+
+        List<Content> contents = contentRepository.findMissionTargetsForUpdate(contentIds);
+        if (contents.size() != contentIds.size()) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+        if (contents.stream().anyMatch(content -> !content.isScopedTo(regionId))) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        return List.copyOf(contents);
+    }
+
     public Content markPrePublicationRevisionPending(Content content) {
         if (content.getStatus() != ContentStatus.APPROVED) {
             throw new BusinessException(ErrorCode.CONTENT_STATE_CONFLICT);
