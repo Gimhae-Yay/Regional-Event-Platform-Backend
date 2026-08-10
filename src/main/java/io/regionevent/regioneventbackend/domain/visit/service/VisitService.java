@@ -25,6 +25,12 @@ public class VisitService {
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Visit findForCouponIssue(Long visitId) {
+        return visitRepository.findByVisitId(visitId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
     @Transactional(readOnly = true)
     public Visit findByIdForCheckInResult(Long visitId) {
         return visitRepository.findByVisitId(visitId)

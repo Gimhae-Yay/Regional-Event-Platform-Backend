@@ -9,6 +9,7 @@ public record ApproveContentRevisionResponse(
     String contentId,
     String revisionStatus,
     String contentStatus,
+    long reservationPrice,
     Instant publishAt,
     Instant reviewedAt
 ) {
@@ -19,6 +20,7 @@ public record ApproveContentRevisionResponse(
             result.contentId().toString(),
             result.revisionStatus().name(),
             result.contentStatus().name(),
+            result.reservationPrice(),
             result.publishAt(),
             result.reviewedAt()
         );

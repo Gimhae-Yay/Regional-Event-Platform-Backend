@@ -24,6 +24,7 @@ public record OriginalContentReviewDetailResponse(
     String ageRequirement,
     String materials,
     String cancellationPolicyText,
+    long reservationPrice,
     OffsetDateTime publishAt,
     List<Session> sessions
 ) {
@@ -52,6 +53,7 @@ public record OriginalContentReviewDetailResponse(
             result.ageRequirement(),
             result.materials(),
             result.cancellationPolicyText(),
+            result.reservationPrice(),
             toSeoulOffsetDateTime(result.publishAt()),
             result.sessions().stream()
                 .map(Session::from)

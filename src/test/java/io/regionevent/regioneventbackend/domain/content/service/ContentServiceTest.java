@@ -176,6 +176,7 @@ class ContentServiceTest {
             "전체",
             "준비물",
             "취소 정책",
+            0,
             Instant.parse("2026-08-10T01:00:00Z")
         );
         verify(content).assignRepresentativeImage(replacementImageObject, UPDATED_AT);
@@ -376,6 +377,7 @@ class ContentServiceTest {
             "전체",
             "준비물",
             "취소 정책",
+            0,
             Instant.parse("2026-08-10T01:00:00Z")
         );
     }

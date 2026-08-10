@@ -27,8 +27,7 @@ Accept: application/json
   "validDaysAfterIssue": 30,
   "issueStartsAt": "2026-08-01T00:00:00Z",
   "issueEndsAt": "2026-08-31T14:59:59Z",
-  "totalIssueLimit": 1000,
-  "reason": "8월 재방문 혜택 운영"
+  "totalIssueLimit": 1000
 }
 ```
 
@@ -66,7 +65,6 @@ Accept: application/json
 | `issueStartsAt` | String | Y | 발급 가능 시작 시각. UTC ISO 8601 일시 |
 | `issueEndsAt` | String | Y | 발급 가능 종료 시각. UTC ISO 8601 일시. `issueStartsAt`보다 뒤여야 한다. |
 | `totalIssueLimit` | Number or null | N | 정책 전체 발급 한도. `null`이면 한도를 두지 않는다. 값이 있으면 1 이상 정수 |
-| `reason` | String | Y | 생성 사유. 앞뒤 공백 제거 후 비어 있을 수 없다. |
 
 ### Response
 
@@ -128,6 +126,7 @@ Accept: application/json
 | --- | --- | --- |
 | `400` | `INVALID_INPUT` | 필수값이 없거나 형식·범위가 올바르지 않다. 정책은 생성하지 않는다. |
 | `400` | `INVALID_JSON` | 요청 본문 형식이 올바르지 않다. 정책은 생성하지 않는다. |
+| `400` | `INVALID_TYPE` | 필드 값의 JSON 타입이 계약과 다르다. 정책은 생성하지 않는다. |
 | `401` | `UNAUTHENTICATED` | 인증 정보가 없거나 유효하지 않다. |
 | `403` | `FORBIDDEN` | 인증 주체가 `ACTIVE` 회원 또는 현재 `OPERATOR` 역할이 아니거나, 대상 콘텐츠와 `region_id`가 다르거나, 대상 콘텐츠를 소유하지 않는다. |
 | `404` | `NOT_FOUND` | 대상 콘텐츠를 찾을 수 없다. |
@@ -140,7 +139,7 @@ Accept: application/json
 {
   "statusCode": 409,
   "code": "COUPON_POLICY_CONFLICT",
-  "message": "쿠폰 정책을 생성할 수 없는 상태입니다.",
+  "message": "쿠폰 정책을 처리할 수 없는 상태입니다.",
   "data": null
 }
 ```
@@ -151,4 +150,3 @@ Accept: application/json
 2. 정액 할인 금액은 1 이상, 최소 결제 금액은 0 이상이며 발급 후 유효 일수는 1 이상 365 이하여야 한다.
 3. `minimumPaymentAmount`는 `discountAmount`보다 크거나 같아야 한다.
 4. 생성 성공 시 정책 상태는 `DRAFT`로 기록한다.
-5. 생성 이력에는 처리자, 대상 콘텐츠·지역, 생성 사유와 생성 시각을 기록한다.

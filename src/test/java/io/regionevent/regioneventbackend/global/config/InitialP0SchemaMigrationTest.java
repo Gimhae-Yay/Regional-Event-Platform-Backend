@@ -147,7 +147,9 @@ class InitialP0SchemaMigrationTest {
             "26",
             "27",
             "28",
-            "29"
+            "29",
+            "30",
+            "31"
         );
         assertThat(tableNames).contains(
             "REGION",
@@ -199,6 +201,7 @@ class InitialP0SchemaMigrationTest {
         );
         assertThat(constraintNames).contains(
             "PK_REGION",
+            "CK_REGION_REGION_CODE_NORMALIZED",
             "UK_CONTENT_REVISION_CONTENT_REVISION_NO",
             "FK_CONTENT_REPRESENTATIVE_IMAGE_OBJECT",
             "FK_CONTENT_REVISION_CANDIDATE_IMAGE_OBJECT",
@@ -221,6 +224,8 @@ class InitialP0SchemaMigrationTest {
             "CK_IDEMPOTENCY_RECORD_VISIT_RESULT",
             "CK_REVIEW_STATE",
             "CK_CONTENT_REVISION_REVIEWED",
+            "CK_CONTENT_RESERVATION_PRICE",
+            "CK_CONTENT_REVISION_RESERVATION_PRICE",
             "FK_COUPON_POLICY_CONTENT_REGION",
             "FK_COUPON_POLICY_REGION",
             "CK_COUPON_POLICY_STATUS_TIMESTAMPS",
@@ -349,12 +354,14 @@ class InitialP0SchemaMigrationTest {
         assertThat(appUserColumnNames).contains("ACCOUNT_KIND");
         assertThat(contentColumnNames).contains(
             "REPRESENTATIVE_IMAGE_OBJECT_ID",
-            "REPRESENTATIVE_IMAGE_ASSIGNED_AT"
+            "REPRESENTATIVE_IMAGE_ASSIGNED_AT",
+            "RESERVATION_PRICE"
         );
         assertThat(contentRevisionColumnNames).contains(
             "CANDIDATE_IMAGE_OBJECT_ID",
             "CANDIDATE_IMAGE_ASSIGNED_AT",
-            "PUBLISH_AT"
+            "PUBLISH_AT",
+            "RESERVATION_PRICE"
         );
         assertThat(contentSessionColumnNames).contains(
             "REVIEWED_AT",

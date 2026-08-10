@@ -103,6 +103,7 @@ public class CreateContentRevisionUseCase {
         if (request == null) {
             throw invalidInput();
         }
+        validateReservationPrice(request.reservationPrice());
     }
 
     private void validatePendingRevisionEligibility(
@@ -196,6 +197,7 @@ public class CreateContentRevisionUseCase {
             request.ageRequirement(),
             request.materials(),
             request.cancellationPolicyText(),
+            request.reservationPrice(),
             publishAt
         );
     }
@@ -219,6 +221,12 @@ public class CreateContentRevisionUseCase {
             new AuditEventActor(operator.roleAssignment()),
             submittedAt
         ));
+    }
+
+    private void validateReservationPrice(Long reservationPrice) {
+        if (reservationPrice == null || reservationPrice < 0) {
+            throw invalidInput();
+        }
     }
 
     private static BusinessException invalidInput() {

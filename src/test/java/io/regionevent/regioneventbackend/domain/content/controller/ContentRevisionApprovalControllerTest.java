@@ -45,6 +45,7 @@ class ContentRevisionApprovalControllerTest {
                 CONTENT_ID,
                 ContentRevisionStatus.EDIT_APPROVED,
                 ContentStatus.APPROVED,
+                20_000,
                 PUBLISH_AT,
                 REVIEWED_AT
             ));
@@ -65,6 +66,7 @@ class ContentRevisionApprovalControllerTest {
             "101",
             "EDIT_APPROVED",
             "APPROVED",
+            20_000,
             PUBLISH_AT,
             REVIEWED_AT
         ));

@@ -5,7 +5,10 @@ import org.springframework.stereotype.Service;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicy;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.stampbook.entity.Stampbook;
+import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookStatus;
 import io.regionevent.regioneventbackend.domain.stampbook.repository.StampbookRepository;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 @Service
 public class StampbookService {
@@ -21,5 +24,25 @@ public class StampbookService {
         CouponPolicy rewardCouponPolicy
     ) {
         return stampbookRepository.saveAndFlush(new Stampbook(region, rewardCouponPolicy));
+    }
+
+    public Stampbook findForUpdate(Long stampbookId) {
+        if (stampbookId == null || stampbookId <= 0) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        return stampbookRepository.findByStampbookIdForUpdate(stampbookId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public void validateDraft(Stampbook stampbook) {
+        if (stampbook.getStatus() != StampbookStatus.DRAFT) {
+            throw new BusinessException(ErrorCode.STAMPBOOK_STATE_CONFLICT);
+        }
+    }
+
+    public void validatePublished(Stampbook stampbook) {
+        if (stampbook.getStatus() != StampbookStatus.PUBLISHED) {
+            throw new BusinessException(ErrorCode.STAMPBOOK_STATE_CONFLICT);
+        }
     }
 }

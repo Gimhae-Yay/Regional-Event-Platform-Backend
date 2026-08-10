@@ -3,8 +3,11 @@ package io.regionevent.regioneventbackend.domain.user.repository;
 import java.util.List;
 import java.util.Optional;
 
+import jakarta.persistence.LockModeType;
+
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -29,6 +32,38 @@ public interface UserRoleAssignmentRepository extends JpaRepository<UserRoleAssi
         UserRole role,
         UserRoleAssignmentStatus status,
         AppUserStatus appUserStatus
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = {"appUser", "region"})
+    @Query("""
+        SELECT assignment
+        FROM UserRoleAssignment assignment
+        WHERE assignment.appUser.userId = :userId
+          AND assignment.role = :role
+          AND assignment.status = :status
+        """)
+    Optional<UserRoleAssignment> findActiveRoleAssignmentForUpdate(
+        @Param("userId") Long userId,
+        @Param("role") UserRole role,
+        @Param("status") UserRoleAssignmentStatus status
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = {"appUser", "region"})
+    @Query("""
+        SELECT assignment
+        FROM UserRoleAssignment assignment
+        WHERE assignment.appUser.userId = :userId
+          AND assignment.role = :role
+          AND assignment.status = :status
+          AND assignment.appUser.status = :appUserStatus
+        """)
+    Optional<UserRoleAssignment> findByAppUserUserIdAndRoleAndStatusAndAppUserStatusForUpdate(
+        @Param("userId") Long userId,
+        @Param("role") UserRole role,
+        @Param("status") UserRoleAssignmentStatus status,
+        @Param("appUserStatus") AppUserStatus appUserStatus
     );
 
     @Query("""
