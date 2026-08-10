@@ -30,6 +30,12 @@ public class RegionAdminMissionController {
 
     private static final String LIST_SUCCESS_MESSAGE = "지역 미션 목록 조회에 성공했습니다.";
 
+    private static final String DEFAULT_PAGE_VALUE = "0";
+    private static final String DEFAULT_SIZE_VALUE = "20";
+    private static final int MIN_PAGE = 0;
+    private static final int MIN_SIZE = 1;
+    private static final int MAX_SIZE = 100;
+
     private final GetRegionAdminMissionDetailUseCase getRegionAdminMissionDetailUseCase;
     private final GetRegionAdminMissionsUseCase getRegionAdminMissionsUseCase;
 
@@ -45,8 +51,8 @@ public class RegionAdminMissionController {
     public ResponseEntity<ApiResponse<PageResponse<RegionAdminMissionSummaryResponse>>> getMissions(
         @AuthenticationPrincipal Long userId,
         @RequestParam(required = false) String status,
-        @RequestParam(defaultValue = "0") String page,
-        @RequestParam(defaultValue = "20") String size
+        @RequestParam(defaultValue = DEFAULT_PAGE_VALUE) String page,
+        @RequestParam(defaultValue = DEFAULT_SIZE_VALUE) String size
     ) {
         RegionAdminMissionListResult result = getRegionAdminMissionsUseCase.get(
             userId,
@@ -91,7 +97,7 @@ public class RegionAdminMissionController {
 
     private int toPage(String value) {
         int page = toInt(value);
-        if (page < 0) {
+        if (page < MIN_PAGE) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
         return page;
@@ -99,7 +105,7 @@ public class RegionAdminMissionController {
 
     private int toSize(String value) {
         int size = toInt(value);
-        if (size < 1 || size > 100) {
+        if (size < MIN_SIZE || size > MAX_SIZE) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
         return size;

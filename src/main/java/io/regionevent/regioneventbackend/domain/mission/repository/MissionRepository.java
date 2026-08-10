@@ -12,8 +12,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 
 import io.regionevent.regioneventbackend.domain.mission.entity.Mission;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
@@ -24,7 +22,7 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
 
     Page<Mission> findAllByRegionRegionIdAndStatusOrderByMissionIdDesc(
         Long regionId,
-        io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus status,
+        MissionStatus status,
         Pageable pageable
     );
 

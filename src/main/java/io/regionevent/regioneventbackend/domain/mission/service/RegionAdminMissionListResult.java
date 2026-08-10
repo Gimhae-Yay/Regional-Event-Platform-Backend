@@ -2,6 +2,8 @@ package io.regionevent.regioneventbackend.domain.mission.service;
 
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+
 import io.regionevent.regioneventbackend.domain.mission.entity.Mission;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
 
@@ -17,7 +19,7 @@ public record RegionAdminMissionListResult(
         content = List.copyOf(content);
     }
 
-    public static RegionAdminMissionListResult from(org.springframework.data.domain.Page<Mission> missions) {
+    public static RegionAdminMissionListResult from(Page<Mission> missions) {
         return new RegionAdminMissionListResult(
             missions.getContent().stream().map(MissionSummary::from).toList(),
             missions.getNumber(),
