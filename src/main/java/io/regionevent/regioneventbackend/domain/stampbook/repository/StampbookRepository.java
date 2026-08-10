@@ -111,7 +111,8 @@ public interface StampbookRepository extends JpaRepository<Stampbook, Long> {
             visitContent.contentId,
             visit.checkedAt,
             content.contentId,
-            content.title
+            content.title,
+            targetContent.content.contentId
         )
         FROM Stampbook stampbook
         LEFT JOIN StampbookProgress progress
@@ -123,6 +124,9 @@ public interface StampbookRepository extends JpaRepository<Stampbook, Long> {
         LEFT JOIN visit.user visitUser
         LEFT JOIN visit.content visitContent
         LEFT JOIN stampEarn.content content
+        LEFT JOIN StampbookContent targetContent
+            ON targetContent.stampbook = stampbook
+            AND targetContent.content = content
         WHERE stampbook.stampbookId = :stampbookId
           AND (
             stampbook.status = :publishedStatus

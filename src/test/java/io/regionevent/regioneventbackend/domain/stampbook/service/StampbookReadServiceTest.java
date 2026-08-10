@@ -528,7 +528,8 @@ class StampbookReadServiceTest {
             visitContentId,
             visitedAt,
             contentId,
-            contentTitle
+            contentTitle,
+            contentId
         );
     }
 }

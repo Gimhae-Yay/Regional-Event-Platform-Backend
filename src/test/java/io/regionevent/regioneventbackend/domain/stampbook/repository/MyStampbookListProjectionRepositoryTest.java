@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.domain.stampbook.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
 import java.util.List;
@@ -38,6 +39,7 @@ import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookProgre
 import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookProgressStatus;
 import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookStatus;
 import io.regionevent.regioneventbackend.domain.stampbook.repository.MyStampbookListProjection;
+import io.regionevent.regioneventbackend.domain.stampbook.service.StampbookReadService;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
@@ -572,6 +574,50 @@ class MyStampbookListProjectionRepositoryTest {
         )).isEqualTo(publishedEarnCountBeforeRead);
         assertThat(visitRepository.findById(publishedProjections.getFirst().visitId()).orElseThrow().getCheckedAt())
             .isEqualTo(Instant.parse("2026-08-02T01:05:00Z"));
+    }
+
+    @Test
+    void 스탬프_적립_이력_조회는_대상이_아닌_콘텐츠_적립을_노출하지_않는다() {
+        Region region = saveRegion();
+        Content firstTarget = saveContent(region, "invalid-earning-first-target");
+        Content secondTarget = saveContent(region, "invalid-earning-second-target");
+        Content nonTarget = saveContent(region, "invalid-earning-non-target");
+        CouponPolicy rewardCouponPolicy = saveRewardCouponPolicy(firstTarget, region);
+        AppUser viewer = saveUser("invalid-earning-viewer@example.com");
+        Stampbook stampbook = saveStampbook(region, rewardCouponPolicy, firstTarget, secondTarget);
+        updateStampbookStatus(stampbook, StampbookStatus.PUBLISHED, FIRST_PUBLISHED_AT, null);
+        StampbookProgress progress = stampbookProgressRepository.saveAndFlush(
+            new StampbookProgress(stampbook, viewer)
+        );
+        saveStampEarn(
+            region,
+            viewer,
+            progress,
+            nonTarget,
+            FIRST_EARNED_AT,
+            "invalid-earning-non-target"
+        );
+        entityManager.clear();
+
+        List<MyStampEarningProjection> projections = stampbookRepository.findMyStampEarningProjections(
+            viewer.getUserId(),
+            stampbook.getStampbookId(),
+            StampbookStatus.PUBLISHED,
+            StampbookStatus.ENDED
+        );
+
+        assertThat(projections).singleElement()
+            .extracting(
+                MyStampEarningProjection::contentId,
+                MyStampEarningProjection::targetContentId
+            )
+            .containsExactly(nonTarget.getContentId(), null);
+        assertThatThrownBy(() -> new StampbookReadService(stampbookRepository).findMyStampEarnings(
+            viewer.getUserId(),
+            stampbook.getStampbookId()
+        ))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("stamp earning read data is inconsistent");
     }
 
     private Stampbook saveStampbook(

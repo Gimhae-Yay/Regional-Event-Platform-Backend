@@ -16,6 +16,7 @@ public record MyStampEarningProjection(
     Long visitContentId,
     Instant visitedAt,
     Long contentId,
-    String contentTitle
+    String contentTitle,
+    Long targetContentId
 ) {
 }

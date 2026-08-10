@@ -116,6 +116,7 @@ public class StampbookReadService {
             || projection.visitId() <= 0
             || !isSame(projection.progressUserId(), projection.visitUserId())
             || !isSame(projection.visitContentId(), projection.contentId())
+            || !isSame(projection.contentId(), projection.targetContentId())
             || projection.visitedAt() == null
             || projection.contentId() == null
             || projection.contentId() <= 0
