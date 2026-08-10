@@ -55,6 +55,11 @@ public class MissionService {
         return missionRepository.saveAndFlush(mission);
     }
 
+    public Mission findPublicMissionDetail(Long missionId, Instant now) {
+        return missionRepository.findPublicMissionDetailByMissionId(missionId, now)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
     public boolean existsPublishedRewardCouponPolicy(Long couponPolicyId) {
         return missionRepository.existsByRewardCouponPolicyCouponPolicyIdAndStatus(
             couponPolicyId,
