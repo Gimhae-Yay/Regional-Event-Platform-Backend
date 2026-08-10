@@ -1,44 +1,80 @@
 package io.regionevent.regioneventbackend.domain.mission.controller;
 
-import static io.regionevent.regioneventbackend.domain.mission.controller.MissionIdParser.toMissionId;
+import java.util.UUID;
+import java.util.regex.Pattern;
+
+import jakarta.validation.Valid;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestAttribute;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import io.regionevent.regioneventbackend.domain.mission.dto.OperatorMissionDetailResponse;
-import io.regionevent.regioneventbackend.domain.mission.service.GetOperatorMissionDetailUseCase;
+import io.regionevent.regioneventbackend.domain.mission.dto.CreateOperatorMissionRequest;
+import io.regionevent.regioneventbackend.domain.mission.dto.CreateOperatorMissionResponse;
+import io.regionevent.regioneventbackend.domain.mission.service.CreateOperatorMissionResult;
+import io.regionevent.regioneventbackend.domain.mission.service.CreateOperatorMissionUseCase;
+import io.regionevent.regioneventbackend.domain.mission.service.CreateOperatorMissionUseCase.CreateOperatorMissionCommand;
+import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.global.response.ApiResponse;
 
 @RestController
 @RequestMapping("/api/v1/operator/missions")
 public class OperatorMissionController {
 
-    private static final String SUCCESS_MESSAGE = "내 미션 상세 조회에 성공했습니다.";
+    private static final String CREATE_SUCCESS_MESSAGE = "미션 생성에 성공했습니다.";
+    private static final Pattern POSITIVE_DECIMAL_PATTERN = Pattern.compile("^[1-9][0-9]*$");
 
-    private final GetOperatorMissionDetailUseCase getOperatorMissionDetailUseCase;
+    private final CreateOperatorMissionUseCase createOperatorMissionUseCase;
 
-    public OperatorMissionController(
-        GetOperatorMissionDetailUseCase getOperatorMissionDetailUseCase
-    ) {
-        this.getOperatorMissionDetailUseCase = getOperatorMissionDetailUseCase;
+    public OperatorMissionController(CreateOperatorMissionUseCase createOperatorMissionUseCase) {
+        this.createOperatorMissionUseCase = createOperatorMissionUseCase;
     }
 
-    @GetMapping("/{missionId}")
-    public ResponseEntity<ApiResponse<OperatorMissionDetailResponse>> getDetail(
+    @PostMapping
+    public ResponseEntity<ApiResponse<CreateOperatorMissionResponse>> create(
         @AuthenticationPrincipal Long userId,
-        @PathVariable String missionId
+        @Valid @RequestBody CreateOperatorMissionRequest request,
+        @RequestAttribute(RequestIdFilter.REQUEST_ID_ATTRIBUTE) String requestId
     ) {
-        OperatorMissionDetailResponse response = getOperatorMissionDetailUseCase.get(
+        CreateOperatorMissionResult result = createOperatorMissionUseCase.create(
             userId,
-            toMissionId(missionId)
+            toCommand(request),
+            UUID.fromString(requestId)
         );
         return ApiResponse
-            .success(HttpStatus.OK, SUCCESS_MESSAGE, response)
+            .success(HttpStatus.CREATED, CREATE_SUCCESS_MESSAGE, CreateOperatorMissionResponse.from(result))
             .toResponseEntity();
+    }
+
+    private CreateOperatorMissionCommand toCommand(CreateOperatorMissionRequest request) {
+        return new CreateOperatorMissionCommand(
+            request.conditionType(),
+            request.requiredVisitCount(),
+            request.targetContentIds() == null
+                ? null
+                : request.targetContentIds().stream()
+                    .map(this::toPositiveId)
+                    .toList(),
+            toPositiveId(request.rewardCouponPolicyId()),
+            request.endsAt()
+        );
+    }
+
+    private Long toPositiveId(String value) {
+        if (value == null || !POSITIVE_DECIMAL_PATTERN.matcher(value).matches()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        try {
+            return Long.valueOf(value);
+        } catch (NumberFormatException exception) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, exception);
+        }
     }
 }

@@ -253,6 +253,17 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
     @EntityGraph(attributePaths = {"operator", "region", "representativeImageObject"})
     Optional<Content> findByContentIdAndDeletedAtIsNull(Long contentId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = "region")
+    @Query("""
+        SELECT content
+        FROM Content content
+        WHERE content.contentId IN :contentIds
+            AND content.deletedAt IS NULL
+        ORDER BY content.contentId ASC
+        """)
+    List<Content> findMissionTargetsForUpdate(@Param("contentIds") List<Long> contentIds);
+
     @EntityGraph(attributePaths = {"operator", "region", "representativeImageObject"})
     @Query("""
         SELECT content

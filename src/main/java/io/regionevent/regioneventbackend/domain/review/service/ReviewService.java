@@ -82,7 +82,7 @@ public class ReviewService {
             return reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
         }
-        Review review = reviewRepository.findById(reviewId)
+        Review review = reviewRepository.findByReviewIdForUpdate(reviewId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
         if (review.getStatus() == ReviewStatus.DELETED) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
