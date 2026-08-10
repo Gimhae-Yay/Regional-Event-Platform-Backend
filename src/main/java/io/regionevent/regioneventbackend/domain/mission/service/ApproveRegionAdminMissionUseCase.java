@@ -75,6 +75,7 @@ public class ApproveRegionAdminMissionUseCase {
         AuthorizedRegionAdmin regionAdmin = regionAdminAuthorizationService
             .requireAuthorizedRegionAdmin(userId);
         Mission mission = missionService.findMission(missionId);
+        MissionStatus previousStateForFailure = mission.getStatus();
 
         try {
             validateRegionScope(regionAdmin, mission);
@@ -84,6 +85,7 @@ public class ApproveRegionAdminMissionUseCase {
                 initiallyReferencedCouponPolicyId
             );
             mission = missionService.findForUpdate(missionId);
+            previousStateForFailure = mission.getStatus();
             validateLockedRewardCouponPolicyLink(
                 mission,
                 initiallyReferencedCouponPolicyId
@@ -99,10 +101,22 @@ public class ApproveRegionAdminMissionUseCase {
             recordSuccess(requestId, approvedMission, regionAdmin, publishedAt);
             return ApproveRegionAdminMissionResult.from(approvedMission);
         } catch (BusinessException exception) {
-            recordFailure(requestId, mission, regionAdmin, exception.getErrorCode());
+            recordFailure(
+                requestId,
+                mission,
+                previousStateForFailure,
+                regionAdmin,
+                exception.getErrorCode()
+            );
             throw exception;
         } catch (RuntimeException exception) {
-            recordFailure(requestId, mission, regionAdmin, ErrorCode.INTERNAL_SERVER_ERROR);
+            recordFailure(
+                requestId,
+                mission,
+                previousStateForFailure,
+                regionAdmin,
+                ErrorCode.INTERNAL_SERVER_ERROR
+            );
             throw exception;
         }
     }
@@ -188,6 +202,7 @@ public class ApproveRegionAdminMissionUseCase {
     private void recordFailure(
         UUID requestId,
         Mission mission,
+        MissionStatus previousState,
         AuthorizedRegionAdmin regionAdmin,
         ErrorCode errorCode
     ) {
@@ -196,7 +211,7 @@ public class ApproveRegionAdminMissionUseCase {
             mission.getRegion(),
             AuditEventTargetType.MISSION,
             mission.getMissionId(),
-            mission.getStatus().name(),
+            previousState.name(),
             null,
             AuditEventResult.FAILURE,
             errorCode.code(),

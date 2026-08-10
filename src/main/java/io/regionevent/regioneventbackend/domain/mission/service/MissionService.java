@@ -6,6 +6,8 @@ import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicy;
 import io.regionevent.regioneventbackend.domain.mission.entity.Mission;
@@ -55,6 +57,7 @@ public class MissionService {
         return missionRepository.saveAndFlush(mission);
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
     public Mission findMission(Long missionId) {
         return missionRepository.findByMissionId(missionId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
