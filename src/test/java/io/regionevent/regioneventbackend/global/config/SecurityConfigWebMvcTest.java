@@ -188,6 +188,7 @@ class SecurityConfigWebMvcTest {
             Arguments.of(HttpMethod.POST, "/api/v1/auth/logout"),
             Arguments.of(HttpMethod.GET, "/api/v1/regions"),
             Arguments.of(HttpMethod.GET, "/api/v1/regions/1/home"),
+            Arguments.of(HttpMethod.GET, "/api/v1/regions/1/missions"),
             Arguments.of(HttpMethod.GET, "/api/v1/contents"),
             Arguments.of(HttpMethod.GET, "/api/v1/contents/1"),
             Arguments.of(HttpMethod.GET, "/api/v1/contents/1/reviews"),
@@ -250,6 +251,7 @@ class SecurityConfigWebMvcTest {
         @GetMapping({
             "/api/v1/regions",
             "/api/v1/regions/{regionId}/home",
+            "/api/v1/regions/{regionId}/missions",
             "/api/v1/contents",
             "/api/v1/contents/{contentId}",
             "/api/v1/contents/{contentId}/reviews",

@@ -43,7 +43,7 @@ public class BearerAccessTokenAuthenticationFilter extends OncePerRequestFilter 
             return;
         }
         if (!authorization.startsWith(BEARER_PREFIX)) {
-            filterChain.doFilter(request, response);
+            rejectAuthentication(request, response);
             return;
         }
 
