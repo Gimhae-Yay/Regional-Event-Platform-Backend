@@ -97,4 +97,46 @@ public interface StampbookRepository extends JpaRepository<Stampbook, Long> {
         @Param("publishedStatus") StampbookStatus publishedStatus,
         @Param("endedStatus") StampbookStatus endedStatus
     );
+
+    @Query("""
+        SELECT new io.regionevent.regioneventbackend.domain.stampbook.repository.MyStampEarningProjection(
+            stampbook.stampbookId,
+            stampbook.status,
+            progress.stampbookProgressId,
+            progressUser.userId,
+            stampEarn.stampEarnId,
+            stampEarn.earnedAt,
+            visit.visitId,
+            visitUser.userId,
+            visitContent.contentId,
+            visit.checkedAt,
+            content.contentId,
+            content.title
+        )
+        FROM Stampbook stampbook
+        LEFT JOIN StampbookProgress progress
+            ON progress.stampbook = stampbook
+            AND progress.user.userId = :userId
+        LEFT JOIN progress.user progressUser
+        LEFT JOIN StampEarn stampEarn ON stampEarn.stampbookProgress = progress
+        LEFT JOIN stampEarn.visit visit
+        LEFT JOIN visit.user visitUser
+        LEFT JOIN visit.content visitContent
+        LEFT JOIN stampEarn.content content
+        WHERE stampbook.stampbookId = :stampbookId
+          AND (
+            stampbook.status = :publishedStatus
+            OR (
+                stampbook.status = :endedStatus
+                AND progress.stampbookProgressId IS NOT NULL
+            )
+          )
+        ORDER BY stampEarn.earnedAt DESC, stampEarn.stampEarnId DESC
+        """)
+    List<MyStampEarningProjection> findMyStampEarningProjections(
+        @Param("userId") Long userId,
+        @Param("stampbookId") Long stampbookId,
+        @Param("publishedStatus") StampbookStatus publishedStatus,
+        @Param("endedStatus") StampbookStatus endedStatus
+    );
 }
