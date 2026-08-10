@@ -27,7 +27,7 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
         LEFT JOIN FETCH targetContent.content content
         WHERE mission.missionId = :missionId
         """)
-    Optional<Mission> findOperatorMissionDetailByMissionId(@Param("missionId") Long missionId);
+    Optional<Mission> findMissionDetailByMissionId(@Param("missionId") Long missionId);
 
     @EntityGraph(attributePaths = {"region", "rewardCouponPolicy"})
     @Lock(LockModeType.PESSIMISTIC_WRITE)
