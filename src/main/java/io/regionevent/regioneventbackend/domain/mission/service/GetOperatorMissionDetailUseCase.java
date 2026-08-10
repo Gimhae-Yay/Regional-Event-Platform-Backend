@@ -27,7 +27,7 @@ public class GetOperatorMissionDetailUseCase {
     @Transactional(readOnly = true)
     public OperatorMissionDetailResponse get(Long userId, Long missionId) {
         AuthorizedOperator operator = operatorAuthorizationService.requireAuthorizedOperator(userId);
-        Mission mission = missionService.findOperatorMissionDetail(missionId);
+        Mission mission = missionService.findMissionDetail(missionId);
         if (!operator.region().getRegionId().equals(mission.getRegion().getRegionId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
