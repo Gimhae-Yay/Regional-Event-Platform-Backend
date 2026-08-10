@@ -1,10 +1,16 @@
 package io.regionevent.regioneventbackend.domain.mission.service;
 
+import java.time.Instant;
+import java.util.List;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import io.regionevent.regioneventbackend.domain.mission.entity.Mission;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
 import io.regionevent.regioneventbackend.domain.mission.repository.MissionRepository;
+import io.regionevent.regioneventbackend.domain.mission.repository.PublicRegionMissionProjection;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
@@ -26,6 +32,38 @@ public class MissionService {
         return missionRepository.existsByRewardCouponPolicyCouponPolicyIdAndStatus(
             couponPolicyId,
             MissionStatus.PUBLISHED
+        );
+    }
+
+    public PublicRegionMissionListResult findPublicRegionMissions(
+        Long regionId,
+        Long userId,
+        Instant now,
+        Pageable pageable
+    ) {
+        Page<PublicRegionMissionProjection> missions = missionRepository.findPublicRegionMissions(
+            regionId,
+            userId,
+            now,
+            pageable
+        );
+        List<PublicRegionMissionListResult.Mission> content = missions.getContent().stream()
+            .map(mission -> new PublicRegionMissionListResult.Mission(
+                mission.getMissionId(),
+                mission.getRegionId(),
+                mission.getConditionType(),
+                mission.getRequiredVisitCount(),
+                Math.toIntExact(mission.getTargetContentCount()),
+                mission.getEndsAt(),
+                mission.getParticipationStatus()
+            ))
+            .toList();
+        return new PublicRegionMissionListResult(
+            content,
+            missions.getNumber(),
+            missions.getSize(),
+            missions.getTotalElements(),
+            missions.getTotalPages()
         );
     }
 }

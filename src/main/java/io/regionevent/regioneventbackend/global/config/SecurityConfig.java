@@ -137,6 +137,7 @@ public class SecurityConfig {
                     HttpMethod.GET,
                     "/api/v1/regions",
                     "/api/v1/regions/*/home",
+                    "/api/v1/regions/*/missions",
                     "/api/v1/contents",
                     "/api/v1/contents/*",
                     "/api/v1/contents/*/reviews",

@@ -20,6 +20,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookStatus;
+import io.regionevent.regioneventbackend.domain.stampbook.service.GetMyStampbookDetailUseCase;
 import io.regionevent.regioneventbackend.domain.stampbook.service.GetMyStampbooksUseCase;
 import io.regionevent.regioneventbackend.domain.stampbook.service.MyStampbookListResult;
 import io.regionevent.regioneventbackend.domain.stampbook.service.MyStampbookProgressStatus;
@@ -43,6 +44,9 @@ class MyStampbookControllerWebMvcTest {
 
     @MockitoBean
     private GetMyStampbooksUseCase getMyStampbooksUseCase;
+
+    @MockitoBean
+    private GetMyStampbookDetailUseCase getMyStampbookDetailUseCase;
 
     @MockitoBean
     private RefreshTokenStore refreshTokenStore;
