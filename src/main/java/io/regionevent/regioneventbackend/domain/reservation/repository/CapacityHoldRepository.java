@@ -37,7 +37,7 @@ public interface CapacityHoldRepository extends JpaRepository<CapacityHold, Long
         WHERE hold_id = :holdId
             AND user_id = :userId
             AND status = 'ACTIVE'
-            AND expires_at > CURRENT_TIMESTAMP
+            AND expires_at > CURRENT_TIMESTAMP(6)
             AND EXISTS (
                 SELECT 1
                 FROM content_session
@@ -45,7 +45,7 @@ public interface CapacityHoldRepository extends JpaRepository<CapacityHold, Long
                 WHERE content_session.session_id = capacity_hold.session_id
                     AND content.status = 'PUBLISHED'
                     AND content_session.status = 'SCHEDULED'
-                    AND content_session.starts_at > CURRENT_TIMESTAMP
+                    AND content_session.starts_at > CURRENT_TIMESTAMP(6)
             )
             AND NOT EXISTS (
                 SELECT 1
@@ -137,14 +137,14 @@ public interface CapacityHoldRepository extends JpaRepository<CapacityHold, Long
         """)
     Optional<Long> findContentSessionIdByHoldId(@Param("holdId") Long holdId);
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("""
-        SELECT capacityHold
-        FROM CapacityHold capacityHold
-        WHERE capacityHold.holdId = :holdId
-            AND capacityHold.status = io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus.ACTIVE
-            AND capacityHold.expiresAt > CURRENT_TIMESTAMP
-        """)
+    @Query(value = """
+        SELECT *
+        FROM capacity_hold
+        WHERE hold_id = :holdId
+            AND status = 'ACTIVE'
+            AND expires_at > CURRENT_TIMESTAMP(6)
+        FOR UPDATE
+        """, nativeQuery = true)
     Optional<CapacityHold> findActiveByHoldIdForUpdate(@Param("holdId") Long holdId);
 
     @Query(value = """

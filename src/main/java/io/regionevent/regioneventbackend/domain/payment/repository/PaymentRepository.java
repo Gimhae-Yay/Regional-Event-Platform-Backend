@@ -31,6 +31,8 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
         @Param("status") PaymentStatus status
     );
 
+    boolean existsByCapacityHoldUserUserIdAndStatus(Long userId, PaymentStatus status);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT payment

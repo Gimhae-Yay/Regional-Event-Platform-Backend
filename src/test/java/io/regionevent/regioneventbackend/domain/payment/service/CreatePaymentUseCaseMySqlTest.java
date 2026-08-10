@@ -447,7 +447,7 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
     void databaseCurrentTimeRejectsAnExpiredHoldBeforeCreatingPaymentArtifacts() {
         Fixture fixture = createFixture();
         jdbcTemplate.update(
-            "UPDATE capacity_hold SET expires_at = CURRENT_TIMESTAMP(6) - INTERVAL 1 SECOND WHERE hold_id = ?",
+            "UPDATE capacity_hold SET expires_at = CURRENT_TIMESTAMP(6) - INTERVAL 1 MICROSECOND WHERE hold_id = ?",
             fixture.hold().getHoldId()
         );
 
@@ -467,7 +467,7 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         Fixture fixture = createFixture();
         Coupon coupon = createCoupon(fixture, 1_000);
         jdbcTemplate.update(
-            "UPDATE coupon SET expires_at = CURRENT_TIMESTAMP(6) - INTERVAL 1 SECOND WHERE coupon_id = ?",
+            "UPDATE coupon SET expires_at = CURRENT_TIMESTAMP(6) - INTERVAL 1 MICROSECOND WHERE coupon_id = ?",
             coupon.getCouponId()
         );
 
@@ -481,6 +481,29 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
 
         assertThat(paymentRepository.findAll()).isEmpty();
         assertThat(paymentIdempotencyRepository.findAll()).isEmpty();
+        assertThat(couponStatusHistoryRepository.findAll()).isEmpty();
+    }
+
+    @Test
+    void databaseCurrentTimeRejectsAnExpiredHoldBeforeZeroAmountConfirmation() {
+        Fixture fixture = createFixture();
+        Coupon coupon = createCoupon(fixture, 20_000);
+        jdbcTemplate.update(
+            "UPDATE capacity_hold SET expires_at = CURRENT_TIMESTAMP(6) - INTERVAL 1 MICROSECOND WHERE hold_id = ?",
+            fixture.hold().getHoldId()
+        );
+
+        assertThatThrownBy(() -> createPaymentUseCase.create(
+            fixture.user().getUserId(),
+            fixture.hold().getHoldId().toString(),
+            new CreatePaymentRequest(JsonNodeFactory.instance.stringNode(coupon.getCouponId().toString())),
+            "payment-key-" + System.nanoTime(),
+            UUID.randomUUID()
+        )).isInstanceOf(BusinessException.class);
+
+        assertThat(reservationRepository.findAll()).isEmpty();
+        assertThat(paymentRepository.findAll()).isEmpty();
+        assertThat(reservationPriceSnapshotRepository.findAll()).isEmpty();
         assertThat(couponStatusHistoryRepository.findAll()).isEmpty();
     }
 

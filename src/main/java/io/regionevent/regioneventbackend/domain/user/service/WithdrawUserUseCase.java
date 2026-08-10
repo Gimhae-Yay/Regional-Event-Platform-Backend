@@ -1,7 +1,6 @@
 package io.regionevent.regioneventbackend.domain.user.service;
 
 import java.time.Clock;
-import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -11,7 +10,8 @@ import io.regionevent.regioneventbackend.domain.content.service.ContentService;
 import io.regionevent.regioneventbackend.domain.idempotency.service.IdempotencyService;
 import io.regionevent.regioneventbackend.domain.operator.service.OperatorApplicationService;
 import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHoldService;
-import io.regionevent.regioneventbackend.domain.payment.service.ExpirePendingPaymentForTerminatedHoldUseCase;
+import io.regionevent.regioneventbackend.domain.payment.service.PaymentService;
+import io.regionevent.regioneventbackend.domain.payment.service.RefundService;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationService;
 import io.regionevent.regioneventbackend.domain.review.service.ReviewService;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -28,7 +28,8 @@ public class WithdrawUserUseCase {
     private final ContentService contentService;
     private final RefreshTokenService refreshTokenService;
     private final CapacityHoldService capacityHoldService;
-    private final ExpirePendingPaymentForTerminatedHoldUseCase expirePendingPaymentForTerminatedHoldUseCase;
+    private final PaymentService paymentService;
+    private final RefundService refundService;
     private final ReservationService reservationService;
     private final OperatorApplicationService operatorApplicationService;
     private final VisitService visitService;
@@ -43,7 +44,8 @@ public class WithdrawUserUseCase {
         ContentService contentService,
         RefreshTokenService refreshTokenService,
         CapacityHoldService capacityHoldService,
-        ExpirePendingPaymentForTerminatedHoldUseCase expirePendingPaymentForTerminatedHoldUseCase,
+        PaymentService paymentService,
+        RefundService refundService,
         ReservationService reservationService,
         OperatorApplicationService operatorApplicationService,
         VisitService visitService,
@@ -57,7 +59,8 @@ public class WithdrawUserUseCase {
         this.contentService = contentService;
         this.refreshTokenService = refreshTokenService;
         this.capacityHoldService = capacityHoldService;
-        this.expirePendingPaymentForTerminatedHoldUseCase = expirePendingPaymentForTerminatedHoldUseCase;
+        this.paymentService = paymentService;
+        this.refundService = refundService;
         this.reservationService = reservationService;
         this.operatorApplicationService = operatorApplicationService;
         this.visitService = visitService;
@@ -75,13 +78,7 @@ public class WithdrawUserUseCase {
         appUserService.startWithdrawal(user);
 
         refreshTokenService.revokeAllFamilies(userId);
-        UUID requestId = UUID.randomUUID();
-        capacityHoldService.invalidateActiveHoldsForWithdrawal(userId)
-            .forEach(capacityHold -> expirePendingPaymentForTerminatedHoldUseCase.expire(
-                capacityHold,
-                requestId,
-                null
-            ));
+        capacityHoldService.invalidateActiveHoldsForWithdrawal(userId);
         reservationService.cancelConfirmedReservationsForWithdrawal(userId);
         operatorApplicationService.cancelAndUnlinkByApplicantUserId(userId);
         capacityHoldService.unlinkUserByUserId(userId);
@@ -96,6 +93,9 @@ public class WithdrawUserUseCase {
 
     private void validateWithdrawable(Long userId) {
         if (userRoleAssignmentService.hasPrivilegedRole(userId) || contentService.hasOwnedContent(userId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        if (paymentService.hasPendingPayment(userId) || refundService.hasInProgressRefund(userId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
     }
