@@ -348,6 +348,7 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
         WHERE content_id = :contentId
             AND status = 'PUBLISHED'
             AND deleted_at IS NULL
+            AND reservation_price = 0
         FOR UPDATE
         """, nativeQuery = true)
     Optional<Long> findPublishedReservationTargetIdForUpdate(@Param("contentId") Long contentId);

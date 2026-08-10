@@ -36,6 +36,7 @@ class GetOriginalContentReviewDetailUseCaseTest {
     private static final Long USER_ID = 1L;
     private static final Long REGION_ID = 10L;
     private static final Long CONTENT_ID = 101L;
+    private static final long RESERVATION_PRICE = 2_147_483_648L;
     private static final Instant IMAGE_EXPIRES_AT = Instant.parse("2026-08-01T00:05:00Z");
 
     private final RegionAdminAuthorizationService regionAdminAuthorizationService =
@@ -79,6 +80,7 @@ class GetOriginalContentReviewDetailUseCaseTest {
         assertThat(result.operatorId()).isEqualTo(41L);
         assertThat(result.contentType()).isEqualTo(ContentType.EVENT_EXPERIENCE);
         assertThat(result.status()).isEqualTo(ContentStatus.PENDING);
+        assertThat(result.reservationPrice()).isEqualTo(RESERVATION_PRICE);
         assertThat(result.representativeImageUrl()).isEqualTo("https://example.invalid/view");
         assertThat(result.representativeImageUrlExpiresAt()).isEqualTo(IMAGE_EXPIRES_AT);
         assertThat(result.sessions()).singleElement()
@@ -161,6 +163,7 @@ class GetOriginalContentReviewDetailUseCaseTest {
         when(content.getAgeRequirement()).thenReturn("초등학생 이상");
         when(content.getMaterials()).thenReturn("필기도구");
         when(content.getCancellationPolicyText()).thenReturn("회차 시작 전까지 취소할 수 있습니다.");
+        when(content.getReservationPrice()).thenReturn(RESERVATION_PRICE);
         when(content.getPublishAt()).thenReturn(Instant.parse("2026-08-20T00:00:00Z"));
         when(content.getRepresentativeImageObject()).thenReturn(representativeImageObject);
         when(content.getRepresentativeImageAssignedAt()).thenReturn(Instant.parse("2026-08-01T00:00:00Z"));

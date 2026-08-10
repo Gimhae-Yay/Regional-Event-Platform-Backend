@@ -127,6 +127,7 @@ public class GetContentRevisionReviewDetailUseCase {
             revision.getAgeRequirement(),
             revision.getMaterials(),
             revision.getCancellationPolicyText(),
+            revision.getReservationPrice(),
             revision.getPublishAt(),
             sessions.stream()
                 .map(this::toSession)

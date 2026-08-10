@@ -97,6 +97,7 @@ public class UpdateContentRevisionUseCase {
         if (request == null) {
             throw invalidInput();
         }
+        validateReservationPrice(request.reservationPrice());
     }
 
     private void validateOwnership(
@@ -166,6 +167,12 @@ public class UpdateContentRevisionUseCase {
         }
     }
 
+    private void validateReservationPrice(Long reservationPrice) {
+        if (reservationPrice == null || reservationPrice < 0) {
+            throw invalidInput();
+        }
+    }
+
     private UpdateContentRevisionCommand toCommand(
         UpdateContentRevisionRequest request,
         Instant publishAt,
@@ -181,6 +188,7 @@ public class UpdateContentRevisionUseCase {
             request.ageRequirement(),
             request.materials(),
             request.cancellationPolicyText(),
+            request.reservationPrice(),
             publishAt,
             candidateImageObject,
             candidateImageObject == null ? null : candidateImageObject.getLinkedAt()
