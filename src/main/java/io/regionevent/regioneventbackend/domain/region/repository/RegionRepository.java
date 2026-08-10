@@ -18,6 +18,37 @@ public interface RegionRepository extends JpaRepository<Region, Long> {
 
     Optional<Region> findByRegionIdAndIsPublicTrue(Long regionId);
 
+    @Query("""
+        SELECT new io.regionevent.regioneventbackend.domain.region.repository.PlatformAdminRegionListProjection(
+            region.regionId,
+            region.regionCode,
+            region.name,
+            region.isPublic,
+            COUNT(assignment),
+            region.createdAt,
+            region.updatedAt
+        )
+        FROM Region region
+        LEFT JOIN UserRoleAssignment assignment
+            ON assignment.region = region
+            AND assignment.role = io.regionevent.regioneventbackend.domain.user.entity.UserRole.REGION_ADMIN
+            AND assignment.status = io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentStatus.ACTIVE
+            AND assignment.appUser.accountKind = io.regionevent.regioneventbackend.domain.user.entity.AppUserAccountKind.ORDINARY
+            AND assignment.appUser.status = io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus.ACTIVE
+        WHERE :isPublic IS NULL OR region.isPublic = :isPublic
+        GROUP BY
+            region.regionId,
+            region.regionCode,
+            region.name,
+            region.isPublic,
+            region.createdAt,
+            region.updatedAt
+        ORDER BY region.name ASC, region.regionId ASC
+        """)
+    List<PlatformAdminRegionListProjection> findPlatformAdminRegionList(
+        @Param("isPublic") Boolean isPublic
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<Region> findByRegionId(Long regionId);
 
