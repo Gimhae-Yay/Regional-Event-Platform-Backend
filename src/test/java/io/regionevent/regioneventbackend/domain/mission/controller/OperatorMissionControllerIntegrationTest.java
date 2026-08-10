@@ -1,10 +1,14 @@
 package io.regionevent.regioneventbackend.domain.mission.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import jakarta.persistence.EntityManager;
 
@@ -12,9 +16,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
+import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
@@ -53,6 +61,7 @@ class OperatorMissionControllerIntegrationTest {
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
+    private final AuditEventRepository auditEventRepository;
     private final JwtAccessTokenService jwtAccessTokenService;
     private final EntityManager entityManager;
 
@@ -65,6 +74,7 @@ class OperatorMissionControllerIntegrationTest {
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
         UserRoleAssignmentRepository userRoleAssignmentRepository,
+        AuditEventRepository auditEventRepository,
         JwtAccessTokenService jwtAccessTokenService,
         EntityManager entityManager
     ) {
@@ -75,8 +85,201 @@ class OperatorMissionControllerIntegrationTest {
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
         this.userRoleAssignmentRepository = userRoleAssignmentRepository;
+        this.auditEventRepository = auditEventRepository;
         this.jwtAccessTokenService = jwtAccessTokenService;
         this.entityManager = entityManager;
+    }
+
+    @Test
+    void create_withContentSetMissionRequest_persistsDraftMissionTargetContentsAndSuccessAudit() throws Exception {
+        Region region = saveRegion("C");
+        AppUser operator = saveOperator(region, AppUserStatus.ACTIVE);
+        Content rewardContent = saveContent(region, operator, "reward-create");
+        Content firstTargetContent = saveContent(region, operator, "first-create");
+        Content secondTargetContent = saveContent(region, operator, "second-create");
+        CouponPolicy rewardCouponPolicy = saveMissionRewardCouponPolicy(rewardContent, region);
+
+        mockMvc.perform(post("/api/v1/operator/missions")
+                .header("Authorization", bearerToken(operator))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createMissionRequest(
+                    "CONTENT_SET",
+                    null,
+                    List.of(secondTargetContent.getContentId(), firstTargetContent.getContentId()),
+                    rewardCouponPolicy.getCouponPolicyId()
+                )))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.statusCode").value(201))
+            .andExpect(jsonPath("$.code").value("SUCCESS"))
+            .andExpect(jsonPath("$.data.status").value("DRAFT"));
+
+        Mission mission = missionRepository.findAll().stream().findFirst().orElseThrow();
+        assertThat(mission.getStatus()).isEqualTo(io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus.DRAFT);
+        assertThat(mission.getTargetContents())
+            .extracting(targetContent -> targetContent.getContent().getContentId())
+            .containsExactlyInAnyOrder(firstTargetContent.getContentId(), secondTargetContent.getContentId());
+        assertThat(auditEventRepository.findAll()).singleElement().satisfies(auditEvent -> {
+            assertThat(auditEvent.getTargetType()).isEqualTo(AuditEventTargetType.MISSION);
+            assertThat(auditEvent.getTargetId()).isEqualTo(mission.getMissionId());
+            assertThat(auditEvent.getPreviousState()).isNull();
+            assertThat(auditEvent.getNextState()).isEqualTo("DRAFT");
+            assertThat(auditEvent.getResult()).isEqualTo(AuditEventResult.SUCCESS);
+            assertThat(auditEvent.getReasonCode()).isEqualTo("MISSION_CREATED");
+        });
+    }
+
+    @Test
+    void create_withVisitCountMissionRequest_persistsDraftMissionAndSuccessAudit() throws Exception {
+        Region region = saveRegion("VC");
+        AppUser operator = saveOperator(region, AppUserStatus.ACTIVE);
+        Content rewardContent = saveContent(region, operator, "reward-visit-count");
+        CouponPolicy rewardCouponPolicy = saveMissionRewardCouponPolicy(rewardContent, region);
+
+        mockMvc.perform(post("/api/v1/operator/missions")
+                .header("Authorization", bearerToken(operator))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createMissionRequest(
+                    "VISIT_COUNT",
+                    3,
+                    List.of(),
+                    rewardCouponPolicy.getCouponPolicyId()
+                )))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.statusCode").value(201))
+            .andExpect(jsonPath("$.code").value("SUCCESS"))
+            .andExpect(jsonPath("$.data.status").value("DRAFT"));
+
+        Mission mission = missionRepository.findAll().stream().findFirst().orElseThrow();
+        assertThat(mission.getStatus()).isEqualTo(io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus.DRAFT);
+        assertThat(mission.getConditionType()).isEqualTo(MissionConditionType.VISIT_COUNT);
+        assertThat(mission.getRequiredVisitCount()).isEqualTo(3);
+        assertThat(mission.getTargetContents()).isEmpty();
+        assertThat(auditEventRepository.findAll()).singleElement().satisfies(auditEvent -> {
+            assertThat(auditEvent.getTargetType()).isEqualTo(AuditEventTargetType.MISSION);
+            assertThat(auditEvent.getTargetId()).isEqualTo(mission.getMissionId());
+            assertThat(auditEvent.getResult()).isEqualTo(AuditEventResult.SUCCESS);
+            assertThat(auditEvent.getReasonCode()).isEqualTo("MISSION_CREATED");
+        });
+    }
+
+    @Test
+    void create_withNonMissionRewardPolicy_returnsMissionStateConflict() throws Exception {
+        Region region = saveRegion("IP");
+        AppUser operator = saveOperator(region, AppUserStatus.ACTIVE);
+        Content rewardContent = saveContent(region, operator, "invalid-policy-reward");
+        CouponPolicy rewardCouponPolicy = saveCouponPolicy(rewardContent, region, CouponIssuanceType.VISIT);
+
+        mockMvc.perform(post("/api/v1/operator/missions")
+                .header("Authorization", bearerToken(operator))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createMissionRequest(
+                    "VISIT_COUNT",
+                    3,
+                    List.of(),
+                    rewardCouponPolicy.getCouponPolicyId()
+                )))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code").value("MISSION_STATE_CONFLICT"));
+
+        assertMissionWasNotCreated();
+    }
+
+    @Test
+    void create_withEndedRewardCouponPolicy_returnsMissionStateConflict() throws Exception {
+        Region region = saveRegion("EP");
+        AppUser operator = saveOperator(region, AppUserStatus.ACTIVE);
+        Content rewardContent = saveContent(region, operator, "ended-policy-reward");
+        CouponPolicy rewardCouponPolicy = saveMissionRewardCouponPolicy(rewardContent, region);
+        rewardCouponPolicy.publish(CONTENT_PUBLISHED_AT);
+        rewardCouponPolicy.end(COUPON_ISSUE_ENDS_AT);
+        couponPolicyRepository.saveAndFlush(rewardCouponPolicy);
+
+        mockMvc.perform(post("/api/v1/operator/missions")
+                .header("Authorization", bearerToken(operator))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createMissionRequest(
+                    "VISIT_COUNT",
+                    3,
+                    List.of(),
+                    rewardCouponPolicy.getCouponPolicyId()
+                )))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code").value("MISSION_STATE_CONFLICT"));
+
+        assertMissionWasNotCreated();
+    }
+
+    @Test
+    void create_withDeletedTargetContent_returnsNotFound() throws Exception {
+        Region region = saveRegion("DT");
+        AppUser operator = saveOperator(region, AppUserStatus.ACTIVE);
+        Content rewardContent = saveContent(region, operator, "deleted-target-reward");
+        Content targetContent = saveContent(region, operator, "deleted-target", ContentStatus.APPROVED);
+        targetContent.softDelete(CONTENT_PUBLISHED_AT);
+        contentRepository.saveAndFlush(targetContent);
+        CouponPolicy rewardCouponPolicy = saveMissionRewardCouponPolicy(rewardContent, region);
+
+        mockMvc.perform(post("/api/v1/operator/missions")
+                .header("Authorization", bearerToken(operator))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createMissionRequest(
+                    "CONTENT_SET",
+                    null,
+                    List.of(targetContent.getContentId()),
+                    rewardCouponPolicy.getCouponPolicyId()
+                )))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+
+        assertMissionWasNotCreated();
+    }
+
+    @Test
+    void create_withDifferentRegionTargetContent_returnsForbidden() throws Exception {
+        Region region = saveRegion("TR");
+        Region otherRegion = saveRegion("OTR");
+        AppUser operator = saveOperator(region, AppUserStatus.ACTIVE);
+        AppUser otherRegionOperator = saveOperator(otherRegion, AppUserStatus.ACTIVE);
+        Content rewardContent = saveContent(region, operator, "target-region-reward");
+        Content otherRegionTargetContent = saveContent(otherRegion, otherRegionOperator, "other-target");
+        CouponPolicy rewardCouponPolicy = saveMissionRewardCouponPolicy(rewardContent, region);
+
+        mockMvc.perform(post("/api/v1/operator/missions")
+                .header("Authorization", bearerToken(operator))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createMissionRequest(
+                    "CONTENT_SET",
+                    null,
+                    List.of(otherRegionTargetContent.getContentId()),
+                    rewardCouponPolicy.getCouponPolicyId()
+                )))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        assertMissionWasNotCreated();
+    }
+
+    @Test
+    void create_withoutOperatorRole_returnsForbidden() throws Exception {
+        Region region = saveRegion("ROLE");
+        AppUser operator = saveOperator(region, AppUserStatus.ACTIVE);
+        AppUser visitor = saveUser("visitor", AppUserStatus.ACTIVE);
+        Content rewardContent = saveContent(region, operator, "role-reward");
+        CouponPolicy rewardCouponPolicy = saveMissionRewardCouponPolicy(rewardContent, region);
+
+        mockMvc.perform(post("/api/v1/operator/missions")
+                .header("Authorization", bearerToken(visitor))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createMissionRequest(
+                    "VISIT_COUNT",
+                    3,
+                    List.of(),
+                    rewardCouponPolicy.getCouponPolicyId()
+                )))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        assertMissionWasNotCreated();
     }
 
     @Test
@@ -254,11 +457,20 @@ class OperatorMissionControllerIntegrationTest {
         AppUser operator,
         String suffix
     ) {
+        return saveContent(region, operator, suffix, ContentStatus.PUBLISHED);
+    }
+
+    private Content saveContent(
+        Region region,
+        AppUser operator,
+        String suffix,
+        ContentStatus status
+    ) {
         return contentRepository.saveAndFlush(new Content(
             region,
             operator,
             ContentType.EVENT_EXPERIENCE,
-            ContentStatus.PUBLISHED,
+            status,
             suffix + " 콘텐츠",
             "미션 테스트를 위한 콘텐츠 설명입니다.",
             "김해시",
@@ -276,12 +488,20 @@ class OperatorMissionControllerIntegrationTest {
         Content content,
         Region region
     ) {
+        return saveCouponPolicy(content, region, CouponIssuanceType.MISSION_REWARD);
+    }
+
+    private CouponPolicy saveCouponPolicy(
+        Content content,
+        Region region,
+        CouponIssuanceType issuanceType
+    ) {
         return couponPolicyRepository.saveAndFlush(new CouponPolicy(
             content,
             region,
             "미션 보상 쿠폰",
             "미션 완료 보상 쿠폰입니다.",
-            CouponIssuanceType.MISSION_REWARD,
+            issuanceType,
             3_000,
             10_000,
             30,
@@ -293,5 +513,35 @@ class OperatorMissionControllerIntegrationTest {
 
     private String bearerToken(AppUser user) {
         return "Bearer " + jwtAccessTokenService.issue(user.getUserId());
+    }
+
+    private void assertMissionWasNotCreated() {
+        assertThat(missionRepository.count()).isZero();
+        assertThat(auditEventRepository.count()).isZero();
+    }
+
+    private String createMissionRequest(
+        String conditionType,
+        Integer requiredVisitCount,
+        List<Long> targetContentIds,
+        Long rewardCouponPolicyId
+    ) {
+        String targetContentIdsJson = targetContentIds.stream()
+            .map(contentId -> "\"%d\"".formatted(contentId))
+            .collect(Collectors.joining(", "));
+        return """
+            {
+              "conditionType": "%s",
+              "requiredVisitCount": %s,
+              "targetContentIds": [%s],
+              "rewardCouponPolicyId": "%d",
+              "endsAt": "2027-09-30T23:59:59+09:00"
+            }
+            """.formatted(
+                conditionType,
+                requiredVisitCount,
+                targetContentIdsJson,
+                rewardCouponPolicyId
+            );
     }
 }

@@ -13,6 +13,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.TestPropertySource;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
@@ -29,6 +31,7 @@ import io.regionevent.regioneventbackend.domain.mission.entity.MissionConditionT
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionParticipation;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionParticipationStatus;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionProgress;
+import io.regionevent.regioneventbackend.domain.mission.entity.MissionRewardClaim;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
@@ -57,6 +60,7 @@ class MissionParticipationProgressRepositoryTest {
 
     private final MissionParticipationRepository missionParticipationRepository;
     private final MissionProgressRepository missionProgressRepository;
+    private final MissionRewardClaimRepository missionRewardClaimRepository;
     private final MissionRepository missionRepository;
     private final CouponPolicyRepository couponPolicyRepository;
     private final ContentRepository contentRepository;
@@ -72,6 +76,7 @@ class MissionParticipationProgressRepositoryTest {
     MissionParticipationProgressRepositoryTest(
         MissionParticipationRepository missionParticipationRepository,
         MissionProgressRepository missionProgressRepository,
+        MissionRewardClaimRepository missionRewardClaimRepository,
         MissionRepository missionRepository,
         CouponPolicyRepository couponPolicyRepository,
         ContentRepository contentRepository,
@@ -85,6 +90,7 @@ class MissionParticipationProgressRepositoryTest {
     ) {
         this.missionParticipationRepository = missionParticipationRepository;
         this.missionProgressRepository = missionProgressRepository;
+        this.missionRewardClaimRepository = missionRewardClaimRepository;
         this.missionRepository = missionRepository;
         this.couponPolicyRepository = couponPolicyRepository;
         this.contentRepository = contentRepository;
@@ -230,6 +236,148 @@ class MissionParticipationProgressRepositoryTest {
         ))).isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    @Test
+    void 참여_요약은_본인_상태_고정정렬_페이지와_집계를_반환한다() {
+        MissionFixtures fixtures = createMissionFixtures();
+        Mission secondMission = saveVisitCountMission(fixtures, 2);
+        Mission thirdMission = saveVisitCountMission(fixtures, 1);
+        Mission otherUserMission = saveVisitCountMission(fixtures, 1);
+        MissionParticipation completedParticipation = missionParticipationRepository.saveAndFlush(
+            new MissionParticipation(fixtures.mission(), fixtures.visitor(), JOINED_AT)
+        );
+        completedParticipation.complete(COMPLETED_AT);
+        MissionParticipation firstTiedParticipation = missionParticipationRepository.saveAndFlush(
+            new MissionParticipation(secondMission, fixtures.visitor(), JOINED_AT.plusSeconds(60))
+        );
+        MissionParticipation secondTiedParticipation = missionParticipationRepository.saveAndFlush(
+            new MissionParticipation(thirdMission, fixtures.visitor(), JOINED_AT.plusSeconds(60))
+        );
+        AppUser otherVisitor = saveUser("other-summary-visitor@example.com", "다른 방문자");
+        missionParticipationRepository.saveAndFlush(
+            new MissionParticipation(otherUserMission, otherVisitor, JOINED_AT.plusSeconds(120))
+        );
+        Visit firstVisit = saveVisit(fixtures, "summary-first");
+        Visit secondVisit = saveVisit(fixtures, "summary-second");
+        missionProgressRepository.saveAndFlush(new MissionProgress(
+            completedParticipation,
+            firstVisit,
+            fixtures.content(),
+            RECORDED_AT
+        ));
+        missionProgressRepository.saveAndFlush(new MissionProgress(
+            completedParticipation,
+            secondVisit,
+            fixtures.content(),
+            RECORDED_AT.plusSeconds(60)
+        ));
+        missionRewardClaimRepository.saveAndFlush(new MissionRewardClaim(
+            completedParticipation,
+            fixtures.mission().getRewardCouponPolicy(),
+            COMPLETED_AT.plusSeconds(60)
+        ));
+        entityManager.clear();
+
+        Page<MissionParticipationSummaryProjection> firstPage = missionParticipationRepository
+            .findSummariesByUserIdAndStatus(
+                fixtures.visitor().getUserId(),
+                null,
+                PageRequest.of(0, 2)
+            );
+        Page<MissionParticipationSummaryProjection> secondPage = missionParticipationRepository
+            .findSummariesByUserIdAndStatus(
+                fixtures.visitor().getUserId(),
+                null,
+                PageRequest.of(1, 2)
+            );
+        Page<MissionParticipationSummaryProjection> completedPage = missionParticipationRepository
+            .findSummariesByUserIdAndStatus(
+                fixtures.visitor().getUserId(),
+                MissionParticipationStatus.COMPLETED,
+                PageRequest.of(0, 20)
+            );
+
+        assertThat(firstPage.getContent())
+            .extracting(MissionParticipationSummaryProjection::getParticipationId)
+            .containsExactly(
+                secondTiedParticipation.getMissionParticipationId(),
+                firstTiedParticipation.getMissionParticipationId()
+            );
+        assertThat(firstPage.getTotalElements()).isEqualTo(3);
+        assertThat(firstPage.getTotalPages()).isEqualTo(2);
+        assertThat(secondPage.getContent()).singleElement().satisfies(summary -> {
+            assertThat(summary.getParticipationId()).isEqualTo(completedParticipation.getMissionParticipationId());
+            assertThat(summary.getMissionId()).isEqualTo(fixtures.mission().getMissionId());
+            assertThat(summary.getStatus()).isEqualTo(MissionParticipationStatus.COMPLETED);
+            assertThat(summary.getProgressCount()).isEqualTo(2);
+            assertThat(summary.getRequiredCount()).isEqualTo(3);
+            assertThat(summary.getRewardClaimed()).isTrue();
+            assertThat(summary.getJoinedAt()).isEqualTo(JOINED_AT);
+            assertThat(summary.getCompletedAt()).isEqualTo(COMPLETED_AT);
+        });
+        assertThat(completedPage.getContent())
+            .extracting(MissionParticipationSummaryProjection::getParticipationId)
+            .containsExactly(completedParticipation.getMissionParticipationId());
+    }
+
+    @Test
+    void 콘텐츠_집합_참여_요약은_서로_다른_진행_콘텐츠와_목표_콘텐츠를_집계한다() {
+        MissionFixtures fixtures = createMissionFixtures();
+        Content secondContent = saveContent(
+            fixtures.region(),
+            fixtures.operator(),
+            "김해 박물관 체험",
+            "content-set-second"
+        );
+        Mission contentSetMission = new Mission(
+            fixtures.region(),
+            MissionConditionType.CONTENT_SET,
+            null,
+            fixtures.mission().getRewardCouponPolicy(),
+            MISSION_ENDS_AT
+        );
+        contentSetMission.addTargetContent(fixtures.content());
+        contentSetMission.addTargetContent(secondContent);
+        missionRepository.saveAndFlush(contentSetMission);
+        MissionParticipation participation = missionParticipationRepository.saveAndFlush(
+            new MissionParticipation(contentSetMission, fixtures.visitor(), JOINED_AT)
+        );
+        Visit firstContentFirstVisit = saveVisit(fixtures, fixtures.content(), "set-first");
+        Visit firstContentSecondVisit = saveVisit(fixtures, fixtures.content(), "set-duplicate");
+        Visit secondContentVisit = saveVisit(fixtures, secondContent, "set-second");
+        missionProgressRepository.saveAndFlush(new MissionProgress(
+            participation,
+            firstContentFirstVisit,
+            fixtures.content(),
+            RECORDED_AT
+        ));
+        missionProgressRepository.saveAndFlush(new MissionProgress(
+            participation,
+            firstContentSecondVisit,
+            fixtures.content(),
+            RECORDED_AT.plusSeconds(60)
+        ));
+        missionProgressRepository.saveAndFlush(new MissionProgress(
+            participation,
+            secondContentVisit,
+            secondContent,
+            RECORDED_AT.plusSeconds(120)
+        ));
+        entityManager.clear();
+
+        MissionParticipationSummaryProjection summary = missionParticipationRepository
+            .findSummariesByUserIdAndStatus(
+                fixtures.visitor().getUserId(),
+                null,
+                PageRequest.of(0, 20)
+            )
+            .getContent()
+            .getFirst();
+
+        assertThat(summary.getProgressCount()).isEqualTo(2);
+        assertThat(summary.getRequiredCount()).isEqualTo(2);
+        assertThat(summary.getRewardClaimed()).isFalse();
+    }
+
     private ProgressFixtures createProgressFixtures() {
         MissionFixtures missionFixtures = createMissionFixtures();
         MissionParticipation participation = missionParticipationRepository.saveAndFlush(
@@ -276,7 +424,7 @@ class MissionParticipationProgressRepositoryTest {
         Mission mission = missionRepository.saveAndFlush(new Mission(
             region,
             MissionConditionType.VISIT_COUNT,
-            1,
+            3,
             rewardCouponPolicy,
             MISSION_ENDS_AT
         ));
@@ -288,9 +436,17 @@ class MissionParticipationProgressRepositoryTest {
         MissionFixtures fixtures,
         String suffix
     ) {
+        return saveVisit(fixtures, fixtures.content(), suffix);
+    }
+
+    private Visit saveVisit(
+        MissionFixtures fixtures,
+        Content content,
+        String suffix
+    ) {
         AppUser reviewer = saveUser("reviewer-" + suffix + "@example.com", "회차 검토자");
         ContentSession contentSession = new ContentSession(
-            fixtures.content(),
+            content,
             fixtures.region(),
             Instant.parse("2026-08-11T01:00:00Z"),
             Instant.parse("2026-08-11T03:00:00Z"),
@@ -330,11 +486,45 @@ class MissionParticipationProgressRepositoryTest {
             fixtures.region(),
             reservation,
             fixtures.visitor(),
-            fixtures.content(),
+            content,
             savedContentSession,
             fixtures.operator(),
             CheckinMethod.QR,
             RECORDED_AT
+        ));
+    }
+
+    private Mission saveVisitCountMission(MissionFixtures fixtures, int requiredVisitCount) {
+        return missionRepository.saveAndFlush(new Mission(
+            fixtures.region(),
+            MissionConditionType.VISIT_COUNT,
+            requiredVisitCount,
+            fixtures.mission().getRewardCouponPolicy(),
+            MISSION_ENDS_AT
+        ));
+    }
+
+    private Content saveContent(
+        Region region,
+        AppUser operator,
+        String title,
+        String suffix
+    ) {
+        return contentRepository.saveAndFlush(new Content(
+            region,
+            operator,
+            ContentType.EVENT_EXPERIENCE,
+            ContentStatus.PUBLISHED,
+            title,
+            "미션 목표 콘텐츠입니다.",
+            "김해시",
+            "매일 10:00~18:00",
+            "055-1234-5678",
+            "안전요원의 안내를 따라주세요.",
+            "만 7세 이상",
+            "편한 복장",
+            "시작 하루 전까지 취소할 수 있습니다.",
+            ISSUE_STARTS_AT.plusSeconds(Math.abs(suffix.hashCode()))
         ));
     }
 
