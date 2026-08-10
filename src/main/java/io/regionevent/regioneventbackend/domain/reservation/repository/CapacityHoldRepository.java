@@ -143,6 +143,7 @@ public interface CapacityHoldRepository extends JpaRepository<CapacityHold, Long
         FROM CapacityHold capacityHold
         WHERE capacityHold.holdId = :holdId
             AND capacityHold.status = io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus.ACTIVE
+            AND capacityHold.expiresAt > CURRENT_TIMESTAMP
         """)
     Optional<CapacityHold> findActiveByHoldIdForUpdate(@Param("holdId") Long holdId);
 

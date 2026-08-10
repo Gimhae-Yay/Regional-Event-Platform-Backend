@@ -1,5 +1,9 @@
 package io.regionevent.regioneventbackend.domain.payment.controller;
 
+import java.util.UUID;
+
+import jakarta.servlet.http.HttpServletRequest;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -13,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 import io.regionevent.regioneventbackend.domain.payment.dto.CreatePaymentRequest;
 import io.regionevent.regioneventbackend.domain.payment.dto.CreatePaymentResponse;
 import io.regionevent.regioneventbackend.domain.payment.service.CreatePaymentUseCase;
+import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.global.response.ApiResponse;
@@ -32,6 +37,7 @@ public class PaymentController {
     @PostMapping("/{holdId}/payments")
     public ResponseEntity<ApiResponse<CreatePaymentResponse>> create(
         Authentication authentication,
+        HttpServletRequest httpServletRequest,
         @PathVariable String holdId,
         @RequestBody(required = false) CreatePaymentRequest request,
         @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey
@@ -42,7 +48,8 @@ public class PaymentController {
             userId,
             holdId,
             request,
-            idempotencyKey
+            idempotencyKey,
+            UUID.fromString((String) httpServletRequest.getAttribute(RequestIdFilter.REQUEST_ID_ATTRIBUTE))
         );
         return ApiResponse.success(HttpStatus.CREATED, SUCCESS_MESSAGE, response).toResponseEntity();
     }

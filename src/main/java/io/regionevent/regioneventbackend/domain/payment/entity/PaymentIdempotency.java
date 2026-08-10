@@ -156,10 +156,10 @@ public class PaymentIdempotency {
         return expiresAt;
     }
 
-    public void succeedWithPayment(Payment payment, Instant completedAt, Instant expiresAt) {
+    public void succeedWithPayment(Payment payment, Instant completedAt) {
         this.payment = requireNotNull(payment, "payment");
         this.reservation = null;
-        complete(completedAt, expiresAt);
+        complete(completedAt, null);
     }
 
     public void succeedWithReservation(Reservation reservation, Instant completedAt, Instant expiresAt) {
@@ -171,7 +171,14 @@ public class PaymentIdempotency {
     private void complete(Instant completedAt, Instant expiresAt) {
         this.status = PaymentIdempotencyStatus.SUCCEEDED;
         this.completedAt = requireNotNull(completedAt, "completedAt");
-        this.expiresAt = requireNotNull(expiresAt, "expiresAt");
+        this.expiresAt = expiresAt;
+    }
+
+    public void setExpiresAtAfterPaymentFinalization(Instant finalizedAt) {
+        if (payment == null || reservation != null || status != PaymentIdempotencyStatus.SUCCEEDED) {
+            throw new IllegalStateException("only succeeded payment result can be expired after finalization");
+        }
+        expiresAt = requireNotNull(finalizedAt, "finalizedAt").plus(24, java.time.temporal.ChronoUnit.HOURS);
     }
 
     private static String requireNotBlank(

@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.domain.coupon.service;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -22,6 +23,11 @@ public class CouponService {
     @Transactional(propagation = Propagation.MANDATORY)
     public Coupon create(Coupon coupon) {
         return couponRepository.saveAndFlush(coupon);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<Coupon> findByCouponIdForUpdate(Long couponId) {
+        return couponRepository.findByCouponIdForUpdate(couponId);
     }
 
     @Transactional(readOnly = true)

@@ -291,8 +291,8 @@ public class ContentService {
         return contentRepository.findPublishedReservationTargetIdForUpdate(contentId).isPresent();
     }
 
-    public boolean lockPublishedPaymentTarget(Long contentId) {
-        return contentRepository.findPublishedPaymentTargetIdForUpdate(contentId).isPresent();
+    public Optional<Long> findPublishedPaymentReservationPriceForUpdate(Long contentId) {
+        return contentRepository.findPublishedPaymentReservationPriceForUpdate(contentId);
     }
 
     public Content approve(Content content) {

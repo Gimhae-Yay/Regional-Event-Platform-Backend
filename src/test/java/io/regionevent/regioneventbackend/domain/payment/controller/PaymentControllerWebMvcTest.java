@@ -48,7 +48,7 @@ class PaymentControllerWebMvcTest {
 
     @Test
     void positiveAmountCreatesPendingPaymentResponse() throws Exception {
-        when(createPaymentUseCase.create(eq(USER_ID), eq("10"), any(), eq("payment-key"))).thenReturn(
+        when(createPaymentUseCase.create(eq(USER_ID), eq("10"), any(), eq("payment-key"), any())).thenReturn(
             new CreatePaymentResponse(
                 true,
                 new CreatePaymentResponse.PaymentResponse(
@@ -74,12 +74,12 @@ class PaymentControllerWebMvcTest {
             .andExpect(jsonPath("$.data.payment.amount.finalAmount").value(17000))
             .andExpect(jsonPath("$.data.reservation").isEmpty());
 
-        verify(createPaymentUseCase).create(eq(USER_ID), eq("10"), any(), eq("payment-key"));
+        verify(createPaymentUseCase).create(eq(USER_ID), eq("10"), any(), eq("payment-key"), any());
     }
 
     @Test
     void zeroAmountReturnsConfirmedReservationResponse() throws Exception {
-        when(createPaymentUseCase.create(eq(USER_ID), eq("10"), any(), eq("payment-key"))).thenReturn(
+        when(createPaymentUseCase.create(eq(USER_ID), eq("10"), any(), eq("payment-key"), any())).thenReturn(
             new CreatePaymentResponse(
                 false,
                 null,
