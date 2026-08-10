@@ -291,6 +291,10 @@ public class ContentService {
         return contentRepository.findPublishedReservationTargetIdForUpdate(contentId).isPresent();
     }
 
+    public boolean lockPublishedPaymentTarget(Long contentId) {
+        return contentRepository.findPublishedPaymentTargetIdForUpdate(contentId).isPresent();
+    }
+
     public Content approve(Content content) {
         content.approve();
         return contentRepository.saveAndFlush(content);

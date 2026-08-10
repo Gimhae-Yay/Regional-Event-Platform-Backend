@@ -166,7 +166,7 @@ public class CreatePaymentUseCase {
     private void lockReservationTarget(CapacityHold hold) {
         Long contentId = hold.getContentSession().getContent().getContentId();
         Long sessionId = hold.getContentSession().getSessionId();
-        if (!contentService.lockPublishedReservationTarget(contentId)
+        if (!contentService.lockPublishedPaymentTarget(contentId)
             || !contentSessionService.lockConfirmableReservationTarget(sessionId)) {
             throw new BusinessException(ErrorCode.PAYMENT_HOLD_CONFLICT);
         }
