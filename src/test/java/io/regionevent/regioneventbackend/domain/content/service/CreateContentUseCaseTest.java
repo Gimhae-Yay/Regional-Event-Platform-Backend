@@ -114,6 +114,7 @@ class CreateContentUseCaseTest {
             eq(SUBMITTED_AT)
         );
         assertThat(contentCommandCaptor.getValue().publishAt()).isEqualTo(PUBLISH_AT.toInstant());
+        assertThat(contentCommandCaptor.getValue().reservationPrice()).isZero();
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<CreateContentSessionCommand>> sessionCommandsCaptor = ArgumentCaptor.forClass(List.class);
         verify(contentSessionService).createPendingSessions(

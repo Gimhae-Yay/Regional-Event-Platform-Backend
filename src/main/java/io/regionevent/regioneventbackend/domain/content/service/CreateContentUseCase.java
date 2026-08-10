@@ -93,6 +93,7 @@ public class CreateContentUseCase {
         if (request == null || request.sessions() == null || request.sessions().isEmpty()) {
             throw invalidInput();
         }
+        validateReservationPrice(request.reservationPrice());
         validateSeoulOffset(request.publishAt());
         request.sessions().forEach(this::validateSession);
     }
@@ -136,6 +137,7 @@ public class CreateContentUseCase {
             request.ageRequirement(),
             request.materials(),
             request.cancellationPolicyText(),
+            request.reservationPrice(),
             request.publishAt().toInstant()
         );
     }
@@ -167,6 +169,12 @@ public class CreateContentUseCase {
             }
             return parsedValue;
         } catch (NumberFormatException exception) {
+            throw invalidInput();
+        }
+    }
+
+    private void validateReservationPrice(Integer reservationPrice) {
+        if (reservationPrice == null || reservationPrice < 0) {
             throw invalidInput();
         }
     }

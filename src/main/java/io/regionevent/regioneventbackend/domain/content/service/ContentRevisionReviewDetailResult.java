@@ -22,6 +22,7 @@ public record ContentRevisionReviewDetailResult(
     String ageRequirement,
     String materials,
     String cancellationPolicyText,
+    int candidateReservationPrice,
     Instant candidatePublishAt,
     List<Session> sessions,
     Instant submittedAt
@@ -29,6 +30,34 @@ public record ContentRevisionReviewDetailResult(
 
     public ContentRevisionReviewDetailResult {
         sessions = List.copyOf(sessions);
+    }
+
+    public ContentRevisionReviewDetailResult(
+        Long revisionId,
+        Long contentId,
+        ContentRevisionReviewType reviewType,
+        ContentStatus contentStatus,
+        String title,
+        String description,
+        String representativeImageUrl,
+        Instant representativeImageUrlExpiresAt,
+        String locationText,
+        String operatingHoursText,
+        String contactText,
+        String precautions,
+        String ageRequirement,
+        String materials,
+        String cancellationPolicyText,
+        Instant candidatePublishAt,
+        List<Session> sessions,
+        Instant submittedAt
+    ) {
+        this(
+            revisionId, contentId, reviewType, contentStatus, title, description,
+            representativeImageUrl, representativeImageUrlExpiresAt, locationText,
+            operatingHoursText, contactText, precautions, ageRequirement, materials,
+            cancellationPolicyText, 0, candidatePublishAt, sessions, submittedAt
+        );
     }
 
     public record Session(

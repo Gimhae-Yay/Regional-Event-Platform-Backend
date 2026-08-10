@@ -352,6 +352,25 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
         });
     }
 
+    @Test
+    void paidContent_isRejectedByP0FreeReservationConfirmation() {
+        Fixture fixture = createFixture(20_000);
+
+        ReservationConfirmationResult result = confirm(
+            fixture,
+            fixture.capacityHold().getHoldId(),
+            "paid-content-" + System.nanoTime()
+        );
+
+        assertThat(result.isSuccessful()).isFalse();
+        assertThat(result.errorCode()).isEqualTo(ErrorCode.RESERVATION_CONFIRM_CONFLICT);
+        assertThat(capacityHoldRepository.findById(fixture.capacityHold().getHoldId()))
+            .hasValueSatisfying(hold -> assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.ACTIVE));
+        assertThat(reservationRepository.findAll())
+            .noneMatch(reservation -> reservation.getCapacityHold().getHoldId()
+                .equals(fixture.capacityHold().getHoldId()));
+    }
+
     private List<ReservationConfirmationResult> confirmConcurrently(
         Fixture fixture,
         String firstIdempotencyKey,
@@ -525,6 +544,10 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
     }
 
     private Fixture createFixture() {
+        return createFixture(0);
+    }
+
+    private Fixture createFixture(int reservationPrice) {
         return transactionTemplate.execute(status -> {
             String suffix = Long.toUnsignedString(System.nanoTime());
             Instant now = Instant.now();
@@ -559,6 +582,7 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
                 "만 7세 이상",
                 "편한 복장",
                 "시작 하루 전까지 취소할 수 있습니다.",
+                reservationPrice,
                 now
             ));
             ContentSession session = new ContentSession(

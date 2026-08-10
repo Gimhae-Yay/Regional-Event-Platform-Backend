@@ -23,6 +23,7 @@ public record ContentRevisionReviewDetailResponse(
     String ageRequirement,
     String materials,
     String cancellationPolicyText,
+    int candidateReservationPrice,
     OffsetDateTime candidatePublishAt,
     List<Session> sessions,
     Instant submittedAt
@@ -51,6 +52,7 @@ public record ContentRevisionReviewDetailResponse(
             result.ageRequirement(),
             result.materials(),
             result.cancellationPolicyText(),
+            result.candidateReservationPrice(),
             toSeoulOffsetDateTime(result.candidatePublishAt()),
             result.sessions().stream()
                 .map(Session::from)

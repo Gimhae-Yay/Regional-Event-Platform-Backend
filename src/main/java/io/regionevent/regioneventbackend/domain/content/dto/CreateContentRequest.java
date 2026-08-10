@@ -8,6 +8,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
@@ -46,6 +47,10 @@ public record CreateContentRequest(
     String cancellationPolicyText,
 
     @NotNull
+    @PositiveOrZero
+    Integer reservationPrice,
+
+    @NotNull
     @JsonFormat(without = JsonFormat.Feature.ADJUST_DATES_TO_CONTEXT_TIME_ZONE)
     OffsetDateTime publishAt,
 
@@ -55,6 +60,27 @@ public record CreateContentRequest(
     @NotEmpty
     List<@Valid SessionRequest> sessions
 ) {
+
+    public CreateContentRequest(
+        String title,
+        String description,
+        String locationText,
+        String operatingHoursText,
+        String contactText,
+        String precautions,
+        String ageRequirement,
+        String materials,
+        String cancellationPolicyText,
+        OffsetDateTime publishAt,
+        JsonNode representativeImageObjectId,
+        List<SessionRequest> sessions
+    ) {
+        this(
+            title, description, locationText, operatingHoursText, contactText, precautions,
+            ageRequirement, materials, cancellationPolicyText, 0, publishAt,
+            representativeImageObjectId, sessions
+        );
+    }
 
     public record SessionRequest(
         @NotNull

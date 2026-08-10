@@ -57,6 +57,7 @@ public class ContentRevisionService {
             command.ageRequirement(),
             command.materials(),
             command.cancellationPolicyText(),
+            command.reservationPrice(),
             command.publishAt(),
             submittedAt,
             null,
@@ -107,6 +108,7 @@ public class ContentRevisionService {
             command.ageRequirement(),
             command.materials(),
             command.cancellationPolicyText(),
+            command.reservationPrice(),
             command.publishAt()
         );
         if (command.candidateImageObject() != null) {
@@ -254,6 +256,7 @@ public class ContentRevisionService {
             revision.getAgeRequirement(),
             revision.getMaterials(),
             revision.getCancellationPolicyText(),
+            revision.getReservationPrice(),
             publishAt
         );
         content.assignRepresentativeImage(revision.getCandidateImageObject(), appliedAt);
@@ -269,8 +272,27 @@ public class ContentRevisionService {
         String ageRequirement,
         String materials,
         String cancellationPolicyText,
+        int reservationPrice,
         Instant publishAt
     ) {
+
+        public CreateContentRevisionCommand(
+            String title,
+            String description,
+            String locationText,
+            String operatingHoursText,
+            String contactText,
+            String precautions,
+            String ageRequirement,
+            String materials,
+            String cancellationPolicyText,
+            Instant publishAt
+        ) {
+            this(
+                title, description, locationText, operatingHoursText, contactText, precautions,
+                ageRequirement, materials, cancellationPolicyText, 0, publishAt
+            );
+        }
     }
 
     public record UpdateContentRevisionCommand(
@@ -283,9 +305,31 @@ public class ContentRevisionService {
         String ageRequirement,
         String materials,
         String cancellationPolicyText,
+        int reservationPrice,
         Instant publishAt,
         ImageObject candidateImageObject,
         Instant candidateImageAssignedAt
     ) {
+
+        public UpdateContentRevisionCommand(
+            String title,
+            String description,
+            String locationText,
+            String operatingHoursText,
+            String contactText,
+            String precautions,
+            String ageRequirement,
+            String materials,
+            String cancellationPolicyText,
+            Instant publishAt,
+            ImageObject candidateImageObject,
+            Instant candidateImageAssignedAt
+        ) {
+            this(
+                title, description, locationText, operatingHoursText, contactText, precautions,
+                ageRequirement, materials, cancellationPolicyText, 0, publishAt,
+                candidateImageObject, candidateImageAssignedAt
+            );
+        }
     }
 }

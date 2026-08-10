@@ -8,6 +8,8 @@ public interface PublicSessionReservationInfoProjection {
 
     Long getContentId();
 
+    int getReservationPrice();
+
     Instant getStartsAt();
 
     Instant getEndsAt();
