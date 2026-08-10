@@ -149,7 +149,8 @@ class InitialP0SchemaMigrationTest {
             "28",
             "29",
             "30",
-            "31"
+            "31",
+            "32"
         );
         assertThat(tableNames).contains(
             "REGION",
@@ -193,7 +194,8 @@ class InitialP0SchemaMigrationTest {
             "PAYMENT_DISCREPANCY_ACTION",
             "REFUND",
             "REFUND_ATTEMPT",
-            "COUPON_REDEMPTION"
+            "COUPON_REDEMPTION",
+            "COUPON_POLICY_UPDATE_HISTORY"
         );
         assertThat(tableNames).doesNotContain(
             "CONTENT_REPRESENTATIVE_IMAGE",
@@ -349,7 +351,10 @@ class InitialP0SchemaMigrationTest {
             "FK_COUPON_REDEMPTION_SNAPSHOT_COUPON",
             "FK_COUPON_REDEMPTION_RESERVATION",
             "CK_COUPON_REDEMPTION_STATUS",
-            "CK_COUPON_REDEMPTION_REVERSED_AT"
+            "CK_COUPON_REDEMPTION_REVERSED_AT",
+            "PK_COUPON_POLICY_UPDATE_HISTORY",
+            "FK_COUPON_POLICY_UPDATE_HISTORY_POLICY",
+            "FK_COUPON_POLICY_UPDATE_HISTORY_ACTOR"
         );
         assertThat(appUserColumnNames).contains("ACCOUNT_KIND");
         assertThat(contentColumnNames).contains(
