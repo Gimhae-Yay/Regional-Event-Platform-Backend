@@ -54,6 +54,7 @@ public class ContentService {
             command.ageRequirement(),
             command.materials(),
             command.cancellationPolicyText(),
+            command.reservationPrice(),
             command.publishAt()
         );
         content.assignRepresentativeImage(representativeImageObject, representativeImageAssignedAt);
@@ -140,6 +141,7 @@ public class ContentService {
             command.ageRequirement(),
             command.materials(),
             command.cancellationPolicyText(),
+            command.reservationPrice(),
             command.publishAt()
         );
         if (replacementImageObject != null) {
@@ -322,6 +324,7 @@ public class ContentService {
             || isBlank(content.getAgeRequirement())
             || isBlank(content.getMaterials())
             || isBlank(content.getCancellationPolicyText())
+            || content.getReservationPrice() < 0
             || content.getPublishAt() == null) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
@@ -403,8 +406,27 @@ public class ContentService {
         String ageRequirement,
         String materials,
         String cancellationPolicyText,
+        long reservationPrice,
         Instant publishAt
     ) {
+
+        public CreateContentCommand(
+            String title,
+            String description,
+            String locationText,
+            String operatingHoursText,
+            String contactText,
+            String precautions,
+            String ageRequirement,
+            String materials,
+            String cancellationPolicyText,
+            Instant publishAt
+        ) {
+            this(
+                title, description, locationText, operatingHoursText, contactText, precautions,
+                ageRequirement, materials, cancellationPolicyText, 0, publishAt
+            );
+        }
     }
 
     public record UpdateContentCommand(
@@ -417,7 +439,26 @@ public class ContentService {
         String ageRequirement,
         String materials,
         String cancellationPolicyText,
+        long reservationPrice,
         Instant publishAt
     ) {
+
+        public UpdateContentCommand(
+            String title,
+            String description,
+            String locationText,
+            String operatingHoursText,
+            String contactText,
+            String precautions,
+            String ageRequirement,
+            String materials,
+            String cancellationPolicyText,
+            Instant publishAt
+        ) {
+            this(
+                title, description, locationText, operatingHoursText, contactText, precautions,
+                ageRequirement, materials, cancellationPolicyText, 0, publishAt
+            );
+        }
     }
 }

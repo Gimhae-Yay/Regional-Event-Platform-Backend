@@ -23,7 +23,10 @@ public interface CouponRepository extends JpaRepository<Coupon, Long> {
     );
 
     @EntityGraph(attributePaths = {"couponPolicy", "couponPolicy.content", "couponPolicy.region", "user"})
-    List<Coupon> findAllByUserUserIdAndStatusOrderByExpiresAtAsc(
+    List<Coupon> findAllByUserUserIdOrderByIssuedAtDescCouponIdDesc(Long userId);
+
+    @EntityGraph(attributePaths = {"couponPolicy", "couponPolicy.content", "couponPolicy.region", "user"})
+    List<Coupon> findAllByUserUserIdAndStatusOrderByIssuedAtDescCouponIdDesc(
         Long userId,
         CouponStatus status
     );

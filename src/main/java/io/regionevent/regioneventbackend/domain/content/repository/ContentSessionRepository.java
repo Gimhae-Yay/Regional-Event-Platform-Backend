@@ -194,6 +194,7 @@ public interface ContentSessionRepository extends JpaRepository<ContentSession, 
     @Query("""
         SELECT contentSession.sessionId AS sessionId,
             contentSession.content.contentId AS contentId,
+            contentSession.content.reservationPrice AS reservationPrice,
             contentSession.startsAt AS startsAt,
             contentSession.endsAt AS endsAt,
             contentSession.remainingCapacity AS remainingCapacity,
