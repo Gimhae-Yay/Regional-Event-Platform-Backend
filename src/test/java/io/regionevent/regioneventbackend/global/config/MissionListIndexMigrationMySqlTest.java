@@ -32,7 +32,7 @@ class MissionListIndexMigrationMySqlTest {
     @Container
     static final MySQLContainer<?> MYSQL = new MySQLContainer<>(
         DockerImageName.parse("mysql:8.0.42")
-    );
+    ).withUrlParam("rewriteBatchedStatements", "true");
 
     @Test
     void migration_createsIndexesUsedByRegionMissionListQueries() {
@@ -44,7 +44,7 @@ class MissionListIndexMigrationMySqlTest {
         Map<String, Object> regionPlan = jdbcTemplate.queryForMap(
             """
             EXPLAIN
-            SELECT mission_id, status
+            SELECT mission.*
             FROM mission
             WHERE region_id = 1
             ORDER BY mission_id DESC
@@ -54,7 +54,7 @@ class MissionListIndexMigrationMySqlTest {
         Map<String, Object> regionStatusPlan = jdbcTemplate.queryForMap(
             """
             EXPLAIN
-            SELECT mission_id, status
+            SELECT mission.*
             FROM mission
             WHERE region_id = 1
               AND status = 'PENDING_REVIEW'
@@ -124,7 +124,11 @@ class MissionListIndexMigrationMySqlTest {
         Map<String, Object> plan,
         String indexName
     ) {
-        assertThat(plan.get("key")).isEqualTo(indexName);
-        assertThat(String.valueOf(plan.get("Extra"))).doesNotContain("Using filesort");
+        assertThat(plan.get("key"))
+            .as("execution plan: %s", plan)
+            .isEqualTo(indexName);
+        assertThat(String.valueOf(plan.get("Extra")))
+            .as("execution plan: %s", plan)
+            .doesNotContain("Using filesort");
     }
 }
