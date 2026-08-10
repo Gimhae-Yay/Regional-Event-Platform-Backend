@@ -104,7 +104,11 @@ public class EndContentReservationsUseCase {
             capacityHoldService.invalidateAllActiveHoldsForContent(
                 contentId,
                 CONTENT_ENDED_INVALIDATION_REASON
-            ).forEach(expirePendingPaymentForTerminatedHoldUseCase::expire);
+            ).forEach(capacityHold -> expirePendingPaymentForTerminatedHoldUseCase.expire(
+                capacityHold,
+                requestId,
+                actor
+            ));
             recordAuditEventUseCase.record(new AuditEventCommand(
                 requestId,
                 region,
@@ -162,7 +166,11 @@ public class EndContentReservationsUseCase {
             capacityHoldService.invalidateAllActiveHoldsForContent(
                 contentId,
                 CONTENT_ENDED_INVALIDATION_REASON
-            ).forEach(expirePendingPaymentForTerminatedHoldUseCase::expire);
+            ).forEach(capacityHold -> expirePendingPaymentForTerminatedHoldUseCase.expire(
+                capacityHold,
+                requestId,
+                null
+            ));
             recordAuditEventUseCase.record(new AuditEventCommand(
                 requestId,
                 content.getRegion(),

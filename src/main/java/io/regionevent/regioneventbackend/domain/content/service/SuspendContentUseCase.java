@@ -103,7 +103,11 @@ public class SuspendContentUseCase {
             capacityHoldService.invalidateAllActiveHoldsForContent(
                 contentId,
                 CONTENT_SUSPENDED_INVALIDATION_REASON
-            ).forEach(expirePendingPaymentForTerminatedHoldUseCase::expire);
+            ).forEach(capacityHold -> expirePendingPaymentForTerminatedHoldUseCase.expire(
+                capacityHold,
+                requestId,
+                actor
+            ));
             recordSuccessfulSuspension(requestId, actor, suspendedContent, suspendedAt);
             return SuspendContentResult.from(suspendedContent, suspendedLog);
         } catch (BusinessException exception) {

@@ -1,6 +1,8 @@
 package io.regionevent.regioneventbackend.domain.payment.service;
 
 import java.time.Instant;
+import java.util.List;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -8,10 +10,16 @@ import org.springframework.transaction.annotation.Transactional;
 import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentIdempotency;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentIdempotencyOperation;
+import io.regionevent.regioneventbackend.domain.payment.entity.PaymentIdempotencyStatus;
 import io.regionevent.regioneventbackend.domain.payment.repository.PaymentIdempotencyRepository;
 
 @Service
 public class PaymentIdempotencyService {
+
+    private static final List<PaymentIdempotencyStatus> TERMINAL_STATUSES = List.of(
+        PaymentIdempotencyStatus.SUCCEEDED,
+        PaymentIdempotencyStatus.FAILED
+    );
 
     private final PaymentIdempotencyRepository paymentIdempotencyRepository;
 
@@ -43,6 +51,11 @@ public class PaymentIdempotencyService {
     public void setPaymentResultExpiration(Payment payment, Instant finalizedAt) {
         paymentIdempotencyRepository.findByPaymentPaymentIdForUpdate(payment.getPaymentId())
             .ifPresent(idempotency -> idempotency.setExpiresAtAfterPaymentFinalization(finalizedAt));
+    }
+
+    @Transactional
+    public int deleteExpiredTerminalRecords() {
+        return paymentIdempotencyRepository.deleteExpiredTerminalRecords(TERMINAL_STATUSES);
     }
 
     public record PaymentIdempotencyAcquireResult(

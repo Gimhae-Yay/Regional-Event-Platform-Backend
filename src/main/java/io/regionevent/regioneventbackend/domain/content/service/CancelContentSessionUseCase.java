@@ -80,7 +80,12 @@ public class CancelContentSessionUseCase {
             validatedReason,
             cancelledAt
         );
-        terminatedHolds.forEach(expirePendingPaymentForTerminatedHoldUseCase::expire);
+        AuditEventActor actor = new AuditEventActor(operator.roleAssignment());
+        terminatedHolds.forEach(capacityHold -> expirePendingPaymentForTerminatedHoldUseCase.expire(
+            capacityHold,
+            requestId,
+            actor
+        ));
         int releasedQuantity = terminatedHolds.stream()
             .mapToInt(CapacityHoldService.TerminatedCapacityHold::quantity)
             .sum() + reservationService.cancelUncheckedInReservationsForSession(
@@ -89,7 +94,7 @@ public class CancelContentSessionUseCase {
             cancelledAt
         );
         contentSessionService.releaseCapacity(cancelledSession, releasedQuantity);
-        recordSuccessfulAuditEvent(requestId, operator, cancelledSession, cancelledAt);
+        recordSuccessfulAuditEvent(requestId, actor, cancelledSession, cancelledAt);
 
         return new CancelContentSessionResult(
             cancelledSession.getSessionId(),
@@ -122,7 +127,7 @@ public class CancelContentSessionUseCase {
 
     private void recordSuccessfulAuditEvent(
         UUID requestId,
-        OperatorAuthorizationService.AuthorizedOperator operator,
+        AuditEventActor actor,
         ContentSession contentSession,
         Instant cancelledAt
     ) {
@@ -135,7 +140,7 @@ public class CancelContentSessionUseCase {
             "CANCELLED",
             AuditEventResult.SUCCESS,
             OPERATOR_SESSION_CANCEL_REASON,
-            new AuditEventActor(operator.roleAssignment()),
+            actor,
             cancelledAt
         ));
     }

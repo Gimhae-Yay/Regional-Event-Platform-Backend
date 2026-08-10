@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.domain.user.service;
 
 import java.time.Clock;
+import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -74,8 +75,13 @@ public class WithdrawUserUseCase {
         appUserService.startWithdrawal(user);
 
         refreshTokenService.revokeAllFamilies(userId);
+        UUID requestId = UUID.randomUUID();
         capacityHoldService.invalidateActiveHoldsForWithdrawal(userId)
-            .forEach(expirePendingPaymentForTerminatedHoldUseCase::expire);
+            .forEach(capacityHold -> expirePendingPaymentForTerminatedHoldUseCase.expire(
+                capacityHold,
+                requestId,
+                null
+            ));
         reservationService.cancelConfirmedReservationsForWithdrawal(userId);
         operatorApplicationService.cancelAndUnlinkByApplicantUserId(userId);
         capacityHoldService.unlinkUserByUserId(userId);
