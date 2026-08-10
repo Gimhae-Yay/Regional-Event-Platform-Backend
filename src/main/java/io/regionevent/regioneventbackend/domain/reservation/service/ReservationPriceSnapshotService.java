@@ -23,9 +23,9 @@ public class ReservationPriceSnapshotService {
     @Transactional(readOnly = true)
     public Optional<ReservationPriceSnapshot> findByCapacityHoldId(Long holdId) {
         return reservationPriceSnapshotRepository.findByCapacityHoldHoldId(holdId);
-	}
+    }
 
-	@Transactional(propagation = Propagation.MANDATORY)
+    @Transactional(propagation = Propagation.MANDATORY)
     public Optional<ReservationPriceSnapshot> findByHoldIdForUpdate(Long holdId) {
         return reservationPriceSnapshotRepository.findByHoldIdForUpdate(holdId);
     }

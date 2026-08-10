@@ -121,14 +121,17 @@ public class CreatePaymentUseCase {
         long baseAmount = lockReservationTarget(requestedHold);
         CapacityHold hold = capacityHoldService.findActiveOwnedHoldForUpdate(holdId, user);
         ReservationPriceSnapshot snapshot = reservationPriceSnapshotService.findByHoldIdForUpdate(holdId)
-            .orElseGet(() -> createSnapshot(hold, couponId, user, baseAmount));
-        validateSnapshotCoupon(snapshot, couponId);
+            .orElse(null);
 
         Payment pendingPayment = paymentService.findPendingByHoldIdForUpdate(holdId)
             .orElse(null);
         if (pendingPayment != null) {
             throw new BusinessException(ErrorCode.PAYMENT_HOLD_CONFLICT);
         }
+        if (snapshot == null) {
+            snapshot = createSnapshot(hold, couponId, user, baseAmount);
+        }
+        validateSnapshotCoupon(snapshot, couponId);
         if (snapshot.getFinalAmount() > 0) {
             Payment payment = paymentService.create(new Payment(
                 hold,

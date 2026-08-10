@@ -13,6 +13,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
@@ -32,6 +33,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import tools.jackson.databind.node.JsonNodeFactory;
+
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
@@ -48,10 +51,12 @@ import io.regionevent.regioneventbackend.domain.coupon.repository.CouponPolicyRe
 import io.regionevent.regioneventbackend.domain.coupon.repository.CouponRedemptionRepository;
 import io.regionevent.regioneventbackend.domain.coupon.repository.CouponRepository;
 import io.regionevent.regioneventbackend.domain.coupon.repository.CouponStatusHistoryRepository;
+import io.regionevent.regioneventbackend.domain.coupon.service.CouponService;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
 import io.regionevent.regioneventbackend.domain.payment.dto.CreatePaymentRequest;
 import io.regionevent.regioneventbackend.domain.payment.dto.CreatePaymentResponse;
+import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentIdempotency;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentIdempotencyStatus;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentStatus;
@@ -75,7 +80,6 @@ import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTest
 import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
-import tools.jackson.databind.node.JsonNodeFactory;
 
 @SpringBootTest
 @Testcontainers(disabledWithoutDocker = true)
@@ -100,6 +104,7 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
     private final ReservationPriceSnapshotRepository reservationPriceSnapshotRepository;
     private final AuditEventRepository auditEventRepository;
     private final PriceLockSynchronizingContentService priceLockSynchronizingContentService;
+    private final PaymentLockOrderTrackingPaymentService paymentLockOrderTrackingPaymentService;
     private final CapacityHoldService capacityHoldService;
     private final ExpirePendingPaymentForTerminatedHoldUseCase expirePendingPaymentForTerminatedHoldUseCase;
     private final PaymentIdempotencyService paymentIdempotencyService;
@@ -125,6 +130,7 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         ReservationPriceSnapshotRepository reservationPriceSnapshotRepository,
         AuditEventRepository auditEventRepository,
         PriceLockSynchronizingContentService priceLockSynchronizingContentService,
+        PaymentLockOrderTrackingPaymentService paymentLockOrderTrackingPaymentService,
         CapacityHoldService capacityHoldService,
         ExpirePendingPaymentForTerminatedHoldUseCase expirePendingPaymentForTerminatedHoldUseCase,
         PaymentIdempotencyService paymentIdempotencyService,
@@ -148,6 +154,7 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         this.reservationPriceSnapshotRepository = reservationPriceSnapshotRepository;
         this.auditEventRepository = auditEventRepository;
         this.priceLockSynchronizingContentService = priceLockSynchronizingContentService;
+        this.paymentLockOrderTrackingPaymentService = paymentLockOrderTrackingPaymentService;
         this.capacityHoldService = capacityHoldService;
         this.expirePendingPaymentForTerminatedHoldUseCase = expirePendingPaymentForTerminatedHoldUseCase;
         this.paymentIdempotencyService = paymentIdempotencyService;
@@ -254,6 +261,23 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
                     UserRole.VISITOR.name()
                 )
             );
+    }
+
+    @Test
+    void paymentCreationLocksPendingPaymentBeforeReservingCoupon() {
+        Fixture fixture = createFixture();
+        Coupon coupon = createCoupon(fixture, 1_000);
+        paymentLockOrderTrackingPaymentService.verifyPendingPaymentLockBeforeCouponReservation();
+
+        CreatePaymentResponse response = createPaymentUseCase.create(
+            fixture.user().getUserId(),
+            fixture.hold().getHoldId().toString(),
+            new CreatePaymentRequest(JsonNodeFactory.instance.stringNode(coupon.getCouponId().toString())),
+            "payment-key-" + System.nanoTime(),
+            UUID.randomUUID()
+        );
+
+        assertThat(response.requiresPayment()).isTrue();
     }
 
     @Test
@@ -881,6 +905,26 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         ) {
             return new PriceLockSynchronizingContentService(contentRepository);
         }
+
+        @Bean
+        @Primary
+        PaymentLockOrderTrackingPaymentService paymentLockOrderTrackingPaymentService(
+            PaymentRepository paymentRepository
+        ) {
+            return new PaymentLockOrderTrackingPaymentService(paymentRepository);
+        }
+
+        @Bean
+        @Primary
+        PaymentLockOrderTrackingCouponService paymentLockOrderTrackingCouponService(
+            CouponRepository couponRepository,
+            PaymentLockOrderTrackingPaymentService paymentLockOrderTrackingPaymentService
+        ) {
+            return new PaymentLockOrderTrackingCouponService(
+                couponRepository,
+                paymentLockOrderTrackingPaymentService
+            );
+        }
     }
 
     static class PriceLockSynchronizingContentService extends ContentService {
@@ -922,6 +966,56 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException("interrupted while waiting for content price lock", exception);
             }
+        }
+    }
+
+    static class PaymentLockOrderTrackingPaymentService extends PaymentService {
+
+        private final AtomicBoolean paymentLockChecked = new AtomicBoolean();
+        private final AtomicBoolean lockOrderVerificationRequested = new AtomicBoolean();
+
+        PaymentLockOrderTrackingPaymentService(PaymentRepository paymentRepository) {
+            super(paymentRepository);
+        }
+
+        void verifyPendingPaymentLockBeforeCouponReservation() {
+            paymentLockChecked.set(false);
+            lockOrderVerificationRequested.set(true);
+        }
+
+        @Override
+        public Optional<Payment> findPendingByHoldIdForUpdate(Long holdId) {
+            if (lockOrderVerificationRequested.get()) {
+                paymentLockChecked.set(true);
+            }
+            return super.findPendingByHoldIdForUpdate(holdId);
+        }
+
+        void validatePendingPaymentLockBeforeCouponReservation() {
+            if (lockOrderVerificationRequested.get()
+                && !paymentLockChecked.getAndSet(false)) {
+                throw new IllegalStateException("payment lock must be acquired before coupon lock");
+            }
+            lockOrderVerificationRequested.set(false);
+        }
+    }
+
+    static class PaymentLockOrderTrackingCouponService extends CouponService {
+
+        private final PaymentLockOrderTrackingPaymentService paymentService;
+
+        PaymentLockOrderTrackingCouponService(
+            CouponRepository couponRepository,
+            PaymentLockOrderTrackingPaymentService paymentService
+        ) {
+            super(couponRepository);
+            this.paymentService = paymentService;
+        }
+
+        @Override
+        public Optional<Coupon> findByCouponIdForUpdate(Long couponId) {
+            paymentService.validatePendingPaymentLockBeforeCouponReservation();
+            return super.findByCouponIdForUpdate(couponId);
         }
     }
 
