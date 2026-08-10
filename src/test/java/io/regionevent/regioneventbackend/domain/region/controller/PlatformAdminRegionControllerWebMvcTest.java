@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.region.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -16,8 +17,11 @@ import java.time.Instant;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
@@ -42,6 +46,7 @@ import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenSto
 
 @WebMvcTest(PlatformAdminRegionController.class)
 @Import({SecurityConfig.class, RequestIdFilter.class, GlobalExceptionHandler.class})
+@ExtendWith(OutputCaptureExtension.class)
 class PlatformAdminRegionControllerWebMvcTest {
 
     private static final Long AUTHENTICATED_USER_ID = 101L;
@@ -110,13 +115,19 @@ class PlatformAdminRegionControllerWebMvcTest {
     }
 
     @Test
-    void getRegions_잘못된공개여부_유스케이스를호출하지않는다() throws Exception {
+    void getRegions_잘못된공개여부_실패로그를남기고_유스케이스를호출하지않는다(
+        CapturedOutput output
+    ) throws Exception {
         mockMvc.perform(authenticated(get("/api/v1/platform-admin/regions")
                 .queryParam("isPublic", "yes")))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
 
         verifyNoInteractions(getPlatformAdminRegionsUseCase);
+        assertThat(output.getOut()).contains(
+            "Platform admin region list queried. requestId=",
+            "resultCount=0, resultCode=INVALID_TYPE"
+        );
     }
 
     @Test
