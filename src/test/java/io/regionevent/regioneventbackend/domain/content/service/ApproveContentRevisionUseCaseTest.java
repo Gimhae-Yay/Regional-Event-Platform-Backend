@@ -41,6 +41,7 @@ class ApproveContentRevisionUseCaseTest {
     private static final Instant CLOCK_INSTANT = Instant.parse("2026-08-02T10:56:14.722444122Z");
     private static final Instant REVIEWED_AT = Instant.parse("2026-08-02T10:56:14.722444Z");
     private static final Instant PUBLISH_AT = Instant.parse("2026-08-20T00:00:00Z");
+    private static final long RESERVATION_PRICE = 20_000L;
 
     private final ContentRevisionService contentRevisionService = mock(ContentRevisionService.class);
     private final ContentService contentService = mock(ContentService.class);
@@ -69,6 +70,7 @@ class ApproveContentRevisionUseCaseTest {
 
         assertThat(result.revisionStatus()).isEqualTo(ContentRevisionStatus.EDIT_APPROVED);
         assertThat(result.contentStatus()).isEqualTo(ContentStatus.PUBLISHED);
+        assertThat(result.reservationPrice()).isEqualTo(RESERVATION_PRICE);
         assertThat(result.reviewedAt()).isEqualTo(REVIEWED_AT);
         InOrder lockOrder = inOrder(contentRevisionService, contentService);
         lockOrder.verify(contentRevisionService).findContentIdByRevisionId(REVISION_ID);
@@ -117,6 +119,7 @@ class ApproveContentRevisionUseCaseTest {
             approvedStatus(initialStatus)
         );
         when(content.getPublishAt()).thenReturn(PUBLISH_AT);
+        when(content.getReservationPrice()).thenReturn(RESERVATION_PRICE);
         when(region.getRegionId()).thenReturn(REGION_ID);
         when(reviewerAssignment.getAppUser()).thenReturn(reviewer);
         when(reviewerAssignment.getRoleAssignmentId())

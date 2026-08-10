@@ -37,6 +37,7 @@ class ContentRevisionApprovalControllerIntegrationTest extends ContentController
             CONTENT_ID,
             ContentRevisionStatus.EDIT_APPROVED,
             ContentStatus.PUBLISHED,
+            20_000,
             Instant.parse("2026-08-10T01:00:00Z"),
             Instant.parse("2026-08-04T12:00:00Z")
         ));
@@ -51,7 +52,8 @@ class ContentRevisionApprovalControllerIntegrationTest extends ContentController
             .andExpect(jsonPath("$.data.revisionId").value(Long.toString(REVISION_ID)))
             .andExpect(jsonPath("$.data.contentId").value(Long.toString(CONTENT_ID)))
             .andExpect(jsonPath("$.data.revisionStatus").value("EDIT_APPROVED"))
-            .andExpect(jsonPath("$.data.contentStatus").value("PUBLISHED"));
+            .andExpect(jsonPath("$.data.contentStatus").value("PUBLISHED"))
+            .andExpect(jsonPath("$.data.reservationPrice").value(20_000));
 
         verify(approveContentRevisionUseCase).approve(
             eq(AUTHENTICATED_USER_ID),

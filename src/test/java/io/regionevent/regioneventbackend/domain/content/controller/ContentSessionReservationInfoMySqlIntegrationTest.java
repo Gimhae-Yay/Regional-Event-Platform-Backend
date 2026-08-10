@@ -135,6 +135,15 @@ class ContentSessionReservationInfoMySqlIntegrationTest {
             .andExpect(jsonPath("$.code").value("NOT_FOUND"));
     }
 
+    @Test
+    void publicSessionReservationInfo_returnsContentReservationPrice() throws Exception {
+        ContentSession session = createScheduledSession();
+
+        mockMvc.perform(get("/api/v1/sessions/{sessionId}", session.getSessionId()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.price").value(20_000));
+    }
+
     private ContentSession createScheduledSession() {
         String suffix = Long.toUnsignedString(System.nanoTime());
         Region region = regionRepository.saveAndFlush(new Region("R" + suffix, "김해시", true));
@@ -159,6 +168,7 @@ class ContentSessionReservationInfoMySqlIntegrationTest {
             "만 7세 이상",
             "편한 복장",
             "시작 하루 전까지 취소할 수 있습니다.",
+            20_000,
             FIXED_NOW.minusSeconds(60)
         ));
         Instant startsAt = FIXED_NOW.plusSeconds(SESSION_STARTS_IN_SECONDS);

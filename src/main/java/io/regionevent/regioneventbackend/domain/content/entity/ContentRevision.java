@@ -62,6 +62,10 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
                 status <> 'EDIT_WITHDRAWN'
                 OR (withdrawn_at IS NOT NULL AND withdrawn_by_user_id IS NOT NULL AND withdrawal_reason IS NOT NULL)
                 """
+        ),
+        @CheckConstraint(
+            name = "ck_content_revision_reservation_price",
+            constraint = "reservation_price >= 0"
         )
     }
 )
@@ -132,6 +136,9 @@ public class ContentRevision {
     @Column(name = "cancellation_policy_text", nullable = false, columnDefinition = "TEXT")
     private String cancellationPolicyText;
 
+    @Column(name = "reservation_price", nullable = false)
+    private long reservationPrice;
+
     @Column(name = "publish_at")
     private Instant publishAt;
 
@@ -191,6 +198,7 @@ public class ContentRevision {
         String ageRequirement,
         String materials,
         String cancellationPolicyText,
+        long reservationPrice,
         Instant publishAt,
         Instant submittedAt,
         Instant reviewedAt,
@@ -214,6 +222,7 @@ public class ContentRevision {
         this.ageRequirement = requireNotBlank(ageRequirement, "ageRequirement");
         this.materials = requireNotBlank(materials, "materials");
         this.cancellationPolicyText = requireNotBlank(cancellationPolicyText, "cancellationPolicyText");
+        this.reservationPrice = requireNonNegative(reservationPrice, "reservationPrice");
         this.publishAt = publishAt;
         this.submittedAt = requireNotNull(submittedAt, "submittedAt");
         this.reviewedAt = reviewedAt;
@@ -223,6 +232,57 @@ public class ContentRevision {
         this.withdrawnBy = withdrawnBy;
         this.withdrawalReason = withdrawalReason;
         validateStatusDetails();
+    }
+
+    public ContentRevision(
+        Content content,
+        int revisionNo,
+        int baseContentVersion,
+        AppUser editor,
+        ContentRevisionStatus status,
+        String title,
+        String description,
+        String locationText,
+        String operatingHoursText,
+        String contactText,
+        String precautions,
+        String ageRequirement,
+        String materials,
+        String cancellationPolicyText,
+        Instant publishAt,
+        Instant submittedAt,
+        Instant reviewedAt,
+        AppUser reviewedBy,
+        String reviewReason,
+        Instant withdrawnAt,
+        AppUser withdrawnBy,
+        String withdrawalReason
+    ) {
+        this(
+            content,
+            revisionNo,
+            baseContentVersion,
+            editor,
+            status,
+            title,
+            description,
+            locationText,
+            operatingHoursText,
+            contactText,
+            precautions,
+            ageRequirement,
+            materials,
+            cancellationPolicyText,
+            0,
+            publishAt,
+            submittedAt,
+            reviewedAt,
+            reviewedBy,
+            reviewReason,
+            withdrawnAt,
+            withdrawnBy,
+            withdrawalReason
+        );
     }
 
     @PrePersist
@@ -286,6 +346,7 @@ public class ContentRevision {
         String ageRequirement,
         String materials,
         String cancellationPolicyText,
+        long reservationPrice,
         Instant publishAt
     ) {
         if (status != ContentRevisionStatus.EDIT_REJECTED) {
@@ -300,6 +361,7 @@ public class ContentRevision {
         this.ageRequirement = requireNotBlank(ageRequirement, "ageRequirement");
         this.materials = requireNotBlank(materials, "materials");
         this.cancellationPolicyText = requireNotBlank(cancellationPolicyText, "cancellationPolicyText");
+        this.reservationPrice = requireNonNegative(reservationPrice, "reservationPrice");
         this.publishAt = publishAt;
     }
 
@@ -365,6 +427,10 @@ public class ContentRevision {
 
     public String getCancellationPolicyText() {
         return cancellationPolicyText;
+    }
+
+    public long getReservationPrice() {
+        return reservationPrice;
     }
 
     public Instant getPublishAt() {
@@ -443,6 +509,13 @@ public class ContentRevision {
     private static String requireNotBlank(String value, String fieldName) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(fieldName + " must not be null or blank");
+        }
+        return value;
+    }
+
+    private static long requireNonNegative(long value, String fieldName) {
+        if (value < 0) {
+            throw new IllegalArgumentException(fieldName + " must not be negative");
         }
         return value;
     }
