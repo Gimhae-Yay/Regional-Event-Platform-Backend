@@ -141,10 +141,15 @@ class PlatformAdminRegionControllerWebMvcTest {
     }
 
     @Test
-    void getRegions_인증정보없음_미인증오류를반환한다() throws Exception {
+    void getRegions_인증정보없음_미인증오류와실패로그를반환한다(CapturedOutput output) throws Exception {
         mockMvc.perform(get("/api/v1/platform-admin/regions"))
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+
+        assertThat(output.getOut()).contains(
+            "Platform admin region list queried. requestId=",
+            "resultCount=0, resultCode=UNAUTHENTICATED"
+        );
     }
 
     @Test
