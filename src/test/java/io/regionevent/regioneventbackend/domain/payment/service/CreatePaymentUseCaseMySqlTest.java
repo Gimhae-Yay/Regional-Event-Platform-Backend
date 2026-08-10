@@ -4,9 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -329,6 +331,95 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
     }
 
     @Test
+    @Timeout(10)
+    void differentKeysConcurrentRequestsForSameHoldCreateOnePendingPayment() throws Exception {
+        Fixture fixture = createFixture();
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<CreatePaymentResponse> first = executorService.submit(() -> createAfterStart(
+                fixture.user().getUserId(),
+                fixture.hold().getHoldId(),
+                null,
+                "payment-key-" + System.nanoTime(),
+                ready,
+                start
+            ));
+            Future<CreatePaymentResponse> second = executorService.submit(() -> createAfterStart(
+                fixture.user().getUserId(),
+                fixture.hold().getHoldId(),
+                null,
+                "payment-key-" + System.nanoTime(),
+                ready,
+                start
+            ));
+            assertThat(ready.await(3, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            assertConcurrentPaymentResults(
+                List.of(awaitPaymentCreation(first), awaitPaymentCreation(second))
+            );
+        }
+
+        assertThat(paymentRepository.findAll())
+            .filteredOn(payment -> payment.getCapacityHold().getHoldId().equals(fixture.hold().getHoldId()))
+            .hasSize(1);
+        assertThat(reservationPriceSnapshotRepository.findByCapacityHoldHoldId(fixture.hold().getHoldId()))
+            .isPresent();
+        assertThat(paymentIdempotencyRepository.findAll())
+            .filteredOn(record -> record.getActorUserId() == fixture.user().getUserId())
+            .hasSize(1);
+    }
+
+    @Test
+    @Timeout(10)
+    void differentKeysConcurrentRequestsForSameCouponReserveItOnce() throws Exception {
+        Fixture fixture = createFixture(2);
+        CapacityHold additionalHold = createAdditionalActiveHold(fixture);
+        Coupon coupon = createCoupon(fixture, 1_000);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<CreatePaymentResponse> first = executorService.submit(() -> createAfterStart(
+                fixture.user().getUserId(),
+                fixture.hold().getHoldId(),
+                coupon.getCouponId(),
+                "payment-key-" + System.nanoTime(),
+                ready,
+                start
+            ));
+            Future<CreatePaymentResponse> second = executorService.submit(() -> createAfterStart(
+                fixture.user().getUserId(),
+                additionalHold.getHoldId(),
+                coupon.getCouponId(),
+                "payment-key-" + System.nanoTime(),
+                ready,
+                start
+            ));
+            assertThat(ready.await(3, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            assertConcurrentPaymentResults(
+                List.of(awaitPaymentCreation(first), awaitPaymentCreation(second))
+            );
+        }
+
+        assertThat(paymentRepository.findAll()).hasSize(1);
+        assertThat(reservationPriceSnapshotRepository.findAll()).hasSize(1);
+        assertThat(couponRepository.findById(coupon.getCouponId()).orElseThrow())
+            .extracting(Coupon::getStatus)
+            .isEqualTo(CouponStatus.RESERVED);
+        assertThat(couponStatusHistoryRepository.findAll()).singleElement()
+            .extracting(
+                history -> history.getPreviousStatus(),
+                history -> history.getNextStatus()
+            )
+            .containsExactly(CouponStatus.AVAILABLE, CouponStatus.RESERVED);
+    }
+
+    @Test
     void databaseCurrentTimeRejectsAnExpiredHoldBeforeCreatingPaymentArtifacts() {
         Fixture fixture = createFixture();
         jdbcTemplate.update(
@@ -582,17 +673,60 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         CountDownLatch ready,
         CountDownLatch start
     ) throws Exception {
+        return createAfterStart(
+            fixture.user().getUserId(),
+            fixture.hold().getHoldId(),
+            null,
+            key,
+            ready,
+            start
+        );
+    }
+
+    private CreatePaymentResponse createAfterStart(
+        long userId,
+        Long holdId,
+        Long couponId,
+        String key,
+        CountDownLatch ready,
+        CountDownLatch start
+    ) throws Exception {
         ready.countDown();
         if (!start.await(3, TimeUnit.SECONDS)) {
             throw new IllegalStateException("concurrent payment creation did not start");
         }
         return createPaymentUseCase.create(
-            fixture.user().getUserId(),
-            fixture.hold().getHoldId().toString(),
-            new CreatePaymentRequest(null),
+            userId,
+            holdId.toString(),
+            new CreatePaymentRequest(couponId == null
+                ? null
+                : JsonNodeFactory.instance.stringNode(couponId.toString())),
             key,
             UUID.randomUUID()
         );
+    }
+
+    private PaymentCreationAttempt awaitPaymentCreation(
+        Future<CreatePaymentResponse> paymentCreation
+    ) throws Exception {
+        try {
+            return PaymentCreationAttempt.success(paymentCreation.get(5, TimeUnit.SECONDS));
+        } catch (ExecutionException exception) {
+            return PaymentCreationAttempt.failure(exception.getCause());
+        }
+    }
+
+    private void assertConcurrentPaymentResults(List<PaymentCreationAttempt> attempts) {
+        assertThat(attempts)
+            .filteredOn(PaymentCreationAttempt::succeeded)
+            .singleElement();
+        PaymentCreationAttempt failedAttempt = attempts.stream()
+            .filter(attempt -> !attempt.succeeded())
+            .findFirst()
+            .orElseThrow();
+        assertThat(failedAttempt.failure()).isInstanceOf(BusinessException.class);
+        assertThat(((BusinessException) failedAttempt.failure()).getErrorCode())
+            .isEqualTo(ErrorCode.PAYMENT_HOLD_CONFLICT);
     }
 
     private void await(CountDownLatch latch) {
@@ -607,6 +741,10 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
     }
 
     private Fixture createFixture() {
+        return createFixture(1);
+    }
+
+    private Fixture createFixture(int sessionCapacity) {
         return transactionTemplate.execute(status -> {
             String suffix = Long.toUnsignedString(System.nanoTime());
             Instant now = Instant.now();
@@ -651,7 +789,7 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
                 now.plusSeconds(10_800),
                 now.plusSeconds(1_800),
                 now.plusSeconds(9_000),
-                1
+                sessionCapacity
             );
             session.approve(operator, now);
             ContentSession savedSession = contentSessionRepository.saveAndFlush(session);
@@ -674,6 +812,33 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
                 now
             ));
             return new Fixture(user, hold, content.getContentId());
+        });
+    }
+
+    private CapacityHold createAdditionalActiveHold(Fixture fixture) {
+        return transactionTemplate.execute(status -> {
+            Instant now = Instant.now();
+            ContentSession contentSession = contentSessionRepository.findById(
+                fixture.hold().getContentSession().getSessionId()
+            ).orElseThrow();
+            contentSessionRepository.decreaseRemainingCapacityIfReservable(
+                contentSession.getSessionId(),
+                1,
+                ContentStatus.PUBLISHED,
+                ContentSessionStatus.SCHEDULED
+            );
+            return capacityHoldRepository.saveAndFlush(new CapacityHold(
+                contentSession.getRegion(),
+                contentSession,
+                appUserRepository.getReferenceById(fixture.user().getUserId()),
+                1,
+                CapacityHoldStatus.ACTIVE,
+                now.plusSeconds(600),
+                null,
+                null,
+                null,
+                now
+            ));
         });
     }
 
@@ -764,6 +929,24 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         CountDownLatch contentLoaded,
         CountDownLatch allowContentPriceLock
     ) {
+    }
+
+    private record PaymentCreationAttempt(
+        CreatePaymentResponse response,
+        Throwable failure
+    ) {
+
+        private static PaymentCreationAttempt success(CreatePaymentResponse response) {
+            return new PaymentCreationAttempt(response, null);
+        }
+
+        private static PaymentCreationAttempt failure(Throwable failure) {
+            return new PaymentCreationAttempt(null, failure);
+        }
+
+        private boolean succeeded() {
+            return response != null;
+        }
     }
 
     private record Fixture(AppUser user, CapacityHold hold, Long contentId) {
