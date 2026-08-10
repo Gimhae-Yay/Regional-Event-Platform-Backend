@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceUnitUtil;
@@ -336,6 +337,31 @@ class ContentRepositoryTest {
             .isEmpty();
         assertThat(contentRepository.findApprovedPublicationTargetForUpdate(pendingContent.getContentId()))
             .isEmpty();
+    }
+
+    @Test
+    void findMissionTargetsForUpdate_excludesSoftDeletedContentsAndOrdersByContentId() {
+        Region region = saveRegion();
+        AppUser operator = saveOperator();
+        Content firstContent = contentRepository.saveAndFlush(
+            newContent(region, operator, ContentStatus.APPROVED, Instant.parse("2026-08-01T00:00:00Z"))
+        );
+        Content deletedContent = contentRepository.saveAndFlush(
+            newContent(region, operator, ContentStatus.APPROVED, Instant.parse("2026-08-01T00:00:00Z"))
+        );
+        Content secondContent = contentRepository.saveAndFlush(
+            newContent(region, operator, ContentStatus.APPROVED, Instant.parse("2026-08-01T00:00:00Z"))
+        );
+        deletedContent.softDelete();
+        contentRepository.flush();
+        entityManager.clear();
+
+        assertThat(contentRepository.findMissionTargetsForUpdate(List.of(
+            secondContent.getContentId(),
+            deletedContent.getContentId(),
+            firstContent.getContentId()
+        ))).extracting(Content::getContentId)
+            .containsExactly(firstContent.getContentId(), secondContent.getContentId());
     }
 
     private Region saveRegion() {
