@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -98,6 +99,40 @@ class ContentServiceTest {
 
         assertThat(contentService.findOwnedContentForRevisionCreation(CONTENT_ID, USER_ID, REGION_ID))
             .isSameAs(content);
+    }
+
+    @Test
+    void findMissionTargetContentsForUpdate_대상_콘텐츠를_잠금_조회하고_반환한다() {
+        Content firstContent = ownedContent(false, true, ContentStatus.PUBLISHED);
+        Content secondContent = ownedContent(false, true, ContentStatus.APPROVED);
+        when(contentRepository.findMissionTargetsForUpdate(List.of(101L, 102L)))
+            .thenReturn(List.of(firstContent, secondContent));
+
+        assertThat(contentService.findMissionTargetContentsForUpdate(List.of(101L, 102L), REGION_ID))
+            .containsExactly(firstContent, secondContent);
+    }
+
+    @Test
+    void findMissionTargetContentsForUpdate_조회된_건수가_요청과_다르면_대상없음_오류를_반환한다() {
+        Content firstContent = ownedContent(false, true, ContentStatus.PUBLISHED);
+        when(contentRepository.findMissionTargetsForUpdate(List.of(101L, 102L)))
+            .thenReturn(List.of(firstContent));
+
+        assertThatThrownBy(() -> contentService.findMissionTargetContentsForUpdate(List.of(101L, 102L), REGION_ID))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.NOT_FOUND)
+            );
+    }
+
+    @Test
+    void findMissionTargetContentsForUpdate_지역이_다르면_권한_오류를_반환한다() {
+        Content content = ownedContent(false, false, ContentStatus.PUBLISHED);
+        when(contentRepository.findMissionTargetsForUpdate(List.of(101L))).thenReturn(List.of(content));
+
+        assertThatThrownBy(() -> contentService.findMissionTargetContentsForUpdate(List.of(101L), REGION_ID))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN)
+            );
     }
 
     @Test
