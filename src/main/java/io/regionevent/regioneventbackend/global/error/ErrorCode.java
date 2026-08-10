@@ -6,6 +6,9 @@ import org.springframework.http.HttpStatus;
 
 public enum ErrorCode {
 
+    COUPON_POLICY_NOT_PUBLISHED(HttpStatus.CONFLICT, "COUPON_POLICY_NOT_PUBLISHED", "쿠폰 정책이 발급 가능한 상태가 아닙니다."),
+    COUPON_ISSUE_CONFLICT(HttpStatus.CONFLICT, "COUPON_ISSUE_CONFLICT", "쿠폰을 발급할 수 없는 상태입니다."),
+
     CONTENT_STATE_CONFLICT(HttpStatus.CONFLICT, "CONTENT_STATE_CONFLICT", "콘텐츠 상태가 요청을 처리할 수 없습니다."),
     CONTENT_DELETE_CONFLICT(HttpStatus.CONFLICT, "CONTENT_DELETE_CONFLICT", "콘텐츠를 삭제할 수 없는 상태입니다."),
     CONTENT_END_CONFLICT(HttpStatus.CONFLICT, "CONTENT_END_CONFLICT", "콘텐츠를 종료할 수 없는 상태입니다."),
