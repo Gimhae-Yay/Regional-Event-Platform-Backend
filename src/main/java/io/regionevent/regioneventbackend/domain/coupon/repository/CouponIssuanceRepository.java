@@ -23,6 +23,18 @@ public interface CouponIssuanceRepository extends JpaRepository<CouponIssuance, 
     })
     Optional<CouponIssuance> findByIssuanceIdentityHash(String issuanceIdentityHash);
 
+    @EntityGraph(attributePaths = {
+        "coupon",
+        "coupon.user",
+        "couponPolicy",
+        "couponPolicy.content",
+        "couponPolicy.region",
+        "visit",
+        "missionRewardClaim",
+        "stampbookRewardGrant"
+    })
+    Optional<CouponIssuance> findByCouponCouponId(Long couponId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @EntityGraph(attributePaths = {
         "coupon",
