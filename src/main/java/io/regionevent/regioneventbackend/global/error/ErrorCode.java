@@ -30,6 +30,7 @@ public enum ErrorCode {
     ROLE_ASSIGNMENT_CONFLICT(HttpStatus.CONFLICT, "ROLE_ASSIGNMENT_CONFLICT", "역할을 변경할 수 없습니다."),
     STAMPBOOK_STATE_CONFLICT(HttpStatus.CONFLICT, "STAMPBOOK_STATE_CONFLICT", "스탬프북 상태가 요청을 처리할 수 없습니다."),
     MISSION_STATE_CONFLICT(HttpStatus.CONFLICT, "MISSION_STATE_CONFLICT", "미션 상태가 요청을 처리할 수 없습니다."),
+    COUPON_POLICY_REFERENCED(HttpStatus.CONFLICT, "COUPON_POLICY_REFERENCED", "참조 중인 쿠폰 정책은 종료할 수 없습니다."),
     COUPON_POLICY_CONFLICT(HttpStatus.CONFLICT, "COUPON_POLICY_CONFLICT", "쿠폰 정책을 처리할 수 없는 상태입니다."),
     REGION_CODE_ALREADY_EXISTS(HttpStatus.CONFLICT, "REGION_CODE_ALREADY_EXISTS", "이미 사용 중인 지역 코드입니다."),
     REGION_AVAILABILITY_CONFLICT(HttpStatus.CONFLICT, "REGION_AVAILABILITY_CONFLICT", "지역 공개 여부를 변경할 수 없습니다."),

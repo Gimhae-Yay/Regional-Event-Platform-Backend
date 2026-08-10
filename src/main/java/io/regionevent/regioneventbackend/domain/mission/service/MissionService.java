@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicy;
 import io.regionevent.regioneventbackend.domain.mission.entity.Mission;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionConditionType;
+import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
 import io.regionevent.regioneventbackend.domain.mission.repository.MissionRepository;
 import io.regionevent.regioneventbackend.domain.mission.repository.PublicRegionMissionProjection;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
@@ -52,6 +53,13 @@ public class MissionService {
 
     public Mission save(Mission mission) {
         return missionRepository.saveAndFlush(mission);
+    }
+
+    public boolean existsPublishedRewardCouponPolicy(Long couponPolicyId) {
+        return missionRepository.existsByRewardCouponPolicyCouponPolicyIdAndStatus(
+            couponPolicyId,
+            MissionStatus.PUBLISHED
+        );
     }
 
     public PublicRegionMissionListResult findPublicRegionMissions(

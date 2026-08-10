@@ -45,4 +45,11 @@ public class StampbookService {
             throw new BusinessException(ErrorCode.STAMPBOOK_STATE_CONFLICT);
         }
     }
+
+    public boolean existsPublishedRewardCouponPolicy(Long couponPolicyId) {
+        return stampbookRepository.existsByRewardCouponPolicyCouponPolicyIdAndStatus(
+            couponPolicyId,
+            StampbookStatus.PUBLISHED
+        );
+    }
 }
