@@ -5,6 +5,8 @@ import java.util.Optional;
 
 import jakarta.persistence.LockModeType;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -15,6 +17,55 @@ import io.regionevent.regioneventbackend.domain.mission.entity.MissionParticipat
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionParticipationStatus;
 
 public interface MissionParticipationRepository extends JpaRepository<MissionParticipation, Long> {
+
+    @Query(
+        value = """
+            SELECT participation.missionParticipationId AS participationId,
+                mission.missionId AS missionId,
+                participation.status AS status,
+                COUNT(DISTINCT CASE
+                    WHEN mission.conditionType = io.regionevent.regioneventbackend.domain.mission.entity.MissionConditionType.VISIT_COUNT
+                        THEN progress.visit.visitId
+                    ELSE progress.content.contentId
+                END) AS progressCount,
+                CASE
+                    WHEN mission.conditionType = io.regionevent.regioneventbackend.domain.mission.entity.MissionConditionType.VISIT_COUNT
+                        THEN mission.requiredVisitCount
+                    ELSE COUNT(DISTINCT targetContent.content.contentId)
+                END AS requiredCount,
+                CASE WHEN COUNT(rewardClaim.missionRewardClaimId) > 0 THEN true ELSE false END AS rewardClaimed,
+                participation.joinedAt AS joinedAt,
+                participation.completedAt AS completedAt
+            FROM MissionParticipation participation
+            JOIN participation.mission mission
+            LEFT JOIN MissionProgress progress
+                ON progress.missionParticipation = participation
+            LEFT JOIN mission.targetContents targetContent
+            LEFT JOIN MissionRewardClaim rewardClaim
+                ON rewardClaim.missionParticipation = participation
+            WHERE participation.user.userId = :userId
+              AND (:status IS NULL OR participation.status = :status)
+            GROUP BY participation.missionParticipationId,
+                mission.missionId,
+                participation.status,
+                mission.conditionType,
+                mission.requiredVisitCount,
+                participation.joinedAt,
+                participation.completedAt
+            ORDER BY participation.joinedAt DESC, participation.missionParticipationId DESC
+            """,
+        countQuery = """
+            SELECT COUNT(participation)
+            FROM MissionParticipation participation
+            WHERE participation.user.userId = :userId
+              AND (:status IS NULL OR participation.status = :status)
+            """
+    )
+    Page<MissionParticipationSummaryProjection> findSummariesByUserIdAndStatus(
+        @Param("userId") Long userId,
+        @Param("status") MissionParticipationStatus status,
+        Pageable pageable
+    );
 
     @EntityGraph(attributePaths = {"mission", "user"})
     Optional<MissionParticipation> findByMissionMissionIdAndUserUserId(
