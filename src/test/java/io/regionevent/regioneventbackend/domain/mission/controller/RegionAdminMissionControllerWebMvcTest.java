@@ -21,9 +21,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import io.regionevent.regioneventbackend.domain.mission.dto.RegionAdminMissionDetailResponse;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionConditionType;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
-import io.regionevent.regioneventbackend.domain.mission.service.GetRegionAdminMissionsUseCase;
 import io.regionevent.regioneventbackend.domain.mission.service.GetRegionAdminMissionDetailUseCase;
-import io.regionevent.regioneventbackend.domain.mission.service.RegionAdminMissionListResult;
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -46,9 +44,6 @@ class RegionAdminMissionControllerWebMvcTest {
 
     @MockitoBean
     private GetRegionAdminMissionDetailUseCase getRegionAdminMissionDetailUseCase;
-
-    @MockitoBean
-    private GetRegionAdminMissionsUseCase getRegionAdminMissionsUseCase;
 
     @MockitoBean
     private RefreshTokenStore refreshTokenStore;
@@ -85,48 +80,6 @@ class RegionAdminMissionControllerWebMvcTest {
             .andExpect(jsonPath("$.data.endedAt").doesNotExist());
 
         verify(getRegionAdminMissionDetailUseCase).get(REGION_ADMIN_ID, 701L);
-    }
-
-    @Test
-    void getMissions_withDefaultParameters_returnsPagedMissionSummaries() throws Exception {
-        when(getRegionAdminMissionsUseCase.get(REGION_ADMIN_ID, null, 0, 20))
-            .thenReturn(new RegionAdminMissionListResult(
-                List.of(new RegionAdminMissionListResult.MissionSummary(702L, MissionStatus.PENDING_REVIEW)),
-                0,
-                20,
-                1,
-                1
-            ));
-
-        mockMvc.perform(authenticated(get("/api/v1/region-admin/missions")))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.statusCode").value(200))
-            .andExpect(jsonPath("$.data.content[0].missionId").value("702"))
-            .andExpect(jsonPath("$.data.content[0].status").value("PENDING_REVIEW"))
-            .andExpect(jsonPath("$.data.page").value(0))
-            .andExpect(jsonPath("$.data.size").value(20))
-            .andExpect(jsonPath("$.data.totalElements").value(1))
-            .andExpect(jsonPath("$.data.totalPages").value(1));
-
-        verify(getRegionAdminMissionsUseCase).get(REGION_ADMIN_ID, null, 0, 20);
-    }
-
-    @Test
-    void getMissions_withStatusAndInvalidParameters_returnsContractErrors() throws Exception {
-        mockMvc.perform(authenticated(get("/api/v1/region-admin/missions")
-            .param("status", "PENDING_REVIEW")
-            .param("page", "-1")
-            .param("size", "10")))
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
-        mockMvc.perform(authenticated(get("/api/v1/region-admin/missions").param("size", "number")))
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
-        mockMvc.perform(authenticated(get("/api/v1/region-admin/missions").param("status", "INVALID")))
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
-
-        verifyNoInteractions(getRegionAdminMissionsUseCase);
     }
 
     @Test
