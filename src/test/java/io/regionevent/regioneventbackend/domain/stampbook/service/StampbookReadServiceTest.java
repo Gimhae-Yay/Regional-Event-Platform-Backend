@@ -17,6 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookProgressStatus;
 import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookStatus;
 import io.regionevent.regioneventbackend.domain.stampbook.repository.MyStampbookDetailProjection;
+import io.regionevent.regioneventbackend.domain.stampbook.repository.MyStampEarningProjection;
 import io.regionevent.regioneventbackend.domain.stampbook.repository.MyStampbookListProjection;
 import io.regionevent.regioneventbackend.domain.stampbook.repository.StampbookRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -298,6 +299,161 @@ class StampbookReadServiceTest {
             .hasMessage("stampbook progress read data is inconsistent");
     }
 
+    @Test
+    void 내_스탬프_적립_이력은_적립시각과_식별자_내림차순으로_반환한다() {
+        Instant earnedAt = Instant.parse("2026-08-03T01:00:00Z");
+        when(stampbookRepository.findMyStampEarningProjections(
+            USER_ID,
+            101L,
+            StampbookStatus.PUBLISHED,
+            StampbookStatus.ENDED
+        )).thenReturn(List.of(
+            earningProjection(
+                101L,
+                StampbookStatus.PUBLISHED,
+                201L,
+                USER_ID,
+                502L,
+                earnedAt,
+                702L,
+                USER_ID,
+                302L,
+                Instant.parse("2026-08-03T00:50:00Z"),
+                302L,
+                "두 번째 콘텐츠"
+            ),
+            earningProjection(
+                101L,
+                StampbookStatus.PUBLISHED,
+                201L,
+                USER_ID,
+                501L,
+                earnedAt,
+                701L,
+                USER_ID,
+                301L,
+                Instant.parse("2026-08-02T00:50:00Z"),
+                301L,
+                "첫 번째 콘텐츠"
+            )
+        ));
+
+        MyStampEarningsResult result = stampbookReadService.findMyStampEarnings(USER_ID, 101L);
+
+        assertThat(result.stampbookId()).isEqualTo(101L);
+        assertThat(result.earnings()).containsExactly(
+            new MyStampEarningsResult.Earning(
+                502L,
+                702L,
+                302L,
+                "두 번째 콘텐츠",
+                Instant.parse("2026-08-03T00:50:00Z"),
+                earnedAt
+            ),
+            new MyStampEarningsResult.Earning(
+                501L,
+                701L,
+                301L,
+                "첫 번째 콘텐츠",
+                Instant.parse("2026-08-02T00:50:00Z"),
+                earnedAt
+            )
+        );
+        verify(stampbookRepository).findMyStampEarningProjections(
+            USER_ID,
+            101L,
+            StampbookStatus.PUBLISHED,
+            StampbookStatus.ENDED
+        );
+    }
+
+    @Test
+    void 공개_스탬프북에_적립_진행이_없으면_빈_이력을_반환한다() {
+        when(stampbookRepository.findMyStampEarningProjections(
+            USER_ID,
+            101L,
+            StampbookStatus.PUBLISHED,
+            StampbookStatus.ENDED
+        )).thenReturn(List.of(earningProjection(
+            101L,
+            StampbookStatus.PUBLISHED,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+        )));
+
+        MyStampEarningsResult result = stampbookReadService.findMyStampEarnings(USER_ID, 101L);
+
+        assertThat(result.stampbookId()).isEqualTo(101L);
+        assertThat(result.earnings()).isEmpty();
+    }
+
+    @Test
+    void 내_스탬프_적립_이력은_방문_근거의_사용자_정합성이_다르면_오류로_처리한다() {
+        when(stampbookRepository.findMyStampEarningProjections(
+            USER_ID,
+            101L,
+            StampbookStatus.PUBLISHED,
+            StampbookStatus.ENDED
+        )).thenReturn(List.of(earningProjection(
+            101L,
+            StampbookStatus.PUBLISHED,
+            201L,
+            USER_ID,
+            501L,
+            Instant.parse("2026-08-03T01:00:00Z"),
+            701L,
+            200L,
+            301L,
+            Instant.parse("2026-08-03T00:50:00Z"),
+            301L,
+            "첫 번째 콘텐츠"
+        )));
+
+        assertThatThrownBy(() -> stampbookReadService.findMyStampEarnings(USER_ID, 101L))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("stamp earning read data is inconsistent");
+    }
+
+    @Test
+    void 내_스탬프_적립_이력_조회는_대상이_없으면_NOT_FOUND로_처리한다() {
+        when(stampbookRepository.findMyStampEarningProjections(
+            USER_ID,
+            101L,
+            StampbookStatus.PUBLISHED,
+            StampbookStatus.ENDED
+        )).thenReturn(List.of());
+        when(stampbookRepository.existsById(101L)).thenReturn(false);
+
+        assertThatThrownBy(() -> stampbookReadService.findMyStampEarnings(USER_ID, 101L))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.NOT_FOUND)
+            );
+    }
+
+    @Test
+    void 내_스탬프_적립_이력_조회는_다른_회원의_종료_이력을_FORBIDDEN으로_처리한다() {
+        when(stampbookRepository.findMyStampEarningProjections(
+            USER_ID,
+            101L,
+            StampbookStatus.PUBLISHED,
+            StampbookStatus.ENDED
+        )).thenReturn(List.of());
+        when(stampbookRepository.existsById(101L)).thenReturn(true);
+
+        assertThatThrownBy(() -> stampbookReadService.findMyStampEarnings(USER_ID, 101L))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN)
+            );
+    }
+
     private MyStampbookListProjection projection(
         Long stampbookId,
         StampbookStatus stampbookStatus,
@@ -343,6 +499,37 @@ class StampbookReadServiceTest {
             contentId,
             contentTitle,
             earnedAt
+        );
+    }
+
+    private MyStampEarningProjection earningProjection(
+        Long stampbookId,
+        StampbookStatus stampbookStatus,
+        Long stampbookProgressId,
+        Long progressUserId,
+        Long stampEarnId,
+        Instant earnedAt,
+        Long visitId,
+        Long visitUserId,
+        Long visitContentId,
+        Instant visitedAt,
+        Long contentId,
+        String contentTitle
+    ) {
+        return new MyStampEarningProjection(
+            stampbookId,
+            stampbookStatus,
+            stampbookProgressId,
+            progressUserId,
+            stampEarnId,
+            earnedAt,
+            visitId,
+            visitUserId,
+            visitContentId,
+            visitedAt,
+            contentId,
+            contentTitle,
+            contentId
         );
     }
 }
