@@ -1,6 +1,5 @@
 package io.regionevent.regioneventbackend.domain.coupon.service;
 
-<<<<<<< HEAD
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -9,13 +8,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.coupon.entity.Coupon;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatus;
-=======
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
-
-import io.regionevent.regioneventbackend.domain.coupon.entity.Coupon;
->>>>>>> origin/dev
 import io.regionevent.regioneventbackend.domain.coupon.repository.CouponRepository;
 
 @Service
