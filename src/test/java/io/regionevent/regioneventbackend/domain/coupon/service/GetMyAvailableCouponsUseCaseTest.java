@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
@@ -21,7 +22,9 @@ import io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatus;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus;
+import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationPriceSnapshot;
 import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHoldService;
+import io.regionevent.regioneventbackend.domain.reservation.service.ReservationPriceSnapshotService;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -35,11 +38,15 @@ class GetMyAvailableCouponsUseCaseTest {
 
     private final AppUserService appUserService = mock(AppUserService.class);
     private final CapacityHoldService capacityHoldService = mock(CapacityHoldService.class);
+    private final ReservationPriceSnapshotService reservationPriceSnapshotService = mock(
+        ReservationPriceSnapshotService.class
+    );
     private final CouponService couponService = mock(CouponService.class);
     private final Clock clock = mock(Clock.class);
     private final GetMyAvailableCouponsUseCase useCase = new GetMyAvailableCouponsUseCase(
         appUserService,
         capacityHoldService,
+        reservationPriceSnapshotService,
         couponService,
         clock
     );
@@ -52,14 +59,17 @@ class GetMyAvailableCouponsUseCaseTest {
         Coupon expiredCoupon = coupon(301L, 401L, 101L, 10L, 3_000L, 10_000L, EVALUATED_AT);
         Coupon otherContentCoupon = coupon(302L, 402L, 102L, 10L, 3_000L, 10_000L, EVALUATED_AT.plusSeconds(60));
         Coupon insufficientAmountCoupon = coupon(303L, 403L, 101L, 10L, 3_000L, 30_000L, EVALUATED_AT.plusSeconds(60));
+        Coupon otherRegionCoupon = coupon(304L, 404L, 101L, 11L, 3_000L, 10_000L, EVALUATED_AT.plusSeconds(60));
         when(appUserService.findActiveUser(USER_ID)).thenReturn(user);
         when(capacityHoldService.findOwnedHold(HOLD_ID, user)).thenReturn(hold);
         when(couponService.findAllByUserId(USER_ID, CouponStatus.AVAILABLE)).thenReturn(List.of(
             applicableCoupon,
             expiredCoupon,
             otherContentCoupon,
-            insufficientAmountCoupon
+            insufficientAmountCoupon,
+            otherRegionCoupon
         ));
+        when(reservationPriceSnapshotService.findByCapacityHoldId(HOLD_ID)).thenReturn(Optional.empty());
         when(clock.instant()).thenReturn(EVALUATED_AT);
 
         GetMyAvailableCouponsResult result = useCase.findAll(USER_ID, HOLD_ID);
@@ -76,9 +86,46 @@ class GetMyAvailableCouponsUseCaseTest {
     }
 
     @Test
+    void findAll_기존_가격_스냅샷이_있으면_스냅샷_기준으로_쿠폰을_반환한다() {
+        AppUser user = mock(AppUser.class);
+        CapacityHold hold = hold(10L, 101L, 2, CapacityHoldStatus.ACTIVE, EVALUATED_AT.plusSeconds(60));
+        Coupon coupon = coupon(300L, 400L, 101L, 10L, 30_000L, 24_000L, EVALUATED_AT.plusSeconds(60));
+        ReservationPriceSnapshot snapshot = mock(ReservationPriceSnapshot.class);
+        when(appUserService.findActiveUser(USER_ID)).thenReturn(user);
+        when(capacityHoldService.findOwnedHold(HOLD_ID, user)).thenReturn(hold);
+        when(reservationPriceSnapshotService.findByCapacityHoldId(HOLD_ID)).thenReturn(Optional.of(snapshot));
+        when(snapshot.getBaseAmount()).thenReturn(25_000L);
+        when(couponService.findAllByUserId(USER_ID, CouponStatus.AVAILABLE)).thenReturn(List.of(coupon));
+        when(clock.instant()).thenReturn(EVALUATED_AT);
+
+        GetMyAvailableCouponsResult result = useCase.findAll(USER_ID, HOLD_ID);
+
+        assertThat(result.availableCoupons()).singleElement().satisfies(availableCoupon -> {
+            assertThat(availableCoupon.baseAmount()).isEqualTo(25_000L);
+            assertThat(availableCoupon.discountAmount()).isEqualTo(25_000L);
+            assertThat(availableCoupon.payableAmount()).isZero();
+        });
+    }
+
+    @Test
     void findAll_비활성_홀드면_충돌을_반환한다() {
         AppUser user = mock(AppUser.class);
         CapacityHold hold = hold(10L, 101L, 1, CapacityHoldStatus.CONSUMED, EVALUATED_AT.plusSeconds(60));
+        when(appUserService.findActiveUser(USER_ID)).thenReturn(user);
+        when(capacityHoldService.findOwnedHold(HOLD_ID, user)).thenReturn(hold);
+        when(reservationPriceSnapshotService.findByCapacityHoldId(HOLD_ID)).thenReturn(Optional.empty());
+        when(clock.instant()).thenReturn(EVALUATED_AT);
+
+        assertThatThrownBy(() -> useCase.findAll(USER_ID, HOLD_ID))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.COUPON_AVAILABILITY_CONFLICT)
+            );
+    }
+
+    @Test
+    void findAll_활성_홀드가_판단_시각에_만료되면_충돌을_반환한다() {
+        AppUser user = mock(AppUser.class);
+        CapacityHold hold = hold(10L, 101L, 1, CapacityHoldStatus.ACTIVE, EVALUATED_AT);
         when(appUserService.findActiveUser(USER_ID)).thenReturn(user);
         when(capacityHoldService.findOwnedHold(HOLD_ID, user)).thenReturn(hold);
         when(clock.instant()).thenReturn(EVALUATED_AT);

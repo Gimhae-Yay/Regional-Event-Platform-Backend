@@ -21,6 +21,9 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponIssuanceType;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatus;
+import io.regionevent.regioneventbackend.domain.coupon.service.CouponSummary;
 import io.regionevent.regioneventbackend.domain.coupon.service.GetMyAvailableCouponsResult;
 import io.regionevent.regioneventbackend.domain.coupon.service.GetMyAvailableCouponsUseCase;
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
@@ -65,6 +68,53 @@ class MyAvailableCouponControllerWebMvcTest {
             .andExpect(jsonPath("$.data.holdId").value("200"))
             .andExpect(jsonPath("$.data.availableCoupons").isArray())
             .andExpect(jsonPath("$.data.availableCoupons").isEmpty());
+    }
+
+    @Test
+    void getMyAvailableCoupons_사용_가능한_쿠폰의_할인_미리보기를_반환한다() throws Exception {
+        Instant issuedAt = Instant.parse("2026-08-01T00:00:00Z");
+        Instant expiresAt = Instant.parse("2026-08-31T00:00:00Z");
+        when(getMyAvailableCouponsUseCase.findAll(USER_ID, HOLD_ID)).thenReturn(
+            new GetMyAvailableCouponsResult(
+                HOLD_ID,
+                Instant.parse("2026-08-10T00:00:00Z"),
+                List.of(new GetMyAvailableCouponsResult.AvailableCoupon(
+                    new CouponSummary(
+                        300L,
+                        400L,
+                        101L,
+                        10L,
+                        "재방문 할인",
+                        CouponIssuanceType.VISIT,
+                        CouponStatus.AVAILABLE,
+                        3_000L,
+                        10_000L,
+                        issuedAt,
+                        expiresAt
+                    ),
+                    20_000L,
+                    3_000L,
+                    17_000L
+                ))
+            )
+        );
+
+        mockMvc.perform(authenticated(get("/api/v1/me/coupons/available").param("holdId", "200")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.availableCoupons[0].couponId").value("300"))
+            .andExpect(jsonPath("$.data.availableCoupons[0].couponPolicyId").value("400"))
+            .andExpect(jsonPath("$.data.availableCoupons[0].contentId").value("101"))
+            .andExpect(jsonPath("$.data.availableCoupons[0].regionId").value("10"))
+            .andExpect(jsonPath("$.data.availableCoupons[0].policyName").value("재방문 할인"))
+            .andExpect(jsonPath("$.data.availableCoupons[0].issueSourceType").value("VISIT"))
+            .andExpect(jsonPath("$.data.availableCoupons[0].status").value("AVAILABLE"))
+            .andExpect(jsonPath("$.data.availableCoupons[0].discountAmount").value(3_000))
+            .andExpect(jsonPath("$.data.availableCoupons[0].minimumPaymentAmount").value(10_000))
+            .andExpect(jsonPath("$.data.availableCoupons[0].issuedAt").value(issuedAt.toString()))
+            .andExpect(jsonPath("$.data.availableCoupons[0].expiresAt").value(expiresAt.toString()))
+            .andExpect(jsonPath("$.data.availableCoupons[0].discountPreview.baseAmount").value(20_000))
+            .andExpect(jsonPath("$.data.availableCoupons[0].discountPreview.discountAmount").value(3_000))
+            .andExpect(jsonPath("$.data.availableCoupons[0].discountPreview.payableAmount").value(17_000));
     }
 
     @Test

@@ -11,6 +11,7 @@ import io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatus;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus;
 import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHoldService;
+import io.regionevent.regioneventbackend.domain.reservation.service.ReservationPriceSnapshotService;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -21,17 +22,20 @@ public class GetMyAvailableCouponsUseCase {
 
     private final AppUserService appUserService;
     private final CapacityHoldService capacityHoldService;
+    private final ReservationPriceSnapshotService reservationPriceSnapshotService;
     private final CouponService couponService;
     private final Clock clock;
 
     public GetMyAvailableCouponsUseCase(
         AppUserService appUserService,
         CapacityHoldService capacityHoldService,
+        ReservationPriceSnapshotService reservationPriceSnapshotService,
         CouponService couponService,
         Clock clock
     ) {
         this.appUserService = appUserService;
         this.capacityHoldService = capacityHoldService;
+        this.reservationPriceSnapshotService = reservationPriceSnapshotService;
         this.couponService = couponService;
         this.clock = clock;
     }
@@ -43,10 +47,12 @@ public class GetMyAvailableCouponsUseCase {
         Instant evaluatedAt = clock.instant();
         validateAvailableHold(hold, evaluatedAt);
 
-        long baseAmount = Math.multiplyExact(
-            hold.getContentSession().getContent().getReservationPrice(),
-            hold.getQuantity()
-        );
+        long baseAmount = reservationPriceSnapshotService.findByCapacityHoldId(holdId)
+            .map(snapshot -> snapshot.getBaseAmount())
+            .orElseGet(() -> Math.multiplyExact(
+                hold.getContentSession().getContent().getReservationPrice(),
+                hold.getQuantity()
+            ));
         return new GetMyAvailableCouponsResult(
             holdId,
             evaluatedAt,
