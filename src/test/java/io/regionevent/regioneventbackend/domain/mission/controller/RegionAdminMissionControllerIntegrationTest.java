@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.mission.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -15,6 +16,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
@@ -80,6 +82,57 @@ class RegionAdminMissionControllerIntegrationTest {
         this.userRoleAssignmentRepository = userRoleAssignmentRepository;
         this.jwtAccessTokenService = jwtAccessTokenService;
         this.entityManager = entityManager;
+    }
+
+    @Test
+    void getMissions_returnsOnlyAuthorizedRegionMissionsWithStatusFilterAndPagination() throws Exception {
+        Fixture fixture = createFixture("L");
+        Fixture otherFixture = createFixture("O");
+        Mission draftMission = saveVisitCountMission(fixture);
+        Mission pendingReviewMission = saveVisitCountMission(fixture);
+        Mission publishedMission = saveVisitCountMission(fixture);
+        Mission endedMission = saveVisitCountMission(fixture);
+        saveVisitCountMission(otherFixture);
+        updateMissionStatus(pendingReviewMission, MissionStatus.PENDING_REVIEW);
+        updateMissionStatus(publishedMission, MissionStatus.PUBLISHED);
+        updateMissionStatus(endedMission, MissionStatus.ENDED);
+        entityManager.clear();
+
+        getMissions(fixture.admin(), null, "0", "2")
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.content.length()").value(2))
+            .andExpect(jsonPath("$.data.content[0].missionId").value(endedMission.getMissionId().toString()))
+            .andExpect(jsonPath("$.data.content[1].missionId").value(publishedMission.getMissionId().toString()))
+            .andExpect(jsonPath("$.data.totalElements").value(4))
+            .andExpect(jsonPath("$.data.totalPages").value(2));
+        getMissions(fixture.admin(), MissionStatus.PENDING_REVIEW.name(), "0", "20")
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.content.length()").value(1))
+            .andExpect(jsonPath("$.data.content[0].missionId").value(pendingReviewMission.getMissionId().toString()))
+            .andExpect(jsonPath("$.data.content[0].status").value("PENDING_REVIEW"));
+        getMissions(otherFixture.admin(), null, "0", "20")
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.totalElements").value(1));
+        getMissions(saveUser("visitor", AppUserStatus.ACTIVE), null, "0", "20")
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+        mockMvc.perform(get("/api/v1/region-admin/missions"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+        assertThat(draftMission.getMissionId()).isLessThan(pendingReviewMission.getMissionId());
+    }
+
+    @Test
+    void getMissions_withNoMission_returnsEmptyPage() throws Exception {
+        Fixture fixture = createFixture("E");
+
+        getMissions(fixture.admin(), null, "0", "20")
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.content").isEmpty())
+            .andExpect(jsonPath("$.data.page").value(0))
+            .andExpect(jsonPath("$.data.size").value(20))
+            .andExpect(jsonPath("$.data.totalElements").value(0))
+            .andExpect(jsonPath("$.data.totalPages").value(0));
     }
 
     @Test
@@ -202,6 +255,22 @@ class RegionAdminMissionControllerIntegrationTest {
     private ResultActions getDetail(AppUser user, String missionId) throws Exception {
         return mockMvc.perform(get("/api/v1/region-admin/missions/{missionId}", missionId)
             .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(user.getUserId())));
+    }
+
+    private ResultActions getMissions(
+        AppUser user,
+        String status,
+        String page,
+        String size
+    ) throws Exception {
+        MockHttpServletRequestBuilder requestBuilder = get("/api/v1/region-admin/missions")
+            .param("page", page)
+            .param("size", size)
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(user.getUserId()));
+        if (status != null) {
+            requestBuilder.param("status", status);
+        }
+        return mockMvc.perform(requestBuilder);
     }
 
     private Fixture createFixture(String prefix) {
