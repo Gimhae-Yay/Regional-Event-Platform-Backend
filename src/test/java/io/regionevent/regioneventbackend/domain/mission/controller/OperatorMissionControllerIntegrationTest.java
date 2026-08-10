@@ -1,10 +1,14 @@
 package io.regionevent.regioneventbackend.domain.mission.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.UUID;
 
 import jakarta.persistence.EntityManager;
 
@@ -15,6 +19,9 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
+import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
@@ -25,6 +32,9 @@ import io.regionevent.regioneventbackend.domain.coupon.repository.CouponPolicyRe
 import io.regionevent.regioneventbackend.domain.mission.entity.Mission;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionConditionType;
 import io.regionevent.regioneventbackend.domain.mission.repository.MissionRepository;
+import io.regionevent.regioneventbackend.domain.mission.service.CreateOperatorMissionResult;
+import io.regionevent.regioneventbackend.domain.mission.service.CreateOperatorMissionUseCase;
+import io.regionevent.regioneventbackend.domain.mission.service.CreateOperatorMissionUseCase.CreateOperatorMissionCommand;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -53,7 +63,9 @@ class OperatorMissionControllerIntegrationTest {
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
+    private final AuditEventRepository auditEventRepository;
     private final JwtAccessTokenService jwtAccessTokenService;
+    private final CreateOperatorMissionUseCase createOperatorMissionUseCase;
     private final EntityManager entityManager;
 
     @Autowired
@@ -65,7 +77,9 @@ class OperatorMissionControllerIntegrationTest {
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
         UserRoleAssignmentRepository userRoleAssignmentRepository,
+        AuditEventRepository auditEventRepository,
         JwtAccessTokenService jwtAccessTokenService,
+        CreateOperatorMissionUseCase createOperatorMissionUseCase,
         EntityManager entityManager
     ) {
         this.mockMvc = mockMvc;
@@ -75,8 +89,78 @@ class OperatorMissionControllerIntegrationTest {
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
         this.userRoleAssignmentRepository = userRoleAssignmentRepository;
+        this.auditEventRepository = auditEventRepository;
         this.jwtAccessTokenService = jwtAccessTokenService;
+        this.createOperatorMissionUseCase = createOperatorMissionUseCase;
         this.entityManager = entityManager;
+    }
+
+    @Test
+    void create_withContentSetMission_persistsDraftMissionTargetContentsAndSuccessAudit() {
+        Region region = saveRegion("C");
+        AppUser operator = saveOperator(region, AppUserStatus.ACTIVE);
+        Content rewardContent = saveContent(region, operator, "reward-create");
+        Content firstTargetContent = saveContent(region, operator, "first-create");
+        Content secondTargetContent = saveContent(region, operator, "second-create");
+        CouponPolicy rewardCouponPolicy = saveMissionRewardCouponPolicy(rewardContent, region);
+
+        CreateOperatorMissionResult result = createOperatorMissionUseCase.create(
+            operator.getUserId(),
+            new CreateOperatorMissionCommand(
+                "CONTENT_SET",
+                null,
+                List.of(secondTargetContent.getContentId(), firstTargetContent.getContentId()),
+                rewardCouponPolicy.getCouponPolicyId(),
+                OffsetDateTime.parse("2027-09-30T23:59:59+09:00")
+            ),
+            UUID.fromString("00000000-0000-0000-0000-000000000628")
+        );
+
+        Mission mission = missionRepository.findById(result.missionId()).orElseThrow();
+        assertThat(mission.getStatus()).isEqualTo(io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus.DRAFT);
+        assertThat(mission.getTargetContents())
+            .extracting(targetContent -> targetContent.getContent().getContentId())
+            .containsExactlyInAnyOrder(firstTargetContent.getContentId(), secondTargetContent.getContentId());
+        assertThat(auditEventRepository.findAll()).singleElement().satisfies(auditEvent -> {
+            assertThat(auditEvent.getTargetType()).isEqualTo(AuditEventTargetType.MISSION);
+            assertThat(auditEvent.getTargetId()).isEqualTo(mission.getMissionId());
+            assertThat(auditEvent.getPreviousState()).isNull();
+            assertThat(auditEvent.getNextState()).isEqualTo("DRAFT");
+            assertThat(auditEvent.getResult()).isEqualTo(AuditEventResult.SUCCESS);
+            assertThat(auditEvent.getReasonCode()).isEqualTo("MISSION_CREATED");
+        });
+    }
+
+    @Test
+    void create_withVisitCountMission_persistsDraftMissionAndSuccessAudit() {
+        Region region = saveRegion("VC");
+        AppUser operator = saveOperator(region, AppUserStatus.ACTIVE);
+        Content rewardContent = saveContent(region, operator, "reward-visit-count");
+        CouponPolicy rewardCouponPolicy = saveMissionRewardCouponPolicy(rewardContent, region);
+
+        CreateOperatorMissionResult result = createOperatorMissionUseCase.create(
+            operator.getUserId(),
+            new CreateOperatorMissionCommand(
+                "VISIT_COUNT",
+                3,
+                List.of(),
+                rewardCouponPolicy.getCouponPolicyId(),
+                OffsetDateTime.parse("2027-09-30T23:59:59+09:00")
+            ),
+            UUID.fromString("00000000-0000-0000-0000-000000000629")
+        );
+
+        Mission mission = missionRepository.findById(result.missionId()).orElseThrow();
+        assertThat(mission.getStatus()).isEqualTo(io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus.DRAFT);
+        assertThat(mission.getConditionType()).isEqualTo(MissionConditionType.VISIT_COUNT);
+        assertThat(mission.getRequiredVisitCount()).isEqualTo(3);
+        assertThat(mission.getTargetContents()).isEmpty();
+        assertThat(auditEventRepository.findAll()).singleElement().satisfies(auditEvent -> {
+            assertThat(auditEvent.getTargetType()).isEqualTo(AuditEventTargetType.MISSION);
+            assertThat(auditEvent.getTargetId()).isEqualTo(mission.getMissionId());
+            assertThat(auditEvent.getResult()).isEqualTo(AuditEventResult.SUCCESS);
+            assertThat(auditEvent.getReasonCode()).isEqualTo("MISSION_CREATED");
+        });
     }
 
     @Test

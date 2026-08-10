@@ -4,6 +4,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -22,6 +24,8 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import io.regionevent.regioneventbackend.domain.mission.dto.OperatorMissionDetailResponse;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionConditionType;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
+import io.regionevent.regioneventbackend.domain.mission.service.CreateOperatorMissionResult;
+import io.regionevent.regioneventbackend.domain.mission.service.CreateOperatorMissionUseCase;
 import io.regionevent.regioneventbackend.domain.mission.service.GetOperatorMissionDetailUseCase;
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.config.SecurityConfig;
@@ -44,10 +48,138 @@ class OperatorMissionControllerWebMvcTest {
     private JwtAccessTokenService jwtAccessTokenService;
 
     @MockitoBean
+    private CreateOperatorMissionUseCase createOperatorMissionUseCase;
+
+    @MockitoBean
     private GetOperatorMissionDetailUseCase getOperatorMissionDetailUseCase;
 
     @MockitoBean
     private RefreshTokenStore refreshTokenStore;
+
+    @Test
+    void create_withContentSetRequest_returnsCreatedDraftMission() throws Exception {
+        when(createOperatorMissionUseCase.create(
+            org.mockito.ArgumentMatchers.eq(OPERATOR_ID),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any()
+        )).thenReturn(new CreateOperatorMissionResult(701L, MissionStatus.DRAFT));
+
+        mockMvc.perform(authenticated(post("/api/v1/operator/missions"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "conditionType": "CONTENT_SET",
+                      "requiredVisitCount": null,
+                      "targetContentIds": ["101", "102"],
+                      "rewardCouponPolicyId": "501",
+                      "endsAt": "2026-09-30T23:59:59+09:00"
+                    }
+                    """))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.statusCode").value(201))
+            .andExpect(jsonPath("$.code").value("SUCCESS"))
+            .andExpect(jsonPath("$.message").value("미션 생성에 성공했습니다."))
+            .andExpect(jsonPath("$.data.missionId").value("701"))
+            .andExpect(jsonPath("$.data.status").value("DRAFT"));
+    }
+
+    @Test
+    void create_withDuplicateTargetContentIds_returnsInputErrorWithoutCallingUseCase() throws Exception {
+        mockMvc.perform(authenticated(post("/api/v1/operator/missions"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "conditionType": "CONTENT_SET",
+                      "requiredVisitCount": null,
+                      "targetContentIds": ["101", "101"],
+                      "rewardCouponPolicyId": "501",
+                      "endsAt": "2026-09-30T23:59:59+09:00"
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        verifyNoInteractions(createOperatorMissionUseCase);
+    }
+
+    @Test
+    void create_withInvalidJsonOrType_returnsContractErrorWithoutCallingUseCase() throws Exception {
+        mockMvc.perform(authenticated(post("/api/v1/operator/missions"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_JSON"));
+
+        mockMvc.perform(authenticated(post("/api/v1/operator/missions"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "conditionType": "VISIT_COUNT",
+                      "requiredVisitCount": {},
+                      "targetContentIds": [],
+                      "rewardCouponPolicyId": "501",
+                      "endsAt": "2026-09-30T23:59:59+09:00"
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+
+        verifyNoInteractions(createOperatorMissionUseCase);
+    }
+
+    @Test
+    void create_withoutAuthentication_returnsUnauthenticated() throws Exception {
+        mockMvc.perform(post("/api/v1/operator/missions")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "conditionType": "VISIT_COUNT",
+                      "requiredVisitCount": 3,
+                      "targetContentIds": [],
+                      "rewardCouponPolicyId": "501",
+                      "endsAt": "2026-09-30T23:59:59+09:00"
+                    }
+                    """))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+    }
+
+    @Test
+    void create_whenUseCaseThrowsBusinessError_returnsContractError() throws Exception {
+        when(createOperatorMissionUseCase.create(
+            org.mockito.ArgumentMatchers.eq(OPERATOR_ID),
+            org.mockito.ArgumentMatchers.argThat(command -> command.rewardCouponPolicyId().equals(501L)),
+            org.mockito.ArgumentMatchers.any()
+        )).thenThrow(new BusinessException(ErrorCode.MISSION_STATE_CONFLICT));
+        when(createOperatorMissionUseCase.create(
+            org.mockito.ArgumentMatchers.eq(OPERATOR_ID),
+            org.mockito.ArgumentMatchers.argThat(command -> command.rewardCouponPolicyId().equals(502L)),
+            org.mockito.ArgumentMatchers.any()
+        )).thenThrow(new BusinessException(ErrorCode.FORBIDDEN));
+        when(createOperatorMissionUseCase.create(
+            org.mockito.ArgumentMatchers.eq(OPERATOR_ID),
+            org.mockito.ArgumentMatchers.argThat(command -> command.rewardCouponPolicyId().equals(503L)),
+            org.mockito.ArgumentMatchers.any()
+        )).thenThrow(new BusinessException(ErrorCode.NOT_FOUND));
+
+        mockMvc.perform(authenticated(post("/api/v1/operator/missions"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createVisitCountRequest("501")))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code").value("MISSION_STATE_CONFLICT"));
+
+        mockMvc.perform(authenticated(post("/api/v1/operator/missions"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createVisitCountRequest("502")))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        mockMvc.perform(authenticated(post("/api/v1/operator/missions"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createVisitCountRequest("503")))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+    }
 
     @Test
     void getDetail_withValidMissionId_returnsOperatorMissionDetail() throws Exception {
@@ -142,5 +274,17 @@ class OperatorMissionControllerWebMvcTest {
 
     private MockHttpServletRequestBuilder authenticated(MockHttpServletRequestBuilder requestBuilder) {
         return requestBuilder.header("Authorization", "Bearer " + jwtAccessTokenService.issue(OPERATOR_ID));
+    }
+
+    private String createVisitCountRequest(String rewardCouponPolicyId) {
+        return """
+            {
+              "conditionType": "VISIT_COUNT",
+              "requiredVisitCount": 3,
+              "targetContentIds": [],
+              "rewardCouponPolicyId": "%s",
+              "endsAt": "2026-09-30T23:59:59+09:00"
+            }
+            """.formatted(rewardCouponPolicyId);
     }
 }

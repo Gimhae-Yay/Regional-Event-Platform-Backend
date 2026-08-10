@@ -1,0 +1,202 @@
+package io.regionevent.regioneventbackend.domain.mission.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.UUID;
+
+import org.junit.jupiter.api.Test;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
+import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
+import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
+import io.regionevent.regioneventbackend.domain.content.entity.Content;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
+import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
+import io.regionevent.regioneventbackend.domain.content.service.ContentService;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponIssuanceType;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicy;
+import io.regionevent.regioneventbackend.domain.coupon.repository.CouponPolicyRepository;
+import io.regionevent.regioneventbackend.domain.coupon.service.CouponPolicyService;
+import io.regionevent.regioneventbackend.domain.mission.repository.MissionRepository;
+import io.regionevent.regioneventbackend.domain.mission.repository.MissionTargetContentRepository;
+import io.regionevent.regioneventbackend.domain.mission.service.CreateOperatorMissionUseCase.CreateOperatorMissionCommand;
+import io.regionevent.regioneventbackend.domain.region.entity.Region;
+import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
+import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
+import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
+import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
+import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
+import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
+import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService;
+import io.regionevent.regioneventbackend.support.jpa.CleanH2Database;
+
+@DataJpaTest
+@Import({
+    CreateOperatorMissionUseCase.class,
+    ContentService.class,
+    CouponPolicyService.class,
+    MissionService.class,
+    OperatorAuthorizationService.class,
+    CreateOperatorMissionAuditAtomicityTest.FixedClockConfiguration.class
+})
+@Transactional(propagation = Propagation.NOT_SUPPORTED)
+@CleanH2Database
+class CreateOperatorMissionAuditAtomicityTest {
+
+    private static final Instant CREATED_AT = Instant.parse("2026-08-09T00:00:00Z");
+
+    private final CreateOperatorMissionUseCase createOperatorMissionUseCase;
+    private final RegionRepository regionRepository;
+    private final AppUserRepository appUserRepository;
+    private final UserRoleAssignmentRepository userRoleAssignmentRepository;
+    private final ContentRepository contentRepository;
+    private final CouponPolicyRepository couponPolicyRepository;
+    private final MissionRepository missionRepository;
+    private final MissionTargetContentRepository missionTargetContentRepository;
+    private final AuditEventRepository auditEventRepository;
+    private final TransactionTemplate transactionTemplate;
+
+    @MockitoBean
+    private RecordAuditEventUseCase recordAuditEventUseCase;
+
+    @Autowired
+    CreateOperatorMissionAuditAtomicityTest(
+        CreateOperatorMissionUseCase createOperatorMissionUseCase,
+        RegionRepository regionRepository,
+        AppUserRepository appUserRepository,
+        UserRoleAssignmentRepository userRoleAssignmentRepository,
+        ContentRepository contentRepository,
+        CouponPolicyRepository couponPolicyRepository,
+        MissionRepository missionRepository,
+        MissionTargetContentRepository missionTargetContentRepository,
+        AuditEventRepository auditEventRepository,
+        PlatformTransactionManager transactionManager
+    ) {
+        this.createOperatorMissionUseCase = createOperatorMissionUseCase;
+        this.regionRepository = regionRepository;
+        this.appUserRepository = appUserRepository;
+        this.userRoleAssignmentRepository = userRoleAssignmentRepository;
+        this.contentRepository = contentRepository;
+        this.couponPolicyRepository = couponPolicyRepository;
+        this.missionRepository = missionRepository;
+        this.missionTargetContentRepository = missionTargetContentRepository;
+        this.auditEventRepository = auditEventRepository;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+    }
+
+    @Test
+    void create_whenSuccessAuditFails_rollsBackMissionAndTargetContents() {
+        Fixture fixture = createFixture();
+        doThrow(new IllegalStateException("audit storage failure"))
+            .when(recordAuditEventUseCase)
+            .record(any(AuditEventCommand.class));
+
+        assertThatThrownBy(() -> createOperatorMissionUseCase.create(
+            fixture.operator().getUserId(),
+            new CreateOperatorMissionCommand(
+                "CONTENT_SET",
+                null,
+                List.of(fixture.targetContent().getContentId()),
+                fixture.rewardCouponPolicy().getCouponPolicyId(),
+                OffsetDateTime.parse("2026-09-30T23:59:59+09:00")
+            ),
+            UUID.randomUUID()
+        )).isInstanceOf(IllegalStateException.class)
+            .hasMessage("audit storage failure");
+
+        assertThat(missionRepository.count()).isZero();
+        assertThat(missionTargetContentRepository.count()).isZero();
+        assertThat(auditEventRepository.count()).isZero();
+    }
+
+    private Fixture createFixture() {
+        return transactionTemplate.execute(status -> {
+            String suffix = Long.toUnsignedString(System.nanoTime());
+            Region region = regionRepository.save(new Region("MSN-" + suffix, "Gimhae", true));
+            AppUser operator = appUserRepository.save(new AppUser(
+                "operator-" + suffix + "@example.com",
+                "password-hash",
+                "operator",
+                "010-1234-5678",
+                AppUserStatus.ACTIVE
+            ));
+            userRoleAssignmentRepository.save(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
+            Content rewardContent = contentRepository.save(newContent(region, operator, "reward"));
+            Content targetContent = contentRepository.save(newContent(region, operator, "target"));
+            CouponPolicy rewardCouponPolicy = couponPolicyRepository.save(new CouponPolicy(
+                rewardContent,
+                region,
+                "Mission reward",
+                null,
+                CouponIssuanceType.MISSION_REWARD,
+                1_000,
+                1_000,
+                7,
+                CREATED_AT.minusSeconds(3_600),
+                CREATED_AT.plusSeconds(3_600),
+                null
+            ));
+            return new Fixture(operator, targetContent, rewardCouponPolicy);
+        });
+    }
+
+    private Content newContent(
+        Region region,
+        AppUser operator,
+        String suffix
+    ) {
+        return new Content(
+            region,
+            operator,
+            ContentType.EVENT_EXPERIENCE,
+            ContentStatus.APPROVED,
+            suffix + " content",
+            "mission test content",
+            "Gimhae",
+            "10:00-18:00",
+            "055-1234-5678",
+            "notice",
+            "all",
+            "none",
+            "policy",
+            CREATED_AT
+        );
+    }
+
+    private record Fixture(
+        AppUser operator,
+        Content targetContent,
+        CouponPolicy rewardCouponPolicy
+    ) {
+    }
+
+    @TestConfiguration
+    static class FixedClockConfiguration {
+
+        @Bean
+        Clock clock() {
+            return Clock.fixed(CREATED_AT, ZoneOffset.UTC);
+        }
+    }
+}
