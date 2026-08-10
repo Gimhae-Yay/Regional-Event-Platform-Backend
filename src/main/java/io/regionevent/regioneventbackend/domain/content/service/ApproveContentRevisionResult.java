@@ -11,6 +11,7 @@ public record ApproveContentRevisionResult(
     Long contentId,
     ContentRevisionStatus revisionStatus,
     ContentStatus contentStatus,
+    long reservationPrice,
     Instant publishAt,
     Instant reviewedAt
 ) {
@@ -21,6 +22,7 @@ public record ApproveContentRevisionResult(
             revision.getContent().getContentId(),
             revision.getStatus(),
             revision.getContent().getStatus(),
+            revision.getContent().getReservationPrice(),
             revision.getContent().getPublishAt(),
             revision.getReviewedAt()
         );

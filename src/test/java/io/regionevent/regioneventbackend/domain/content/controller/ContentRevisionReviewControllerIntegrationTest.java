@@ -91,6 +91,7 @@ class ContentRevisionReviewControllerIntegrationTest extends ContentControllerWe
             .andExpect(jsonPath("$.data.reviewType").value("PUBLISHED_REVISION"))
             .andExpect(jsonPath("$.data.contentStatus").value("PUBLISHED"))
             .andExpect(jsonPath("$.data.title").value("수정본 제목"))
+            .andExpect(jsonPath("$.data.reservationPrice").value(15_000))
             .andExpect(jsonPath("$.data.sessions").isEmpty());
 
         verify(getContentRevisionReviewDetailUseCase).get(AUTHENTICATED_USER_ID, REVISION_ID);
@@ -155,6 +156,7 @@ class ContentRevisionReviewControllerIntegrationTest extends ContentControllerWe
             "만 7세 이상",
             "편한 복장",
             "하루 전 취소 가능",
+            15_000,
             null,
             List.of(),
             Instant.parse("2026-08-04T12:00:00Z")
