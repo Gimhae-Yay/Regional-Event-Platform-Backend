@@ -33,8 +33,12 @@ public class CouponService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public Optional<Coupon> findAvailableByCouponIdForUpdate(Long couponId) {
-        return couponRepository.findAvailableByCouponIdForUpdate(couponId);
+    public boolean reserveIfAvailableAndNotExpired(Coupon coupon) {
+        if (couponRepository.reserveIfAvailableAndNotExpired(coupon.getCouponId()) == 0) {
+            return false;
+        }
+        coupon.reserve();
+        return true;
     }
 
     @Transactional(propagation = Propagation.MANDATORY)

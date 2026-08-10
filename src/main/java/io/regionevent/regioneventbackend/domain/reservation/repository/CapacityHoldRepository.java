@@ -71,7 +71,7 @@ public interface CapacityHoldRepository extends JpaRepository<CapacityHold, Long
         WHERE hold_id = :holdId
             AND user_id = :userId
             AND status = 'ACTIVE'
-            AND expires_at > CURRENT_TIMESTAMP
+            AND expires_at > CURRENT_TIMESTAMP(6)
             AND EXISTS (
                 SELECT 1
                 FROM content_session
@@ -79,7 +79,7 @@ public interface CapacityHoldRepository extends JpaRepository<CapacityHold, Long
                 WHERE content_session.session_id = capacity_hold.session_id
                     AND content.status = 'PUBLISHED'
                     AND content_session.status = 'SCHEDULED'
-                    AND content_session.starts_at > CURRENT_TIMESTAMP
+                    AND content_session.starts_at > CURRENT_TIMESTAMP(6)
             )
             AND NOT EXISTS (
                 SELECT 1

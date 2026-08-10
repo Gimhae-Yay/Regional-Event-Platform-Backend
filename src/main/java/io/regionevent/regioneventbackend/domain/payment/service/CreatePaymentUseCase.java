@@ -134,6 +134,7 @@ public class CreatePaymentUseCase {
         }
         validateSnapshotCoupon(snapshot, couponId);
         if (snapshot.getFinalAmount() > 0) {
+            hold = capacityHoldService.findActiveOwnedHoldForUpdate(holdId, user);
             Payment payment = paymentService.create(new Payment(
                 hold,
                 snapshot,
@@ -212,9 +213,6 @@ public class CreatePaymentUseCase {
     ) {
         Coupon coupon = couponService.findByCouponIdForUpdate(couponId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
-        if (couponService.findAvailableByCouponIdForUpdate(couponId).isEmpty()) {
-            throw new BusinessException(ErrorCode.PAYMENT_HOLD_CONFLICT);
-        }
         java.time.Instant currentDatabaseTime = couponService.findCurrentDatabaseTime();
         Content content = hold.getContentSession().getContent();
         if (coupon.getUser() == null
@@ -224,7 +222,9 @@ public class CreatePaymentUseCase {
             || baseAmount < coupon.getCouponPolicy().getMinimumPaymentAmount()) {
             throw new BusinessException(ErrorCode.PAYMENT_HOLD_CONFLICT);
         }
-        coupon.reserve();
+        if (!couponService.reserveIfAvailableAndNotExpired(coupon)) {
+            throw new BusinessException(ErrorCode.PAYMENT_HOLD_CONFLICT);
+        }
         couponStatusHistoryService.create(new CouponStatusHistory(
             coupon,
             CouponStatus.AVAILABLE,
