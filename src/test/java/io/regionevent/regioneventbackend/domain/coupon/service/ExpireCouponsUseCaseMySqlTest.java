@@ -21,6 +21,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -71,6 +72,7 @@ class ExpireCouponsUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
     private final ContentRepository contentRepository;
     private final AppUserRepository appUserRepository;
     private final RegionRepository regionRepository;
+    private final JdbcTemplate jdbcTemplate;
     private final TransactionTemplate transactionTemplate;
 
     @Autowired
@@ -84,6 +86,7 @@ class ExpireCouponsUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         ContentRepository contentRepository,
         AppUserRepository appUserRepository,
         RegionRepository regionRepository,
+        JdbcTemplate jdbcTemplate,
         PlatformTransactionManager transactionManager
     ) {
         this.useCase = useCase;
@@ -95,6 +98,7 @@ class ExpireCouponsUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         this.contentRepository = contentRepository;
         this.appUserRepository = appUserRepository;
         this.regionRepository = regionRepository;
+        this.jdbcTemplate = jdbcTemplate;
         transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
@@ -181,6 +185,64 @@ class ExpireCouponsUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
     }
 
     @Test
+    @Timeout(10)
+    void 결제_쿠폰_선점과_경합하면_하나의_상태_전이만_성공한다() throws Exception {
+        Fixture fixture = createFixture(1, 0);
+        Long couponId = fixture.expiredCouponIds().get(0);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+
+        CouponExpirationResult expirationResult;
+        int reservationUpdateCount;
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<CouponExpirationResult> expiration = executorService.submit(() -> executeAfterStart(ready, start));
+            Future<Integer> reservation = executorService.submit(() -> reserveCouponAfterStart(couponId, ready, start));
+            assertThat(ready.await(3, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            expirationResult = expiration.get(5, TimeUnit.SECONDS);
+            reservationUpdateCount = reservation.get(5, TimeUnit.SECONDS);
+        }
+
+        CouponStatus finalStatus = readCouponStatuses(List.of(couponId)).get(0);
+
+        assertThat(expirationResult.expiredCouponCount() + reservationUpdateCount).isOne();
+        assertThat(finalStatus).isIn(CouponStatus.EXPIRED, CouponStatus.RESERVED);
+        if (finalStatus == CouponStatus.EXPIRED) {
+            assertThat(couponStatusHistoryRepository.count()).isOne();
+            assertThat(auditEventRepository.count()).isOne();
+        } else {
+            assertThat(couponStatusHistoryRepository.count()).isZero();
+            assertThat(auditEventRepository.count()).isZero();
+        }
+    }
+
+    @Test
+    void 만료_대상이_아닌_쿠폰은_상태를_변경하지_않는다() {
+        Fixture fixture = createFixture(5, 1);
+        List<CouponStatus> nonTargetStatuses = List.of(
+            CouponStatus.RESERVED,
+            CouponStatus.USED,
+            CouponStatus.EXPIRED,
+            CouponStatus.INVALIDATED
+        );
+        for (int index = 0; index < nonTargetStatuses.size(); index++) {
+            updateCouponStatus(fixture.expiredCouponIds().get(index), nonTargetStatuses.get(index));
+        }
+
+        CouponExpirationResult result = useCase.execute();
+
+        assertThat(result.expiredCouponCount()).isOne();
+        assertThat(readCouponStatuses(fixture.expiredCouponIds().subList(0, 4)))
+            .containsExactlyElementsOf(nonTargetStatuses);
+        assertThat(readCouponStatuses(List.of(fixture.expiredCouponIds().get(4))))
+            .containsExactly(CouponStatus.EXPIRED);
+        assertThat(readCouponStatuses(fixture.futureCouponIds()))
+            .containsExactly(CouponStatus.AVAILABLE);
+        assertThat(couponStatusHistoryRepository.count()).isOne();
+        assertThat(auditEventRepository.count()).isOne();
+    }
+
+    @Test
     void 배치_내_감사_기록이_실패하면_모든_상태_이력_감사가_롤백되고_재실행한다() {
         Fixture fixture = createFixture(2, 0);
         recordAuditEventUseCase.failNextRecord();
@@ -209,6 +271,27 @@ class ExpireCouponsUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         ready.countDown();
         await(start);
         return useCase.execute();
+    }
+
+    private int reserveCouponAfterStart(
+        Long couponId,
+        CountDownLatch ready,
+        CountDownLatch start
+    ) {
+        ready.countDown();
+        await(start);
+        return jdbcTemplate.update(
+            "UPDATE coupon SET status = 'RESERVED' WHERE coupon_id = ? AND status = 'AVAILABLE'",
+            couponId
+        );
+    }
+
+    private void updateCouponStatus(Long couponId, CouponStatus status) {
+        jdbcTemplate.update(
+            "UPDATE coupon SET status = ? WHERE coupon_id = ?",
+            status.name(),
+            couponId
+        );
     }
 
     private Fixture createFixture(
