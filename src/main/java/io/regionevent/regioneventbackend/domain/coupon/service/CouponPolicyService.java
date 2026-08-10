@@ -54,6 +54,14 @@ public class CouponPolicyService {
         return couponPolicyRepository.saveAndFlush(couponPolicy);
     }
 
+    public CouponPolicy end(
+        CouponPolicy couponPolicy,
+        Instant endedAt
+    ) {
+        couponPolicy.end(endedAt);
+        return couponPolicyRepository.saveAndFlush(couponPolicy);
+    }
+
     public record CreateCouponPolicyCommand(
         Content content,
         Region region,

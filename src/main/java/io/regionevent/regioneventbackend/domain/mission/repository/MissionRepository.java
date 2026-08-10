@@ -16,6 +16,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import io.regionevent.regioneventbackend.domain.mission.entity.Mission;
+import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
 
 public interface MissionRepository extends JpaRepository<Mission, Long> {
 
@@ -49,6 +50,11 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
         WHERE mission.missionId = :missionId
         """)
     Optional<Mission> findByMissionIdForUpdate(@Param("missionId") Long missionId);
+
+    boolean existsByRewardCouponPolicyCouponPolicyIdAndStatus(
+        Long couponPolicyId,
+        MissionStatus status
+    );
 
     @Query(
         value = """

@@ -39,6 +39,13 @@ public class MissionService {
         return missionRepository.findAllByRegionRegionIdAndStatusOrderByMissionIdDesc(regionId, status, pageable);
     }
 
+    public boolean existsPublishedRewardCouponPolicy(Long couponPolicyId) {
+        return missionRepository.existsByRewardCouponPolicyCouponPolicyIdAndStatus(
+            couponPolicyId,
+            MissionStatus.PUBLISHED
+        );
+    }
+
     public PublicRegionMissionListResult findPublicRegionMissions(
         Long regionId,
         Long userId,
