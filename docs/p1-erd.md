@@ -384,6 +384,7 @@ erDiagram
         VARCHAR order_id "내부 주문 식별자(유일); NOT NULL"
         VARCHAR portone_payment_id "PortOne V2 거래 ID; 결제 시작 전 NULL 가능"
         VARCHAR status "상태: PENDING|APPROVED|DECLINED|CANCELLED|EXPIRED|DISCREPANT; NOT NULL"
+        TIMESTAMP created_at "결제 시도 생성 시각; NOT NULL"
         TIMESTAMP finalized_at "종결 시각; PENDING이면 NULL 가능"
     }
     payment_idempotency {
