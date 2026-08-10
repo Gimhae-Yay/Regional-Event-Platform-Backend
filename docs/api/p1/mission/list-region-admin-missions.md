@@ -85,4 +85,5 @@ Accept: application/json
 ### 처리 규칙
 
 1. 인증 지역 관리자의 담당 지역 미션만 반환한다.
-2. 빈 결과는 `200 OK`, 빈 `content` 배열, `totalElements = 0`, `totalPages = 0`으로 반환한다.
+2. `status`를 생략하면 상태 필터를 적용하지 않고 담당 지역의 `DRAFT`, `PENDING_REVIEW`, `PUBLISHED`, `ENDED` 미션을 모두 조회한다.
+3. 빈 결과는 `200 OK`, 빈 `content` 배열, `totalElements = 0`, `totalPages = 0`으로 반환한다.
