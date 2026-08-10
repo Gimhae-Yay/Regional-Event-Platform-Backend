@@ -117,6 +117,25 @@ class ContentControllerIntegrationTest extends ContentControllerWebMvcTestSuppor
     }
 
     @Test
+    void 콘텐츠_생성_예약_가격이_누락되거나_음수면_입력_오류를_반환한다() throws Exception {
+        String missingPriceRequest = VALID_CREATE_REQUEST.replace("\"reservationPrice\": 0,", "");
+        String negativePriceRequest = VALID_CREATE_REQUEST.replace("\"reservationPrice\": 0", "\"reservationPrice\": -1");
+
+        mockMvc.perform(authenticated(post("/api/v1/operator/contents"))
+                .contentType(APPLICATION_JSON)
+                .content(missingPriceRequest))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        mockMvc.perform(authenticated(post("/api/v1/operator/contents"))
+                .contentType(APPLICATION_JSON)
+                .content(negativePriceRequest))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        verify(createContentUseCase, never()).createContent(any(), any());
+    }
+
+    @Test
     void 콘텐츠_생성_회차_정원_타입이_다르면_타입_오류를_반환한다() throws Exception {
         String invalidTypeRequest = VALID_CREATE_REQUEST.replace("\"capacity\": 20", "\"capacity\": \"twenty\"");
 
@@ -190,6 +209,25 @@ class ContentControllerIntegrationTest extends ContentControllerWebMvcTestSuppor
                 .content("{}"))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+    }
+
+    @Test
+    void 내_콘텐츠_수정_예약_가격이_누락되거나_음수면_입력_오류를_반환한다() throws Exception {
+        String missingPriceRequest = VALID_UPDATE_REQUEST.replace("\"reservationPrice\": 0,", "");
+        String negativePriceRequest = VALID_UPDATE_REQUEST.replace("\"reservationPrice\": 0", "\"reservationPrice\": -1");
+
+        mockMvc.perform(authenticated(put("/api/v1/operator/contents/{contentId}", CONTENT_ID))
+                .contentType(APPLICATION_JSON)
+                .content(missingPriceRequest))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        mockMvc.perform(authenticated(put("/api/v1/operator/contents/{contentId}", CONTENT_ID))
+                .contentType(APPLICATION_JSON)
+                .content(negativePriceRequest))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        verify(updateMyContentUseCase, never()).updateContent(any(), any(), any());
     }
 
     @Test

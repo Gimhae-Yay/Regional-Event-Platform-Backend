@@ -99,6 +99,25 @@ class UpdateContentRevisionControllerIntegrationTest extends ContentControllerWe
     }
 
     @Test
+    void 수정본_편집_예약_가격이_누락되거나_음수면_입력_오류를_반환한다() throws Exception {
+        String missingPriceRequest = VALID_REQUEST.replace("\"reservationPrice\": 0,", "");
+        String negativePriceRequest = VALID_REQUEST.replace("\"reservationPrice\": 0", "\"reservationPrice\": -1");
+
+        mockMvc.perform(authenticated(put("/api/v1/operator/content-revisions/{revisionId}", REVISION_ID))
+                .contentType(APPLICATION_JSON)
+                .content(missingPriceRequest))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        mockMvc.perform(authenticated(put("/api/v1/operator/content-revisions/{revisionId}", REVISION_ID))
+                .contentType(APPLICATION_JSON)
+                .content(negativePriceRequest))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        verify(updateContentRevisionUseCase, never()).updateRevision(any(), any(), any());
+    }
+
+    @Test
     void 수정본_편집_소유권_거절은_공통_오류로_응답한다() throws Exception {
         expectBusinessError(ErrorCode.FORBIDDEN, 403, "FORBIDDEN");
     }

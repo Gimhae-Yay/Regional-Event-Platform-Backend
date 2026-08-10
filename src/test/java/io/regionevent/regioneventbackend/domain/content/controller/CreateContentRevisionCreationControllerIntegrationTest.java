@@ -113,6 +113,25 @@ class CreateContentRevisionCreationControllerIntegrationTest extends ContentCont
     }
 
     @Test
+    void 수정본_생성_예약_가격이_누락되거나_음수면_입력_오류를_반환한다() throws Exception {
+        String missingPriceRequest = VALID_REQUEST.replace("\"reservationPrice\": 0,", "");
+        String negativePriceRequest = VALID_REQUEST.replace("\"reservationPrice\": 0", "\"reservationPrice\": -1");
+
+        mockMvc.perform(authenticated(post("/api/v1/operator/contents/{contentId}/revisions", CONTENT_ID))
+                .contentType(APPLICATION_JSON)
+                .content(missingPriceRequest))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        mockMvc.perform(authenticated(post("/api/v1/operator/contents/{contentId}/revisions", CONTENT_ID))
+                .contentType(APPLICATION_JSON)
+                .content(negativePriceRequest))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        verify(createContentRevisionUseCase, never()).createRevision(any(), any(), any(), any());
+    }
+
+    @Test
     void 수정본_생성_이미지_ID_타입_거절은_공통_오류로_응답한다() throws Exception {
         when(createContentRevisionUseCase.createRevision(
             eq(AUTHENTICATED_USER_ID),
