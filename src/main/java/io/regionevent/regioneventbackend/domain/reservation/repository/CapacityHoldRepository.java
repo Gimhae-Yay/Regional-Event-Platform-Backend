@@ -57,12 +57,6 @@ public interface CapacityHoldRepository extends JpaRepository<CapacityHold, Long
                 FROM payment
                 WHERE hold_id = capacity_hold.hold_id
             )
-            AND NOT EXISTS (
-                SELECT 1
-                FROM reservation_price_snapshot
-                WHERE hold_id = capacity_hold.hold_id
-                    AND coupon_id IS NOT NULL
-            )
         """, nativeQuery = true)
     int consumeIfConfirmable(
         @Param("holdId") Long holdId,
