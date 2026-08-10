@@ -39,6 +39,7 @@ class ContentControllerIntegrationTest extends ContentControllerWebMvcTestSuppor
           "ageRequirement": "만 7세 이상",
           "materials": "편한 복장",
           "cancellationPolicyText": "시작 하루 전까지 취소할 수 있습니다.",
+          "reservationPrice": 0,
           "publishAt": "2026-08-10T10:00:00+09:00",
           "representativeImageObjectId": "10",
           "sessions": [
@@ -63,6 +64,7 @@ class ContentControllerIntegrationTest extends ContentControllerWebMvcTestSuppor
           "ageRequirement": "만 7세 이상",
           "materials": "편한 복장",
           "cancellationPolicyText": "시작 하루 전까지 취소할 수 있습니다.",
+          "reservationPrice": 0,
           "publishAt": "2026-08-10T10:00:00+09:00",
           "representativeImageObjectId": "11"
         }
