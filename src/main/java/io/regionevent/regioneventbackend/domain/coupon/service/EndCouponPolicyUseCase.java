@@ -13,6 +13,7 @@ import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetTyp
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventActor;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
+import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicy;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicyStatus;
@@ -35,6 +36,7 @@ public class EndCouponPolicyUseCase {
     private final MissionService missionService;
     private final StampbookService stampbookService;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
+    private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase;
     private final Clock clock;
 
     public EndCouponPolicyUseCase(
@@ -44,6 +46,7 @@ public class EndCouponPolicyUseCase {
         MissionService missionService,
         StampbookService stampbookService,
         RecordAuditEventUseCase recordAuditEventUseCase,
+        RecordFailedAuditEventUseCase recordFailedAuditEventUseCase,
         Clock clock
     ) {
         this.appUserService = appUserService;
@@ -52,6 +55,7 @@ public class EndCouponPolicyUseCase {
         this.missionService = missionService;
         this.stampbookService = stampbookService;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
+        this.recordFailedAuditEventUseCase = recordFailedAuditEventUseCase;
         this.clock = clock;
     }
 
@@ -67,15 +71,16 @@ public class EndCouponPolicyUseCase {
             .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
         AuthorizedOperator operator = operatorAuthorizationService.requireAuthorizedOperatorForUpdate(userId);
         CouponPolicy couponPolicy = couponPolicyService.findForUpdate(couponPolicyId);
-        validateOwnership(operator, couponPolicy);
+        validateOwnership(requestId, operator, couponPolicy);
 
         if (couponPolicy.getStatus() == CouponPolicyStatus.ENDED) {
             return EndCouponPolicyResult.from(couponPolicy);
         }
         if (couponPolicy.getStatus() != CouponPolicyStatus.PUBLISHED) {
+            recordFailure(requestId, operator, couponPolicy, ErrorCode.COUPON_POLICY_CONFLICT);
             throw new BusinessException(ErrorCode.COUPON_POLICY_CONFLICT);
         }
-        validateNotReferenced(couponPolicy.getCouponPolicyId());
+        validateNotReferenced(requestId, operator, couponPolicy);
 
         Instant endedAt = clock.instant().truncatedTo(ChronoUnit.MICROS);
         CouponPolicy endedCouponPolicy = couponPolicyService.end(couponPolicy, endedAt);
@@ -97,21 +102,48 @@ public class EndCouponPolicyUseCase {
     }
 
     private void validateOwnership(
+        UUID requestId,
         AuthorizedOperator operator,
         CouponPolicy couponPolicy
     ) {
         Content content = couponPolicy.getContent();
         if (!content.isOwnedBy(operator.user().getUserId())
             || !content.isScopedTo(operator.region().getRegionId())) {
+            recordFailure(requestId, operator, couponPolicy, ErrorCode.FORBIDDEN);
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
     }
 
-    private void validateNotReferenced(Long couponPolicyId) {
-        if (missionService.existsPublishedRewardCouponPolicy(couponPolicyId)
-            || stampbookService.existsPublishedRewardCouponPolicy(couponPolicyId)) {
+    private void validateNotReferenced(
+        UUID requestId,
+        AuthorizedOperator operator,
+        CouponPolicy couponPolicy
+    ) {
+        if (missionService.existsPublishedRewardCouponPolicy(couponPolicy.getCouponPolicyId())
+            || stampbookService.existsPublishedRewardCouponPolicy(couponPolicy.getCouponPolicyId())) {
+            recordFailure(requestId, operator, couponPolicy, ErrorCode.COUPON_POLICY_REFERENCED);
             throw new BusinessException(ErrorCode.COUPON_POLICY_REFERENCED);
         }
+    }
+
+    private void recordFailure(
+        UUID requestId,
+        AuthorizedOperator operator,
+        CouponPolicy couponPolicy,
+        ErrorCode errorCode
+    ) {
+        recordFailedAuditEventUseCase.record(new AuditEventCommand(
+            requestId,
+            couponPolicy.getRegion(),
+            AuditEventTargetType.COUPON_POLICY,
+            couponPolicy.getCouponPolicyId(),
+            couponPolicy.getStatus().name(),
+            null,
+            AuditEventResult.FAILURE,
+            errorCode.code(),
+            new AuditEventActor(operator.roleAssignment()),
+            clock.instant().truncatedTo(ChronoUnit.MICROS)
+        ));
     }
 
     private String normalizeReason(String reason) {

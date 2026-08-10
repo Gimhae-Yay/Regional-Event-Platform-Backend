@@ -22,6 +22,7 @@ import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
+import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicy;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicyStatus;
@@ -53,6 +54,9 @@ class EndCouponPolicyUseCaseTest {
     private final MissionService missionService = mock(MissionService.class);
     private final StampbookService stampbookService = mock(StampbookService.class);
     private final RecordAuditEventUseCase recordAuditEventUseCase = mock(RecordAuditEventUseCase.class);
+    private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase = mock(
+        RecordFailedAuditEventUseCase.class
+    );
     private final Clock clock = mock(Clock.class);
     private final EndCouponPolicyUseCase useCase = new EndCouponPolicyUseCase(
         appUserService,
@@ -61,6 +65,7 @@ class EndCouponPolicyUseCaseTest {
         missionService,
         stampbookService,
         recordAuditEventUseCase,
+        recordFailedAuditEventUseCase,
         clock
     );
 
@@ -116,15 +121,16 @@ class EndCouponPolicyUseCaseTest {
         assertThat(result.status()).isEqualTo(CouponPolicyStatus.ENDED);
         assertThat(result.endedAt()).isEqualTo(ENDED_AT);
         verify(couponPolicyService, never()).end(any(), any());
-        verifyNoInteractions(missionService, stampbookService, recordAuditEventUseCase, clock);
+        verifyNoInteractions(missionService, stampbookService, recordAuditEventUseCase, recordFailedAuditEventUseCase, clock);
     }
 
     @Test
     void end_공개_미션이_참조하면_충돌을_반환하고_상태를_변경하지_않는다() {
-        prepareAuthorizedOperator();
+        AuthorizedOperator operator = prepareAuthorizedOperator();
         CouponPolicy publishedPolicy = couponPolicy(CouponPolicyStatus.PUBLISHED, true, null);
         when(couponPolicyService.findForUpdate(COUPON_POLICY_ID)).thenReturn(publishedPolicy);
         when(missionService.existsPublishedRewardCouponPolicy(COUPON_POLICY_ID)).thenReturn(true);
+        when(clock.instant()).thenReturn(ENDED_AT);
 
         assertThatThrownBy(() -> useCase.end(
             USER_ID,
@@ -136,15 +142,17 @@ class EndCouponPolicyUseCaseTest {
         );
 
         verify(couponPolicyService, never()).end(any(), any());
-        verifyNoInteractions(stampbookService, recordAuditEventUseCase, clock);
+        verifyFailureAuditEvent(operator, CouponPolicyStatus.PUBLISHED, ErrorCode.COUPON_POLICY_REFERENCED);
+        verifyNoInteractions(stampbookService, recordAuditEventUseCase);
     }
 
     @Test
     void end_공개_스탬프북이_참조하면_충돌을_반환하고_상태를_변경하지_않는다() {
-        prepareAuthorizedOperator();
+        AuthorizedOperator operator = prepareAuthorizedOperator();
         CouponPolicy publishedPolicy = couponPolicy(CouponPolicyStatus.PUBLISHED, true, null);
         when(couponPolicyService.findForUpdate(COUPON_POLICY_ID)).thenReturn(publishedPolicy);
         when(stampbookService.existsPublishedRewardCouponPolicy(COUPON_POLICY_ID)).thenReturn(true);
+        when(clock.instant()).thenReturn(ENDED_AT);
 
         assertThatThrownBy(() -> useCase.end(
             USER_ID,
@@ -156,14 +164,16 @@ class EndCouponPolicyUseCaseTest {
         );
 
         verify(couponPolicyService, never()).end(any(), any());
-        verifyNoInteractions(recordAuditEventUseCase, clock);
+        verifyFailureAuditEvent(operator, CouponPolicyStatus.PUBLISHED, ErrorCode.COUPON_POLICY_REFERENCED);
+        verifyNoInteractions(recordAuditEventUseCase);
     }
 
     @Test
     void end_PUBLISHED가_아닌_정책이면_상태_충돌을_반환한다() {
-        prepareAuthorizedOperator();
+        AuthorizedOperator operator = prepareAuthorizedOperator();
         CouponPolicy draftPolicy = couponPolicy(CouponPolicyStatus.DRAFT, true, null);
         when(couponPolicyService.findForUpdate(COUPON_POLICY_ID)).thenReturn(draftPolicy);
+        when(clock.instant()).thenReturn(ENDED_AT);
 
         assertThatThrownBy(() -> useCase.end(
             USER_ID,
@@ -175,14 +185,16 @@ class EndCouponPolicyUseCaseTest {
         );
 
         verify(couponPolicyService, never()).end(any(), any());
-        verifyNoInteractions(missionService, stampbookService, recordAuditEventUseCase, clock);
+        verifyFailureAuditEvent(operator, CouponPolicyStatus.DRAFT, ErrorCode.COUPON_POLICY_CONFLICT);
+        verifyNoInteractions(missionService, stampbookService, recordAuditEventUseCase);
     }
 
     @Test
     void end_다른_운영자의_정책이면_권한_오류를_반환한다() {
-        prepareAuthorizedOperator();
+        AuthorizedOperator operator = prepareAuthorizedOperator();
         CouponPolicy otherOperatorPolicy = couponPolicy(CouponPolicyStatus.PUBLISHED, false, null);
         when(couponPolicyService.findForUpdate(COUPON_POLICY_ID)).thenReturn(otherOperatorPolicy);
+        when(clock.instant()).thenReturn(ENDED_AT);
 
         assertThatThrownBy(() -> useCase.end(
             USER_ID,
@@ -194,7 +206,8 @@ class EndCouponPolicyUseCaseTest {
         );
 
         verify(couponPolicyService, never()).end(any(), any());
-        verifyNoInteractions(missionService, stampbookService, recordAuditEventUseCase, clock);
+        verifyFailureAuditEvent(operator, CouponPolicyStatus.PUBLISHED, ErrorCode.FORBIDDEN);
+        verifyNoInteractions(missionService, stampbookService, recordAuditEventUseCase);
     }
 
     @Test
@@ -212,7 +225,7 @@ class EndCouponPolicyUseCaseTest {
             assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.NOT_FOUND)
         );
 
-        verifyNoInteractions(missionService, stampbookService, recordAuditEventUseCase, clock);
+        verifyNoInteractions(missionService, stampbookService, recordAuditEventUseCase, recordFailedAuditEventUseCase, clock);
     }
 
     @Test
@@ -229,8 +242,29 @@ class EndCouponPolicyUseCaseTest {
             missionService,
             stampbookService,
             recordAuditEventUseCase,
+            recordFailedAuditEventUseCase,
             clock
         );
+    }
+
+    private void verifyFailureAuditEvent(
+        AuthorizedOperator operator,
+        CouponPolicyStatus previousStatus,
+        ErrorCode errorCode
+    ) {
+        ArgumentCaptor<AuditEventCommand> captor = ArgumentCaptor.forClass(AuditEventCommand.class);
+        verify(recordFailedAuditEventUseCase).record(captor.capture());
+        assertThat(captor.getValue()).satisfies(command -> {
+            assertThat(command.requestId()).isEqualTo(REQUEST_ID);
+            assertThat(command.targetType()).isEqualTo(AuditEventTargetType.COUPON_POLICY);
+            assertThat(command.targetId()).isEqualTo(COUPON_POLICY_ID);
+            assertThat(command.previousState()).isEqualTo(previousStatus.name());
+            assertThat(command.nextState()).isNull();
+            assertThat(command.result()).isEqualTo(AuditEventResult.FAILURE);
+            assertThat(command.reasonCode()).isEqualTo(errorCode.code());
+            assertThat(command.actor().roleAssignment()).isEqualTo(operator.roleAssignment());
+            assertThat(command.occurredAt()).isEqualTo(ENDED_AT);
+        });
     }
 
     private AuthorizedOperator prepareAuthorizedOperator() {
