@@ -61,7 +61,7 @@ public class CouponPolicyController {
     ) {
         CreateCouponPolicyResult result = createCouponPolicyUseCase.create(
             userId,
-            toContentId(request.contentId()),
+            toPositiveId(request.contentId(), ErrorCode.INVALID_INPUT),
             request
         );
         return ApiResponse.success(
@@ -80,7 +80,7 @@ public class CouponPolicyController {
     ) {
         PublishCouponPolicyResult result = publishCouponPolicyUseCase.publish(
             userId,
-            toCouponPolicyId(couponPolicyId),
+            toPositiveId(couponPolicyId, ErrorCode.INVALID_INPUT),
             request.reason(),
             UUID.fromString(requestId)
         );
@@ -100,7 +100,7 @@ public class CouponPolicyController {
     ) {
         UpdateCouponPolicyResult result = updateCouponPolicyUseCase.update(
             userId,
-            toUpdateCouponPolicyId(couponPolicyId),
+            toPositiveId(couponPolicyId, ErrorCode.INVALID_TYPE),
             request,
             UUID.fromString(requestId)
         );
@@ -111,33 +111,17 @@ public class CouponPolicyController {
         ).toResponseEntity();
     }
 
-    private Long toContentId(String value) {
-        return toPositiveId(value);
-    }
-
-    private Long toCouponPolicyId(String value) {
-        return toPositiveId(value);
-    }
-
-    private Long toUpdateCouponPolicyId(String value) {
+    private Long toPositiveId(
+        String value,
+        ErrorCode errorCode
+    ) {
         if (value == null || !POSITIVE_DECIMAL_PATTERN.matcher(value).matches()) {
-            throw new BusinessException(ErrorCode.INVALID_TYPE);
+            throw new BusinessException(errorCode);
         }
         try {
             return Long.valueOf(value);
         } catch (NumberFormatException exception) {
-            throw new BusinessException(ErrorCode.INVALID_TYPE, exception);
-        }
-    }
-
-    private Long toPositiveId(String value) {
-        if (value == null || !POSITIVE_DECIMAL_PATTERN.matcher(value).matches()) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT);
-        }
-        try {
-            return Long.valueOf(value);
-        } catch (NumberFormatException exception) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, exception);
+            throw new BusinessException(errorCode, exception);
         }
     }
 }
