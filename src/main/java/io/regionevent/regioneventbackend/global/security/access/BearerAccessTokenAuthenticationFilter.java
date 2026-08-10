@@ -82,7 +82,8 @@ public class BearerAccessTokenAuthenticationFilter extends OncePerRequestFilter 
     private boolean requiresOptionalAuthenticationValidation(HttpServletRequest request) {
         String requestPath = request.getRequestURI().substring(request.getContextPath().length());
         return "GET".equals(request.getMethod())
-            && requestPath.matches("^/api/v1/regions/[^/]+/missions$");
+            && (requestPath.matches("^/api/v1/regions/[^/]+/missions$")
+                || requestPath.matches("^/api/v1/missions/[^/]+$"));
     }
 
     private void rejectAuthentication(HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException {

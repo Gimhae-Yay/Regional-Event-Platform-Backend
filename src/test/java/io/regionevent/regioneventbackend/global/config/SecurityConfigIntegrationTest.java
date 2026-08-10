@@ -198,6 +198,7 @@ class SecurityConfigIntegrationTest {
             Arguments.of(HttpMethod.GET, "/api/v1/regions"),
             Arguments.of(HttpMethod.GET, "/api/v1/regions/1/home"),
             Arguments.of(HttpMethod.GET, "/api/v1/regions/1/missions"),
+            Arguments.of(HttpMethod.GET, "/api/v1/missions/1"),
             Arguments.of(HttpMethod.GET, "/api/v1/contents"),
             Arguments.of(HttpMethod.GET, "/api/v1/contents/1"),
             Arguments.of(HttpMethod.GET, "/api/v1/contents/1/reviews"),
