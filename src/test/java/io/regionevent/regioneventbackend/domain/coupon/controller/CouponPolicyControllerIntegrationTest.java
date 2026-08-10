@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -28,6 +29,8 @@ import io.regionevent.regioneventbackend.domain.coupon.service.CreateCouponPolic
 import io.regionevent.regioneventbackend.domain.coupon.service.CreateCouponPolicyUseCase;
 import io.regionevent.regioneventbackend.domain.coupon.service.PublishCouponPolicyResult;
 import io.regionevent.regioneventbackend.domain.coupon.service.PublishCouponPolicyUseCase;
+import io.regionevent.regioneventbackend.domain.coupon.service.UpdateCouponPolicyResult;
+import io.regionevent.regioneventbackend.domain.coupon.service.UpdateCouponPolicyUseCase;
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -75,6 +78,9 @@ class CouponPolicyControllerIntegrationTest {
 
     @MockitoBean
     private PublishCouponPolicyUseCase publishCouponPolicyUseCase;
+
+    @MockitoBean
+    private UpdateCouponPolicyUseCase updateCouponPolicyUseCase;
 
     @Test
     void 쿠폰_정책_생성_유효하면_DRAFT_정책을_응답한다() throws Exception {
@@ -179,6 +185,67 @@ class CouponPolicyControllerIntegrationTest {
         expectPublishBusinessError(ErrorCode.NOT_FOUND, 404, "NOT_FOUND");
         expectPublishBusinessError(ErrorCode.FORBIDDEN, 403, "FORBIDDEN");
         expectPublishBusinessError(ErrorCode.COUPON_POLICY_CONFLICT, 409, "COUPON_POLICY_CONFLICT");
+    }
+
+    @Test
+    void 쿠폰_정책_수정_유효하면_수정된_DRAFT_정책을_응답한다() throws Exception {
+        when(updateCouponPolicyUseCase.update(
+            eq(AUTHENTICATED_USER_ID),
+            eq(300L),
+            any(),
+            any()
+        )).thenReturn(new UpdateCouponPolicyResult(
+            300L,
+            CouponPolicyStatus.DRAFT,
+            "재방문 할인 수정",
+            4_000L,
+            12_000L,
+            45,
+            Instant.parse("2026-08-09T00:00:00Z")
+        ));
+
+        mockMvc.perform(authenticated(patch("/api/v1/operator/coupon-policies/300"))
+                .contentType(APPLICATION_JSON)
+                .content("{\"name\":\"재방문 할인 수정\",\"discountAmount\":4000,\"reason\":\"혜택 조정\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value("SUCCESS"))
+            .andExpect(jsonPath("$.message").value("쿠폰 정책 수정에 성공했습니다."))
+            .andExpect(jsonPath("$.data.couponPolicyId").value("300"))
+            .andExpect(jsonPath("$.data.status").value("DRAFT"))
+            .andExpect(jsonPath("$.data.name").value("재방문 할인 수정"))
+            .andExpect(jsonPath("$.data.updatedAt").value("2026-08-09T00:00:00Z"));
+    }
+
+    @Test
+    void 쿠폰_정책_수정_권한과_상태오류를_공통_오류로_응답한다() throws Exception {
+        expectUpdateBusinessError(ErrorCode.FORBIDDEN, 403, "FORBIDDEN");
+        expectUpdateBusinessError(ErrorCode.COUPON_POLICY_CONFLICT, 409, "COUPON_POLICY_CONFLICT");
+    }
+
+    @Test
+    void 쿠폰_정책_수정_식별자_형식이_잘못되면_타입오류를_응답한다() throws Exception {
+        mockMvc.perform(authenticated(patch("/api/v1/operator/coupon-policies/invalid"))
+                .contentType(APPLICATION_JSON)
+                .content("{\"name\":\"재방문 할인 수정\",\"reason\":\"혜택 조정\"}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+
+        verify(updateCouponPolicyUseCase, never()).update(any(), any(), any(), any());
+    }
+
+    private void expectUpdateBusinessError(ErrorCode errorCode, int statusCode, String code) throws Exception {
+        when(updateCouponPolicyUseCase.update(
+            eq(AUTHENTICATED_USER_ID),
+            eq(300L),
+            any(),
+            any()
+        )).thenThrow(new BusinessException(errorCode));
+
+        mockMvc.perform(authenticated(patch("/api/v1/operator/coupon-policies/300"))
+                .contentType(APPLICATION_JSON)
+                .content("{\"name\":\"재방문 할인 수정\",\"reason\":\"혜택 조정\"}"))
+            .andExpect(status().is(statusCode))
+            .andExpect(jsonPath("$.code").value(code));
     }
 
     private void expectPublishBusinessError(

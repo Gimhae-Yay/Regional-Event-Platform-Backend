@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestAttribute;
@@ -19,10 +20,14 @@ import io.regionevent.regioneventbackend.domain.coupon.dto.CreateCouponPolicyReq
 import io.regionevent.regioneventbackend.domain.coupon.dto.CreateCouponPolicyResponse;
 import io.regionevent.regioneventbackend.domain.coupon.dto.PublishCouponPolicyRequest;
 import io.regionevent.regioneventbackend.domain.coupon.dto.PublishCouponPolicyResponse;
+import io.regionevent.regioneventbackend.domain.coupon.dto.UpdateCouponPolicyRequest;
+import io.regionevent.regioneventbackend.domain.coupon.dto.UpdateCouponPolicyResponse;
 import io.regionevent.regioneventbackend.domain.coupon.service.CreateCouponPolicyResult;
 import io.regionevent.regioneventbackend.domain.coupon.service.CreateCouponPolicyUseCase;
 import io.regionevent.regioneventbackend.domain.coupon.service.PublishCouponPolicyResult;
 import io.regionevent.regioneventbackend.domain.coupon.service.PublishCouponPolicyUseCase;
+import io.regionevent.regioneventbackend.domain.coupon.service.UpdateCouponPolicyResult;
+import io.regionevent.regioneventbackend.domain.coupon.service.UpdateCouponPolicyUseCase;
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
@@ -37,13 +42,16 @@ public class CouponPolicyController {
 
     private final CreateCouponPolicyUseCase createCouponPolicyUseCase;
     private final PublishCouponPolicyUseCase publishCouponPolicyUseCase;
+    private final UpdateCouponPolicyUseCase updateCouponPolicyUseCase;
 
     public CouponPolicyController(
         CreateCouponPolicyUseCase createCouponPolicyUseCase,
-        PublishCouponPolicyUseCase publishCouponPolicyUseCase
+        PublishCouponPolicyUseCase publishCouponPolicyUseCase,
+        UpdateCouponPolicyUseCase updateCouponPolicyUseCase
     ) {
         this.createCouponPolicyUseCase = createCouponPolicyUseCase;
         this.publishCouponPolicyUseCase = publishCouponPolicyUseCase;
+        this.updateCouponPolicyUseCase = updateCouponPolicyUseCase;
     }
 
     @PostMapping
@@ -83,12 +91,43 @@ public class CouponPolicyController {
         ).toResponseEntity();
     }
 
+    @PatchMapping("/{couponPolicyId}")
+    public ResponseEntity<ApiResponse<UpdateCouponPolicyResponse>> updateCouponPolicy(
+        @AuthenticationPrincipal Long userId,
+        @PathVariable String couponPolicyId,
+        @RequestBody UpdateCouponPolicyRequest request,
+        @RequestAttribute(RequestIdFilter.REQUEST_ID_ATTRIBUTE) String requestId
+    ) {
+        UpdateCouponPolicyResult result = updateCouponPolicyUseCase.update(
+            userId,
+            toUpdateCouponPolicyId(couponPolicyId),
+            request,
+            UUID.fromString(requestId)
+        );
+        return ApiResponse.success(
+            HttpStatus.OK,
+            "쿠폰 정책 수정에 성공했습니다.",
+            UpdateCouponPolicyResponse.from(result)
+        ).toResponseEntity();
+    }
+
     private Long toContentId(String value) {
         return toPositiveId(value);
     }
 
     private Long toCouponPolicyId(String value) {
         return toPositiveId(value);
+    }
+
+    private Long toUpdateCouponPolicyId(String value) {
+        if (value == null || !POSITIVE_DECIMAL_PATTERN.matcher(value).matches()) {
+            throw new BusinessException(ErrorCode.INVALID_TYPE);
+        }
+        try {
+            return Long.valueOf(value);
+        } catch (NumberFormatException exception) {
+            throw new BusinessException(ErrorCode.INVALID_TYPE, exception);
+        }
     }
 
     private Long toPositiveId(String value) {
