@@ -251,6 +251,155 @@ class MyStampbookListProjectionRepositoryTest {
         )).isEqualTo(2L);
     }
 
+    @Test
+    void 스탬프북_상세_Projection은_콘텐츠별_적립을_정렬하고_공개_또는_본인_종료_이력만_조회한다() {
+        Region region = saveRegion();
+        Content firstTarget = saveContent(region, "first-detail-target");
+        Content secondTarget = saveContent(region, "second-detail-target");
+        CouponPolicy rewardCouponPolicy = saveRewardCouponPolicy(firstTarget, region);
+        AppUser viewer = saveUser("detail-viewer@example.com");
+        AppUser otherUser = saveUser("detail-other@example.com");
+
+        Stampbook publishedStampbook = saveStampbook(
+            region,
+            rewardCouponPolicy,
+            firstTarget,
+            secondTarget
+        );
+        updateStampbookStatus(publishedStampbook, StampbookStatus.PUBLISHED, FIRST_PUBLISHED_AT, null);
+        StampbookProgress publishedProgress = stampbookProgressRepository.saveAndFlush(
+            new StampbookProgress(publishedStampbook, viewer)
+        );
+        saveStampEarn(
+            region,
+            viewer,
+            publishedProgress,
+            secondTarget,
+            FIRST_EARNED_AT,
+            "detail-published"
+        );
+
+        Stampbook ownedEndedStampbook = saveStampbook(
+            region,
+            rewardCouponPolicy,
+            firstTarget,
+            secondTarget
+        );
+        updateStampbookStatus(
+            ownedEndedStampbook,
+            StampbookStatus.ENDED,
+            SECOND_PUBLISHED_AT,
+            Instant.parse("2026-08-05T00:00:00Z")
+        );
+        StampbookProgress completedProgress = stampbookProgressRepository.saveAndFlush(
+            new StampbookProgress(ownedEndedStampbook, viewer)
+        );
+        saveStampEarn(
+            region,
+            viewer,
+            completedProgress,
+            firstTarget,
+            FIRST_EARNED_AT,
+            "detail-ended-first"
+        );
+        saveStampEarn(
+            region,
+            viewer,
+            completedProgress,
+            secondTarget,
+            LATEST_EARNED_AT,
+            "detail-ended-second"
+        );
+        completedProgress.complete(COMPLETED_AT);
+        stampbookProgressRepository.saveAndFlush(completedProgress);
+
+        Stampbook otherEndedStampbook = saveStampbook(
+            region,
+            rewardCouponPolicy,
+            firstTarget,
+            secondTarget
+        );
+        updateStampbookStatus(
+            otherEndedStampbook,
+            StampbookStatus.ENDED,
+            Instant.parse("2026-08-04T00:00:00Z"),
+            Instant.parse("2026-08-05T00:00:00Z")
+        );
+        stampbookProgressRepository.saveAndFlush(new StampbookProgress(otherEndedStampbook, otherUser));
+
+        Stampbook draftStampbook = saveStampbook(
+            region,
+            rewardCouponPolicy,
+            firstTarget,
+            secondTarget
+        );
+        long earnedCountBeforeRead = stampEarnRepository.countByStampbookProgressStampbookProgressId(
+            publishedProgress.getStampbookProgressId()
+        );
+        entityManager.clear();
+
+        List<MyStampbookDetailProjection> publishedProjections = stampbookRepository
+            .findMyStampbookDetailProjections(
+                viewer.getUserId(),
+                publishedStampbook.getStampbookId(),
+                StampbookStatus.PUBLISHED,
+                StampbookStatus.ENDED
+            );
+        List<MyStampbookDetailProjection> ownedEndedProjections = stampbookRepository
+            .findMyStampbookDetailProjections(
+                viewer.getUserId(),
+                ownedEndedStampbook.getStampbookId(),
+                StampbookStatus.PUBLISHED,
+                StampbookStatus.ENDED
+            );
+        List<MyStampbookDetailProjection> otherEndedProjections = stampbookRepository
+            .findMyStampbookDetailProjections(
+                viewer.getUserId(),
+                otherEndedStampbook.getStampbookId(),
+                StampbookStatus.PUBLISHED,
+                StampbookStatus.ENDED
+            );
+        List<MyStampbookDetailProjection> draftProjections = stampbookRepository
+            .findMyStampbookDetailProjections(
+                viewer.getUserId(),
+                draftStampbook.getStampbookId(),
+                StampbookStatus.PUBLISHED,
+                StampbookStatus.ENDED
+            );
+        entityManager.clear();
+
+        assertThat(publishedProjections)
+            .extracting(MyStampbookDetailProjection::contentId)
+            .containsExactly(firstTarget.getContentId(), secondTarget.getContentId());
+        assertThat(publishedProjections.getFirst())
+            .extracting(
+                MyStampbookDetailProjection::progressStatus,
+                MyStampbookDetailProjection::contentId,
+                MyStampbookDetailProjection::earnedAt
+            )
+            .containsExactly(StampbookProgressStatus.IN_PROGRESS, firstTarget.getContentId(), null);
+        assertThat(publishedProjections.get(1))
+            .extracting(
+                MyStampbookDetailProjection::contentId,
+                MyStampbookDetailProjection::earnedAt
+            )
+            .containsExactly(secondTarget.getContentId(), FIRST_EARNED_AT);
+        assertThat(ownedEndedProjections)
+            .allSatisfy(projection -> {
+                assertThat(projection.stampbookStatus()).isEqualTo(StampbookStatus.ENDED);
+                assertThat(projection.progressStatus()).isEqualTo(StampbookProgressStatus.COMPLETED);
+                assertThat(projection.completedAt()).isEqualTo(COMPLETED_AT);
+            });
+        assertThat(otherEndedProjections).isEmpty();
+        assertThat(draftProjections).isEmpty();
+        assertThat(stampbookProgressRepository.findById(publishedProgress.getStampbookProgressId()).orElseThrow())
+            .extracting(StampbookProgress::getStatus, StampbookProgress::getCompletedAt)
+            .containsExactly(StampbookProgressStatus.IN_PROGRESS, null);
+        assertThat(stampEarnRepository.countByStampbookProgressStampbookProgressId(
+            publishedProgress.getStampbookProgressId()
+        )).isEqualTo(earnedCountBeforeRead);
+    }
+
     private Stampbook saveStampbook(
         Region region,
         CouponPolicy rewardCouponPolicy,
