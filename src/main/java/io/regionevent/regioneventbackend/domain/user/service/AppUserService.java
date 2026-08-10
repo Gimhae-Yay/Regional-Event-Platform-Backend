@@ -1,15 +1,18 @@
 package io.regionevent.regioneventbackend.domain.user.service;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserAccountKind;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
+import io.regionevent.regioneventbackend.domain.user.repository.PlatformAdminUserListProjection;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
@@ -71,6 +74,11 @@ public class AppUserService {
     public void delete(AppUser user) {
         appUserRepository.delete(user);
         appUserRepository.flush();
+    }
+
+    @Transactional(readOnly = true)
+    public List<PlatformAdminUserListProjection> findPlatformAdminUserList() {
+        return appUserRepository.findPlatformAdminUserList();
     }
 
     private void validateLoginIdentifierAvailable(String email) {
