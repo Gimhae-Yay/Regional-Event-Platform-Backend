@@ -107,6 +107,75 @@ class DeactivateAdminAccountUseCaseTest {
         verifyNoInteractions(auditEventUseCase);
     }
 
+    @Test
+    void deactivate_자기자신을비활성화하면_충돌오류를반환하고감사를기록하지않는다() {
+        PlatformAdminAuthorizationService authorizationService = mock(PlatformAdminAuthorizationService.class);
+        PlatformAdminAssignmentService assignmentService = mock(PlatformAdminAssignmentService.class);
+        RecordAuditEventUseCase auditEventUseCase = mock(RecordAuditEventUseCase.class);
+        DeactivateAdminAccountUseCase useCase = new DeactivateAdminAccountUseCase(
+            authorizationService,
+            assignmentService,
+            auditEventUseCase,
+            Clock.fixed(NOW, ZoneOffset.UTC)
+        );
+        PlatformAdminAssignment actor = assignment(1L, ACTOR_USER_ID, PlatformAdminGrade.SUPER_ADMIN);
+        when(authorizationService.requireAuthorizedSuperAdmin(ACTOR_USER_ID)).thenReturn(actor);
+        when(assignmentService.findActiveSuperAdminsForUpdate()).thenReturn(List.of(actor));
+        when(assignmentService.findAssignmentForUpdate(ACTOR_USER_ID)).thenReturn(Optional.of(actor));
+
+        assertThatThrownBy(() -> useCase.deactivate(
+            ACTOR_USER_ID,
+            ACTOR_USER_ID,
+            new DeactivateAdminAccountUseCase.DeactivateAdminAccountCommand(
+                "ADMIN_ACCOUNT_INACTIVATION",
+                "OPS-2026-0810-001"
+            ),
+            UUID.randomUUID()
+        )).isInstanceOfSatisfying(BusinessException.class, exception ->
+            assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.ADMIN_ACCOUNT_DEACTIVATION_CONFLICT)
+        );
+
+        assertThat(actor.getStatus()).isEqualTo(PlatformAdminAssignmentStatus.ACTIVE);
+        verifyNoInteractions(auditEventUseCase);
+    }
+
+    @Test
+    void deactivate_이미비활성화된계정이면_충돌오류를반환하고감사를기록하지않는다() {
+        PlatformAdminAuthorizationService authorizationService = mock(PlatformAdminAuthorizationService.class);
+        PlatformAdminAssignmentService assignmentService = mock(PlatformAdminAssignmentService.class);
+        RecordAuditEventUseCase auditEventUseCase = mock(RecordAuditEventUseCase.class);
+        DeactivateAdminAccountUseCase useCase = new DeactivateAdminAccountUseCase(
+            authorizationService,
+            assignmentService,
+            auditEventUseCase,
+            Clock.fixed(NOW, ZoneOffset.UTC)
+        );
+        PlatformAdminAssignment actor = assignment(1L, ACTOR_USER_ID, PlatformAdminGrade.SUPER_ADMIN);
+        PlatformAdminAssignment target = assignment(2L, 101L, PlatformAdminGrade.PLATFORM_ADMIN);
+        Instant inactivatedAt = NOW.minusSeconds(60);
+        target.inactivate(inactivatedAt, "PREVIOUS_ADMIN_ACCOUNT_INACTIVATION");
+        when(authorizationService.requireAuthorizedSuperAdmin(ACTOR_USER_ID)).thenReturn(actor);
+        when(assignmentService.findActiveSuperAdminsForUpdate()).thenReturn(List.of(actor));
+        when(assignmentService.findAssignmentForUpdate(101L)).thenReturn(Optional.of(target));
+
+        assertThatThrownBy(() -> useCase.deactivate(
+            ACTOR_USER_ID,
+            101L,
+            new DeactivateAdminAccountUseCase.DeactivateAdminAccountCommand(
+                "ADMIN_ACCOUNT_INACTIVATION",
+                "OPS-2026-0810-001"
+            ),
+            UUID.randomUUID()
+        )).isInstanceOfSatisfying(BusinessException.class, exception ->
+            assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.ADMIN_ACCOUNT_DEACTIVATION_CONFLICT)
+        );
+
+        assertThat(target.getStatus()).isEqualTo(PlatformAdminAssignmentStatus.INACTIVE);
+        assertThat(target.getInactivatedAt()).isEqualTo(inactivatedAt);
+        assertThat(target.getInactiveReasonCode()).isEqualTo("PREVIOUS_ADMIN_ACCOUNT_INACTIVATION");
+        verifyNoInteractions(auditEventUseCase);
+    }
+
     private PlatformAdminAssignment assignment(Long assignmentId, Long userId, PlatformAdminGrade grade) {
         AppUser user = mock(AppUser.class);
         when(user.getUserId()).thenReturn(userId);
