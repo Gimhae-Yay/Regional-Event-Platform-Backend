@@ -551,6 +551,8 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         assertThat(auditEventRepository.findAll())
             .filteredOn(auditEvent -> auditEvent.getRequestId().equals(requestId.toString()))
             .filteredOn(auditEvent -> auditEvent.getTargetType() == AuditEventTargetType.COUPON)
+            .filteredOn(auditEvent -> CouponStatus.RESERVED.name().equals(auditEvent.getPreviousState()))
+            .filteredOn(auditEvent -> CouponStatus.USED.name().equals(auditEvent.getNextState()))
             .singleElement()
             .extracting(
                 auditEvent -> auditEvent.getTargetId(),
