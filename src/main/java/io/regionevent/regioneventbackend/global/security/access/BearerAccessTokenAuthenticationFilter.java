@@ -38,7 +38,15 @@ public class BearerAccessTokenAuthenticationFilter extends OncePerRequestFilter 
         FilterChain filterChain
     ) throws ServletException, IOException {
         String authorization = request.getHeader(HttpHeaders.AUTHORIZATION);
-        if (authorization == null || authorization.isBlank()) {
+        if (authorization == null) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+        if (authorization.isBlank()) {
+            if (requiresOptionalAuthenticationValidation(request)) {
+                rejectAuthentication(request, response);
+                return;
+            }
             filterChain.doFilter(request, response);
             return;
         }

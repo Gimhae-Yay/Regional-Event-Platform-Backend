@@ -221,6 +221,16 @@ class PublicRegionMissionControllerIntegrationTest {
             .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
     }
 
+    @Test
+    void getPublicRegionMissions_blankAuthorizationHeader_returnsUnauthenticated() throws Exception {
+        Fixture fixture = createFixture(true);
+
+        mockMvc.perform(get("/api/v1/regions/{regionId}/missions", fixture.region().getRegionId())
+                .header(AUTHORIZATION, "   "))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+    }
+
     private Fixture createFixture(boolean isPublic) {
         String suffix = Long.toUnsignedString(System.nanoTime());
         Region region = regionRepository.saveAndFlush(new Region("R" + suffix, "테스트 지역", isPublic));

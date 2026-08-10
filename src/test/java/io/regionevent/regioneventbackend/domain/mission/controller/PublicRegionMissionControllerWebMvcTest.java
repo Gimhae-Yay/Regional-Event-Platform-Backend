@@ -176,4 +176,18 @@ class PublicRegionMissionControllerWebMvcTest {
 
         verifyNoInteractions(getPublicRegionMissionsUseCase);
     }
+
+    @Test
+    void getPublicRegionMissions_blankAuthorizationHeader_returnsUnauthenticated() throws Exception {
+        mockMvc.perform(get("/api/v1/regions/11/missions")
+                .header(AUTHORIZATION, ""))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+        mockMvc.perform(get("/api/v1/regions/11/missions")
+                .header(AUTHORIZATION, "   "))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+
+        verifyNoInteractions(getPublicRegionMissionsUseCase);
+    }
 }

@@ -24,6 +24,11 @@ public class PublicRegionMissionController {
 
     private static final String SUCCESS_MESSAGE = "공개 미션 목록 조회에 성공했습니다.";
     private static final Pattern POSITIVE_DECIMAL_PATTERN = Pattern.compile("^[1-9][0-9]*$");
+    private static final String DEFAULT_PAGE_VALUE = "0";
+    private static final String DEFAULT_SIZE_VALUE = "20";
+    private static final int MIN_PAGE = 0;
+    private static final int MIN_SIZE = 1;
+    private static final int MAX_SIZE = 100;
 
     private final GetPublicRegionMissionsUseCase getPublicRegionMissionsUseCase;
 
@@ -35,8 +40,8 @@ public class PublicRegionMissionController {
     public ResponseEntity<ApiResponse<GetPublicRegionMissionsResponse>> getPublicRegionMissions(
         @AuthenticationPrincipal Long userId,
         @PathVariable String regionId,
-        @RequestParam(defaultValue = "0") String page,
-        @RequestParam(defaultValue = "20") String size
+        @RequestParam(defaultValue = DEFAULT_PAGE_VALUE) String page,
+        @RequestParam(defaultValue = DEFAULT_SIZE_VALUE) String size
     ) {
         PublicRegionMissionListResult result = getPublicRegionMissionsUseCase.get(
             toRegionId(regionId),
@@ -59,7 +64,7 @@ public class PublicRegionMissionController {
 
     private int toPage(String value) {
         int page = toInt(value);
-        if (page < 0) {
+        if (page < MIN_PAGE) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
         return page;
@@ -67,7 +72,7 @@ public class PublicRegionMissionController {
 
     private int toSize(String value) {
         int size = toInt(value);
-        if (size < 1 || size > 100) {
+        if (size < MIN_SIZE || size > MAX_SIZE) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
         return size;
