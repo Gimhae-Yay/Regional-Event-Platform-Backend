@@ -376,6 +376,56 @@ class MissionParticipationProgressRepositoryTest {
         assertThat(summary.getProgressCount()).isEqualTo(2);
         assertThat(summary.getRequiredCount()).isEqualTo(2);
         assertThat(summary.getRewardClaimed()).isFalse();
+        MissionParticipationSummaryProjection singleSummary = missionParticipationRepository
+            .findSummaryByMissionIdAndUserId(
+                contentSetMission.getMissionId(),
+                fixtures.visitor().getUserId()
+            )
+            .orElseThrow();
+        assertThat(singleSummary.getParticipationId()).isEqualTo(participation.getMissionParticipationId());
+        assertThat(singleSummary.getProgressCount()).isEqualTo(2);
+        assertThat(singleSummary.getRequiredCount()).isEqualTo(2);
+    }
+
+    @Test
+    void 방문_횟수_참여_요약은_서로_다른_방문과_보상_수령_여부를_집계한다() {
+        MissionFixtures fixtures = createMissionFixtures();
+        MissionParticipation participation = missionParticipationRepository.saveAndFlush(
+            new MissionParticipation(fixtures.mission(), fixtures.visitor(), JOINED_AT)
+        );
+        Visit firstVisit = saveVisit(fixtures, "single-summary-first");
+        Visit secondVisit = saveVisit(fixtures, "single-summary-second");
+        missionProgressRepository.saveAndFlush(new MissionProgress(
+            participation,
+            firstVisit,
+            fixtures.content(),
+            RECORDED_AT
+        ));
+        missionProgressRepository.saveAndFlush(new MissionProgress(
+            participation,
+            secondVisit,
+            fixtures.content(),
+            RECORDED_AT.plusSeconds(60)
+        ));
+        participation.complete(COMPLETED_AT);
+        missionParticipationRepository.flush();
+        missionRewardClaimRepository.saveAndFlush(new MissionRewardClaim(
+            participation,
+            fixtures.mission().getRewardCouponPolicy(),
+            COMPLETED_AT.plusSeconds(60)
+        ));
+        entityManager.clear();
+
+        MissionParticipationSummaryProjection summary = missionParticipationRepository
+            .findSummaryByMissionIdAndUserId(
+                fixtures.mission().getMissionId(),
+                fixtures.visitor().getUserId()
+            )
+            .orElseThrow();
+
+        assertThat(summary.getProgressCount()).isEqualTo(2);
+        assertThat(summary.getRequiredCount()).isEqualTo(3);
+        assertThat(summary.getRewardClaimed()).isTrue();
     }
 
     private ProgressFixtures createProgressFixtures() {
