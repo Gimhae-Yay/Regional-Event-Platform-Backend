@@ -100,6 +100,13 @@ class SecurityConfigWebMvcTest {
     }
 
     @Test
+    void publicPath_withNonBearerAuthorizationHeader_isAllowed() throws Exception {
+        mockMvc.perform(get("/api/v1/contents")
+                .header(HttpHeaders.AUTHORIZATION, "Basic malformed"))
+            .andExpect(status().isNoContent());
+    }
+
+    @Test
     void pathAdjacentToPublicPath_withoutAccessToken_returnsUnauthenticatedResponse() throws Exception {
         mockMvc.perform(get("/api/v1/regions/1"))
             .andExpect(status().isUnauthorized())

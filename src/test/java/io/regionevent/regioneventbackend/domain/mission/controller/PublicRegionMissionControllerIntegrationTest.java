@@ -137,6 +137,39 @@ class PublicRegionMissionControllerIntegrationTest {
     }
 
     @Test
+    void getPublicRegionMissions_authenticatedWithOtherUser_doesNotReturnParticipationStatus() throws Exception {
+        Fixture fixture = createFixture(true);
+        Mission mission = saveVisitCountMission(fixture, "other-user-participating", FUTURE_ENDS_AT, 3);
+        publishMission(mission, PUBLISHED_AT);
+        missionParticipationRepository.saveAndFlush(new MissionParticipation(
+            mission,
+            fixture.visitor(),
+            PUBLISHED_AT.plusSeconds(60)
+        ));
+        String accessToken = jwtAccessTokenService.issue(fixture.operator().getUserId());
+
+        mockMvc.perform(get("/api/v1/regions/{regionId}/missions", fixture.region().getRegionId())
+                .header(AUTHORIZATION, "Bearer " + accessToken))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.content[0].missionId").value(mission.getMissionId().toString()))
+            .andExpect(jsonPath("$.data.content[0].participationStatus").isEmpty());
+    }
+
+    @Test
+    void getPublicRegionMissions_sameEndsAt_returnsMissionIdAscending() throws Exception {
+        Fixture fixture = createFixture(true);
+        Mission first = saveVisitCountMission(fixture, "same-ends-at-first", FUTURE_ENDS_AT, 1);
+        Mission second = saveVisitCountMission(fixture, "same-ends-at-second", FUTURE_ENDS_AT, 2);
+        publishMission(second, PUBLISHED_AT);
+        publishMission(first, PUBLISHED_AT);
+
+        mockMvc.perform(get("/api/v1/regions/{regionId}/missions", fixture.region().getRegionId()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.content[0].missionId").value(first.getMissionId().toString()))
+            .andExpect(jsonPath("$.data.content[1].missionId").value(second.getMissionId().toString()));
+    }
+
+    @Test
     void getPublicRegionMissions_emptyResult_returnsEmptyPage() throws Exception {
         Fixture fixture = createFixture(true);
 
