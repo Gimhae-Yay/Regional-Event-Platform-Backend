@@ -16,8 +16,8 @@ public class MissionService {
         this.missionRepository = missionRepository;
     }
 
-    public Mission findOperatorMissionDetail(Long missionId) {
-        return missionRepository.findOperatorMissionDetailByMissionId(missionId)
+    public Mission findMissionDetail(Long missionId) {
+        return missionRepository.findMissionDetailByMissionId(missionId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 }
