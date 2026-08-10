@@ -1,5 +1,7 @@
 package io.regionevent.regioneventbackend.domain.mission.service;
 
+import java.util.Optional;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -31,5 +33,13 @@ public class MissionParticipationReadService {
     public MissionParticipation findDetail(Long participationId) {
         return missionParticipationRepository.findByMissionParticipationId(participationId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public Optional<MissionParticipationSummary> findSummaryByMissionIdAndUserId(
+        Long missionId,
+        Long userId
+    ) {
+        return missionParticipationRepository.findSummaryByMissionIdAndUserId(missionId, userId)
+            .map(MissionParticipationSummary::from);
     }
 }
