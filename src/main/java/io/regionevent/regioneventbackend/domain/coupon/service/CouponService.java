@@ -1,5 +1,7 @@
 package io.regionevent.regioneventbackend.domain.coupon.service;
 
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -28,6 +30,21 @@ public class CouponService {
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<Coupon> findByCouponIdForUpdate(Long couponId) {
         return couponRepository.findByCouponIdForUpdate(couponId);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<Coupon> findAvailableByCouponIdForUpdate(Long couponId) {
+        return couponRepository.findAvailableByCouponIdForUpdate(couponId);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Instant findCurrentDatabaseTime() {
+        BigDecimal epochSeconds = couponRepository.findCurrentEpochSeconds();
+        long seconds = epochSeconds.longValue();
+        long nanos = epochSeconds.remainder(BigDecimal.ONE)
+            .movePointRight(9)
+            .longValue();
+        return Instant.ofEpochSecond(seconds, nanos);
     }
 
     @Transactional(readOnly = true)

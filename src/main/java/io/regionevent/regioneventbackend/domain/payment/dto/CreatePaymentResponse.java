@@ -3,8 +3,10 @@ package io.regionevent.regioneventbackend.domain.payment.dto;
 import java.time.Instant;
 
 import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
+import io.regionevent.regioneventbackend.domain.payment.entity.PaymentStatus;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationPriceSnapshot;
+import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 
 public record CreatePaymentResponse(
     boolean requiresPayment,
@@ -20,7 +22,7 @@ public record CreatePaymentResponse(
                 payment.getPaymentId().toString(),
                 payment.getCapacityHold().getHoldId().toString(),
                 payment.getOrderId(),
-                payment.getStatus().name(),
+                PaymentStatus.PENDING.name(),
                 new AmountResponse(
                     snapshot.getBaseAmount(),
                     snapshot.getDiscountAmount(),
@@ -41,7 +43,7 @@ public record CreatePaymentResponse(
                 reservation.getReservationId().toString(),
                 reservation.getReservationNo(),
                 reservation.getCapacityHold().getHoldId().toString(),
-                reservation.getStatus().name(),
+                ReservationStatus.CONFIRMED.name(),
                 reservation.getConfirmedAt()
             )
         );

@@ -203,11 +203,13 @@ public class CreatePaymentUseCase {
     ) {
         Coupon coupon = couponService.findByCouponIdForUpdate(couponId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+        if (couponService.findAvailableByCouponIdForUpdate(couponId).isEmpty()) {
+            throw new BusinessException(ErrorCode.PAYMENT_HOLD_CONFLICT);
+        }
+        java.time.Instant currentDatabaseTime = couponService.findCurrentDatabaseTime();
         Content content = hold.getContentSession().getContent();
         if (coupon.getUser() == null
             || !coupon.getUser().getUserId().equals(user.getUserId())
-            || coupon.getStatus() != CouponStatus.AVAILABLE
-            || !coupon.getExpiresAt().isAfter(java.time.Instant.now())
             || !sameId(coupon.getCouponPolicy().getContent().getContentId(), content.getContentId())
             || !sameId(coupon.getCouponPolicy().getRegion().getRegionId(), hold.getRegion().getRegionId())
             || baseAmount < coupon.getCouponPolicy().getMinimumPaymentAmount()) {
@@ -220,7 +222,7 @@ public class CreatePaymentUseCase {
             CouponStatus.RESERVED,
             COUPON_RESERVED_REASON,
             "USER",
-            java.time.Instant.now()
+            currentDatabaseTime
         ));
         return coupon;
     }

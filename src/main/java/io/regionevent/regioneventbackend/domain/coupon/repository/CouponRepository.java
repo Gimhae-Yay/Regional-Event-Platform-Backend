@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.coupon.repository;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -39,4 +40,18 @@ public interface CouponRepository extends JpaRepository<Coupon, Long> {
         WHERE coupon.couponId = :couponId
         """)
     Optional<Coupon> findByCouponIdForUpdate(@Param("couponId") Long couponId);
+
+    @EntityGraph(attributePaths = {"couponPolicy", "couponPolicy.content", "couponPolicy.region", "user"})
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT coupon
+        FROM Coupon coupon
+        WHERE coupon.couponId = :couponId
+            AND coupon.status = io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatus.AVAILABLE
+            AND coupon.expiresAt > CURRENT_TIMESTAMP
+        """)
+    Optional<Coupon> findAvailableByCouponIdForUpdate(@Param("couponId") Long couponId);
+
+    @Query(value = "SELECT UNIX_TIMESTAMP(CURRENT_TIMESTAMP(6))", nativeQuery = true)
+    BigDecimal findCurrentEpochSeconds();
 }
