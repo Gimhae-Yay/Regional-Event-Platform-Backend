@@ -35,7 +35,7 @@ import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
-@WebMvcTest(OperatorMissionController.class)
+@WebMvcTest({OperatorMissionController.class, OperatorMissionDetailController.class})
 @Import({SecurityConfig.class, RequestIdFilter.class, GlobalExceptionHandler.class})
 class OperatorMissionControllerWebMvcTest {
 
@@ -119,6 +119,81 @@ class OperatorMissionControllerWebMvcTest {
                       "targetContentIds": [],
                       "rewardCouponPolicyId": "501",
                       "endsAt": "2026-09-30T23:59:59+09:00"
+                    }
+                    """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+
+        verifyNoInteractions(createOperatorMissionUseCase);
+    }
+
+    @Test
+    void create_withScalarTypeCoercion_returnsTypeErrorWithoutCallingUseCase() throws Exception {
+        mockMvc.perform(authenticated(post("/api/v1/operator/missions"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "conditionType": 1,
+                      "requiredVisitCount": 3,
+                      "targetContentIds": [],
+                      "rewardCouponPolicyId": "501",
+                      "endsAt": "2026-09-30T23:59:59+09:00"
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+
+        mockMvc.perform(authenticated(post("/api/v1/operator/missions"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "conditionType": "VISIT_COUNT",
+                      "requiredVisitCount": "3",
+                      "targetContentIds": [],
+                      "rewardCouponPolicyId": "501",
+                      "endsAt": "2026-09-30T23:59:59+09:00"
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+
+        mockMvc.perform(authenticated(post("/api/v1/operator/missions"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "conditionType": "CONTENT_SET",
+                      "requiredVisitCount": null,
+                      "targetContentIds": [101],
+                      "rewardCouponPolicyId": "501",
+                      "endsAt": "2026-09-30T23:59:59+09:00"
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+
+        mockMvc.perform(authenticated(post("/api/v1/operator/missions"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "conditionType": "VISIT_COUNT",
+                      "requiredVisitCount": 3,
+                      "targetContentIds": [],
+                      "rewardCouponPolicyId": 501,
+                      "endsAt": "2026-09-30T23:59:59+09:00"
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+
+        mockMvc.perform(authenticated(post("/api/v1/operator/missions"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "conditionType": "VISIT_COUNT",
+                      "requiredVisitCount": 3,
+                      "targetContentIds": [],
+                      "rewardCouponPolicyId": "501",
+                      "endsAt": 1788101999
                     }
                     """))
             .andExpect(status().isBadRequest())

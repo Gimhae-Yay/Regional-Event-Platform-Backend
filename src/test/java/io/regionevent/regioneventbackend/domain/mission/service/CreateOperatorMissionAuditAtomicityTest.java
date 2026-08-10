@@ -1,25 +1,22 @@
 package io.regionevent.regioneventbackend.domain.mission.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.time.Clock;
 import java.time.Instant;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
-import java.util.List;
-import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,14 +29,11 @@ import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
-import io.regionevent.regioneventbackend.domain.content.service.ContentService;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponIssuanceType;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicy;
 import io.regionevent.regioneventbackend.domain.coupon.repository.CouponPolicyRepository;
-import io.regionevent.regioneventbackend.domain.coupon.service.CouponPolicyService;
 import io.regionevent.regioneventbackend.domain.mission.repository.MissionRepository;
 import io.regionevent.regioneventbackend.domain.mission.repository.MissionTargetContentRepository;
-import io.regionevent.regioneventbackend.domain.mission.service.CreateOperatorMissionUseCase.CreateOperatorMissionCommand;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -48,25 +42,18 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
-import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService;
+import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.support.jpa.CleanH2Database;
 
-@DataJpaTest
-@Import({
-    CreateOperatorMissionUseCase.class,
-    ContentService.class,
-    CouponPolicyService.class,
-    MissionService.class,
-    OperatorAuthorizationService.class,
-    CreateOperatorMissionAuditAtomicityTest.FixedClockConfiguration.class
-})
+@SpringBootTest
+@AutoConfigureMockMvc
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 @CleanH2Database
 class CreateOperatorMissionAuditAtomicityTest {
 
     private static final Instant CREATED_AT = Instant.parse("2026-08-09T00:00:00Z");
 
-    private final CreateOperatorMissionUseCase createOperatorMissionUseCase;
+    private final MockMvc mockMvc;
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
@@ -75,6 +62,7 @@ class CreateOperatorMissionAuditAtomicityTest {
     private final MissionRepository missionRepository;
     private final MissionTargetContentRepository missionTargetContentRepository;
     private final AuditEventRepository auditEventRepository;
+    private final JwtAccessTokenService jwtAccessTokenService;
     private final TransactionTemplate transactionTemplate;
 
     @MockitoBean
@@ -82,7 +70,7 @@ class CreateOperatorMissionAuditAtomicityTest {
 
     @Autowired
     CreateOperatorMissionAuditAtomicityTest(
-        CreateOperatorMissionUseCase createOperatorMissionUseCase,
+        MockMvc mockMvc,
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
         UserRoleAssignmentRepository userRoleAssignmentRepository,
@@ -91,9 +79,10 @@ class CreateOperatorMissionAuditAtomicityTest {
         MissionRepository missionRepository,
         MissionTargetContentRepository missionTargetContentRepository,
         AuditEventRepository auditEventRepository,
+        JwtAccessTokenService jwtAccessTokenService,
         PlatformTransactionManager transactionManager
     ) {
-        this.createOperatorMissionUseCase = createOperatorMissionUseCase;
+        this.mockMvc = mockMvc;
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
         this.userRoleAssignmentRepository = userRoleAssignmentRepository;
@@ -102,28 +91,34 @@ class CreateOperatorMissionAuditAtomicityTest {
         this.missionRepository = missionRepository;
         this.missionTargetContentRepository = missionTargetContentRepository;
         this.auditEventRepository = auditEventRepository;
+        this.jwtAccessTokenService = jwtAccessTokenService;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     @Test
-    void create_whenSuccessAuditFails_rollsBackMissionAndTargetContents() {
+    void createRequest_whenSuccessAuditFails_rollsBackMissionAndTargetContents() throws Exception {
         Fixture fixture = createFixture();
         doThrow(new IllegalStateException("audit storage failure"))
             .when(recordAuditEventUseCase)
             .record(any(AuditEventCommand.class));
 
-        assertThatThrownBy(() -> createOperatorMissionUseCase.create(
-            fixture.operator().getUserId(),
-            new CreateOperatorMissionCommand(
-                "CONTENT_SET",
-                null,
-                List.of(fixture.targetContent().getContentId()),
-                fixture.rewardCouponPolicy().getCouponPolicyId(),
-                OffsetDateTime.parse("2026-09-30T23:59:59+09:00")
-            ),
-            UUID.randomUUID()
-        )).isInstanceOf(IllegalStateException.class)
-            .hasMessage("audit storage failure");
+        mockMvc.perform(post("/api/v1/operator/missions")
+                .header("Authorization", "Bearer " + jwtAccessTokenService.issue(fixture.operator().getUserId()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "conditionType": "CONTENT_SET",
+                      "requiredVisitCount": null,
+                      "targetContentIds": ["%d"],
+                      "rewardCouponPolicyId": "%d",
+                      "endsAt": "2026-09-30T23:59:59+09:00"
+                    }
+                    """.formatted(
+                    fixture.targetContent().getContentId(),
+                    fixture.rewardCouponPolicy().getCouponPolicyId()
+                )))
+            .andExpect(status().isInternalServerError())
+            .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
 
         assertThat(missionRepository.count()).isZero();
         assertThat(missionTargetContentRepository.count()).isZero();
@@ -191,12 +186,4 @@ class CreateOperatorMissionAuditAtomicityTest {
     ) {
     }
 
-    @TestConfiguration
-    static class FixedClockConfiguration {
-
-        @Bean
-        Clock clock() {
-            return Clock.fixed(CREATED_AT, ZoneOffset.UTC);
-        }
-    }
 }
