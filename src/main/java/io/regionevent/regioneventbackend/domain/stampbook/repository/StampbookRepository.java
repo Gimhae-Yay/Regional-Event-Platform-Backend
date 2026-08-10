@@ -59,4 +59,42 @@ public interface StampbookRepository extends JpaRepository<Stampbook, Long> {
         @Param("publishedStatus") StampbookStatus publishedStatus,
         @Param("endedStatus") StampbookStatus endedStatus
     );
+
+    @Query("""
+        SELECT new io.regionevent.regioneventbackend.domain.stampbook.repository.MyStampbookDetailProjection(
+            stampbook.stampbookId,
+            stampbook.region.regionId,
+            stampbook.status,
+            stampbook.publishedAt,
+            stampbook.endedAt,
+            progress.status,
+            progress.completedAt,
+            stampbookContent.content.contentId,
+            stampbookContent.content.title,
+            stampEarn.earnedAt
+        )
+        FROM Stampbook stampbook
+        LEFT JOIN StampbookProgress progress
+            ON progress.stampbook = stampbook
+            AND progress.user.userId = :userId
+        LEFT JOIN StampbookContent stampbookContent ON stampbookContent.stampbook = stampbook
+        LEFT JOIN StampEarn stampEarn
+            ON stampEarn.stampbookProgress = progress
+            AND stampEarn.content = stampbookContent.content
+        WHERE stampbook.stampbookId = :stampbookId
+          AND (
+            stampbook.status = :publishedStatus
+            OR (
+                stampbook.status = :endedStatus
+                AND progress.stampbookProgressId IS NOT NULL
+            )
+          )
+        ORDER BY stampbookContent.content.contentId ASC
+        """)
+    List<MyStampbookDetailProjection> findMyStampbookDetailProjections(
+        @Param("userId") Long userId,
+        @Param("stampbookId") Long stampbookId,
+        @Param("publishedStatus") StampbookStatus publishedStatus,
+        @Param("endedStatus") StampbookStatus endedStatus
+    );
 }
