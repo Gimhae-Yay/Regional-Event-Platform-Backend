@@ -138,6 +138,7 @@ public class SecurityConfig {
                     "/api/v1/regions",
                     "/api/v1/regions/*/home",
                     "/api/v1/regions/*/missions",
+                    "/api/v1/missions/*",
                     "/api/v1/contents",
                     "/api/v1/contents/*",
                     "/api/v1/contents/*/reviews",
