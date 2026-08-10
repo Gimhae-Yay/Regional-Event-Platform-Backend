@@ -108,6 +108,7 @@ public class GetOriginalContentReviewDetailUseCase {
             content.getAgeRequirement(),
             content.getMaterials(),
             content.getCancellationPolicyText(),
+            content.getReservationPrice(),
             content.getPublishAt(),
             sessions.stream()
                 .map(this::toSession)
