@@ -1,6 +1,8 @@
 package io.regionevent.regioneventbackend.domain.platformadmin.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doAnswer;
 
 import java.util.List;
 import java.util.UUID;
@@ -9,6 +11,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -17,6 +20,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +40,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminAssignm
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminGrade;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.PlatformAdminAssignmentRepository;
+import io.regionevent.regioneventbackend.domain.user.service.PlatformAdminAuthorizationService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
@@ -55,6 +60,9 @@ class DeactivateAdminAccountMySqlTest extends NonTransactionalMySqlTestSupport {
     private final AuditEventRepository auditEventRepository;
     private final AuditEventActorLinkRepository auditEventActorLinkRepository;
     private final TransactionTemplate transactionTemplate;
+
+    @MockitoSpyBean
+    private PlatformAdminAuthorizationService platformAdminAuthorizationService;
 
     @Autowired
     DeactivateAdminAccountMySqlTest(
@@ -117,11 +125,58 @@ class DeactivateAdminAccountMySqlTest extends NonTransactionalMySqlTestSupport {
             .extracting(DeactivationAttempt::errorCode)
             .containsExactly(ErrorCode.ADMIN_ACCOUNT_DEACTIVATION_CONFLICT);
         assertThat(platformAdminAssignmentRepository.findAll())
-            .filteredOn(PlatformAdminAssignment::isActive)
+            .filteredOn(assignment -> assignment.isActive()
+                && assignment.getGrade() == PlatformAdminGrade.SUPER_ADMIN)
             .singleElement()
             .extracting(PlatformAdminAssignment::getGrade)
             .isEqualTo(PlatformAdminGrade.SUPER_ADMIN);
         assertThat(auditEventRepository.findAll()).singleElement().satisfies(this::assertSuccessfulAudit);
+        assertThat(auditEventActorLinkRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    @Timeout(15)
+    void 비활성화처리자가기존조회후대기하면_현재잠금조회에서권한오류를반환한다() throws Exception {
+        Fixture fixture = createFixture();
+        CountDownLatch initialAuthorizationCompleted = new CountDownLatch(1);
+        CountDownLatch continueDeactivation = new CountDownLatch(1);
+        AtomicBoolean blockInitialAuthorization = new AtomicBoolean(true);
+        doAnswer(invocation -> {
+            PlatformAdminAssignment assignment = (PlatformAdminAssignment) invocation.callRealMethod();
+            if (fixture.secondUser().getUserId().equals(invocation.getArgument(0))
+                && blockInitialAuthorization.compareAndSet(true, false)) {
+                initialAuthorizationCompleted.countDown();
+                await(continueDeactivation);
+            }
+            return assignment;
+        }).when(platformAdminAuthorizationService).requireAuthorizedSuperAdmin(anyLong());
+
+        try (ExecutorService executorService = Executors.newSingleThreadExecutor()) {
+            Future<DeactivationAttempt> secondRequest = executorService.submit(
+                () -> deactivate(
+                    fixture.secondUser().getUserId(),
+                    fixture.thirdUser().getUserId()
+                )
+            );
+            assertThat(initialAuthorizationCompleted.await(3, TimeUnit.SECONDS)).isTrue();
+
+            DeactivationAttempt firstRequest = deactivate(
+                fixture.firstUser().getUserId(),
+                fixture.secondUser().getUserId()
+            );
+            assertThat(firstRequest.isSuccessful()).isTrue();
+            continueDeactivation.countDown();
+
+            assertThat(secondRequest.get(5, TimeUnit.SECONDS).errorCode()).isEqualTo(ErrorCode.FORBIDDEN);
+        } finally {
+            continueDeactivation.countDown();
+        }
+
+        assertThat(findAssignmentStatus(fixture.secondUser().getUserId()))
+            .isEqualTo(PlatformAdminAssignmentStatus.INACTIVE);
+        assertThat(findAssignmentStatus(fixture.thirdUser().getUserId()))
+            .isEqualTo(PlatformAdminAssignmentStatus.ACTIVE);
+        assertThat(auditEventRepository.count()).isEqualTo(1);
         assertThat(auditEventActorLinkRepository.count()).isEqualTo(1);
     }
 
@@ -133,6 +188,10 @@ class DeactivateAdminAccountMySqlTest extends NonTransactionalMySqlTestSupport {
     ) {
         ready.countDown();
         await(start);
+        return deactivate(actorUserId, targetUserId);
+    }
+
+    private DeactivationAttempt deactivate(Long actorUserId, Long targetUserId) {
         try {
             return new DeactivationAttempt(deactivateAdminAccountUseCase.deactivate(
                 actorUserId,
@@ -153,7 +212,8 @@ class DeactivateAdminAccountMySqlTest extends NonTransactionalMySqlTestSupport {
             String suffix = Long.toUnsignedString(System.nanoTime());
             AppUser firstUser = saveSuperAdmin("first-" + suffix + "@example.com");
             AppUser secondUser = saveSuperAdmin("second-" + suffix + "@example.com");
-            return new Fixture(firstUser, secondUser);
+            AppUser thirdUser = savePlatformAdmin("third-" + suffix + "@example.com");
+            return new Fixture(firstUser, secondUser, thirdUser);
         });
     }
 
@@ -168,6 +228,25 @@ class DeactivateAdminAccountMySqlTest extends NonTransactionalMySqlTestSupport {
         ));
         platformAdminAssignmentRepository.save(new PlatformAdminAssignment(user, PlatformAdminGrade.SUPER_ADMIN));
         return user;
+    }
+
+    private AppUser savePlatformAdmin(String email) {
+        AppUser user = appUserRepository.save(new AppUser(
+            email,
+            "hashed-password",
+            "전체관리자",
+            "010-1234-5678",
+            AppUserAccountKind.PRIVILEGED,
+            AppUserStatus.ACTIVE
+        ));
+        platformAdminAssignmentRepository.save(new PlatformAdminAssignment(user, PlatformAdminGrade.PLATFORM_ADMIN));
+        return user;
+    }
+
+    private PlatformAdminAssignmentStatus findAssignmentStatus(Long userId) {
+        return transactionTemplate.execute(status -> platformAdminAssignmentRepository.findByAppUserUserId(userId)
+            .orElseThrow()
+            .getStatus());
     }
 
     private void assertSuccessfulAudit(AuditEvent event) {
@@ -190,7 +269,7 @@ class DeactivateAdminAccountMySqlTest extends NonTransactionalMySqlTestSupport {
         }
     }
 
-    private record Fixture(AppUser firstUser, AppUser secondUser) {
+    private record Fixture(AppUser firstUser, AppUser secondUser, AppUser thirdUser) {
     }
 
     private record DeactivationAttempt(

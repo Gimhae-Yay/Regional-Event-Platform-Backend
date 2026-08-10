@@ -51,6 +51,7 @@ class DeactivateAdminAccountUseCaseTest {
         PlatformAdminAssignment target = assignment(2L, 101L, PlatformAdminGrade.PLATFORM_ADMIN);
         when(authorizationService.requireAuthorizedSuperAdmin(ACTOR_USER_ID)).thenReturn(actor);
         when(assignmentService.findActiveSuperAdminsForUpdate()).thenReturn(List.of(actor));
+        when(authorizationService.requireAuthorizedSuperAdminForUpdate(ACTOR_USER_ID)).thenReturn(actor);
         when(assignmentService.findAssignmentForUpdate(101L)).thenReturn(Optional.of(target));
 
         DeactivateAdminAccountResult result = useCase.deactivate(
@@ -89,6 +90,7 @@ class DeactivateAdminAccountUseCaseTest {
         PlatformAdminAssignment target = assignment(2L, 101L, PlatformAdminGrade.SUPER_ADMIN);
         when(authorizationService.requireAuthorizedSuperAdmin(ACTOR_USER_ID)).thenReturn(actor);
         when(assignmentService.findActiveSuperAdminsForUpdate()).thenReturn(List.of(target));
+        when(authorizationService.requireAuthorizedSuperAdminForUpdate(ACTOR_USER_ID)).thenReturn(actor);
         when(assignmentService.findAssignmentForUpdate(101L)).thenReturn(Optional.of(target));
 
         assertThatThrownBy(() -> useCase.deactivate(
@@ -121,6 +123,7 @@ class DeactivateAdminAccountUseCaseTest {
         PlatformAdminAssignment actor = assignment(1L, ACTOR_USER_ID, PlatformAdminGrade.SUPER_ADMIN);
         when(authorizationService.requireAuthorizedSuperAdmin(ACTOR_USER_ID)).thenReturn(actor);
         when(assignmentService.findActiveSuperAdminsForUpdate()).thenReturn(List.of(actor));
+        when(authorizationService.requireAuthorizedSuperAdminForUpdate(ACTOR_USER_ID)).thenReturn(actor);
         when(assignmentService.findAssignmentForUpdate(ACTOR_USER_ID)).thenReturn(Optional.of(actor));
 
         assertThatThrownBy(() -> useCase.deactivate(
@@ -156,6 +159,7 @@ class DeactivateAdminAccountUseCaseTest {
         target.inactivate(inactivatedAt, "PREVIOUS_ADMIN_ACCOUNT_INACTIVATION");
         when(authorizationService.requireAuthorizedSuperAdmin(ACTOR_USER_ID)).thenReturn(actor);
         when(assignmentService.findActiveSuperAdminsForUpdate()).thenReturn(List.of(actor));
+        when(authorizationService.requireAuthorizedSuperAdminForUpdate(ACTOR_USER_ID)).thenReturn(actor);
         when(assignmentService.findAssignmentForUpdate(101L)).thenReturn(Optional.of(target));
 
         assertThatThrownBy(() -> useCase.deactivate(

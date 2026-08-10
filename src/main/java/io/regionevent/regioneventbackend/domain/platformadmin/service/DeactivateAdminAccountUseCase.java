@@ -53,7 +53,7 @@ public class DeactivateAdminAccountUseCase {
             .requireAuthorizedSuperAdmin(actorUserId);
         List<PlatformAdminAssignment> activeSuperAdmins = platformAdminAssignmentService
             .findActiveSuperAdminsForUpdate();
-        actor = platformAdminAuthorizationService.requireAuthorizedSuperAdmin(actorUserId);
+        actor = platformAdminAuthorizationService.requireAuthorizedSuperAdminForUpdate(actorUserId);
         PlatformAdminAssignment target = platformAdminAssignmentService.findAssignmentForUpdate(targetUserId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
         validateDeactivation(actor, target, activeSuperAdmins);
