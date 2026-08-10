@@ -253,6 +253,28 @@ class MyMissionParticipationDetailControllerIntegrationTest {
     }
 
     @Test
+    void get_withUnlinkedParticipationUser_returnsForbidden() throws Exception {
+        MissionFixtures fixtures = createMissionFixtures(MissionConditionType.VISIT_COUNT, 1);
+        MissionParticipation participation = saveParticipation(fixtures.mission(), fixtures.visitor());
+        AppUser otherVisitor = saveVisitor("unlinked-other-visitor", AppUserStatus.ACTIVE);
+        entityManager.createNativeQuery("""
+                UPDATE mission_participation
+                SET user_id = NULL
+                WHERE mission_participation_id = :participationId
+                """)
+            .setParameter("participationId", participation.getMissionParticipationId())
+            .executeUpdate();
+        entityManager.flush();
+        entityManager.clear();
+
+        mockMvc.perform(get("/api/v1/me/mission-participations/{participationId}",
+                    participation.getMissionParticipationId())
+                .header("Authorization", bearerToken(otherVisitor)))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
     void get_withoutActiveVisitorRole_returnsForbidden() throws Exception {
         MissionFixtures fixtures = createMissionFixtures(MissionConditionType.VISIT_COUNT, 1);
         MissionParticipation participation = saveParticipation(fixtures.mission(), fixtures.visitor());

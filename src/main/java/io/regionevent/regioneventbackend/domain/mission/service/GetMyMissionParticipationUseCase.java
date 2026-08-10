@@ -11,6 +11,7 @@ import io.regionevent.regioneventbackend.domain.mission.entity.Mission;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionConditionType;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionParticipation;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionProgress;
+import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.service.UserRoleAssignmentService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -43,7 +44,8 @@ public class GetMyMissionParticipationUseCase {
     public MissionParticipationDetailResult get(Long userId, Long participationId) {
         UserRoleAssignment visitor = userRoleAssignmentService.findActiveVisitor(userId);
         MissionParticipation participation = missionParticipationReadService.findDetail(participationId);
-        if (!visitor.getAppUser().getUserId().equals(participation.getUser().getUserId())) {
+        AppUser participationUser = participation.getUser();
+        if (participationUser == null || !visitor.getAppUser().getUserId().equals(participationUser.getUserId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         List<MissionProgress> progresses = missionProgressService.findAllByParticipationId(
