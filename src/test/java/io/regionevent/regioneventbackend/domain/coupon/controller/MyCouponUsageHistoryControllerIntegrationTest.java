@@ -76,8 +76,7 @@ class MyCouponUsageHistoryControllerIntegrationTest {
                     CouponRedemptionStatus.REVERSED,
                     3_000L,
                     Instant.parse("2026-08-10T00:00:00Z"),
-                    Instant.parse("2026-08-11T00:00:00Z"),
-                    null
+                    Instant.parse("2026-08-11T00:00:00Z")
                 ))
             ));
 

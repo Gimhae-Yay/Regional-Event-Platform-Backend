@@ -30,8 +30,7 @@ public record GetMyCouponUsageHistoryResult(
         CouponRedemptionStatus status,
         long discountAmount,
         Instant confirmedAt,
-        Instant reversedAt,
-        String reversalReason
+        Instant reversedAt
     ) {
 
         private static UsageHistory from(CouponRedemption couponRedemption) {
@@ -42,8 +41,7 @@ public record GetMyCouponUsageHistoryResult(
                 couponRedemption.getStatus(),
                 couponRedemption.getReservationPriceSnapshot().getDiscountAmount(),
                 couponRedemption.getRedeemedAt(),
-                couponRedemption.getReversedAt(),
-                null
+                couponRedemption.getReversedAt()
             );
         }
     }
