@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
+import io.regionevent.regioneventbackend.domain.region.repository.PlatformAdminRegionListProjection;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
 import io.regionevent.regioneventbackend.domain.region.repository.PublicRegionVerificationProjection;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -66,6 +67,11 @@ public class RegionService {
     @Transactional(readOnly = true)
     public List<PublicRegionVerificationProjection> findPublicRegionVerifications() {
         return regionRepository.findPublicRegionVerifications();
+    }
+
+    @Transactional(readOnly = true)
+    public List<PlatformAdminRegionListProjection> findPlatformAdminRegionList(Boolean isPublic) {
+        return regionRepository.findPlatformAdminRegionList(isPublic);
     }
 
     public PublicRegionStaticInfo findPublicRegionStaticInfo(Long regionId) {
