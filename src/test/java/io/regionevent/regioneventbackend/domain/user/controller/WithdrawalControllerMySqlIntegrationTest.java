@@ -40,6 +40,7 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentSessionRepository;
 import io.regionevent.regioneventbackend.domain.payment.dto.CreatePaymentRequest;
+import io.regionevent.regioneventbackend.domain.payment.dto.CreatePaymentResponse;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentStatus;
 import io.regionevent.regioneventbackend.domain.payment.entity.Refund;
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundStatus;
@@ -212,7 +213,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
             20_000,
             fixture.session().getContent().getContentId()
         );
-        createPaymentUseCase.create(
+        CreatePaymentResponse paymentResponse = createPaymentUseCase.create(
             fixture.user().getUserId(),
             fixture.activeHold().getHoldId().toString(),
             new CreatePaymentRequest(null),
@@ -224,7 +225,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
             fixture.activeHold().getHoldId()
         );
         refundRepository.saveAndFlush(new Refund(
-            paymentRepository.findAll().getFirst(),
+            paymentRepository.findByOrderId(paymentResponse.payment().orderId()).orElseThrow(),
             20_000,
             Instant.now()
         ));
