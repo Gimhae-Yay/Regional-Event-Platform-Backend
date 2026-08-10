@@ -528,7 +528,25 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
             .containsExactlyInAnyOrder(
                 AuditEventTargetType.CAPACITY_HOLD,
                 AuditEventTargetType.RESERVATION,
+                AuditEventTargetType.COUPON,
                 AuditEventTargetType.COUPON
+            );
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent -> auditEvent.getRequestId().equals(requestId.toString()))
+            .filteredOn(auditEvent -> auditEvent.getTargetType() == AuditEventTargetType.COUPON)
+            .filteredOn(auditEvent -> CouponStatus.AVAILABLE.name().equals(auditEvent.getPreviousState()))
+            .singleElement()
+            .extracting(
+                auditEvent -> auditEvent.getTargetId(),
+                auditEvent -> auditEvent.getNextState(),
+                auditEvent -> auditEvent.getActorKind(),
+                auditEvent -> auditEvent.getActorRole()
+            )
+            .containsExactly(
+                coupon.getCouponId(),
+                CouponStatus.RESERVED.name(),
+                "USER",
+                UserRole.VISITOR.name()
             );
         assertThat(auditEventRepository.findAll())
             .filteredOn(auditEvent -> auditEvent.getRequestId().equals(requestId.toString()))

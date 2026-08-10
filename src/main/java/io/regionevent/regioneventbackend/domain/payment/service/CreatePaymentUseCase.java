@@ -28,6 +28,7 @@ import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentIdempotency;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentIdempotencyStatus;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentStatus;
+import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationPriceSnapshot;
@@ -370,6 +371,13 @@ public class CreatePaymentUseCase {
             reservation.getConfirmedAt()
         ));
         if (usedCoupon != null) {
+            recordCouponReservationAuditEvent(
+                requestId,
+                actor,
+                capacityHold.getRegion(),
+                usedCoupon,
+                reservation.getConfirmedAt()
+            );
             recordAuditEventUseCase.record(new AuditEventCommand(
                 requestId,
                 capacityHold.getRegion(),
@@ -404,19 +412,35 @@ public class CreatePaymentUseCase {
             payment.getCreatedAt()
         ));
         if (reservedCoupon != null) {
-            recordAuditEventUseCase.record(new AuditEventCommand(
+            recordCouponReservationAuditEvent(
                 requestId,
-                payment.getCapacityHold().getRegion(),
-                AuditEventTargetType.COUPON,
-                reservedCoupon.getCouponId(),
-                CouponStatus.AVAILABLE.name(),
-                CouponStatus.RESERVED.name(),
-                AuditEventResult.SUCCESS,
-                null,
                 actor,
+                payment.getCapacityHold().getRegion(),
+                reservedCoupon,
                 payment.getCreatedAt()
-            ));
+            );
         }
+    }
+
+    private void recordCouponReservationAuditEvent(
+        UUID requestId,
+        AuditEventActor actor,
+        Region region,
+        Coupon coupon,
+        java.time.Instant occurredAt
+    ) {
+        recordAuditEventUseCase.record(new AuditEventCommand(
+            requestId,
+            region,
+            AuditEventTargetType.COUPON,
+            coupon.getCouponId(),
+            CouponStatus.AVAILABLE.name(),
+            CouponStatus.RESERVED.name(),
+            AuditEventResult.SUCCESS,
+            null,
+            actor,
+            occurredAt
+        ));
     }
 
     private AuditEventActor visitorActor(AppUser user) {
