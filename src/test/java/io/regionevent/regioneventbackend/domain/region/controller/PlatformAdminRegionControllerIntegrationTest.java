@@ -71,7 +71,12 @@ class PlatformAdminRegionControllerIntegrationTest {
     @Test
     void 전체관리자는_비공개지역을포함해_활성일반지역관리자수와함께조회한다() throws Exception {
         Fixture fixture = createFixture();
-        Instant privateRegionUpdatedAt = fixture.privateRegion().getUpdatedAt();
+        Long privateRegionId = fixture.privateRegion().getRegionId();
+        entityManager.flush();
+        entityManager.clear();
+        Instant privateRegionUpdatedAt = regionRepository.findById(privateRegionId)
+            .orElseThrow()
+            .getUpdatedAt();
         long auditEventCount = auditEventRepository.count();
 
         mockMvc.perform(authenticated(get("/api/v1/platform-admin/regions"), fixture.platformAdmin()))
@@ -87,7 +92,7 @@ class PlatformAdminRegionControllerIntegrationTest {
 
         entityManager.flush();
         entityManager.clear();
-        assertThat(regionRepository.findById(fixture.privateRegion().getRegionId()))
+        assertThat(regionRepository.findById(privateRegionId))
             .hasValueSatisfying(region ->
                 assertThat(region.getUpdatedAt()).isEqualTo(privateRegionUpdatedAt)
             );

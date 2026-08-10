@@ -6,6 +6,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.Instant;
 import java.util.List;
 
+import jakarta.persistence.EntityManager;
+
 import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,16 +32,19 @@ class RegionRepositoryTest {
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
+    private final EntityManager entityManager;
 
     @Autowired
     RegionRepositoryTest(
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
-        UserRoleAssignmentRepository userRoleAssignmentRepository
+        UserRoleAssignmentRepository userRoleAssignmentRepository,
+        EntityManager entityManager
     ) {
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
         this.userRoleAssignmentRepository = userRoleAssignmentRepository;
+        this.entityManager = entityManager;
     }
 
     @Test
@@ -105,7 +110,7 @@ class RegionRepositoryTest {
         Region firstSameName = regionRepository.saveAndFlush(new Region("FIRST", "가나다", false));
         Region secondSameName = regionRepository.saveAndFlush(new Region("SECOND", "가나다", true));
         Region lastRegion = regionRepository.saveAndFlush(new Region("LAST", "다라마바사", true));
-        Instant firstRegionUpdatedAt = firstSameName.getUpdatedAt();
+        Long firstSameNameId = firstSameName.getRegionId();
 
         assignRegionAdmin(firstSameName, "active-admin-1", AppUserAccountKind.ORDINARY, AppUserStatus.ACTIVE);
         assignRegionAdmin(firstSameName, "active-admin-2", AppUserAccountKind.ORDINARY, AppUserStatus.ACTIVE);
@@ -119,6 +124,10 @@ class RegionRepositoryTest {
         userRoleAssignmentRepository.saveAndFlush(revokedAssignment);
         assignRegionAdmin(firstSameName, "withdrawing-admin", AppUserAccountKind.ORDINARY, AppUserStatus.WITHDRAWING);
         assignRegionAdmin(firstSameName, "privileged-admin", AppUserAccountKind.PRIVILEGED, AppUserStatus.ACTIVE);
+        entityManager.flush();
+        entityManager.clear();
+        firstSameName = regionRepository.findById(firstSameNameId).orElseThrow();
+        Instant firstRegionUpdatedAt = firstSameName.getUpdatedAt();
 
         List<PlatformAdminRegionListProjection> regions = regionRepository
             .findPlatformAdminRegionList(null);
