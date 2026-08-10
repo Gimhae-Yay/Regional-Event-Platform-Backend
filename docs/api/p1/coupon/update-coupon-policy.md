@@ -135,4 +135,4 @@ Accept: application/json
 3. `contentId`, `regionId`, `issueSourceType`은 수정하지 않는다. 다른 콘텐츠나 발급 경로가 필요하면 새 정책을 생성한다.
 4. 요청에 포함된 필드만 변경한 뒤 `discountAmount >= 1`, `minimumPaymentAmount >= discountAmount`,
    `1 <= validDaysAfterIssue <= 365`, `issueStartsAt < issueEndsAt`를 검증한다.
-5. 수정 이력에는 처리자, 이전 값, 이후 값, 수정 사유와 수정 시각을 기록한다.
+5. 수정 처리에는 공통 감사 이력에 처리자, 대상, 이전·이후 상태, 수정 사유, 수정 시각과 `requestId`를 기록한다.
