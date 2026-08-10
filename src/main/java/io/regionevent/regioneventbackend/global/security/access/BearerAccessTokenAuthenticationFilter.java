@@ -38,11 +38,23 @@ public class BearerAccessTokenAuthenticationFilter extends OncePerRequestFilter 
         FilterChain filterChain
     ) throws ServletException, IOException {
         String authorization = request.getHeader(HttpHeaders.AUTHORIZATION);
-        if (authorization == null || authorization.isBlank()) {
+        if (authorization == null) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+        if (authorization.isBlank()) {
+            if (requiresOptionalAuthenticationValidation(request)) {
+                rejectAuthentication(request, response);
+                return;
+            }
             filterChain.doFilter(request, response);
             return;
         }
         if (!authorization.startsWith(BEARER_PREFIX)) {
+            if (requiresOptionalAuthenticationValidation(request)) {
+                rejectAuthentication(request, response);
+                return;
+            }
             filterChain.doFilter(request, response);
             return;
         }
@@ -65,6 +77,12 @@ public class BearerAccessTokenAuthenticationFilter extends OncePerRequestFilter 
         } catch (InvalidAccessTokenException exception) {
             rejectAuthentication(request, response);
         }
+    }
+
+    private boolean requiresOptionalAuthenticationValidation(HttpServletRequest request) {
+        String requestPath = request.getRequestURI().substring(request.getContextPath().length());
+        return "GET".equals(request.getMethod())
+            && requestPath.matches("^/api/v1/regions/[^/]+/missions$");
     }
 
     private void rejectAuthentication(HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException {
