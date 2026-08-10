@@ -100,7 +100,7 @@ public class CapacityHoldService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public int invalidateActiveHoldsForSession(
+    public List<TerminatedCapacityHold> invalidateActiveHoldsForSession(
         ContentSession contentSession,
         String invalidationReason,
         Instant invalidatedAt
@@ -108,12 +108,11 @@ public class CapacityHoldService {
         List<CapacityHold> activeHolds = capacityHoldRepository.findActiveBySessionIdForUpdate(
             contentSession.getSessionId()
         );
-        int releasedQuantity = activeHolds.stream()
-            .mapToInt(CapacityHold::getQuantity)
-            .sum();
         activeHolds.forEach(capacityHold -> capacityHold.invalidate(invalidationReason, invalidatedAt));
         capacityHoldRepository.saveAllAndFlush(activeHolds);
-        return releasedQuantity;
+        return activeHolds.stream()
+            .map(TerminatedCapacityHold::from)
+            .toList();
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -132,7 +131,7 @@ public class CapacityHoldService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public void invalidateAllActiveHoldsForContent(
+    public List<TerminatedCapacityHold> invalidateAllActiveHoldsForContent(
         Long contentId,
         String invalidationReason
     ) {
@@ -140,14 +139,18 @@ public class CapacityHoldService {
             throw new IllegalArgumentException("contentId must be positive");
         }
         validateInvalidationReason(invalidationReason);
-        capacityHoldRepository.findActiveHoldIdsByContentId(contentId)
-            .forEach(holdId -> invalidateAndReleaseCapacityIfActive(holdId, invalidationReason));
+        return capacityHoldRepository.findActiveHoldIdsByContentId(contentId).stream()
+            .map(holdId -> invalidateAndReleaseCapacityIfActive(holdId, invalidationReason))
+            .flatMap(Optional::stream)
+            .toList();
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public void invalidateActiveHoldsForWithdrawal(Long userId) {
-        capacityHoldRepository.findActiveHoldIdsByUserId(userId)
-            .forEach(holdId -> invalidateAndReleaseCapacityIfActive(holdId, "USER_WITHDRAWAL"));
+    public List<TerminatedCapacityHold> invalidateActiveHoldsForWithdrawal(Long userId) {
+        return capacityHoldRepository.findActiveHoldIdsByUserId(userId).stream()
+            .map(holdId -> invalidateAndReleaseCapacityIfActive(holdId, "USER_WITHDRAWAL"))
+            .flatMap(Optional::stream)
+            .toList();
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -214,6 +217,7 @@ public class CapacityHoldService {
     public record TerminatedCapacityHold(
         Long holdId,
         Region region,
+        int quantity,
         CapacityHoldStatus nextStatus,
         String reasonCode,
         Instant occurredAt
@@ -230,6 +234,7 @@ public class CapacityHoldService {
             return new TerminatedCapacityHold(
                 capacityHold.getHoldId(),
                 capacityHold.getRegion(),
+                capacityHold.getQuantity(),
                 capacityHold.getStatus(),
                 capacityHold.getInvalidationReason(),
                 capacityHold.getTerminalAt()

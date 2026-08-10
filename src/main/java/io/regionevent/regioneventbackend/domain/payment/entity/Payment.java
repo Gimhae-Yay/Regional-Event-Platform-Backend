@@ -155,6 +155,14 @@ public class Payment {
         return createdAt;
     }
 
+    public void expire(Instant expiredAt) {
+        if (status != PaymentStatus.PENDING) {
+            throw new IllegalStateException("only pending payment can be expired");
+        }
+        status = PaymentStatus.EXPIRED;
+        finalizedAt = requireNotNull(expiredAt, "expiredAt");
+    }
+
     private static void validateSnapshotHold(
         CapacityHold capacityHold,
         ReservationPriceSnapshot reservationPriceSnapshot

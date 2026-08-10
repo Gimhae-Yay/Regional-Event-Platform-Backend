@@ -14,6 +14,7 @@ import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetTyp
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.ContentSessionService;
+import io.regionevent.regioneventbackend.domain.payment.service.ExpirePendingPaymentForTerminatedHoldUseCase;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus;
 
 @Service
@@ -24,17 +25,20 @@ public class ExpireOrInvalidateCapacityHoldsUseCase {
 
     private final CapacityHoldService capacityHoldService;
     private final ContentSessionService contentSessionService;
+    private final ExpirePendingPaymentForTerminatedHoldUseCase expirePendingPaymentForTerminatedHoldUseCase;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final TransactionTemplate holdTransactionTemplate;
 
     public ExpireOrInvalidateCapacityHoldsUseCase(
         CapacityHoldService capacityHoldService,
         ContentSessionService contentSessionService,
+        ExpirePendingPaymentForTerminatedHoldUseCase expirePendingPaymentForTerminatedHoldUseCase,
         RecordAuditEventUseCase recordAuditEventUseCase,
         PlatformTransactionManager transactionManager
     ) {
         this.capacityHoldService = capacityHoldService;
         this.contentSessionService = contentSessionService;
+        this.expirePendingPaymentForTerminatedHoldUseCase = expirePendingPaymentForTerminatedHoldUseCase;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
         holdTransactionTemplate = new TransactionTemplate(transactionManager);
         holdTransactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -68,6 +72,7 @@ public class ExpireOrInvalidateCapacityHoldsUseCase {
                     SESSION_STARTED_INVALIDATION_REASON
                 )
                     .map(capacityHold -> {
+                        expirePendingPaymentForTerminatedHoldUseCase.expire(capacityHold);
                         recordTerminationAuditEvent(requestId, capacityHold);
                         return toProcessingResult(capacityHold.nextStatus());
                     })
@@ -90,6 +95,7 @@ public class ExpireOrInvalidateCapacityHoldsUseCase {
                     SESSION_STARTED_INVALIDATION_REASON
                 )
                     .map(capacityHold -> {
+                        expirePendingPaymentForTerminatedHoldUseCase.expire(capacityHold);
                         recordTerminationAuditEvent(requestId, capacityHold);
                         return toProcessingResult(capacityHold.nextStatus());
                     })

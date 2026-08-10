@@ -15,10 +15,10 @@ import io.regionevent.regioneventbackend.domain.payment.entity.PaymentStatus;
 
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
-    @EntityGraph(attributePaths = {"capacityHold", "reservationPriceSnapshot", "reservation"})
+    @EntityGraph(attributePaths = {"capacityHold", "reservationPriceSnapshot", "reservationPriceSnapshot.coupon", "reservation"})
     Optional<Payment> findByOrderId(String orderId);
 
-    @EntityGraph(attributePaths = {"capacityHold", "reservationPriceSnapshot", "reservation"})
+    @EntityGraph(attributePaths = {"capacityHold", "reservationPriceSnapshot", "reservationPriceSnapshot.coupon", "reservation"})
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT payment

@@ -113,6 +113,16 @@ public class Coupon {
         status = CouponStatus.USED;
     }
 
+    public CouponStatus release(Instant releasedAt) {
+        if (status != CouponStatus.RESERVED) {
+            throw new IllegalStateException("only reserved coupon can be released");
+        }
+        status = expiresAt.isAfter(requireNotNull(releasedAt, "releasedAt"))
+            ? CouponStatus.AVAILABLE
+            : CouponStatus.EXPIRED;
+        return status;
+    }
+
     private static void validateExpiry(
         Instant issuedAt,
         Instant expiresAt

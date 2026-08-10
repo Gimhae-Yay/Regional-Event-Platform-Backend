@@ -27,4 +27,12 @@ public interface PaymentIdempotencyRepository extends JpaRepository<PaymentIdemp
         @Param("operation") PaymentIdempotencyOperation operation,
         @Param("idempotencyKeyHash") String idempotencyKeyHash
     );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT idempotency
+        FROM PaymentIdempotency idempotency
+        WHERE idempotency.payment.paymentId = :paymentId
+        """)
+    Optional<PaymentIdempotency> findByPaymentPaymentIdForUpdate(@Param("paymentId") Long paymentId);
 }
