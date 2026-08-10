@@ -26,6 +26,8 @@ import io.regionevent.regioneventbackend.domain.coupon.entity.CouponIssuanceType
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicyStatus;
 import io.regionevent.regioneventbackend.domain.coupon.service.CreateCouponPolicyResult;
 import io.regionevent.regioneventbackend.domain.coupon.service.CreateCouponPolicyUseCase;
+import io.regionevent.regioneventbackend.domain.coupon.service.PublishCouponPolicyResult;
+import io.regionevent.regioneventbackend.domain.coupon.service.PublishCouponPolicyUseCase;
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -70,6 +72,9 @@ class CouponPolicyControllerIntegrationTest {
 
     @MockitoBean
     private CreateCouponPolicyUseCase createCouponPolicyUseCase;
+
+    @MockitoBean
+    private PublishCouponPolicyUseCase publishCouponPolicyUseCase;
 
     @Test
     void 쿠폰_정책_생성_유효하면_DRAFT_정책을_응답한다() throws Exception {
@@ -143,6 +148,57 @@ class CouponPolicyControllerIntegrationTest {
         expectBusinessError(ErrorCode.FORBIDDEN, 403, "FORBIDDEN");
         expectBusinessError(ErrorCode.NOT_FOUND, 404, "NOT_FOUND");
         expectBusinessError(ErrorCode.COUPON_POLICY_CONFLICT, 409, "COUPON_POLICY_CONFLICT");
+    }
+
+    @Test
+    void 쿠폰_정책_공개_유효하면_PUBLISHED_정책을_응답한다() throws Exception {
+        when(publishCouponPolicyUseCase.publish(
+            eq(AUTHENTICATED_USER_ID),
+            eq(300L),
+            eq("검토 완료 후 공개"),
+            any()
+        )).thenReturn(new PublishCouponPolicyResult(
+            300L,
+            CouponPolicyStatus.PUBLISHED,
+            Instant.parse("2026-08-08T00:00:00Z")
+        ));
+
+        mockMvc.perform(authenticated(post("/api/v1/operator/coupon-policies/300/publish"))
+                .contentType(APPLICATION_JSON)
+                .content("{\"reason\":\"검토 완료 후 공개\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value("SUCCESS"))
+            .andExpect(jsonPath("$.message").value("쿠폰 정책 공개에 성공했습니다."))
+            .andExpect(jsonPath("$.data.couponPolicyId").value("300"))
+            .andExpect(jsonPath("$.data.status").value("PUBLISHED"))
+            .andExpect(jsonPath("$.data.publishedAt").value("2026-08-08T00:00:00Z"));
+    }
+
+    @Test
+    void 쿠폰_정책_공개_대상이_없거나_권한과_상태가_맞지않으면_공통_오류를_응답한다() throws Exception {
+        expectPublishBusinessError(ErrorCode.NOT_FOUND, 404, "NOT_FOUND");
+        expectPublishBusinessError(ErrorCode.FORBIDDEN, 403, "FORBIDDEN");
+        expectPublishBusinessError(ErrorCode.COUPON_POLICY_CONFLICT, 409, "COUPON_POLICY_CONFLICT");
+    }
+
+    private void expectPublishBusinessError(
+        ErrorCode errorCode,
+        int statusCode,
+        String code
+    ) throws Exception {
+        when(publishCouponPolicyUseCase.publish(
+            eq(AUTHENTICATED_USER_ID),
+            eq(300L),
+            eq("검토 완료 후 공개"),
+            any()
+        )).thenThrow(new BusinessException(errorCode));
+
+        mockMvc.perform(authenticated(post("/api/v1/operator/coupon-policies/300/publish"))
+                .contentType(APPLICATION_JSON)
+                .content("{\"reason\":\"검토 완료 후 공개\"}"))
+            .andExpect(status().is(statusCode))
+            .andExpect(jsonPath("$.code").value(code))
+            .andExpect(jsonPath("$.message").value(errorCode.message()));
     }
 
     private void expectBusinessError(ErrorCode errorCode, int statusCode, String code) throws Exception {

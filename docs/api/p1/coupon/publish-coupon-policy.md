@@ -52,7 +52,7 @@ Accept: application/json
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `reason` | String | Y | 공개 사유. 앞뒤 공백 제거 후 비어 있을 수 없다. |
+| `reason` | String | Y | 공개 사유. 앞뒤 공백 제거 후 1~500자여야 한다. |
 
 ### Response
 
@@ -109,7 +109,7 @@ Accept: application/json
 {
   "statusCode": 409,
   "code": "COUPON_POLICY_CONFLICT",
-  "message": "쿠폰 정책을 공개할 수 없는 상태입니다.",
+  "message": "쿠폰 정책을 처리할 수 없는 상태입니다.",
   "data": null
 }
 ```

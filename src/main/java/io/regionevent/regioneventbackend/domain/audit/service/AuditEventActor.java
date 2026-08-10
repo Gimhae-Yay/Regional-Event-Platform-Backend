@@ -13,6 +13,22 @@ public final class AuditEventActor {
     private final String platformAdminRoleName;
     private final UserRoleAssignment roleAssignment;
 
+    public AuditEventActor(AppUser appUser, UserRole role) {
+        if (appUser == null || appUser.getUserId() == null) {
+            throw new IllegalArgumentException("appUser must be persisted");
+        }
+        if (appUser.getStatus() != AppUserStatus.ACTIVE) {
+            throw new IllegalArgumentException("actor must be active");
+        }
+        if (role == null) {
+            throw new IllegalArgumentException("role must not be null");
+        }
+
+        this.appUser = appUser;
+        this.platformAdminRoleName = role.name();
+        this.roleAssignment = null;
+    }
+
     public AuditEventActor(UserRoleAssignment roleAssignment) {
         if (roleAssignment == null
             || roleAssignment.getRoleAssignmentId() == null

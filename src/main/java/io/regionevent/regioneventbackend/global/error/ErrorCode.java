@@ -6,6 +6,9 @@ import org.springframework.http.HttpStatus;
 
 public enum ErrorCode {
 
+    COUPON_POLICY_NOT_PUBLISHED(HttpStatus.CONFLICT, "COUPON_POLICY_NOT_PUBLISHED", "쿠폰 정책이 발급 가능한 상태가 아닙니다."),
+    COUPON_ISSUE_CONFLICT(HttpStatus.CONFLICT, "COUPON_ISSUE_CONFLICT", "쿠폰을 발급할 수 없는 상태입니다."),
+
     CONTENT_STATE_CONFLICT(HttpStatus.CONFLICT, "CONTENT_STATE_CONFLICT", "콘텐츠 상태가 요청을 처리할 수 없습니다."),
     CONTENT_DELETE_CONFLICT(HttpStatus.CONFLICT, "CONTENT_DELETE_CONFLICT", "콘텐츠를 삭제할 수 없는 상태입니다."),
     CONTENT_END_CONFLICT(HttpStatus.CONFLICT, "CONTENT_END_CONFLICT", "콘텐츠를 종료할 수 없는 상태입니다."),
@@ -26,7 +29,7 @@ public enum ErrorCode {
     OPERATOR_APPLICATION_STATE_CONFLICT(HttpStatus.CONFLICT, "OPERATOR_APPLICATION_STATE_CONFLICT", "운영자 신청 상태가 요청과 일치하지 않습니다."),
     ROLE_ASSIGNMENT_CONFLICT(HttpStatus.CONFLICT, "ROLE_ASSIGNMENT_CONFLICT", "역할을 변경할 수 없습니다."),
     STAMPBOOK_STATE_CONFLICT(HttpStatus.CONFLICT, "STAMPBOOK_STATE_CONFLICT", "스탬프북 상태가 요청을 처리할 수 없습니다."),
-    COUPON_POLICY_CONFLICT(HttpStatus.CONFLICT, "COUPON_POLICY_CONFLICT", "쿠폰 정책을 생성할 수 없는 상태입니다."),
+    COUPON_POLICY_CONFLICT(HttpStatus.CONFLICT, "COUPON_POLICY_CONFLICT", "쿠폰 정책을 처리할 수 없는 상태입니다."),
     REGION_CODE_ALREADY_EXISTS(HttpStatus.CONFLICT, "REGION_CODE_ALREADY_EXISTS", "이미 사용 중인 지역 코드입니다."),
     REGION_AVAILABILITY_CONFLICT(HttpStatus.CONFLICT, "REGION_AVAILABILITY_CONFLICT", "지역 공개 여부를 변경할 수 없습니다."),
 

@@ -188,6 +188,18 @@ public class CouponPolicy {
         this.endedAt = requireNotNull(endedAt, "endedAt");
     }
 
+    public void issue(Instant issuedAt) {
+        Instant validatedIssuedAt = requireNotNull(issuedAt, "issuedAt");
+        validateStatus(CouponPolicyStatus.PUBLISHED);
+        if (validatedIssuedAt.isBefore(issueStartsAt) || validatedIssuedAt.isAfter(issueEndsAt)) {
+            throw new IllegalStateException("coupon policy is outside the issue period");
+        }
+        if (totalIssueLimit != null && issuedCount >= totalIssueLimit) {
+            throw new IllegalStateException("coupon policy issue limit is exhausted");
+        }
+        issuedCount++;
+    }
+
     public Long getCouponPolicyId() {
         return couponPolicyId;
     }

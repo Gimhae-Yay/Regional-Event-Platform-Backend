@@ -52,6 +52,7 @@ GET /api/v1/region-admin/content-revisions/{revisionId}
     "ageRequirement": "초등학생 이상",
     "materials": "필기도구",
     "cancellationPolicyText": "회차 시작 전까지 예약 전체 취소가 가능합니다.",
+    "reservationPrice": 20000,
     "candidatePublishAt": "2026-08-20T09:00:00+09:00",
     "sessions": [
       {
@@ -77,6 +78,7 @@ GET /api/v1/region-admin/content-revisions/{revisionId}
 | `data.reviewType` | String | `PUBLISHED_REVISION` 또는 `PRE_PUBLIC_REVISION` |
 | `data.contentStatus` | String | 현재 원본 상태. 각각 `PUBLISHED` 또는 `PENDING` |
 | `data.title`~`data.cancellationPolicyText` | String | 수정본의 모든 후보 표시 필드 |
+| `data.reservationPrice` | Integer | 수정본 후보 예약 기본 금액이다. 정수 KRW이며 `0` 이상이다. 승인 전에는 원본 가격을 바꾸지 않는다. |
 | `data.representativeImageUrl` | String | 후보 대표 이미지의 단기 presigned GET URL |
 | `data.representativeImageUrlExpiresAt` | String | 후보 대표 이미지 URL의 UTC 만료 시각 |
 | `data.candidatePublishAt` | String or null | 공개 전 수정본의 후보 공개 예정 시각. 공개 콘텐츠 수정본에서는 `null` |
