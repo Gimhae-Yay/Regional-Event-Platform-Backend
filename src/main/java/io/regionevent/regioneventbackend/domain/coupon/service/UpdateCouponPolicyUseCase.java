@@ -21,6 +21,7 @@ import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.coupon.dto.UpdateCouponPolicyRequest;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicy;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicyStatus;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicyUpdateHistory;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponPolicyService.UpdateCouponPolicyCommand;
 import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService;
@@ -38,6 +39,7 @@ public class UpdateCouponPolicyUseCase {
     private final AppUserService appUserService;
     private final OperatorAuthorizationService operatorAuthorizationService;
     private final CouponPolicyService couponPolicyService;
+    private final CouponPolicyUpdateHistoryService couponPolicyUpdateHistoryService;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase;
     private final Clock clock;
@@ -46,6 +48,7 @@ public class UpdateCouponPolicyUseCase {
         AppUserService appUserService,
         OperatorAuthorizationService operatorAuthorizationService,
         CouponPolicyService couponPolicyService,
+        CouponPolicyUpdateHistoryService couponPolicyUpdateHistoryService,
         RecordAuditEventUseCase recordAuditEventUseCase,
         RecordFailedAuditEventUseCase recordFailedAuditEventUseCase,
         Clock clock
@@ -53,6 +56,7 @@ public class UpdateCouponPolicyUseCase {
         this.appUserService = appUserService;
         this.operatorAuthorizationService = operatorAuthorizationService;
         this.couponPolicyService = couponPolicyService;
+        this.couponPolicyUpdateHistoryService = couponPolicyUpdateHistoryService;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
         this.recordFailedAuditEventUseCase = recordFailedAuditEventUseCase;
         this.clock = clock;
@@ -78,10 +82,23 @@ public class UpdateCouponPolicyUseCase {
         }
 
         Instant updatedAt = clock.instant().truncatedTo(ChronoUnit.MICROS);
+        UpdateCouponPolicyCommand command = parsedRequest.toCommand(couponPolicy);
+        validateCommand(command);
+        CouponPolicyUpdateHistory.Snapshot previousValues = CouponPolicyUpdateHistory.snapshotOf(
+            couponPolicy
+        );
         CouponPolicy updatedCouponPolicy = couponPolicyService.update(
             couponPolicy,
-            parsedRequest.toCommand(couponPolicy)
+            command
         );
+        couponPolicyUpdateHistoryService.create(new CouponPolicyUpdateHistory(
+            updatedCouponPolicy,
+            operator.user(),
+            previousValues,
+            CouponPolicyUpdateHistory.snapshotOf(updatedCouponPolicy),
+            parsedRequest.reason(),
+            updatedAt
+        ));
         recordAuditEventUseCase.record(new AuditEventCommand(
             requestId,
             updatedCouponPolicy.getRegion(),
@@ -97,6 +114,13 @@ public class UpdateCouponPolicyUseCase {
             updatedAt
         ));
         return UpdateCouponPolicyResult.from(updatedCouponPolicy, updatedAt);
+    }
+
+    private void validateCommand(UpdateCouponPolicyCommand command) {
+        if (command.minimumPaymentAmount() < command.discountAmount()
+            || !command.issueStartsAt().isBefore(command.issueEndsAt())) {
+            throw invalidInput();
+        }
     }
 
     private ParsedRequest parseRequest(UpdateCouponPolicyRequest request) {

@@ -29,6 +29,7 @@ import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.coupon.dto.UpdateCouponPolicyRequest;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicy;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicyStatus;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicyUpdateHistory;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponPolicyService.UpdateCouponPolicyCommand;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -53,6 +54,9 @@ class UpdateCouponPolicyUseCaseTest {
         OperatorAuthorizationService.class
     );
     private final CouponPolicyService couponPolicyService = mock(CouponPolicyService.class);
+    private final CouponPolicyUpdateHistoryService couponPolicyUpdateHistoryService = mock(
+        CouponPolicyUpdateHistoryService.class
+    );
     private final RecordAuditEventUseCase recordAuditEventUseCase = mock(RecordAuditEventUseCase.class);
     private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase = mock(
         RecordFailedAuditEventUseCase.class
@@ -62,6 +66,7 @@ class UpdateCouponPolicyUseCaseTest {
         appUserService,
         operatorAuthorizationService,
         couponPolicyService,
+        couponPolicyUpdateHistoryService,
         recordAuditEventUseCase,
         recordFailedAuditEventUseCase,
         clock
@@ -72,6 +77,9 @@ class UpdateCouponPolicyUseCaseTest {
         AuthorizedOperator operator = authorizedOperator();
         CouponPolicy draftPolicy = couponPolicy(CouponPolicyStatus.DRAFT, true);
         CouponPolicy updatedPolicy = couponPolicy(CouponPolicyStatus.DRAFT, true);
+        when(updatedPolicy.getName()).thenReturn("수정 정책");
+        when(updatedPolicy.getDescription()).thenReturn(null);
+        when(updatedPolicy.getDiscountAmount()).thenReturn(4_000L);
         when(appUserService.findActiveUserForUpdate(USER_ID)).thenReturn(Optional.of(operator.user()));
         when(operatorAuthorizationService.requireAuthorizedOperatorForUpdate(USER_ID)).thenReturn(operator);
         when(couponPolicyService.findForUpdate(COUPON_POLICY_ID)).thenReturn(draftPolicy);
@@ -95,6 +103,16 @@ class UpdateCouponPolicyUseCaseTest {
         assertThat(commandCaptor.getValue().name()).isEqualTo("수정 정책");
         assertThat(commandCaptor.getValue().description()).isNull();
         assertThat(commandCaptor.getValue().discountAmount()).isEqualTo(4_000L);
+        ArgumentCaptor<CouponPolicyUpdateHistory> historyCaptor = ArgumentCaptor.forClass(
+            CouponPolicyUpdateHistory.class
+        );
+        verify(couponPolicyUpdateHistoryService).create(historyCaptor.capture());
+        assertThat(historyCaptor.getValue().getActor()).isEqualTo(operator.user());
+        assertThat(historyCaptor.getValue().getPreviousName()).isEqualTo("기존 정책");
+        assertThat(historyCaptor.getValue().getNextName()).isEqualTo("수정 정책");
+        assertThat(historyCaptor.getValue().getPreviousDiscountAmount()).isEqualTo(3_000L);
+        assertThat(historyCaptor.getValue().getNextDiscountAmount()).isEqualTo(4_000L);
+        assertThat(historyCaptor.getValue().getReason()).isEqualTo("혜택 조정");
         ArgumentCaptor<AuditEventCommand> auditCaptor = ArgumentCaptor.forClass(AuditEventCommand.class);
         verify(recordAuditEventUseCase).record(auditCaptor.capture());
         assertThat(auditCaptor.getValue().targetType()).isEqualTo(AuditEventTargetType.COUPON_POLICY);
@@ -120,6 +138,7 @@ class UpdateCouponPolicyUseCaseTest {
         );
 
         verify(couponPolicyService, never()).update(any(), any());
+        verifyNoInteractions(couponPolicyUpdateHistoryService);
         verify(recordAuditEventUseCase, never()).record(any());
         verifyFailureAudit(ErrorCode.COUPON_POLICY_CONFLICT, publishedPolicy);
     }
@@ -140,6 +159,7 @@ class UpdateCouponPolicyUseCaseTest {
         );
 
         verify(couponPolicyService, never()).update(any(), any());
+        verifyNoInteractions(couponPolicyUpdateHistoryService);
         verify(recordAuditEventUseCase, never()).record(any());
         verifyFailureAudit(ErrorCode.FORBIDDEN, otherOperatorPolicy);
     }
@@ -160,9 +180,58 @@ class UpdateCouponPolicyUseCaseTest {
             appUserService,
             operatorAuthorizationService,
             couponPolicyService,
+            couponPolicyUpdateHistoryService,
             recordAuditEventUseCase,
             recordFailedAuditEventUseCase
         );
+    }
+
+    @Test
+    void update_병합한_금액조건이_잘못되면_입력오류를_반환한다() {
+        prepareAuthorizedOperator();
+        CouponPolicy draftPolicy = couponPolicy(CouponPolicyStatus.DRAFT, true);
+        when(couponPolicyService.findForUpdate(COUPON_POLICY_ID)).thenReturn(draftPolicy);
+
+        assertThatThrownBy(() -> useCase.update(
+            USER_ID,
+            COUPON_POLICY_ID,
+            request("수정 정책", 12_000L, null),
+            REQUEST_ID
+        )).isInstanceOfSatisfying(BusinessException.class, exception ->
+            assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT)
+        );
+
+        verify(couponPolicyService, never()).update(any(), any());
+        verifyNoInteractions(couponPolicyUpdateHistoryService, recordAuditEventUseCase);
+    }
+
+    @Test
+    void update_병합한_기간조건이_잘못되면_입력오류를_반환한다() {
+        prepareAuthorizedOperator();
+        CouponPolicy draftPolicy = couponPolicy(CouponPolicyStatus.DRAFT, true);
+        when(couponPolicyService.findForUpdate(COUPON_POLICY_ID)).thenReturn(draftPolicy);
+
+        assertThatThrownBy(() -> useCase.update(
+            USER_ID,
+            COUPON_POLICY_ID,
+            new UpdateCouponPolicyRequest(
+                null,
+                null,
+                null,
+                null,
+                null,
+                JsonNodeFactory.instance.stringNode("2026-09-01T00:00:00Z"),
+                null,
+                null,
+                JsonNodeFactory.instance.stringNode("기간 조정")
+            ),
+            REQUEST_ID
+        )).isInstanceOfSatisfying(BusinessException.class, exception ->
+            assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT)
+        );
+
+        verify(couponPolicyService, never()).update(any(), any());
+        verifyNoInteractions(couponPolicyUpdateHistoryService, recordAuditEventUseCase);
     }
 
     private void verifyFailureAudit(ErrorCode errorCode, CouponPolicy couponPolicy) {
