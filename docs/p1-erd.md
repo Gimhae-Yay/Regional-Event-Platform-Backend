@@ -384,6 +384,7 @@ erDiagram
         VARCHAR order_id "내부 주문 식별자(유일); NOT NULL"
         VARCHAR portone_payment_id "PortOne V2 거래 ID; 결제 시작 전 NULL 가능"
         VARCHAR status "상태: PENDING|APPROVED|DECLINED|CANCELLED|EXPIRED|DISCREPANT; NOT NULL"
+        TIMESTAMP created_at "결제 시도 생성 시각; NOT NULL"
         TIMESTAMP finalized_at "종결 시각; PENDING이면 NULL 가능"
     }
     payment_idempotency {
@@ -689,7 +690,7 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 
 | 테이블 | 핵심 열 | 책임 |
 | --- | --- | --- |
-| `payment` | `payment_id`, `hold_id`, `reservation_price_snapshot_id`, `reservation_id`, `order_id`, `portone_payment_id`, 상태·종결 시각 | 외부 결제가 필요한 내부 결제 시도 |
+| `payment` | `payment_id`, `hold_id`, `reservation_price_snapshot_id`, `reservation_id`, `order_id`, `portone_payment_id`, 상태·생성·종결 시각 | 외부 결제가 필요한 내부 결제 시도 |
 | `payment_idempotency` | `payment_idempotency_id`, 요청자·연산·키·요청 해시, 처리 상태, `payment_id` 또는 `reservation_id`, 만료 시각 | 결제 생성 요청의 동시 실행·재시도 결과 |
 | `payment_verification` | `payment_verification_id`, `payment_id`, 검증 원인·관측 금액·통화·주문 ID·외부 상태·내부 판정·해시 | 서버 조회 결과와 판정 근거 |
 | `payment_webhook` | `payment_webhook_id`, `provider_event_id`, `payment_id`, 인증·처리 결과·원문 해시·수신 시각 | 웹훅 재전송 차단과 처리 감사 |
