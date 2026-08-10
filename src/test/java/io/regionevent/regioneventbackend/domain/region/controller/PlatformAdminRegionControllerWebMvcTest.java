@@ -6,12 +6,14 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
@@ -25,6 +27,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import io.regionevent.regioneventbackend.domain.region.service.CreateRegionResult;
 import io.regionevent.regioneventbackend.domain.region.service.CreateRegionUseCase;
 import io.regionevent.regioneventbackend.domain.region.service.CreateRegionUseCase.CreateRegionCommand;
+import io.regionevent.regioneventbackend.domain.region.service.GetPlatformAdminRegionsUseCase;
+import io.regionevent.regioneventbackend.domain.region.service.PlatformAdminRegionListInfo;
 import io.regionevent.regioneventbackend.domain.region.service.UpdateRegionStatusResult;
 import io.regionevent.regioneventbackend.domain.region.service.UpdateRegionStatusUseCase;
 import io.regionevent.regioneventbackend.domain.region.service.UpdateRegionStatusUseCase.UpdateRegionStatusCommand;
@@ -54,10 +58,83 @@ class PlatformAdminRegionControllerWebMvcTest {
     private CreateRegionUseCase createRegionUseCase;
 
     @MockitoBean
+    private GetPlatformAdminRegionsUseCase getPlatformAdminRegionsUseCase;
+
+    @MockitoBean
     private UpdateRegionStatusUseCase updateRegionStatusUseCase;
 
     @MockitoBean
     private RefreshTokenStore refreshTokenStore;
+
+    @Test
+    void getRegions_유효한요청_전체지역목록을반환한다() throws Exception {
+        when(getPlatformAdminRegionsUseCase.get(AUTHENTICATED_USER_ID, null)).thenReturn(List.of(
+            new PlatformAdminRegionListInfo(
+                11L,
+                "GIMHAE",
+                "김해시",
+                true,
+                2L,
+                CREATED_AT,
+                UPDATED_AT
+            )
+        ));
+
+        mockMvc.perform(authenticated(get("/api/v1/platform-admin/regions")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.statusCode").value(200))
+            .andExpect(jsonPath("$.code").value("SUCCESS"))
+            .andExpect(jsonPath("$.message").value("전체 지역 조회에 성공했습니다."))
+            .andExpect(jsonPath("$.data.regions[0].regionId").value("11"))
+            .andExpect(jsonPath("$.data.regions[0].regionCode").value("GIMHAE"))
+            .andExpect(jsonPath("$.data.regions[0].name").value("김해시"))
+            .andExpect(jsonPath("$.data.regions[0].isPublic").value(true))
+            .andExpect(jsonPath("$.data.regions[0].regionAdminCount").value(2))
+            .andExpect(jsonPath("$.data.regions[0].createdAt").value("2026-08-09T00:00:00Z"))
+            .andExpect(jsonPath("$.data.regions[0].updatedAt").value("2026-08-09T01:00:00Z"));
+
+        verify(getPlatformAdminRegionsUseCase).get(AUTHENTICATED_USER_ID, null);
+    }
+
+    @Test
+    void getRegions_공개여부필터_유스케이스에전달한다() throws Exception {
+        when(getPlatformAdminRegionsUseCase.get(AUTHENTICATED_USER_ID, false)).thenReturn(List.of());
+
+        mockMvc.perform(authenticated(get("/api/v1/platform-admin/regions")
+                .queryParam("isPublic", "false")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.regions").isArray())
+            .andExpect(jsonPath("$.data.regions").isEmpty());
+
+        verify(getPlatformAdminRegionsUseCase).get(AUTHENTICATED_USER_ID, false);
+    }
+
+    @Test
+    void getRegions_잘못된공개여부_유스케이스를호출하지않는다() throws Exception {
+        mockMvc.perform(authenticated(get("/api/v1/platform-admin/regions")
+                .queryParam("isPublic", "yes")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+
+        verifyNoInteractions(getPlatformAdminRegionsUseCase);
+    }
+
+    @Test
+    void getRegions_권한없음_계약된오류를반환한다() throws Exception {
+        when(getPlatformAdminRegionsUseCase.get(AUTHENTICATED_USER_ID, null))
+            .thenThrow(new BusinessException(ErrorCode.FORBIDDEN));
+
+        mockMvc.perform(authenticated(get("/api/v1/platform-admin/regions")))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    void getRegions_인증정보없음_미인증오류를반환한다() throws Exception {
+        mockMvc.perform(get("/api/v1/platform-admin/regions"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+    }
 
     @Test
     void createRegion_유효한요청_생성응답을반환한다() throws Exception {
