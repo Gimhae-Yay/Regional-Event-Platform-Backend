@@ -36,6 +36,8 @@ class ContentRevisionServiceTest {
     private static final Instant ORIGINAL_PUBLISH_AT = Instant.parse("2026-08-05T00:00:00Z");
     private static final Instant CANDIDATE_PUBLISH_AT = Instant.parse("2026-08-06T00:00:00Z");
     private static final Instant REVIEWED_AT = Instant.parse("2026-08-02T01:00:00Z");
+    private static final int ORIGINAL_RESERVATION_PRICE = 12_000;
+    private static final int CANDIDATE_RESERVATION_PRICE = 15_000;
 
     private final ContentRevisionService contentRevisionService;
     private final ContentRevisionRepository contentRevisionRepository;
@@ -65,6 +67,8 @@ class ContentRevisionServiceTest {
     void approve_whenPublishedRevisionIsValid_appliesCandidateAndKeepsPublicationState() {
         Fixture fixture = createFixture(ContentStatus.PUBLISHED, null);
         int originalVersion = fixture.content().getVersionNo();
+        assertThat(fixture.content().getReservationPrice()).isEqualTo(ORIGINAL_RESERVATION_PRICE);
+        assertThat(fixture.revision().getReservationPrice()).isEqualTo(CANDIDATE_RESERVATION_PRICE);
 
         ContentRevision approvedRevision = contentRevisionService.approve(
             contentRevisionService.findReviewTargetForUpdate(fixture.revision().getContentRevisionId()),
@@ -79,6 +83,7 @@ class ContentRevisionServiceTest {
         assertThat(approvedRevision.getReviewReason()).isNull();
         assertThat(fixture.content().getStatus()).isEqualTo(ContentStatus.PUBLISHED);
         assertThat(fixture.content().getPublishAt()).isEqualTo(ORIGINAL_PUBLISH_AT);
+        assertThat(fixture.content().getReservationPrice()).isEqualTo(CANDIDATE_RESERVATION_PRICE);
         assertThat(fixture.content().getTitle()).isEqualTo("후보 제목");
         assertThat(fixture.content().getRepresentativeImageObject())
             .isEqualTo(fixture.revision().getCandidateImageObject());
@@ -88,6 +93,8 @@ class ContentRevisionServiceTest {
     @Test
     void approve_whenPrePublicationRevisionIsValid_appliesCandidateAndRestoresApprovedState() {
         Fixture fixture = createFixture(ContentStatus.PENDING, CANDIDATE_PUBLISH_AT);
+        assertThat(fixture.content().getReservationPrice()).isEqualTo(ORIGINAL_RESERVATION_PRICE);
+        assertThat(fixture.revision().getReservationPrice()).isEqualTo(CANDIDATE_RESERVATION_PRICE);
 
         contentRevisionService.approve(
             contentRevisionService.findReviewTargetForUpdate(fixture.revision().getContentRevisionId()),
@@ -98,6 +105,7 @@ class ContentRevisionServiceTest {
 
         assertThat(fixture.content().getStatus()).isEqualTo(ContentStatus.APPROVED);
         assertThat(fixture.content().getPublishAt()).isEqualTo(CANDIDATE_PUBLISH_AT);
+        assertThat(fixture.content().getReservationPrice()).isEqualTo(CANDIDATE_RESERVATION_PRICE);
         assertThat(fixture.content().getTitle()).isEqualTo("후보 제목");
         assertThat(fixture.revision().getStatus()).isEqualTo(ContentRevisionStatus.EDIT_APPROVED);
         assertThat(fixture.revision().getReviewReason()).isNull();
@@ -313,6 +321,7 @@ class ContentRevisionServiceTest {
             "만 7세 이상",
             "편한 복장",
             "원본 취소 정책",
+            ORIGINAL_RESERVATION_PRICE,
             ORIGINAL_PUBLISH_AT
         ));
         Instant assignedAt = Instant.parse("2026-08-01T00:10:00Z");
@@ -342,6 +351,7 @@ class ContentRevisionServiceTest {
             "만 8세 이상",
             "운동화",
             "후보 취소 정책",
+            CANDIDATE_RESERVATION_PRICE,
             candidatePublishAt,
             Instant.parse("2026-08-01T00:00:00Z"),
             null,

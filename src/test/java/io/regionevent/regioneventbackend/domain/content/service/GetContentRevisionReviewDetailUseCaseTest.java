@@ -36,6 +36,7 @@ class GetContentRevisionReviewDetailUseCaseTest {
     private static final Long REGION_ID = 10L;
     private static final Long CONTENT_ID = 101L;
     private static final Long REVISION_ID = 501L;
+    private static final int CANDIDATE_RESERVATION_PRICE = 15_000;
     private static final Instant SUBMITTED_AT = Instant.parse("2026-08-01T00:00:00Z");
     private static final Instant IMAGE_EXPIRES_AT = Instant.parse("2026-08-01T00:05:00Z");
 
@@ -86,6 +87,7 @@ class GetContentRevisionReviewDetailUseCaseTest {
         assertThat(result.contentId()).isEqualTo(CONTENT_ID);
         assertThat(result.reviewType()).isEqualTo(ContentRevisionReviewType.PUBLISHED_REVISION);
         assertThat(result.contentStatus()).isEqualTo(ContentStatus.PUBLISHED);
+        assertThat(result.candidateReservationPrice()).isEqualTo(CANDIDATE_RESERVATION_PRICE);
         assertThat(result.representativeImageUrl()).isEqualTo("https://example.invalid/view");
         assertThat(result.representativeImageUrlExpiresAt()).isEqualTo(IMAGE_EXPIRES_AT);
         assertThat(result.candidatePublishAt()).isNull();
@@ -167,6 +169,7 @@ class GetContentRevisionReviewDetailUseCaseTest {
         when(revision.getAgeRequirement()).thenReturn("초등학생 이상");
         when(revision.getMaterials()).thenReturn("필기도구");
         when(revision.getCancellationPolicyText()).thenReturn("회차 시작 전까지 취소할 수 있습니다.");
+        when(revision.getReservationPrice()).thenReturn(CANDIDATE_RESERVATION_PRICE);
         when(revision.getCandidateImageAssignedAt()).thenReturn(SUBMITTED_AT);
         when(revision.getSubmittedAt()).thenReturn(SUBMITTED_AT);
         when(content.getContentId()).thenReturn(CONTENT_ID);
