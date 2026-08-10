@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -346,14 +347,18 @@ class SuspendContentFailureAuditMySqlTest extends NonTransactionalMySqlTestSuppo
 
         @Override
         @Transactional(propagation = Propagation.MANDATORY)
-        public void invalidateAllActiveHoldsForContent(
+        public List<TerminatedCapacityHold> invalidateAllActiveHoldsForContent(
             Long contentId,
             String invalidationReason
         ) {
-            super.invalidateAllActiveHoldsForContent(contentId, invalidationReason);
+            List<TerminatedCapacityHold> terminatedCapacityHolds = super.invalidateAllActiveHoldsForContent(
+                contentId,
+                invalidationReason
+            );
             if (failNextInvalidation.compareAndSet(true, false)) {
                 throw new IllegalStateException("capacity hold invalidation failure");
             }
+            return terminatedCapacityHolds;
         }
 
         void failNextInvalidation() {

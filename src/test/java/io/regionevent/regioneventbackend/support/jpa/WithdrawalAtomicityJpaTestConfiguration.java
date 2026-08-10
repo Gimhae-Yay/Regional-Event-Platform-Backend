@@ -10,6 +10,8 @@ import io.regionevent.regioneventbackend.domain.audit.service.AuditEventActorLin
 import io.regionevent.regioneventbackend.domain.content.service.ContentService;
 import io.regionevent.regioneventbackend.domain.idempotency.service.IdempotencyService;
 import io.regionevent.regioneventbackend.domain.operator.service.OperatorApplicationService;
+import io.regionevent.regioneventbackend.domain.payment.service.PaymentService;
+import io.regionevent.regioneventbackend.domain.payment.service.RefundService;
 import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHoldService;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationService;
 import io.regionevent.regioneventbackend.domain.review.service.ReviewService;
@@ -27,6 +29,8 @@ import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenSer
     UserRoleAssignmentService.class,
     ContentService.class,
     CapacityHoldService.class,
+    PaymentService.class,
+    RefundService.class,
     ReservationService.class,
     OperatorApplicationService.class,
     VisitService.class,

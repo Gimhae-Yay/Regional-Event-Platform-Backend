@@ -149,7 +149,8 @@ class InitialP0SchemaMigrationTest {
             "28",
             "29",
             "30",
-            "31"
+            "31",
+            "32"
         );
         assertThat(tableNames).contains(
             "REGION",
@@ -315,6 +316,8 @@ class InitialP0SchemaMigrationTest {
             "UK_PAYMENT_IDEMPOTENCY_ACTOR_OPERATION_KEY",
             "UK_PAYMENT_IDEMPOTENCY_PAYMENT",
             "FK_PAYMENT_IDEMPOTENCY_PAYMENT",
+            "UK_PAYMENT_IDEMPOTENCY_RESERVATION",
+            "FK_PAYMENT_IDEMPOTENCY_RESERVATION",
             "CK_PAYMENT_IDEMPOTENCY_OPERATION",
             "CK_PAYMENT_IDEMPOTENCY_STATUS",
             "CK_PAYMENT_IDEMPOTENCY_RESULT",
