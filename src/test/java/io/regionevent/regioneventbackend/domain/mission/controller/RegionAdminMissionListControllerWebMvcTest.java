@@ -86,6 +86,27 @@ class RegionAdminMissionListControllerWebMvcTest {
         verifyNoInteractions(getRegionAdminMissionsUseCase);
     }
 
+    @Test
+    void getMissions_withSizeOutsideAllowedRange_returnsInvalidInputWithoutCallingUseCase() throws Exception {
+        mockMvc.perform(authenticated(get("/api/v1/region-admin/missions").param("size", "0")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        mockMvc.perform(authenticated(get("/api/v1/region-admin/missions").param("size", "101")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        verifyNoInteractions(getRegionAdminMissionsUseCase);
+    }
+
+    @Test
+    void getMissions_withNonNumericPage_returnsInvalidTypeWithoutCallingUseCase() throws Exception {
+        mockMvc.perform(authenticated(get("/api/v1/region-admin/missions").param("page", "number")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+
+        verifyNoInteractions(getRegionAdminMissionsUseCase);
+    }
+
     private MockHttpServletRequestBuilder authenticated(MockHttpServletRequestBuilder requestBuilder) {
         return requestBuilder.header("Authorization", "Bearer " + jwtAccessTokenService.issue(REGION_ADMIN_ID));
     }
