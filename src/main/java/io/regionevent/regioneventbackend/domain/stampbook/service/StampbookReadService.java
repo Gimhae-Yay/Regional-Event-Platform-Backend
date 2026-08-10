@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookProgressStatus;
 import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookStatus;
 import io.regionevent.regioneventbackend.domain.stampbook.repository.MyStampbookDetailProjection;
+import io.regionevent.regioneventbackend.domain.stampbook.repository.MyStampEarningProjection;
 import io.regionevent.regioneventbackend.domain.stampbook.repository.MyStampbookListProjection;
 import io.regionevent.regioneventbackend.domain.stampbook.repository.StampbookRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -54,6 +55,38 @@ public class StampbookReadService {
         return toDetailResult(projections);
     }
 
+    public MyStampEarningsResult findMyStampEarnings(
+        Long userId,
+        Long stampbookId
+    ) {
+        validateUserId(userId);
+        validateStampbookId(stampbookId);
+
+        List<MyStampEarningProjection> projections = stampbookRepository.findMyStampEarningProjections(
+            userId,
+            stampbookId,
+            StampbookStatus.PUBLISHED,
+            StampbookStatus.ENDED
+        );
+        if (projections.isEmpty()) {
+            throwDetailAccessException(stampbookId);
+        }
+
+        MyStampEarningProjection firstProjection = projections.getFirst();
+        validateEarningTarget(firstProjection, userId);
+        if (firstProjection.stampEarnId() == null) {
+            validateEmptyEarnings(projections, firstProjection);
+            return new MyStampEarningsResult(firstProjection.stampbookId(), List.of());
+        }
+
+        List<MyStampEarningsResult.Earning> earnings = projections.stream()
+            .map(projection -> toEarning(projection, firstProjection, userId))
+            .toList();
+        validateEarningOrder(earnings);
+
+        return new MyStampEarningsResult(firstProjection.stampbookId(), earnings);
+    }
+
     private MyStampbookListResult toResult(MyStampbookListProjection projection) {
         validateStampbook(projection);
 
@@ -64,6 +97,93 @@ public class StampbookReadService {
             projection.publishedAt(),
             toProgress(projection)
         );
+    }
+
+    private MyStampEarningsResult.Earning toEarning(
+        MyStampEarningProjection projection,
+        MyStampEarningProjection firstProjection,
+        Long userId
+    ) {
+        validateEarningTarget(projection, userId);
+        if (!isSame(firstProjection.stampbookId(), projection.stampbookId())
+            || firstProjection.stampbookStatus() != projection.stampbookStatus()
+            || !isSame(firstProjection.stampbookProgressId(), projection.stampbookProgressId())
+            || !isSame(firstProjection.progressUserId(), projection.progressUserId())
+            || projection.stampEarnId() == null
+            || projection.stampEarnId() <= 0
+            || projection.earnedAt() == null
+            || projection.visitId() == null
+            || projection.visitId() <= 0
+            || !isSame(projection.progressUserId(), projection.visitUserId())
+            || !isSame(projection.visitContentId(), projection.contentId())
+            || !isSame(projection.contentId(), projection.targetContentId())
+            || projection.visitedAt() == null
+            || projection.contentId() == null
+            || projection.contentId() <= 0
+            || projection.contentTitle() == null
+            || projection.contentTitle().isBlank()) {
+            throw new IllegalStateException("stamp earning read data is inconsistent");
+        }
+
+        return new MyStampEarningsResult.Earning(
+            projection.stampEarnId(),
+            projection.visitId(),
+            projection.contentId(),
+            projection.contentTitle(),
+            projection.visitedAt(),
+            projection.earnedAt()
+        );
+    }
+
+    private void validateEarningTarget(
+        MyStampEarningProjection projection,
+        Long userId
+    ) {
+        if (projection == null
+            || projection.stampbookId() == null
+            || projection.stampbookId() <= 0
+            || projection.stampbookStatus() != StampbookStatus.PUBLISHED
+                && projection.stampbookStatus() != StampbookStatus.ENDED
+            || projection.stampbookProgressId() == null
+                && projection.stampbookStatus() != StampbookStatus.PUBLISHED
+            || projection.stampbookProgressId() == null
+                && projection.progressUserId() != null
+            || projection.stampbookProgressId() != null
+                && (projection.stampbookProgressId() <= 0
+                    || projection.progressUserId() == null
+                    || projection.progressUserId() <= 0
+                    || !isSame(projection.progressUserId(), userId))) {
+            throw new IllegalStateException("stamp earning read data is inconsistent");
+        }
+    }
+
+    private void validateEmptyEarnings(
+        List<MyStampEarningProjection> projections,
+        MyStampEarningProjection firstProjection
+    ) {
+        if (projections.size() != 1
+            || firstProjection.visitId() != null
+            || firstProjection.visitUserId() != null
+            || firstProjection.visitContentId() != null
+            || firstProjection.visitedAt() != null
+            || firstProjection.contentId() != null
+            || firstProjection.contentTitle() != null
+            || firstProjection.earnedAt() != null) {
+            throw new IllegalStateException("stamp earning read data is inconsistent");
+        }
+    }
+
+    private void validateEarningOrder(List<MyStampEarningsResult.Earning> earnings) {
+        MyStampEarningsResult.Earning previous = null;
+        for (MyStampEarningsResult.Earning earning : earnings) {
+            if (previous != null
+                && (previous.earnedAt().isBefore(earning.earnedAt())
+                    || previous.earnedAt().equals(earning.earnedAt())
+                        && previous.stampEarnId() <= earning.stampEarnId())) {
+                throw new IllegalStateException("stamp earning read data is inconsistent");
+            }
+            previous = earning;
+        }
     }
 
     private MyStampbookDetailResult toDetailResult(List<MyStampbookDetailProjection> projections) {

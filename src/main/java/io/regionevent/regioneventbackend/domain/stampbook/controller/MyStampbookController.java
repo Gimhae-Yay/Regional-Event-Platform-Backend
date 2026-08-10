@@ -53,7 +53,7 @@ public class MyStampbookController {
             DETAIL_SUCCESS_MESSAGE,
             GetMyStampbookDetailResponse.from(getMyStampbookDetailUseCase.find(
                 userId,
-                MyStampbookDetailRequestIdParser.parseRequired(stampbookId)
+                MyStampbookRequestIdParser.parseRequired(stampbookId)
             ))
         ).toResponseEntity();
     }
