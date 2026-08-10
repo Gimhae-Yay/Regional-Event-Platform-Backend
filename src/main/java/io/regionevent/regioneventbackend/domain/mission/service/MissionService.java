@@ -3,6 +3,7 @@ package io.regionevent.regioneventbackend.domain.mission.service;
 import org.springframework.stereotype.Service;
 
 import io.regionevent.regioneventbackend.domain.mission.entity.Mission;
+import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
 import io.regionevent.regioneventbackend.domain.mission.repository.MissionRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
@@ -19,5 +20,12 @@ public class MissionService {
     public Mission findOperatorMissionDetail(Long missionId) {
         return missionRepository.findOperatorMissionDetailByMissionId(missionId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public boolean existsPublishedRewardCouponPolicy(Long couponPolicyId) {
+        return missionRepository.existsByRewardCouponPolicyCouponPolicyIdAndStatus(
+            couponPolicyId,
+            MissionStatus.PUBLISHED
+        );
     }
 }

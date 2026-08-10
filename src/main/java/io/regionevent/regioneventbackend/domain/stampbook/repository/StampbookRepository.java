@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import io.regionevent.regioneventbackend.domain.stampbook.entity.Stampbook;
+import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookStatus;
 
 public interface StampbookRepository extends JpaRepository<Stampbook, Long> {
 
@@ -22,4 +23,9 @@ public interface StampbookRepository extends JpaRepository<Stampbook, Long> {
         WHERE stampbook.stampbookId = :stampbookId
         """)
     Optional<Stampbook> findByStampbookIdForUpdate(@Param("stampbookId") Long stampbookId);
+
+    boolean existsByRewardCouponPolicyCouponPolicyIdAndStatus(
+        Long couponPolicyId,
+        StampbookStatus status
+    );
 }
