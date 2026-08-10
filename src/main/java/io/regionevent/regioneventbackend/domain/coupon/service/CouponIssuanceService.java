@@ -24,6 +24,11 @@ public class CouponIssuanceService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<CouponIssuance> findByCouponId(Long couponId) {
+        return couponIssuanceRepository.findByCouponCouponId(couponId);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
     public Optional<CouponIssuance> findByIdentityHashForUpdate(String issuanceIdentityHash) {
         return couponIssuanceRepository.findByIssuanceIdentityHashForUpdate(issuanceIdentityHash);
     }
