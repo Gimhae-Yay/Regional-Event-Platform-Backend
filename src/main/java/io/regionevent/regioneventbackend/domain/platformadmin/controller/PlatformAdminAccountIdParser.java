@@ -13,11 +13,20 @@ final class PlatformAdminAccountIdParser {
     }
 
     static Long toId(String value) {
+        if (!POSITIVE_DECIMAL_PATTERN.matcher(value).matches()) {
+            validateType(value);
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
         try {
-            if (!POSITIVE_DECIMAL_PATTERN.matcher(value).matches()) {
-                throw new BusinessException(ErrorCode.INVALID_INPUT);
-            }
             return Long.valueOf(value);
+        } catch (NumberFormatException exception) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, exception);
+        }
+    }
+
+    private static void validateType(String value) {
+        try {
+            Long.valueOf(value);
         } catch (NumberFormatException exception) {
             throw new BusinessException(ErrorCode.INVALID_TYPE, exception);
         }

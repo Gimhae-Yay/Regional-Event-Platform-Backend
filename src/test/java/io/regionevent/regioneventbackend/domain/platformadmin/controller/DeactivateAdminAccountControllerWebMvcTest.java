@@ -108,6 +108,17 @@ class DeactivateAdminAccountControllerWebMvcTest {
         verifyNoInteractions(deactivateAdminAccountUseCase);
     }
 
+    @Test
+    void deactivateAdminAccount_Long범위초과대상식별자_입력오류를응답하고유스케이스를호출하지않는다() throws Exception {
+        mockMvc.perform(authenticated(post("/api/v1/platform-admin/admin-accounts/9223372036854775808/deactivate"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(validRequest()))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        verifyNoInteractions(deactivateAdminAccountUseCase);
+    }
+
     private String validRequest() {
         return """
             {
