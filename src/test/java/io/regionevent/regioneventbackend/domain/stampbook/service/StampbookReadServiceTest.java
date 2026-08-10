@@ -422,6 +422,38 @@ class StampbookReadServiceTest {
             .hasMessage("stamp earning read data is inconsistent");
     }
 
+    @Test
+    void 내_스탬프_적립_이력_조회는_대상이_없으면_NOT_FOUND로_처리한다() {
+        when(stampbookRepository.findMyStampEarningProjections(
+            USER_ID,
+            101L,
+            StampbookStatus.PUBLISHED,
+            StampbookStatus.ENDED
+        )).thenReturn(List.of());
+        when(stampbookRepository.existsById(101L)).thenReturn(false);
+
+        assertThatThrownBy(() -> stampbookReadService.findMyStampEarnings(USER_ID, 101L))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.NOT_FOUND)
+            );
+    }
+
+    @Test
+    void 내_스탬프_적립_이력_조회는_다른_회원의_종료_이력을_FORBIDDEN으로_처리한다() {
+        when(stampbookRepository.findMyStampEarningProjections(
+            USER_ID,
+            101L,
+            StampbookStatus.PUBLISHED,
+            StampbookStatus.ENDED
+        )).thenReturn(List.of());
+        when(stampbookRepository.existsById(101L)).thenReturn(true);
+
+        assertThatThrownBy(() -> stampbookReadService.findMyStampEarnings(USER_ID, 101L))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN)
+            );
+    }
+
     private MyStampbookListProjection projection(
         Long stampbookId,
         StampbookStatus stampbookStatus,
