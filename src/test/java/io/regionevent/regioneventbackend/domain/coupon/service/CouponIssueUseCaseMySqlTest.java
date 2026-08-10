@@ -324,6 +324,32 @@ class CouponIssueUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         });
     }
 
+    @Test
+    void invalidCouponIssueInputRecordsFailureAuditEvent() {
+        Fixture fixture = createFixture();
+
+        assertInvalidInput(fixture, fixture.couponPolicy().getCouponPolicyId().toString(), "MISSION_REWARD", "300");
+        assertInvalidInput(fixture, fixture.couponPolicy().getCouponPolicyId().toString(), "OTHER", "300");
+        assertInvalidInput(fixture, "0", "VISIT", fixture.visit().getVisitId().toString());
+        assertInvalidInput(fixture, fixture.couponPolicy().getCouponPolicyId().toString(), "VISIT", "0");
+
+        assertThat(couponRepository.count()).isZero();
+        assertThat(couponIssuanceRepository.count()).isZero();
+        assertThat(auditEventRepository.findAll()).hasSize(4).allSatisfy(event -> {
+            assertThat(event.getTargetType()).isEqualTo(AuditEventTargetType.COUPON);
+            assertThat(event.getResult()).isEqualTo(AuditEventResult.FAILURE);
+            assertThat(event.getReasonCode()).isEqualTo(ErrorCode.INVALID_INPUT.code());
+        });
+    }
+
+    private void assertInvalidInput(Fixture fixture, String couponPolicyId, String issueSourceType, String sourceId) {
+        assertThatThrownBy(() -> couponIssueUseCase.issue(
+            fixture.user().getUserId(), couponPolicyId, issueSourceType, sourceId, UUID.randomUUID()
+        )).isInstanceOfSatisfying(BusinessException.class, exception ->
+            assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT)
+        );
+    }
+
     private CouponIssueResult issueAfterStart(Fixture fixture, CountDownLatch start) {
         await(start);
         return couponIssueUseCase.issue(
