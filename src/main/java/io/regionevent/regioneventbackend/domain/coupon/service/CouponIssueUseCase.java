@@ -126,15 +126,15 @@ public class CouponIssueUseCase {
                 .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
             actor = new AuditEventActor(user, UserRole.VISITOR);
             couponPolicy = couponPolicyService.findForIssue(couponPolicyId);
-            IssueSource issueSource = findIssueSource(couponPolicy, user, command);
 
             CouponIssueResult existingResult = couponIssuanceService
-                .findByIdentityHashForUpdate(issueSource.identityHash())
+                .findByIdentityHashForUpdate(identityHash(userId, couponPolicyId, command))
                 .map(issuance -> CouponIssueResult.from(issuance.getCoupon(), true))
                 .orElse(null);
             if (existingResult != null) {
                 return existingResult;
             }
+            IssueSource issueSource = findIssueSource(couponPolicy, user, command);
             return issueNewCoupon(couponPolicy, user, command.issueSourceType(), issueSource, actor, requestId);
         } catch (BusinessException exception) {
             recordFailure(requestId, actor, couponPolicy, exception.getErrorCode());

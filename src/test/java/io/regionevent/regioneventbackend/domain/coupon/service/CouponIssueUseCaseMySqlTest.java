@@ -220,6 +220,32 @@ class CouponIssueUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
     }
 
     @Test
+    void 기존_방문_발급이_있으면_다른_방문_근거를_다시_검증하지_않는다() {
+        Fixture fixture = createFixture();
+        CouponIssueResult issued = couponIssueUseCase.issue(
+            fixture.user().getUserId(),
+            fixture.couponPolicy().getCouponPolicyId(),
+            new CouponIssueUseCase.CouponIssueCommand(CouponIssuanceType.VISIT, fixture.visit().getVisitId()),
+            UUID.randomUUID()
+        );
+
+        CouponIssueResult duplicate = couponIssueUseCase.issue(
+            fixture.user().getUserId(),
+            fixture.couponPolicy().getCouponPolicyId(),
+            new CouponIssueUseCase.CouponIssueCommand(CouponIssuanceType.VISIT, Long.MAX_VALUE),
+            UUID.randomUUID()
+        );
+
+        assertThat(duplicate.couponId()).isEqualTo(issued.couponId());
+        assertThat(duplicate.duplicate()).isTrue();
+        assertThat(couponRepository.count()).isOne();
+        assertThat(couponIssuanceRepository.count()).isOne();
+        assertThat(auditEventRepository.findAll()).singleElement().satisfies(event ->
+            assertThat(event.getResult()).isEqualTo(AuditEventResult.SUCCESS)
+        );
+    }
+
+    @Test
     void 스탬프북_완료_보상은_본인에게만_발급한다() {
         StampbookFixture fixture = createStampbookFixture();
 
