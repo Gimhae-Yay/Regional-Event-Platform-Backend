@@ -25,6 +25,8 @@ public interface MissionRewardClaimRepository extends JpaRepository<MissionRewar
         Long missionParticipationId
     );
 
+    boolean existsByMissionParticipationMissionParticipationId(Long missionParticipationId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT claim
