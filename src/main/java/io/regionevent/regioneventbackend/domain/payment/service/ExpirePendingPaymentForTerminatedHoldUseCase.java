@@ -46,18 +46,18 @@ public class ExpirePendingPaymentForTerminatedHoldUseCase {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public void expire(
+    public boolean expire(
         CapacityHoldService.TerminatedCapacityHold capacityHold,
         UUID requestId,
         AuditEventActor actor
     ) {
-        recordCapacityHoldAuditEvent(capacityHold, requestId, actor);
-        paymentService.expirePendingByHoldId(capacityHold.holdId(), capacityHold.occurredAt())
-            .ifPresent(payment -> {
+        return paymentService.expirePendingByHoldId(capacityHold.holdId(), capacityHold.occurredAt())
+            .map(payment -> {
                 paymentIdempotencyService.setPaymentResultExpiration(
                     payment,
                     payment.getFinalizedAt()
                 );
+                recordCapacityHoldAuditEvent(capacityHold, requestId, actor);
                 recordPaymentAuditEvent(payment, capacityHold, requestId, actor);
                 releaseSnapshotCoupon(
                     payment.getReservationPriceSnapshot().getCoupon(),
@@ -65,7 +65,9 @@ public class ExpirePendingPaymentForTerminatedHoldUseCase {
                     requestId,
                     actor
                 );
-            });
+                return true;
+            })
+            .orElse(false);
     }
 
     private void releaseSnapshotCoupon(
