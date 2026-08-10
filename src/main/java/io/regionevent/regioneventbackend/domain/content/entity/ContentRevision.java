@@ -137,7 +137,7 @@ public class ContentRevision {
     private String cancellationPolicyText;
 
     @Column(name = "reservation_price", nullable = false)
-    private int reservationPrice;
+    private long reservationPrice;
 
     @Column(name = "publish_at")
     private Instant publishAt;
@@ -198,7 +198,7 @@ public class ContentRevision {
         String ageRequirement,
         String materials,
         String cancellationPolicyText,
-        int reservationPrice,
+        long reservationPrice,
         Instant publishAt,
         Instant submittedAt,
         Instant reviewedAt,
@@ -346,7 +346,7 @@ public class ContentRevision {
         String ageRequirement,
         String materials,
         String cancellationPolicyText,
-        int reservationPrice,
+        long reservationPrice,
         Instant publishAt
     ) {
         if (status != ContentRevisionStatus.EDIT_REJECTED) {
@@ -429,7 +429,7 @@ public class ContentRevision {
         return cancellationPolicyText;
     }
 
-    public int getReservationPrice() {
+    public long getReservationPrice() {
         return reservationPrice;
     }
 
@@ -513,7 +513,7 @@ public class ContentRevision {
         return value;
     }
 
-    private static int requireNonNegative(int value, String fieldName) {
+    private static long requireNonNegative(long value, String fieldName) {
         if (value < 0) {
             throw new IllegalArgumentException(fieldName + " must not be negative");
         }

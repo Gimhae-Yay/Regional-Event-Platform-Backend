@@ -272,7 +272,7 @@ public class ContentRevisionService {
         String ageRequirement,
         String materials,
         String cancellationPolicyText,
-        int reservationPrice,
+        long reservationPrice,
         Instant publishAt
     ) {
 
@@ -305,7 +305,7 @@ public class ContentRevisionService {
         String ageRequirement,
         String materials,
         String cancellationPolicyText,
-        int reservationPrice,
+        long reservationPrice,
         Instant publishAt,
         ImageObject candidateImageObject,
         Instant candidateImageAssignedAt

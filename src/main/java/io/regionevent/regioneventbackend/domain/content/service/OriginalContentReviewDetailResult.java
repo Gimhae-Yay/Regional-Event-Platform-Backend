@@ -24,7 +24,7 @@ public record OriginalContentReviewDetailResult(
     String ageRequirement,
     String materials,
     String cancellationPolicyText,
-    int reservationPrice,
+    long reservationPrice,
     Instant publishAt,
     List<Session> sessions
 ) {

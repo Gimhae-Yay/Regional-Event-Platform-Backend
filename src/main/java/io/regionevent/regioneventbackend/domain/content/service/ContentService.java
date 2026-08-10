@@ -406,7 +406,7 @@ public class ContentService {
         String ageRequirement,
         String materials,
         String cancellationPolicyText,
-        int reservationPrice,
+        long reservationPrice,
         Instant publishAt
     ) {
 
@@ -439,7 +439,7 @@ public class ContentService {
         String ageRequirement,
         String materials,
         String cancellationPolicyText,
-        int reservationPrice,
+        long reservationPrice,
         Instant publishAt
     ) {
 

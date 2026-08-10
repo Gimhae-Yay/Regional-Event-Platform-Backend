@@ -22,7 +22,7 @@ public record ContentRevisionReviewDetailResult(
     String ageRequirement,
     String materials,
     String cancellationPolicyText,
-    int candidateReservationPrice,
+    long candidateReservationPrice,
     Instant candidatePublishAt,
     List<Session> sessions,
     Instant submittedAt

@@ -36,8 +36,8 @@ class ContentRevisionServiceTest {
     private static final Instant ORIGINAL_PUBLISH_AT = Instant.parse("2026-08-05T00:00:00Z");
     private static final Instant CANDIDATE_PUBLISH_AT = Instant.parse("2026-08-06T00:00:00Z");
     private static final Instant REVIEWED_AT = Instant.parse("2026-08-02T01:00:00Z");
-    private static final int ORIGINAL_RESERVATION_PRICE = 12_000;
-    private static final int CANDIDATE_RESERVATION_PRICE = 15_000;
+    private static final long ORIGINAL_RESERVATION_PRICE = 2_147_483_648L;
+    private static final long CANDIDATE_RESERVATION_PRICE = 2_147_483_649L;
 
     private final ContentRevisionService contentRevisionService;
     private final ContentRevisionRepository contentRevisionRepository;

@@ -10,7 +10,7 @@ public record GetSessionReservationInfoResponse(
     String contentId,
     OffsetDateTime startsAt,
     OffsetDateTime endsAt,
-    int price,
+    long price,
     int remainingCapacity,
     boolean reservable
 ) {

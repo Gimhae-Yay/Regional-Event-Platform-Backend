@@ -48,10 +48,12 @@ import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus;
+import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationPriceSnapshot;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.reservation.dto.CreateReservationHoldRequest;
 import io.regionevent.regioneventbackend.domain.reservation.dto.CreateReservationHoldResponse;
 import io.regionevent.regioneventbackend.domain.reservation.repository.CapacityHoldRepository;
+import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationPriceSnapshotRepository;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationRepository;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
@@ -79,6 +81,7 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
     private final ContentRepository contentRepository;
     private final ContentSessionRepository contentSessionRepository;
     private final CapacityHoldRepository capacityHoldRepository;
+    private final ReservationPriceSnapshotRepository reservationPriceSnapshotRepository;
     private final ReservationRepository reservationRepository;
     private final IdempotencyRecordRepository idempotencyRecordRepository;
     private final AuditEventRepository auditEventRepository;
@@ -96,6 +99,7 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
         ContentRepository contentRepository,
         ContentSessionRepository contentSessionRepository,
         CapacityHoldRepository capacityHoldRepository,
+        ReservationPriceSnapshotRepository reservationPriceSnapshotRepository,
         ReservationRepository reservationRepository,
         IdempotencyRecordRepository idempotencyRecordRepository,
         AuditEventRepository auditEventRepository,
@@ -111,6 +115,7 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
         this.contentRepository = contentRepository;
         this.contentSessionRepository = contentSessionRepository;
         this.capacityHoldRepository = capacityHoldRepository;
+        this.reservationPriceSnapshotRepository = reservationPriceSnapshotRepository;
         this.reservationRepository = reservationRepository;
         this.idempotencyRecordRepository = idempotencyRecordRepository;
         this.auditEventRepository = auditEventRepository;
@@ -371,6 +376,34 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
                 .equals(fixture.capacityHold().getHoldId()));
     }
 
+    @Test
+    void p1PriceSnapshotLinkedHold_isRejectedByP0FreeReservationConfirmation() {
+        Fixture fixture = createFixture();
+        reservationPriceSnapshotRepository.saveAndFlush(new ReservationPriceSnapshot(
+            fixture.capacityHold(),
+            null,
+            0,
+            0,
+            0,
+            "KRW",
+            Instant.now()
+        ));
+
+        ReservationConfirmationResult result = confirm(
+            fixture,
+            fixture.capacityHold().getHoldId(),
+            "p1-snapshot-" + System.nanoTime()
+        );
+
+        assertThat(result.isSuccessful()).isFalse();
+        assertThat(result.errorCode()).isEqualTo(ErrorCode.RESERVATION_CONFIRM_CONFLICT);
+        assertThat(capacityHoldRepository.findById(fixture.capacityHold().getHoldId()))
+            .hasValueSatisfying(hold -> assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.ACTIVE));
+        assertThat(reservationRepository.findAll())
+            .noneMatch(reservation -> reservation.getCapacityHold().getHoldId()
+                .equals(fixture.capacityHold().getHoldId()));
+    }
+
     private List<ReservationConfirmationResult> confirmConcurrently(
         Fixture fixture,
         String firstIdempotencyKey,
@@ -547,7 +580,7 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
         return createFixture(0);
     }
 
-    private Fixture createFixture(int reservationPrice) {
+    private Fixture createFixture(long reservationPrice) {
         return transactionTemplate.execute(status -> {
             String suffix = Long.toUnsignedString(System.nanoTime());
             Instant now = Instant.now();

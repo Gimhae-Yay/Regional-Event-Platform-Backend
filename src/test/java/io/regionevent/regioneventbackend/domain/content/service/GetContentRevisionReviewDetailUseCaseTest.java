@@ -36,7 +36,7 @@ class GetContentRevisionReviewDetailUseCaseTest {
     private static final Long REGION_ID = 10L;
     private static final Long CONTENT_ID = 101L;
     private static final Long REVISION_ID = 501L;
-    private static final int CANDIDATE_RESERVATION_PRICE = 15_000;
+    private static final long CANDIDATE_RESERVATION_PRICE = 2_147_483_649L;
     private static final Instant SUBMITTED_AT = Instant.parse("2026-08-01T00:00:00Z");
     private static final Instant IMAGE_EXPIRES_AT = Instant.parse("2026-08-01T00:05:00Z");
 

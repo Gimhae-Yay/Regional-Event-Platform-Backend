@@ -167,7 +167,7 @@ public class UpdateContentRevisionUseCase {
         }
     }
 
-    private void validateReservationPrice(Integer reservationPrice) {
+    private void validateReservationPrice(Long reservationPrice) {
         if (reservationPrice == null || reservationPrice < 0) {
             throw invalidInput();
         }

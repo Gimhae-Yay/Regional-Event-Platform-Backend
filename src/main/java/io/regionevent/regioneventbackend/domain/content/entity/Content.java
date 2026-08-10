@@ -94,7 +94,7 @@ public class Content {
     private String cancellationPolicyText;
 
     @Column(name = "reservation_price", nullable = false)
-    private int reservationPrice;
+    private long reservationPrice;
 
     @Column(name = "publish_at", nullable = false)
     private Instant publishAt;
@@ -135,7 +135,7 @@ public class Content {
         String ageRequirement,
         String materials,
         String cancellationPolicyText,
-        int reservationPrice,
+        long reservationPrice,
         Instant publishAt
     ) {
         this.region = requireNotNull(region, "region");
@@ -305,7 +305,7 @@ public class Content {
         String ageRequirement,
         String materials,
         String cancellationPolicyText,
-        int reservationPrice,
+        long reservationPrice,
         Instant publishAt
     ) {
         this.title = requireNotBlank(title, "title");
@@ -421,7 +421,7 @@ public class Content {
         return cancellationPolicyText;
     }
 
-    public int getReservationPrice() {
+    public long getReservationPrice() {
         return reservationPrice;
     }
 
@@ -463,7 +463,7 @@ public class Content {
         return value;
     }
 
-    private static int requireNonNegative(int value, String fieldName) {
+    private static long requireNonNegative(long value, String fieldName) {
         if (value < 0) {
             throw new IllegalArgumentException(fieldName + " must not be negative");
         }

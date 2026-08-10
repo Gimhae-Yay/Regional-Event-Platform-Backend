@@ -36,7 +36,7 @@ class GetOriginalContentReviewDetailUseCaseTest {
     private static final Long USER_ID = 1L;
     private static final Long REGION_ID = 10L;
     private static final Long CONTENT_ID = 101L;
-    private static final int RESERVATION_PRICE = 12_000;
+    private static final long RESERVATION_PRICE = 2_147_483_648L;
     private static final Instant IMAGE_EXPIRES_AT = Instant.parse("2026-08-01T00:05:00Z");
 
     private final RegionAdminAuthorizationService regionAdminAuthorizationService =

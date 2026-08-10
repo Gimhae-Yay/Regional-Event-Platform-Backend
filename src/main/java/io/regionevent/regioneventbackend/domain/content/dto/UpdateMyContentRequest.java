@@ -44,7 +44,7 @@ public record UpdateMyContentRequest(
 
     @NotNull
     @PositiveOrZero
-    Integer reservationPrice,
+    Long reservationPrice,
 
     @NotNull
     @JsonFormat(without = JsonFormat.Feature.ADJUST_DATES_TO_CONTEXT_TIME_ZONE)
@@ -68,7 +68,7 @@ public record UpdateMyContentRequest(
     ) {
         this(
             title, description, locationText, operatingHoursText, contactText, precautions,
-            ageRequirement, materials, cancellationPolicyText, 0, publishAt,
+            ageRequirement, materials, cancellationPolicyText, 0L, publishAt,
             representativeImageObjectId
         );
     }

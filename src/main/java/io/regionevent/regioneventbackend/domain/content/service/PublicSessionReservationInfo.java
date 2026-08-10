@@ -7,7 +7,7 @@ import io.regionevent.regioneventbackend.domain.content.repository.PublicSession
 public record PublicSessionReservationInfo(
     Long sessionId,
     Long contentId,
-    int reservationPrice,
+    long reservationPrice,
     Instant startsAt,
     Instant endsAt,
     int remainingCapacity,
