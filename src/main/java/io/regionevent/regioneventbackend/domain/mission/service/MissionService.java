@@ -28,6 +28,30 @@ public class MissionService {
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
+    public Mission findMission(Long missionId) {
+        return missionRepository.findByMissionId(missionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public Mission findForUpdate(Long missionId) {
+        return missionRepository.findByMissionIdForUpdate(missionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public Mission approve(
+        Mission mission,
+        Instant publishedAt
+    ) {
+        if (mission.getStatus() != MissionStatus.PENDING_REVIEW) {
+            throw new BusinessException(ErrorCode.MISSION_STATE_CONFLICT);
+        }
+        if (publishedAt == null || !publishedAt.isBefore(mission.getEndsAt())) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        mission.approve(publishedAt);
+        return missionRepository.saveAndFlush(mission);
+    }
+
     public boolean existsPublishedRewardCouponPolicy(Long couponPolicyId) {
         return missionRepository.existsByRewardCouponPolicyCouponPolicyIdAndStatus(
             couponPolicyId,
