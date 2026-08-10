@@ -25,6 +25,11 @@ public interface StampbookRepository extends JpaRepository<Stampbook, Long> {
         """)
     Optional<Stampbook> findByStampbookIdForUpdate(@Param("stampbookId") Long stampbookId);
 
+    boolean existsByRewardCouponPolicyCouponPolicyIdAndStatus(
+        Long couponPolicyId,
+        StampbookStatus status
+    );
+
     @Query("""
         SELECT new io.regionevent.regioneventbackend.domain.stampbook.repository.MyStampbookListProjection(
             stampbook.stampbookId,
