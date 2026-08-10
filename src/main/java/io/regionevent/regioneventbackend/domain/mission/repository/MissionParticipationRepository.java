@@ -73,6 +73,9 @@ public interface MissionParticipationRepository extends JpaRepository<MissionPar
         Long userId
     );
 
+    @EntityGraph(attributePaths = {"mission", "mission.region", "user"})
+    Optional<MissionParticipation> findByMissionParticipationId(Long missionParticipationId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT participation

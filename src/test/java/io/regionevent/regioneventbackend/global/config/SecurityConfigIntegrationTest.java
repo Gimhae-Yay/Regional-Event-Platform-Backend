@@ -75,6 +75,14 @@ class SecurityConfigIntegrationTest {
     }
 
     @Test
+    void publicPath_withNonBearerAuthorizationHeader_isAllowed() throws Exception {
+        mockMvc.perform(get("/api/v1/contents")
+                .header(HttpHeaders.AUTHORIZATION, "Basic malformed"))
+            .andExpect(result -> assertThat(result.getResponse().getStatus())
+                .isNotIn(401, 403));
+    }
+
+    @Test
     void pathAdjacentToPublicPath_withoutAccessToken_returnsUnauthenticatedResponse() throws Exception {
         mockMvc.perform(get("/api/v1/regions/1"))
             .andExpect(status().isUnauthorized())
@@ -189,6 +197,7 @@ class SecurityConfigIntegrationTest {
             Arguments.of(HttpMethod.POST, "/api/v1/auth/logout"),
             Arguments.of(HttpMethod.GET, "/api/v1/regions"),
             Arguments.of(HttpMethod.GET, "/api/v1/regions/1/home"),
+            Arguments.of(HttpMethod.GET, "/api/v1/regions/1/missions"),
             Arguments.of(HttpMethod.GET, "/api/v1/contents"),
             Arguments.of(HttpMethod.GET, "/api/v1/contents/1"),
             Arguments.of(HttpMethod.GET, "/api/v1/contents/1/reviews"),
