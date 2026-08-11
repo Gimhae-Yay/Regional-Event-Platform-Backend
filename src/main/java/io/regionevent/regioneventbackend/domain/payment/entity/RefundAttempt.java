@@ -161,12 +161,37 @@ public class RefundAttempt {
         return attemptedAt;
     }
 
+    public void respond(String portoneCancellationId, String externalStatus, String resultHash) {
+        if (outcomeKind != RefundAttemptOutcomeKind.PENDING) {
+            throw new IllegalStateException("only pending attempt can be responded");
+        }
+        this.portoneCancellationId = requireNotBlank(portoneCancellationId, "portoneCancellationId");
+        this.externalStatus = requireNotBlank(externalStatus, "externalStatus");
+        this.resultHash = requireNotBlank(resultHash, "resultHash");
+        outcomeKind = RefundAttemptOutcomeKind.RESPONDED;
+    }
+
+    public void noResponse(RefundFailureReasonCode failureReasonCode) {
+        if (outcomeKind != RefundAttemptOutcomeKind.PENDING) {
+            throw new IllegalStateException("only pending attempt can be finalized");
+        }
+        this.failureReasonCode = requireNotNull(failureReasonCode, "failureReasonCode");
+        outcomeKind = RefundAttemptOutcomeKind.NO_RESPONSE;
+    }
+
     private static <T> T requireNotNull(
         T value,
         String fieldName
     ) {
         if (value == null) {
             throw new IllegalArgumentException(fieldName + " must not be null");
+        }
+        return value;
+    }
+
+    private static String requireNotBlank(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(fieldName + " must not be blank");
         }
         return value;
     }

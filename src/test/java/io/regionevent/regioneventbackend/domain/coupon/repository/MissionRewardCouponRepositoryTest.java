@@ -121,6 +121,9 @@ class MissionRewardCouponRepositoryTest {
         CouponIssuance foundIssuance = couponIssuanceRepository
             .findByIssuanceIdentityHash("mission-reward-issuance-hash")
             .orElseThrow();
+        CouponIssuance foundByClaim = couponIssuanceRepository
+            .findByMissionRewardClaimMissionRewardClaimId(missionRewardClaim.getMissionRewardClaimId())
+            .orElseThrow();
         MissionRewardClaim foundClaim = missionRewardClaimRepository
             .findByMissionParticipationMissionParticipationId(
                 fixtures.participation().getMissionParticipationId()
@@ -128,15 +131,45 @@ class MissionRewardCouponRepositoryTest {
             .orElseThrow();
 
         assertThat(foundIssuance.getCouponIssuanceId()).isEqualTo(issuance.getCouponIssuanceId());
+        assertThat(foundByClaim.getCouponIssuanceId()).isEqualTo(issuance.getCouponIssuanceId());
         assertThat(foundClaim.getMissionRewardClaimId()).isEqualTo(missionRewardClaim.getMissionRewardClaimId());
         assertThat(couponStatusHistoryRepository
             .findAllByCouponCouponIdOrderByOccurredAtAsc(coupon.getCouponId()))
             .extracting(CouponStatusHistory::getNextStatus)
             .containsExactly(CouponStatus.AVAILABLE);
+        assertThat(couponStatusHistoryRepository
+            .findFirstByCouponCouponIdOrderByOccurredAtAsc(coupon.getCouponId()))
+            .hasValueSatisfying(history -> {
+                assertThat(history.getPreviousStatus()).isNull();
+                assertThat(history.getNextStatus()).isEqualTo(CouponStatus.AVAILABLE);
+                assertThat(history.getReasonCode()).isEqualTo("MISSION_REWARD_ISSUED");
+                assertThat(history.getActorKind()).isEqualTo("USER");
+            });
         assertThat(Hibernate.isInitialized(foundIssuance.getCoupon())).isTrue();
         assertThat(Hibernate.isInitialized(foundIssuance.getMissionRewardClaim())).isTrue();
         assertThat(Hibernate.isInitialized(foundClaim.getMissionParticipation())).isTrue();
         assertThat(Hibernate.isInitialized(foundClaim.getCouponPolicy())).isTrue();
+    }
+
+    @Test
+    void 미션참여와보상수령은식별자로잠금조회한다() {
+        RewardFixtures fixtures = createRewardFixtures();
+        MissionRewardClaim claim = missionRewardClaimRepository.saveAndFlush(
+            new MissionRewardClaim(fixtures.participation(), fixtures.couponPolicy(), CLAIMED_AT)
+        );
+        entityManager.clear();
+
+        assertThat(missionParticipationRepository.findByMissionParticipationIdForUpdate(
+            fixtures.participation().getMissionParticipationId()
+        )).hasValueSatisfying(participation ->
+            assertThat(participation.getMissionParticipationId())
+                .isEqualTo(fixtures.participation().getMissionParticipationId())
+        );
+        assertThat(missionRewardClaimRepository.findByMissionParticipationIdForUpdate(
+            fixtures.participation().getMissionParticipationId()
+        )).hasValueSatisfying(found ->
+            assertThat(found.getMissionRewardClaimId()).isEqualTo(claim.getMissionRewardClaimId())
+        );
     }
 
     @Test
