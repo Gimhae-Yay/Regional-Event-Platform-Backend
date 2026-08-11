@@ -31,6 +31,17 @@ public class MissionService {
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
+    public Page<Mission> findRegionAdminMissions(
+        Long regionId,
+        MissionStatus status,
+        Pageable pageable
+    ) {
+        if (status == null) {
+            return missionRepository.findAllByRegionRegionIdOrderByMissionIdDesc(regionId, pageable);
+        }
+        return missionRepository.findAllByRegionRegionIdAndStatusOrderByMissionIdDesc(regionId, status, pageable);
+    }
+
     public Mission create(
         Region region,
         MissionConditionType conditionType,
