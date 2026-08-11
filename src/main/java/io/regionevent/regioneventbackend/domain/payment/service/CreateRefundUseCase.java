@@ -11,6 +11,14 @@ import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetTyp
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventActor;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
+import io.regionevent.regioneventbackend.domain.coupon.entity.Coupon;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponRedemption;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponRedemptionStatus;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatus;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatusHistory;
+import io.regionevent.regioneventbackend.domain.coupon.service.CouponRedemptionService;
+import io.regionevent.regioneventbackend.domain.coupon.service.CouponService;
+import io.regionevent.regioneventbackend.domain.coupon.service.CouponStatusHistoryService;
 import io.regionevent.regioneventbackend.domain.payment.dto.CreateRefundRequest;
 import io.regionevent.regioneventbackend.domain.payment.dto.CreateRefundResponse;
 import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
@@ -22,6 +30,8 @@ import io.regionevent.regioneventbackend.domain.payment.entity.RefundAttemptInit
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundFailureReasonCode;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneLookupException;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOnePaymentGateway;
+import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
+import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminAssignment;
 import io.regionevent.regioneventbackend.domain.user.service.PlatformAdminAuthorizationService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -33,12 +43,16 @@ public class CreateRefundUseCase {
     private static final String CURRENCY = "KRW";
     private static final String DISCREPANCY_ACTION_TYPE = "FULL_REFUND_REQUEST";
     private static final String DISCREPANCY_ACTION_REASON_CODE = "MANUAL_FULL_REFUND";
+    private static final String COUPON_RESTORE_REASON = "REFUND_SUCCEEDED";
 
     private final PlatformAdminAuthorizationService platformAdminAuthorizationService;
     private final PaymentService paymentService;
     private final RefundService refundService;
     private final RefundAttemptService refundAttemptService;
     private final PaymentDiscrepancyService paymentDiscrepancyService;
+    private final CouponService couponService;
+    private final CouponRedemptionService couponRedemptionService;
+    private final CouponStatusHistoryService couponStatusHistoryService;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final PortOnePaymentGateway portOnePaymentGateway;
 
@@ -48,6 +62,9 @@ public class CreateRefundUseCase {
         RefundService refundService,
         RefundAttemptService refundAttemptService,
         PaymentDiscrepancyService paymentDiscrepancyService,
+        CouponService couponService,
+        CouponRedemptionService couponRedemptionService,
+        CouponStatusHistoryService couponStatusHistoryService,
         RecordAuditEventUseCase recordAuditEventUseCase,
         PortOnePaymentGateway portOnePaymentGateway
     ) {
@@ -56,6 +73,9 @@ public class CreateRefundUseCase {
         this.refundService = refundService;
         this.refundAttemptService = refundAttemptService;
         this.paymentDiscrepancyService = paymentDiscrepancyService;
+        this.couponService = couponService;
+        this.couponRedemptionService = couponRedemptionService;
+        this.couponStatusHistoryService = couponStatusHistoryService;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
         this.portOnePaymentGateway = portOnePaymentGateway;
     }
@@ -106,7 +126,9 @@ public class CreateRefundUseCase {
             );
             attempt.respond(cancellation.cancellationId(), cancellation.status(), cancellation.resultHash());
             if (cancellation.isSucceeded()) {
-                refund.succeed(Instant.now());
+                Instant completedAt = Instant.now();
+                refund.succeed(completedAt);
+                restoreCouponIfEligible(refund, completedAt, requestId, assignment);
             } else {
                 refund.fail(Instant.now());
             }
@@ -152,6 +174,64 @@ public class CreateRefundUseCase {
             CURRENCY,
             actedAt
         );
+    }
+
+    private void restoreCouponIfEligible(
+        Refund refund,
+        Instant restoredAt,
+        UUID requestId,
+        PlatformAdminAssignment assignment
+    ) {
+        Payment payment = refund.getPayment();
+        Reservation reservation = payment.getReservation();
+        if (reservation == null
+            || reservation.getStatus() != ReservationStatus.CANCELLED
+            || !reservation.getCancelledAt().isBefore(reservation.getContentSession().getStartsAt())
+            || payment.getReservationPriceSnapshot().getCoupon() == null) {
+            return;
+        }
+        CouponRedemption redemption = couponRedemptionService
+            .findByReservationPriceSnapshotIdForUpdate(
+                payment.getReservationPriceSnapshot().getReservationPriceSnapshotId()
+            )
+            .orElse(null);
+        if (redemption == null || redemption.getStatus() == CouponRedemptionStatus.REVERSED) {
+            return;
+        }
+        Coupon snapshotCoupon = payment.getReservationPriceSnapshot().getCoupon();
+        Coupon coupon = couponService.findByCouponIdForUpdate(snapshotCoupon.getCouponId())
+            .orElseThrow(() -> new IllegalStateException("snapshot coupon does not exist"));
+        if (redemption.getCoupon().getCouponId().equals(coupon.getCouponId())
+            && redemption.getReservation().getReservationId().equals(reservation.getReservationId())
+            && redemption.getReservationPriceSnapshot().getReservationPriceSnapshotId().equals(
+                payment.getReservationPriceSnapshot().getReservationPriceSnapshotId()
+            )
+            && coupon.getStatus() == CouponStatus.USED) {
+            redemption.reverse(restoredAt);
+            CouponStatus restoredStatus = couponService.restoreUsedCoupon(coupon, restoredAt);
+            couponStatusHistoryService.create(new CouponStatusHistory(
+                coupon,
+                CouponStatus.USED,
+                restoredStatus,
+                COUPON_RESTORE_REASON,
+                assignment.getGrade().name(),
+                restoredAt
+            ));
+            recordAuditEventUseCase.record(new AuditEventCommand(
+                requestId,
+                payment.getCapacityHold().getRegion(),
+                AuditEventTargetType.COUPON,
+                coupon.getCouponId(),
+                CouponStatus.USED.name(),
+                restoredStatus.name(),
+                AuditEventResult.SUCCESS,
+                COUPON_RESTORE_REASON,
+                null,
+                null,
+                new AuditEventActor(assignment),
+                restoredAt
+            ));
+        }
     }
 
     private long toPositiveId(String value) {
