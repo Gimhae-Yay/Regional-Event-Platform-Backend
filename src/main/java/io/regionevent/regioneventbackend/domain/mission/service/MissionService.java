@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.mission.service;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
@@ -52,6 +53,15 @@ public class MissionService {
             return missionRepository.findAllByRegionRegionIdOrderByMissionIdDesc(regionId, pageable);
         }
         return missionRepository.findAllByRegionRegionIdAndStatusOrderByMissionIdDesc(regionId, status, pageable);
+    }
+
+    public Mission findMissionForParticipationUpdate(Long missionId) {
+        return missionRepository.findByMissionIdForParticipationUpdate(missionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public Instant findCurrentDatabaseTime() {
+        return toInstant(missionRepository.findCurrentEpochSeconds());
     }
 
     public Mission create(
@@ -149,5 +159,13 @@ public class MissionService {
             missions.getTotalElements(),
             missions.getTotalPages()
         );
+    }
+
+    private Instant toInstant(BigDecimal epochSeconds) {
+        long seconds = epochSeconds.longValue();
+        long nanos = epochSeconds.remainder(BigDecimal.ONE)
+            .movePointRight(9)
+            .longValue();
+        return Instant.ofEpochSecond(seconds, nanos);
     }
 }
