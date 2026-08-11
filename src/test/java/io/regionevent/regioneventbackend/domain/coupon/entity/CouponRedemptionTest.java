@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.coupon.entity;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -13,6 +14,31 @@ import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationPriceSnapshot;
 
 class CouponRedemptionTest {
+
+    @Test
+    void 확정된_쿠폰_사용_이력은_한번만_복구할_수_있다() {
+        Coupon coupon = mock(Coupon.class);
+        ReservationPriceSnapshot snapshot = mock(ReservationPriceSnapshot.class);
+        Reservation reservation = mock(Reservation.class);
+        CapacityHold capacityHold = mock(CapacityHold.class);
+        when(snapshot.getCoupon()).thenReturn(coupon);
+        when(snapshot.getCapacityHold()).thenReturn(capacityHold);
+        when(reservation.getCapacityHold()).thenReturn(capacityHold);
+        CouponRedemption redemption = new CouponRedemption(
+            coupon,
+            snapshot,
+            reservation,
+            Instant.parse("2026-08-11T00:00:00Z")
+        );
+        Instant reversedAt = Instant.parse("2026-08-11T00:01:00Z");
+
+        redemption.reverse(reversedAt);
+
+        assertThat(redemption.getStatus()).isEqualTo(CouponRedemptionStatus.REVERSED);
+        assertThat(redemption.getReversedAt()).isEqualTo(reversedAt);
+        assertThatThrownBy(() -> redemption.reverse(reversedAt.plusSeconds(1)))
+            .isInstanceOf(IllegalStateException.class);
+    }
 
     private static final Instant REDEEMED_AT = Instant.parse("2026-08-10T00:00:00Z");
 

@@ -82,6 +82,13 @@ public class PaymentDiscrepancy {
         return detectedAt;
     }
 
+    public void requestRefund() {
+        if (!"OPEN".equals(status)) {
+            throw new IllegalStateException("only open discrepancy can request refund");
+        }
+        status = "REFUND_REQUESTED";
+    }
+
     private static <T> T requireNotNull(
         T value,
         String fieldName
