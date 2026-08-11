@@ -23,6 +23,7 @@ class RefundAttemptTest {
 
         assertThat(attempt.getOutcomeKind()).isEqualTo(RefundAttemptOutcomeKind.RESPONDED);
         assertThat(attempt.getPortoneCancellationId()).isEqualTo("cancel-1");
+        assertThat(attempt.getResultHash()).isEqualTo("result-hash");
     }
 
     @Test

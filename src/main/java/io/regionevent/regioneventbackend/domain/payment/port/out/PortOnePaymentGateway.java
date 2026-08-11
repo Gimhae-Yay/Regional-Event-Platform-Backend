@@ -22,8 +22,20 @@ public interface PortOnePaymentGateway {
         String storeId,
         long amount,
         String currency,
-        String status
+        String status,
+        String resultHash
     ) {
+
+        public PortOnePayment(
+            String paymentId,
+            String transactionId,
+            String storeId,
+            long amount,
+            String currency,
+            String status
+        ) {
+            this(paymentId, transactionId, storeId, amount, currency, status, null);
+        }
 
         public PortOnePayment(
             String paymentId,
@@ -32,7 +44,7 @@ public interface PortOnePaymentGateway {
             String currency,
             String status
         ) {
-            this(paymentId, transactionId, null, amount, currency, status);
+            this(paymentId, transactionId, null, amount, currency, status, null);
         }
 
         public boolean isPaid() {
