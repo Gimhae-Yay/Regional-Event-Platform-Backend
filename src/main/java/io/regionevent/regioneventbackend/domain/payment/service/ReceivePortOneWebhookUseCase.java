@@ -179,28 +179,26 @@ public class ReceivePortOneWebhookUseCase {
         PortOnePaymentGateway.PortOnePayment observed,
         UUID requestId
     ) {
-        Payment lookupPayment = paymentService.findByOrderId(event.paymentId()).orElse(null);
+        Payment payment = paymentService.findByOrderIdForUpdate(event.paymentId()).orElse(null);
         if (paymentWebhookService.existsByProviderEventId(webhookId)) {
             return;
         }
         Instant now = Instant.now();
-        if (lookupPayment == null) {
+        if (payment == null) {
             paymentWebhookService.create(new PaymentWebhook(
                 webhookId, null, AUTHENTICATION_RESULT, "PAYMENT_NOT_FOUND", hash(rawBody), now
             ));
             return;
         }
 
-        Long contentId = lookupPayment.getCapacityHold().getContentSession().getContent().getContentId();
-        Long sessionId = lookupPayment.getCapacityHold().getContentSession().getSessionId();
-        Long holdId = lookupPayment.getCapacityHold().getHoldId();
+        Long contentId = payment.getCapacityHold().getContentSession().getContent().getContentId();
+        Long sessionId = payment.getCapacityHold().getContentSession().getSessionId();
+        Long holdId = payment.getCapacityHold().getHoldId();
         Content lockedContent = contentService.findForUpdate(contentId);
         ContentSession lockedSession = contentSessionService.findForUpdate(sessionId);
         CapacityHold lockedHold = capacityHoldService.findByHoldIdForUpdate(holdId);
         ReservationPriceSnapshot snapshot = reservationPriceSnapshotService.findByHoldIdForUpdate(holdId)
             .orElseThrow(() -> new IllegalStateException("payment snapshot does not exist"));
-        Payment payment = paymentService.findByOrderIdForUpdate(event.paymentId())
-            .orElseThrow(() -> new IllegalStateException("payment disappeared after lookup"));
         validateLockedPaymentContext(lockedContent, lockedSession, lockedHold, snapshot, payment);
         if (paymentWebhookService.existsByProviderEventId(webhookId)) {
             return;
