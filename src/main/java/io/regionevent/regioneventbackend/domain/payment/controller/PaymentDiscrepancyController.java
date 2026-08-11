@@ -13,10 +13,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import io.regionevent.regioneventbackend.domain.payment.dto.GetPaymentDiscrepanciesResponse;
-import io.regionevent.regioneventbackend.domain.payment.dto.GetPaymentDiscrepancyResponse;
-import io.regionevent.regioneventbackend.domain.payment.service.GetPaymentDiscrepancyUseCase;
 import io.regionevent.regioneventbackend.domain.payment.service.GetPaymentDiscrepanciesUseCase;
-import io.regionevent.regioneventbackend.domain.payment.service.PaymentDiscrepancyDetailInfo;
 import io.regionevent.regioneventbackend.domain.payment.service.PaymentDiscrepancyListInfo;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
@@ -33,17 +30,11 @@ public class PaymentDiscrepancyController {
         "REFUND_REQUESTED"
     );
     private static final String SUCCESS_MESSAGE = "결제 불일치 목록 조회에 성공했습니다.";
-    private static final String DETAIL_SUCCESS_MESSAGE = "결제 불일치 상세 조회에 성공했습니다.";
 
     private final GetPaymentDiscrepanciesUseCase getPaymentDiscrepanciesUseCase;
-    private final GetPaymentDiscrepancyUseCase getPaymentDiscrepancyUseCase;
 
-    public PaymentDiscrepancyController(
-        GetPaymentDiscrepanciesUseCase getPaymentDiscrepanciesUseCase,
-        GetPaymentDiscrepancyUseCase getPaymentDiscrepancyUseCase
-    ) {
+    public PaymentDiscrepancyController(GetPaymentDiscrepanciesUseCase getPaymentDiscrepanciesUseCase) {
         this.getPaymentDiscrepanciesUseCase = getPaymentDiscrepanciesUseCase;
-        this.getPaymentDiscrepancyUseCase = getPaymentDiscrepancyUseCase;
     }
 
     @GetMapping
@@ -59,22 +50,6 @@ public class PaymentDiscrepancyController {
             HttpStatus.OK,
             SUCCESS_MESSAGE,
             GetPaymentDiscrepanciesResponse.from(discrepancies)
-        ).toResponseEntity();
-    }
-
-    @GetMapping("/{discrepancyId}")
-    public ResponseEntity<ApiResponse<GetPaymentDiscrepancyResponse>> getDiscrepancy(
-        @AuthenticationPrincipal Long actorUserId,
-        @PathVariable String discrepancyId
-    ) {
-        PaymentDiscrepancyDetailInfo discrepancy = getPaymentDiscrepancyUseCase.get(
-            actorUserId,
-            PaymentDiscrepancyIdParser.parseRequired(discrepancyId)
-        );
-        return ApiResponse.success(
-            HttpStatus.OK,
-            DETAIL_SUCCESS_MESSAGE,
-            GetPaymentDiscrepancyResponse.from(discrepancy)
         ).toResponseEntity();
     }
 
