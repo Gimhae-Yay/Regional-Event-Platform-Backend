@@ -31,6 +31,7 @@ import io.regionevent.regioneventbackend.domain.content.service.SubmitContentUse
 import io.regionevent.regioneventbackend.domain.content.service.WithdrawContentRevisionUseCase;
 import io.regionevent.regioneventbackend.domain.image.service.ImageObjectCleanupService;
 import io.regionevent.regioneventbackend.domain.image.service.ImageObjectService;
+import io.regionevent.regioneventbackend.domain.payment.service.ExpirePendingPaymentForTerminatedHoldUseCase;
 import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHoldService;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationIdentifierGenerator;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationService;
@@ -91,5 +92,10 @@ public class ContentAtomicityJpaTestConfiguration {
     @Bean
     ImageObjectCleanupService imageObjectCleanupService() {
         return mock(ImageObjectCleanupService.class);
+    }
+
+    @Bean
+    ExpirePendingPaymentForTerminatedHoldUseCase expirePendingPaymentForTerminatedHoldUseCase() {
+        return mock(ExpirePendingPaymentForTerminatedHoldUseCase.class);
     }
 }

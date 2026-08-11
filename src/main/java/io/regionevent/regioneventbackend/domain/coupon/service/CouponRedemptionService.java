@@ -23,4 +23,9 @@ public class CouponRedemptionService {
         return couponRedemptionRepository
             .findAllByCouponCouponIdOrderByRedeemedAtDescCouponRedemptionIdDesc(couponId);
     }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public CouponRedemption create(CouponRedemption couponRedemption) {
+        return couponRedemptionRepository.saveAndFlush(couponRedemption);
+    }
 }

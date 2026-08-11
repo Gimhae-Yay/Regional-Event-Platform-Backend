@@ -15,10 +15,10 @@ import io.regionevent.regioneventbackend.domain.payment.entity.PaymentStatus;
 
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
-    @EntityGraph(attributePaths = {"capacityHold", "reservationPriceSnapshot", "reservation"})
+    @EntityGraph(attributePaths = {"capacityHold", "reservationPriceSnapshot", "reservationPriceSnapshot.coupon", "reservation"})
     Optional<Payment> findByOrderId(String orderId);
 
-    @EntityGraph(attributePaths = {"capacityHold", "reservationPriceSnapshot", "reservation"})
+    @EntityGraph(attributePaths = {"capacityHold", "reservationPriceSnapshot", "reservationPriceSnapshot.coupon", "reservation"})
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT payment
@@ -30,6 +30,8 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
         @Param("holdId") Long holdId,
         @Param("status") PaymentStatus status
     );
+
+    boolean existsByCapacityHoldUserUserIdAndStatus(Long userId, PaymentStatus status);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
