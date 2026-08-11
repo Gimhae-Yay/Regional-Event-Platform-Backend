@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
@@ -28,7 +29,7 @@ class GetRefundFailuresUseCaseTest {
     private static final Long ACTOR_USER_ID = 101L;
 
     @Test
-    void get_활성플랫폼관리자는_시도수와갱신시각순으로_환불목록을반환한다() {
+    void get_활성플랫폼관리자는_읽기전용으로_시도수와갱신시각순의_환불목록을반환한다() {
         PlatformAdminAuthorizationService authorizationService = mock(
             PlatformAdminAuthorizationService.class
         );
@@ -59,6 +60,7 @@ class GetRefundFailuresUseCaseTest {
         verify(authorizationService).requireAuthorizedPlatformAdmin(ACTOR_USER_ID);
         verify(refundService).findAllByStatuses(Set.of(RefundStatus.FAILED, RefundStatus.DISCREPANT));
         verify(refundAttemptService).findAllByRefundIds(List.of(552L, 551L, 550L));
+        verifyNoMoreInteractions(authorizationService, refundService, refundAttemptService);
     }
 
     @Test
