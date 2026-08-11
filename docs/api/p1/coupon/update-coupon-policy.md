@@ -135,4 +135,6 @@ Accept: application/json
 3. `contentId`, `regionId`, `issueSourceType`은 수정하지 않는다. 다른 콘텐츠나 발급 경로가 필요하면 새 정책을 생성한다.
 4. 요청에 포함된 필드만 변경한 뒤 `discountAmount >= 1`, `minimumPaymentAmount >= discountAmount`,
    `1 <= validDaysAfterIssue <= 365`, `issueStartsAt < issueEndsAt`를 검증한다.
-5. 수정 이력에는 처리자, 이전 값, 이후 값, 수정 사유와 수정 시각을 기록한다.
+5. 요청 필드를 반영한 결과가 기존 정책과 같으면 `200 OK` 무변경 성공으로 응답한다. 이 경우 정책·`updatedAt`·수정 이력·성공 감사는 변경하거나 만들지 않는다.
+6. 수정 이력에는 처리자 역할, 이전 값, 이후 값, 수정 사유, 요청 ID와 수정 시각을 기록한다. 이전·이후 값은 `name`, `description`, `discountAmount`, `minimumPaymentAmount`, `validDaysAfterIssue`, `issueStartsAt`, `issueEndsAt`, `totalIssueLimit`을 각각 보존한다.
+7. 정책 갱신, 수정 이력 저장, `COUPON_POLICY` 성공 공통 감사 이벤트는 같은 트랜잭션에서 커밋하거나 함께 롤백한다. 참조 감사 이벤트는 `SUCCESS`, `COUPON_POLICY`, 같은 정책 ID, `DRAFT → DRAFT`, 같은 처리자 역할·사유·요청 ID·시각이어야 한다. 이 행 간 동일성은 FK만으로 강제할 수 없으므로 같은 트랜잭션 안에서 검증한다.

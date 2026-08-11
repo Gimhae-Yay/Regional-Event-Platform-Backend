@@ -150,6 +150,13 @@ public class Mission {
         return targetContent;
     }
 
+    public void submitForReview() {
+        if (status != MissionStatus.DRAFT) {
+            throw new IllegalStateException("mission status must be DRAFT but was " + status);
+        }
+        status = MissionStatus.PENDING_REVIEW;
+    }
+
     public void approve(Instant publishedAt) {
         Instant validatedPublishedAt = requireNotNull(publishedAt, "publishedAt");
         if (status != MissionStatus.PENDING_REVIEW) {
