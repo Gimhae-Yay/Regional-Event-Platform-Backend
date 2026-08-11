@@ -576,6 +576,136 @@ class OperatorMissionControllerIntegrationTest {
             .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
     }
 
+    @Test
+    void getMissions_returnsAllAssignedRegionStatusesIncludingOtherOperatorMissions() throws Exception {
+        Region assignedRegion = saveRegion("LIST-ASSIGNED");
+        Region otherRegion = saveRegion("LIST-OTHER");
+        AppUser operator = saveOperator(assignedRegion, AppUserStatus.ACTIVE);
+        AppUser sameRegionOtherOperator = saveOperator(assignedRegion, AppUserStatus.ACTIVE);
+        AppUser otherRegionOperator = saveOperator(otherRegion, AppUserStatus.ACTIVE);
+        Mission draftMission = saveVisitCountMission(assignedRegion, operator);
+        Mission pendingReviewMission = saveVisitCountMission(assignedRegion, operator);
+        Mission publishedOtherOperatorMission = saveContentSetMission(assignedRegion, sameRegionOtherOperator);
+        Mission endedOtherOperatorMission = saveVisitCountMission(assignedRegion, sameRegionOtherOperator);
+        Mission otherRegionMission = saveVisitCountMission(otherRegion, otherRegionOperator);
+        setMissionStatus(pendingReviewMission, MissionStatus.PENDING_REVIEW);
+        setMissionStatus(publishedOtherOperatorMission, MissionStatus.PUBLISHED);
+        setMissionStatus(endedOtherOperatorMission, MissionStatus.ENDED);
+        setMissionStatus(otherRegionMission, MissionStatus.PUBLISHED);
+
+        mockMvc.perform(get("/api/v1/operator/missions")
+                .header("Authorization", bearerToken(operator)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.statusCode").value(200))
+            .andExpect(jsonPath("$.code").value("SUCCESS"))
+            .andExpect(jsonPath("$.message").value("내 미션 목록 조회에 성공했습니다."))
+            .andExpect(jsonPath("$.data.content.length()").value(4))
+            .andExpect(jsonPath("$.data.content[0].missionId")
+                .value(endedOtherOperatorMission.getMissionId().toString()))
+            .andExpect(jsonPath("$.data.content[0].status").value("ENDED"))
+            .andExpect(jsonPath("$.data.content[0].conditionType").value("VISIT_COUNT"))
+            .andExpect(jsonPath("$.data.content[0].endsAt").value("2026-09-30T23:59:59+09:00"))
+            .andExpect(jsonPath("$.data.content[1].missionId")
+                .value(publishedOtherOperatorMission.getMissionId().toString()))
+            .andExpect(jsonPath("$.data.content[1].status").value("PUBLISHED"))
+            .andExpect(jsonPath("$.data.content[1].conditionType").value("CONTENT_SET"))
+            .andExpect(jsonPath("$.data.content[2].missionId")
+                .value(pendingReviewMission.getMissionId().toString()))
+            .andExpect(jsonPath("$.data.content[2].status").value("PENDING_REVIEW"))
+            .andExpect(jsonPath("$.data.content[3].missionId").value(draftMission.getMissionId().toString()))
+            .andExpect(jsonPath("$.data.content[3].status").value("DRAFT"))
+            .andExpect(jsonPath("$.data.page").value(0))
+            .andExpect(jsonPath("$.data.size").value(20))
+            .andExpect(jsonPath("$.data.totalElements").value(4))
+            .andExpect(jsonPath("$.data.totalPages").value(1));
+    }
+
+    @Test
+    void getMissions_withStatus_returnsOnlyRequestedStatus() throws Exception {
+        Region region = saveRegion("LIST-STATUS");
+        AppUser operator = saveOperator(region, AppUserStatus.ACTIVE);
+        Mission draftMission = saveVisitCountMission(region, operator);
+        Mission publishedMission = saveVisitCountMission(region, operator);
+        setMissionStatus(publishedMission, MissionStatus.PUBLISHED);
+
+        mockMvc.perform(get("/api/v1/operator/missions")
+                .header("Authorization", bearerToken(operator))
+                .param("status", "PUBLISHED"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.content.length()").value(1))
+            .andExpect(jsonPath("$.data.content[0].missionId").value(publishedMission.getMissionId().toString()))
+            .andExpect(jsonPath("$.data.content[0].status").value("PUBLISHED"))
+            .andExpect(jsonPath("$.data.totalElements").value(1))
+            .andExpect(jsonPath("$.data.totalPages").value(1));
+
+        assertThat(draftMission.getMissionId()).isNotEqualTo(publishedMission.getMissionId());
+    }
+
+    @Test
+    void getMissions_withPage_returnsMissionIdDescendingPage() throws Exception {
+        Region region = saveRegion("LIST-PAGE");
+        AppUser operator = saveOperator(region, AppUserStatus.ACTIVE);
+        Mission firstMission = saveVisitCountMission(region, operator);
+        Mission secondMission = saveVisitCountMission(region, operator);
+        Mission thirdMission = saveVisitCountMission(region, operator);
+
+        mockMvc.perform(get("/api/v1/operator/missions")
+                .header("Authorization", bearerToken(operator))
+                .param("page", "1")
+                .param("size", "1"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.content.length()").value(1))
+            .andExpect(jsonPath("$.data.content[0].missionId").value(secondMission.getMissionId().toString()))
+            .andExpect(jsonPath("$.data.page").value(1))
+            .andExpect(jsonPath("$.data.size").value(1))
+            .andExpect(jsonPath("$.data.totalElements").value(3))
+            .andExpect(jsonPath("$.data.totalPages").value(3));
+
+        assertThat(thirdMission.getMissionId()).isGreaterThan(secondMission.getMissionId());
+        assertThat(secondMission.getMissionId()).isGreaterThan(firstMission.getMissionId());
+    }
+
+    @Test
+    void getMissions_withoutRegionMissions_returnsEmptyPage() throws Exception {
+        Region region = saveRegion("LIST-EMPTY");
+        AppUser operator = saveOperator(region, AppUserStatus.ACTIVE);
+
+        mockMvc.perform(get("/api/v1/operator/missions")
+                .header("Authorization", bearerToken(operator)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.content").isEmpty())
+            .andExpect(jsonPath("$.data.page").value(0))
+            .andExpect(jsonPath("$.data.size").value(20))
+            .andExpect(jsonPath("$.data.totalElements").value(0))
+            .andExpect(jsonPath("$.data.totalPages").value(0));
+    }
+
+    @Test
+    void getMissions_withoutOperatorRole_returnsForbidden() throws Exception {
+        AppUser user = saveUser("list-user", AppUserStatus.ACTIVE);
+
+        mockMvc.perform(get("/api/v1/operator/missions")
+                .header("Authorization", bearerToken(user)))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    void getMissions_withRevokedOperatorAssignment_returnsForbidden() throws Exception {
+        Region region = saveRegion("LIST-REVOKED");
+        AppUser operator = saveUser("list-revoked", AppUserStatus.ACTIVE);
+        UserRoleAssignment assignment = userRoleAssignmentRepository.saveAndFlush(
+            new UserRoleAssignment(operator, UserRole.OPERATOR, region)
+        );
+        assignment.revoke(Instant.parse("2026-08-11T00:00:00Z"), "TEST_REVOKED");
+        userRoleAssignmentRepository.saveAndFlush(assignment);
+
+        mockMvc.perform(get("/api/v1/operator/missions")
+                .header("Authorization", bearerToken(operator)))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
     private Mission saveVisitCountMission(
         Region region,
         AppUser operator
@@ -589,6 +719,24 @@ class OperatorMissionControllerIntegrationTest {
             rewardCouponPolicy,
             MISSION_ENDS_AT
         ));
+    }
+
+    private Mission saveContentSetMission(
+        Region region,
+        AppUser operator
+    ) {
+        Content rewardContent = saveContent(region, operator, "content-set-reward");
+        Content targetContent = saveContent(region, operator, "content-set-target");
+        CouponPolicy rewardCouponPolicy = saveMissionRewardCouponPolicy(rewardContent, region);
+        Mission mission = new Mission(
+            region,
+            MissionConditionType.CONTENT_SET,
+            null,
+            rewardCouponPolicy,
+            MISSION_ENDS_AT
+        );
+        mission.addTargetContent(targetContent);
+        return missionRepository.saveAndFlush(mission);
     }
 
     private void publishAndEnd(Mission mission) {
@@ -606,14 +754,38 @@ class OperatorMissionControllerIntegrationTest {
     }
 
     private void setMissionStatus(Mission mission, MissionStatus status) {
-        entityManager.createNativeQuery("""
-            UPDATE mission
-            SET status = :status
-            WHERE mission_id = :missionId
-            """)
-            .setParameter("status", status.name())
-            .setParameter("missionId", mission.getMissionId())
-            .executeUpdate();
+        switch (status) {
+            case PUBLISHED -> entityManager.createNativeQuery("""
+                UPDATE mission
+                SET status = :status,
+                    published_at = :publishedAt
+                WHERE mission_id = :missionId
+                """)
+                .setParameter("status", status.name())
+                .setParameter("publishedAt", MISSION_PUBLISHED_AT)
+                .setParameter("missionId", mission.getMissionId())
+                .executeUpdate();
+            case ENDED -> entityManager.createNativeQuery("""
+                UPDATE mission
+                SET status = :status,
+                    published_at = :publishedAt,
+                    ended_at = :endedAt
+                WHERE mission_id = :missionId
+                """)
+                .setParameter("status", status.name())
+                .setParameter("publishedAt", MISSION_PUBLISHED_AT)
+                .setParameter("endedAt", MISSION_ENDED_AT)
+                .setParameter("missionId", mission.getMissionId())
+                .executeUpdate();
+            default -> entityManager.createNativeQuery("""
+                UPDATE mission
+                SET status = :status
+                WHERE mission_id = :missionId
+                """)
+                .setParameter("status", status.name())
+                .setParameter("missionId", mission.getMissionId())
+                .executeUpdate();
+        }
         entityManager.clear();
     }
 

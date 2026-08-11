@@ -44,7 +44,7 @@ public class MissionService {
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
-    public Page<Mission> findRegionAdminMissions(
+    public Page<Mission> findRegionMissions(
         Long regionId,
         MissionStatus status,
         Pageable pageable

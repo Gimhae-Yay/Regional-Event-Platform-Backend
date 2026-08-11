@@ -29,7 +29,7 @@ public class GetRegionAdminMissionsUseCase {
         int size
     ) {
         Long regionId = regionAdminAuthorizationService.requireAuthorizedRegionId(userId);
-        return RegionAdminMissionListResult.from(missionService.findRegionAdminMissions(
+        return RegionAdminMissionListResult.from(missionService.findRegionMissions(
             regionId,
             status,
             PageRequest.of(page, size)
