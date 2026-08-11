@@ -40,6 +40,10 @@ reservation:
     initial-delay: PT1M
     fixed-delay: PT1M
 
+coupon:
+  expiration:
+    cron: "0 */5 * * * *"
+
 storage:
   fake:
     enabled: ${IMAGE_STORAGE_FAKE_ENABLED:false}
