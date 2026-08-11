@@ -180,13 +180,16 @@ public class ReceivePortOneWebhookUseCase {
     ) {
         try {
             Reservation reservation = reservationService.createConfirmed(
-                capacityHoldService.consumeForPaidZeroIfConfirmable(
+                capacityHoldService.consumeForPaidPaymentIfConfirmable(
                     payment.getCapacityHold().getHoldId(),
-                    payment.getCapacityHold().getUser().getUserId()
+                    payment.getCapacityHold().getUser().getUserId(),
+                    payment.getPaymentId()
                 )
             );
             useCoupon(snapshot, reservation, now);
-            payment.approve(reservation, observed.transactionId(), now);
+            paymentService.findByOrderIdForUpdate(payment.getOrderId())
+                .orElseThrow(() -> new IllegalStateException("payment disappeared after capacity hold consumption"))
+                .approve(reservation, observed.transactionId(), now);
         } catch (ReservationConfirmationConflictException exception) {
             payment.markDiscrepant(observed.transactionId(), now);
             paymentDiscrepancyService.create(new PaymentDiscrepancy(payment, "LATE_APPROVAL", "OPEN", now));

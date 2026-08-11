@@ -99,6 +99,27 @@ public class CapacityHoldService {
             .orElseThrow(() -> new IllegalStateException("consumed capacity hold does not exist"));
     }
 
+    @Transactional(
+        propagation = Propagation.MANDATORY,
+        noRollbackFor = ReservationConfirmationConflictException.class
+    )
+    public CapacityHold consumeForPaidPaymentIfConfirmable(
+        Long holdId,
+        Long userId,
+        Long paymentId
+    ) {
+        int updatedCount = capacityHoldRepository.consumeForPaidPaymentIfConfirmable(
+            holdId,
+            userId,
+            paymentId
+        );
+        if (updatedCount == 0) {
+            throw new ReservationConfirmationConflictException();
+        }
+        return capacityHoldRepository.findByHoldId(holdId)
+            .orElseThrow(() -> new IllegalStateException("consumed capacity hold does not exist"));
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
     public List<TerminatedCapacityHold> invalidateActiveHoldsForSession(
         ContentSession contentSession,
