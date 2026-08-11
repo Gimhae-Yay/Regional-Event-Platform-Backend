@@ -25,6 +25,11 @@ public class PaymentService {
         return paymentRepository.findByHoldIdAndStatusForUpdate(holdId, PaymentStatus.PENDING);
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<Payment> findByOrderIdForUpdate(String orderId) {
+        return paymentRepository.findByOrderIdForUpdate(orderId);
+    }
+
     @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
     public boolean hasPendingPayment(Long userId) {
         return paymentRepository.existsByCapacityHoldUserUserIdAndStatus(userId, PaymentStatus.PENDING);

@@ -163,6 +163,35 @@ public class Payment {
         finalizedAt = requireNotNull(expiredAt, "expiredAt");
     }
 
+    public void approve(Reservation reservation, String portonePaymentId, Instant approvedAt) {
+        requirePendingOrExpired();
+        this.reservation = requireNotNull(reservation, "reservation");
+        this.portonePaymentId = requireNotBlank(portonePaymentId, "portonePaymentId");
+        status = PaymentStatus.APPROVED;
+        finalizedAt = requireNotNull(approvedAt, "approvedAt");
+    }
+
+    public void decline(Instant declinedAt) {
+        if (status != PaymentStatus.PENDING) {
+            throw new IllegalStateException("only pending payment can be declined");
+        }
+        status = PaymentStatus.DECLINED;
+        finalizedAt = requireNotNull(declinedAt, "declinedAt");
+    }
+
+    public void markDiscrepant(String portonePaymentId, Instant detectedAt) {
+        requirePendingOrExpired();
+        this.portonePaymentId = requireNotBlank(portonePaymentId, "portonePaymentId");
+        status = PaymentStatus.DISCREPANT;
+        finalizedAt = requireNotNull(detectedAt, "detectedAt");
+    }
+
+    private void requirePendingOrExpired() {
+        if (status != PaymentStatus.PENDING && status != PaymentStatus.EXPIRED) {
+            throw new IllegalStateException("only pending or expired payment can be finalized");
+        }
+    }
+
     private static void validateSnapshotHold(
         CapacityHold capacityHold,
         ReservationPriceSnapshot reservationPriceSnapshot
