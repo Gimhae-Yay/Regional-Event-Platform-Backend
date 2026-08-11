@@ -135,12 +135,12 @@ public class ReceivePortOneWebhookUseCase {
 
     private boolean skipProviderLookup(String webhookId, String rawBody, WebhookEvent event) {
         return Boolean.TRUE.equals(transactionTemplate.execute(status -> {
-            if (paymentWebhookService.existsByProviderEventId(webhookId)) {
-                return true;
-            }
-            Payment payment = paymentService.findByOrderId(event.paymentId()).orElse(null);
+            Payment payment = paymentService.findByOrderIdForUpdate(event.paymentId()).orElse(null);
             if (payment == null || !isTerminal(payment.getStatus())) {
                 return false;
+            }
+            if (paymentWebhookService.existsByProviderEventId(webhookId)) {
+                return true;
             }
             paymentWebhookService.create(new PaymentWebhook(
                 webhookId,
