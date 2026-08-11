@@ -16,8 +16,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-and-test:
-    name: 빌드 및 테스트
+  fast-test:
+    name: 빠른 테스트 및 패키징
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -34,16 +34,52 @@ jobs:
       - name: Gradle 설정 및 캐시
         uses: gradle/actions/setup-gradle@v4
 
-      - name: 빌드 및 테스트
-        run: ./gradlew --no-daemon clean build
+      - name: 빠른 테스트 및 패키징
+        run: ./gradlew --no-daemon clean ciFastCheck
 
       - name: 테스트 결과 보관
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-reports
+          name: fast-test-reports
           path: |
-            build/test-results/test/**
-            build/reports/tests/test/**
+            build/test-results/fastTest/**
+            build/reports/tests/fastTest/**
+          if-no-files-found: ignore
+          retention-days: 7
+
+  container-test:
+    name: Testcontainers 테스트 (shard ${{ matrix.shard }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+
+    steps:
+      - name: 소스 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Amazon Corretto 21 설정
+        uses: actions/setup-java@v4
+        with:
+          distribution: corretto
+          java-version: "21"
+
+      - name: Gradle 설정 및 캐시
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Testcontainers 테스트
+        run: ./gradlew --no-daemon clean containerTestShard${{ matrix.shard }}
+
+      - name: 테스트 결과 보관
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-test-reports-${{ matrix.shard }}
+          path: |
+            build/test-results/containerTestShard${{ matrix.shard }}/**
+            build/reports/tests/containerTestShard${{ matrix.shard }}/**
           if-no-files-found: ignore
           retention-days: 7
