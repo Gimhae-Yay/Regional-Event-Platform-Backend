@@ -13,6 +13,8 @@ import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.test.context.TestPropertySource;
 
@@ -253,6 +255,74 @@ class MissionRepositoryTest {
             new MissionTargetContent(mission, deletedTargetContent)
         )).isInstanceOf(IllegalStateException.class)
             .hasMessage("soft deleted content cannot be a mission target");
+    }
+
+    @Test
+    void findByRegionAndStatus_returnsOnlyRegionMissionsInDescendingOrderWithPageCount() {
+        Region region = saveRegion("GIMHAE");
+        Region otherRegion = saveRegion("BUSAN");
+        CouponPolicy rewardCouponPolicy = saveMissionRewardCouponPolicy(
+            saveContent(region, "reward"),
+            region
+        );
+        CouponPolicy otherRegionRewardCouponPolicy = saveMissionRewardCouponPolicy(
+            saveContent(otherRegion, "other-reward"),
+            otherRegion
+        );
+        Mission firstMission = missionRepository.saveAndFlush(new Mission(
+            region,
+            MissionConditionType.VISIT_COUNT,
+            1,
+            rewardCouponPolicy,
+            MISSION_ENDS_AT
+        ));
+        Mission secondMission = missionRepository.saveAndFlush(new Mission(
+            region,
+            MissionConditionType.VISIT_COUNT,
+            2,
+            rewardCouponPolicy,
+            MISSION_ENDS_AT
+        ));
+        Mission pendingReviewMission = missionRepository.saveAndFlush(new Mission(
+            region,
+            MissionConditionType.VISIT_COUNT,
+            3,
+            rewardCouponPolicy,
+            MISSION_ENDS_AT
+        ));
+        missionRepository.saveAndFlush(new Mission(
+            otherRegion,
+            MissionConditionType.VISIT_COUNT,
+            1,
+            otherRegionRewardCouponPolicy,
+            MISSION_ENDS_AT
+        ));
+        entityManager.createNativeQuery("UPDATE mission SET status = 'PENDING_REVIEW' WHERE mission_id = :missionId")
+            .setParameter("missionId", pendingReviewMission.getMissionId())
+            .executeUpdate();
+        entityManager.clear();
+
+        Page<Mission> allMissions = missionRepository.findAllByRegionRegionIdOrderByMissionIdDesc(
+            region.getRegionId(),
+            PageRequest.of(0, 2)
+        );
+        Page<Mission> pendingReviewMissions =
+            missionRepository.findAllByRegionRegionIdAndStatusOrderByMissionIdDesc(
+                region.getRegionId(),
+                MissionStatus.PENDING_REVIEW,
+                PageRequest.of(0, 20)
+            );
+
+        assertThat(allMissions.getContent())
+            .extracting(Mission::getMissionId)
+            .containsExactly(pendingReviewMission.getMissionId(), secondMission.getMissionId());
+        assertThat(allMissions.getTotalElements()).isEqualTo(3);
+        assertThat(allMissions.getTotalPages()).isEqualTo(2);
+        assertThat(pendingReviewMissions.getContent())
+            .extracting(Mission::getMissionId)
+            .containsExactly(pendingReviewMission.getMissionId());
+        assertThat(pendingReviewMissions.getTotalElements()).isOne();
+        assertThat(firstMission.getMissionId()).isLessThan(secondMission.getMissionId());
     }
 
     private Region saveRegion(String regionCode) {
