@@ -9,6 +9,8 @@ import java.util.UUID;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -45,6 +47,7 @@ import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHold
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationConfirmationConflictException;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationPriceSnapshotService;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationService;
+import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.infra.payment.PortOneWebhookSignatureVerifier;
@@ -52,6 +55,7 @@ import io.regionevent.regioneventbackend.infra.payment.PortOneWebhookSignatureVe
 @Service
 public class ReceivePortOneWebhookUseCase {
 
+    private static final Logger log = LoggerFactory.getLogger(ReceivePortOneWebhookUseCase.class);
     private static final String AUTHENTICATION_RESULT = "VERIFIED";
     private static final String COUPON_USED_REASON = "PORTONE_PAYMENT_APPROVED";
     private static final String COUPON_RELEASED_REASON = "PORTONE_PAYMENT_DECLINED";
@@ -125,6 +129,10 @@ public class ReceivePortOneWebhookUseCase {
         try {
             signatureVerifier.verify(webhookId, webhookTimestamp, webhookSignature, rawBody);
         } catch (PortOneWebhookSignatureVerifier.InvalidWebhookSignatureException exception) {
+            log.warn(
+                "PortOne webhook signature verification failed. requestId={}, errorCode={}, webhookId={}",
+                RequestIdFilter.currentRequestId(), ErrorCode.WEBHOOK_SIGNATURE_INVALID.name(), webhookId
+            );
             throw new BusinessException(ErrorCode.WEBHOOK_SIGNATURE_INVALID);
         }
 
