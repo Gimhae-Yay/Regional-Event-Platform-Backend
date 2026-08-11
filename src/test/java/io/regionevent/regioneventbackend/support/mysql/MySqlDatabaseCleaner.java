@@ -24,6 +24,8 @@ public final class MySqlDatabaseCleaner {
     private static final int LOCK_WAIT_TIMEOUT_SECONDS = 2;
     private static final int JDBC_QUERY_TIMEOUT_SECONDS = 3;
     private static final int JDBC_NETWORK_TIMEOUT_MILLIS = 5_000;
+    private static final int DIAGNOSTIC_COLLECTION_TIMEOUT_SECONDS = 1;
+    private static final int CONNECTION_ABORT_TIMEOUT_SECONDS = 1;
     private static final int MAXIMUM_DIAGNOSTIC_ROWS = 20;
     private static final Executor DIRECT_EXECUTOR = Runnable::run;
 
@@ -33,7 +35,7 @@ public final class MySqlDatabaseCleaner {
         this(dataSource::getConnection);
     }
 
-    private MySqlDatabaseCleaner(ConnectionProvider connectionProvider) {
+    MySqlDatabaseCleaner(ConnectionProvider connectionProvider) {
         this.connectionProvider = connectionProvider;
     }
 
@@ -131,7 +133,8 @@ public final class MySqlDatabaseCleaner {
             executeTruncateWithTimeout(
                 connection,
                 statement,
-                "TRUNCATE TABLE " + quote + escapedTableName + quote
+                "TRUNCATE TABLE " + quote + escapedTableName + quote,
+                connectionId
             );
         } catch (SQLException exception) {
             throw createTruncateFailure(tableName, connectionId, exception);
@@ -141,19 +144,23 @@ public final class MySqlDatabaseCleaner {
     private void executeTruncateWithTimeout(
         Connection connection,
         Statement statement,
-        String sql
+        String sql,
+        long connectionId
     ) throws SQLException {
-        ExecutorService executor = Executors.newSingleThreadExecutor(runnable -> {
-            Thread thread = new Thread(runnable, "mysql-cleaner-truncate");
-            thread.setDaemon(true);
-            return thread;
-        });
+        ExecutorService executor = newDaemonExecutor("mysql-cleaner-truncate");
         Future<?> execution = executor.submit(() -> statement.execute(sql));
         try {
             execution.get(JDBC_QUERY_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         } catch (TimeoutException exception) {
-            abortConnection(connection);
-            throw new SQLTimeoutException("TRUNCATE query exceeded JDBC wait timeout", exception);
+            TimeoutDiagnostics timeoutDiagnostics = collectTimeoutDiagnostics(connectionId);
+            TruncateTimeoutException timeoutException = new TruncateTimeoutException(
+                "TRUNCATE query exceeded JDBC wait timeout",
+                exception,
+                timeoutDiagnostics
+            );
+            preserveDiagnosticFailure(timeoutException, timeoutDiagnostics);
+            abortConnection(connection, timeoutException);
+            throw timeoutException;
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new SQLException("TRUNCATE query was interrupted", exception);
@@ -164,16 +171,42 @@ public final class MySqlDatabaseCleaner {
         }
     }
 
-    private void abortConnection(Connection connection) {
-        Thread abortThread = new Thread(() -> {
-            try {
-                connection.abort(DIRECT_EXECUTOR);
-            } catch (SQLException exception) {
-                throw new IllegalStateException("failed to abort timed out MySQL cleanup connection", exception);
-            }
-        }, "mysql-cleaner-abort");
-        abortThread.setDaemon(true);
-        abortThread.start();
+    private ExecutorService newDaemonExecutor(String threadName) {
+        return Executors.newSingleThreadExecutor(runnable -> {
+            Thread thread = new Thread(runnable, threadName);
+            thread.setDaemon(true);
+            return thread;
+        });
+    }
+
+    private void abortConnection(Connection connection, SQLException timeoutException) {
+        ExecutorService executor = newDaemonExecutor("mysql-cleaner-abort");
+        Future<?> execution = executor.submit(() -> {
+            connection.abort(DIRECT_EXECUTOR);
+            return null;
+        });
+        try {
+            execution.get(CONNECTION_ABORT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        } catch (TimeoutException exception) {
+            timeoutException.addSuppressed(new SQLException(
+                "timed out while aborting the MySQL cleanup connection",
+                exception
+            ));
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            timeoutException.addSuppressed(new SQLException(
+                "interrupted while aborting the MySQL cleanup connection",
+                exception
+            ));
+        } catch (ExecutionException exception) {
+            timeoutException.addSuppressed(new SQLException(
+                "failed to abort the MySQL cleanup connection",
+                exception.getCause()
+            ));
+        } finally {
+            execution.cancel(true);
+            executor.shutdownNow();
+        }
     }
 
     private void rethrowSqlException(ExecutionException exception) throws SQLException {
@@ -247,8 +280,13 @@ public final class MySqlDatabaseCleaner {
     private IllegalStateException createTruncateFailure(String tableName, long connectionId, SQLException exception) {
         String message = "MySQL test database cleanup TRUNCATE failed: table=" + tableName
             + ", connectionId=" + connectionId;
+        TimeoutDiagnostics timeoutDiagnostics = null;
         if (isTimeout(exception)) {
-            message += ", timeoutDiagnostics=" + collectTimeoutDiagnostics(connectionId);
+            timeoutDiagnostics = findTimeoutDiagnostics(exception, connectionId);
+            message += ", timeoutDiagnostics=" + timeoutDiagnostics.value();
+        }
+        if (timeoutDiagnostics != null && !(exception instanceof TruncateTimeoutException)) {
+            preserveDiagnosticFailure(exception, timeoutDiagnostics);
         }
         return new IllegalStateException(message, exception);
     }
@@ -268,17 +306,66 @@ public final class MySqlDatabaseCleaner {
         return false;
     }
 
-    private String collectTimeoutDiagnostics(long cleaningConnectionId) {
+    private TimeoutDiagnostics findTimeoutDiagnostics(SQLException exception, long cleaningConnectionId) {
+        if (exception instanceof TruncateTimeoutException timeoutException) {
+            return timeoutException.timeoutDiagnostics();
+        }
+        return collectTimeoutDiagnostics(cleaningConnectionId);
+    }
+
+    private TimeoutDiagnostics collectTimeoutDiagnostics(long cleaningConnectionId) {
+        ExecutorService executor = newDaemonExecutor("mysql-cleaner-diagnostics");
+        Future<TimeoutDiagnostics> execution = executor.submit(
+            () -> collectTimeoutDiagnosticsWithConnection(cleaningConnectionId)
+        );
+        try {
+            return execution.get(DIAGNOSTIC_COLLECTION_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        } catch (TimeoutException exception) {
+            execution.cancel(true);
+            return unavailableDiagnostics(new SQLException(
+                "diagnostic connection exceeded the collection timeout",
+                exception
+            ));
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            return unavailableDiagnostics(new SQLException(
+                "diagnostic collection was interrupted",
+                exception
+            ));
+        } catch (ExecutionException exception) {
+            return unavailableDiagnostics(new SQLException(
+                "diagnostic collection failed",
+                exception.getCause()
+            ));
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    private TimeoutDiagnostics collectTimeoutDiagnosticsWithConnection(long cleaningConnectionId) {
         try (Connection diagnosticConnection = connectionProvider.open()) {
             long diagnosticConnectionId = findConnectionId(diagnosticConnection);
-            return "{cleaningConnectionId=" + cleaningConnectionId
+            return new TimeoutDiagnostics("{cleaningConnectionId=" + cleaningConnectionId
                 + ", diagnosticConnectionId=" + diagnosticConnectionId
                 + ", dataLockWaits=" + findDataLockWaits(diagnosticConnection, cleaningConnectionId)
                 + ", metadataLocks=" + findPendingMetadataLocks(diagnosticConnection)
                 + ", activeTransactions=" + findActiveTransactions(diagnosticConnection)
-                + "}";
+                + "}", null);
         } catch (SQLException exception) {
-            return "{unavailable=" + toDiagnosticFailure(exception) + "}";
+            return unavailableDiagnostics(exception);
+        }
+    }
+
+    private TimeoutDiagnostics unavailableDiagnostics(SQLException exception) {
+        return new TimeoutDiagnostics("{unavailable=" + toDiagnosticFailure(exception) + "}", exception);
+    }
+
+    private void preserveDiagnosticFailure(
+        Exception failure,
+        TimeoutDiagnostics timeoutDiagnostics
+    ) {
+        if (timeoutDiagnostics.failure() != null) {
+            failure.addSuppressed(timeoutDiagnostics.failure());
         }
     }
 
@@ -378,8 +465,34 @@ public final class MySqlDatabaseCleaner {
     ) {
     }
 
+    private record TimeoutDiagnostics(
+        String value,
+        SQLException failure
+    ) {
+    }
+
+    private static final class TruncateTimeoutException extends SQLTimeoutException {
+
+        private static final long serialVersionUID = 1L;
+
+        private final TimeoutDiagnostics timeoutDiagnostics;
+
+        private TruncateTimeoutException(
+            String message,
+            Throwable cause,
+            TimeoutDiagnostics timeoutDiagnostics
+        ) {
+            super(message, cause);
+            this.timeoutDiagnostics = timeoutDiagnostics;
+        }
+
+        private TimeoutDiagnostics timeoutDiagnostics() {
+            return timeoutDiagnostics;
+        }
+    }
+
     @FunctionalInterface
-    private interface ConnectionProvider {
+    interface ConnectionProvider {
 
         Connection open() throws SQLException;
     }
