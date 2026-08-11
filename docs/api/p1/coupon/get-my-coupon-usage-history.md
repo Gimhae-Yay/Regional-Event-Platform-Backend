@@ -66,8 +66,7 @@ Accept: application/json
         "status": "CONFIRMED",
         "discountAmount": 3000,
         "confirmedAt": "2026-08-06T03:00:00Z",
-        "reversedAt": null,
-        "reversalReason": null
+        "reversedAt": null
       }
     ]
   }
@@ -90,7 +89,6 @@ Accept: application/json
 | `data.usageHistory[].discountAmount` | Number | 확정 당시 할인 금액 |
 | `data.usageHistory[].confirmedAt` | String | 사용 확정 시각 |
 | `data.usageHistory[].reversedAt` | String or null | 복구 반전 시각. 반전되지 않았으면 `null` |
-| `data.usageHistory[].reversalReason` | String or null | 복구 반전 사유. 반전되지 않았으면 `null` |
 
 ### Error Code
 
@@ -119,4 +117,4 @@ Accept: application/json
 1. 인증 주체는 `ACTIVE` 상태의 회원이어야 한다.
 2. 인증 회원과 대상 쿠폰의 `user_id`가 일치해야 한다.
 3. 사용 이력은 `confirmedAt` 내림차순, 같은 시각이면 `couponRedemptionId` 내림차순으로 정렬한다.
-4. 반전된 사용 이력은 삭제하지 않고 `REVERSED` 상태와 반전 사유를 포함해 반환한다.
+4. 반전된 사용 이력은 삭제하지 않고 `REVERSED` 상태와 반전 시각을 반환한다. 반전 사유는 감사 이력에 보존하며 이 API 응답에는 포함하지 않는다.
