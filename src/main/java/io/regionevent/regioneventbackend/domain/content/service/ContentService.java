@@ -310,6 +310,10 @@ public class ContentService {
         return contentRepository.findPublishedReservationTargetIdForUpdate(contentId).isPresent();
     }
 
+    public Optional<Long> findPublishedPaymentReservationPriceForUpdate(Long contentId) {
+        return contentRepository.findPublishedPaymentReservationPriceForUpdate(contentId);
+    }
+
     public Content approve(Content content) {
         content.approve();
         return contentRepository.saveAndFlush(content);
