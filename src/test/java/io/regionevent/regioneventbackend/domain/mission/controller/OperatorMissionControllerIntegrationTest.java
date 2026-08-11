@@ -174,6 +174,7 @@ class OperatorMissionControllerIntegrationTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.statusCode").value(200))
             .andExpect(jsonPath("$.code").value("SUCCESS"))
+            .andExpect(jsonPath("$.message").value("미션 검토 요청에 성공했습니다."))
             .andExpect(jsonPath("$.data.missionId").value(mission.getMissionId().toString()))
             .andExpect(jsonPath("$.data.status").value("PENDING_REVIEW"));
 
@@ -313,7 +314,7 @@ class OperatorMissionControllerIntegrationTest {
     }
 
     @Test
-    void submit_withDifferentRegionRewardCouponPolicy_returnsConflictWithoutChangingMissionOrAudit()
+    void submit_withDifferentRegionRewardCouponPolicy_returnsForbiddenWithoutChangingMissionOrAudit()
         throws Exception {
         Region missionRegion = saveRegion("SUB-POLICY-MISSION");
         Region policyRegion = saveRegion("SUB-POLICY-OTHER");
@@ -334,8 +335,8 @@ class OperatorMissionControllerIntegrationTest {
 
         mockMvc.perform(post("/api/v1/operator/missions/{missionId}/submit", mission.getMissionId())
                 .header("Authorization", bearerToken(missionOperator)))
-            .andExpect(status().isConflict())
-            .andExpect(jsonPath("$.code").value("MISSION_STATE_CONFLICT"));
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
 
         assertThat(missionRepository.findById(mission.getMissionId()))
             .hasValueSatisfying(savedMission -> assertThat(savedMission.getStatus()).isEqualTo(MissionStatus.DRAFT));

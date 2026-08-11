@@ -33,7 +33,7 @@ import io.regionevent.regioneventbackend.global.response.ApiResponse;
 public class OperatorMissionController {
 
     private static final String CREATE_SUCCESS_MESSAGE = "미션 생성에 성공했습니다.";
-    private static final String SUBMIT_SUCCESS_MESSAGE = "미션 제출에 성공했습니다.";
+    private static final String SUBMIT_SUCCESS_MESSAGE = "미션 검토 요청에 성공했습니다.";
     private static final Pattern POSITIVE_DECIMAL_PATTERN = Pattern.compile("^[1-9][0-9]*$");
 
     private final CreateOperatorMissionUseCase createOperatorMissionUseCase;

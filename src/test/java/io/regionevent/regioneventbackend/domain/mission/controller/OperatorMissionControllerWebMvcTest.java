@@ -236,6 +236,7 @@ class OperatorMissionControllerWebMvcTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.statusCode").value(200))
             .andExpect(jsonPath("$.code").value("SUCCESS"))
+            .andExpect(jsonPath("$.message").value("미션 검토 요청에 성공했습니다."))
             .andExpect(jsonPath("$.data.missionId").value("701"))
             .andExpect(jsonPath("$.data.status").value("PENDING_REVIEW"));
     }

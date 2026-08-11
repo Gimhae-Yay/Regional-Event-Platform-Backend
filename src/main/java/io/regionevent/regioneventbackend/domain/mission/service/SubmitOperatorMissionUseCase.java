@@ -99,8 +99,10 @@ public class SubmitOperatorMissionUseCase {
         if (!operator.region().getRegionId().equals(mission.getRegion().getRegionId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        if (!mission.getRegion().getRegionId().equals(rewardCouponPolicy.getRegion().getRegionId())
-            || rewardCouponPolicy.getIssuanceType() != CouponIssuanceType.MISSION_REWARD
+        if (!mission.getRegion().getRegionId().equals(rewardCouponPolicy.getRegion().getRegionId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        if (rewardCouponPolicy.getIssuanceType() != CouponIssuanceType.MISSION_REWARD
             || (rewardCouponPolicy.getStatus() != CouponPolicyStatus.DRAFT
                 && rewardCouponPolicy.getStatus() != CouponPolicyStatus.PUBLISHED)
             || mission.getStatus() != MissionStatus.DRAFT) {
