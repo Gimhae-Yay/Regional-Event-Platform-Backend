@@ -15,7 +15,6 @@ import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventActor;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
-import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.coupon.dto.UpdateCouponPolicyRequest;
@@ -33,12 +32,10 @@ public class UpdateCouponPolicyUseCase {
 
     private static final int MAXIMUM_NAME_LENGTH = 255;
     private static final int MAXIMUM_DESCRIPTION_LENGTH = 1_000;
-    private static final int MAXIMUM_REASON_LENGTH = 500;
 
     private final AppUserService appUserService;
     private final OperatorAuthorizationService operatorAuthorizationService;
     private final CouponPolicyService couponPolicyService;
-    private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase;
     private final Clock clock;
 
@@ -46,14 +43,12 @@ public class UpdateCouponPolicyUseCase {
         AppUserService appUserService,
         OperatorAuthorizationService operatorAuthorizationService,
         CouponPolicyService couponPolicyService,
-        RecordAuditEventUseCase recordAuditEventUseCase,
         RecordFailedAuditEventUseCase recordFailedAuditEventUseCase,
         Clock clock
     ) {
         this.appUserService = appUserService;
         this.operatorAuthorizationService = operatorAuthorizationService;
         this.couponPolicyService = couponPolicyService;
-        this.recordAuditEventUseCase = recordAuditEventUseCase;
         this.recordFailedAuditEventUseCase = recordFailedAuditEventUseCase;
         this.clock = clock;
     }
@@ -84,20 +79,6 @@ public class UpdateCouponPolicyUseCase {
             couponPolicy,
             command
         );
-        recordAuditEventUseCase.record(new AuditEventCommand(
-            requestId,
-            updatedCouponPolicy.getRegion(),
-            AuditEventTargetType.COUPON_POLICY,
-            updatedCouponPolicy.getCouponPolicyId(),
-            CouponPolicyStatus.DRAFT.name(),
-            CouponPolicyStatus.DRAFT.name(),
-            AuditEventResult.SUCCESS,
-            null,
-            parsedRequest.reason(),
-            null,
-            new AuditEventActor(operator.roleAssignment()),
-            updatedAt
-        ));
         return UpdateCouponPolicyResult.from(updatedCouponPolicy, updatedAt);
     }
 
@@ -134,8 +115,7 @@ public class UpdateCouponPolicyUseCase {
             validDaysAfterIssue,
             issueStartsAt,
             issueEndsAt,
-            totalIssueLimit,
-            parseReason(request.reason())
+            totalIssueLimit
         );
     }
 
@@ -234,20 +214,6 @@ public class UpdateCouponPolicyUseCase {
         return parseLong(value, 1L);
     }
 
-    private String parseReason(JsonNode value) {
-        if (value == null || value.isNull()) {
-            throw invalidInput();
-        }
-        if (!value.isString()) {
-            throw invalidInput();
-        }
-        String normalizedReason = value.stringValue().strip();
-        if (normalizedReason.isEmpty() || normalizedReason.length() > MAXIMUM_REASON_LENGTH) {
-            throw invalidInput();
-        }
-        return normalizedReason;
-    }
-
     private void validateOwnership(
         UUID requestId,
         AuthorizedOperator operator,
@@ -293,8 +259,7 @@ public class UpdateCouponPolicyUseCase {
         PatchValue<Integer> validDaysAfterIssue,
         PatchValue<Instant> issueStartsAt,
         PatchValue<Instant> issueEndsAt,
-        PatchValue<Long> totalIssueLimit,
-        String reason
+        PatchValue<Long> totalIssueLimit
     ) {
 
         private UpdateCouponPolicyCommand toCommand(CouponPolicy couponPolicy) {

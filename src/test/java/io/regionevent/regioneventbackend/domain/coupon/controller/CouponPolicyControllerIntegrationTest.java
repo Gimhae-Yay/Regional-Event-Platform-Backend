@@ -206,7 +206,7 @@ class CouponPolicyControllerIntegrationTest {
 
         mockMvc.perform(authenticated(patch("/api/v1/operator/coupon-policies/300"))
                 .contentType(APPLICATION_JSON)
-                .content("{\"name\":\"재방문 할인 수정\",\"discountAmount\":4000,\"reason\":\"혜택 조정\"}"))
+                .content("{\"name\":\"재방문 할인 수정\",\"discountAmount\":4000}"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.code").value("SUCCESS"))
             .andExpect(jsonPath("$.message").value("쿠폰 정책 수정에 성공했습니다."))
@@ -226,7 +226,7 @@ class CouponPolicyControllerIntegrationTest {
     void 쿠폰_정책_수정_식별자_형식이_잘못되면_타입오류를_응답한다() throws Exception {
         mockMvc.perform(authenticated(patch("/api/v1/operator/coupon-policies/invalid"))
                 .contentType(APPLICATION_JSON)
-                .content("{\"name\":\"재방문 할인 수정\",\"reason\":\"혜택 조정\"}"))
+                .content("{\"name\":\"재방문 할인 수정\"}"))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
 
@@ -243,7 +243,7 @@ class CouponPolicyControllerIntegrationTest {
 
         mockMvc.perform(authenticated(patch("/api/v1/operator/coupon-policies/300"))
                 .contentType(APPLICATION_JSON)
-                .content("{\"name\":\"재방문 할인 수정\",\"reason\":\"혜택 조정\"}"))
+                .content("{\"name\":\"재방문 할인 수정\"}"))
             .andExpect(status().is(statusCode))
             .andExpect(jsonPath("$.code").value(code));
     }

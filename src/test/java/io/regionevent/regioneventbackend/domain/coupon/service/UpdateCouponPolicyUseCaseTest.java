@@ -23,7 +23,6 @@ import tools.jackson.databind.node.JsonNodeFactory;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
-import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.coupon.dto.UpdateCouponPolicyRequest;
@@ -53,7 +52,6 @@ class UpdateCouponPolicyUseCaseTest {
         OperatorAuthorizationService.class
     );
     private final CouponPolicyService couponPolicyService = mock(CouponPolicyService.class);
-    private final RecordAuditEventUseCase recordAuditEventUseCase = mock(RecordAuditEventUseCase.class);
     private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase = mock(
         RecordFailedAuditEventUseCase.class
     );
@@ -62,13 +60,12 @@ class UpdateCouponPolicyUseCaseTest {
         appUserService,
         operatorAuthorizationService,
         couponPolicyService,
-        recordAuditEventUseCase,
         recordFailedAuditEventUseCase,
         clock
     );
 
     @Test
-    void update_DRAFT_정책이면_부분수정하고_감사_이력을_기록한다() {
+    void update_DRAFT_정책이면_부분수정한다() {
         AuthorizedOperator operator = authorizedOperator();
         CouponPolicy draftPolicy = couponPolicy(CouponPolicyStatus.DRAFT, true);
         CouponPolicy updatedPolicy = couponPolicy(CouponPolicyStatus.DRAFT, true);
@@ -98,13 +95,7 @@ class UpdateCouponPolicyUseCaseTest {
         assertThat(commandCaptor.getValue().name()).isEqualTo("수정 정책");
         assertThat(commandCaptor.getValue().description()).isNull();
         assertThat(commandCaptor.getValue().discountAmount()).isEqualTo(4_000L);
-        ArgumentCaptor<AuditEventCommand> auditCaptor = ArgumentCaptor.forClass(AuditEventCommand.class);
-        verify(recordAuditEventUseCase).record(auditCaptor.capture());
-        assertThat(auditCaptor.getValue().targetType()).isEqualTo(AuditEventTargetType.COUPON_POLICY);
-        assertThat(auditCaptor.getValue().previousState()).isEqualTo(CouponPolicyStatus.DRAFT.name());
-        assertThat(auditCaptor.getValue().nextState()).isEqualTo(CouponPolicyStatus.DRAFT.name());
-        assertThat(auditCaptor.getValue().result()).isEqualTo(AuditEventResult.SUCCESS);
-        assertThat(auditCaptor.getValue().reason()).isEqualTo("혜택 조정");
+        verifyNoInteractions(recordFailedAuditEventUseCase);
     }
 
     @Test
@@ -123,7 +114,6 @@ class UpdateCouponPolicyUseCaseTest {
         );
 
         verify(couponPolicyService, never()).update(any(), any());
-        verify(recordAuditEventUseCase, never()).record(any());
         verifyFailureAudit(ErrorCode.COUPON_POLICY_CONFLICT, publishedPolicy);
     }
 
@@ -143,7 +133,6 @@ class UpdateCouponPolicyUseCaseTest {
         );
 
         verify(couponPolicyService, never()).update(any(), any());
-        verify(recordAuditEventUseCase, never()).record(any());
         verifyFailureAudit(ErrorCode.FORBIDDEN, otherOperatorPolicy);
     }
 
@@ -152,8 +141,7 @@ class UpdateCouponPolicyUseCaseTest {
         assertThatThrownBy(() -> useCase.update(
             USER_ID,
             COUPON_POLICY_ID,
-            new UpdateCouponPolicyRequest(null, null, null, null, null, null, null, null,
-                JsonNodeFactory.instance.stringNode("혜택 조정")),
+            new UpdateCouponPolicyRequest(null, null, null, null, null, null, null, null),
             REQUEST_ID
         )).isInstanceOfSatisfying(BusinessException.class, exception ->
             assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT)
@@ -163,7 +151,6 @@ class UpdateCouponPolicyUseCaseTest {
             appUserService,
             operatorAuthorizationService,
             couponPolicyService,
-            recordAuditEventUseCase,
             recordFailedAuditEventUseCase
         );
     }
@@ -184,7 +171,6 @@ class UpdateCouponPolicyUseCaseTest {
         );
 
         verify(couponPolicyService, never()).update(any(), any());
-        verifyNoInteractions(recordAuditEventUseCase);
     }
 
     @Test
@@ -204,8 +190,7 @@ class UpdateCouponPolicyUseCaseTest {
                 null,
                 JsonNodeFactory.instance.stringNode("2026-09-01T00:00:00Z"),
                 null,
-                null,
-                JsonNodeFactory.instance.stringNode("기간 조정")
+                null
             ),
             REQUEST_ID
         )).isInstanceOfSatisfying(BusinessException.class, exception ->
@@ -213,7 +198,6 @@ class UpdateCouponPolicyUseCaseTest {
         );
 
         verify(couponPolicyService, never()).update(any(), any());
-        verifyNoInteractions(recordAuditEventUseCase);
     }
 
     private void verifyFailureAudit(ErrorCode errorCode, CouponPolicy couponPolicy) {
@@ -285,8 +269,7 @@ class UpdateCouponPolicyUseCaseTest {
             null,
             null,
             null,
-            null,
-            JsonNodeFactory.instance.stringNode("혜택 조정")
+            null
         );
     }
 }
