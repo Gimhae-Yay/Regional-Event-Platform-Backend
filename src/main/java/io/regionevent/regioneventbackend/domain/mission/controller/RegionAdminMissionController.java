@@ -22,9 +22,7 @@ public class RegionAdminMissionController {
 
     private final GetRegionAdminMissionDetailUseCase getRegionAdminMissionDetailUseCase;
 
-    public RegionAdminMissionController(
-        GetRegionAdminMissionDetailUseCase getRegionAdminMissionDetailUseCase
-    ) {
+    public RegionAdminMissionController(GetRegionAdminMissionDetailUseCase getRegionAdminMissionDetailUseCase) {
         this.getRegionAdminMissionDetailUseCase = getRegionAdminMissionDetailUseCase;
     }
 
@@ -41,4 +39,5 @@ public class RegionAdminMissionController {
             .success(HttpStatus.OK, SUCCESS_MESSAGE, response)
             .toResponseEntity();
     }
+
 }
