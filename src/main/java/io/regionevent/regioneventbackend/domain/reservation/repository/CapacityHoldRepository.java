@@ -23,6 +23,14 @@ public interface CapacityHoldRepository extends JpaRepository<CapacityHold, Long
     @Query("""
         SELECT capacityHold
         FROM CapacityHold capacityHold
+        WHERE capacityHold.holdId = :holdId
+        """)
+    Optional<CapacityHold> findByHoldIdForUpdate(@Param("holdId") Long holdId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT capacityHold
+        FROM CapacityHold capacityHold
         WHERE capacityHold.contentSession.sessionId = :sessionId
             AND capacityHold.status = io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus.ACTIVE
         ORDER BY capacityHold.holdId ASC
@@ -90,6 +98,38 @@ public interface CapacityHoldRepository extends JpaRepository<CapacityHold, Long
     int consumeForPaidZeroIfConfirmable(
         @Param("holdId") Long holdId,
         @Param("userId") Long userId
+    );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+        UPDATE capacity_hold
+        SET status = 'CONSUMED',
+            terminal_at = CURRENT_TIMESTAMP
+        WHERE hold_id = :holdId
+            AND user_id = :userId
+            AND status = 'ACTIVE'
+            AND expires_at > CURRENT_TIMESTAMP(6)
+            AND EXISTS (
+                SELECT 1
+                FROM content_session
+                JOIN content ON content.content_id = content_session.content_id
+                WHERE content_session.session_id = capacity_hold.session_id
+                    AND content.status = 'PUBLISHED'
+                    AND content_session.status = 'SCHEDULED'
+                    AND content_session.starts_at > CURRENT_TIMESTAMP(6)
+            )
+            AND EXISTS (
+                SELECT 1
+                FROM payment
+                WHERE payment_id = :paymentId
+                    AND hold_id = capacity_hold.hold_id
+                    AND status = 'PENDING'
+            )
+        """, nativeQuery = true)
+    int consumeForPaidPaymentIfConfirmable(
+        @Param("holdId") Long holdId,
+        @Param("userId") Long userId,
+        @Param("paymentId") Long paymentId
     );
 
     @Query(value = """

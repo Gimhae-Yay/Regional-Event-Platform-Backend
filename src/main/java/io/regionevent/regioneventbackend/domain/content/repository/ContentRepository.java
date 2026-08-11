@@ -293,6 +293,14 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
         """)
     Optional<Content> findDeletionTargetForUpdate(@Param("contentId") Long contentId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT content
+        FROM Content content
+        WHERE content.contentId = :contentId
+        """)
+    Optional<Content> findByContentIdForUpdate(@Param("contentId") Long contentId);
+
     boolean existsByContentIdAndStatusAndDeletedAtIsNull(
         Long contentId,
         ContentStatus status
