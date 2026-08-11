@@ -2,9 +2,12 @@ package io.regionevent.regioneventbackend.domain.payment.service;
 
 import java.time.Instant;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
@@ -55,6 +58,7 @@ public class CreateRefundUseCase {
     private final CouponStatusHistoryService couponStatusHistoryService;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final PortOnePaymentGateway portOnePaymentGateway;
+    private final TransactionTemplate transactionTemplate;
 
     public CreateRefundUseCase(
         PlatformAdminAuthorizationService platformAdminAuthorizationService,
@@ -66,7 +70,8 @@ public class CreateRefundUseCase {
         CouponRedemptionService couponRedemptionService,
         CouponStatusHistoryService couponStatusHistoryService,
         RecordAuditEventUseCase recordAuditEventUseCase,
-        PortOnePaymentGateway portOnePaymentGateway
+        PortOnePaymentGateway portOnePaymentGateway,
+        PlatformTransactionManager transactionManager
     ) {
         this.platformAdminAuthorizationService = platformAdminAuthorizationService;
         this.paymentService = paymentService;
@@ -78,25 +83,66 @@ public class CreateRefundUseCase {
         this.couponStatusHistoryService = couponStatusHistoryService;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
         this.portOnePaymentGateway = portOnePaymentGateway;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
-    @Transactional
     public CreateRefundResponse create(
         Long actorUserId,
         String paymentIdValue,
         CreateRefundRequest request,
         UUID requestId
     ) {
-        PlatformAdminAssignment assignment = platformAdminAuthorizationService
-            .requireAuthorizedPlatformAdmin(actorUserId);
         long paymentId = toPositiveId(paymentIdValue);
         String evidenceReference = normalizeRequired(request == null ? null : request.evidenceReference());
         String reason = normalizeRequired(request == null ? null : request.reason());
+
+        PreparedRefund preparedRefund = executeInTransaction(
+            () -> prepareRefund(
+                actorUserId,
+                paymentId,
+                evidenceReference,
+                reason
+            )
+        );
+        if (preparedRefund.existingResponse() != null) {
+            return preparedRefund.existingResponse();
+        }
+
+        try {
+            PortOnePaymentGateway.PortOneCancellation cancellation = portOnePaymentGateway.cancelPayment(
+                preparedRefund.portonePaymentId(),
+                preparedRefund.amount(),
+                reason
+            );
+            return executeInTransaction(() -> confirmResponse(
+                actorUserId,
+                preparedRefund,
+                cancellation,
+                evidenceReference,
+                reason,
+                requestId
+            ));
+        } catch (PortOneLookupException ignored) {
+            return executeInTransaction(() -> confirmNoResponse(
+                preparedRefund
+            ));
+        }
+    }
+
+    private PreparedRefund prepareRefund(
+        Long actorUserId,
+        long paymentId,
+        String evidenceReference,
+        String reason
+    ) {
+        PlatformAdminAssignment assignment = platformAdminAuthorizationService
+            .requireAuthorizedPlatformAdmin(actorUserId);
         Payment payment = paymentService.findByPaymentIdForUpdate(paymentId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
         Refund existing = refundService.findByPaymentIdForUpdate(paymentId).orElse(null);
         if (existing != null) {
-            return CreateRefundResponse.from(existing);
+            return PreparedRefund.withExistingResponse(CreateRefundResponse.from(existing));
         }
         if (payment.getStatus() != PaymentStatus.APPROVED && payment.getStatus() != PaymentStatus.DISCREPANT) {
             throw new BusinessException(ErrorCode.REFUND_PAYMENT_CONFLICT);
@@ -118,27 +164,41 @@ public class CreateRefundUseCase {
             now
         ));
         requestDiscrepancyRefund(payment, evidenceReference, reason, now);
-        try {
-            PortOnePaymentGateway.PortOneCancellation cancellation = portOnePaymentGateway.cancelPayment(
-                payment.getPortonePaymentId(),
-                refund.getAmount(),
-                reason
-            );
-            attempt.respond(cancellation.cancellationId(), cancellation.status(), cancellation.resultHash());
-            if (cancellation.isSucceeded()) {
-                Instant completedAt = Instant.now();
-                refund.succeed(completedAt);
-                restoreCouponIfEligible(refund, completedAt, requestId, assignment);
-            } else {
-                refund.fail(Instant.now());
-            }
-        } catch (PortOneLookupException exception) {
-            attempt.noResponse(RefundFailureReasonCode.UNKNOWN);
-            refund.markDiscrepant(Instant.now());
+        return new PreparedRefund(
+            refund.getRefundId(),
+            attempt.getRefundAttemptId(),
+            payment.getPortonePaymentId(),
+            refund.getAmount(),
+            null
+        );
+    }
+
+    private CreateRefundResponse confirmResponse(
+        Long actorUserId,
+        PreparedRefund preparedRefund,
+        PortOnePaymentGateway.PortOneCancellation cancellation,
+        String evidenceReference,
+        String reason,
+        UUID requestId
+    ) {
+        PlatformAdminAssignment assignment = platformAdminAuthorizationService
+            .requireAuthorizedPlatformAdmin(actorUserId);
+        Refund refund = refundService.findByRefundIdForUpdate(preparedRefund.refundId())
+            .orElseThrow(() -> new IllegalStateException("prepared refund does not exist"));
+        RefundAttempt attempt = refundAttemptService
+            .findByRefundAttemptIdForUpdate(preparedRefund.refundAttemptId())
+            .orElseThrow(() -> new IllegalStateException("prepared refund attempt does not exist"));
+        attempt.respond(cancellation.cancellationId(), cancellation.status(), cancellation.resultHash());
+        if (cancellation.isSucceeded()) {
+            Instant completedAt = Instant.now();
+            refund.succeed(completedAt);
+            restoreCouponIfEligible(refund, completedAt, requestId, assignment);
+        } else {
+            refund.fail(Instant.now());
         }
         recordAuditEventUseCase.record(new AuditEventCommand(
             requestId,
-            payment.getCapacityHold().getRegion(),
+            refund.getPayment().getCapacityHold().getRegion(),
             AuditEventTargetType.REFUND,
             refund.getRefundId(),
             "REQUESTED",
@@ -150,6 +210,19 @@ public class CreateRefundUseCase {
             new AuditEventActor(assignment),
             Instant.now()
         ));
+        return CreateRefundResponse.from(refund);
+    }
+
+    private CreateRefundResponse confirmNoResponse(
+        PreparedRefund preparedRefund
+    ) {
+        Refund refund = refundService.findByRefundIdForUpdate(preparedRefund.refundId())
+            .orElseThrow(() -> new IllegalStateException("prepared refund does not exist"));
+        RefundAttempt attempt = refundAttemptService
+            .findByRefundAttemptIdForUpdate(preparedRefund.refundAttemptId())
+            .orElseThrow(() -> new IllegalStateException("prepared refund attempt does not exist"));
+        attempt.noResponse(RefundFailureReasonCode.UNKNOWN);
+        refund.markDiscrepant(Instant.now());
         return CreateRefundResponse.from(refund);
     }
 
@@ -265,5 +338,26 @@ public class CreateRefundUseCase {
 
     private RefundAttemptInitiatorKind toInitiatorKind(PlatformAdminAssignment assignment) {
         return RefundAttemptInitiatorKind.valueOf(assignment.getGrade().name());
+    }
+
+    private <T> T executeInTransaction(Supplier<T> action) {
+        T result = transactionTemplate.execute(status -> action.get());
+        if (result == null) {
+            throw new IllegalStateException("transaction result must not be null");
+        }
+        return result;
+    }
+
+    private record PreparedRefund(
+        Long refundId,
+        Long refundAttemptId,
+        String portonePaymentId,
+        long amount,
+        CreateRefundResponse existingResponse
+    ) {
+
+        private static PreparedRefund withExistingResponse(CreateRefundResponse response) {
+            return new PreparedRefund(null, null, null, 0, response);
+        }
     }
 }

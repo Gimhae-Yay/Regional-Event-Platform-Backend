@@ -1,5 +1,7 @@
 package io.regionevent.regioneventbackend.domain.payment.service;
 
+import java.util.Optional;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,5 +21,10 @@ public class RefundAttemptService {
     @Transactional(propagation = Propagation.MANDATORY)
     public RefundAttempt create(RefundAttempt refundAttempt) {
         return refundAttemptRepository.saveAndFlush(refundAttempt);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<RefundAttempt> findByRefundAttemptIdForUpdate(Long refundAttemptId) {
+        return refundAttemptRepository.findByRefundAttemptIdForUpdate(refundAttemptId);
     }
 }

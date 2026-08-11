@@ -40,6 +40,11 @@ public class RefundService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<Refund> findByRefundIdForUpdate(Long refundId) {
+        return refundRepository.findByRefundIdForUpdate(refundId);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
     public Refund create(Refund refund) {
         return refundRepository.saveAndFlush(refund);
     }
