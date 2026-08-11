@@ -3,6 +3,7 @@ package io.regionevent.regioneventbackend.domain.content.service;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -16,6 +17,7 @@ import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUs
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHoldService;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationService;
+import io.regionevent.regioneventbackend.domain.payment.service.ExpirePendingPaymentForTerminatedHoldUseCase;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
@@ -29,6 +31,7 @@ public class CancelContentSessionUseCase {
     private final OperatorAuthorizationService operatorAuthorizationService;
     private final ContentSessionService contentSessionService;
     private final CapacityHoldService capacityHoldService;
+    private final ExpirePendingPaymentForTerminatedHoldUseCase expirePendingPaymentForTerminatedHoldUseCase;
     private final ReservationService reservationService;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final Clock clock;
@@ -37,6 +40,7 @@ public class CancelContentSessionUseCase {
         OperatorAuthorizationService operatorAuthorizationService,
         ContentSessionService contentSessionService,
         CapacityHoldService capacityHoldService,
+        ExpirePendingPaymentForTerminatedHoldUseCase expirePendingPaymentForTerminatedHoldUseCase,
         ReservationService reservationService,
         RecordAuditEventUseCase recordAuditEventUseCase,
         Clock clock
@@ -44,6 +48,7 @@ public class CancelContentSessionUseCase {
         this.operatorAuthorizationService = operatorAuthorizationService;
         this.contentSessionService = contentSessionService;
         this.capacityHoldService = capacityHoldService;
+        this.expirePendingPaymentForTerminatedHoldUseCase = expirePendingPaymentForTerminatedHoldUseCase;
         this.reservationService = reservationService;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
         this.clock = clock;
@@ -69,17 +74,27 @@ public class CancelContentSessionUseCase {
             cancelledAt,
             validatedReason
         );
-        int releasedQuantity = capacityHoldService.invalidateActiveHoldsForSession(
+        List<CapacityHoldService.TerminatedCapacityHold> terminatedHolds = capacityHoldService
+            .invalidateActiveHoldsForSession(
             cancelledSession,
             validatedReason,
             cancelledAt
-        ) + reservationService.cancelUncheckedInReservationsForSession(
+        );
+        AuditEventActor actor = new AuditEventActor(operator.roleAssignment());
+        terminatedHolds.forEach(capacityHold -> expirePendingPaymentForTerminatedHoldUseCase.expire(
+            capacityHold,
+            requestId,
+            actor
+        ));
+        int releasedQuantity = terminatedHolds.stream()
+            .mapToInt(CapacityHoldService.TerminatedCapacityHold::quantity)
+            .sum() + reservationService.cancelUncheckedInReservationsForSession(
             cancelledSession,
             validatedReason,
             cancelledAt
         );
         contentSessionService.releaseCapacity(cancelledSession, releasedQuantity);
-        recordSuccessfulAuditEvent(requestId, operator, cancelledSession, cancelledAt);
+        recordSuccessfulAuditEvent(requestId, actor, cancelledSession, cancelledAt);
 
         return new CancelContentSessionResult(
             cancelledSession.getSessionId(),
@@ -112,7 +127,7 @@ public class CancelContentSessionUseCase {
 
     private void recordSuccessfulAuditEvent(
         UUID requestId,
-        OperatorAuthorizationService.AuthorizedOperator operator,
+        AuditEventActor actor,
         ContentSession contentSession,
         Instant cancelledAt
     ) {
@@ -125,7 +140,7 @@ public class CancelContentSessionUseCase {
             "CANCELLED",
             AuditEventResult.SUCCESS,
             OPERATOR_SESSION_CANCEL_REASON,
-            new AuditEventActor(operator.roleAssignment()),
+            actor,
             cancelledAt
         ));
     }
