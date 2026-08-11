@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.payment.service;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -31,7 +32,7 @@ import io.regionevent.regioneventbackend.domain.payment.entity.Refund;
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundAttempt;
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundAttemptInitiatorKind;
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundFailureReasonCode;
-import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneLookupException;
+import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneNoResponseException;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOnePaymentGateway;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
@@ -43,9 +44,9 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
 @Service
 public class CreateRefundUseCase {
 
-    private static final String CURRENCY = "KRW";
     private static final String DISCREPANCY_ACTION_TYPE = "FULL_REFUND_REQUEST";
     private static final String DISCREPANCY_ACTION_REASON_CODE = "MANUAL_FULL_REFUND";
+    private static final String DISCREPANCY_ACTION_RESULT_CODE = "REFUND_REQUESTED";
     private static final String COUPON_RESTORE_REASON = "REFUND_SUCCEEDED";
 
     private final PlatformAdminAuthorizationService platformAdminAuthorizationService;
@@ -53,11 +54,13 @@ public class CreateRefundUseCase {
     private final RefundService refundService;
     private final RefundAttemptService refundAttemptService;
     private final PaymentDiscrepancyService paymentDiscrepancyService;
+    private final PaymentDiscrepancyActionService paymentDiscrepancyActionService;
     private final CouponService couponService;
     private final CouponRedemptionService couponRedemptionService;
     private final CouponStatusHistoryService couponStatusHistoryService;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final PortOnePaymentGateway portOnePaymentGateway;
+    private final Clock clock;
     private final TransactionTemplate transactionTemplate;
 
     public CreateRefundUseCase(
@@ -66,11 +69,13 @@ public class CreateRefundUseCase {
         RefundService refundService,
         RefundAttemptService refundAttemptService,
         PaymentDiscrepancyService paymentDiscrepancyService,
+        PaymentDiscrepancyActionService paymentDiscrepancyActionService,
         CouponService couponService,
         CouponRedemptionService couponRedemptionService,
         CouponStatusHistoryService couponStatusHistoryService,
         RecordAuditEventUseCase recordAuditEventUseCase,
         PortOnePaymentGateway portOnePaymentGateway,
+        Clock clock,
         PlatformTransactionManager transactionManager
     ) {
         this.platformAdminAuthorizationService = platformAdminAuthorizationService;
@@ -78,11 +83,13 @@ public class CreateRefundUseCase {
         this.refundService = refundService;
         this.refundAttemptService = refundAttemptService;
         this.paymentDiscrepancyService = paymentDiscrepancyService;
+        this.paymentDiscrepancyActionService = paymentDiscrepancyActionService;
         this.couponService = couponService;
         this.couponRedemptionService = couponRedemptionService;
         this.couponStatusHistoryService = couponStatusHistoryService;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
         this.portOnePaymentGateway = portOnePaymentGateway;
+        this.clock = clock;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -123,9 +130,14 @@ public class CreateRefundUseCase {
                 reason,
                 requestId
             ));
-        } catch (PortOneLookupException ignored) {
+        } catch (PortOneNoResponseException exception) {
             return executeInTransaction(() -> confirmNoResponse(
-                preparedRefund
+                actorUserId,
+                preparedRefund,
+                exception.getFailureReasonCode(),
+                evidenceReference,
+                reason,
+                requestId
             ));
         }
     }
@@ -150,7 +162,7 @@ public class CreateRefundUseCase {
         if (payment.getPortonePaymentId() == null) {
             throw new BusinessException(ErrorCode.REFUND_PAYMENT_CONFLICT);
         }
-        Instant now = Instant.now();
+        Instant now = Instant.now(clock);
         Refund refund = refundService.create(new Refund(
             payment,
             payment.getReservationPriceSnapshot().getFinalAmount(),
@@ -160,7 +172,7 @@ public class CreateRefundUseCase {
         RefundAttempt attempt = refundAttemptService.create(new RefundAttempt(
             refund,
             1,
-            toInitiatorKind(assignment),
+            RefundAttemptInitiatorKind.SYSTEM,
             now
         ));
         requestDiscrepancyRefund(payment, evidenceReference, reason, now);
@@ -190,39 +202,34 @@ public class CreateRefundUseCase {
             .orElseThrow(() -> new IllegalStateException("prepared refund attempt does not exist"));
         attempt.respond(cancellation.cancellationId(), cancellation.status(), cancellation.resultHash());
         if (cancellation.isSucceeded()) {
-            Instant completedAt = Instant.now();
+            Instant completedAt = Instant.now(clock);
             refund.succeed(completedAt);
             restoreCouponIfEligible(refund, completedAt, requestId, assignment);
         } else {
-            refund.fail(Instant.now());
+            refund.fail(Instant.now(clock));
         }
-        recordAuditEventUseCase.record(new AuditEventCommand(
-            requestId,
-            refund.getPayment().getCapacityHold().getRegion(),
-            AuditEventTargetType.REFUND,
-            refund.getRefundId(),
-            "REQUESTED",
-            refund.getStatus().name(),
-            AuditEventResult.SUCCESS,
-            null,
-            reason,
-            evidenceReference,
-            new AuditEventActor(assignment),
-            Instant.now()
-        ));
+        recordRefundAudit(refund, assignment, evidenceReference, reason, requestId);
         return CreateRefundResponse.from(refund);
     }
 
     private CreateRefundResponse confirmNoResponse(
-        PreparedRefund preparedRefund
+        Long actorUserId,
+        PreparedRefund preparedRefund,
+        RefundFailureReasonCode failureReasonCode,
+        String evidenceReference,
+        String reason,
+        UUID requestId
     ) {
+        PlatformAdminAssignment assignment = platformAdminAuthorizationService
+            .requireAuthorizedPlatformAdmin(actorUserId);
         Refund refund = refundService.findByRefundIdForUpdate(preparedRefund.refundId())
             .orElseThrow(() -> new IllegalStateException("prepared refund does not exist"));
         RefundAttempt attempt = refundAttemptService
             .findByRefundAttemptIdForUpdate(preparedRefund.refundAttemptId())
             .orElseThrow(() -> new IllegalStateException("prepared refund attempt does not exist"));
-        attempt.noResponse(RefundFailureReasonCode.UNKNOWN);
-        refund.markDiscrepant(Instant.now());
+        attempt.noResponse(failureReasonCode);
+        refund.markDiscrepant(Instant.now(clock));
+        recordRefundAudit(refund, assignment, evidenceReference, reason, requestId);
         return CreateRefundResponse.from(refund);
     }
 
@@ -239,12 +246,12 @@ public class CreateRefundUseCase {
             return;
         }
         discrepancy.requestRefund();
-        paymentDiscrepancyService.createAction(
+        paymentDiscrepancyActionService.create(
             discrepancy,
             DISCREPANCY_ACTION_TYPE,
             evidenceReference,
             DISCREPANCY_ACTION_REASON_CODE,
-            CURRENCY,
+            DISCREPANCY_ACTION_RESULT_CODE,
             actedAt
         );
     }
@@ -336,8 +343,27 @@ public class CreateRefundUseCase {
         return normalized;
     }
 
-    private RefundAttemptInitiatorKind toInitiatorKind(PlatformAdminAssignment assignment) {
-        return RefundAttemptInitiatorKind.valueOf(assignment.getGrade().name());
+    private void recordRefundAudit(
+        Refund refund,
+        PlatformAdminAssignment assignment,
+        String evidenceReference,
+        String reason,
+        UUID requestId
+    ) {
+        recordAuditEventUseCase.record(new AuditEventCommand(
+            requestId,
+            refund.getPayment().getCapacityHold().getRegion(),
+            AuditEventTargetType.REFUND,
+            refund.getRefundId(),
+            "REQUESTED",
+            refund.getStatus().name(),
+            AuditEventResult.SUCCESS,
+            null,
+            reason,
+            evidenceReference,
+            new AuditEventActor(assignment),
+            Instant.now(clock)
+        ));
     }
 
     private <T> T executeInTransaction(Supplier<T> action) {

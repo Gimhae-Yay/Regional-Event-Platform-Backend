@@ -4,13 +4,17 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
@@ -25,12 +29,19 @@ import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentStatus;
 import io.regionevent.regioneventbackend.domain.payment.entity.Refund;
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundAttempt;
+import io.regionevent.regioneventbackend.domain.payment.entity.RefundAttemptInitiatorKind;
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundStatus;
-import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneLookupException;
+import io.regionevent.regioneventbackend.domain.payment.entity.RefundFailureReasonCode;
+import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneNoResponseException;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOnePaymentGateway;
+import io.regionevent.regioneventbackend.domain.region.entity.Region;
+import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationPriceSnapshot;
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminAssignment;
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminGrade;
+import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
+import io.regionevent.regioneventbackend.domain.user.entity.AppUserAccountKind;
+import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.service.PlatformAdminAuthorizationService;
 
 class CreateRefundUseCaseTest {
@@ -44,30 +55,44 @@ class CreateRefundUseCaseTest {
         PaymentDiscrepancyService discrepancyService = mock(PaymentDiscrepancyService.class);
         PortOnePaymentGateway paymentGateway = mock(PortOnePaymentGateway.class);
         PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
+        RecordAuditEventUseCase auditEventUseCase = mock(RecordAuditEventUseCase.class);
         CreateRefundUseCase useCase = new CreateRefundUseCase(
             authorizationService,
             paymentService,
             refundService,
             refundAttemptService,
             discrepancyService,
+            mock(PaymentDiscrepancyActionService.class),
             mock(CouponService.class),
             mock(CouponRedemptionService.class),
             mock(CouponStatusHistoryService.class),
-            mock(RecordAuditEventUseCase.class),
+            auditEventUseCase,
             paymentGateway,
+            Clock.fixed(Instant.parse("2026-08-11T00:00:00Z"), ZoneOffset.UTC),
             transactionManager
         );
         PlatformAdminAssignment assignment = mock(PlatformAdminAssignment.class);
+        AppUser appUser = mock(AppUser.class);
         Payment payment = mock(Payment.class);
+        CapacityHold capacityHold = mock(CapacityHold.class);
+        Region region = mock(Region.class);
         ReservationPriceSnapshot snapshot = mock(ReservationPriceSnapshot.class);
         Refund refund = mock(Refund.class);
         RefundAttempt attempt = mock(RefundAttempt.class);
 
         when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         when(authorizationService.requireAuthorizedPlatformAdmin(1L)).thenReturn(assignment);
+        when(assignment.getPlatformAdminAssignmentId()).thenReturn(1L);
+        when(assignment.getAppUser()).thenReturn(appUser);
+        when(assignment.isActive()).thenReturn(true);
         when(assignment.getGrade()).thenReturn(PlatformAdminGrade.PLATFORM_ADMIN);
+        when(appUser.getUserId()).thenReturn(1L);
+        when(appUser.getStatus()).thenReturn(AppUserStatus.ACTIVE);
+        when(appUser.getAccountKind()).thenReturn(AppUserAccountKind.PRIVILEGED);
         when(paymentService.findByPaymentIdForUpdate(10L)).thenReturn(Optional.of(payment));
         when(payment.getPaymentId()).thenReturn(10L);
+        when(payment.getCapacityHold()).thenReturn(capacityHold);
+        when(capacityHold.getRegion()).thenReturn(region);
         when(payment.getStatus()).thenReturn(PaymentStatus.APPROVED);
         when(payment.getPortonePaymentId()).thenReturn("portone-payment");
         when(payment.getReservationPriceSnapshot()).thenReturn(snapshot);
@@ -80,7 +105,10 @@ class CreateRefundUseCaseTest {
         when(attempt.getRefundAttemptId()).thenReturn(30L);
         when(discrepancyService.findByPaymentIdForUpdate(10L)).thenReturn(Optional.empty());
         when(paymentGateway.cancelPayment("portone-payment", 10_000L, "관리자 요청"))
-            .thenThrow(new PortOneLookupException(new RuntimeException("connection failed")));
+            .thenThrow(new PortOneNoResponseException(
+                RefundFailureReasonCode.CONNECTION,
+                new RuntimeException("connection failed")
+            ));
         when(refundService.findByRefundIdForUpdate(20L)).thenReturn(Optional.of(refund));
         when(refundAttemptService.findByRefundAttemptIdForUpdate(30L)).thenReturn(Optional.of(attempt));
         when(refund.getPayment()).thenReturn(payment);
@@ -97,6 +125,12 @@ class CreateRefundUseCaseTest {
         InOrder inOrder = inOrder(transactionManager, paymentGateway);
         inOrder.verify(transactionManager).commit(any());
         inOrder.verify(paymentGateway).cancelPayment("portone-payment", 10_000L, "관리자 요청");
+        ArgumentCaptor<RefundAttempt> attemptCaptor = ArgumentCaptor.forClass(RefundAttempt.class);
+        verify(refundAttemptService).create(attemptCaptor.capture());
+        verify(attempt).noResponse(RefundFailureReasonCode.CONNECTION);
+        verify(auditEventUseCase).record(any());
+        org.assertj.core.api.Assertions.assertThat(attemptCaptor.getValue().getInitiatorKind())
+            .isEqualTo(RefundAttemptInitiatorKind.SYSTEM);
         org.assertj.core.api.Assertions.assertThat(response.status()).isEqualTo("DISCREPANT");
     }
 }

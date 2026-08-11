@@ -1,6 +1,11 @@
 package io.regionevent.regioneventbackend.infra.payment;
 
+import java.io.IOException;
+import java.net.ConnectException;
+import java.net.SocketTimeoutException;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -15,7 +20,9 @@ import io.portone.sdk.server.payment.Payment.Recognized;
 import io.portone.sdk.server.payment.CancelPaymentResponse;
 import io.portone.sdk.server.payment.FailedPaymentCancellation;
 import io.portone.sdk.server.payment.SucceededPaymentCancellation;
+import io.regionevent.regioneventbackend.domain.payment.entity.RefundFailureReasonCode;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneLookupException;
+import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneNoResponseException;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOnePaymentGateway;
 import io.regionevent.regioneventbackend.domain.payment.service.PortOneProperties;
 
@@ -76,11 +83,29 @@ public class PortOnePaymentAdapter implements PortOnePaymentGateway {
                 return new PortOneCancellation(cancellation.getId(), "FAILED", hash(cancellation.getId()));
             }
             throw new PortOneLookupException(new IllegalStateException("unrecognized cancellation response"));
-        } catch (PortOneLookupException exception) {
-            throw exception;
+        } catch (TimeoutException exception) {
+            throw new PortOneNoResponseException(RefundFailureReasonCode.TIMEOUT, exception);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new PortOneNoResponseException(RefundFailureReasonCode.UNKNOWN, exception);
+        } catch (ExecutionException exception) {
+            throw toCancellationException(exception.getCause());
         } catch (Exception exception) {
             throw new PortOneLookupException(exception);
         }
+    }
+
+    private RuntimeException toCancellationException(Throwable cause) {
+        if (cause instanceof SocketTimeoutException) {
+            return new PortOneNoResponseException(RefundFailureReasonCode.TIMEOUT, cause);
+        }
+        if (cause instanceof ConnectException) {
+            return new PortOneNoResponseException(RefundFailureReasonCode.CONNECTION, cause);
+        }
+        if (cause instanceof IOException) {
+            return new PortOneNoResponseException(RefundFailureReasonCode.NETWORK, cause);
+        }
+        return new PortOneLookupException(cause);
     }
 
     private String toStatus(Payment payment) {

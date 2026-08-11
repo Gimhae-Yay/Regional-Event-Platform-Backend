@@ -11,7 +11,6 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentDiscrepancy;
-import io.regionevent.regioneventbackend.domain.payment.repository.PaymentDiscrepancyActionRepository;
 import io.regionevent.regioneventbackend.domain.payment.repository.PaymentDiscrepancyRepository;
 
 class PaymentDiscrepancyServiceTest {
@@ -21,17 +20,11 @@ class PaymentDiscrepancyServiceTest {
         PaymentDiscrepancyRepository paymentDiscrepancyRepository = mock(
             PaymentDiscrepancyRepository.class
         );
-        PaymentDiscrepancyActionRepository paymentDiscrepancyActionRepository = mock(
-            PaymentDiscrepancyActionRepository.class
-        );
         PaymentDiscrepancy discrepancy = mock(PaymentDiscrepancy.class);
         when(paymentDiscrepancyRepository
             .findAllByStatusOrderByDetectedAtAscPaymentDiscrepancyIdAsc("OPEN"))
             .thenReturn(List.of(discrepancy));
-        PaymentDiscrepancyService service = new PaymentDiscrepancyService(
-            paymentDiscrepancyRepository,
-            paymentDiscrepancyActionRepository
-        );
+        PaymentDiscrepancyService service = new PaymentDiscrepancyService(paymentDiscrepancyRepository);
 
         List<PaymentDiscrepancy> actual = service.findAllByStatus("OPEN");
 
