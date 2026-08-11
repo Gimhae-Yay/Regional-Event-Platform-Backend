@@ -43,6 +43,7 @@ import io.regionevent.regioneventbackend.domain.mission.repository.MissionProgre
 import io.regionevent.regioneventbackend.domain.mission.repository.MissionRepository;
 import io.regionevent.regioneventbackend.domain.mission.repository.MissionRewardClaimRepository;
 import io.regionevent.regioneventbackend.domain.mission.service.MissionParticipationDuplicateReadService;
+import io.regionevent.regioneventbackend.domain.mission.service.MissionService;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -66,6 +67,10 @@ class MissionParticipationControllerMySqlIntegrationTest extends NonTransactiona
     private static final Instant PUBLISHED_AT = Instant.parse("2026-08-01T00:00:00Z");
     private static final Instant FUTURE_ENDS_AT = Instant.parse("2037-01-01T00:00:00Z");
     private static final String PATH = "/api/v1/missions/{missionId}/participations";
+    private static final int BOUNDARY_WINDOW_START_MICROSECOND = 50_000;
+    private static final int BOUNDARY_WINDOW_END_MICROSECOND = 150_000;
+    private static final int BOUNDARY_WINDOW_MAX_ATTEMPTS = 750;
+    private static final long BOUNDARY_WINDOW_RETRY_MILLIS = 2L;
 
     private final MockMvc mockMvc;
     private final ObjectMapper objectMapper;
@@ -76,6 +81,7 @@ class MissionParticipationControllerMySqlIntegrationTest extends NonTransactiona
     private final ContentRepository contentRepository;
     private final CouponPolicyRepository couponPolicyRepository;
     private final MissionRepository missionRepository;
+    private final MissionService missionService;
     private final MissionParticipationRepository missionParticipationRepository;
     private final MissionProgressRepository missionProgressRepository;
     private final MissionRewardClaimRepository missionRewardClaimRepository;
@@ -93,6 +99,7 @@ class MissionParticipationControllerMySqlIntegrationTest extends NonTransactiona
         ContentRepository contentRepository,
         CouponPolicyRepository couponPolicyRepository,
         MissionRepository missionRepository,
+        MissionService missionService,
         MissionParticipationRepository missionParticipationRepository,
         MissionProgressRepository missionProgressRepository,
         MissionRewardClaimRepository missionRewardClaimRepository,
@@ -108,6 +115,7 @@ class MissionParticipationControllerMySqlIntegrationTest extends NonTransactiona
         this.contentRepository = contentRepository;
         this.couponPolicyRepository = couponPolicyRepository;
         this.missionRepository = missionRepository;
+        this.missionService = missionService;
         this.missionParticipationRepository = missionParticipationRepository;
         this.missionProgressRepository = missionProgressRepository;
         this.missionRewardClaimRepository = missionRewardClaimRepository;
@@ -123,7 +131,7 @@ class MissionParticipationControllerMySqlIntegrationTest extends NonTransactiona
     @Test
     void create_신규와반복요청은최초참여결과를반환하고진행도와보상을만들지않는다() throws Exception {
         Fixture fixture = createFixture(true, true);
-        Instant before = missionRepository.findCurrentDatabaseTime().minusSeconds(1);
+        Instant before = missionService.findCurrentDatabaseTime().minusSeconds(1);
 
         MvcResult firstResponse = performCreate(fixture.visitor(), fixture.mission())
             .andExpect(status().isCreated())
@@ -138,7 +146,7 @@ class MissionParticipationControllerMySqlIntegrationTest extends NonTransactiona
             .andExpect(jsonPath("$.data.status").value("IN_PROGRESS"))
             .andReturn();
 
-        Instant after = missionRepository.findCurrentDatabaseTime().plusSeconds(1);
+        Instant after = missionService.findCurrentDatabaseTime().plusSeconds(1);
         MissionParticipation participation = missionParticipationRepository.findAll().getFirst();
         assertThat(responseData(repeatedResponse).get("participationId").asString()).isEqualTo(participationId);
         assertThat(participation.getMissionParticipationId().toString()).isEqualTo(participationId);
@@ -215,6 +223,18 @@ class MissionParticipationControllerMySqlIntegrationTest extends NonTransactiona
         performCreate(endedFixture.visitor(), endedFixture.mission())
             .andExpect(status().isConflict())
             .andExpect(jsonPath("$.code").value("MISSION_STATE_CONFLICT"));
+        assertThat(missionParticipationRepository.count()).isZero();
+    }
+
+    @Test
+    void create_소수초_종료경계를_지난_신규참여는_상태충돌을_반환한다() throws Exception {
+        Fixture fixture = createFixture(true, true);
+        setMissionEndsAtOneMicrosecondBeforeCurrentTime(fixture.mission());
+
+        performCreate(fixture.visitor(), fixture.mission())
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code").value("MISSION_STATE_CONFLICT"));
+
         assertThat(missionParticipationRepository.count()).isZero();
     }
 
@@ -350,6 +370,27 @@ class MissionParticipationControllerMySqlIntegrationTest extends NonTransactiona
             Timestamp.from(PUBLISHED_AT.plusSeconds(1)),
             mission.getMissionId()
         );
+    }
+
+    private void setMissionEndsAtOneMicrosecondBeforeCurrentTime(Mission mission) throws InterruptedException {
+        for (int attempt = 0; attempt < BOUNDARY_WINDOW_MAX_ATTEMPTS; attempt++) {
+            int updatedCount = jdbcTemplate.update(
+                """
+                UPDATE mission
+                SET ends_at = CURRENT_TIMESTAMP(6) - INTERVAL 1 MICROSECOND
+                WHERE mission_id = ?
+                  AND MICROSECOND(CURRENT_TIMESTAMP(6)) BETWEEN ? AND ?
+                """,
+                mission.getMissionId(),
+                BOUNDARY_WINDOW_START_MICROSECOND,
+                BOUNDARY_WINDOW_END_MICROSECOND
+            );
+            if (updatedCount == 1) {
+                return;
+            }
+            TimeUnit.MILLISECONDS.sleep(BOUNDARY_WINDOW_RETRY_MILLIS);
+        }
+        throw new IllegalStateException("failed to set mission end boundary within the current second");
     }
 
     private String bearerToken(AppUser user) {

@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.mission.service;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
@@ -60,7 +61,7 @@ public class MissionService {
     }
 
     public Instant findCurrentDatabaseTime() {
-        return missionRepository.findCurrentDatabaseTime();
+        return toInstant(missionRepository.findCurrentEpochSeconds());
     }
 
     public Mission create(
@@ -158,5 +159,13 @@ public class MissionService {
             missions.getTotalElements(),
             missions.getTotalPages()
         );
+    }
+
+    private Instant toInstant(BigDecimal epochSeconds) {
+        long seconds = epochSeconds.longValue();
+        long nanos = epochSeconds.remainder(BigDecimal.ONE)
+            .movePointRight(9)
+            .longValue();
+        return Instant.ofEpochSecond(seconds, nanos);
     }
 }

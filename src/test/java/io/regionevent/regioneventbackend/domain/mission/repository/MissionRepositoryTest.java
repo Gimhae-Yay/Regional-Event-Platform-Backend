@@ -146,16 +146,6 @@ class MissionRepositoryTest {
     }
 
     @Test
-    void DB_현재시각_조회는_호출시점의_시각을_반환한다() {
-        Instant before = Instant.now().minusSeconds(1);
-
-        Instant currentDatabaseTime = missionRepository.findCurrentDatabaseTime();
-
-        Instant after = Instant.now().plusSeconds(1);
-        assertThat(currentDatabaseTime).isBetween(before, after);
-    }
-
-    @Test
     void 방문_횟수_미션은_양수_목표를_저장하고_대상_콘텐츠를_추가하지_않는다() {
         Region region = saveRegion("GIMHAE");
         Content rewardContent = saveContent(region, "reward");
