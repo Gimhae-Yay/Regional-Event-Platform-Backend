@@ -1,13 +1,15 @@
 package io.regionevent.regioneventbackend.domain.payment.service;
 
 import java.util.EnumSet;
+import java.util.List;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import io.regionevent.regioneventbackend.domain.payment.entity.RefundStatus;
 import io.regionevent.regioneventbackend.domain.payment.entity.Refund;
+import io.regionevent.regioneventbackend.domain.payment.entity.RefundStatus;
 import io.regionevent.regioneventbackend.domain.payment.repository.RefundRepository;
 
 @Service
@@ -33,12 +35,16 @@ public class RefundService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public java.util.Optional<Refund> findByPaymentIdForUpdate(Long paymentId) {
+    public Optional<Refund> findByPaymentIdForUpdate(Long paymentId) {
         return refundRepository.findByPaymentIdForUpdate(paymentId);
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
     public Refund create(Refund refund) {
         return refundRepository.saveAndFlush(refund);
+    }
+
+    public List<Refund> findAllOwnedByUserId(Long userId) {
+        return refundRepository.findAllByPaymentOwnerUserIdOrderByRequestedAtDescRefundIdDesc(userId);
     }
 }
