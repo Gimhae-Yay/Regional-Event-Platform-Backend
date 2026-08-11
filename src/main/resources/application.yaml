@@ -29,6 +29,10 @@ idempotency:
   cleanup-initial-delay: PT1H
   lock-wait-timeout-seconds: 3
 
+portone:
+  api-secret: ${PORTONE_API_SECRET:}
+  webhook-secret: ${PORTONE_WEBHOOK_SECRET:}
+
 public-catalog-cache:
   ttl: ${PUBLIC_CATALOG_CACHE_TTL:PT10M}
 
