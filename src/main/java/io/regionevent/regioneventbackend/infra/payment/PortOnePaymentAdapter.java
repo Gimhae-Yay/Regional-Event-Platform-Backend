@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 
 import io.portone.sdk.server.PortOneClient;
 import io.portone.sdk.server.payment.PaidPayment;
+import io.portone.sdk.server.payment.PartialCancelledPayment;
 import io.portone.sdk.server.payment.Payment;
 import io.portone.sdk.server.payment.Payment.Recognized;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneLookupException;
@@ -53,6 +54,9 @@ public class PortOnePaymentAdapter implements PortOnePaymentGateway {
     }
 
     private String toStatus(Payment payment) {
+        if (payment instanceof PartialCancelledPayment) {
+            return "PENDING";
+        }
         String typeName = payment.getClass().getSimpleName();
         return typeName.contains("Failed") || typeName.contains("Cancelled")
             ? "DECLINED"
