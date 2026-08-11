@@ -221,7 +221,7 @@ public class ReceivePortOneWebhookUseCase {
         ));
 
         if ("APPROVE".equals(decision)) {
-            approve(payment, snapshot, observed, requestId, now);
+            payment = approve(payment, snapshot, observed, requestId, now);
         } else if ("DECLINE".equals(decision)) {
             payment.decline(now);
             recordPaymentAudit(payment, PaymentStatus.PENDING, PaymentStatus.DECLINED, requestId, now);
@@ -241,7 +241,7 @@ public class ReceivePortOneWebhookUseCase {
         ));
     }
 
-    private void approve(
+    private Payment approve(
         Payment payment,
         ReservationPriceSnapshot snapshot,
         PortOnePaymentGateway.PortOnePayment observed,
@@ -259,17 +259,26 @@ public class ReceivePortOneWebhookUseCase {
             recordCapacityHoldAudit(payment, requestId, now);
             recordReservationAudit(reservation, requestId, now);
             useCoupon(snapshot, reservation, requestId, now);
-            payment.approve(reservation, observed.transactionId(), now);
-            recordPaymentAudit(payment, PaymentStatus.PENDING, PaymentStatus.APPROVED, requestId, now);
+            Payment approvedPayment = findPaymentAfterCapacityHoldUpdate(payment.getOrderId());
+            approvedPayment.approve(reservation, observed.transactionId(), now);
+            recordPaymentAudit(approvedPayment, PaymentStatus.PENDING, PaymentStatus.APPROVED, requestId, now);
+            return approvedPayment;
         } catch (ReservationConfirmationConflictException exception) {
-            payment.markDiscrepant(observed.transactionId(), now);
+            Payment discrepantPayment = findPaymentAfterCapacityHoldUpdate(payment.getOrderId());
+            discrepantPayment.markDiscrepant(observed.transactionId(), now);
             PaymentDiscrepancy discrepancy = paymentDiscrepancyService.create(new PaymentDiscrepancy(
-                payment, "LATE_APPROVAL", "OPEN", now
+                discrepantPayment, "LATE_APPROVAL", "OPEN", now
             ));
-            recordPaymentAudit(payment, PaymentStatus.PENDING, PaymentStatus.DISCREPANT, requestId, now);
+            recordPaymentAudit(discrepantPayment, PaymentStatus.PENDING, PaymentStatus.DISCREPANT, requestId, now);
             recordDiscrepancyAudit(discrepancy, requestId, now);
             releaseCoupon(snapshot, COUPON_DISCREPANCY_RELEASED_REASON, requestId, now);
+            return discrepantPayment;
         }
+    }
+
+    private Payment findPaymentAfterCapacityHoldUpdate(String orderId) {
+        return paymentService.findByOrderIdForUpdate(orderId)
+            .orElseThrow(() -> new IllegalStateException("payment does not exist after capacity hold update"));
     }
 
     private LockedPaymentContext lockPaymentContext(Payment payment) {
