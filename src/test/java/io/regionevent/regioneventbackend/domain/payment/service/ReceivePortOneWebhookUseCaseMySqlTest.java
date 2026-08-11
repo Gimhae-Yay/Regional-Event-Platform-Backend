@@ -159,8 +159,8 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
         CountDownLatch start = new CountDownLatch(1);
 
         try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
-            Future<?> first = executorService.submit(() -> receiveAfterStart(ready, start, orderId));
-            Future<?> second = executorService.submit(() -> receiveAfterStart(ready, start, orderId));
+            Future<?> first = executorService.submit(() -> receiveAfterStart(ready, start, WEBHOOK_ID, orderId));
+            Future<?> second = executorService.submit(() -> receiveAfterStart(ready, start, WEBHOOK_ID, orderId));
             assertThat(ready.await(3, TimeUnit.SECONDS)).isTrue();
             start.countDown();
             first.get(5, TimeUnit.SECONDS);
@@ -179,6 +179,53 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
         assertThat(paymentWebhookRepository.findAll())
             .filteredOn(webhook -> WEBHOOK_ID.equals(webhook.getProviderEventId()))
             .hasSize(1);
+    }
+
+    @Test
+    @Timeout(10)
+    void differentWebhooksArrivingConcurrently_changePaymentDomainStateOnlyOnce() throws Exception {
+        Fixture fixture = createFixture();
+        createPaymentUseCase.create(
+            fixture.user().getUserId(),
+            fixture.hold().getHoldId().toString(),
+            new CreatePaymentRequest(null),
+            "payment-key-" + System.nanoTime(),
+            UUID.randomUUID()
+        );
+        String orderId = paymentRepository.findAll().getFirst().getOrderId();
+        when(paymentGateway.findByPaymentId(orderId)).thenReturn(new PortOnePaymentGateway.PortOnePayment(
+            orderId,
+            TRANSACTION_ID,
+            "store-1",
+            20_000,
+            "KRW",
+            "PAID"
+        ));
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<?> first = executorService.submit(
+                () -> receiveAfterStart(ready, start, "webhook-first", orderId)
+            );
+            Future<?> second = executorService.submit(
+                () -> receiveAfterStart(ready, start, "webhook-second", orderId)
+            );
+            assertThat(ready.await(3, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            first.get(5, TimeUnit.SECONDS);
+            second.get(5, TimeUnit.SECONDS);
+        }
+
+        assertThat(paymentVerificationRepository.findAll())
+            .extracting(PaymentVerification::getInternalDecision)
+            .containsExactly("APPROVE");
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM payment", String.class))
+            .isEqualTo(PaymentStatus.APPROVED.name());
+        assertThat(reservationRepository.findAll()).hasSize(1);
+        assertThat(paymentWebhookRepository.findAll())
+            .extracting(webhook -> webhook.getProviderEventId())
+            .containsExactlyInAnyOrder("webhook-first", "webhook-second");
     }
 
     @Test
@@ -252,8 +299,8 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
         CountDownLatch start = new CountDownLatch(1);
 
         try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
-            Future<?> first = executorService.submit(() -> receiveAfterStart(ready, start, orderId));
-            Future<?> second = executorService.submit(() -> receiveAfterStart(ready, start, orderId));
+            Future<?> first = executorService.submit(() -> receiveAfterStart(ready, start, WEBHOOK_ID, orderId));
+            Future<?> second = executorService.submit(() -> receiveAfterStart(ready, start, WEBHOOK_ID, orderId));
             assertThat(ready.await(3, TimeUnit.SECONDS)).isTrue();
             start.countDown();
             first.get(5, TimeUnit.SECONDS);
@@ -272,6 +319,7 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
     private void receiveAfterStart(
         CountDownLatch ready,
         CountDownLatch start,
+        String webhookId,
         String orderId
     ) {
         ready.countDown();
@@ -284,7 +332,7 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
             throw new IllegalStateException("interrupted while waiting for webhook start", exception);
         }
         receivePortOneWebhookUseCase.receive(
-            WEBHOOK_ID,
+            webhookId,
             WEBHOOK_TIMESTAMP,
             WEBHOOK_SIGNATURE,
             paymentEvent(orderId)

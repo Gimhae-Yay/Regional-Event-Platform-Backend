@@ -288,6 +288,12 @@ public class ContentService {
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
+    public Content findForUpdate(Long contentId) {
+        validateRequiredId(contentId);
+        return contentRepository.findByContentIdForUpdate(contentId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
     public Content findSuspendTargetForUpdate(Long contentId) {
         return contentRepository.findSuspendTargetForUpdate(contentId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));

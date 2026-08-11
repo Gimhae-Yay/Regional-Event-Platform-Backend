@@ -20,6 +20,10 @@ import io.regionevent.regioneventbackend.domain.coupon.entity.CouponRedemption;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponRedemptionService;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponService;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponStatusHistoryService;
+import io.regionevent.regioneventbackend.domain.content.entity.Content;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
+import io.regionevent.regioneventbackend.domain.content.service.ContentService;
+import io.regionevent.regioneventbackend.domain.content.service.ContentSessionService;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
@@ -31,6 +35,7 @@ import io.regionevent.regioneventbackend.domain.payment.entity.PaymentVerificati
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentWebhook;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneLookupException;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOnePaymentGateway;
+import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationPriceSnapshot;
 import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHoldService;
@@ -56,6 +61,8 @@ public class ReceivePortOneWebhookUseCase {
     private final PaymentWebhookService paymentWebhookService;
     private final PaymentVerificationService paymentVerificationService;
     private final PaymentDiscrepancyService paymentDiscrepancyService;
+    private final ContentService contentService;
+    private final ContentSessionService contentSessionService;
     private final CapacityHoldService capacityHoldService;
     private final ReservationPriceSnapshotService reservationPriceSnapshotService;
     private final ReservationService reservationService;
@@ -73,6 +80,8 @@ public class ReceivePortOneWebhookUseCase {
         PaymentWebhookService paymentWebhookService,
         PaymentVerificationService paymentVerificationService,
         PaymentDiscrepancyService paymentDiscrepancyService,
+        ContentService contentService,
+        ContentSessionService contentSessionService,
         CapacityHoldService capacityHoldService,
         ReservationPriceSnapshotService reservationPriceSnapshotService,
         ReservationService reservationService,
@@ -89,6 +98,8 @@ public class ReceivePortOneWebhookUseCase {
         this.paymentWebhookService = paymentWebhookService;
         this.paymentVerificationService = paymentVerificationService;
         this.paymentDiscrepancyService = paymentDiscrepancyService;
+        this.contentService = contentService;
+        this.contentSessionService = contentSessionService;
         this.capacityHoldService = capacityHoldService;
         this.reservationPriceSnapshotService = reservationPriceSnapshotService;
         this.reservationService = reservationService;
@@ -168,15 +179,30 @@ public class ReceivePortOneWebhookUseCase {
         PortOnePaymentGateway.PortOnePayment observed,
         UUID requestId
     ) {
-        Payment payment = paymentService.findByOrderIdForUpdate(event.paymentId()).orElse(null);
+        Payment lookupPayment = paymentService.findByOrderId(event.paymentId()).orElse(null);
         if (paymentWebhookService.existsByProviderEventId(webhookId)) {
             return;
         }
         Instant now = Instant.now();
-        if (payment == null) {
+        if (lookupPayment == null) {
             paymentWebhookService.create(new PaymentWebhook(
                 webhookId, null, AUTHENTICATION_RESULT, "PAYMENT_NOT_FOUND", hash(rawBody), now
             ));
+            return;
+        }
+
+        Long contentId = lookupPayment.getCapacityHold().getContentSession().getContent().getContentId();
+        Long sessionId = lookupPayment.getCapacityHold().getContentSession().getSessionId();
+        Long holdId = lookupPayment.getCapacityHold().getHoldId();
+        Content lockedContent = contentService.findForUpdate(contentId);
+        ContentSession lockedSession = contentSessionService.findForUpdate(sessionId);
+        CapacityHold lockedHold = capacityHoldService.findByHoldIdForUpdate(holdId);
+        ReservationPriceSnapshot snapshot = reservationPriceSnapshotService.findByHoldIdForUpdate(holdId)
+            .orElseThrow(() -> new IllegalStateException("payment snapshot does not exist"));
+        Payment payment = paymentService.findByOrderIdForUpdate(event.paymentId())
+            .orElseThrow(() -> new IllegalStateException("payment disappeared after lookup"));
+        validateLockedPaymentContext(lockedContent, lockedSession, lockedHold, snapshot, payment);
+        if (paymentWebhookService.existsByProviderEventId(webhookId)) {
             return;
         }
         if (isTerminal(payment.getStatus())) {
@@ -186,9 +212,6 @@ public class ReceivePortOneWebhookUseCase {
             return;
         }
 
-        ReservationPriceSnapshot snapshot = reservationPriceSnapshotService
-            .findByHoldIdForUpdate(payment.getCapacityHold().getHoldId())
-            .orElseThrow(() -> new IllegalStateException("payment snapshot does not exist"));
         String decision = decide(payment, snapshot, event, observed);
         paymentVerificationService.create(new PaymentVerification(
             payment,
@@ -253,6 +276,21 @@ public class ReceivePortOneWebhookUseCase {
             recordPaymentAudit(payment, PaymentStatus.PENDING, PaymentStatus.DISCREPANT, requestId, now);
             recordDiscrepancyAudit(discrepancy, requestId, now);
             releaseCoupon(snapshot, COUPON_DISCREPANCY_RELEASED_REASON, requestId, now);
+        }
+    }
+
+    private void validateLockedPaymentContext(
+        Content content,
+        ContentSession contentSession,
+        CapacityHold capacityHold,
+        ReservationPriceSnapshot snapshot,
+        Payment payment
+    ) {
+        if (!contentSession.getContent().getContentId().equals(content.getContentId())
+            || !capacityHold.getContentSession().getSessionId().equals(contentSession.getSessionId())
+            || !snapshot.getCapacityHold().getHoldId().equals(capacityHold.getHoldId())
+            || !payment.getCapacityHold().getHoldId().equals(capacityHold.getHoldId())) {
+            throw new IllegalStateException("payment context changed while acquiring locks");
         }
     }
 

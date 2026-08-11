@@ -29,6 +29,10 @@ import tools.jackson.databind.ObjectMapper;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponRedemptionService;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponService;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponStatusHistoryService;
+import io.regionevent.regioneventbackend.domain.content.service.ContentService;
+import io.regionevent.regioneventbackend.domain.content.service.ContentSessionService;
+import io.regionevent.regioneventbackend.domain.content.entity.Content;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentDiscrepancy;
@@ -61,6 +65,8 @@ class ReceivePortOneWebhookUseCaseTest {
     private final PaymentWebhookService paymentWebhookService = mock(PaymentWebhookService.class);
     private final PaymentVerificationService paymentVerificationService = mock(PaymentVerificationService.class);
     private final PaymentDiscrepancyService paymentDiscrepancyService = mock(PaymentDiscrepancyService.class);
+    private final ContentService contentService = mock(ContentService.class);
+    private final ContentSessionService contentSessionService = mock(ContentSessionService.class);
     private final CapacityHoldService capacityHoldService = mock(CapacityHoldService.class);
     private final ReservationPriceSnapshotService reservationPriceSnapshotService = mock(
         ReservationPriceSnapshotService.class
@@ -98,6 +104,8 @@ class ReceivePortOneWebhookUseCaseTest {
             paymentWebhookService,
             paymentVerificationService,
             paymentDiscrepancyService,
+            contentService,
+            contentSessionService,
             capacityHoldService,
             reservationPriceSnapshotService,
             reservationService,
@@ -296,14 +304,25 @@ class ReceivePortOneWebhookUseCaseTest {
 
     private Payment pendingPayment() {
         CapacityHold capacityHold = mock(CapacityHold.class);
+        Content content = mock(Content.class);
+        ContentSession contentSession = mock(ContentSession.class);
         ReservationPriceSnapshot snapshot = mock(ReservationPriceSnapshot.class);
         Payment payment = mock(Payment.class);
+        when(content.getContentId()).thenReturn(1L);
+        when(contentSession.getSessionId()).thenReturn(1L);
+        when(contentSession.getContent()).thenReturn(content);
         when(capacityHold.getHoldId()).thenReturn(1L);
+        when(capacityHold.getContentSession()).thenReturn(contentSession);
         when(payment.getCapacityHold()).thenReturn(capacityHold);
         when(payment.getPaymentId()).thenReturn(1L);
         when(payment.getOrderId()).thenReturn(PAYMENT_ID);
         when(payment.getStatus()).thenReturn(PaymentStatus.PENDING);
+        when(paymentService.findByOrderId(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        when(contentService.findForUpdate(1L)).thenReturn(content);
+        when(contentSessionService.findForUpdate(1L)).thenReturn(contentSession);
+        when(capacityHoldService.findByHoldIdForUpdate(1L)).thenReturn(capacityHold);
         when(reservationPriceSnapshotService.findByHoldIdForUpdate(1L)).thenReturn(Optional.of(snapshot));
+        when(snapshot.getCapacityHold()).thenReturn(capacityHold);
         when(snapshot.getFinalAmount()).thenReturn(20_000L);
         when(snapshot.getCurrency()).thenReturn("KRW");
         return payment;

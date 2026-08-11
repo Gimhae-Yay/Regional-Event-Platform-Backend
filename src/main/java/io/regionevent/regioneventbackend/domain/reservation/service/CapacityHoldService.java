@@ -70,6 +70,12 @@ public class CapacityHoldService {
         return capacityHold;
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public CapacityHold findByHoldIdForUpdate(Long holdId) {
+        return capacityHoldRepository.findByHoldIdForUpdate(holdId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
     @Transactional(
         propagation = Propagation.MANDATORY,
         noRollbackFor = ReservationConfirmationConflictException.class
