@@ -42,6 +42,34 @@ public interface CouponRepository extends JpaRepository<Coupon, Long> {
         """)
     Optional<Coupon> findByCouponIdForUpdate(@Param("couponId") Long couponId);
 
+    @Query(value = """
+        SELECT coupon_id
+        FROM coupon
+        WHERE status = 'AVAILABLE'
+            AND expires_at <= CURRENT_TIMESTAMP(6)
+        ORDER BY coupon_id ASC
+        LIMIT :batchSize
+        """, nativeQuery = true)
+    List<Long> findExpirationCandidateIds(@Param("batchSize") int batchSize);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+        UPDATE coupon
+        SET status = 'EXPIRED'
+        WHERE coupon_id = :couponId
+            AND status = 'AVAILABLE'
+            AND expires_at <= CURRENT_TIMESTAMP(6)
+        """, nativeQuery = true)
+    int expireIfAvailableAndExpired(@Param("couponId") Long couponId);
+
+    @EntityGraph(attributePaths = {"couponPolicy", "couponPolicy.region"})
+    @Query("""
+        SELECT coupon
+        FROM Coupon coupon
+        WHERE coupon.couponId = :couponId
+        """)
+    Optional<Coupon> findExpirationTargetByCouponId(@Param("couponId") Long couponId);
+
     @Modifying(flushAutomatically = true)
     @Query(value = """
         UPDATE coupon
