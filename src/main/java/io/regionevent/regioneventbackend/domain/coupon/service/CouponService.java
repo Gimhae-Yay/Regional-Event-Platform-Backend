@@ -56,6 +56,11 @@ public class CouponService {
         return coupon.release(releasedAt);
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public CouponStatus restoreUsedCoupon(Coupon coupon, Instant restoredAt) {
+        return coupon.restoreUsed(restoredAt);
+    }
+
     @Transactional(readOnly = true)
     public List<Coupon> findAllByUserId(
         Long userId,

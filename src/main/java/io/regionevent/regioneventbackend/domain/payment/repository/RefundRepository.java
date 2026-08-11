@@ -53,4 +53,12 @@ public interface RefundRepository extends JpaRepository<Refund, Long> {
         WHERE refund.payment.paymentId = :paymentId
         """)
     Optional<Refund> findByPaymentIdForUpdate(@Param("paymentId") Long paymentId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT refund
+        FROM Refund refund
+        WHERE refund.refundId = :refundId
+        """)
+    Optional<Refund> findByRefundIdForUpdate(@Param("refundId") Long refundId);
 }

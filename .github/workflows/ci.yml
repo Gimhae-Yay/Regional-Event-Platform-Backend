@@ -10,14 +10,54 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  ci-eligibility:
+    name: CI 테스트 실행 판정
+    runs-on: ubuntu-latest
+    outputs:
+      skip-tests: ${{ steps.eligibility.outputs.skip-tests }}
+
+    steps:
+      - id: eligibility
+        uses: actions/github-script@v7
+        with:
+          script: |
+            if (context.eventName !== 'pull_request') {
+              core.setOutput('skip-tests', 'false');
+              core.info('Pull Request 실행이 아니므로 모든 테스트를 실행합니다.');
+              return;
+            }
+
+            try {
+              const commits = await github.paginate(
+                github.rest.pulls.listCommits,
+                {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: context.payload.pull_request.number,
+                  per_page: 100,
+                },
+              );
+              const isDocsOnly = commits.length > 0
+                && commits.every((commit) => /^docs:/.test(commit.commit.message.split('\n', 1)[0]));
+
+              core.setOutput('skip-tests', String(isDocsOnly));
+              core.info(`PR 커밋 ${commits.length}개를 판정했습니다. 테스트 생략: ${isDocsOnly}`);
+            } catch (error) {
+              core.setOutput('skip-tests', 'false');
+              core.warning('PR 커밋 목록을 조회하지 못해 모든 테스트를 실행합니다.');
+            }
+
   fast-test:
     name: 빠른 테스트 및 패키징
+    needs: ci-eligibility
+    if: ${{ needs.ci-eligibility.outputs.skip-tests != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -50,6 +90,8 @@ jobs:
 
   container-test:
     name: Testcontainers 테스트 (shard ${{ matrix.shard }})
+    needs: ci-eligibility
+    if: ${{ needs.ci-eligibility.outputs.skip-tests != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
