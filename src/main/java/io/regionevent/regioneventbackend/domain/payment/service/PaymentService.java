@@ -30,6 +30,11 @@ public class PaymentService {
         return paymentRepository.findByOrderIdForUpdate(orderId);
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<Payment> findWebhookTargetByOrderIdForUpdate(String orderId) {
+        return paymentRepository.findWebhookTargetByOrderIdForUpdate(orderId);
+    }
+
     @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
     public Optional<Payment> findByOrderId(String orderId) {
         return paymentRepository.findByOrderId(orderId);

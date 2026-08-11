@@ -84,6 +84,18 @@ class PortOneWebhookControllerWebMvcTest {
             .andExpect(jsonPath("$.data").isEmpty());
     }
 
+    @Test
+    void receive_nonJsonContentType_returnsInvalidInputResponse() throws Exception {
+        mockMvc.perform(post(PATH)
+            .contentType(MediaType.TEXT_PLAIN)
+            .header("webhook-id", WEBHOOK_ID)
+            .header("webhook-timestamp", WEBHOOK_TIMESTAMP)
+            .header("webhook-signature", WEBHOOK_SIGNATURE)
+            .content(validPaymentEvent()))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+    }
+
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder webhookRequest(
         String rawBody
     ) {

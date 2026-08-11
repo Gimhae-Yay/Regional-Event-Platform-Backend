@@ -27,6 +27,14 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
         """)
     Optional<Payment> findByOrderIdForUpdate(@Param("orderId") String orderId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT payment
+        FROM Payment payment
+        WHERE payment.orderId = :orderId
+        """)
+    Optional<Payment> findWebhookTargetByOrderIdForUpdate(@Param("orderId") String orderId);
+
     @EntityGraph(attributePaths = {"capacityHold", "reservationPriceSnapshot", "reservationPriceSnapshot.coupon", "reservation"})
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""

@@ -133,7 +133,7 @@ class ReceivePortOneWebhookUseCaseTest {
             .isEqualTo(ErrorCode.WEBHOOK_SIGNATURE_INVALID);
 
         verify(paymentGateway, never()).findByPaymentId(anyString());
-        verify(paymentWebhookService, never()).create(any());
+        verify(paymentWebhookService, never()).createIfAbsent(any());
     }
 
     @Test
@@ -156,7 +156,7 @@ class ReceivePortOneWebhookUseCaseTest {
 
         useCase.receive(WEBHOOK_ID, WEBHOOK_TIMESTAMP, WEBHOOK_SIGNATURE, rawBody);
 
-        verify(paymentWebhookService).create(webhookCaptor.capture());
+        verify(paymentWebhookService).createIfAbsent(webhookCaptor.capture());
         PaymentWebhook webhook = webhookCaptor.getValue();
         assertThat(webhook.getProviderEventId()).isEqualTo(WEBHOOK_ID);
         assertThat(webhook.getPayloadHash()).doesNotContain("secret-value");
@@ -179,8 +179,8 @@ class ReceivePortOneWebhookUseCaseTest {
             .extracting(exception -> ((BusinessException) exception).getErrorCode())
             .isEqualTo(ErrorCode.INTERNAL_SERVER_ERROR);
 
-        verify(paymentWebhookService, never()).create(any());
-        verify(paymentService, never()).findByOrderIdForUpdate(anyString());
+        verify(paymentWebhookService, never()).createIfAbsent(any());
+        verify(paymentService, never()).findWebhookTargetByOrderIdForUpdate(anyString());
     }
 
     @Test
@@ -203,7 +203,7 @@ class ReceivePortOneWebhookUseCaseTest {
         useCase.receive(WEBHOOK_ID, WEBHOOK_TIMESTAMP, WEBHOOK_SIGNATURE, validPaymentEvent());
 
         verify(paymentGateway, times(2)).findByPaymentId(PAYMENT_ID);
-        verify(paymentWebhookService).create(any(PaymentWebhook.class));
+        verify(paymentWebhookService).createIfAbsent(any(PaymentWebhook.class));
     }
 
     @Test
@@ -217,16 +217,14 @@ class ReceivePortOneWebhookUseCaseTest {
 
     @Test
     void receive_finalizedPayment_doesNotLookupPortOne() {
-        Payment payment = mock(Payment.class);
+        Payment payment = pendingPayment();
         when(payment.getStatus()).thenReturn(PaymentStatus.APPROVED);
-        when(paymentService.findByOrderId(PAYMENT_ID)).thenReturn(Optional.of(payment));
-        when(paymentService.findByOrderIdForUpdate(PAYMENT_ID)).thenReturn(Optional.of(payment));
         when(paymentWebhookService.existsByProviderEventId(WEBHOOK_ID)).thenReturn(false);
 
         useCase.receive(WEBHOOK_ID, WEBHOOK_TIMESTAMP, WEBHOOK_SIGNATURE, validPaymentEvent());
 
         verify(paymentGateway, never()).findByPaymentId(anyString());
-        verify(paymentWebhookService).create(any(PaymentWebhook.class));
+        verify(paymentWebhookService).createIfAbsent(any(PaymentWebhook.class));
     }
 
     @Test
@@ -318,6 +316,7 @@ class ReceivePortOneWebhookUseCaseTest {
         when(payment.getOrderId()).thenReturn(PAYMENT_ID);
         when(payment.getStatus()).thenReturn(PaymentStatus.PENDING);
         when(paymentService.findByOrderId(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        when(paymentService.findWebhookTargetByOrderIdForUpdate(PAYMENT_ID)).thenReturn(Optional.of(payment));
         when(contentService.findForUpdate(1L)).thenReturn(content);
         when(contentSessionService.findForUpdate(1L)).thenReturn(contentSession);
         when(capacityHoldService.findByHoldIdForUpdate(1L)).thenReturn(capacityHold);

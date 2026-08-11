@@ -153,16 +153,16 @@ public class ReceivePortOneWebhookUseCase {
             if (payment == null || !isTerminal(payment.getStatus())) {
                 return false;
             }
-            Payment lockedPayment = paymentService.findByOrderIdForUpdate(event.paymentId()).orElse(null);
-            if (lockedPayment == null || !isTerminal(lockedPayment.getStatus())) {
+            LockedPaymentContext lockedContext = lockPaymentContext(payment);
+            if (lockedContext == null || !isTerminal(lockedContext.payment().getStatus())) {
                 return false;
             }
             if (paymentWebhookService.existsByProviderEventId(webhookId)) {
                 return true;
             }
-            paymentWebhookService.create(new PaymentWebhook(
+            paymentWebhookService.createIfAbsent(new PaymentWebhook(
                 webhookId,
-                lockedPayment,
+                lockedContext.payment(),
                 AUTHENTICATION_RESULT,
                 "ALREADY_FINALIZED",
                 hash(rawBody),
@@ -179,32 +179,29 @@ public class ReceivePortOneWebhookUseCase {
         PortOnePaymentGateway.PortOnePayment observed,
         UUID requestId
     ) {
-        Payment payment = paymentService.findByOrderIdForUpdate(event.paymentId()).orElse(null);
         if (paymentWebhookService.existsByProviderEventId(webhookId)) {
             return;
         }
         Instant now = Instant.now();
+        Payment payment = paymentService.findByOrderId(event.paymentId()).orElse(null);
         if (payment == null) {
-            paymentWebhookService.create(new PaymentWebhook(
+            paymentWebhookService.createIfAbsent(new PaymentWebhook(
                 webhookId, null, AUTHENTICATION_RESULT, "PAYMENT_NOT_FOUND", hash(rawBody), now
             ));
             return;
         }
 
-        Long contentId = payment.getCapacityHold().getContentSession().getContent().getContentId();
-        Long sessionId = payment.getCapacityHold().getContentSession().getSessionId();
-        Long holdId = payment.getCapacityHold().getHoldId();
-        Content lockedContent = contentService.findForUpdate(contentId);
-        ContentSession lockedSession = contentSessionService.findForUpdate(sessionId);
-        CapacityHold lockedHold = capacityHoldService.findByHoldIdForUpdate(holdId);
-        ReservationPriceSnapshot snapshot = reservationPriceSnapshotService.findByHoldIdForUpdate(holdId)
-            .orElseThrow(() -> new IllegalStateException("payment snapshot does not exist"));
-        validateLockedPaymentContext(lockedContent, lockedSession, lockedHold, snapshot, payment);
+        LockedPaymentContext lockedContext = lockPaymentContext(payment);
+        if (lockedContext == null) {
+            return;
+        }
+        payment = lockedContext.payment();
+        ReservationPriceSnapshot snapshot = lockedContext.snapshot();
         if (paymentWebhookService.existsByProviderEventId(webhookId)) {
             return;
         }
         if (isTerminal(payment.getStatus())) {
-            paymentWebhookService.create(new PaymentWebhook(
+            paymentWebhookService.createIfAbsent(new PaymentWebhook(
                 webhookId, payment, AUTHENTICATION_RESULT, "ALREADY_FINALIZED", hash(rawBody), now
             ));
             return;
@@ -239,7 +236,7 @@ public class ReceivePortOneWebhookUseCase {
             recordDiscrepancyAudit(discrepancy, requestId, now);
             releaseCoupon(snapshot, COUPON_DISCREPANCY_RELEASED_REASON, requestId, now);
         }
-        paymentWebhookService.create(new PaymentWebhook(
+        paymentWebhookService.createIfAbsent(new PaymentWebhook(
             webhookId, payment, AUTHENTICATION_RESULT, decision, hash(rawBody), now
         ));
     }
@@ -262,9 +259,7 @@ public class ReceivePortOneWebhookUseCase {
             recordCapacityHoldAudit(payment, requestId, now);
             recordReservationAudit(reservation, requestId, now);
             useCoupon(snapshot, reservation, requestId, now);
-            paymentService.findByOrderIdForUpdate(payment.getOrderId())
-                .orElseThrow(() -> new IllegalStateException("payment disappeared after capacity hold consumption"))
-                .approve(reservation, observed.transactionId(), now);
+            payment.approve(reservation, observed.transactionId(), now);
             recordPaymentAudit(payment, PaymentStatus.PENDING, PaymentStatus.APPROVED, requestId, now);
         } catch (ReservationConfirmationConflictException exception) {
             payment.markDiscrepant(observed.transactionId(), now);
@@ -275,6 +270,24 @@ public class ReceivePortOneWebhookUseCase {
             recordDiscrepancyAudit(discrepancy, requestId, now);
             releaseCoupon(snapshot, COUPON_DISCREPANCY_RELEASED_REASON, requestId, now);
         }
+    }
+
+    private LockedPaymentContext lockPaymentContext(Payment payment) {
+        Long contentId = payment.getCapacityHold().getContentSession().getContent().getContentId();
+        Long sessionId = payment.getCapacityHold().getContentSession().getSessionId();
+        Long holdId = payment.getCapacityHold().getHoldId();
+        Content lockedContent = contentService.findForUpdate(contentId);
+        ContentSession lockedSession = contentSessionService.findForUpdate(sessionId);
+        CapacityHold lockedHold = capacityHoldService.findByHoldIdForUpdate(holdId);
+        ReservationPriceSnapshot snapshot = reservationPriceSnapshotService.findByHoldIdForUpdate(holdId)
+            .orElseThrow(() -> new IllegalStateException("payment snapshot does not exist"));
+        Payment lockedPayment = paymentService.findWebhookTargetByOrderIdForUpdate(payment.getOrderId())
+            .orElse(null);
+        if (lockedPayment == null) {
+            return null;
+        }
+        validateLockedPaymentContext(lockedContent, lockedSession, lockedHold, snapshot, lockedPayment);
+        return new LockedPaymentContext(lockedPayment, snapshot);
     }
 
     private void validateLockedPaymentContext(
@@ -495,5 +508,11 @@ public class ReceivePortOneWebhookUseCase {
         private boolean isPaymentEvent() {
             return paymentId != null;
         }
+    }
+
+    private record LockedPaymentContext(
+        Payment payment,
+        ReservationPriceSnapshot snapshot
+    ) {
     }
 }

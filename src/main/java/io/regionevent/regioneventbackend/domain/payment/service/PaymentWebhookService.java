@@ -27,4 +27,16 @@ public class PaymentWebhookService {
     public PaymentWebhook create(PaymentWebhook paymentWebhook) {
         return paymentWebhookRepository.saveAndFlush(paymentWebhook);
     }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean createIfAbsent(PaymentWebhook paymentWebhook) {
+        return paymentWebhookRepository.insertIfAbsent(
+            paymentWebhook.getProviderEventId(),
+            paymentWebhook.getPayment() == null ? null : paymentWebhook.getPayment().getPaymentId(),
+            paymentWebhook.getAuthenticationResult(),
+            paymentWebhook.getProcessingResult(),
+            paymentWebhook.getPayloadHash(),
+            paymentWebhook.getReceivedAt()
+        ) == 1;
+    }
 }
