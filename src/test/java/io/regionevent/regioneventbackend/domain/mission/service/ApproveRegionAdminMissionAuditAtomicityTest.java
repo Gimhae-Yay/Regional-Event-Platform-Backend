@@ -131,6 +131,25 @@ class ApproveRegionAdminMissionAuditAtomicityTest {
             });
     }
 
+    @Test
+    void reject_whenSuccessAuditFails_rollsBackRejection() throws Exception {
+        Fixture fixture = createFixture();
+        doThrow(new IllegalStateException("audit storage failure"))
+            .when(recordAuditEventUseCase)
+            .record(any(AuditEventCommand.class));
+
+        mockMvc.perform(post("/api/v1/region-admin/missions/{missionId}/reject", fixture.missionId())
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(fixture.adminUserId()))
+                .contentType("application/json")
+                .content("{\"reasonCode\":\"MISSION_REWARD_POLICY_INVALID\"}"))
+            .andExpect(status().isInternalServerError())
+            .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
+
+        Mission mission = missionRepository.findById(fixture.missionId()).orElseThrow();
+        assertThat(mission.getStatus()).isEqualTo(MissionStatus.PENDING_REVIEW);
+        assertThat(auditEventRepository.count()).isZero();
+    }
+
     private Fixture createFixture() {
         return transactionTemplate.execute(status -> {
             String suffix = Long.toUnsignedString(System.nanoTime());

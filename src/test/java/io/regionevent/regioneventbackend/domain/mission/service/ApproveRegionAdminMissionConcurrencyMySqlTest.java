@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.domain.mission.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 import java.time.Instant;
 import java.util.List;
@@ -19,9 +20,14 @@ import org.junit.jupiter.api.Timeout;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -47,10 +53,12 @@ import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepositor
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
+import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
 import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 
 @SpringBootTest
+@AutoConfigureMockMvc
 class ApproveRegionAdminMissionConcurrencyMySqlTest extends NonTransactionalMySqlTestSupport {
 
     private static final Instant BASE_TIME = Instant.parse("2026-08-10T00:00:00Z");
@@ -60,6 +68,8 @@ class ApproveRegionAdminMissionConcurrencyMySqlTest extends NonTransactionalMySq
     private static final long LOCK_WAIT_CONFIRMATION_INTERVAL_MILLIS = 100;
 
     private final ApproveRegionAdminMissionUseCase approveRegionAdminMissionUseCase;
+    private final MockMvc mockMvc;
+    private final JwtAccessTokenService jwtAccessTokenService;
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
@@ -74,6 +84,8 @@ class ApproveRegionAdminMissionConcurrencyMySqlTest extends NonTransactionalMySq
     @Autowired
     ApproveRegionAdminMissionConcurrencyMySqlTest(
         ApproveRegionAdminMissionUseCase approveRegionAdminMissionUseCase,
+        MockMvc mockMvc,
+        JwtAccessTokenService jwtAccessTokenService,
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
         UserRoleAssignmentRepository userRoleAssignmentRepository,
@@ -86,6 +98,8 @@ class ApproveRegionAdminMissionConcurrencyMySqlTest extends NonTransactionalMySq
         EntityManager entityManager
     ) {
         this.approveRegionAdminMissionUseCase = approveRegionAdminMissionUseCase;
+        this.mockMvc = mockMvc;
+        this.jwtAccessTokenService = jwtAccessTokenService;
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
         this.userRoleAssignmentRepository = userRoleAssignmentRepository;
@@ -132,6 +146,32 @@ class ApproveRegionAdminMissionConcurrencyMySqlTest extends NonTransactionalMySq
         assertThat(mission.getStatus()).isEqualTo(MissionStatus.PUBLISHED);
         assertThat(mission.getPublishedAt()).isNotNull();
         assertThat(auditEventRepository.count()).isEqualTo(2);
+    }
+
+    @Test
+    @Timeout(20)
+    void concurrentRejections_returnMissionToDraftExactlyOnce() throws Exception {
+        Fixture fixture = createFixture(MissionConditionType.VISIT_COUNT);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+
+        List<RejectionAttempt> attempts;
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<RejectionAttempt> first = executor.submit(() -> rejectAfterStart(fixture, ready, start));
+            Future<RejectionAttempt> second = executor.submit(() -> rejectAfterStart(fixture, ready, start));
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            attempts = List.of(first.get(15, TimeUnit.SECONDS), second.get(15, TimeUnit.SECONDS));
+        }
+
+        assertThat(attempts).filteredOn(RejectionAttempt::successful).singleElement();
+        assertThat(attempts)
+            .filteredOn(attempt -> !attempt.successful())
+            .extracting(RejectionAttempt::errorCode)
+            .containsExactly(ErrorCode.MISSION_STATE_CONFLICT);
+        assertThat(missionRepository.findById(fixture.missionId()).orElseThrow().getStatus())
+            .isEqualTo(MissionStatus.DRAFT);
+        assertThat(auditEventRepository.count()).isEqualTo(1);
     }
 
     @Test
@@ -271,6 +311,35 @@ class ApproveRegionAdminMissionConcurrencyMySqlTest extends NonTransactionalMySq
         ready.countDown();
         await(start);
         return approve(fixture);
+    }
+
+    private RejectionAttempt rejectAfterStart(
+        Fixture fixture,
+        CountDownLatch ready,
+        CountDownLatch start
+    ) throws Exception {
+        ready.countDown();
+        await(start);
+        MvcResult result = mockMvc.perform(post(
+                "/api/v1/region-admin/missions/{missionId}/reject",
+                fixture.missionId()
+            )
+                .header(
+                    HttpHeaders.AUTHORIZATION,
+                    "Bearer " + jwtAccessTokenService.issue(fixture.adminUserId())
+                )
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"reasonCode\":\"MISSION_REWARD_POLICY_INVALID\"}"))
+            .andReturn();
+        int status = result.getResponse().getStatus();
+        if (status == 200) {
+            return new RejectionAttempt(true, null);
+        }
+        String responseBody = result.getResponse().getContentAsString();
+        if (status == 409 && responseBody.contains("\"code\":\"MISSION_STATE_CONFLICT\"")) {
+            return new RejectionAttempt(false, ErrorCode.MISSION_STATE_CONFLICT);
+        }
+        throw new AssertionError("unexpected rejection response: " + status + " " + responseBody);
     }
 
     private ApprovalAttempt approve(Fixture fixture) {
@@ -478,6 +547,12 @@ class ApproveRegionAdminMissionConcurrencyMySqlTest extends NonTransactionalMySq
     }
 
     private record ApprovalAttempt(
+        boolean successful,
+        ErrorCode errorCode
+    ) {
+    }
+
+    private record RejectionAttempt(
         boolean successful,
         ErrorCode errorCode
     ) {

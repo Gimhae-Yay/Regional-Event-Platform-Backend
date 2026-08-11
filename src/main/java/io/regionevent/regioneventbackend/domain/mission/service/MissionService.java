@@ -118,6 +118,14 @@ public class MissionService {
         return missionRepository.saveAndFlush(mission);
     }
 
+    public Mission reject(Mission mission) {
+        if (mission.getStatus() != MissionStatus.PENDING_REVIEW) {
+            throw new BusinessException(ErrorCode.MISSION_STATE_CONFLICT);
+        }
+        mission.reject();
+        return missionRepository.saveAndFlush(mission);
+    }
+
     public Mission end(
         Mission mission,
         Instant endedAt
