@@ -34,7 +34,7 @@ import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
-@WebMvcTest(MyRefundController.class)
+@WebMvcTest({MyRefundController.class, MyRefundDetailController.class})
 @Import({SecurityConfig.class, RequestIdFilter.class, GlobalExceptionHandler.class})
 class MyRefundControllerWebMvcTest {
 
