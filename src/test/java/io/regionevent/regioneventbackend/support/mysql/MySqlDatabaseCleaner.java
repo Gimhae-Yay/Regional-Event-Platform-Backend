@@ -8,6 +8,7 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
@@ -68,14 +69,19 @@ public final class MySqlDatabaseCleaner {
 
     private Connection openConnectionWithTimeout() throws SQLException {
         ExecutorService executor = newDaemonExecutor("mysql-cleaner-connection-open");
-        Future<Connection> execution = executor.submit(connectionProvider::open);
+        CompletableFuture<Connection> openedConnection = new CompletableFuture<>();
+        executor.submit(() -> openConnection(openedConnection));
         try {
-            return execution.get(CONNECTION_OPEN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            return openedConnection.get(CONNECTION_OPEN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         } catch (TimeoutException exception) {
-            throw new SQLTimeoutException(
+            SQLTimeoutException timeoutException = new SQLTimeoutException(
                 "MySQL cleanup connection opening exceeded the timeout",
                 exception
             );
+            if (!openedConnection.completeExceptionally(timeoutException)) {
+                closeCompletedOpeningConnection(openedConnection);
+            }
+            throw timeoutException;
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new SQLException("MySQL cleanup connection opening was interrupted", exception);
@@ -83,8 +89,46 @@ public final class MySqlDatabaseCleaner {
             rethrowSqlException(exception);
             throw new IllegalStateException("unreachable");
         } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    private void openConnection(CompletableFuture<Connection> openedConnection) {
+        try {
+            Connection connection = connectionProvider.open();
+            if (!openedConnection.complete(connection)) {
+                closeLateOpeningConnection(connection);
+            }
+        } catch (SQLException exception) {
+            openedConnection.completeExceptionally(exception);
+        } catch (RuntimeException exception) {
+            openedConnection.completeExceptionally(exception);
+        }
+    }
+
+    private void closeCompletedOpeningConnection(CompletableFuture<Connection> openedConnection) {
+        openedConnection.thenAccept(this::closeLateOpeningConnection);
+    }
+
+    private void closeLateOpeningConnection(Connection connection) {
+        ExecutorService executor = newDaemonExecutor("mysql-cleaner-late-connection-close");
+        Future<?> execution = executor.submit(() -> {
+            connection.close();
+            return null;
+        });
+        boolean interrupted = Thread.interrupted();
+        try {
+            execution.get(CONNECTION_CLOSE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        } catch (InterruptedException exception) {
+            interrupted = true;
+        } catch (ExecutionException | TimeoutException exception) {
+            // A timed-out cleanup attempt must not block the test worker again.
+        } finally {
             execution.cancel(true);
             executor.shutdownNow();
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 

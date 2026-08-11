@@ -153,6 +153,60 @@ class MySqlDatabaseCleanerTest {
     }
 
     @Test
+    @Timeout(4)
+    void clean_최초연결획득시간초과뒤늦게반환된연결을종료한다() throws Exception {
+        Connection lateConnection = mock(Connection.class);
+        CountDownLatch connectionOpening = new CountDownLatch(1);
+        CountDownLatch lateConnectionClosed = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            lateConnectionClosed.countDown();
+            return null;
+        }).when(lateConnection).close();
+        MySqlDatabaseCleaner databaseCleaner = new MySqlDatabaseCleaner(() -> {
+            awaitWithoutInterrupt(connectionOpening);
+            return lateConnection;
+        });
+
+        long startedAt = System.nanoTime();
+        try {
+            IllegalStateException exception = catchThrowableOfType(
+                databaseCleaner::clean,
+                IllegalStateException.class
+            );
+
+            assertThat(Duration.ofNanos(System.nanoTime() - startedAt))
+                .isLessThan(Duration.ofSeconds(2));
+            assertThat(exception.getCause())
+                .isInstanceOf(SQLTimeoutException.class)
+                .hasMessageContaining("cleanup connection opening exceeded the timeout");
+
+            connectionOpening.countDown();
+
+            assertThat(lateConnectionClosed.await(2, TimeUnit.SECONDS)).isTrue();
+            verify(lateConnection).close();
+        } finally {
+            connectionOpening.countDown();
+        }
+    }
+
+    @Test
+    void clean_최초연결획득이RuntimeException으로실패하면_원인을보존한다() {
+        RuntimeException connectionOpeningFailure = new IllegalStateException("connection opening failed");
+        MySqlDatabaseCleaner databaseCleaner = new MySqlDatabaseCleaner(() -> {
+            throw connectionOpeningFailure;
+        });
+
+        IllegalStateException exception = catchThrowableOfType(
+            databaseCleaner::clean,
+            IllegalStateException.class
+        );
+
+        assertThat(exception.getCause())
+            .isInstanceOf(SQLException.class)
+            .hasCause(connectionOpeningFailure);
+    }
+
+    @Test
     @Timeout(15)
     void clean_연결중단시간초과면_세션복구없이원래진단을유지한다() throws Exception {
         CleaningConnection cleaningConnection = createCleaningConnection();
