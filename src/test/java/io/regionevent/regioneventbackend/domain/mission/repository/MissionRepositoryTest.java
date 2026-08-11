@@ -122,6 +122,30 @@ class MissionRepositoryTest {
     }
 
     @Test
+    void 참여_잠금_조회는_미션_행만_조회하고_연관_엔티티를_로딩하지_않는다() {
+        Region region = saveRegion("MISSION-PARTICIPATION-LOCK");
+        Content rewardContent = saveContent(region, "participation-lock-reward");
+        CouponPolicy rewardCouponPolicy = saveMissionRewardCouponPolicy(rewardContent, region);
+        Mission mission = missionRepository.saveAndFlush(new Mission(
+            region,
+            MissionConditionType.VISIT_COUNT,
+            1,
+            rewardCouponPolicy,
+            MISSION_ENDS_AT
+        ));
+        entityManager.clear();
+
+        Mission lockedMission = missionRepository
+            .findByMissionIdForParticipationUpdate(mission.getMissionId())
+            .orElseThrow();
+        PersistenceUnitUtil persistenceUnitUtil = entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
+
+        assertThat(lockedMission.getMissionId()).isEqualTo(mission.getMissionId());
+        assertThat(persistenceUnitUtil.isLoaded(lockedMission, "region")).isFalse();
+        assertThat(persistenceUnitUtil.isLoaded(lockedMission, "rewardCouponPolicy")).isFalse();
+    }
+
+    @Test
     void 방문_횟수_미션은_양수_목표를_저장하고_대상_콘텐츠를_추가하지_않는다() {
         Region region = saveRegion("GIMHAE");
         Content rewardContent = saveContent(region, "reward");

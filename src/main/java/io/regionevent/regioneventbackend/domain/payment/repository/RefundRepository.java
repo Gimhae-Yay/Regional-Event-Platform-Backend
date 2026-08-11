@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.domain.payment.repository;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 import jakarta.persistence.LockModeType;
@@ -15,6 +16,17 @@ import io.regionevent.regioneventbackend.domain.payment.entity.Refund;
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundStatus;
 
 public interface RefundRepository extends JpaRepository<Refund, Long> {
+
+    @EntityGraph(attributePaths = {"payment", "payment.reservationPriceSnapshot", "payment.reservation"})
+    @Query("""
+        SELECT refund
+        FROM Refund refund
+        WHERE refund.payment.capacityHold.user.userId = :userId
+        ORDER BY refund.requestedAt DESC, refund.refundId DESC
+        """)
+    List<Refund> findAllByPaymentOwnerUserIdOrderByRequestedAtDescRefundIdDesc(
+        @Param("userId") Long userId
+    );
 
     boolean existsByPaymentCapacityHoldUserUserIdAndStatusIn(
         Long userId,
