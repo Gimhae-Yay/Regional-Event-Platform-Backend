@@ -166,15 +166,7 @@ class ReceivePortOneWebhookUseCaseTest {
             "\"data\": {",
             "\"secret\": \"secret-value\",\n  \"data\": {"
         );
-        when(paymentGateway.findByPaymentId(PAYMENT_ID)).thenReturn(new PortOnePaymentGateway.PortOnePayment(
-            PAYMENT_ID,
-            TRANSACTION_ID,
-            "store-1",
-            20_000,
-            "KRW",
-            "PAID"
-        ));
-        when(paymentService.findByOrderIdForUpdate(PAYMENT_ID)).thenReturn(Optional.empty());
+        when(paymentService.findByOrderId(PAYMENT_ID)).thenReturn(Optional.empty());
         when(paymentWebhookService.existsByProviderEventId(WEBHOOK_ID)).thenReturn(false);
         ArgumentCaptor<PaymentWebhook> webhookCaptor = ArgumentCaptor.forClass(PaymentWebhook.class);
 
@@ -185,11 +177,13 @@ class ReceivePortOneWebhookUseCaseTest {
         assertThat(webhook.getProviderEventId()).isEqualTo(WEBHOOK_ID);
         assertThat(webhook.getPayloadHash()).doesNotContain("secret-value");
         assertThat(webhook.getPayloadHash()).doesNotContain(rawBody);
-        verify(paymentGateway).findByPaymentId(PAYMENT_ID);
+        verify(paymentGateway, never()).findByPaymentId(anyString());
     }
 
     @Test
     void receive_paymentLookupFails_doesNotPersistWebhookOrVerification() {
+        Payment payment = pendingPayment();
+        when(paymentService.findByOrderId(PAYMENT_ID)).thenReturn(Optional.of(payment));
         when(paymentGateway.findByPaymentId(PAYMENT_ID)).thenThrow(new PortOneLookupException(
             new IllegalStateException("provider timeout")
         ));
@@ -205,29 +199,6 @@ class ReceivePortOneWebhookUseCaseTest {
 
         verify(paymentWebhookService, never()).createIfAbsent(any());
         verify(paymentService, never()).findWebhookTargetByOrderIdForUpdate(anyString());
-    }
-
-    @Test
-    void receive_paymentLookupFailsThenWebhookIsRetried_persistsWebhookAfterSuccessfulLookup() {
-        when(paymentGateway.findByPaymentId(PAYMENT_ID))
-            .thenThrow(new PortOneLookupException(new IllegalStateException("provider timeout")))
-            .thenReturn(paidPayment());
-        when(paymentService.findByOrderIdForUpdate(PAYMENT_ID)).thenReturn(Optional.empty());
-        when(paymentWebhookService.existsByProviderEventId(WEBHOOK_ID)).thenReturn(false);
-
-        assertThatThrownBy(() -> useCase.receive(
-            WEBHOOK_ID,
-            WEBHOOK_TIMESTAMP,
-            WEBHOOK_SIGNATURE,
-            validPaymentEvent()
-        )).isInstanceOf(BusinessException.class)
-            .extracting(exception -> ((BusinessException) exception).getErrorCode())
-            .isEqualTo(ErrorCode.INTERNAL_SERVER_ERROR);
-
-        useCase.receive(WEBHOOK_ID, WEBHOOK_TIMESTAMP, WEBHOOK_SIGNATURE, validPaymentEvent());
-
-        verify(paymentGateway, times(2)).findByPaymentId(PAYMENT_ID);
-        verify(paymentWebhookService).createIfAbsent(any(PaymentWebhook.class));
     }
 
     @Test

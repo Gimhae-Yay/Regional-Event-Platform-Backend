@@ -156,7 +156,13 @@ public class ReceivePortOneWebhookUseCase {
                 return true;
             }
             Payment payment = paymentService.findByOrderId(event.paymentId()).orElse(null);
-            if (payment == null || !isTerminal(payment.getStatus())) {
+            if (payment == null) {
+                paymentWebhookService.createIfAbsent(new PaymentWebhook(
+                    webhookId, null, AUTHENTICATION_RESULT, "PAYMENT_NOT_FOUND", hash(rawBody), Instant.now()
+                ));
+                return true;
+            }
+            if (!isTerminal(payment.getStatus())) {
                 return false;
             }
             LockedPaymentContext lockedContext = lockPaymentContext(payment);
