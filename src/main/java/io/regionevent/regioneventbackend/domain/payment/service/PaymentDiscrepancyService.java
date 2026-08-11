@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.domain.payment.service;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -13,7 +14,6 @@ import io.regionevent.regioneventbackend.domain.payment.repository.PaymentDiscre
 public class PaymentDiscrepancyService {
 
     private final PaymentDiscrepancyRepository paymentDiscrepancyRepository;
-
     public PaymentDiscrepancyService(PaymentDiscrepancyRepository paymentDiscrepancyRepository) {
         this.paymentDiscrepancyRepository = paymentDiscrepancyRepository;
     }
@@ -21,6 +21,11 @@ public class PaymentDiscrepancyService {
     @Transactional(propagation = Propagation.MANDATORY)
     public PaymentDiscrepancy create(PaymentDiscrepancy discrepancy) {
         return paymentDiscrepancyRepository.saveAndFlush(discrepancy);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<PaymentDiscrepancy> findByPaymentIdForUpdate(Long paymentId) {
+        return paymentDiscrepancyRepository.findByPaymentIdForUpdate(paymentId);
     }
 
     @Transactional(readOnly = true)

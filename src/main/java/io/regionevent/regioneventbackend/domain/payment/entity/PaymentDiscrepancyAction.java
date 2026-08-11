@@ -33,7 +33,7 @@ public class PaymentDiscrepancyAction {
     @Column(name = "action_type", nullable = false, length = 100, updatable = false)
     private String actionType;
 
-    @Column(name = "evidence_reference", length = 255, updatable = false)
+    @Column(name = "evidence_reference", length = 500, updatable = false)
     private String evidenceReference;
 
     @Column(name = "reason_code", nullable = false, length = 100, updatable = false)
