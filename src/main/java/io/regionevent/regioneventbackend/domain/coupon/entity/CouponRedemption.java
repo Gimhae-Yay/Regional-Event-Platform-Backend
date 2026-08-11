@@ -138,6 +138,14 @@ public class CouponRedemption {
         return reversedAt;
     }
 
+    public void reverse(Instant reversedAt) {
+        if (status != CouponRedemptionStatus.CONFIRMED) {
+            throw new IllegalStateException("only confirmed coupon redemption can be reversed");
+        }
+        status = CouponRedemptionStatus.REVERSED;
+        this.reversedAt = requireNotNull(reversedAt, "reversedAt");
+    }
+
     private static void validateSnapshotCoupon(
         ReservationPriceSnapshot reservationPriceSnapshot,
         Coupon coupon

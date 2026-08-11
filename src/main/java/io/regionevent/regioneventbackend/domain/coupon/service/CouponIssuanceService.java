@@ -29,6 +29,11 @@ public class CouponIssuanceService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<CouponIssuance> findByMissionRewardClaimId(Long missionRewardClaimId) {
+        return couponIssuanceRepository.findByMissionRewardClaimMissionRewardClaimId(missionRewardClaimId);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
     public Optional<CouponIssuance> findByIdentityHashForUpdate(String issuanceIdentityHash) {
         return couponIssuanceRepository.findByIssuanceIdentityHashForUpdate(issuanceIdentityHash);
     }

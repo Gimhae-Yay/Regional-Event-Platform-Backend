@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.domain.payment.repository;
 
 import java.util.List;
+import java.util.Optional;
 
 import jakarta.persistence.LockModeType;
 
@@ -13,6 +14,16 @@ import io.regionevent.regioneventbackend.domain.payment.entity.RefundAttempt;
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundAttemptOutcomeKind;
 
 public interface RefundAttemptRepository extends JpaRepository<RefundAttempt, Long> {
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT attempt
+        FROM RefundAttempt attempt
+        WHERE attempt.refundAttemptId = :refundAttemptId
+        """)
+    Optional<RefundAttempt> findByRefundAttemptIdForUpdate(
+        @Param("refundAttemptId") Long refundAttemptId
+    );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
