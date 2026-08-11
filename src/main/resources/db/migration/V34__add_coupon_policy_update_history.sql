@@ -34,6 +34,8 @@ CREATE TABLE coupon_policy_update_history (
         FOREIGN KEY (audit_event_id) REFERENCES audit_event (audit_event_id) ON DELETE SET NULL,
     CONSTRAINT ck_coupon_policy_update_history_actor_kind
         CHECK (actor_kind = 'USER'),
+    CONSTRAINT ck_coupon_policy_update_history_actor_role
+        CHECK (actor_role = 'OPERATOR'),
     CONSTRAINT ck_coupon_policy_update_history_reason
         CHECK (CHAR_LENGTH(TRIM(reason)) BETWEEN 1 AND 500),
     CONSTRAINT ck_coupon_policy_update_history_previous_discount

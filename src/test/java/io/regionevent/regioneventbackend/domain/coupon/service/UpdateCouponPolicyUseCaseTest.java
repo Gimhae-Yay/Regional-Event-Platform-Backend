@@ -20,6 +20,7 @@ import org.mockito.ArgumentCaptor;
 
 import tools.jackson.databind.node.JsonNodeFactory;
 
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEvent;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
@@ -30,6 +31,7 @@ import io.regionevent.regioneventbackend.domain.coupon.dto.UpdateCouponPolicyReq
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicy;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicyStatus;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicyUpdateHistory;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicyUpdateSnapshot;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponPolicyService.UpdateCouponPolicyCommand;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -86,7 +88,7 @@ class UpdateCouponPolicyUseCaseTest {
         when(couponPolicyService.findForUpdate(COUPON_POLICY_ID)).thenReturn(draftPolicy);
         when(couponPolicyService.update(eq(draftPolicy), any(UpdateCouponPolicyCommand.class), eq(UPDATED_AT)))
             .thenReturn(updatedPolicy);
-        io.regionevent.regioneventbackend.domain.audit.entity.AuditEvent auditEvent = auditEvent();
+        AuditEvent auditEvent = auditEvent();
         when(recordAuditEventUseCase.record(any())).thenReturn(auditEvent);
         when(clock.instant()).thenReturn(UPDATED_AT);
 
@@ -284,6 +286,25 @@ class UpdateCouponPolicyUseCaseTest {
         verify(couponPolicyService, never()).update(any(), any(), any());
     }
 
+    @Test
+    void updateHistory_운영자_역할이_아니면_생성할_수_없다() {
+        CouponPolicy couponPolicy = couponPolicy(CouponPolicyStatus.DRAFT, true);
+        AuditEvent auditEvent = auditEvent();
+        when(auditEvent.getActorRole()).thenReturn(UserRole.VISITOR.name());
+
+        assertThatThrownBy(() -> new CouponPolicyUpdateHistory(
+            couponPolicy,
+            auditEvent,
+            UserRole.VISITOR.name(),
+            "수정 사유",
+            REQUEST_ID.toString(),
+            UPDATED_AT,
+            CouponPolicyUpdateSnapshot.from(couponPolicy),
+            CouponPolicyUpdateSnapshot.from(couponPolicy)
+        )).isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("actorRole must be OPERATOR");
+    }
+
     private void verifyFailureAudit(ErrorCode errorCode, CouponPolicy couponPolicy) {
         ArgumentCaptor<AuditEventCommand> captor = ArgumentCaptor.forClass(AuditEventCommand.class);
         verify(recordFailedAuditEventUseCase).record(captor.capture());
@@ -360,10 +381,8 @@ class UpdateCouponPolicyUseCaseTest {
         );
     }
 
-    private io.regionevent.regioneventbackend.domain.audit.entity.AuditEvent auditEvent() {
-        io.regionevent.regioneventbackend.domain.audit.entity.AuditEvent auditEvent = mock(
-            io.regionevent.regioneventbackend.domain.audit.entity.AuditEvent.class
-        );
+    private AuditEvent auditEvent() {
+        AuditEvent auditEvent = mock(AuditEvent.class);
         when(auditEvent.getResult()).thenReturn(AuditEventResult.SUCCESS);
         when(auditEvent.getTargetType()).thenReturn(AuditEventTargetType.COUPON_POLICY);
         when(auditEvent.getTargetId()).thenReturn(COUPON_POLICY_ID);

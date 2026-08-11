@@ -18,6 +18,7 @@ import jakarta.persistence.UniqueConstraint;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEvent;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
+import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 
 @Entity
 @Table(
@@ -30,6 +31,7 @@ import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetTyp
 public class CouponPolicyUpdateHistory {
 
     private static final String USER_ACTOR_KIND = "USER";
+    private static final String OPERATOR_ACTOR_ROLE = UserRole.OPERATOR.name();
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -130,7 +132,7 @@ public class CouponPolicyUpdateHistory {
         this.couponPolicy = requireNotNull(couponPolicy, "couponPolicy");
         this.auditEvent = requireNotNull(auditEvent, "auditEvent");
         this.actorKind = USER_ACTOR_KIND;
-        this.actorRole = requireNotBlank(actorRole, "actorRole");
+        this.actorRole = validateActorRole(actorRole);
         this.reason = requireNotBlank(reason, "reason").strip();
         this.requestId = requireNotBlank(requestId, "requestId");
         this.updatedAt = requireNotNull(updatedAt, "updatedAt");
@@ -178,12 +180,60 @@ public class CouponPolicyUpdateHistory {
         return nextName;
     }
 
+    public String getPreviousDescription() {
+        return previousDescription;
+    }
+
+    public String getNextDescription() {
+        return nextDescription;
+    }
+
     public long getPreviousDiscountAmount() {
         return previousDiscountAmount;
     }
 
     public long getNextDiscountAmount() {
         return nextDiscountAmount;
+    }
+
+    public long getPreviousMinimumPaymentAmount() {
+        return previousMinimumPaymentAmount;
+    }
+
+    public long getNextMinimumPaymentAmount() {
+        return nextMinimumPaymentAmount;
+    }
+
+    public int getPreviousValidDays() {
+        return previousValidDays;
+    }
+
+    public int getNextValidDays() {
+        return nextValidDays;
+    }
+
+    public Instant getPreviousIssueStartsAt() {
+        return previousIssueStartsAt;
+    }
+
+    public Instant getNextIssueStartsAt() {
+        return nextIssueStartsAt;
+    }
+
+    public Instant getPreviousIssueEndsAt() {
+        return previousIssueEndsAt;
+    }
+
+    public Instant getNextIssueEndsAt() {
+        return nextIssueEndsAt;
+    }
+
+    public Long getPreviousTotalIssueLimit() {
+        return previousTotalIssueLimit;
+    }
+
+    public Long getNextTotalIssueLimit() {
+        return nextTotalIssueLimit;
     }
 
     private void copySnapshots(
@@ -241,5 +291,13 @@ public class CouponPolicyUpdateHistory {
             throw new IllegalArgumentException(fieldName + " must not be null or blank");
         }
         return value;
+    }
+
+    private static String validateActorRole(String actorRole) {
+        String validatedActorRole = requireNotBlank(actorRole, "actorRole");
+        if (!OPERATOR_ACTOR_ROLE.equals(validatedActorRole)) {
+            throw new IllegalArgumentException("actorRole must be OPERATOR");
+        }
+        return validatedActorRole;
     }
 }
