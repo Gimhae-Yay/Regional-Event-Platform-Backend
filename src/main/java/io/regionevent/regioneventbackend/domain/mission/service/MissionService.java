@@ -6,6 +6,8 @@ import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicy;
 import io.regionevent.regioneventbackend.domain.mission.entity.Mission;
@@ -81,11 +83,35 @@ public class MissionService {
         return missionRepository.saveAndFlush(mission);
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+    public Mission findMission(Long missionId) {
+        return missionRepository.findByMissionId(missionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public Mission findForUpdate(Long missionId) {
+        return missionRepository.findByMissionIdForUpdate(missionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public Mission approve(
+        Mission mission,
+        Instant publishedAt
+    ) {
+        if (mission.getStatus() != MissionStatus.PENDING_REVIEW) {
+            throw new BusinessException(ErrorCode.MISSION_STATE_CONFLICT);
+        }
+        if (publishedAt == null || !publishedAt.isBefore(mission.getEndsAt())) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        mission.approve(publishedAt);
+        return missionRepository.saveAndFlush(mission);
+    }
+
     public Mission findPublicMissionDetail(Long missionId, Instant now) {
         return missionRepository.findPublicMissionDetailByMissionId(missionId, now)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
-
     public boolean existsPublishedRewardCouponPolicy(Long couponPolicyId) {
         return missionRepository.existsByRewardCouponPolicyCouponPolicyIdAndStatus(
             couponPolicyId,

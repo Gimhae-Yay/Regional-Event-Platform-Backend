@@ -157,6 +157,18 @@ public class Mission {
         status = MissionStatus.PENDING_REVIEW;
     }
 
+    public void approve(Instant publishedAt) {
+        Instant validatedPublishedAt = requireNotNull(publishedAt, "publishedAt");
+        if (status != MissionStatus.PENDING_REVIEW) {
+            throw new IllegalStateException("mission status must be PENDING_REVIEW");
+        }
+        if (!validatedPublishedAt.isBefore(endsAt)) {
+            throw new IllegalArgumentException("publishedAt must be before endsAt");
+        }
+        status = MissionStatus.PUBLISHED;
+        this.publishedAt = validatedPublishedAt;
+    }
+
     public Long getMissionId() {
         return missionId;
     }

@@ -18,8 +18,7 @@ import io.regionevent.regioneventbackend.global.response.ApiResponse;
 @RequestMapping("/api/v1/region-admin/missions")
 public class RegionAdminMissionController {
 
-    private static final String SUCCESS_MESSAGE = "지역 미션 상세 조회에 성공했습니다.";
-
+    private static final String DETAIL_SUCCESS_MESSAGE = "지역 미션 상세 조회에 성공했습니다.";
     private final GetRegionAdminMissionDetailUseCase getRegionAdminMissionDetailUseCase;
 
     public RegionAdminMissionController(GetRegionAdminMissionDetailUseCase getRegionAdminMissionDetailUseCase) {
@@ -36,7 +35,7 @@ public class RegionAdminMissionController {
             toMissionId(missionId)
         );
         return ApiResponse
-            .success(HttpStatus.OK, SUCCESS_MESSAGE, response)
+            .success(HttpStatus.OK, DETAIL_SUCCESS_MESSAGE, response)
             .toResponseEntity();
     }
 
