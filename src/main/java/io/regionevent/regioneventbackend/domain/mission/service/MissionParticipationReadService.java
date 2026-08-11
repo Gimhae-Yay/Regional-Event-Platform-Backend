@@ -42,4 +42,11 @@ public class MissionParticipationReadService {
         return missionParticipationRepository.findSummaryByMissionIdAndUserId(missionId, userId)
             .map(MissionParticipationSummary::from);
     }
+
+    public Optional<MissionParticipation> findByMissionIdAndUserId(
+        Long missionId,
+        Long userId
+    ) {
+        return missionParticipationRepository.findByMissionMissionIdAndUserUserId(missionId, userId);
+    }
 }

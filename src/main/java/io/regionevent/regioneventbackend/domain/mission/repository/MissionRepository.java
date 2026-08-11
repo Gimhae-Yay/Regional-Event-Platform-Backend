@@ -73,6 +73,17 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
         """)
     Optional<Mission> findByMissionIdForUpdate(@Param("missionId") Long missionId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT mission
+        FROM Mission mission
+        WHERE mission.missionId = :missionId
+        """)
+    Optional<Mission> findByMissionIdForParticipationUpdate(@Param("missionId") Long missionId);
+
+    @Query("SELECT cast(CURRENT_TIMESTAMP as instant)")
+    Instant findCurrentDatabaseTime();
+
     boolean existsByRewardCouponPolicyCouponPolicyIdAndStatus(
         Long couponPolicyId,
         MissionStatus status

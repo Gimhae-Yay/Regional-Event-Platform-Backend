@@ -54,6 +54,15 @@ public class MissionService {
         return missionRepository.findAllByRegionRegionIdAndStatusOrderByMissionIdDesc(regionId, status, pageable);
     }
 
+    public Mission findMissionForParticipationUpdate(Long missionId) {
+        return missionRepository.findByMissionIdForParticipationUpdate(missionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public Instant findCurrentDatabaseTime() {
+        return missionRepository.findCurrentDatabaseTime();
+    }
+
     public Mission create(
         Region region,
         MissionConditionType conditionType,
