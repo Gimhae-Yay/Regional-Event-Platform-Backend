@@ -2,15 +2,15 @@
 
 ## 메타데이터
 
-- 상태: 검증 중
+- 상태: 완료
 - 개선 유형: 성능, 유지보수성
 - 범위: `SharedMySqlTestContainer`가 만드는 테스트 전용 MySQL 데이터 디렉터리
 - 관련 요구사항: [P0 테스트 및 출시 수용 기준](../p0-spec.md#9-테스트-및-출시-수용-기준)
 - 관련 단계: 단계 1. MVP 구현·검증
 - 기준 시각·시간대: 2026-08-11 KST
 - Before revision: `829524359d5a968a2000379bcfd236653dc23d28`
-- After revision: 측정 후 기록
-- 작업 트리 상태: ADR-0093 커밋 `829524359d5a968a2000379bcfd236653dc23d28` 위에 조사·개선 기록이 untracked인 상태. 코드·테스트 구성은 Before 동안 변경하지 않았다.
+- After revision: `1d45805512a7a8e49a71bd1b985ec13fd5302aee`
+- 작업 트리 상태: Before는 ADR-0093 커밋 `829524359d5a968a2000379bcfd236653dc23d28` 위에 조사·개선 기록이 untracked인 상태였고, After는 tmpfs 코드·검증 테스트 커밋 `1d45805512a7a8e49a71bd1b985ec13fd5302aee`에서 측정했다.
 - 환경: macOS arm64, OpenJDK 21.0.7, Gradle 9.5.1, Docker Server 29.5.2, Docker 메모리 7.75 GiB, Docker CPU 4, MySQL 8.0.42, Gradle daemon 미사용
 
 ## 개선 계약
@@ -67,35 +67,40 @@ Before에서는 Docker가 실행된 상태에서 전체 테스트가 종료 코�
 
 ## 변경 내용
 
-ADR-0093을 따른 테스트 전용 tmpfs 구성 및 이를 고정하는 테스트를 적용할 예정이다.
+`SharedMySqlTestContainer`가 만드는 MySQL에 `/var/lib/mysql` → `rw,size=512m` tmpfs를 적용했다.
+`SharedMySqlTestContainerTest`는 컨테이너를 시작하지 않고 이 매핑을 고정한다.
 
 ## After
 
 - 명령·입력: `/usr/bin/time -lp ./gradlew --no-daemon clean test`
-- 종료 코드: 측정 예정
-- 정상 계약 검증: 측정 예정
+- 종료 코드: 0, 0
+- 정상 계약 검증: 각 실행 1,710 tests 통과, skip/failure/error 0; `/usr/bin/time`의 swaps 0회
 
 | 반복 | 관찰값 | 비고 |
 | --- | --- | --- |
-| 1 | 측정 예정 | tmpfs 적용 후 |
-| 2 | 측정 예정 | tmpfs 적용 후 |
+| 1 | 517.31초 | tmpfs 적용 후; user 482.30초, sys 50.50초, 최대 RSS 2,675,916,800 bytes, swaps 0회 |
+| 2 | 507.26초 | tmpfs 적용 후; user 485.50초, sys 48.33초, 최대 RSS 2,712,190,976 bytes, swaps 0회 |
 
 ## 비교와 판정
 
 | 항목 | Before | After | 변화량 | 판정 |
 | --- | --- | --- | --- | --- |
-| 순차 전체 테스트 경과 시간 중앙값 | 694.28초 | 측정 예정 | 측정 예정 | 대기 |
-| MySQL 테스트 데이터 격리 | 1,710 tests 통과 | 측정 예정 | 해당 없음 | 대기 |
-| 메모리 안정성 | swaps 0회, OOM 없음 | 측정 예정 | 해당 없음 | 대기 |
+| 순차 전체 테스트 경과 시간 중앙값 | 694.28초 | 512.29초 | -182.00초(-26.2%) | 개선 |
+| MySQL 테스트 데이터 격리 | 1,710 tests 통과 | MySQL cleaner 통합 테스트와 전체 테스트 2회에서 1,710 tests 통과 | 해당 없음 | 유지 |
+| 메모리 안정성 | swaps 0회, OOM 없음 | swaps 0회, OOM·tmpfs 공간 부족 없음 | 해당 없음 | 유지 |
 
 ## 회귀·실패 경로 검증
 
-- `MySqlDatabaseCleanerIntegrationTest`, 전체 `test`, 전체 `build` 결과를 After에 기록한다.
-- tmpfs 공간 부족, Docker 메모리 부족, swap, OOM, 컨테이너 초기화 실패는 모두 troubleshooting 기록으로 연결한다.
+- `./gradlew test --tests 'io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainerTest'`: 성공(9초). Docker 없이 tmpfs 매핑을 검증했다.
+- `./gradlew --no-daemon clean test --tests 'io.regionevent.regioneventbackend.support.mysql.MySqlDatabaseCleanerIntegrationTest'`: 성공(52초). migration, fixture 정리, Flyway 이력 보존을 확인했다.
+- `./gradlew --no-daemon clean test`: After 2회 모두 성공(517.31초, 507.26초; 각 1,710 tests).
+- `./gradlew test`: 성공(이전 전체 테스트 결과를 재사용해 UP-TO-DATE, 2초).
+- `./gradlew build`: 성공(이전 전체 테스트 결과를 재사용해 `test` UP-TO-DATE, 2초).
+- tmpfs 공간 부족, Docker 메모리 부족, swap, OOM, 컨테이너 초기화 실패는 관찰되지 않았다.
 
 ## 한계와 잔여 위험
 
-- 두 번의 순차 실행은 로컬 성능 변동을 완전히 제거하지 않는다.
+- 두 번의 순차 실행은 로컬 성능 변동을 완전히 제거하지 않으며, 이 수치는 이 Docker Desktop 환경에 한정된다.
 - 이 비교는 Docker Desktop 메모리 7.75 GiB·4 CPU 환경에서만 유효하며 CI·다른 호스트의 절대 시간으로 일반화하지 않는다.
 - #687의 동시 Gradle 실행 잠금 대기는 이 범위에서 재현하지 않으며 별도 위험으로 남는다.
 
