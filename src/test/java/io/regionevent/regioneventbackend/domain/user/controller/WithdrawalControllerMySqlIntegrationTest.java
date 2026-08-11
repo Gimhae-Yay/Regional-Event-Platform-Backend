@@ -39,6 +39,14 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentSessionRepository;
+import io.regionevent.regioneventbackend.domain.payment.dto.CreatePaymentRequest;
+import io.regionevent.regioneventbackend.domain.payment.dto.CreatePaymentResponse;
+import io.regionevent.regioneventbackend.domain.payment.entity.PaymentStatus;
+import io.regionevent.regioneventbackend.domain.payment.entity.Refund;
+import io.regionevent.regioneventbackend.domain.payment.entity.RefundStatus;
+import io.regionevent.regioneventbackend.domain.payment.repository.PaymentRepository;
+import io.regionevent.regioneventbackend.domain.payment.repository.RefundRepository;
+import io.regionevent.regioneventbackend.domain.payment.service.CreatePaymentUseCase;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
 import io.regionevent.regioneventbackend.domain.reservation.dto.CreateReservationHoldRequest;
@@ -81,6 +89,8 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
     private final ContentSessionRepository contentSessionRepository;
     private final CapacityHoldRepository capacityHoldRepository;
     private final ReservationRepository reservationRepository;
+    private final PaymentRepository paymentRepository;
+    private final RefundRepository refundRepository;
     private final JwtAccessTokenService jwtAccessTokenService;
     private final JdbcTemplate jdbcTemplate;
     private final WithdrawUserUseCase withdrawUserUseCase;
@@ -89,6 +99,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
     private final ReservationConfirmationUseCase reservationConfirmationUseCase;
     private final ReservationCancellationUseCase reservationCancellationUseCase;
     private final GetMyReservationQrUseCase getMyReservationQrUseCase;
+    private final CreatePaymentUseCase createPaymentUseCase;
 
     @Autowired
     WithdrawalControllerMySqlIntegrationTest(
@@ -100,6 +111,8 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         ContentSessionRepository contentSessionRepository,
         CapacityHoldRepository capacityHoldRepository,
         ReservationRepository reservationRepository,
+        PaymentRepository paymentRepository,
+        RefundRepository refundRepository,
         JwtAccessTokenService jwtAccessTokenService,
         JdbcTemplate jdbcTemplate,
         WithdrawUserUseCase withdrawUserUseCase,
@@ -107,7 +120,8 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         CreateReservationHoldUseCase createReservationHoldUseCase,
         ReservationConfirmationUseCase reservationConfirmationUseCase,
         ReservationCancellationUseCase reservationCancellationUseCase,
-        GetMyReservationQrUseCase getMyReservationQrUseCase
+        GetMyReservationQrUseCase getMyReservationQrUseCase,
+        CreatePaymentUseCase createPaymentUseCase
     ) {
         this.mockMvc = mockMvc;
         this.appUserRepository = appUserRepository;
@@ -117,6 +131,8 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         this.contentSessionRepository = contentSessionRepository;
         this.capacityHoldRepository = capacityHoldRepository;
         this.reservationRepository = reservationRepository;
+        this.paymentRepository = paymentRepository;
+        this.refundRepository = refundRepository;
         this.jwtAccessTokenService = jwtAccessTokenService;
         this.jdbcTemplate = jdbcTemplate;
         this.withdrawUserUseCase = withdrawUserUseCase;
@@ -125,6 +141,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         this.reservationConfirmationUseCase = reservationConfirmationUseCase;
         this.reservationCancellationUseCase = reservationCancellationUseCase;
         this.getMyReservationQrUseCase = getMyReservationQrUseCase;
+        this.createPaymentUseCase = createPaymentUseCase;
     }
 
     @DynamicPropertySource
@@ -161,6 +178,65 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
             });
         assertThat(contentSessionRepository.findById(fixture.session().getSessionId()))
             .hasValueSatisfying(session -> assertThat(session.getRemainingCapacity()).isEqualTo(10));
+    }
+
+    @Test
+    void withdraw_withPendingPayment_rejectsWithoutChangingThePaymentOrHold() {
+        Fixture fixture = createFixture();
+        jdbcTemplate.update(
+            "UPDATE content SET reservation_price = ? WHERE content_id = ?",
+            20_000,
+            fixture.session().getContent().getContentId()
+        );
+        createPaymentUseCase.create(
+            fixture.user().getUserId(),
+            fixture.activeHold().getHoldId().toString(),
+            new CreatePaymentRequest(null),
+            "withdrawal-pending-payment-" + System.nanoTime(),
+            UUID.randomUUID()
+        );
+
+        assertThat(withdraw(fixture.user().getUserId())).isEqualTo(ErrorCode.FORBIDDEN);
+        assertThat(appUserRepository.findById(fixture.user().getUserId())).isPresent();
+        assertThat(capacityHoldRepository.findById(fixture.activeHold().getHoldId()))
+            .hasValueSatisfying(hold -> assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.ACTIVE));
+        assertThat(paymentRepository.findAll()).singleElement()
+            .extracting(payment -> payment.getStatus())
+            .isEqualTo(PaymentStatus.PENDING);
+    }
+
+    @Test
+    void withdraw_withRequestedRefund_rejectsWithoutChangingThePaymentOrHold() {
+        Fixture fixture = createFixture();
+        jdbcTemplate.update(
+            "UPDATE content SET reservation_price = ? WHERE content_id = ?",
+            20_000,
+            fixture.session().getContent().getContentId()
+        );
+        CreatePaymentResponse paymentResponse = createPaymentUseCase.create(
+            fixture.user().getUserId(),
+            fixture.activeHold().getHoldId().toString(),
+            new CreatePaymentRequest(null),
+            "withdrawal-requested-refund-" + System.nanoTime(),
+            UUID.randomUUID()
+        );
+        jdbcTemplate.update(
+            "UPDATE payment SET status = 'APPROVED', finalized_at = CURRENT_TIMESTAMP(6) WHERE hold_id = ?",
+            fixture.activeHold().getHoldId()
+        );
+        refundRepository.saveAndFlush(new Refund(
+            paymentRepository.findByOrderId(paymentResponse.payment().orderId()).orElseThrow(),
+            20_000,
+            Instant.now()
+        ));
+
+        assertThat(withdraw(fixture.user().getUserId())).isEqualTo(ErrorCode.FORBIDDEN);
+        assertThat(appUserRepository.findById(fixture.user().getUserId())).isPresent();
+        assertThat(capacityHoldRepository.findById(fixture.activeHold().getHoldId()))
+            .hasValueSatisfying(hold -> assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.ACTIVE));
+        assertThat(refundRepository.findAll()).singleElement()
+            .extracting(refund -> refund.getStatus())
+            .isEqualTo(RefundStatus.REQUESTED);
     }
 
     @Test

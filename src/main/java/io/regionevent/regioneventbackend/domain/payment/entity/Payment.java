@@ -88,6 +88,9 @@ public class Payment {
     @Column(name = "finalized_at")
     private Instant finalizedAt;
 
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
     protected Payment() {
     }
 
@@ -95,6 +98,15 @@ public class Payment {
         CapacityHold capacityHold,
         ReservationPriceSnapshot reservationPriceSnapshot,
         String orderId
+    ) {
+        this(capacityHold, reservationPriceSnapshot, orderId, Instant.now());
+    }
+
+    public Payment(
+        CapacityHold capacityHold,
+        ReservationPriceSnapshot reservationPriceSnapshot,
+        String orderId,
+        Instant createdAt
     ) {
         this.capacityHold = requireNotNull(capacityHold, "capacityHold");
         this.reservationPriceSnapshot = requireNotNull(
@@ -104,6 +116,7 @@ public class Payment {
         validateSnapshotHold(capacityHold, reservationPriceSnapshot);
         this.orderId = requireNotBlank(orderId, "orderId");
         this.status = PaymentStatus.PENDING;
+        this.createdAt = requireNotNull(createdAt, "createdAt");
     }
 
     public Long getPaymentId() {
@@ -136,6 +149,18 @@ public class Payment {
 
     public Instant getFinalizedAt() {
         return finalizedAt;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public void expire(Instant expiredAt) {
+        if (status != PaymentStatus.PENDING) {
+            throw new IllegalStateException("only pending payment can be expired");
+        }
+        status = PaymentStatus.EXPIRED;
+        finalizedAt = requireNotNull(expiredAt, "expiredAt");
     }
 
     private static void validateSnapshotHold(

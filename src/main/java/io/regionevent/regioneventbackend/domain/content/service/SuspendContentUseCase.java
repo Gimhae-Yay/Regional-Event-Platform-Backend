@@ -21,6 +21,7 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentLog;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHoldService;
+import io.regionevent.regioneventbackend.domain.payment.service.ExpirePendingPaymentForTerminatedHoldUseCase;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.service.RegionAdminAuthorizationService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -36,6 +37,7 @@ public class SuspendContentUseCase {
     private final ContentSessionService contentSessionService;
     private final ContentLogService contentLogService;
     private final CapacityHoldService capacityHoldService;
+    private final ExpirePendingPaymentForTerminatedHoldUseCase expirePendingPaymentForTerminatedHoldUseCase;
     private final RegionAdminAuthorizationService regionAdminAuthorizationService;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase;
@@ -46,6 +48,7 @@ public class SuspendContentUseCase {
         ContentSessionService contentSessionService,
         ContentLogService contentLogService,
         CapacityHoldService capacityHoldService,
+        ExpirePendingPaymentForTerminatedHoldUseCase expirePendingPaymentForTerminatedHoldUseCase,
         RegionAdminAuthorizationService regionAdminAuthorizationService,
         RecordAuditEventUseCase recordAuditEventUseCase,
         RecordFailedAuditEventUseCase recordFailedAuditEventUseCase,
@@ -55,6 +58,7 @@ public class SuspendContentUseCase {
         this.contentSessionService = contentSessionService;
         this.contentLogService = contentLogService;
         this.capacityHoldService = capacityHoldService;
+        this.expirePendingPaymentForTerminatedHoldUseCase = expirePendingPaymentForTerminatedHoldUseCase;
         this.regionAdminAuthorizationService = regionAdminAuthorizationService;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
         this.recordFailedAuditEventUseCase = recordFailedAuditEventUseCase;
@@ -99,7 +103,11 @@ public class SuspendContentUseCase {
             capacityHoldService.invalidateAllActiveHoldsForContent(
                 contentId,
                 CONTENT_SUSPENDED_INVALIDATION_REASON
-            );
+            ).forEach(capacityHold -> expirePendingPaymentForTerminatedHoldUseCase.expire(
+                capacityHold,
+                requestId,
+                actor
+            ));
             recordSuccessfulSuspension(requestId, actor, suspendedContent, suspendedAt);
             return SuspendContentResult.from(suspendedContent, suspendedLog);
         } catch (BusinessException exception) {
