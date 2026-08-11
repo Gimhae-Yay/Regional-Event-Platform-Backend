@@ -3,12 +3,20 @@ package io.regionevent.regioneventbackend.domain.mission.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 
 import java.time.Instant;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -39,7 +47,12 @@ import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
+import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
+import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
+import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
 import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 
@@ -50,8 +63,10 @@ class EndMissionsUseCaseIntegrationTest extends NonTransactionalMySqlTestSupport
     private static final Instant ENDS_AT = Instant.parse("2020-01-02T00:00:00Z");
 
     private final EndMissionsUseCase endMissionsUseCase;
+    private final CreateMissionParticipationUseCase createMissionParticipationUseCase;
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
+    private final UserRoleAssignmentRepository userRoleAssignmentRepository;
     private final ContentRepository contentRepository;
     private final CouponPolicyRepository couponPolicyRepository;
     private final MissionRepository missionRepository;
@@ -61,11 +76,16 @@ class EndMissionsUseCaseIntegrationTest extends NonTransactionalMySqlTestSupport
     @MockitoSpyBean
     private RecordAuditEventUseCase recordAuditEventUseCase;
 
+    @MockitoSpyBean
+    private MissionService missionService;
+
     @Autowired
     EndMissionsUseCaseIntegrationTest(
         EndMissionsUseCase endMissionsUseCase,
+        CreateMissionParticipationUseCase createMissionParticipationUseCase,
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
+        UserRoleAssignmentRepository userRoleAssignmentRepository,
         ContentRepository contentRepository,
         CouponPolicyRepository couponPolicyRepository,
         MissionRepository missionRepository,
@@ -73,8 +93,10 @@ class EndMissionsUseCaseIntegrationTest extends NonTransactionalMySqlTestSupport
         AuditEventRepository auditEventRepository
     ) {
         this.endMissionsUseCase = endMissionsUseCase;
+        this.createMissionParticipationUseCase = createMissionParticipationUseCase;
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
+        this.userRoleAssignmentRepository = userRoleAssignmentRepository;
         this.contentRepository = contentRepository;
         this.couponPolicyRepository = couponPolicyRepository;
         this.missionRepository = missionRepository;
@@ -140,6 +162,73 @@ class EndMissionsUseCaseIntegrationTest extends NonTransactionalMySqlTestSupport
         });
     }
 
+    @Test
+    void endBySystem_재실행하면두번째실행은변경하지않는다() {
+        Fixture fixture = createFixture();
+
+        EndMissionSystemResult firstResult = endMissionsUseCase.endBySystem(
+            fixture.missionId(),
+            UUID.randomUUID()
+        );
+        EndMissionSystemResult secondResult = endMissionsUseCase.endBySystem(
+            fixture.missionId(),
+            UUID.randomUUID()
+        );
+
+        assertThat(firstResult.status()).isEqualTo(EndMissionSystemResult.Status.ENDED);
+        assertThat(secondResult.status()).isEqualTo(EndMissionSystemResult.Status.SKIPPED);
+        assertThat(missionParticipationRepository.findById(fixture.inProgressParticipationId()).orElseThrow()
+            .getStatus()).isEqualTo(MissionParticipationStatus.ENDED_INCOMPLETE);
+        assertThat(auditEventRepository.findAll()).hasSize(1);
+    }
+
+    @Test
+    @Timeout(15)
+    void endBySystem_참여생성과경합하면종료후진행중참여를남기지않는다() throws Exception {
+        Fixture fixture = createFixture();
+        CountDownLatch missionLocked = new CountDownLatch(1);
+        CountDownLatch participationCreateStarted = new CountDownLatch(1);
+        CountDownLatch releaseEnd = new CountDownLatch(1);
+        MissionService target = AopTestUtils.getTargetObject(missionService);
+        doAnswer(invocation -> {
+            Mission mission = (Mission) invocation.callRealMethod();
+            missionLocked.countDown();
+            if (!releaseEnd.await(5, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("자동 종료 잠금 해제를 기다리는 시간이 초과되었습니다.");
+            }
+            return mission;
+        }).when(target).findForUpdate(fixture.missionId());
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<EndMissionSystemResult> endResult = executorService.submit(() -> endMissionsUseCase.endBySystem(
+                fixture.missionId(),
+                UUID.randomUUID()
+            ));
+            assertThat(missionLocked.await(5, TimeUnit.SECONDS)).isTrue();
+
+            Future<CreateMissionParticipationResult> createResult = executorService.submit(() -> {
+                participationCreateStarted.countDown();
+                return createMissionParticipationUseCase.create(fixture.joiningVisitorId(), fixture.missionId());
+            });
+            assertThat(participationCreateStarted.await(5, TimeUnit.SECONDS)).isTrue();
+            releaseEnd.countDown();
+
+            assertThat(endResult.get(5, TimeUnit.SECONDS).status()).isEqualTo(EndMissionSystemResult.Status.ENDED);
+            try {
+                createResult.get(5, TimeUnit.SECONDS);
+            } catch (ExecutionException exception) {
+                assertThat(exception.getCause()).isInstanceOf(BusinessException.class);
+                assertThat(((BusinessException) exception.getCause()).getErrorCode())
+                    .isEqualTo(ErrorCode.MISSION_STATE_CONFLICT);
+            }
+        } finally {
+            releaseEnd.countDown();
+        }
+
+        assertThat(missionParticipationRepository.findAll())
+            .extracting(MissionParticipation::getStatus)
+            .doesNotContain(MissionParticipationStatus.IN_PROGRESS);
+    }
+
     private Fixture createFixture() {
         String suffix = Long.toUnsignedString(System.nanoTime());
         Region region = regionRepository.saveAndFlush(new Region("AUTO-" + suffix, "김해시", true));
@@ -157,6 +246,15 @@ class EndMissionsUseCaseIntegrationTest extends NonTransactionalMySqlTestSupport
             "010-1234-5679",
             AppUserStatus.ACTIVE
         ));
+        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(firstVisitor, UserRole.VISITOR, null));
+        AppUser joiningVisitor = appUserRepository.saveAndFlush(new AppUser(
+            "joining-visitor-" + suffix + "@example.com",
+            "hashed-password",
+            "참여 경합 사용자",
+            "010-1234-5681",
+            AppUserStatus.ACTIVE
+        ));
+        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(joiningVisitor, UserRole.VISITOR, null));
         AppUser completedVisitor = appUserRepository.saveAndFlush(new AppUser(
             "completed-visitor-" + suffix + "@example.com",
             "hashed-password",
@@ -213,6 +311,7 @@ class EndMissionsUseCaseIntegrationTest extends NonTransactionalMySqlTestSupport
         completed = missionParticipationRepository.saveAndFlush(completed);
         return new Fixture(
             mission.getMissionId(),
+            joiningVisitor.getUserId(),
             inProgress.getMissionParticipationId(),
             completed.getMissionParticipationId()
         );
@@ -220,6 +319,7 @@ class EndMissionsUseCaseIntegrationTest extends NonTransactionalMySqlTestSupport
 
     private record Fixture(
         Long missionId,
+        Long joiningVisitorId,
         Long inProgressParticipationId,
         Long completedParticipationId
     ) {
