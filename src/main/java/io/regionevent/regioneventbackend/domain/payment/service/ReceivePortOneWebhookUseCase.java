@@ -214,20 +214,16 @@ public class ReceivePortOneWebhookUseCase {
         }
 
         String decision = decide(payment, snapshot, event, observed);
-        paymentVerificationService.create(new PaymentVerification(
-            payment,
-            event.type(),
-            observed.amount(),
-            observed.currency(),
-            observed.paymentId(),
-            observed.status(),
-            decision,
-            hash(observed.paymentId() + observed.transactionId() + observed.amount() + observed.currency() + observed.status()),
-            now
-        ));
-
         if ("APPROVE".equals(decision)) {
-            payment = approve(payment, snapshot, observed, requestId, now);
+            ApprovalResult approvalResult = approve(payment, snapshot, observed, requestId, now);
+            if (approvalResult.alreadyFinalized()) {
+                paymentWebhookService.createIfAbsent(new PaymentWebhook(
+                    webhookId, approvalResult.payment(), AUTHENTICATION_RESULT,
+                    "ALREADY_FINALIZED", hash(rawBody), now
+                ));
+                return;
+            }
+            payment = approvalResult.payment();
         } else if ("DECLINE".equals(decision)) {
             payment.decline(now);
             recordPaymentAudit(payment, PaymentStatus.PENDING, PaymentStatus.DECLINED, requestId, now);
@@ -242,12 +238,23 @@ public class ReceivePortOneWebhookUseCase {
             recordDiscrepancyAudit(discrepancy, requestId, now);
             releaseCoupon(snapshot, COUPON_DISCREPANCY_RELEASED_REASON, requestId, now);
         }
+        paymentVerificationService.create(new PaymentVerification(
+            payment,
+            event.type(),
+            observed.amount(),
+            observed.currency(),
+            observed.paymentId(),
+            observed.status(),
+            decision,
+            hash(observed.paymentId() + observed.transactionId() + observed.amount() + observed.currency() + observed.status()),
+            now
+        ));
         paymentWebhookService.createIfAbsent(new PaymentWebhook(
             webhookId, payment, AUTHENTICATION_RESULT, decision, hash(rawBody), now
         ));
     }
 
-    private Payment approve(
+    private ApprovalResult approve(
         Payment payment,
         ReservationPriceSnapshot snapshot,
         PortOnePaymentGateway.PortOnePayment observed,
@@ -268,9 +275,12 @@ public class ReceivePortOneWebhookUseCase {
             Payment approvedPayment = findPaymentAfterCapacityHoldUpdate(payment.getOrderId());
             approvedPayment.approve(reservation, observed.transactionId(), now);
             recordPaymentAudit(approvedPayment, PaymentStatus.PENDING, PaymentStatus.APPROVED, requestId, now);
-            return approvedPayment;
+            return new ApprovalResult(approvedPayment, false);
         } catch (ReservationConfirmationConflictException exception) {
             Payment discrepantPayment = findPaymentAfterCapacityHoldUpdate(payment.getOrderId());
+            if (isTerminal(discrepantPayment.getStatus())) {
+                return new ApprovalResult(discrepantPayment, true);
+            }
             discrepantPayment.markDiscrepant(observed.transactionId(), now);
             PaymentDiscrepancy discrepancy = paymentDiscrepancyService.create(new PaymentDiscrepancy(
                 discrepantPayment, "LATE_APPROVAL", "OPEN", now
@@ -278,7 +288,7 @@ public class ReceivePortOneWebhookUseCase {
             recordPaymentAudit(discrepantPayment, PaymentStatus.PENDING, PaymentStatus.DISCREPANT, requestId, now);
             recordDiscrepancyAudit(discrepancy, requestId, now);
             releaseCoupon(snapshot, COUPON_DISCREPANCY_RELEASED_REASON, requestId, now);
-            return discrepantPayment;
+            return new ApprovalResult(discrepantPayment, false);
         }
     }
 
@@ -524,6 +534,9 @@ public class ReceivePortOneWebhookUseCase {
         private boolean isPaymentEvent() {
             return paymentId != null;
         }
+    }
+
+    private record ApprovalResult(Payment payment, boolean alreadyFinalized) {
     }
 
     private record LockedPaymentContext(
