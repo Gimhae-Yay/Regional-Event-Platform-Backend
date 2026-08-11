@@ -506,7 +506,7 @@ P0의 복합 PK `(user_id, role)`를 `role_assignment_id`로 대체한다. 역�
 | 추가·확장 항목 | 규칙 |
 | --- | --- |
 | `target_type` | 기존 P0 값에 `PLATFORM_ADMIN_ASSIGNMENT`, `USER_ROLE_ASSIGNMENT`, `STAMPBOOK`, `MISSION`, `COUPON_POLICY`, `COUPON`, `RESERVATION_PRICE_SNAPSHOT`, `PAYMENT`, `REFUND`, `PAYMENT_DISCREPANCY`를 추가 |
-| `reason` | 스탬프북 수명주기·운영 명령과 쿠폰 정책 공개·종료의 사유 원문. 스탬프북의 생성·수정·심사 요청·종료와 쿠폰 정책의 공개·종료에서는 앞뒤 공백 제거 뒤 1~500자이며 NOT NULL, 그 외 이벤트는 nullable. |
+| `reason` | 스탬프북과 쿠폰 정책 수명주기·운영 명령의 사유 원문. 스탬프북의 생성·수정·심사 요청·종료와 쿠폰 정책의 생성·수정·공개·종료에서는 앞뒤 공백 제거 뒤 1~500자이며 NOT NULL, 그 외 이벤트는 nullable. |
 | `reason_code` | 미션 수명주기·운영 명령의 비개인 사유 코드. 미션 생성·수정·검토 요청·승인에는 API 명세의 고정 코드를, 반려·조기 종료에는 허용 목록의 요청 코드를 저장하며 NOT NULL이다. 미션 감사의 `reason`은 NULL이고 운영 설명 원문과 개인정보를 저장하지 않는다. HTTP 요청 실패 감사는 공개 오류 코드와 같은 서버 판정 코드를 사용한다. 자동 종료 Scheduler는 성공 감사에 `MISSION_END_TIME_REACHED`, 처리 실패 감사에 `MISSION_AUTO_END_FAILED`를 사용한다. |
 | `evidence_reference` | `VARCHAR(500) NULL`. 특권 변경·수동 거래 처리 이벤트에서는 NOT NULL, 그 외 기존 P0 이벤트는 nullable. 지역 API는 앞뒤 공백 제거 후 1~500자 자유 문자열을 저장하며 서버가 출처·형식·민감정보를 판별하지 않는다. 개인정보·토큰·비밀값 미포함은 호출자 운영 책임이다. |
 | `audit_event_actor_link` | 활성 actor에만 만든다. 탈퇴 전 제거한다. |
