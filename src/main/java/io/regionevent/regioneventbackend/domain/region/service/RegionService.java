@@ -32,7 +32,7 @@ public class RegionService {
     }
 
     public Region findRegionForUpdate(Long regionId) {
-        return regionRepository.findByRegionId(regionId)
+        return regionRepository.findByRegionIdForUpdate(regionId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
