@@ -12,12 +12,15 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import jakarta.persistence.EntityManager;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,6 +40,7 @@ import io.regionevent.regioneventbackend.domain.mission.entity.Mission;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionConditionType;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
 import io.regionevent.regioneventbackend.domain.mission.repository.MissionRepository;
+import io.regionevent.regioneventbackend.domain.mission.repository.MissionUpdateSnapshot;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -66,6 +70,10 @@ class UpdateOperatorMissionUseCaseMySqlTest extends NonTransactionalMySqlTestSup
     private final MissionRepository missionRepository;
     private final AuditEventRepository auditEventRepository;
     private final TransactionTemplate transactionTemplate;
+    private final EntityManager entityManager;
+
+    @MockitoSpyBean
+    private MissionService missionService;
 
     @Autowired
     UpdateOperatorMissionUseCaseMySqlTest(
@@ -77,7 +85,8 @@ class UpdateOperatorMissionUseCaseMySqlTest extends NonTransactionalMySqlTestSup
         CouponPolicyRepository couponPolicyRepository,
         MissionRepository missionRepository,
         AuditEventRepository auditEventRepository,
-        PlatformTransactionManager transactionManager
+        PlatformTransactionManager transactionManager,
+        EntityManager entityManager
     ) {
         this.updateOperatorMissionUseCase = updateOperatorMissionUseCase;
         this.regionRepository = regionRepository;
@@ -88,6 +97,7 @@ class UpdateOperatorMissionUseCaseMySqlTest extends NonTransactionalMySqlTestSup
         this.missionRepository = missionRepository;
         this.auditEventRepository = auditEventRepository;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.entityManager = entityManager;
     }
 
     @DynamicPropertySource
@@ -139,6 +149,50 @@ class UpdateOperatorMissionUseCaseMySqlTest extends NonTransactionalMySqlTestSup
             .allSatisfy(auditEvent -> assertThat(auditEvent.getReasonCode()).isEqualTo("MISSION_UPDATED"));
     }
 
+    @Test
+    @Timeout(15)
+    void update_whenRewardPolicyChangesAfterInitialLookup_returnsConflictWithoutOverwritingChange() throws Exception {
+        Fixture fixture = createFixture();
+        CountDownLatch initialLookupCompleted = new CountDownLatch(1);
+        CountDownLatch rewardPolicyChanged = new CountDownLatch(1);
+        org.mockito.Mockito.doAnswer(invocation -> {
+            MissionUpdateSnapshot initialSnapshot = (MissionUpdateSnapshot) invocation.callRealMethod();
+            initialLookupCompleted.countDown();
+            await(rewardPolicyChanged);
+            return initialSnapshot;
+        }).when(missionService).findUpdateSnapshot(fixture.firstMissionId());
+
+        Attempt attempt;
+        try (ExecutorService executorService = Executors.newSingleThreadExecutor()) {
+            Future<Attempt> future = executorService.submit(() -> update(
+                fixture.firstOperatorId(),
+                fixture.firstMissionId(),
+                fixture.secondPolicyId()
+            ));
+            assertThat(initialLookupCompleted.await(3, TimeUnit.SECONDS)).isTrue();
+            transactionTemplate.executeWithoutResult(status -> entityManager.createNativeQuery("""
+                UPDATE mission
+                SET reward_coupon_policy_id = :couponPolicyId
+                WHERE mission_id = :missionId
+                """)
+                .setParameter("couponPolicyId", fixture.secondPolicyId())
+                .setParameter("missionId", fixture.firstMissionId())
+                .executeUpdate());
+            rewardPolicyChanged.countDown();
+            attempt = future.get(10, TimeUnit.SECONDS);
+        }
+
+        assertThat(attempt.result()).isNull();
+        assertThat(attempt.errorCode()).isEqualTo(ErrorCode.MISSION_STATE_CONFLICT);
+        assertThat(missionRepository.findByMissionId(fixture.firstMissionId())).hasValueSatisfying(mission -> {
+            assertThat(mission.getRewardCouponPolicy().getCouponPolicyId()).isEqualTo(fixture.secondPolicyId());
+            assertThat(mission.getRequiredVisitCount()).isEqualTo(1);
+        });
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent -> auditEvent.getResult() == AuditEventResult.SUCCESS)
+            .isEmpty();
+    }
+
     private Attempt updateAfterStart(
         Long operatorId,
         Long missionId,
@@ -148,6 +202,14 @@ class UpdateOperatorMissionUseCaseMySqlTest extends NonTransactionalMySqlTestSup
     ) {
         ready.countDown();
         await(start);
+        return update(operatorId, missionId, requestedPolicyId);
+    }
+
+    private Attempt update(
+        Long operatorId,
+        Long missionId,
+        Long requestedPolicyId
+    ) {
         try {
             UpdateOperatorMissionResult result = updateOperatorMissionUseCase.update(
                 operatorId,

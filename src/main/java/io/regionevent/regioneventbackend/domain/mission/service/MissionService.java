@@ -15,6 +15,7 @@ import io.regionevent.regioneventbackend.domain.mission.entity.Mission;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionConditionType;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
 import io.regionevent.regioneventbackend.domain.mission.repository.MissionRepository;
+import io.regionevent.regioneventbackend.domain.mission.repository.MissionUpdateSnapshot;
 import io.regionevent.regioneventbackend.domain.mission.repository.PublicRegionMissionProjection;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -41,6 +42,11 @@ public class MissionService {
 
     public Long findRewardCouponPolicyId(Long missionId) {
         return missionRepository.findRewardCouponPolicyIdByMissionId(missionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public MissionUpdateSnapshot findUpdateSnapshot(Long missionId) {
+        return missionRepository.findUpdateSnapshotByMissionId(missionId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 

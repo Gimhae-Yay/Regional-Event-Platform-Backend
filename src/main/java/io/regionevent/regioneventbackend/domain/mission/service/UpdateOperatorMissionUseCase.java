@@ -28,6 +28,8 @@ import io.regionevent.regioneventbackend.domain.coupon.service.CouponPolicyServi
 import io.regionevent.regioneventbackend.domain.mission.entity.Mission;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionConditionType;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
+import io.regionevent.regioneventbackend.domain.mission.repository.MissionUpdateSnapshot;
+import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService.AuthorizedOperator;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -78,12 +80,13 @@ public class UpdateOperatorMissionUseCase {
         validateRequestContext(userId, missionId, requestId);
         ValidatedCommand validatedCommand = validateCommand(command);
         AuthorizedOperator operator = operatorAuthorizationService.requireAuthorizedOperatorForUpdate(userId);
-        Mission mission = missionService.findByMissionId(missionId);
-        MissionStatus previousState = mission.getStatus();
+        MissionUpdateSnapshot initialSnapshot = missionService.findUpdateSnapshot(missionId);
+        Mission mission = null;
+        MissionStatus previousState = initialSnapshot.getStatus();
 
         try {
-            validateRegionScope(operator, mission);
-            Long initiallyReferencedCouponPolicyId = mission.getRewardCouponPolicy().getCouponPolicyId();
+            validateRegionScope(operator, initialSnapshot.getRegion());
+            Long initiallyReferencedCouponPolicyId = initialSnapshot.getRewardCouponPolicyId();
             List<CouponPolicy> lockedCouponPolicies = lockCouponPolicies(
                 initiallyReferencedCouponPolicyId,
                 validatedCommand.rewardCouponPolicyId()
@@ -112,10 +115,19 @@ public class UpdateOperatorMissionUseCase {
             recordSuccess(requestId, updatedMission, operator, occurredAt);
             return UpdateOperatorMissionResult.from(updatedMission);
         } catch (BusinessException exception) {
-            recordFailure(requestId, mission, previousState, operator, exception.getErrorCode());
+            Region auditRegion = mission == null ? initialSnapshot.getRegion() : mission.getRegion();
+            recordFailure(requestId, auditRegion, missionId, previousState, operator, exception.getErrorCode());
             throw exception;
         } catch (RuntimeException exception) {
-            recordFailure(requestId, mission, previousState, operator, ErrorCode.INTERNAL_SERVER_ERROR);
+            Region auditRegion = mission == null ? initialSnapshot.getRegion() : mission.getRegion();
+            recordFailure(
+                requestId,
+                auditRegion,
+                missionId,
+                previousState,
+                operator,
+                ErrorCode.INTERNAL_SERVER_ERROR
+            );
             throw exception;
         }
     }
@@ -231,7 +243,14 @@ public class UpdateOperatorMissionUseCase {
         AuthorizedOperator operator,
         Mission mission
     ) {
-        if (!operator.region().getRegionId().equals(mission.getRegion().getRegionId())) {
+        validateRegionScope(operator, mission.getRegion());
+    }
+
+    private void validateRegionScope(
+        AuthorizedOperator operator,
+        Region region
+    ) {
+        if (!operator.region().getRegionId().equals(region.getRegionId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
     }
@@ -285,16 +304,17 @@ public class UpdateOperatorMissionUseCase {
 
     private void recordFailure(
         UUID requestId,
-        Mission mission,
+        Region region,
+        Long missionId,
         MissionStatus previousState,
         AuthorizedOperator operator,
         ErrorCode errorCode
     ) {
         recordFailedAuditEventUseCase.record(new AuditEventCommand(
             requestId,
-            mission.getRegion(),
+            region,
             AuditEventTargetType.MISSION,
-            mission.getMissionId(),
+            missionId,
             previousState.name(),
             null,
             AuditEventResult.FAILURE,

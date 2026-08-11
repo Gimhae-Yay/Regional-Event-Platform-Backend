@@ -33,6 +33,7 @@ import io.regionevent.regioneventbackend.domain.coupon.service.CouponPolicyServi
 import io.regionevent.regioneventbackend.domain.mission.entity.Mission;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionConditionType;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
+import io.regionevent.regioneventbackend.domain.mission.repository.MissionUpdateSnapshot;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
@@ -88,7 +89,8 @@ class UpdateOperatorMissionUseCaseTest {
         Content firstContent = mock(Content.class);
         Content secondContent = mock(Content.class);
         when(operatorAuthorizationService.requireAuthorizedOperatorForUpdate(100L)).thenReturn(operator);
-        when(missionService.findByMissionId(701L)).thenReturn(initialMission);
+        MissionUpdateSnapshot initialSnapshot = snapshot(initialMission);
+        when(missionService.findUpdateSnapshot(701L)).thenReturn(initialSnapshot);
         when(couponPolicyService.findForUpdate(501L)).thenReturn(requestedPolicy);
         when(couponPolicyService.findForUpdate(502L)).thenReturn(currentPolicy);
         when(missionService.findByMissionIdForUpdate(701L)).thenReturn(lockedMission);
@@ -111,7 +113,7 @@ class UpdateOperatorMissionUseCaseTest {
 
         assertThat(result).isEqualTo(new UpdateOperatorMissionResult(701L, MissionStatus.DRAFT));
         InOrder lockOrder = inOrder(missionService, couponPolicyService, contentService);
-        lockOrder.verify(missionService).findByMissionId(701L);
+        lockOrder.verify(missionService).findUpdateSnapshot(701L);
         lockOrder.verify(couponPolicyService).findForUpdate(501L);
         lockOrder.verify(couponPolicyService).findForUpdate(502L);
         lockOrder.verify(missionService).findByMissionIdForUpdate(701L);
@@ -159,7 +161,8 @@ class UpdateOperatorMissionUseCaseTest {
         Mission initialMission = mission(701L, 11L, MissionStatus.DRAFT, policy);
         Mission lockedMission = mission(701L, 11L, MissionStatus.PENDING_REVIEW, policy);
         when(operatorAuthorizationService.requireAuthorizedOperatorForUpdate(100L)).thenReturn(operator);
-        when(missionService.findByMissionId(701L)).thenReturn(initialMission);
+        MissionUpdateSnapshot initialSnapshot = snapshot(initialMission);
+        when(missionService.findUpdateSnapshot(701L)).thenReturn(initialSnapshot);
         when(couponPolicyService.findForUpdate(501L)).thenReturn(policy);
         when(missionService.findByMissionIdForUpdate(701L)).thenReturn(lockedMission);
 
@@ -193,7 +196,8 @@ class UpdateOperatorMissionUseCaseTest {
         Mission initialMission = mission(701L, 11L, MissionStatus.DRAFT, initialPolicy);
         Mission lockedMission = mission(701L, 11L, MissionStatus.DRAFT, changedPolicy);
         when(operatorAuthorizationService.requireAuthorizedOperatorForUpdate(100L)).thenReturn(operator);
-        when(missionService.findByMissionId(701L)).thenReturn(initialMission);
+        MissionUpdateSnapshot initialSnapshot = snapshot(initialMission);
+        when(missionService.findUpdateSnapshot(701L)).thenReturn(initialSnapshot);
         when(couponPolicyService.findForUpdate(501L)).thenReturn(initialPolicy);
         when(couponPolicyService.findForUpdate(503L)).thenReturn(requestedPolicy);
         when(missionService.findByMissionIdForUpdate(701L)).thenReturn(lockedMission);
@@ -215,7 +219,8 @@ class UpdateOperatorMissionUseCaseTest {
         CouponPolicy policy = rewardPolicy(501L, 12L, CouponPolicyStatus.DRAFT);
         Mission mission = mission(701L, 12L, MissionStatus.DRAFT, policy);
         when(operatorAuthorizationService.requireAuthorizedOperatorForUpdate(100L)).thenReturn(operator);
-        when(missionService.findByMissionId(701L)).thenReturn(mission);
+        MissionUpdateSnapshot initialSnapshot = snapshot(mission);
+        when(missionService.findUpdateSnapshot(701L)).thenReturn(initialSnapshot);
 
         assertBusinessError(
             command("VISIT_COUNT", 4, List.of(), 501L),
@@ -233,7 +238,8 @@ class UpdateOperatorMissionUseCaseTest {
         CouponPolicy endedPolicy = rewardPolicy(502L, 11L, CouponPolicyStatus.ENDED);
         Mission mission = mission(701L, 11L, MissionStatus.DRAFT, currentPolicy);
         when(operatorAuthorizationService.requireAuthorizedOperatorForUpdate(100L)).thenReturn(operator);
-        when(missionService.findByMissionId(701L)).thenReturn(mission);
+        MissionUpdateSnapshot initialSnapshot = snapshot(mission);
+        when(missionService.findUpdateSnapshot(701L)).thenReturn(initialSnapshot);
         when(couponPolicyService.findForUpdate(501L)).thenReturn(currentPolicy);
         when(couponPolicyService.findForUpdate(502L)).thenReturn(endedPolicy);
         when(missionService.findByMissionIdForUpdate(701L)).thenReturn(mission);
@@ -294,7 +300,8 @@ class UpdateOperatorMissionUseCaseTest {
         CouponPolicy policy
     ) {
         when(operatorAuthorizationService.requireAuthorizedOperatorForUpdate(100L)).thenReturn(operator);
-        when(missionService.findByMissionId(701L)).thenReturn(mission);
+        MissionUpdateSnapshot initialSnapshot = snapshot(mission);
+        when(missionService.findUpdateSnapshot(701L)).thenReturn(initialSnapshot);
         when(couponPolicyService.findForUpdate(policy.getCouponPolicyId())).thenReturn(policy);
         when(missionService.findByMissionIdForUpdate(701L)).thenReturn(mission);
     }
@@ -370,5 +377,27 @@ class UpdateOperatorMissionUseCaseTest {
         when(mission.getStatus()).thenReturn(status);
         when(mission.getRewardCouponPolicy()).thenReturn(rewardPolicy);
         return mission;
+    }
+
+    private MissionUpdateSnapshot snapshot(Mission mission) {
+        Region region = mission.getRegion();
+        MissionStatus status = mission.getStatus();
+        Long rewardCouponPolicyId = mission.getRewardCouponPolicy().getCouponPolicyId();
+        return new MissionUpdateSnapshot() {
+            @Override
+            public Region getRegion() {
+                return region;
+            }
+
+            @Override
+            public MissionStatus getStatus() {
+                return status;
+            }
+
+            @Override
+            public Long getRewardCouponPolicyId() {
+                return rewardCouponPolicyId;
+            }
+        };
     }
 }
