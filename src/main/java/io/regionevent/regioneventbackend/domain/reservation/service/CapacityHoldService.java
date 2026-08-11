@@ -139,7 +139,7 @@ public class CapacityHoldService {
             throw new IllegalArgumentException("contentId must be positive");
         }
         validateInvalidationReason(invalidationReason);
-        capacityHoldRepository.findActiveByContentIdForUpdate(contentId)
+        return capacityHoldRepository.findActiveByContentIdForUpdate(contentId)
             .stream()
             .map(capacityHold -> invalidateAndReleaseCapacityIfActive(
                 capacityHold.getHoldId(),
