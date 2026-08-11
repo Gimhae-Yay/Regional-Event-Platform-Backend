@@ -384,7 +384,9 @@ public class ReceivePortOneWebhookUseCase {
         PortOnePaymentGateway.PortOnePayment observed
     ) {
         if (!observed.isPaid()) {
-            return observed.isExplicitlyDeclined() ? "DECLINE" : "PENDING";
+            return observed.isExplicitlyDeclined() && payment.getStatus() == PaymentStatus.PENDING
+                ? "DECLINE"
+                : "PENDING";
         }
         if (payment.getStatus() == PaymentStatus.EXPIRED
             || !payment.getOrderId().equals(observed.paymentId())

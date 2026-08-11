@@ -245,6 +245,27 @@ class ReceivePortOneWebhookUseCaseTest {
     }
 
     @Test
+    void receive_explicitDeclineForExpiredPayment_preservesFinalStateAndCoupon() {
+        Payment payment = pendingPayment();
+        when(payment.getStatus()).thenReturn(PaymentStatus.EXPIRED);
+        when(paymentGateway.findByPaymentId(PAYMENT_ID)).thenReturn(new PortOnePaymentGateway.PortOnePayment(
+            PAYMENT_ID,
+            TRANSACTION_ID,
+            "store-1",
+            20_000,
+            "KRW",
+            "DECLINED"
+        ));
+        when(paymentWebhookService.existsByProviderEventId(WEBHOOK_ID)).thenReturn(false);
+
+        useCase.receive(WEBHOOK_ID, WEBHOOK_TIMESTAMP, WEBHOOK_SIGNATURE, validPaymentEvent());
+
+        verify(payment, never()).decline(any());
+        verify(paymentVerificationService).create(any());
+        verify(capacityHoldService, never()).consumeForPaidPaymentIfConfirmable(any(), any(), any());
+    }
+
+    @Test
     void receive_amountMismatch_marksPaymentDiscrepantAndRecordsDiscrepancy() {
         Payment payment = pendingPayment();
         when(paymentGateway.findByPaymentId(PAYMENT_ID)).thenReturn(new PortOnePaymentGateway.PortOnePayment(
