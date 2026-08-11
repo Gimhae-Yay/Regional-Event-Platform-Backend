@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.coupon.repository;
 
+import java.util.List;
 import java.util.Optional;
 
 import jakarta.persistence.LockModeType;
@@ -16,6 +17,9 @@ public interface CouponRedemptionRepository extends JpaRepository<CouponRedempti
 
     @EntityGraph(attributePaths = {"coupon", "reservationPriceSnapshot", "reservation"})
     Optional<CouponRedemption> findByReservationReservationId(Long reservationId);
+
+    @EntityGraph(attributePaths = {"coupon", "reservationPriceSnapshot", "reservation"})
+    List<CouponRedemption> findAllByCouponCouponIdOrderByRedeemedAtDescCouponRedemptionIdDesc(Long couponId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""

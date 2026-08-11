@@ -18,6 +18,14 @@ import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
 
 public interface MissionRepository extends JpaRepository<Mission, Long> {
 
+    Page<Mission> findAllByRegionRegionIdOrderByMissionIdDesc(Long regionId, Pageable pageable);
+
+    Page<Mission> findAllByRegionRegionIdAndStatusOrderByMissionIdDesc(
+        Long regionId,
+        MissionStatus status,
+        Pageable pageable
+    );
+
     @EntityGraph(attributePaths = {"region", "rewardCouponPolicy"})
     Optional<Mission> findByMissionId(Long missionId);
 
@@ -31,6 +39,23 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
         WHERE mission.missionId = :missionId
         """)
     Optional<Mission> findMissionDetailByMissionId(@Param("missionId") Long missionId);
+
+    @Query("""
+        SELECT DISTINCT mission
+        FROM Mission mission
+        JOIN FETCH mission.region region
+        JOIN FETCH mission.rewardCouponPolicy rewardCouponPolicy
+        LEFT JOIN FETCH mission.targetContents targetContent
+        LEFT JOIN FETCH targetContent.content content
+        WHERE mission.missionId = :missionId
+          AND region.isPublic = true
+          AND mission.status = io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus.PUBLISHED
+          AND mission.endsAt > :now
+        """)
+    Optional<Mission> findPublicMissionDetailByMissionId(
+        @Param("missionId") Long missionId,
+        @Param("now") Instant now
+    );
 
     @EntityGraph(attributePaths = {"region", "rewardCouponPolicy"})
     @Lock(LockModeType.PESSIMISTIC_WRITE)

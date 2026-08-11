@@ -3,6 +3,7 @@ package io.regionevent.regioneventbackend.domain.reservation.service;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationPriceSnapshot;
@@ -22,5 +23,15 @@ public class ReservationPriceSnapshotService {
     @Transactional(readOnly = true)
     public Optional<ReservationPriceSnapshot> findByCapacityHoldId(Long holdId) {
         return reservationPriceSnapshotRepository.findByCapacityHoldHoldId(holdId);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<ReservationPriceSnapshot> findByHoldIdForUpdate(Long holdId) {
+        return reservationPriceSnapshotRepository.findByHoldIdForUpdate(holdId);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ReservationPriceSnapshot create(ReservationPriceSnapshot snapshot) {
+        return reservationPriceSnapshotRepository.saveAndFlush(snapshot);
     }
 }

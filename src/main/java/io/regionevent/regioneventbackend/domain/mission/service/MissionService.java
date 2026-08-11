@@ -33,6 +33,17 @@ public class MissionService {
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
+    public Page<Mission> findRegionAdminMissions(
+        Long regionId,
+        MissionStatus status,
+        Pageable pageable
+    ) {
+        if (status == null) {
+            return missionRepository.findAllByRegionRegionIdOrderByMissionIdDesc(regionId, pageable);
+        }
+        return missionRepository.findAllByRegionRegionIdAndStatusOrderByMissionIdDesc(regionId, status, pageable);
+    }
+
     public Mission create(
         Region region,
         MissionConditionType conditionType,
@@ -82,6 +93,10 @@ public class MissionService {
         return missionRepository.saveAndFlush(mission);
     }
 
+    public Mission findPublicMissionDetail(Long missionId, Instant now) {
+        return missionRepository.findPublicMissionDetailByMissionId(missionId, now)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
     public boolean existsPublishedRewardCouponPolicy(Long couponPolicyId) {
         return missionRepository.existsByRewardCouponPolicyCouponPolicyIdAndStatus(
             couponPolicyId,

@@ -20,6 +20,7 @@ public enum ErrorCode {
     IDEMPOTENCY_KEY_CONFLICT(HttpStatus.CONFLICT, "IDEMPOTENCY_KEY_CONFLICT", "멱등 키가 다른 요청에 이미 사용되었습니다."),
     IDEMPOTENCY_REQUEST_IN_PROGRESS(HttpStatus.CONFLICT, "IDEMPOTENCY_REQUEST_IN_PROGRESS", "동일한 요청이 처리 중입니다."),
     RESERVATION_CONFIRM_CONFLICT(HttpStatus.CONFLICT, "RESERVATION_CONFIRM_CONFLICT", "예약을 확정할 수 없는 상태입니다."),
+    PAYMENT_HOLD_CONFLICT(HttpStatus.CONFLICT, "PAYMENT_HOLD_CONFLICT", "결제를 생성할 수 없는 상태입니다."),
     QR_ISSUE_CONFLICT(HttpStatus.CONFLICT, "QR_ISSUE_CONFLICT", "QR을 발급할 수 없는 상태입니다."),
     QR_VERIFICATION_FAILED(HttpStatus.BAD_REQUEST, "QR_VERIFICATION_FAILED", "QR을 확인할 수 없습니다."),
     CHECK_IN_CONFLICT(HttpStatus.CONFLICT, "CHECK_IN_CONFLICT", "체크인할 수 없는 상태입니다."),
@@ -35,6 +36,7 @@ public enum ErrorCode {
     COUPON_POLICY_CONFLICT(HttpStatus.CONFLICT, "COUPON_POLICY_CONFLICT", "쿠폰 정책을 처리할 수 없는 상태입니다."),
     REGION_CODE_ALREADY_EXISTS(HttpStatus.CONFLICT, "REGION_CODE_ALREADY_EXISTS", "이미 사용 중인 지역 코드입니다."),
     REGION_AVAILABILITY_CONFLICT(HttpStatus.CONFLICT, "REGION_AVAILABILITY_CONFLICT", "지역 공개 여부를 변경할 수 없습니다."),
+    ADMIN_ACCOUNT_DEACTIVATION_CONFLICT(HttpStatus.CONFLICT, "ADMIN_ACCOUNT_DEACTIVATION_CONFLICT", "전체관리자 계정을 비활성화할 수 없습니다."),
 
     INVALID_INPUT(HttpStatus.BAD_REQUEST, "INVALID_INPUT", "요청 값이 올바르지 않습니다."),
     INVALID_JSON(HttpStatus.BAD_REQUEST, "INVALID_JSON", "요청 본문 형식이 올바르지 않습니다."),

@@ -67,6 +67,45 @@ public interface MissionParticipationRepository extends JpaRepository<MissionPar
         Pageable pageable
     );
 
+    @Query("""
+        SELECT participation.missionParticipationId AS participationId,
+            mission.missionId AS missionId,
+            participation.status AS status,
+            COUNT(DISTINCT CASE
+                WHEN mission.conditionType = io.regionevent.regioneventbackend.domain.mission.entity.MissionConditionType.VISIT_COUNT
+                    THEN progress.visit.visitId
+                ELSE progress.content.contentId
+            END) AS progressCount,
+            CASE
+                WHEN mission.conditionType = io.regionevent.regioneventbackend.domain.mission.entity.MissionConditionType.VISIT_COUNT
+                    THEN mission.requiredVisitCount
+                ELSE COUNT(DISTINCT targetContent.content.contentId)
+            END AS requiredCount,
+            CASE WHEN COUNT(rewardClaim.missionRewardClaimId) > 0 THEN true ELSE false END AS rewardClaimed,
+            participation.joinedAt AS joinedAt,
+            participation.completedAt AS completedAt
+        FROM MissionParticipation participation
+        JOIN participation.mission mission
+        LEFT JOIN MissionProgress progress
+            ON progress.missionParticipation = participation
+        LEFT JOIN mission.targetContents targetContent
+        LEFT JOIN MissionRewardClaim rewardClaim
+            ON rewardClaim.missionParticipation = participation
+        WHERE mission.missionId = :missionId
+          AND participation.user.userId = :userId
+        GROUP BY participation.missionParticipationId,
+            mission.missionId,
+            participation.status,
+            mission.conditionType,
+            mission.requiredVisitCount,
+            participation.joinedAt,
+            participation.completedAt
+        """)
+    Optional<MissionParticipationSummaryProjection> findSummaryByMissionIdAndUserId(
+        @Param("missionId") Long missionId,
+        @Param("userId") Long userId
+    );
+
     @EntityGraph(attributePaths = {"mission", "user"})
     Optional<MissionParticipation> findByMissionMissionIdAndUserUserId(
         Long missionId,
