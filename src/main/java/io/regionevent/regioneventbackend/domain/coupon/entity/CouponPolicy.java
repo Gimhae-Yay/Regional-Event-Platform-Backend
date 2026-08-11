@@ -15,6 +15,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
@@ -140,6 +141,9 @@ public class CouponPolicy {
     @Column(name = "ended_at")
     private Instant endedAt;
 
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+
     protected CouponPolicy() {
     }
 
@@ -186,6 +190,38 @@ public class CouponPolicy {
         validateStatus(CouponPolicyStatus.PUBLISHED);
         this.status = CouponPolicyStatus.ENDED;
         this.endedAt = requireNotNull(endedAt, "endedAt");
+    }
+
+    @PrePersist
+    protected void onCreate() {
+        updatedAt = Instant.now();
+    }
+
+    public void update(
+        String name,
+        String description,
+        long discountAmount,
+        long minimumPaymentAmount,
+        int validDays,
+        Instant issueStartsAt,
+        Instant issueEndsAt,
+        Long totalIssueLimit,
+        Instant updatedAt
+    ) {
+        validateStatus(CouponPolicyStatus.DRAFT);
+        this.name = requireNotBlank(name, "name");
+        this.description = description;
+        this.discountAmount = validateDiscountAmount(discountAmount);
+        this.minimumPaymentAmount = validateMinimumPaymentAmount(
+            minimumPaymentAmount,
+            this.discountAmount
+        );
+        this.validDays = validateValidDays(validDays);
+        this.issueStartsAt = requireNotNull(issueStartsAt, "issueStartsAt");
+        this.issueEndsAt = requireNotNull(issueEndsAt, "issueEndsAt");
+        validateIssuePeriod(this.issueStartsAt, this.issueEndsAt);
+        this.totalIssueLimit = validateTotalIssueLimit(totalIssueLimit);
+        this.updatedAt = requireNotNull(updatedAt, "updatedAt");
     }
 
     public void issue(Instant issuedAt) {
@@ -262,6 +298,10 @@ public class CouponPolicy {
 
     public Instant getEndedAt() {
         return endedAt;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
     }
 
     private static void validateContentRegion(
