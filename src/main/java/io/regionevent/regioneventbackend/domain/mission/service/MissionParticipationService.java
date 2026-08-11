@@ -1,8 +1,11 @@
 package io.regionevent.regioneventbackend.domain.mission.service;
 
 import java.time.Instant;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.mission.entity.Mission;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionParticipation;
@@ -28,5 +31,18 @@ public class MissionParticipationService {
             user,
             joinedAt
         ));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<MissionParticipation> findByIdForProgressUpdate(Long participationId) {
+        return missionParticipationRepository.findByMissionParticipationIdForUpdate(participationId);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void complete(
+        MissionParticipation participation,
+        Instant completedAt
+    ) {
+        participation.complete(completedAt);
     }
 }

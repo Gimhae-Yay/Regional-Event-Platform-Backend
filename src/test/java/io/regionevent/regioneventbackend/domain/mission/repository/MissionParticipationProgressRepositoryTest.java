@@ -60,6 +60,7 @@ class MissionParticipationProgressRepositoryTest {
 
     private final MissionParticipationRepository missionParticipationRepository;
     private final MissionProgressRepository missionProgressRepository;
+    private final MissionTargetContentRepository missionTargetContentRepository;
     private final MissionRewardClaimRepository missionRewardClaimRepository;
     private final MissionRepository missionRepository;
     private final CouponPolicyRepository couponPolicyRepository;
@@ -76,6 +77,7 @@ class MissionParticipationProgressRepositoryTest {
     MissionParticipationProgressRepositoryTest(
         MissionParticipationRepository missionParticipationRepository,
         MissionProgressRepository missionProgressRepository,
+        MissionTargetContentRepository missionTargetContentRepository,
         MissionRewardClaimRepository missionRewardClaimRepository,
         MissionRepository missionRepository,
         CouponPolicyRepository couponPolicyRepository,
@@ -90,6 +92,7 @@ class MissionParticipationProgressRepositoryTest {
     ) {
         this.missionParticipationRepository = missionParticipationRepository;
         this.missionProgressRepository = missionProgressRepository;
+        this.missionTargetContentRepository = missionTargetContentRepository;
         this.missionRewardClaimRepository = missionRewardClaimRepository;
         this.missionRepository = missionRepository;
         this.couponPolicyRepository = couponPolicyRepository;
@@ -234,6 +237,29 @@ class MissionParticipationProgressRepositoryTest {
             fixtures.content(),
             RECORDED_AT
         ))).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void 콘텐츠_집합_대상은_미션과_콘텐츠로_포함여부와_목표수를_조회한다() {
+        MissionFixtures fixtures = createMissionFixtures();
+        Mission contentSetMission = new Mission(
+            fixtures.region(),
+            MissionConditionType.CONTENT_SET,
+            null,
+            fixtures.mission().getRewardCouponPolicy(),
+            MISSION_ENDS_AT
+        );
+        contentSetMission.addTargetContent(fixtures.content());
+        missionRepository.saveAndFlush(contentSetMission);
+        entityManager.clear();
+
+        assertThat(missionTargetContentRepository.existsByMissionMissionIdAndContentContentId(
+            contentSetMission.getMissionId(),
+            fixtures.content().getContentId()
+        )).isTrue();
+        assertThat(missionTargetContentRepository.countByMissionMissionId(
+            contentSetMission.getMissionId()
+        )).isOne();
     }
 
     @Test

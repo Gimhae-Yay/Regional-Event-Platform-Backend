@@ -27,6 +27,11 @@ public interface MissionTargetContentRepository
 
     long countByMissionMissionId(Long missionId);
 
+    boolean existsByMissionMissionIdAndContentContentId(
+        Long missionId,
+        Long contentId
+    );
+
     @Query("""
         SELECT missionTargetContent.content.contentId
         FROM MissionTargetContent missionTargetContent
