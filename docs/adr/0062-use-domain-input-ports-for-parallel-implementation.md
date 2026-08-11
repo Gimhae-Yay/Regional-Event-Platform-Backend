@@ -4,7 +4,7 @@
 - 기록 유형: 신규
 - 기록일: 2026-08-02
 - 결정일: 2026-08-02
-- 관련 요구사항: [아키텍처의 복합 유스케이스 규칙](../ARCHITECTURE.md#42-복합-유스케이스), [출력 Port 배치](0061-locate-output-ports-in-owning-domain.md#결정), [Task 구현의 선행 의존성과 병렬 구현](../../.agents/skills/task-implementation/SKILL.md#2-선행-의존성과-병렬-구현)
+- 관련 요구사항: [아키텍처의 복합 유스케이스 규칙](../ARCHITECTURE.md#42-복합-유스케이스), [출력 Port 배치](0061-locate-output-ports-in-owning-domain.md#결정)
 - 관련 단계: 단계 1. MVP 구현·검증
 - 관련 이슈: 없음
 - 대체 대상: 없음
