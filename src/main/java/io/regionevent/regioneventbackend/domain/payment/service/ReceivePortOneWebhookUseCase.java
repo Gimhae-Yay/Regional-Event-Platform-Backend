@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +20,10 @@ import io.regionevent.regioneventbackend.domain.coupon.entity.CouponRedemption;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponRedemptionService;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponService;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponStatusHistoryService;
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
+import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
+import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentDiscrepancy;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentStatus;
@@ -57,6 +62,7 @@ public class ReceivePortOneWebhookUseCase {
     private final CouponService couponService;
     private final CouponStatusHistoryService couponStatusHistoryService;
     private final CouponRedemptionService couponRedemptionService;
+    private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final TransactionTemplate transactionTemplate;
 
     public ReceivePortOneWebhookUseCase(
@@ -73,6 +79,7 @@ public class ReceivePortOneWebhookUseCase {
         CouponService couponService,
         CouponStatusHistoryService couponStatusHistoryService,
         CouponRedemptionService couponRedemptionService,
+        RecordAuditEventUseCase recordAuditEventUseCase,
         TransactionTemplate transactionTemplate
     ) {
         this.objectMapper = objectMapper;
@@ -88,6 +95,7 @@ public class ReceivePortOneWebhookUseCase {
         this.couponService = couponService;
         this.couponStatusHistoryService = couponStatusHistoryService;
         this.couponRedemptionService = couponRedemptionService;
+        this.recordAuditEventUseCase = recordAuditEventUseCase;
         this.transactionTemplate = transactionTemplate;
     }
 
@@ -107,20 +115,51 @@ public class ReceivePortOneWebhookUseCase {
         if (!event.isPaymentEvent()) {
             return;
         }
+        if (skipProviderLookup(webhookId, rawBody, event)) {
+            return;
+        }
         PortOnePaymentGateway.PortOnePayment observed;
         try {
             observed = paymentGateway.findByPaymentId(event.paymentId());
         } catch (PortOneLookupException exception) {
             throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
-        transactionTemplate.executeWithoutResult(status -> apply(webhookId, rawBody, event, observed));
+        transactionTemplate.executeWithoutResult(status -> apply(
+            webhookId,
+            rawBody,
+            event,
+            observed,
+            requestId(webhookId)
+        ));
+    }
+
+    private boolean skipProviderLookup(String webhookId, String rawBody, WebhookEvent event) {
+        return Boolean.TRUE.equals(transactionTemplate.execute(status -> {
+            if (paymentWebhookService.existsByProviderEventId(webhookId)) {
+                return true;
+            }
+            Payment payment = paymentService.findByOrderId(event.paymentId()).orElse(null);
+            if (payment == null || !isTerminal(payment.getStatus())) {
+                return false;
+            }
+            paymentWebhookService.create(new PaymentWebhook(
+                webhookId,
+                payment,
+                AUTHENTICATION_RESULT,
+                "ALREADY_FINALIZED",
+                hash(rawBody),
+                Instant.now()
+            ));
+            return true;
+        }));
     }
 
     private void apply(
         String webhookId,
         String rawBody,
         WebhookEvent event,
-        PortOnePaymentGateway.PortOnePayment observed
+        PortOnePaymentGateway.PortOnePayment observed,
+        UUID requestId
     ) {
         Payment payment = paymentService.findByOrderIdForUpdate(event.paymentId()).orElse(null);
         if (paymentWebhookService.existsByProviderEventId(webhookId)) {
@@ -157,15 +196,20 @@ public class ReceivePortOneWebhookUseCase {
         ));
 
         if ("APPROVE".equals(decision)) {
-            approve(payment, snapshot, observed, now);
+            approve(payment, snapshot, observed, requestId, now);
         } else if ("DECLINE".equals(decision)) {
             payment.decline(now);
-            releaseCoupon(snapshot, COUPON_RELEASED_REASON, now);
+            recordPaymentAudit(payment, PaymentStatus.PENDING, PaymentStatus.DECLINED, requestId, now);
+            releaseCoupon(snapshot, COUPON_RELEASED_REASON, requestId, now);
         } else if ("DISCREPANT".equals(decision)) {
             String discrepancyType = discrepancyType(payment, snapshot, event, observed);
             payment.markDiscrepant(observed.transactionId(), now);
-            paymentDiscrepancyService.create(new PaymentDiscrepancy(payment, discrepancyType, "OPEN", now));
-            releaseCoupon(snapshot, COUPON_DISCREPANCY_RELEASED_REASON, now);
+            PaymentDiscrepancy discrepancy = paymentDiscrepancyService.create(new PaymentDiscrepancy(
+                payment, discrepancyType, "OPEN", now
+            ));
+            recordPaymentAudit(payment, PaymentStatus.PENDING, PaymentStatus.DISCREPANT, requestId, now);
+            recordDiscrepancyAudit(discrepancy, requestId, now);
+            releaseCoupon(snapshot, COUPON_DISCREPANCY_RELEASED_REASON, requestId, now);
         }
         paymentWebhookService.create(new PaymentWebhook(
             webhookId, payment, AUTHENTICATION_RESULT, decision, hash(rawBody), now
@@ -176,6 +220,7 @@ public class ReceivePortOneWebhookUseCase {
         Payment payment,
         ReservationPriceSnapshot snapshot,
         PortOnePaymentGateway.PortOnePayment observed,
+        UUID requestId,
         Instant now
     ) {
         try {
@@ -186,18 +231,30 @@ public class ReceivePortOneWebhookUseCase {
                     payment.getPaymentId()
                 )
             );
-            useCoupon(snapshot, reservation, now);
+            recordCapacityHoldAudit(payment, requestId, now);
+            recordReservationAudit(reservation, requestId, now);
+            useCoupon(snapshot, reservation, requestId, now);
             paymentService.findByOrderIdForUpdate(payment.getOrderId())
                 .orElseThrow(() -> new IllegalStateException("payment disappeared after capacity hold consumption"))
                 .approve(reservation, observed.transactionId(), now);
+            recordPaymentAudit(payment, PaymentStatus.PENDING, PaymentStatus.APPROVED, requestId, now);
         } catch (ReservationConfirmationConflictException exception) {
             payment.markDiscrepant(observed.transactionId(), now);
-            paymentDiscrepancyService.create(new PaymentDiscrepancy(payment, "LATE_APPROVAL", "OPEN", now));
-            releaseCoupon(snapshot, COUPON_DISCREPANCY_RELEASED_REASON, now);
+            PaymentDiscrepancy discrepancy = paymentDiscrepancyService.create(new PaymentDiscrepancy(
+                payment, "LATE_APPROVAL", "OPEN", now
+            ));
+            recordPaymentAudit(payment, PaymentStatus.PENDING, PaymentStatus.DISCREPANT, requestId, now);
+            recordDiscrepancyAudit(discrepancy, requestId, now);
+            releaseCoupon(snapshot, COUPON_DISCREPANCY_RELEASED_REASON, requestId, now);
         }
     }
 
-    private void useCoupon(ReservationPriceSnapshot snapshot, Reservation reservation, Instant now) {
+    private void useCoupon(
+        ReservationPriceSnapshot snapshot,
+        Reservation reservation,
+        UUID requestId,
+        Instant now
+    ) {
         if (snapshot.getCoupon() == null) {
             return;
         }
@@ -208,9 +265,15 @@ public class ReceivePortOneWebhookUseCase {
             coupon, CouponStatus.RESERVED, CouponStatus.USED, COUPON_USED_REASON, "SYSTEM", now
         ));
         couponRedemptionService.create(new CouponRedemption(coupon, snapshot, reservation, now));
+        recordCouponAudit(coupon, CouponStatus.RESERVED, CouponStatus.USED, requestId, now);
     }
 
-    private void releaseCoupon(ReservationPriceSnapshot snapshot, String reason, Instant now) {
+    private void releaseCoupon(
+        ReservationPriceSnapshot snapshot,
+        String reason,
+        UUID requestId,
+        Instant now
+    ) {
         if (snapshot.getCoupon() == null) {
             return;
         }
@@ -223,6 +286,7 @@ public class ReceivePortOneWebhookUseCase {
         couponStatusHistoryService.create(new CouponStatusHistory(
             coupon, CouponStatus.RESERVED, releasedStatus, reason, "SYSTEM", now
         ));
+        recordCouponAudit(coupon, CouponStatus.RESERVED, releasedStatus, requestId, now);
     }
 
     private String decide(
@@ -237,6 +301,7 @@ public class ReceivePortOneWebhookUseCase {
         if (payment.getStatus() == PaymentStatus.EXPIRED
             || !payment.getOrderId().equals(observed.paymentId())
             || !event.transactionId().equals(observed.transactionId())
+            || !event.storeId().equals(observed.storeId())
             || snapshot.getFinalAmount() != observed.amount()
             || !snapshot.getCurrency().equals(observed.currency())) {
             return "DISCREPANT";
@@ -259,6 +324,9 @@ public class ReceivePortOneWebhookUseCase {
         if (!event.transactionId().equals(observed.transactionId())) {
             return "TARGET_MISMATCH";
         }
+        if (!event.storeId().equals(observed.storeId())) {
+            return "TARGET_MISMATCH";
+        }
         return snapshot.getFinalAmount() != observed.amount()
             || !snapshot.getCurrency().equals(observed.currency())
             ? "AMOUNT_MISMATCH"
@@ -274,11 +342,16 @@ public class ReceivePortOneWebhookUseCase {
             if (data == null || !data.isObject()) {
                 throw new IllegalArgumentException();
             }
-            requiredText(data, "storeId");
+            String storeId = requiredText(data, "storeId");
             if (!isPaymentEvent(type)) {
-                return new WebhookEvent(type, null, null);
+                return new WebhookEvent(type, storeId, null, null);
             }
-            return new WebhookEvent(type, requiredText(data, "paymentId"), requiredText(data, "transactionId"));
+            return new WebhookEvent(
+                type,
+                storeId,
+                requiredText(data, "paymentId"),
+                requiredText(data, "transactionId")
+            );
         } catch (Exception exception) {
             throw new BusinessException(ErrorCode.INVALID_JSON);
         }
@@ -318,7 +391,63 @@ public class ReceivePortOneWebhookUseCase {
         }
     }
 
-    private record WebhookEvent(String type, String paymentId, String transactionId) {
+    private UUID requestId(String webhookId) {
+        return UUID.nameUUIDFromBytes(webhookId.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private void recordCapacityHoldAudit(Payment payment, UUID requestId, Instant now) {
+        recordAuditEventUseCase.record(new AuditEventCommand(
+            requestId, payment.getCapacityHold().getRegion(), AuditEventTargetType.CAPACITY_HOLD,
+            payment.getCapacityHold().getHoldId(), "ACTIVE", "CONSUMED", AuditEventResult.SUCCESS,
+            "PORTONE_PAYMENT_APPROVED", null, now
+        ));
+    }
+
+    private void recordReservationAudit(Reservation reservation, UUID requestId, Instant now) {
+        recordAuditEventUseCase.record(new AuditEventCommand(
+            requestId, reservation.getRegion(), AuditEventTargetType.RESERVATION,
+            reservation.getReservationId(), null, "CONFIRMED", AuditEventResult.SUCCESS,
+            "PORTONE_PAYMENT_APPROVED", null, now
+        ));
+    }
+
+    private void recordPaymentAudit(
+        Payment payment,
+        PaymentStatus previousStatus,
+        PaymentStatus nextStatus,
+        UUID requestId,
+        Instant now
+    ) {
+        recordAuditEventUseCase.record(new AuditEventCommand(
+            requestId, payment.getCapacityHold().getRegion(), AuditEventTargetType.PAYMENT,
+            payment.getPaymentId(), previousStatus.name(), nextStatus.name(), AuditEventResult.SUCCESS,
+            "PORTONE_PAYMENT_" + nextStatus.name(), null, now
+        ));
+    }
+
+    private void recordCouponAudit(
+        Coupon coupon,
+        CouponStatus previousStatus,
+        CouponStatus nextStatus,
+        UUID requestId,
+        Instant now
+    ) {
+        recordAuditEventUseCase.record(new AuditEventCommand(
+            requestId, coupon.getCouponPolicy().getRegion(), AuditEventTargetType.COUPON,
+            coupon.getCouponId(), previousStatus.name(), nextStatus.name(), AuditEventResult.SUCCESS,
+            "PORTONE_PAYMENT_COUPON_" + nextStatus.name(), null, now
+        ));
+    }
+
+    private void recordDiscrepancyAudit(PaymentDiscrepancy discrepancy, UUID requestId, Instant now) {
+        recordAuditEventUseCase.record(new AuditEventCommand(
+            requestId, discrepancy.getPayment().getCapacityHold().getRegion(),
+            AuditEventTargetType.PAYMENT_DISCREPANCY, discrepancy.getPaymentDiscrepancyId(), null,
+            "OPEN", AuditEventResult.SUCCESS, "PORTONE_PAYMENT_DISCREPANT", null, now
+        ));
+    }
+
+    private record WebhookEvent(String type, String storeId, String paymentId, String transactionId) {
 
         private boolean isPaymentEvent() {
             return paymentId != null;

@@ -42,6 +42,7 @@ public class PortOnePaymentAdapter implements PortOnePaymentGateway {
             return new PortOnePayment(
                 recognized.getId(),
                 recognized.getTransactionId(),
+                recognized.getStoreId(),
                 recognized.getAmount().getTotal(),
                 recognized.getCurrency().getValue(),
                 status

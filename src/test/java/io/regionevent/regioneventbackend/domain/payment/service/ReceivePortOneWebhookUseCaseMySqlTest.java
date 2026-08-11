@@ -150,6 +150,7 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
         when(paymentGateway.findByPaymentId(orderId)).thenReturn(new PortOnePaymentGateway.PortOnePayment(
             orderId,
             TRANSACTION_ID,
+            "store-1",
             20_000,
             "KRW",
             "PAID"
@@ -178,6 +179,46 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
         assertThat(paymentWebhookRepository.findAll())
             .filteredOn(webhook -> WEBHOOK_ID.equals(webhook.getProviderEventId()))
             .hasSize(1);
+    }
+
+    @Test
+    void declinedWebhookThenPaidWebhook_preservesDeclinedStateWithoutSecondProviderLookup() {
+        Fixture fixture = createFixture();
+        createPaymentUseCase.create(
+            fixture.user().getUserId(),
+            fixture.hold().getHoldId().toString(),
+            new CreatePaymentRequest(null),
+            "payment-key-" + System.nanoTime(),
+            UUID.randomUUID()
+        );
+        String orderId = paymentRepository.findAll().getFirst().getOrderId();
+        when(paymentGateway.findByPaymentId(orderId)).thenReturn(new PortOnePaymentGateway.PortOnePayment(
+            orderId,
+            TRANSACTION_ID,
+            "store-1",
+            20_000,
+            "KRW",
+            "DECLINED"
+        ));
+
+        receivePortOneWebhookUseCase.receive(
+            "webhook-declined",
+            WEBHOOK_TIMESTAMP,
+            WEBHOOK_SIGNATURE,
+            paymentEvent(orderId)
+        );
+        receivePortOneWebhookUseCase.receive(
+            "webhook-paid-after-decline",
+            WEBHOOK_TIMESTAMP,
+            WEBHOOK_SIGNATURE,
+            paymentEvent(orderId)
+        );
+
+        verify(paymentGateway, times(1)).findByPaymentId(orderId);
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM payment", String.class))
+            .isEqualTo(PaymentStatus.DECLINED.name());
+        assertThat(reservationRepository.findAll()).isEmpty();
+        assertThat(paymentWebhookRepository.findAll()).hasSize(2);
     }
 
     private void receiveAfterStart(

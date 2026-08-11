@@ -21,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import tools.jackson.databind.ObjectMapper;
@@ -28,7 +29,9 @@ import tools.jackson.databind.ObjectMapper;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponRedemptionService;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponService;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponStatusHistoryService;
+import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
+import io.regionevent.regioneventbackend.domain.payment.entity.PaymentDiscrepancy;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentStatus;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentWebhook;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneLookupException;
@@ -63,6 +66,7 @@ class ReceivePortOneWebhookUseCaseTest {
         ReservationPriceSnapshotService.class
     );
     private final ReservationService reservationService = mock(ReservationService.class);
+    private final RecordAuditEventUseCase recordAuditEventUseCase = mock(RecordAuditEventUseCase.class);
     private final TransactionTemplate transactionTemplate = mock(TransactionTemplate.class);
 
     private ReceivePortOneWebhookUseCase useCase;
@@ -75,6 +79,17 @@ class ReceivePortOneWebhookUseCaseTest {
             callback.accept(null);
             return null;
         }).when(transactionTemplate).executeWithoutResult(any());
+        doAnswer(invocation -> {
+            TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(null);
+        }).when(transactionTemplate).execute(any());
+        doAnswer(invocation -> {
+            Payment payment = invocation.getArgument(0, PaymentDiscrepancy.class).getPayment();
+            PaymentDiscrepancy discrepancy = mock(PaymentDiscrepancy.class);
+            when(discrepancy.getPaymentDiscrepancyId()).thenReturn(1L);
+            when(discrepancy.getPayment()).thenReturn(payment);
+            return discrepancy;
+        }).when(paymentDiscrepancyService).create(any(PaymentDiscrepancy.class));
         useCase = new ReceivePortOneWebhookUseCase(
             new ObjectMapper(),
             signatureVerifier,
@@ -89,6 +104,7 @@ class ReceivePortOneWebhookUseCaseTest {
             mock(CouponService.class),
             mock(CouponStatusHistoryService.class),
             mock(CouponRedemptionService.class),
+            recordAuditEventUseCase,
             transactionTemplate
         );
     }
@@ -121,6 +137,7 @@ class ReceivePortOneWebhookUseCaseTest {
         when(paymentGateway.findByPaymentId(PAYMENT_ID)).thenReturn(new PortOnePaymentGateway.PortOnePayment(
             PAYMENT_ID,
             TRANSACTION_ID,
+            "store-1",
             20_000,
             "KRW",
             "PAID"
@@ -182,11 +199,34 @@ class ReceivePortOneWebhookUseCaseTest {
     }
 
     @Test
+    void receive_existingWebhook_doesNotLookupPortOne() {
+        when(paymentWebhookService.existsByProviderEventId(WEBHOOK_ID)).thenReturn(true);
+
+        useCase.receive(WEBHOOK_ID, WEBHOOK_TIMESTAMP, WEBHOOK_SIGNATURE, validPaymentEvent());
+
+        verify(paymentGateway, never()).findByPaymentId(anyString());
+    }
+
+    @Test
+    void receive_finalizedPayment_doesNotLookupPortOne() {
+        Payment payment = mock(Payment.class);
+        when(payment.getStatus()).thenReturn(PaymentStatus.APPROVED);
+        when(paymentService.findByOrderId(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        when(paymentWebhookService.existsByProviderEventId(WEBHOOK_ID)).thenReturn(false);
+
+        useCase.receive(WEBHOOK_ID, WEBHOOK_TIMESTAMP, WEBHOOK_SIGNATURE, validPaymentEvent());
+
+        verify(paymentGateway, never()).findByPaymentId(anyString());
+        verify(paymentWebhookService).create(any(PaymentWebhook.class));
+    }
+
+    @Test
     void receive_explicitDecline_transitionsOnlyPaymentAndRecordsVerification() {
         Payment payment = pendingPayment();
         when(paymentGateway.findByPaymentId(PAYMENT_ID)).thenReturn(new PortOnePaymentGateway.PortOnePayment(
             PAYMENT_ID,
             TRANSACTION_ID,
+            "store-1",
             20_000,
             "KRW",
             "DECLINED"
@@ -208,6 +248,7 @@ class ReceivePortOneWebhookUseCaseTest {
         when(paymentGateway.findByPaymentId(PAYMENT_ID)).thenReturn(new PortOnePaymentGateway.PortOnePayment(
             PAYMENT_ID,
             TRANSACTION_ID,
+            "store-1",
             20_001,
             "KRW",
             "PAID"
@@ -235,6 +276,7 @@ class ReceivePortOneWebhookUseCaseTest {
             .thenReturn(new PortOnePaymentGateway.PortOnePayment(
                 PAYMENT_ID,
                 TRANSACTION_ID,
+                "store-1",
                 20_000,
                 "KRW",
                 "DECLINED"
@@ -257,6 +299,7 @@ class ReceivePortOneWebhookUseCaseTest {
         Payment payment = mock(Payment.class);
         when(capacityHold.getHoldId()).thenReturn(1L);
         when(payment.getCapacityHold()).thenReturn(capacityHold);
+        when(payment.getPaymentId()).thenReturn(1L);
         when(payment.getOrderId()).thenReturn(PAYMENT_ID);
         when(payment.getStatus()).thenReturn(PaymentStatus.PENDING);
         when(reservationPriceSnapshotService.findByHoldIdForUpdate(1L)).thenReturn(Optional.of(snapshot));
@@ -269,6 +312,7 @@ class ReceivePortOneWebhookUseCaseTest {
         return new PortOnePaymentGateway.PortOnePayment(
             PAYMENT_ID,
             TRANSACTION_ID,
+            "store-1",
             20_000,
             "KRW",
             "PAID"

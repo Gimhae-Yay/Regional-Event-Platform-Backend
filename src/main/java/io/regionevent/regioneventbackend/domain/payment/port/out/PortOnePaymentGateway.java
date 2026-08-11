@@ -7,10 +7,21 @@ public interface PortOnePaymentGateway {
     record PortOnePayment(
         String paymentId,
         String transactionId,
+        String storeId,
         long amount,
         String currency,
         String status
     ) {
+
+        public PortOnePayment(
+            String paymentId,
+            String transactionId,
+            long amount,
+            String currency,
+            String status
+        ) {
+            this(paymentId, transactionId, null, amount, currency, status);
+        }
 
         public boolean isPaid() {
             return "PAID".equals(status);
