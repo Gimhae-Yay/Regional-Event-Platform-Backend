@@ -26,6 +26,7 @@ public final class MySqlDatabaseCleaner {
     private static final int JDBC_NETWORK_TIMEOUT_MILLIS = 5_000;
     private static final int DIAGNOSTIC_COLLECTION_TIMEOUT_SECONDS = 1;
     private static final int CONNECTION_ABORT_TIMEOUT_SECONDS = 1;
+    private static final int CONNECTION_CLOSE_TIMEOUT_SECONDS = 1;
     private static final int MAXIMUM_DIAGNOSTIC_ROWS = 20;
     private static final Executor DIRECT_EXECUTOR = Runnable::run;
 
@@ -40,10 +41,22 @@ public final class MySqlDatabaseCleaner {
     }
 
     public void clean() {
-        try (Connection connection = connectionProvider.open()) {
+        Connection connection = null;
+        RuntimeException cleanupFailure = null;
+        try {
+            connection = connectionProvider.open();
             clean(connection);
         } catch (SQLException exception) {
-            throw new IllegalStateException("MySQL test database cleanup failed", exception);
+            cleanupFailure = new IllegalStateException("MySQL test database cleanup failed", exception);
+        } catch (RuntimeException exception) {
+            cleanupFailure = exception;
+        } finally {
+            if (connection != null) {
+                closeConnection(connection, cleanupFailure);
+            }
+        }
+        if (cleanupFailure != null) {
+            throw cleanupFailure;
         }
     }
 
@@ -217,6 +230,56 @@ public final class MySqlDatabaseCleaner {
         }
     }
 
+    private void closeConnection(Connection connection, RuntimeException cleanupFailure) {
+        TruncateTimeoutException timeoutException = findTruncateTimeoutException(cleanupFailure);
+        if (timeoutException != null) {
+            closeConnectionWithTimeout(connection, timeoutException);
+            return;
+        }
+        try {
+            connection.close();
+        } catch (SQLException exception) {
+            if (cleanupFailure != null) {
+                cleanupFailure.addSuppressed(exception);
+                return;
+            }
+            throw new IllegalStateException("MySQL test database cleanup connection close failed", exception);
+        }
+    }
+
+    private void closeConnectionWithTimeout(
+        Connection connection,
+        TruncateTimeoutException timeoutException
+    ) {
+        ExecutorService executor = newDaemonExecutor("mysql-cleaner-close");
+        Future<?> execution = executor.submit(() -> {
+            connection.close();
+            return null;
+        });
+        try {
+            execution.get(CONNECTION_CLOSE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        } catch (TimeoutException exception) {
+            timeoutException.addSuppressed(new SQLException(
+                "timed out while closing the MySQL cleanup connection",
+                exception
+            ));
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            timeoutException.addSuppressed(new SQLException(
+                "interrupted while closing the MySQL cleanup connection",
+                exception
+            ));
+        } catch (ExecutionException exception) {
+            timeoutException.addSuppressed(new SQLException(
+                "failed to close the MySQL cleanup connection",
+                exception.getCause()
+            ));
+        } finally {
+            execution.cancel(true);
+            executor.shutdownNow();
+        }
+    }
+
     private void rethrowSqlException(ExecutionException exception) throws SQLException {
         Throwable cause = exception.getCause();
         if (cause instanceof SQLException sqlException) {
@@ -315,14 +378,18 @@ public final class MySqlDatabaseCleaner {
     }
 
     private boolean containsTruncateTimeout(Throwable exception) {
+        return findTruncateTimeoutException(exception) != null;
+    }
+
+    private TruncateTimeoutException findTruncateTimeoutException(Throwable exception) {
         Throwable current = exception;
         while (current != null) {
             if (current instanceof TruncateTimeoutException) {
-                return true;
+                return (TruncateTimeoutException) current;
             }
             current = current.getCause();
         }
-        return false;
+        return null;
     }
 
     private TimeoutDiagnostics findTimeoutDiagnostics(SQLException exception, long cleaningConnectionId) {

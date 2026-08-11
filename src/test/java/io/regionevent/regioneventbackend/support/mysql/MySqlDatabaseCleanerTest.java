@@ -174,6 +174,76 @@ class MySqlDatabaseCleanerTest {
             .setNetworkTimeout(any(Executor.class), eq(5_000));
     }
 
+    @Test
+    @Timeout(10)
+    void clean_연결중단과종료가제한시간을넘기면_원래진단을유지한다() throws Exception {
+        CleaningConnection cleaningConnection = createCleaningConnection();
+        Connection diagnosticConnection = createDiagnosticConnection();
+        CountDownLatch truncateExecution = new CountDownLatch(1);
+        CountDownLatch abortExecution = new CountDownLatch(1);
+        CountDownLatch closeExecution = new CountDownLatch(1);
+        AtomicInteger openedConnectionCount = new AtomicInteger();
+
+        doAnswer(invocation -> {
+            awaitWithoutInterrupt(truncateExecution);
+            return false;
+        }).when(cleaningConnection.truncateStatement()).execute(any(String.class));
+        doAnswer(invocation -> {
+            awaitWithoutInterrupt(abortExecution);
+            return null;
+        }).when(cleaningConnection.connection()).abort(any(Executor.class));
+        doAnswer(invocation -> {
+            awaitWithoutInterrupt(closeExecution);
+            return null;
+        }).when(cleaningConnection.connection()).close();
+
+        MySqlDatabaseCleaner databaseCleaner = new MySqlDatabaseCleaner(() -> {
+            if (openedConnectionCount.getAndIncrement() == 0) {
+                return cleaningConnection.connection();
+            }
+            return diagnosticConnection;
+        });
+
+        try {
+            IllegalStateException exception = catchThrowableOfType(
+                databaseCleaner::clean,
+                IllegalStateException.class
+            );
+
+            assertThat(exception)
+                .hasMessageContaining("table=test_cleanup_parent")
+                .hasMessageContaining("connectionId=" + CLEANING_CONNECTION_ID)
+                .hasMessageContaining("timeoutDiagnostics={");
+            assertThat(exception.getCause().getSuppressed())
+                .hasSize(2)
+                .anySatisfy(suppressed -> assertThat(suppressed.getMessage())
+                    .contains("timed out while aborting the MySQL cleanup connection"))
+                .anySatisfy(suppressed -> assertThat(suppressed.getMessage())
+                    .contains("timed out while closing the MySQL cleanup connection"));
+            verify(cleaningConnection.connection(), times(9)).createStatement();
+            verify(cleaningConnection.connection(), times(1))
+                .setNetworkTimeout(any(Executor.class), eq(5_000));
+        } finally {
+            abortExecution.countDown();
+            closeExecution.countDown();
+        }
+    }
+
+    private void awaitWithoutInterrupt(CountDownLatch latch) {
+        boolean interrupted = false;
+        while (true) {
+            try {
+                latch.await();
+                break;
+            } catch (InterruptedException exception) {
+                interrupted = true;
+            }
+        }
+        if (interrupted) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
     private CleaningConnection createCleaningConnection() throws SQLException {
         Connection connection = mock(Connection.class);
         Statement statement = createCleaningStatement();
