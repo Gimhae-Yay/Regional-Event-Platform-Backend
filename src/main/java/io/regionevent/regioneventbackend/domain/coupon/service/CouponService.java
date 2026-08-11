@@ -51,6 +51,11 @@ public class CouponService {
         return Instant.ofEpochSecond(seconds, nanos);
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public CouponStatus releaseReservedCoupon(Coupon coupon, Instant releasedAt) {
+        return coupon.release(releasedAt);
+    }
+
     @Transactional(readOnly = true)
     public List<Coupon> findAllByUserId(
         Long userId,
