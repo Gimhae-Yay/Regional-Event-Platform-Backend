@@ -146,6 +146,38 @@ class MissionRepositoryTest {
     }
 
     @Test
+    void 대상_콘텐츠_연결은_기존_행을_삭제한_뒤_새_구성으로_전체_교체한다() {
+        Region region = saveRegion("TARGET-REPLACE");
+        Content rewardContent = saveContent(region, "replace-reward");
+        Content previousTarget = saveContent(region, "replace-previous");
+        Content firstReplacement = saveContent(region, "replace-first");
+        Content secondReplacement = saveContent(region, "replace-second");
+        CouponPolicy rewardCouponPolicy = saveMissionRewardCouponPolicy(rewardContent, region);
+        Mission mission = new Mission(
+            region,
+            MissionConditionType.CONTENT_SET,
+            null,
+            rewardCouponPolicy,
+            MISSION_ENDS_AT
+        );
+        mission.addTargetContent(previousTarget);
+        mission = missionRepository.saveAndFlush(mission);
+        entityManager.clear();
+
+        Mission lockedMission = missionRepository.findByMissionIdForUpdate(mission.getMissionId()).orElseThrow();
+        missionTargetContentRepository.deleteAllByMissionId(mission.getMissionId());
+        missionTargetContentRepository.saveAllAndFlush(List.of(
+            new MissionTargetContent(lockedMission, secondReplacement),
+            new MissionTargetContent(lockedMission, firstReplacement)
+        ));
+        entityManager.clear();
+
+        assertThat(missionTargetContentRepository
+            .findContentIdsByMissionIdOrderByContentIdAsc(mission.getMissionId()))
+            .containsExactly(firstReplacement.getContentId(), secondReplacement.getContentId());
+    }
+
+    @Test
     void 방문_횟수_미션은_양수_목표를_저장하고_대상_콘텐츠를_추가하지_않는다() {
         Region region = saveRegion("GIMHAE");
         Content rewardContent = saveContent(region, "reward");

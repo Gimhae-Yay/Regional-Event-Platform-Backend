@@ -34,6 +34,11 @@ public class MissionService {
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
+    public Mission findByMissionId(Long missionId) {
+        return missionRepository.findByMissionId(missionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
     public Long findRewardCouponPolicyId(Long missionId) {
         return missionRepository.findRewardCouponPolicyIdByMissionId(missionId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
@@ -90,6 +95,31 @@ public class MissionService {
 
     public Mission submitForReview(Mission mission) {
         mission.submitForReview();
+        return missionRepository.saveAndFlush(mission);
+    }
+
+    public Mission replaceDraftCoreValues(
+        Mission mission,
+        MissionConditionType conditionType,
+        Integer requiredVisitCount,
+        CouponPolicy rewardCouponPolicy,
+        Instant endsAt
+    ) {
+        if (mission.getStatus() != MissionStatus.DRAFT) {
+            throw new BusinessException(ErrorCode.MISSION_STATE_CONFLICT);
+        }
+        try {
+            mission.replaceDraftCoreValues(
+                conditionType,
+                requiredVisitCount,
+                rewardCouponPolicy,
+                endsAt
+            );
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, exception);
+        } catch (IllegalStateException exception) {
+            throw new BusinessException(ErrorCode.MISSION_STATE_CONFLICT, exception);
+        }
         return missionRepository.saveAndFlush(mission);
     }
 
