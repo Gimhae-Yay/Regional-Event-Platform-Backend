@@ -1,7 +1,16 @@
+import java.io.IOException
 import java.nio.charset.StandardCharsets
+import java.nio.channels.FileChannel
+import java.nio.channels.FileLock
+import java.nio.channels.OverlappingFileLockException
+import java.nio.file.Files
+import java.nio.file.StandardOpenOption
 import java.security.MessageDigest
 
 import org.gradle.api.GradleException
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.services.BuildService
+import org.gradle.api.services.BuildServiceParameters
 import org.gradle.api.tasks.testing.Test
 
 plugins {
@@ -65,10 +74,76 @@ dependencies {
     testAnnotationProcessor 'org.projectlombok:lombok'
 }
 
+def worktreeFullTestLock = gradle.sharedServices.registerIfAbsent(
+    'worktreeFullTestLock',
+    WorktreeFullTestLockService
+) { specification ->
+    specification.parameters.worktreeDirectory.set(layout.projectDirectory)
+}
+
 tasks.named('test') {
     useJUnitPlatform()
     maxHeapSize = '2g'
+    usesService(worktreeFullTestLock)
+    doFirst {
+        worktreeFullTestLock.get().acquire()
+    }
     finalizedBy tasks.named('jacocoTestReport')
+}
+
+abstract class WorktreeFullTestLockService implements BuildService<WorktreeFullTestLockService.Parameters>, AutoCloseable {
+
+    interface Parameters extends BuildServiceParameters {
+
+        DirectoryProperty getWorktreeDirectory()
+    }
+
+    private FileChannel channel
+    private FileLock lock
+
+    synchronized void acquire() {
+        if (lock != null && lock.isValid()) {
+            return
+        }
+
+        def worktreeDirectory = parameters.worktreeDirectory.get().asFile.toPath().toAbsolutePath().normalize()
+        def lockFile = worktreeDirectory.resolve('.gradle').resolve('full-test.lock')
+        Files.createDirectories(lockFile.parent)
+        channel = FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE)
+        try {
+            lock = channel.tryLock()
+        } catch (OverlappingFileLockException exception) {
+            closeChannel()
+            throw concurrentFullTestException()
+        }
+
+        if (lock == null) {
+            closeChannel()
+            throw concurrentFullTestException()
+        }
+    }
+
+    @Override
+    synchronized void close() throws IOException {
+        if (lock != null) {
+            lock.release()
+            lock = null
+        }
+        closeChannel()
+    }
+
+    private GradleException concurrentFullTestException() {
+        return new GradleException(
+            '같은 작업 트리에서 전체 테스트가 이미 실행 중입니다. 첫 번째 테스트가 끝난 뒤 다시 실행하세요.'
+        )
+    }
+
+    private void closeChannel() throws IOException {
+        if (channel != null) {
+            channel.close()
+            channel = null
+        }
+    }
 }
 
 def testSourceDirectory = file('src/test/java')
