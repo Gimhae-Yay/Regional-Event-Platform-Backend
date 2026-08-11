@@ -37,10 +37,17 @@ public class PlatformAdminAuthorizationService {
         return assignment;
     }
 
-    private PlatformAdminAssignment requireActivePrivilegedAssignment(Long userId) {
-        if (userId == null) {
+    @Transactional(readOnly = true)
+    public PlatformAdminAssignment requireAuthorizedSuperAdminForUpdate(Long userId) {
+        PlatformAdminAssignment assignment = requireActivePrivilegedAssignmentForUpdate(userId);
+        if (assignment.getGrade() != PlatformAdminGrade.SUPER_ADMIN) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
+        return assignment;
+    }
+
+    private PlatformAdminAssignment requireActivePrivilegedAssignment(Long userId) {
+        validateUserId(userId);
         return platformAdminAssignmentRepository
             .findByAppUserUserIdAndStatusAndAppUserStatusAndAppUserAccountKind(
                 userId,
@@ -49,5 +56,23 @@ public class PlatformAdminAuthorizationService {
                 AppUserAccountKind.PRIVILEGED
             )
             .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+    }
+
+    private PlatformAdminAssignment requireActivePrivilegedAssignmentForUpdate(Long userId) {
+        validateUserId(userId);
+        return platformAdminAssignmentRepository
+            .findActivePrivilegedAssignmentForUpdate(
+                userId,
+                PlatformAdminAssignmentStatus.ACTIVE,
+                AppUserStatus.ACTIVE,
+                AppUserAccountKind.PRIVILEGED
+            )
+            .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+    }
+
+    private void validateUserId(Long userId) {
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
     }
 }
