@@ -62,12 +62,43 @@ public class CouponPolicyService {
         return couponPolicyRepository.saveAndFlush(couponPolicy);
     }
 
+    public CouponPolicy update(
+        CouponPolicy couponPolicy,
+        UpdateCouponPolicyCommand command,
+        Instant updatedAt
+    ) {
+        couponPolicy.update(
+            command.name(),
+            command.description(),
+            command.discountAmount(),
+            command.minimumPaymentAmount(),
+            command.validDaysAfterIssue(),
+            command.issueStartsAt(),
+            command.issueEndsAt(),
+            command.totalIssueLimit(),
+            updatedAt
+        );
+        return couponPolicyRepository.saveAndFlush(couponPolicy);
+    }
+
     public record CreateCouponPolicyCommand(
         Content content,
         Region region,
         String name,
         String description,
         CouponIssuanceType issueSourceType,
+        long discountAmount,
+        long minimumPaymentAmount,
+        int validDaysAfterIssue,
+        Instant issueStartsAt,
+        Instant issueEndsAt,
+        Long totalIssueLimit
+    ) {
+    }
+
+    public record UpdateCouponPolicyCommand(
+        String name,
+        String description,
         long discountAmount,
         long minimumPaymentAmount,
         int validDaysAfterIssue,
