@@ -28,4 +28,13 @@ public class CouponRedemptionService {
     public CouponRedemption create(CouponRedemption couponRedemption) {
         return couponRedemptionRepository.saveAndFlush(couponRedemption);
     }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public java.util.Optional<CouponRedemption> findByReservationPriceSnapshotIdForUpdate(
+        Long reservationPriceSnapshotId
+    ) {
+        return couponRedemptionRepository.findByReservationPriceSnapshotIdForUpdate(
+            reservationPriceSnapshotId
+        );
+    }
 }

@@ -4,6 +4,18 @@ public interface PortOnePaymentGateway {
 
     PortOnePayment findByPaymentId(String paymentId);
 
+    PortOneCancellation cancelPayment(String paymentId, long amount, String reason);
+
+    record PortOneCancellation(
+        String cancellationId,
+        String status,
+        String resultHash
+    ) {
+        public boolean isSucceeded() {
+            return "SUCCEEDED".equals(status);
+        }
+    }
+
     record PortOnePayment(
         String paymentId,
         String transactionId,

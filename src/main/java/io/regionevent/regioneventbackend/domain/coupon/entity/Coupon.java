@@ -123,6 +123,16 @@ public class Coupon {
         return status;
     }
 
+    public CouponStatus restoreUsed(Instant restoredAt) {
+        if (status != CouponStatus.USED) {
+            throw new IllegalStateException("only used coupon can be restored");
+        }
+        status = expiresAt.isAfter(requireNotNull(restoredAt, "restoredAt"))
+            ? CouponStatus.AVAILABLE
+            : CouponStatus.EXPIRED;
+        return status;
+    }
+
     private static void validateExpiry(
         Instant issuedAt,
         Instant expiresAt
