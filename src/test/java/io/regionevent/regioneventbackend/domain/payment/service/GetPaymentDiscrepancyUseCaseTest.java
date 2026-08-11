@@ -68,7 +68,7 @@ class GetPaymentDiscrepancyUseCaseTest {
             .containsExactly(551L, 552L);
         assertThat(actual.verifications())
             .extracting(PaymentDiscrepancyDetailInfo.VerificationInfo::matched)
-            .containsExactly(false, true);
+            .containsExactly(false, false);
         assertThat(actual.actions())
             .extracting(PaymentDiscrepancyDetailInfo.ActionInfo::actionId)
             .containsExactly(701L, 702L);

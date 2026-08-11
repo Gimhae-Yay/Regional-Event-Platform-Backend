@@ -71,7 +71,7 @@ public record PaymentDiscrepancyDetailInfo(
                 verification.getVerificationReason(),
                 verification.getExternalStatus(),
                 verification.getObservedAmount(),
-                !"DISCREPANT".equals(verification.getInternalDecision()),
+                "APPROVE".equals(verification.getInternalDecision()),
                 verification.getVerifiedAt()
             );
         }
