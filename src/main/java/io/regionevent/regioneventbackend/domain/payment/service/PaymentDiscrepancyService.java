@@ -8,6 +8,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentDiscrepancy;
 import io.regionevent.regioneventbackend.domain.payment.repository.PaymentDiscrepancyRepository;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 @Service
 public class PaymentDiscrepancyService {
@@ -27,5 +29,11 @@ public class PaymentDiscrepancyService {
     public List<PaymentDiscrepancy> findAllByStatus(String status) {
         return paymentDiscrepancyRepository
             .findAllByStatusOrderByDetectedAtAscPaymentDiscrepancyIdAsc(status);
+    }
+
+    @Transactional(readOnly = true)
+    public PaymentDiscrepancy findById(Long discrepancyId) {
+        return paymentDiscrepancyRepository.findById(discrepancyId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 }

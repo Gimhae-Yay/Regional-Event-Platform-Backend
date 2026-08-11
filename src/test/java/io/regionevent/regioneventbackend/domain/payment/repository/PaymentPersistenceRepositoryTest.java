@@ -148,7 +148,9 @@ class PaymentPersistenceRepositoryTest {
             ))
             .isPresent();
         assertThat(paymentVerificationRepository
-            .findAllByPaymentPaymentIdOrderByVerifiedAtAsc(fixtures.payment().getPaymentId()))
+            .findAllByPaymentPaymentIdOrderByVerifiedAtAscPaymentVerificationIdAsc(
+                fixtures.payment().getPaymentId()
+            ))
             .extracting(PaymentVerification::getPaymentVerificationId)
             .containsExactly(verification.getPaymentVerificationId());
         assertThat(paymentWebhookRepository.findByProviderEventId("provider-event-1")).isPresent();
@@ -156,7 +158,7 @@ class PaymentPersistenceRepositoryTest {
             .findByPaymentIdForUpdate(fixtures.payment().getPaymentId()))
             .isPresent();
         assertThat(paymentDiscrepancyActionRepository
-            .findAllByPaymentDiscrepancyPaymentDiscrepancyIdOrderByActedAtAsc(
+            .findAllByPaymentDiscrepancyPaymentDiscrepancyIdOrderByActedAtAscPaymentDiscrepancyActionIdAsc(
                 discrepancy.getPaymentDiscrepancyId()
             ))
             .hasSize(1);
