@@ -236,11 +236,12 @@ public class ReceivePortOneWebhookUseCase {
             releaseCoupon(snapshot, COUPON_RELEASED_REASON, requestId, now);
         } else if ("DISCREPANT".equals(decision)) {
             String discrepancyType = discrepancyType(payment, snapshot, event, observed);
+            PaymentStatus previousStatus = payment.getStatus();
             payment.markDiscrepant(observed.transactionId(), now);
             PaymentDiscrepancy discrepancy = paymentDiscrepancyService.create(new PaymentDiscrepancy(
                 payment, discrepancyType, "OPEN", now
             ));
-            recordPaymentAudit(payment, PaymentStatus.PENDING, PaymentStatus.DISCREPANT, requestId, now);
+            recordPaymentAudit(payment, previousStatus, PaymentStatus.DISCREPANT, requestId, now);
             recordDiscrepancyAudit(discrepancy, requestId, now);
             releaseCoupon(snapshot, COUPON_DISCREPANCY_RELEASED_REASON, requestId, now);
         }
@@ -287,11 +288,12 @@ public class ReceivePortOneWebhookUseCase {
             if (isTerminal(discrepantPayment.getStatus())) {
                 return new ApprovalResult(discrepantPayment, true);
             }
+            PaymentStatus previousStatus = discrepantPayment.getStatus();
             discrepantPayment.markDiscrepant(observed.transactionId(), now);
             PaymentDiscrepancy discrepancy = paymentDiscrepancyService.create(new PaymentDiscrepancy(
                 discrepantPayment, "LATE_APPROVAL", "OPEN", now
             ));
-            recordPaymentAudit(discrepantPayment, PaymentStatus.PENDING, PaymentStatus.DISCREPANT, requestId, now);
+            recordPaymentAudit(discrepantPayment, previousStatus, PaymentStatus.DISCREPANT, requestId, now);
             recordDiscrepancyAudit(discrepancy, requestId, now);
             releaseCoupon(snapshot, COUPON_DISCREPANCY_RELEASED_REASON, requestId, now);
             return new ApprovalResult(discrepantPayment, false);
