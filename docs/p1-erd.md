@@ -601,10 +601,15 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 | 테이블 | 핵심 열 | 책임 |
 | --- | --- | --- |
 | `coupon_policy` | `coupon_policy_id`, `content_id`, `region_id`, 이름·설명, `issuance_type`, 할인·최소 결제 금액, 유효 일수, 발급 기간·한도·사용량, 상태·공개·종료 시각 | 콘텐츠 하나의 유료 예약에 적용되는 정액 할인·발급 규칙 |
+| `coupon_policy_update_history` | `coupon_policy_update_history_id`, `coupon_policy_id`, `audit_event_id`, actor 종류·역할, 사유·요청 ID·수정 시각, 수정 가능 필드 8종의 전·후 값 | `DRAFT` 정책 수정의 불변 전·후 값 이력 |
 | `coupon` | `coupon_id`, `coupon_policy_id`, `user_id`, `status`, `issued_at`, `expires_at` | 사용자가 보유한 현재 쿠폰 상태 |
 | `coupon_issuance` | `coupon_issuance_id`, `coupon_id`, `coupon_policy_id`, `recipient_user_id`, 발급 근거 FK 3종, 발급 식별 키, `issued_at` | 발급 근거와 중복 지급 차단 |
 | `coupon_status_history` | `coupon_status_history_id`, `coupon_id`, 이전·이후 상태, 사유, actor 종류, 시각 | 모든 쿠폰 상태 전이의 추가 전용 이력 |
 | `coupon_redemption` | `coupon_redemption_id`, `coupon_id`, `reservation_price_snapshot_id`, `reservation_id`, 상태·확정·복구 시각 | 가격 스냅샷과 예약에 연결한 쿠폰 사용·복구 이력 |
+
+`DRAFT` 정책 수정은 잠근 정책의 이전 값과 갱신 뒤 값을 `coupon_policy_update_history`에 한 행으로 기록한다. 이력의 전·후 값은 `name`, `description`, `discount_amount`, `minimum_payment_amount`, `valid_days_after_issue`, `issue_starts_at`, `issue_ends_at`, `total_issue_limit`을 각각 보존한다. `description`과 `total_issue_limit`의 전·후 값은 nullable이고, 나머지 전·후 값은 정책과 같은 타입·제약을 따른다. `content_id`, `region_id`, `issuance_type`, 상태·공개·종료 시각, `issued_count`는 정책 수정 대상이 아니므로 이력에 저장하지 않는다. 요청 필드를 반영한 뒤 8개 수정 가능 필드가 모두 기존 값과 같으면 무변경 성공으로 처리하고 정책·`updated_at`·이력·성공 감사는 바꾸거나 만들지 않는다.
+
+이력은 `coupon_policy_id` FK, 성공 공통 감사 이벤트를 유일하게 참조하는 nullable `audit_event_id`, `actor_kind = USER`, `actor_role = OPERATOR`, 앞뒤 공백 제거 뒤 1~500자인 `reason`, `request_id`, `updated_at`을 가진다. 이력 삽입 때 참조 감사 이벤트는 `result = SUCCESS`, `target_type = COUPON_POLICY`, `target_id = coupon_policy_id`, `previous_state = DRAFT`, `next_state = DRAFT`이고 actor 종류·역할, `reason`, `request_id`, 발생 시각이 이력 행과 같아야 한다. 이 행 간 동일성은 FK만으로 강제할 수 없으므로 애플리케이션이 같은 트랜잭션 안에서 검증한다. 정책 갱신, 이력 삽입, `COUPON_POLICY` 성공 공통 감사 이벤트는 같은 `requestId`와 시각으로 하나의 트랜잭션에서 커밋하거나 함께 롤백한다. 성공 감사 이벤트는 `DRAFT → DRAFT`와 처리자를 기록하고, 전용 이력은 필드별 전·후 값을 기록한다. 사용자 식별은 `audit_event_actor_link`로만 연결하고 탈퇴 때 제거한다. 감사 보관으로 이벤트가 삭제되면 `audit_event_id`는 `ON DELETE SET NULL`로 처리하며, 이력의 역할·사유·시각·전후 값은 유지한다. 이력 행은 생성 뒤 수정·삭제하지 않는다.
 
 `coupon_policy.issuance_type`은 다음 중 하나다.
 
