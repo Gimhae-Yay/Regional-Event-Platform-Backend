@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
+import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -11,15 +12,19 @@ import org.springframework.transaction.annotation.Transactional;
 
 import tools.jackson.databind.JsonNode;
 
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEvent;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventActor;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
+import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.coupon.dto.UpdateCouponPolicyRequest;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicy;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicyStatus;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicyUpdateHistory;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicyUpdateSnapshot;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponPolicyService.UpdateCouponPolicyCommand;
 import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService;
@@ -36,6 +41,8 @@ public class UpdateCouponPolicyUseCase {
     private final AppUserService appUserService;
     private final OperatorAuthorizationService operatorAuthorizationService;
     private final CouponPolicyService couponPolicyService;
+    private final CouponPolicyUpdateHistoryService couponPolicyUpdateHistoryService;
+    private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase;
     private final Clock clock;
 
@@ -43,12 +50,16 @@ public class UpdateCouponPolicyUseCase {
         AppUserService appUserService,
         OperatorAuthorizationService operatorAuthorizationService,
         CouponPolicyService couponPolicyService,
+        CouponPolicyUpdateHistoryService couponPolicyUpdateHistoryService,
+        RecordAuditEventUseCase recordAuditEventUseCase,
         RecordFailedAuditEventUseCase recordFailedAuditEventUseCase,
         Clock clock
     ) {
         this.appUserService = appUserService;
         this.operatorAuthorizationService = operatorAuthorizationService;
         this.couponPolicyService = couponPolicyService;
+        this.couponPolicyUpdateHistoryService = couponPolicyUpdateHistoryService;
+        this.recordAuditEventUseCase = recordAuditEventUseCase;
         this.recordFailedAuditEventUseCase = recordFailedAuditEventUseCase;
         this.clock = clock;
     }
@@ -75,11 +86,58 @@ public class UpdateCouponPolicyUseCase {
         Instant updatedAt = clock.instant().truncatedTo(ChronoUnit.MICROS);
         UpdateCouponPolicyCommand command = parsedRequest.toCommand(couponPolicy);
         validateCommand(command);
+        if (isSamePolicy(couponPolicy, command)) {
+            return UpdateCouponPolicyResult.from(couponPolicy, couponPolicy.getUpdatedAt());
+        }
+
+        CouponPolicyUpdateSnapshot previous = CouponPolicyUpdateSnapshot.from(couponPolicy);
         CouponPolicy updatedCouponPolicy = couponPolicyService.update(
             couponPolicy,
-            command
+            command,
+            updatedAt
         );
+        AuditEventActor actor = new AuditEventActor(operator.roleAssignment());
+        AuditEvent auditEvent = recordAuditEventUseCase.record(
+            new AuditEventCommand(
+                requestId,
+                updatedCouponPolicy.getRegion(),
+                AuditEventTargetType.COUPON_POLICY,
+                updatedCouponPolicy.getCouponPolicyId(),
+                CouponPolicyStatus.DRAFT.name(),
+                CouponPolicyStatus.DRAFT.name(),
+                AuditEventResult.SUCCESS,
+                null,
+                parsedRequest.reason(),
+                null,
+                actor,
+                updatedAt
+            )
+        );
+        couponPolicyUpdateHistoryService.create(new CouponPolicyUpdateHistory(
+            updatedCouponPolicy,
+            auditEvent,
+            actor.getRoleName(),
+            parsedRequest.reason(),
+            requestId.toString(),
+            updatedAt,
+            previous,
+            CouponPolicyUpdateSnapshot.from(updatedCouponPolicy)
+        ));
         return UpdateCouponPolicyResult.from(updatedCouponPolicy, updatedAt);
+    }
+
+    private boolean isSamePolicy(
+        CouponPolicy couponPolicy,
+        UpdateCouponPolicyCommand command
+    ) {
+        return couponPolicy.getName().equals(command.name())
+            && Objects.equals(couponPolicy.getDescription(), command.description())
+            && couponPolicy.getDiscountAmount() == command.discountAmount()
+            && couponPolicy.getMinimumPaymentAmount() == command.minimumPaymentAmount()
+            && couponPolicy.getValidDays() == command.validDaysAfterIssue()
+            && couponPolicy.getIssueStartsAt().equals(command.issueStartsAt())
+            && couponPolicy.getIssueEndsAt().equals(command.issueEndsAt())
+            && Objects.equals(couponPolicy.getTotalIssueLimit(), command.totalIssueLimit());
     }
 
     private void validateCommand(UpdateCouponPolicyCommand command) {
@@ -102,6 +160,7 @@ public class UpdateCouponPolicyUseCase {
         PatchValue<Instant> issueStartsAt = parseInstant(request.issueStartsAt());
         PatchValue<Instant> issueEndsAt = parseInstant(request.issueEndsAt());
         PatchValue<Long> totalIssueLimit = parseTotalIssueLimit(request.totalIssueLimit());
+        String reason = parseReason(request.reason());
         if (!name.present() && !description.present() && !discountAmount.present()
             && !minimumPaymentAmount.present() && !validDaysAfterIssue.present()
             && !issueStartsAt.present() && !issueEndsAt.present() && !totalIssueLimit.present()) {
@@ -115,8 +174,20 @@ public class UpdateCouponPolicyUseCase {
             validDaysAfterIssue,
             issueStartsAt,
             issueEndsAt,
-            totalIssueLimit
+            totalIssueLimit,
+            reason
         );
+    }
+
+    private String parseReason(JsonNode value) {
+        if (value == null || value.isNull() || !value.isString()) {
+            throw invalidInput();
+        }
+        String reason = value.stringValue().strip();
+        if (reason.isEmpty() || reason.length() > 500) {
+            throw invalidInput();
+        }
+        return reason;
     }
 
     private PatchValue<String> parseName(JsonNode value) {
@@ -259,7 +330,8 @@ public class UpdateCouponPolicyUseCase {
         PatchValue<Integer> validDaysAfterIssue,
         PatchValue<Instant> issueStartsAt,
         PatchValue<Instant> issueEndsAt,
-        PatchValue<Long> totalIssueLimit
+        PatchValue<Long> totalIssueLimit,
+        String reason
     ) {
 
         private UpdateCouponPolicyCommand toCommand(CouponPolicy couponPolicy) {

@@ -64,7 +64,8 @@ public class CouponPolicyService {
 
     public CouponPolicy update(
         CouponPolicy couponPolicy,
-        UpdateCouponPolicyCommand command
+        UpdateCouponPolicyCommand command,
+        Instant updatedAt
     ) {
         couponPolicy.update(
             command.name(),
@@ -74,7 +75,8 @@ public class CouponPolicyService {
             command.validDaysAfterIssue(),
             command.issueStartsAt(),
             command.issueEndsAt(),
-            command.totalIssueLimit()
+            command.totalIssueLimit(),
+            updatedAt
         );
         return couponPolicyRepository.saveAndFlush(couponPolicy);
     }

@@ -10,6 +10,7 @@ public record UpdateCouponPolicyRequest(
     JsonNode validDaysAfterIssue,
     JsonNode issueStartsAt,
     JsonNode issueEndsAt,
-    JsonNode totalIssueLimit
+    JsonNode totalIssueLimit,
+    JsonNode reason
 ) {
 }
