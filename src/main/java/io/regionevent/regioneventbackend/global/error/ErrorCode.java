@@ -8,6 +8,7 @@ public enum ErrorCode {
 
     COUPON_POLICY_NOT_PUBLISHED(HttpStatus.CONFLICT, "COUPON_POLICY_NOT_PUBLISHED", "쿠폰 정책이 발급 가능한 상태가 아닙니다."),
     COUPON_ISSUE_CONFLICT(HttpStatus.CONFLICT, "COUPON_ISSUE_CONFLICT", "쿠폰을 발급할 수 없는 상태입니다."),
+    MISSION_REWARD_CLAIM_CONFLICT(HttpStatus.CONFLICT, "MISSION_REWARD_CLAIM_CONFLICT", "미션 보상을 수령할 수 없는 상태입니다."),
     COUPON_AVAILABILITY_CONFLICT(HttpStatus.CONFLICT, "COUPON_AVAILABILITY_CONFLICT", "쿠폰 사용 가능 여부를 판단할 수 없는 상태입니다."),
 
     CONTENT_STATE_CONFLICT(HttpStatus.CONFLICT, "CONTENT_STATE_CONFLICT", "콘텐츠 상태가 요청을 처리할 수 없습니다."),

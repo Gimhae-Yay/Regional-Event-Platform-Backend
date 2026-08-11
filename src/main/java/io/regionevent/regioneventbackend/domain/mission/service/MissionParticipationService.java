@@ -8,6 +8,8 @@ import io.regionevent.regioneventbackend.domain.mission.entity.Mission;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionParticipation;
 import io.regionevent.regioneventbackend.domain.mission.repository.MissionParticipationRepository;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 @Service
 public class MissionParticipationService {
@@ -28,5 +30,10 @@ public class MissionParticipationService {
             user,
             joinedAt
         ));
+    }
+
+    public MissionParticipation findForUpdate(Long participationId) {
+        return missionParticipationRepository.findByMissionParticipationIdForUpdate(participationId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 }
