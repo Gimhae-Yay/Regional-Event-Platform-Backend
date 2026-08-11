@@ -10,6 +10,8 @@ import org.springframework.transaction.annotation.Transactional;
 import io.regionevent.regioneventbackend.domain.payment.entity.Refund;
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundStatus;
 import io.regionevent.regioneventbackend.domain.payment.repository.RefundRepository;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 @Service
 public class RefundService {
@@ -35,5 +37,10 @@ public class RefundService {
 
     public List<Refund> findAllOwnedByUserId(Long userId) {
         return refundRepository.findAllByPaymentOwnerUserIdOrderByRequestedAtDescRefundIdDesc(userId);
+    }
+
+    public Refund findOwnedByRefundId(Long userId, Long refundId) {
+        return refundRepository.findByRefundIdAndPaymentOwnerUserId(refundId, userId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 }
