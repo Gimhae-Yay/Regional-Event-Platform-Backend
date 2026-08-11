@@ -18,6 +18,14 @@ import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
 
 public interface MissionRepository extends JpaRepository<Mission, Long> {
 
+    Page<Mission> findAllByRegionRegionIdOrderByMissionIdDesc(Long regionId, Pageable pageable);
+
+    Page<Mission> findAllByRegionRegionIdAndStatusOrderByMissionIdDesc(
+        Long regionId,
+        MissionStatus status,
+        Pageable pageable
+    );
+
     @EntityGraph(attributePaths = {"region", "rewardCouponPolicy"})
     Optional<Mission> findByMissionId(Long missionId);
 
