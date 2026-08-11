@@ -27,6 +27,8 @@ import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
 import io.regionevent.regioneventbackend.domain.mission.service.CreateOperatorMissionResult;
 import io.regionevent.regioneventbackend.domain.mission.service.CreateOperatorMissionUseCase;
 import io.regionevent.regioneventbackend.domain.mission.service.GetOperatorMissionDetailUseCase;
+import io.regionevent.regioneventbackend.domain.mission.service.SubmitOperatorMissionResult;
+import io.regionevent.regioneventbackend.domain.mission.service.SubmitOperatorMissionUseCase;
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -49,6 +51,9 @@ class OperatorMissionControllerWebMvcTest {
 
     @MockitoBean
     private CreateOperatorMissionUseCase createOperatorMissionUseCase;
+
+    @MockitoBean
+    private SubmitOperatorMissionUseCase submitOperatorMissionUseCase;
 
     @MockitoBean
     private GetOperatorMissionDetailUseCase getOperatorMissionDetailUseCase;
@@ -217,6 +222,71 @@ class OperatorMissionControllerWebMvcTest {
                     """))
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+    }
+
+    @Test
+    void submit_withValidMissionId_returnsPendingReviewMission() throws Exception {
+        when(submitOperatorMissionUseCase.submit(
+            org.mockito.ArgumentMatchers.eq(OPERATOR_ID),
+            org.mockito.ArgumentMatchers.eq(701L),
+            org.mockito.ArgumentMatchers.any()
+        )).thenReturn(new SubmitOperatorMissionResult(701L, MissionStatus.PENDING_REVIEW));
+
+        mockMvc.perform(authenticated(post("/api/v1/operator/missions/701/submit")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.statusCode").value(200))
+            .andExpect(jsonPath("$.code").value("SUCCESS"))
+            .andExpect(jsonPath("$.data.missionId").value("701"))
+            .andExpect(jsonPath("$.data.status").value("PENDING_REVIEW"));
+    }
+
+    @Test
+    void submit_withInvalidMissionId_returnsInputOrTypeErrorWithoutCallingUseCase() throws Exception {
+        mockMvc.perform(authenticated(post("/api/v1/operator/missions/0/submit")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        mockMvc.perform(authenticated(post("/api/v1/operator/missions/not-a-number/submit")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+
+        verifyNoInteractions(submitOperatorMissionUseCase);
+    }
+
+    @Test
+    void submit_withoutAuthentication_returnsUnauthenticated() throws Exception {
+        mockMvc.perform(post("/api/v1/operator/missions/701/submit"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+    }
+
+    @Test
+    void submit_whenUseCaseThrowsBusinessError_returnsContractError() throws Exception {
+        when(submitOperatorMissionUseCase.submit(
+            org.mockito.ArgumentMatchers.eq(OPERATOR_ID),
+            org.mockito.ArgumentMatchers.eq(701L),
+            org.mockito.ArgumentMatchers.any()
+        )).thenThrow(new BusinessException(ErrorCode.MISSION_STATE_CONFLICT));
+        when(submitOperatorMissionUseCase.submit(
+            org.mockito.ArgumentMatchers.eq(OPERATOR_ID),
+            org.mockito.ArgumentMatchers.eq(702L),
+            org.mockito.ArgumentMatchers.any()
+        )).thenThrow(new BusinessException(ErrorCode.FORBIDDEN));
+        when(submitOperatorMissionUseCase.submit(
+            org.mockito.ArgumentMatchers.eq(OPERATOR_ID),
+            org.mockito.ArgumentMatchers.eq(703L),
+            org.mockito.ArgumentMatchers.any()
+        )).thenThrow(new BusinessException(ErrorCode.NOT_FOUND));
+
+        mockMvc.perform(authenticated(post("/api/v1/operator/missions/701/submit")))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code").value("MISSION_STATE_CONFLICT"));
+        mockMvc.perform(authenticated(post("/api/v1/operator/missions/702/submit")))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+        mockMvc.perform(authenticated(post("/api/v1/operator/missions/703/submit")))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.code").value("NOT_FOUND"));
     }
 
     @Test

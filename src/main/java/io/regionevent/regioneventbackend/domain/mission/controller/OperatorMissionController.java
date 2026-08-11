@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -19,6 +20,9 @@ import io.regionevent.regioneventbackend.domain.mission.dto.CreateOperatorMissio
 import io.regionevent.regioneventbackend.domain.mission.service.CreateOperatorMissionResult;
 import io.regionevent.regioneventbackend.domain.mission.service.CreateOperatorMissionUseCase;
 import io.regionevent.regioneventbackend.domain.mission.service.CreateOperatorMissionUseCase.CreateOperatorMissionCommand;
+import io.regionevent.regioneventbackend.domain.mission.dto.SubmitOperatorMissionResponse;
+import io.regionevent.regioneventbackend.domain.mission.service.SubmitOperatorMissionResult;
+import io.regionevent.regioneventbackend.domain.mission.service.SubmitOperatorMissionUseCase;
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
@@ -29,12 +33,18 @@ import io.regionevent.regioneventbackend.global.response.ApiResponse;
 public class OperatorMissionController {
 
     private static final String CREATE_SUCCESS_MESSAGE = "미션 생성에 성공했습니다.";
+    private static final String SUBMIT_SUCCESS_MESSAGE = "미션 제출에 성공했습니다.";
     private static final Pattern POSITIVE_DECIMAL_PATTERN = Pattern.compile("^[1-9][0-9]*$");
 
     private final CreateOperatorMissionUseCase createOperatorMissionUseCase;
+    private final SubmitOperatorMissionUseCase submitOperatorMissionUseCase;
 
-    public OperatorMissionController(CreateOperatorMissionUseCase createOperatorMissionUseCase) {
+    public OperatorMissionController(
+        CreateOperatorMissionUseCase createOperatorMissionUseCase,
+        SubmitOperatorMissionUseCase submitOperatorMissionUseCase
+    ) {
         this.createOperatorMissionUseCase = createOperatorMissionUseCase;
+        this.submitOperatorMissionUseCase = submitOperatorMissionUseCase;
     }
 
     @PostMapping
@@ -50,6 +60,22 @@ public class OperatorMissionController {
         );
         return ApiResponse
             .success(HttpStatus.CREATED, CREATE_SUCCESS_MESSAGE, CreateOperatorMissionResponse.from(result))
+            .toResponseEntity();
+    }
+
+    @PostMapping("/{missionId}/submit")
+    public ResponseEntity<ApiResponse<SubmitOperatorMissionResponse>> submit(
+        @AuthenticationPrincipal Long userId,
+        @PathVariable String missionId,
+        @RequestAttribute(RequestIdFilter.REQUEST_ID_ATTRIBUTE) String requestId
+    ) {
+        SubmitOperatorMissionResult result = submitOperatorMissionUseCase.submit(
+            userId,
+            MissionIdParser.toMissionId(missionId),
+            UUID.fromString(requestId)
+        );
+        return ApiResponse
+            .success(HttpStatus.OK, SUBMIT_SUCCESS_MESSAGE, SubmitOperatorMissionResponse.from(result))
             .toResponseEntity();
     }
 
