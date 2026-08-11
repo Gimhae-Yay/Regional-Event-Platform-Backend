@@ -4,7 +4,7 @@
 - 기록 유형: 신규
 - 기록일: 2026-08-01
 - 결정일: 2026-08-01
-- 관련 요구사항: [Task 구현 절차](../../.agents/skills/task-implementation/SKILL.md), [PR 생성의 base 규칙](../../.agents/skills/pr-create/SKILL.md#저장소-규칙)
+- 관련 요구사항: [PR 생성의 base 규칙](../../.agents/skills/pr-create/SKILL.md#저장소-규칙)
 - 관련 단계: 단계 1. MVP 구현·검증
 - 관련 이슈: 없음
 - 대체 대상: 없음
