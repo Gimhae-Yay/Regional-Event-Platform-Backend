@@ -4,14 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -25,9 +28,13 @@ import tools.jackson.databind.ObjectMapper;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponRedemptionService;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponService;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponStatusHistoryService;
+import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
+import io.regionevent.regioneventbackend.domain.payment.entity.PaymentStatus;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentWebhook;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneLookupException;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOnePaymentGateway;
+import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
+import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationPriceSnapshot;
 import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHoldService;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationPriceSnapshotService;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationService;
@@ -49,6 +56,13 @@ class ReceivePortOneWebhookUseCaseTest {
     private final PortOnePaymentGateway paymentGateway = mock(PortOnePaymentGateway.class);
     private final PaymentService paymentService = mock(PaymentService.class);
     private final PaymentWebhookService paymentWebhookService = mock(PaymentWebhookService.class);
+    private final PaymentVerificationService paymentVerificationService = mock(PaymentVerificationService.class);
+    private final PaymentDiscrepancyService paymentDiscrepancyService = mock(PaymentDiscrepancyService.class);
+    private final CapacityHoldService capacityHoldService = mock(CapacityHoldService.class);
+    private final ReservationPriceSnapshotService reservationPriceSnapshotService = mock(
+        ReservationPriceSnapshotService.class
+    );
+    private final ReservationService reservationService = mock(ReservationService.class);
     private final TransactionTemplate transactionTemplate = mock(TransactionTemplate.class);
 
     private ReceivePortOneWebhookUseCase useCase;
@@ -67,11 +81,11 @@ class ReceivePortOneWebhookUseCaseTest {
             paymentGateway,
             paymentService,
             paymentWebhookService,
-            mock(PaymentVerificationService.class),
-            mock(PaymentDiscrepancyService.class),
-            mock(CapacityHoldService.class),
-            mock(ReservationPriceSnapshotService.class),
-            mock(ReservationService.class),
+            paymentVerificationService,
+            paymentDiscrepancyService,
+            capacityHoldService,
+            reservationPriceSnapshotService,
+            reservationService,
             mock(CouponService.class),
             mock(CouponStatusHistoryService.class),
             mock(CouponRedemptionService.class),
@@ -142,6 +156,123 @@ class ReceivePortOneWebhookUseCaseTest {
 
         verify(paymentWebhookService, never()).create(any());
         verify(paymentService, never()).findByOrderIdForUpdate(anyString());
+    }
+
+    @Test
+    void receive_paymentLookupFailsThenWebhookIsRetried_persistsWebhookAfterSuccessfulLookup() {
+        when(paymentGateway.findByPaymentId(PAYMENT_ID))
+            .thenThrow(new PortOneLookupException(new IllegalStateException("provider timeout")))
+            .thenReturn(paidPayment());
+        when(paymentService.findByOrderIdForUpdate(PAYMENT_ID)).thenReturn(Optional.empty());
+        when(paymentWebhookService.existsByProviderEventId(WEBHOOK_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> useCase.receive(
+            WEBHOOK_ID,
+            WEBHOOK_TIMESTAMP,
+            WEBHOOK_SIGNATURE,
+            validPaymentEvent()
+        )).isInstanceOf(BusinessException.class)
+            .extracting(exception -> ((BusinessException) exception).getErrorCode())
+            .isEqualTo(ErrorCode.INTERNAL_SERVER_ERROR);
+
+        useCase.receive(WEBHOOK_ID, WEBHOOK_TIMESTAMP, WEBHOOK_SIGNATURE, validPaymentEvent());
+
+        verify(paymentGateway, times(2)).findByPaymentId(PAYMENT_ID);
+        verify(paymentWebhookService).create(any(PaymentWebhook.class));
+    }
+
+    @Test
+    void receive_explicitDecline_transitionsOnlyPaymentAndRecordsVerification() {
+        Payment payment = pendingPayment();
+        when(paymentGateway.findByPaymentId(PAYMENT_ID)).thenReturn(new PortOnePaymentGateway.PortOnePayment(
+            PAYMENT_ID,
+            TRANSACTION_ID,
+            20_000,
+            "KRW",
+            "DECLINED"
+        ));
+        when(paymentService.findByOrderIdForUpdate(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        when(paymentWebhookService.existsByProviderEventId(WEBHOOK_ID)).thenReturn(false);
+
+        useCase.receive(WEBHOOK_ID, WEBHOOK_TIMESTAMP, WEBHOOK_SIGNATURE, validPaymentEvent());
+
+        verify(payment).decline(any());
+        verify(paymentVerificationService).create(any());
+        verify(capacityHoldService, never()).consumeForPaidPaymentIfConfirmable(any(), any(), any());
+        verify(reservationService, never()).createConfirmed(any());
+    }
+
+    @Test
+    void receive_amountMismatch_marksPaymentDiscrepantAndRecordsDiscrepancy() {
+        Payment payment = pendingPayment();
+        when(paymentGateway.findByPaymentId(PAYMENT_ID)).thenReturn(new PortOnePaymentGateway.PortOnePayment(
+            PAYMENT_ID,
+            TRANSACTION_ID,
+            20_001,
+            "KRW",
+            "PAID"
+        ));
+        when(paymentService.findByOrderIdForUpdate(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        when(paymentWebhookService.existsByProviderEventId(WEBHOOK_ID)).thenReturn(false);
+
+        useCase.receive(WEBHOOK_ID, WEBHOOK_TIMESTAMP, WEBHOOK_SIGNATURE, validPaymentEvent());
+
+        verify(payment).markDiscrepant(eq(TRANSACTION_ID), any());
+        verify(paymentDiscrepancyService).create(any());
+        verify(capacityHoldService, never()).consumeForPaidPaymentIfConfirmable(any(), any(), any());
+    }
+
+    @Test
+    void receive_reorderedWebhookAfterDecline_preservesFinalPaymentState() {
+        Payment payment = pendingPayment();
+        AtomicReference<PaymentStatus> status = new AtomicReference<>(PaymentStatus.PENDING);
+        when(payment.getStatus()).thenAnswer(invocation -> status.get());
+        doAnswer(invocation -> {
+            status.set(PaymentStatus.DECLINED);
+            return null;
+        }).when(payment).decline(any());
+        when(paymentGateway.findByPaymentId(PAYMENT_ID))
+            .thenReturn(new PortOnePaymentGateway.PortOnePayment(
+                PAYMENT_ID,
+                TRANSACTION_ID,
+                20_000,
+                "KRW",
+                "DECLINED"
+            ))
+            .thenReturn(paidPayment());
+        when(paymentService.findByOrderIdForUpdate(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        when(paymentWebhookService.existsByProviderEventId(anyString())).thenReturn(false);
+
+        useCase.receive("webhook-declined", WEBHOOK_TIMESTAMP, WEBHOOK_SIGNATURE, validPaymentEvent());
+        useCase.receive("webhook-paid", WEBHOOK_TIMESTAMP, WEBHOOK_SIGNATURE, validPaymentEvent());
+
+        verify(payment).decline(any());
+        verify(paymentDiscrepancyService, never()).create(any());
+        verify(capacityHoldService, never()).consumeForPaidPaymentIfConfirmable(any(), any(), any());
+    }
+
+    private Payment pendingPayment() {
+        CapacityHold capacityHold = mock(CapacityHold.class);
+        ReservationPriceSnapshot snapshot = mock(ReservationPriceSnapshot.class);
+        Payment payment = mock(Payment.class);
+        when(capacityHold.getHoldId()).thenReturn(1L);
+        when(payment.getCapacityHold()).thenReturn(capacityHold);
+        when(payment.getOrderId()).thenReturn(PAYMENT_ID);
+        when(payment.getStatus()).thenReturn(PaymentStatus.PENDING);
+        when(reservationPriceSnapshotService.findByHoldIdForUpdate(1L)).thenReturn(Optional.of(snapshot));
+        when(snapshot.getFinalAmount()).thenReturn(20_000L);
+        when(snapshot.getCurrency()).thenReturn("KRW");
+        return payment;
+    }
+
+    private PortOnePaymentGateway.PortOnePayment paidPayment() {
+        return new PortOnePaymentGateway.PortOnePayment(
+            PAYMENT_ID,
+            TRANSACTION_ID,
+            20_000,
+            "KRW",
+            "PAID"
+        );
     }
 
     private String validPaymentEvent() {
