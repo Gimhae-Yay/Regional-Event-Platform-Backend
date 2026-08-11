@@ -40,6 +40,14 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentSessionRepository;
+import io.regionevent.regioneventbackend.domain.coupon.entity.Coupon;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponIssuanceType;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicy;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatus;
+import io.regionevent.regioneventbackend.domain.coupon.repository.CouponPolicyRepository;
+import io.regionevent.regioneventbackend.domain.coupon.repository.CouponRedemptionRepository;
+import io.regionevent.regioneventbackend.domain.coupon.repository.CouponRepository;
+import io.regionevent.regioneventbackend.domain.coupon.repository.CouponStatusHistoryRepository;
 import io.regionevent.regioneventbackend.domain.payment.dto.CreatePaymentRequest;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentVerification;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentStatus;
@@ -87,6 +95,10 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
     private final PaymentWebhookRepository paymentWebhookRepository;
     private final PaymentVerificationRepository paymentVerificationRepository;
     private final ReservationRepository reservationRepository;
+    private final CouponPolicyRepository couponPolicyRepository;
+    private final CouponRepository couponRepository;
+    private final CouponStatusHistoryRepository couponStatusHistoryRepository;
+    private final CouponRedemptionRepository couponRedemptionRepository;
     private final TransactionTemplate transactionTemplate;
     private final JdbcTemplate jdbcTemplate;
 
@@ -105,6 +117,10 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
         PaymentWebhookRepository paymentWebhookRepository,
         PaymentVerificationRepository paymentVerificationRepository,
         ReservationRepository reservationRepository,
+        CouponPolicyRepository couponPolicyRepository,
+        CouponRepository couponRepository,
+        CouponStatusHistoryRepository couponStatusHistoryRepository,
+        CouponRedemptionRepository couponRedemptionRepository,
         JdbcTemplate jdbcTemplate,
         PlatformTransactionManager transactionManager
     ) {
@@ -121,6 +137,10 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
         this.paymentWebhookRepository = paymentWebhookRepository;
         this.paymentVerificationRepository = paymentVerificationRepository;
         this.reservationRepository = reservationRepository;
+        this.couponPolicyRepository = couponPolicyRepository;
+        this.couponRepository = couponRepository;
+        this.couponStatusHistoryRepository = couponStatusHistoryRepository;
+        this.couponRedemptionRepository = couponRedemptionRepository;
         this.jdbcTemplate = jdbcTemplate;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
@@ -179,6 +199,34 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
         assertThat(paymentWebhookRepository.findAll())
             .filteredOn(webhook -> WEBHOOK_ID.equals(webhook.getProviderEventId()))
             .hasSize(1);
+    }
+
+    @Test
+    void paidWebhookWithReservedCoupon_confirmsReservationAndConsumesCouponAtomically() {
+        Fixture fixture = createFixture();
+        Coupon coupon = createCoupon(fixture);
+        createPaymentUseCase.create(
+            fixture.user().getUserId(),
+            fixture.hold().getHoldId().toString(),
+            new CreatePaymentRequest(JsonNodeFactory.instance.stringNode(coupon.getCouponId().toString())),
+            "payment-key-" + System.nanoTime(),
+            UUID.randomUUID()
+        );
+        String orderId = paymentRepository.findAll().getFirst().getOrderId();
+        when(paymentGateway.findByPaymentId(orderId)).thenReturn(new PortOnePaymentGateway.PortOnePayment(
+            orderId, TRANSACTION_ID, "store-1", 19_000, "KRW", "PAID"
+        ));
+
+        receivePortOneWebhookUseCase.receive(
+            "webhook-coupon-approved", WEBHOOK_TIMESTAMP, WEBHOOK_SIGNATURE, paymentEvent(orderId)
+        );
+
+        assertThat(paymentRepository.findAll()).extracting(payment -> payment.getStatus())
+            .containsExactly(PaymentStatus.APPROVED);
+        assertThat(reservationRepository.findAll()).hasSize(1);
+        assertThat(couponRepository.findAll()).extracting(Coupon::getStatus).containsExactly(CouponStatus.USED);
+        assertThat(couponStatusHistoryRepository.findAll()).hasSize(2);
+        assertThat(couponRedemptionRepository.findAll()).hasSize(1);
     }
 
     @Test
@@ -406,7 +454,24 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
                 null,
                 now
             ));
-            return new Fixture(user, hold);
+            return new Fixture(user, hold, content);
+        });
+    }
+
+    private Coupon createCoupon(Fixture fixture) {
+        return transactionTemplate.execute(status -> {
+            Instant now = Instant.now();
+            Content content = contentRepository.findById(fixture.content().getContentId()).orElseThrow();
+            CouponPolicy policy = new CouponPolicy(
+                content, content.getRegion(), "Payment coupon", null, CouponIssuanceType.VISIT,
+                1_000, 1_000, 30, now.minusSeconds(60), now.plusSeconds(3_600), null
+            );
+            policy.publish(now);
+            CouponPolicy savedPolicy = couponPolicyRepository.saveAndFlush(policy);
+            return couponRepository.saveAndFlush(new Coupon(
+                savedPolicy, appUserRepository.getReferenceById(fixture.user().getUserId()),
+                now, now.plusSeconds(3_600)
+            ));
         });
     }
 
@@ -440,6 +505,6 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
         }
     }
 
-    private record Fixture(AppUser user, CapacityHold hold) {
+    private record Fixture(AppUser user, CapacityHold hold, Content content) {
     }
 }
