@@ -23,6 +23,16 @@ public final class CouponIssuanceHasher {
         );
     }
 
+    public static String hashMissionRewardIssue(Long couponPolicyId, Long recipientUserId, Long missionRewardClaimId) {
+        return hash(
+            "couponPolicyId=%d;recipientUserId=%d;missionRewardClaimId=%d;sourceType=MISSION_REWARD".formatted(
+                couponPolicyId,
+                recipientUserId,
+                missionRewardClaimId
+            )
+        );
+    }
+
     private static String hash(String value) {
         try {
             return HexFormat.of().formatHex(
