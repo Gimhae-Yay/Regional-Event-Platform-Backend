@@ -3,6 +3,7 @@ package io.regionevent.regioneventbackend.domain.coupon.service;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -24,6 +25,30 @@ public class CouponService {
     @Transactional(propagation = Propagation.MANDATORY)
     public Coupon create(Coupon coupon) {
         return couponRepository.saveAndFlush(coupon);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<Coupon> findByCouponIdForUpdate(Long couponId) {
+        return couponRepository.findByCouponIdForUpdate(couponId);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean reserveIfAvailableAndNotExpired(Coupon coupon) {
+        if (couponRepository.reserveIfAvailableAndNotExpired(coupon.getCouponId()) == 0) {
+            return false;
+        }
+        coupon.reserve();
+        return true;
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Instant findCurrentDatabaseTime() {
+        BigDecimal epochSeconds = couponRepository.findCurrentEpochSeconds();
+        long seconds = epochSeconds.longValue();
+        long nanos = epochSeconds.remainder(BigDecimal.ONE)
+            .movePointRight(9)
+            .longValue();
+        return Instant.ofEpochSecond(seconds, nanos);
     }
 
     @Transactional(readOnly = true)

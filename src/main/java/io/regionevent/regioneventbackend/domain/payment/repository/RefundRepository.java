@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.payment.repository;
 
+import java.util.Collection;
 import java.util.Optional;
 
 import jakarta.persistence.LockModeType;
@@ -11,8 +12,14 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import io.regionevent.regioneventbackend.domain.payment.entity.Refund;
+import io.regionevent.regioneventbackend.domain.payment.entity.RefundStatus;
 
 public interface RefundRepository extends JpaRepository<Refund, Long> {
+
+    boolean existsByPaymentCapacityHoldUserUserIdAndStatusIn(
+        Long userId,
+        Collection<RefundStatus> statuses
+    );
 
     @EntityGraph(attributePaths = {"payment", "payment.reservationPriceSnapshot"})
     @Lock(LockModeType.PESSIMISTIC_WRITE)

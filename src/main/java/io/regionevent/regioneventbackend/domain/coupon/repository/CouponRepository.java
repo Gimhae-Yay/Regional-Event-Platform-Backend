@@ -1,7 +1,6 @@
 package io.regionevent.regioneventbackend.domain.coupon.repository;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -70,6 +69,16 @@ public interface CouponRepository extends JpaRepository<Coupon, Long> {
         WHERE coupon.couponId = :couponId
         """)
     Optional<Coupon> findExpirationTargetByCouponId(@Param("couponId") Long couponId);
+
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+        UPDATE coupon
+        SET status = 'RESERVED'
+        WHERE coupon_id = :couponId
+            AND status = 'AVAILABLE'
+            AND expires_at > CURRENT_TIMESTAMP(6)
+        """, nativeQuery = true)
+    int reserveIfAvailableAndNotExpired(@Param("couponId") Long couponId);
 
     @Query(value = "SELECT UNIX_TIMESTAMP(CURRENT_TIMESTAMP(6))", nativeQuery = true)
     BigDecimal findCurrentEpochSeconds();

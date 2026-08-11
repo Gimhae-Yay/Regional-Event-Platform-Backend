@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditEventUseCase;
@@ -20,6 +21,7 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionSta
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHoldService;
+import io.regionevent.regioneventbackend.domain.payment.service.ExpirePendingPaymentForTerminatedHoldUseCase;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
@@ -37,6 +39,8 @@ class EndContentReservationsUseCaseTest {
     private final ContentSessionService contentSessionService = mock(ContentSessionService.class);
     private final ContentLogService contentLogService = mock(ContentLogService.class);
     private final CapacityHoldService capacityHoldService = mock(CapacityHoldService.class);
+    private final ExpirePendingPaymentForTerminatedHoldUseCase expirePendingPaymentForTerminatedHoldUseCase =
+        mock(ExpirePendingPaymentForTerminatedHoldUseCase.class);
     private final RegionAdminAuthorizationService regionAdminAuthorizationService =
         mock(RegionAdminAuthorizationService.class);
     private final RecordAuditEventUseCase recordAuditEventUseCase = mock(RecordAuditEventUseCase.class);
@@ -49,11 +53,18 @@ class EndContentReservationsUseCaseTest {
         contentSessionService,
         contentLogService,
         capacityHoldService,
+        expirePendingPaymentForTerminatedHoldUseCase,
         regionAdminAuthorizationService,
         recordAuditEventUseCase,
         recordFailedAuditEventUseCase,
         publicCatalogCacheInvalidator
     );
+
+    @BeforeEach
+    void setUp() {
+        when(capacityHoldService.invalidateAllActiveHoldsForContent(CONTENT_ID, "CONTENT_ENDED"))
+            .thenReturn(List.of());
+    }
 
     @Test
     void endByRegionAdmin_성공하면_콘텐츠_캐시_무효화를_등록한다() {
