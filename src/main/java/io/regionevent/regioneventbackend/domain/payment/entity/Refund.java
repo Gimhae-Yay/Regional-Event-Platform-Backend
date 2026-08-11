@@ -96,6 +96,33 @@ public class Refund {
         return completedAt;
     }
 
+    public void startProcessing() {
+        if (status != RefundStatus.REQUESTED) {
+            throw new IllegalStateException("only requested refund can start processing");
+        }
+        status = RefundStatus.PROCESSING;
+    }
+
+    public void succeed(Instant completedAt) {
+        complete(RefundStatus.SUCCEEDED, completedAt);
+    }
+
+    public void fail(Instant completedAt) {
+        complete(RefundStatus.FAILED, completedAt);
+    }
+
+    public void markDiscrepant(Instant completedAt) {
+        complete(RefundStatus.DISCREPANT, completedAt);
+    }
+
+    private void complete(RefundStatus nextStatus, Instant completedAt) {
+        if (status != RefundStatus.PROCESSING) {
+            throw new IllegalStateException("only processing refund can be completed");
+        }
+        status = nextStatus;
+        this.completedAt = requireNotNull(completedAt, "completedAt");
+    }
+
     private static long validateAmount(
         Payment payment,
         long amount

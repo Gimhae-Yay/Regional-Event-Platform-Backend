@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundStatus;
+import io.regionevent.regioneventbackend.domain.payment.entity.Refund;
 import io.regionevent.regioneventbackend.domain.payment.repository.RefundRepository;
 
 @Service
@@ -29,5 +30,15 @@ public class RefundService {
             userId,
             IN_PROGRESS_STATUSES
         );
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public java.util.Optional<Refund> findByPaymentIdForUpdate(Long paymentId) {
+        return refundRepository.findByPaymentIdForUpdate(paymentId);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Refund create(Refund refund) {
+        return refundRepository.saveAndFlush(refund);
     }
 }
