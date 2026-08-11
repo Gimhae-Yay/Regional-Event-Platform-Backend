@@ -326,6 +326,14 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
         """)
     Optional<Content> findEndTargetForUpdate(@Param("contentId") Long contentId);
 
+    @Query("""
+        SELECT content.region.regionId
+        FROM Content content
+        WHERE content.contentId = :contentId
+            AND content.deletedAt IS NULL
+        """)
+    Optional<Long> findRegionIdByContentIdAndDeletedAtIsNull(@Param("contentId") Long contentId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @EntityGraph(attributePaths = "region")
     @Query("""

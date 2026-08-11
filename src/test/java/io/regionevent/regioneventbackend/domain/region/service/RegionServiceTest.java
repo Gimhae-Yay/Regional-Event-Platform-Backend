@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.sql.SQLException;
+import java.util.Optional;
 
 import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,6 +38,17 @@ class RegionServiceTest {
     @BeforeEach
     void setUp() {
         regionService = new RegionService(regionRepository);
+    }
+
+    @Test
+    void findRegionForUpdate_returnsRegionLockedAndRefreshedByRepository() {
+        Region region = new Region("GIMHAE", "Gimhae", true);
+        when(regionRepository.findByRegionIdForUpdate(1L)).thenReturn(Optional.of(region));
+
+        Region result = regionService.findRegionForUpdate(1L);
+
+        assertThat(result).isSameAs(region);
+        verify(regionRepository).findByRegionIdForUpdate(1L);
     }
 
     @Test

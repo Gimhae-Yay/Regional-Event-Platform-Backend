@@ -12,6 +12,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
+import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
@@ -40,6 +41,7 @@ class RegionAdminAuthorizationServiceTest {
             () -> new RegionAdminAuthorizationServiceTest().requireAuthorizedRegionId_whenAssignedRegionIsMissing_throwsForbidden(),
             () -> new RegionAdminAuthorizationServiceTest().requireAuthorizedRegionId_whenAssignedRegionIdIsMissing_throwsForbidden(),
             () -> new RegionAdminAuthorizationServiceTest().requireAuthorizedRegionId_whenActiveRegionAdminIsAssigned_returnsRegionId(),
+            () -> new RegionAdminAuthorizationServiceTest().requireAuthorizedRegionAdmin_whenActiveAssignmentExists_returnsAuditActor(),
             () -> new RegionAdminAuthorizationServiceTest().authorize_whenAssignedRegionDiffersFromTarget_throwsForbidden(),
             () -> new RegionAdminAuthorizationServiceTest().authorize_whenActiveRegionAdminMatchesTargetRegion_completesNormally()
         );
@@ -94,6 +96,18 @@ class RegionAdminAuthorizationServiceTest {
         assertForbidden(() -> authorizationService.authorize(USER_ID, GIMHAE_REGION_ID));
     }
 
+    void requireAuthorizedRegionAdmin_whenActiveAssignmentExists_returnsAuditActor() {
+        UserRoleAssignment assignment = assignmentInRegion(GIMHAE_REGION_ID);
+        givenAuthorizationAssignment(Optional.of(assignment));
+
+        RegionAdminAuthorizationService.AuthorizedRegionAdmin regionAdmin = authorizationService
+            .requireAuthorizedRegionAdmin(USER_ID);
+
+        assertThat(regionAdmin.user().getUserId()).isEqualTo(USER_ID);
+        assertThat(regionAdmin.region().getRegionId()).isEqualTo(GIMHAE_REGION_ID);
+        assertThat(regionAdmin.roleAssignment()).isSameAs(assignment);
+    }
+
     void authorize_whenActiveRegionAdminMatchesTargetRegion_completesNormally() {
         UserRoleAssignment assignment = assignmentInRegion(GIMHAE_REGION_ID);
         givenAuthorizationAssignment(Optional.of(assignment));
@@ -113,7 +127,11 @@ class RegionAdminAuthorizationServiceTest {
     private UserRoleAssignment assignmentInRegion(Long regionId) {
         UserRoleAssignment assignment = mock(UserRoleAssignment.class);
         Region region = mock(Region.class);
+        AppUser user = mock(AppUser.class);
         when(region.getRegionId()).thenReturn(regionId);
+        when(user.getUserId()).thenReturn(USER_ID);
+        when(assignment.getRoleAssignmentId()).thenReturn(100L);
+        when(assignment.getAppUser()).thenReturn(user);
         when(assignment.getRegion()).thenReturn(region);
         return assignment;
     }

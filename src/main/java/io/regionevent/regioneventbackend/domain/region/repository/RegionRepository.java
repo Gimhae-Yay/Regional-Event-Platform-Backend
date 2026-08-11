@@ -3,16 +3,13 @@ package io.regionevent.regioneventbackend.domain.region.repository;
 import java.util.List;
 import java.util.Optional;
 
-import jakarta.persistence.LockModeType;
-
-import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 
-public interface RegionRepository extends JpaRepository<Region, Long> {
+public interface RegionRepository extends JpaRepository<Region, Long>, RegionRepositoryCustom {
 
     boolean existsByRegionCode(String regionCode);
 
@@ -49,7 +46,6 @@ public interface RegionRepository extends JpaRepository<Region, Long> {
         @Param("isPublic") Boolean isPublic
     );
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<Region> findByRegionId(Long regionId);
 
     @Query("""
