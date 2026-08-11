@@ -108,6 +108,20 @@ public class MissionService {
         return missionRepository.saveAndFlush(mission);
     }
 
+    public Mission end(
+        Mission mission,
+        Instant endedAt
+    ) {
+        if (mission.getStatus() != MissionStatus.PUBLISHED) {
+            throw new BusinessException(ErrorCode.MISSION_STATE_CONFLICT);
+        }
+        if (endedAt == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        mission.end(endedAt);
+        return missionRepository.saveAndFlush(mission);
+    }
+
     public Mission findPublicMissionDetail(Long missionId, Instant now) {
         return missionRepository.findPublicMissionDetailByMissionId(missionId, now)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));

@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
 import io.regionevent.regioneventbackend.domain.audit.repository.MissionHistoryAuditProjection;
+import io.regionevent.regioneventbackend.domain.mission.entity.MissionEarlyEndReasonCode;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
@@ -29,13 +30,6 @@ public class MissionHistoryReadService {
         "MISSION_REWARD_POLICY_INVALID",
         "MISSION_SCHEDULE_INVALID"
     );
-    private static final Set<String> EARLY_END_REASON_CODES = Set.of(
-        "MISSION_OPERATION_SCHEDULE_CHANGED",
-        "MISSION_TARGET_CONTENT_UNAVAILABLE",
-        "MISSION_REWARD_POLICY_UNAVAILABLE",
-        "MISSION_OPERATION_SAFETY_CONCERN"
-    );
-
     private final AuditEventRepository auditEventRepository;
 
     public MissionHistoryReadService(AuditEventRepository auditEventRepository) {
@@ -96,7 +90,7 @@ public class MissionHistoryReadService {
             return "REJECTED";
         }
         if (matchesStateAndActor(projection, "PUBLISHED", "ENDED", USER)
-            && EARLY_END_REASON_CODES.contains(projection.reasonCode())) {
+            && MissionEarlyEndReasonCode.isSupported(projection.reasonCode())) {
             return "ENDED";
         }
         if (matches(projection, "PUBLISHED", "ENDED", SYSTEM, "MISSION_END_TIME_REACHED")) {
