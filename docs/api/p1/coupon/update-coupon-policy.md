@@ -19,8 +19,7 @@ Accept: application/json
 
 {
   "discountAmount": 5000,
-  "minimumPaymentAmount": 15000,
-  "reason": "할인 금액 조정"
+  "minimumPaymentAmount": 15000
 }
 ```
 
@@ -58,9 +57,8 @@ Accept: application/json
 | `issueStartsAt` | String | N | 포함하면 발급 가능 시작 시각을 변경한다. UTC ISO 8601 일시이며 `null`을 허용하지 않는다. |
 | `issueEndsAt` | String | N | 포함하면 발급 가능 종료 시각을 변경한다. UTC ISO 8601 일시이며 `null`을 허용하지 않는다. |
 | `totalIssueLimit` | Number or null | N | 포함하면 정책 전체 발급 한도를 변경한다. `null`은 한도 제거를 의미하고 값은 1 이상 정수다. |
-| `reason` | String | Y | 수정 사유. 앞뒤 공백 제거 후 비어 있을 수 없다. |
 
-`reason` 외 변경 필드를 하나 이상 포함해야 한다. 생략한 필드는 기존 값을 유지하고, 변경 후 전체 값으로 기간·금액 조합을 다시 검증한다.
+변경 필드를 하나 이상 포함해야 한다. 생략한 필드는 기존 값을 유지하고, 변경 후 전체 값으로 기간·금액 조합을 다시 검증한다.
 
 ### Response
 
@@ -135,4 +133,4 @@ Accept: application/json
 3. `contentId`, `regionId`, `issueSourceType`은 수정하지 않는다. 다른 콘텐츠나 발급 경로가 필요하면 새 정책을 생성한다.
 4. 요청에 포함된 필드만 변경한 뒤 `discountAmount >= 1`, `minimumPaymentAmount >= discountAmount`,
    `1 <= validDaysAfterIssue <= 365`, `issueStartsAt < issueEndsAt`를 검증한다.
-5. 수정 처리에는 공통 감사 이력에 처리자, 대상, 이전·이후 상태, 수정 사유, 수정 시각과 `requestId`를 기록한다.
+5. 수정은 정책의 상태를 변경하지 않으므로 공통 감사 이력을 생성하지 않는다.
