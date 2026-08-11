@@ -22,16 +22,19 @@ import org.springframework.test.web.servlet.MockMvc;
 import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
 import io.regionevent.regioneventbackend.domain.payment.entity.Refund;
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundStatus;
+import io.regionevent.regioneventbackend.domain.payment.service.GetMyRefundUseCase;
 import io.regionevent.regioneventbackend.domain.payment.service.GetMyRefundsUseCase;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationPriceSnapshot;
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.config.SecurityConfig;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
-@WebMvcTest(MyRefundController.class)
+@WebMvcTest({MyRefundController.class, MyRefundDetailController.class})
 @Import({SecurityConfig.class, RequestIdFilter.class, GlobalExceptionHandler.class})
 class MyRefundControllerWebMvcTest {
 
@@ -42,6 +45,9 @@ class MyRefundControllerWebMvcTest {
 
     @Autowired
     private JwtAccessTokenService jwtAccessTokenService;
+
+    @MockitoBean
+    private GetMyRefundUseCase getMyRefundUseCase;
 
     @MockitoBean
     private GetMyRefundsUseCase getMyRefundsUseCase;
@@ -108,6 +114,74 @@ class MyRefundControllerWebMvcTest {
             .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
 
         verifyNoInteractions(getMyRefundsUseCase);
+    }
+
+    @Test
+    void get_returnsOnlySpecifiedRefundFields() throws Exception {
+        Refund refund = refund(
+            10L,
+            20L,
+            30L,
+            17_000L,
+            RefundStatus.PROCESSING,
+            Instant.parse("2026-08-07T01:00:00Z"),
+            null
+        );
+        when(getMyRefundUseCase.find(USER_ID, 10L)).thenReturn(refund);
+
+        mockMvc.perform(authenticated(get("/api/v1/me/refunds/10")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value("SUCCESS"))
+            .andExpect(jsonPath("$.data.refundId").value("10"))
+            .andExpect(jsonPath("$.data.paymentId").value("20"))
+            .andExpect(jsonPath("$.data.reservationId").value("30"))
+            .andExpect(jsonPath("$.data.amount").value(17_000))
+            .andExpect(jsonPath("$.data.currency").value("KRW"))
+            .andExpect(jsonPath("$.data.status").value("PROCESSING"))
+            .andExpect(jsonPath("$.data.requestedAt").value("2026-08-07T01:00:00Z"))
+            .andExpect(jsonPath("$.data.completedAt").isEmpty())
+            .andExpect(jsonPath("$.data.paymentMethod").doesNotExist())
+            .andExpect(jsonPath("$.data.rawPayload").doesNotExist());
+
+        verify(getMyRefundUseCase).find(USER_ID, 10L);
+    }
+
+    @Test
+    void get_whenRefundIdIsNotPositive_returnsInvalidTypeWithoutReadingRefund() throws Exception {
+        mockMvc.perform(authenticated(get("/api/v1/me/refunds/0")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+
+        verifyNoInteractions(getMyRefundUseCase);
+    }
+
+    @Test
+    void get_whenRefundIdIsNotLong_returnsInvalidTypeWithoutReadingRefund() throws Exception {
+        mockMvc.perform(authenticated(get("/api/v1/me/refunds/9223372036854775808")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+
+        verifyNoInteractions(getMyRefundUseCase);
+    }
+
+    @Test
+    void get_whenRefundIsMissingOrNotOwned_returnsNotFound() throws Exception {
+        when(getMyRefundUseCase.find(USER_ID, 10L)).thenThrow(new BusinessException(ErrorCode.NOT_FOUND));
+
+        mockMvc.perform(authenticated(get("/api/v1/me/refunds/10")))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+
+        verify(getMyRefundUseCase).find(USER_ID, 10L);
+    }
+
+    @Test
+    void get_withoutAuthentication_returnsUnauthenticatedWithoutReadingRefund() throws Exception {
+        mockMvc.perform(get("/api/v1/me/refunds/10"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+
+        verifyNoInteractions(getMyRefundUseCase);
     }
 
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder authenticated(

@@ -32,7 +32,7 @@ class GetRegionAdminMissionsUseCaseTest {
         when(mission.getMissionId()).thenReturn(701L);
         when(mission.getStatus()).thenReturn(MissionStatus.PENDING_REVIEW);
         when(regionAdminAuthorizationService.requireAuthorizedRegionId(100L)).thenReturn(11L);
-        when(missionService.findRegionAdminMissions(
+        when(missionService.findRegionMissions(
             11L,
             MissionStatus.PENDING_REVIEW,
             PageRequest.of(1, 10)
@@ -47,19 +47,19 @@ class GetRegionAdminMissionsUseCaseTest {
         assertThat(result.size()).isEqualTo(10);
         assertThat(result.totalElements()).isEqualTo(11);
         verify(regionAdminAuthorizationService).requireAuthorizedRegionId(100L);
-        verify(missionService).findRegionAdminMissions(11L, MissionStatus.PENDING_REVIEW, PageRequest.of(1, 10));
+        verify(missionService).findRegionMissions(11L, MissionStatus.PENDING_REVIEW, PageRequest.of(1, 10));
     }
 
     @Test
     void get_withoutStatus_usesAllStatusQuery() {
         when(regionAdminAuthorizationService.requireAuthorizedRegionId(100L)).thenReturn(11L);
-        when(missionService.findRegionAdminMissions(11L, null, PageRequest.of(0, 20)))
+        when(missionService.findRegionMissions(11L, null, PageRequest.of(0, 20)))
             .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
         RegionAdminMissionListResult result = useCase.get(100L, null, 0, 20);
 
         assertThat(result.content()).isEmpty();
         assertThat(result.totalPages()).isZero();
-        verify(missionService).findRegionAdminMissions(11L, null, PageRequest.of(0, 20));
+        verify(missionService).findRegionMissions(11L, null, PageRequest.of(0, 20));
     }
 }

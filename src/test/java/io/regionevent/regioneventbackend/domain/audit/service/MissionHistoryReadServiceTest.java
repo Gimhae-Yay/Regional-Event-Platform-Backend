@@ -9,10 +9,13 @@ import java.time.Instant;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
 import io.regionevent.regioneventbackend.domain.audit.repository.MissionHistoryAuditProjection;
+import io.regionevent.regioneventbackend.domain.mission.entity.MissionEarlyEndReasonCode;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
@@ -70,6 +73,20 @@ class MissionHistoryReadServiceTest {
             .isInstanceOfSatisfying(BusinessException.class, exception ->
                 assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INTERNAL_SERVER_ERROR)
             );
+    }
+
+    @ParameterizedTest
+    @EnumSource(MissionEarlyEndReasonCode.class)
+    void findAll_everyEarlyEndReason_mapsEndedAction(MissionEarlyEndReasonCode reasonCode) {
+        when(auditEventRepository.findMissionHistoryAuditProjections(MISSION_ID)).thenReturn(List.of(
+            projection(1L, "PUBLISHED", "ENDED", reasonCode.name(), "USER", 31L)
+        ));
+
+        List<MissionHistoryReadResult> histories = missionHistoryReadService.findAll(MISSION_ID);
+
+        assertThat(histories)
+            .extracting(MissionHistoryReadResult::action)
+            .containsExactly("ENDED");
     }
 
     private MissionHistoryAuditProjection projection(

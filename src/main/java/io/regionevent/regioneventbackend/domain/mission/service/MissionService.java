@@ -44,7 +44,7 @@ public class MissionService {
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
-    public Page<Mission> findRegionAdminMissions(
+    public Page<Mission> findRegionMissions(
         Long regionId,
         MissionStatus status,
         Pageable pageable
@@ -115,6 +115,20 @@ public class MissionService {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
         mission.approve(publishedAt);
+        return missionRepository.saveAndFlush(mission);
+    }
+
+    public Mission end(
+        Mission mission,
+        Instant endedAt
+    ) {
+        if (mission.getStatus() != MissionStatus.PUBLISHED) {
+            throw new BusinessException(ErrorCode.MISSION_STATE_CONFLICT);
+        }
+        if (endedAt == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        mission.end(endedAt);
         return missionRepository.saveAndFlush(mission);
     }
 
