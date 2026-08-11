@@ -17,6 +17,8 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
+import jakarta.persistence.EntityManager;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -74,6 +76,7 @@ class ReceivePortOneWebhookUseCaseTest {
     private final ReservationService reservationService = mock(ReservationService.class);
     private final RecordAuditEventUseCase recordAuditEventUseCase = mock(RecordAuditEventUseCase.class);
     private final TransactionTemplate transactionTemplate = mock(TransactionTemplate.class);
+    private final EntityManager entityManager = mock(EntityManager.class);
 
     private ReceivePortOneWebhookUseCase useCase;
 
@@ -113,7 +116,8 @@ class ReceivePortOneWebhookUseCaseTest {
             mock(CouponStatusHistoryService.class),
             mock(CouponRedemptionService.class),
             recordAuditEventUseCase,
-            transactionTemplate
+            transactionTemplate,
+            entityManager
         );
     }
 

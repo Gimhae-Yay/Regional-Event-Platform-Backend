@@ -6,6 +6,9 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.UUID;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -71,6 +74,7 @@ public class ReceivePortOneWebhookUseCase {
     private final CouponRedemptionService couponRedemptionService;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final TransactionTemplate transactionTemplate;
+    private final EntityManager entityManager;
 
     public ReceivePortOneWebhookUseCase(
         ObjectMapper objectMapper,
@@ -89,7 +93,8 @@ public class ReceivePortOneWebhookUseCase {
         CouponStatusHistoryService couponStatusHistoryService,
         CouponRedemptionService couponRedemptionService,
         RecordAuditEventUseCase recordAuditEventUseCase,
-        TransactionTemplate transactionTemplate
+        TransactionTemplate transactionTemplate,
+        EntityManager entityManager
     ) {
         this.objectMapper = objectMapper;
         this.signatureVerifier = signatureVerifier;
@@ -108,6 +113,7 @@ public class ReceivePortOneWebhookUseCase {
         this.couponRedemptionService = couponRedemptionService;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
         this.transactionTemplate = transactionTemplate;
+        this.entityManager = entityManager;
     }
 
     public void receive(
@@ -295,6 +301,7 @@ public class ReceivePortOneWebhookUseCase {
         if (lockedPayment == null) {
             return null;
         }
+        entityManager.refresh(lockedPayment, LockModeType.PESSIMISTIC_WRITE);
         validateLockedPaymentContext(lockedContent, lockedSession, lockedHold, snapshot, lockedPayment);
         return new LockedPaymentContext(lockedPayment, snapshot);
     }
