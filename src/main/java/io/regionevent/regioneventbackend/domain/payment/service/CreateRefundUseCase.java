@@ -109,7 +109,8 @@ public class CreateRefundUseCase {
                 actorUserId,
                 paymentId,
                 evidenceReference,
-                reason
+                reason,
+                requestId
             )
         );
         if (preparedRefund.existingResponse() != null) {
@@ -146,7 +147,8 @@ public class CreateRefundUseCase {
         Long actorUserId,
         long paymentId,
         String evidenceReference,
-        String reason
+        String reason,
+        UUID requestId
     ) {
         PlatformAdminAssignment assignment = platformAdminAuthorizationService
             .requireAuthorizedPlatformAdmin(actorUserId);
@@ -175,7 +177,14 @@ public class CreateRefundUseCase {
             RefundAttemptInitiatorKind.SYSTEM,
             now
         ));
-        requestDiscrepancyRefund(payment, evidenceReference, reason, now);
+        requestDiscrepancyRefund(
+            payment,
+            assignment,
+            evidenceReference,
+            reason,
+            now,
+            requestId
+        );
         return new PreparedRefund(
             refund.getRefundId(),
             attempt.getRefundAttemptId(),
@@ -204,7 +213,7 @@ public class CreateRefundUseCase {
         if (cancellation.isSucceeded()) {
             Instant completedAt = Instant.now(clock);
             refund.succeed(completedAt);
-            restoreCouponIfEligible(refund, completedAt, requestId, assignment);
+            restoreCouponIfEligible(refund, requestId, assignment);
         } else {
             refund.fail(Instant.now(clock));
         }
@@ -235,9 +244,11 @@ public class CreateRefundUseCase {
 
     private void requestDiscrepancyRefund(
         Payment payment,
+        PlatformAdminAssignment assignment,
         String evidenceReference,
         String reason,
-        Instant actedAt
+        Instant actedAt,
+        UUID requestId
     ) {
         PaymentDiscrepancy discrepancy = paymentDiscrepancyService
             .findByPaymentIdForUpdate(payment.getPaymentId())
@@ -254,11 +265,24 @@ public class CreateRefundUseCase {
             DISCREPANCY_ACTION_RESULT_CODE,
             actedAt
         );
+        recordAuditEventUseCase.record(new AuditEventCommand(
+            requestId,
+            payment.getCapacityHold().getRegion(),
+            AuditEventTargetType.PAYMENT_DISCREPANCY,
+            discrepancy.getPaymentDiscrepancyId(),
+            "OPEN",
+            "REFUND_REQUESTED",
+            AuditEventResult.SUCCESS,
+            DISCREPANCY_ACTION_REASON_CODE,
+            reason,
+            evidenceReference,
+            new AuditEventActor(assignment),
+            actedAt
+        ));
     }
 
     private void restoreCouponIfEligible(
         Refund refund,
-        Instant restoredAt,
         UUID requestId,
         PlatformAdminAssignment assignment
     ) {
@@ -287,6 +311,7 @@ public class CreateRefundUseCase {
                 payment.getReservationPriceSnapshot().getReservationPriceSnapshotId()
             )
             && coupon.getStatus() == CouponStatus.USED) {
+            Instant restoredAt = couponService.findCurrentDatabaseTime();
             redemption.reverse(restoredAt);
             CouponStatus restoredStatus = couponService.restoreUsedCoupon(coupon, restoredAt);
             couponStatusHistoryService.create(new CouponStatusHistory(

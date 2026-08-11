@@ -19,6 +19,7 @@ import org.mockito.InOrder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
+import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponRedemptionService;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponService;
@@ -26,6 +27,7 @@ import io.regionevent.regioneventbackend.domain.coupon.service.CouponStatusHisto
 import io.regionevent.regioneventbackend.domain.payment.dto.CreateRefundRequest;
 import io.regionevent.regioneventbackend.domain.payment.dto.CreateRefundResponse;
 import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
+import io.regionevent.regioneventbackend.domain.payment.entity.PaymentDiscrepancy;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentStatus;
 import io.regionevent.regioneventbackend.domain.payment.entity.Refund;
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundAttempt;
@@ -53,6 +55,7 @@ class CreateRefundUseCaseTest {
         RefundService refundService = mock(RefundService.class);
         RefundAttemptService refundAttemptService = mock(RefundAttemptService.class);
         PaymentDiscrepancyService discrepancyService = mock(PaymentDiscrepancyService.class);
+        PaymentDiscrepancyActionService discrepancyActionService = mock(PaymentDiscrepancyActionService.class);
         PortOnePaymentGateway paymentGateway = mock(PortOnePaymentGateway.class);
         PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
         RecordAuditEventUseCase auditEventUseCase = mock(RecordAuditEventUseCase.class);
@@ -62,7 +65,7 @@ class CreateRefundUseCaseTest {
             refundService,
             refundAttemptService,
             discrepancyService,
-            mock(PaymentDiscrepancyActionService.class),
+            discrepancyActionService,
             mock(CouponService.class),
             mock(CouponRedemptionService.class),
             mock(CouponStatusHistoryService.class),
@@ -79,6 +82,7 @@ class CreateRefundUseCaseTest {
         ReservationPriceSnapshot snapshot = mock(ReservationPriceSnapshot.class);
         Refund refund = mock(Refund.class);
         RefundAttempt attempt = mock(RefundAttempt.class);
+        PaymentDiscrepancy discrepancy = mock(PaymentDiscrepancy.class);
 
         when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         when(authorizationService.requireAuthorizedPlatformAdmin(1L)).thenReturn(assignment);
@@ -103,7 +107,9 @@ class CreateRefundUseCaseTest {
         when(refund.getAmount()).thenReturn(10_000L);
         when(refundAttemptService.create(any())).thenReturn(attempt);
         when(attempt.getRefundAttemptId()).thenReturn(30L);
-        when(discrepancyService.findByPaymentIdForUpdate(10L)).thenReturn(Optional.empty());
+        when(discrepancyService.findByPaymentIdForUpdate(10L)).thenReturn(Optional.of(discrepancy));
+        when(discrepancy.getStatus()).thenReturn("OPEN");
+        when(discrepancy.getPaymentDiscrepancyId()).thenReturn(40L);
         when(paymentGateway.cancelPayment("portone-payment", 10_000L, "관리자 요청"))
             .thenThrow(new PortOneNoResponseException(
                 RefundFailureReasonCode.CONNECTION,
@@ -128,9 +134,27 @@ class CreateRefundUseCaseTest {
         ArgumentCaptor<RefundAttempt> attemptCaptor = ArgumentCaptor.forClass(RefundAttempt.class);
         verify(refundAttemptService).create(attemptCaptor.capture());
         verify(attempt).noResponse(RefundFailureReasonCode.CONNECTION);
-        verify(auditEventUseCase).record(any());
+        verify(discrepancy).requestRefund();
+        verify(discrepancyActionService).create(
+            discrepancy,
+            "FULL_REFUND_REQUEST",
+            "증빙-1",
+            "MANUAL_FULL_REFUND",
+            "REFUND_REQUESTED",
+            Instant.parse("2026-08-11T00:00:00Z")
+        );
+        ArgumentCaptor<AuditEventCommand> auditCaptor = ArgumentCaptor.forClass(AuditEventCommand.class);
+        verify(auditEventUseCase, org.mockito.Mockito.times(2)).record(auditCaptor.capture());
         org.assertj.core.api.Assertions.assertThat(attemptCaptor.getValue().getInitiatorKind())
             .isEqualTo(RefundAttemptInitiatorKind.SYSTEM);
+        org.assertj.core.api.Assertions.assertThat(auditCaptor.getAllValues())
+            .anySatisfy(audit -> {
+                org.assertj.core.api.Assertions.assertThat(audit.targetType())
+                    .isEqualTo(io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType.PAYMENT_DISCREPANCY);
+                org.assertj.core.api.Assertions.assertThat(audit.targetId()).isEqualTo(40L);
+                org.assertj.core.api.Assertions.assertThat(audit.previousState()).isEqualTo("OPEN");
+                org.assertj.core.api.Assertions.assertThat(audit.nextState()).isEqualTo("REFUND_REQUESTED");
+            });
         org.assertj.core.api.Assertions.assertThat(response.status()).isEqualTo("DISCREPANT");
     }
 }
