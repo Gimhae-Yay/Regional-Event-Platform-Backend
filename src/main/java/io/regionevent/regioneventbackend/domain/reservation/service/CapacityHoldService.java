@@ -116,8 +116,11 @@ public class CapacityHoldService {
             throw new IllegalArgumentException("contentId must be positive");
         }
         validateInvalidationReason(invalidationReason);
-        capacityHoldRepository.findActiveHoldIdsByContentId(contentId)
-            .forEach(holdId -> invalidateAndReleaseCapacityIfActive(holdId, invalidationReason));
+        capacityHoldRepository.findActiveByContentIdForUpdate(contentId)
+            .forEach(capacityHold -> invalidateAndReleaseCapacityIfActive(
+                capacityHold.getHoldId(),
+                invalidationReason
+            ));
     }
 
     @Transactional(propagation = Propagation.MANDATORY)

@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
@@ -274,6 +275,13 @@ public class ContentService {
 
     public Content findEndTargetForUpdate(Long contentId) {
         return contentRepository.findEndTargetForUpdate(contentId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+    public Long findSuspendTargetRegionId(Long contentId) {
+        validateRequiredId(contentId);
+        return contentRepository.findRegionIdByContentIdAndDeletedAtIsNull(contentId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 

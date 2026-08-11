@@ -35,7 +35,7 @@ import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
-@WebMvcTest(RegionAdminMissionController.class)
+@WebMvcTest({RegionAdminMissionController.class, ApproveRegionAdminMissionController.class})
 @Import({SecurityConfig.class, RequestIdFilter.class, GlobalExceptionHandler.class})
 class RegionAdminMissionControllerWebMvcTest {
 

@@ -10,6 +10,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 import jakarta.persistence.EntityManager;
 
@@ -53,6 +54,10 @@ import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 class ApproveRegionAdminMissionConcurrencyMySqlTest extends NonTransactionalMySqlTestSupport {
 
     private static final Instant BASE_TIME = Instant.parse("2026-08-10T00:00:00Z");
+    private static final Instant FUTURE_ISSUE_ENDS_AT = Instant.parse("2037-12-31T00:00:00Z");
+    private static final Instant FUTURE_MISSION_ENDS_AT = Instant.parse("2037-09-30T14:59:59Z");
+    private static final int LOCK_WAIT_CONFIRMATION_ATTEMPTS = 30;
+    private static final long LOCK_WAIT_CONFIRMATION_INTERVAL_MILLIS = 100;
 
     private final ApproveRegionAdminMissionUseCase approveRegionAdminMissionUseCase;
     private final RegionRepository regionRepository;
@@ -95,6 +100,7 @@ class ApproveRegionAdminMissionConcurrencyMySqlTest extends NonTransactionalMySq
 
     @DynamicPropertySource
     static void configureDataSource(DynamicPropertyRegistry registry) {
+        SharedMySqlTestContainer.grantLockMonitoringPrivileges();
         SharedMySqlTestContainer.registerDataSourceProperties(registry);
     }
 
@@ -134,9 +140,12 @@ class ApproveRegionAdminMissionConcurrencyMySqlTest extends NonTransactionalMySq
         Fixture fixture = createFixture(MissionConditionType.CONTENT_SET);
         CountDownLatch contentLocked = new CountDownLatch(1);
         CountDownLatch releaseContent = new CountDownLatch(1);
+        AtomicLong approvalConnectionId = new AtomicLong();
+        CountDownLatch approvalStarted = new CountDownLatch(1);
 
         try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
             Future<Void> suspension = executor.submit(() -> transactionTemplate.execute(status -> {
+                regionRepository.findByRegionIdForUpdate(fixture.regionId()).orElseThrow();
                 Content content = contentRepository.findSuspendTargetForUpdate(fixture.targetContentId())
                     .orElseThrow();
                 contentLocked.countDown();
@@ -147,10 +156,17 @@ class ApproveRegionAdminMissionConcurrencyMySqlTest extends NonTransactionalMySq
             }));
             assertThat(contentLocked.await(5, TimeUnit.SECONDS)).isTrue();
 
-            Future<ApprovalAttempt> approval = executor.submit(() -> approve(fixture));
-            TimeUnit.MILLISECONDS.sleep(500);
-            assertThat(approval.isDone()).isFalse();
-            releaseContent.countDown();
+            Future<ApprovalAttempt> approval = executor.submit(() -> approveInTrackedTransaction(
+                fixture,
+                approvalConnectionId,
+                approvalStarted
+            ));
+            assertThat(approvalStarted.await(5, TimeUnit.SECONDS)).isTrue();
+            try {
+                assertThat(awaitLockWait(approvalConnectionId.get())).isTrue();
+            } finally {
+                releaseContent.countDown();
+            }
 
             suspension.get(10, TimeUnit.SECONDS);
             assertThat(approval.get(15, TimeUnit.SECONDS).errorCode())
@@ -161,6 +177,52 @@ class ApproveRegionAdminMissionConcurrencyMySqlTest extends NonTransactionalMySq
         assertThat(mission.getStatus()).isEqualTo(MissionStatus.PENDING_REVIEW);
         assertThat(contentRepository.findById(fixture.targetContentId()).orElseThrow().getStatus())
             .isEqualTo(ContentStatus.SUSPENDED);
+    }
+
+    @Test
+    @Timeout(20)
+    void regionVisibilityChangedBeforeRegionLock_isRejectedAfterRefresh() throws Exception {
+        Fixture fixture = createFixture(MissionConditionType.VISIT_COUNT);
+        CountDownLatch policyLocked = new CountDownLatch(1);
+        CountDownLatch releasePolicy = new CountDownLatch(1);
+        AtomicLong approvalConnectionId = new AtomicLong();
+        CountDownLatch approvalStarted = new CountDownLatch(1);
+
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<Void> policyLock = executor.submit(() -> transactionTemplate.execute(status -> {
+                couponPolicyRepository.findByCouponPolicyIdForUpdate(fixture.rewardPolicyId())
+                    .orElseThrow();
+                policyLocked.countDown();
+                await(releasePolicy);
+                return null;
+            }));
+            assertThat(policyLocked.await(5, TimeUnit.SECONDS)).isTrue();
+
+            Future<ApprovalAttempt> approval = executor.submit(() -> approveInTrackedTransaction(
+                fixture,
+                approvalConnectionId,
+                approvalStarted
+            ));
+            assertThat(approvalStarted.await(5, TimeUnit.SECONDS)).isTrue();
+            try {
+                assertThat(awaitLockWait(approvalConnectionId.get())).isTrue();
+                transactionTemplate.executeWithoutResult(status -> {
+                    Region region = regionRepository.findByRegionId(fixture.regionId()).orElseThrow();
+                    region.changeVisibility(false);
+                    regionRepository.saveAndFlush(region);
+                });
+            } finally {
+                releasePolicy.countDown();
+            }
+
+            policyLock.get(10, TimeUnit.SECONDS);
+            assertThat(approval.get(15, TimeUnit.SECONDS).errorCode())
+                .isEqualTo(ErrorCode.MISSION_STATE_CONFLICT);
+        }
+
+        Mission mission = missionRepository.findById(fixture.missionId()).orElseThrow();
+        assertThat(mission.getStatus()).isEqualTo(MissionStatus.PENDING_REVIEW);
+        assertThat(regionRepository.findById(fixture.regionId()).orElseThrow().isPublic()).isFalse();
     }
 
     @Test
@@ -224,6 +286,58 @@ class ApproveRegionAdminMissionConcurrencyMySqlTest extends NonTransactionalMySq
         }
     }
 
+    private ApprovalAttempt approveInTrackedTransaction(
+        Fixture fixture,
+        AtomicLong connectionId,
+        CountDownLatch started
+    ) {
+        try {
+            transactionTemplate.executeWithoutResult(status -> {
+                connectionId.set(findCurrentConnectionId());
+                started.countDown();
+                approveRegionAdminMissionUseCase.approve(
+                    fixture.adminUserId(),
+                    fixture.missionId(),
+                    UUID.randomUUID()
+                );
+            });
+            return new ApprovalAttempt(true, null);
+        } catch (BusinessException exception) {
+            return new ApprovalAttempt(false, exception.getErrorCode());
+        }
+    }
+
+    private boolean awaitLockWait(long requestingConnectionId) {
+        for (int attempt = 0; attempt < LOCK_WAIT_CONFIRMATION_ATTEMPTS; attempt++) {
+            Integer waitingLockCount = jdbcTemplate.queryForObject(
+                """
+                    SELECT COUNT(*)
+                    FROM performance_schema.data_lock_waits AS lock_wait
+                    JOIN performance_schema.threads AS requesting_thread
+                        ON requesting_thread.thread_id = lock_wait.requesting_thread_id
+                    WHERE requesting_thread.processlist_id = ?
+                    """,
+                Integer.class,
+                requestingConnectionId
+            );
+            if (waitingLockCount != null && waitingLockCount > 0) {
+                return true;
+            }
+            awaitLockWaitConfirmationInterval();
+        }
+        return false;
+    }
+
+    private long findCurrentConnectionId() {
+        Number connectionId = (Number) entityManager
+            .createNativeQuery("SELECT CONNECTION_ID()")
+            .getSingleResult();
+        if (connectionId == null) {
+            throw new IllegalStateException("MySQL connection id does not exist");
+        }
+        return connectionId.longValue();
+    }
+
     private Fixture createFixture(MissionConditionType conditionType) {
         return transactionTemplate.execute(status -> {
             String suffix = Long.toUnsignedString(System.nanoTime());
@@ -251,7 +365,7 @@ class ApproveRegionAdminMissionConcurrencyMySqlTest extends NonTransactionalMySq
                 1_000,
                 7,
                 BASE_TIME.minusSeconds(3_600),
-                Instant.parse("2099-12-31T00:00:00Z"),
+                FUTURE_ISSUE_ENDS_AT,
                 null
             );
             rewardPolicy.publish(BASE_TIME);
@@ -271,7 +385,7 @@ class ApproveRegionAdminMissionConcurrencyMySqlTest extends NonTransactionalMySq
                 1_000,
                 7,
                 BASE_TIME.minusSeconds(3_600),
-                Instant.parse("2099-12-31T00:00:00Z"),
+                FUTURE_ISSUE_ENDS_AT,
                 null
             );
             alternativeRewardPolicy.publish(BASE_TIME);
@@ -281,7 +395,7 @@ class ApproveRegionAdminMissionConcurrencyMySqlTest extends NonTransactionalMySq
                 conditionType,
                 conditionType == MissionConditionType.VISIT_COUNT ? 3 : null,
                 rewardPolicy,
-                Instant.parse("2099-09-30T14:59:59Z")
+                FUTURE_MISSION_ENDS_AT
             );
             Long targetContentId = null;
             if (conditionType == MissionConditionType.CONTENT_SET) {
@@ -301,6 +415,7 @@ class ApproveRegionAdminMissionConcurrencyMySqlTest extends NonTransactionalMySq
             entityManager.clear();
             return new Fixture(
                 admin.getUserId(),
+                region.getRegionId(),
                 mission.getMissionId(),
                 targetContentId,
                 rewardPolicy.getCouponPolicyId(),
@@ -343,8 +458,18 @@ class ApproveRegionAdminMissionConcurrencyMySqlTest extends NonTransactionalMySq
         }
     }
 
+    private void awaitLockWaitConfirmationInterval() {
+        try {
+            TimeUnit.MILLISECONDS.sleep(LOCK_WAIT_CONFIRMATION_INTERVAL_MILLIS);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("lock wait confirmation was interrupted", exception);
+        }
+    }
+
     private record Fixture(
         Long adminUserId,
+        Long regionId,
         Long missionId,
         Long targetContentId,
         Long rewardPolicyId,

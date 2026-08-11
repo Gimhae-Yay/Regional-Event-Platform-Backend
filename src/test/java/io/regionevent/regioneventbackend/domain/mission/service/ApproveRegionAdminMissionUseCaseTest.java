@@ -27,6 +27,7 @@ import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUs
 import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
+import io.regionevent.regioneventbackend.domain.content.service.ContentService;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponIssuanceType;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicy;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicyStatus;
@@ -34,7 +35,6 @@ import io.regionevent.regioneventbackend.domain.coupon.service.CouponPolicyServi
 import io.regionevent.regioneventbackend.domain.mission.entity.Mission;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionConditionType;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
-import io.regionevent.regioneventbackend.domain.mission.entity.MissionTargetContent;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.service.RegionService;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -51,6 +51,7 @@ class ApproveRegionAdminMissionUseCaseTest {
     private static final Long USER_ID = 100L;
     private static final Long REGION_ID = 11L;
     private static final Long MISSION_ID = 701L;
+    private static final Long CONTENT_ID = 101L;
     private static final Long COUPON_POLICY_ID = 501L;
     private static final Instant PUBLISHED_AT = Instant.parse("2026-08-10T04:30:00.123456Z");
     private static final UUID REQUEST_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
@@ -62,6 +63,7 @@ class ApproveRegionAdminMissionUseCaseTest {
     private final RegionService regionService = mock(RegionService.class);
     private final MissionTargetContentService targetContentService =
         mock(MissionTargetContentService.class);
+    private final ContentService contentService = mock(ContentService.class);
     private final RecordAuditEventUseCase recordAuditEventUseCase =
         mock(RecordAuditEventUseCase.class);
     private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase =
@@ -73,6 +75,7 @@ class ApproveRegionAdminMissionUseCaseTest {
         missionService,
         regionService,
         targetContentService,
+        contentService,
         recordAuditEventUseCase,
         recordFailedAuditEventUseCase,
         clock
@@ -142,7 +145,7 @@ class ApproveRegionAdminMissionUseCaseTest {
         order.verify(regionService).findRegionForUpdate(REGION_ID);
         order.verify(missionService).approve(lockedMission, PUBLISHED_AT);
         order.verify(recordAuditEventUseCase).record(org.mockito.ArgumentMatchers.any());
-        verifyNoInteractions(targetContentService, recordFailedAuditEventUseCase);
+        verifyNoInteractions(targetContentService, contentService, recordFailedAuditEventUseCase);
 
         ArgumentCaptor<AuditEventCommand> commandCaptor = ArgumentCaptor.forClass(AuditEventCommand.class);
         verify(recordAuditEventUseCase).record(commandCaptor.capture());
@@ -160,13 +163,27 @@ class ApproveRegionAdminMissionUseCaseTest {
     @Test
     void approve_contentSetMission_locksAndValidatesPublishedTargets() {
         when(lockedMission.getConditionType()).thenReturn(MissionConditionType.CONTENT_SET);
-        MissionTargetContent targetContent = publishedTargetContent();
-        when(targetContentService.findForUpdateOrderByContentId(MISSION_ID))
-            .thenReturn(List.of(targetContent));
+        Content content = publishedTargetContent();
+        when(targetContentService.findContentIdsOrderByContentId(MISSION_ID))
+            .thenReturn(List.of(CONTENT_ID));
+        when(contentService.findMissionTargetContentsForUpdate(List.of(CONTENT_ID), REGION_ID))
+            .thenReturn(List.of(content));
 
         useCase.approve(USER_ID, MISSION_ID, REQUEST_ID);
 
-        verify(targetContentService).findForUpdateOrderByContentId(MISSION_ID);
+        InOrder order = inOrder(
+            missionService,
+            couponPolicyService,
+            regionService,
+            targetContentService,
+            contentService
+        );
+        order.verify(missionService).findMission(MISSION_ID);
+        order.verify(couponPolicyService).findForUpdate(COUPON_POLICY_ID);
+        order.verify(missionService).findForUpdate(MISSION_ID);
+        order.verify(regionService).findRegionForUpdate(REGION_ID);
+        order.verify(targetContentService).findContentIdsOrderByContentId(MISSION_ID);
+        order.verify(contentService).findMissionTargetContentsForUpdate(List.of(CONTENT_ID), REGION_ID);
         verify(missionService).approve(lockedMission, PUBLISHED_AT);
     }
 
@@ -178,7 +195,7 @@ class ApproveRegionAdminMissionUseCaseTest {
 
         assertBusinessError(ErrorCode.MISSION_STATE_CONFLICT);
 
-        verifyNoInteractions(regionService, targetContentService, recordAuditEventUseCase);
+        verifyNoInteractions(regionService, targetContentService, contentService, recordAuditEventUseCase);
         assertFailureAudit(ErrorCode.MISSION_STATE_CONFLICT);
     }
 
@@ -196,10 +213,12 @@ class ApproveRegionAdminMissionUseCaseTest {
     @Test
     void approve_whenTargetContentIsNotPublished_recordsConflictFailure() {
         when(lockedMission.getConditionType()).thenReturn(MissionConditionType.CONTENT_SET);
-        MissionTargetContent targetContent = publishedTargetContent();
-        when(targetContent.getContent().getStatus()).thenReturn(ContentStatus.APPROVED);
-        when(targetContentService.findForUpdateOrderByContentId(MISSION_ID))
-            .thenReturn(List.of(targetContent));
+        Content content = publishedTargetContent();
+        when(content.getStatus()).thenReturn(ContentStatus.APPROVED);
+        when(targetContentService.findContentIdsOrderByContentId(MISSION_ID))
+            .thenReturn(List.of(CONTENT_ID));
+        when(contentService.findMissionTargetContentsForUpdate(List.of(CONTENT_ID), REGION_ID))
+            .thenReturn(List.of(content));
 
         assertBusinessError(ErrorCode.MISSION_STATE_CONFLICT);
 
@@ -242,14 +261,13 @@ class ApproveRegionAdminMissionUseCaseTest {
         return mission;
     }
 
-    private MissionTargetContent publishedTargetContent() {
+    private Content publishedTargetContent() {
         Content content = mock(Content.class);
+        when(content.getContentId()).thenReturn(CONTENT_ID);
         when(content.getRegion()).thenReturn(region);
         when(content.getStatus()).thenReturn(ContentStatus.PUBLISHED);
         when(content.getDeletedAt()).thenReturn(null);
-        MissionTargetContent targetContent = mock(MissionTargetContent.class);
-        when(targetContent.getContent()).thenReturn(content);
-        return targetContent;
+        return content;
     }
 
     private void assertBusinessError(ErrorCode errorCode) {

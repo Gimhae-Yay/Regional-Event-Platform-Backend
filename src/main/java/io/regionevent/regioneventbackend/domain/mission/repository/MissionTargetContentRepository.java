@@ -27,7 +27,14 @@ public interface MissionTargetContentRepository
 
     long countByMissionMissionId(Long missionId);
 
-    @EntityGraph(attributePaths = {"mission", "content"})
+    @Query("""
+        SELECT missionTargetContent.content.contentId
+        FROM MissionTargetContent missionTargetContent
+        WHERE missionTargetContent.mission.missionId = :missionId
+        ORDER BY missionTargetContent.content.contentId ASC
+        """)
+    List<Long> findContentIdsByMissionIdOrderByContentIdAsc(@Param("missionId") Long missionId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT missionTargetContent

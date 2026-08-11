@@ -17,6 +17,7 @@ import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUs
 import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
+import io.regionevent.regioneventbackend.domain.content.service.ContentService;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponIssuanceType;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicy;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicyStatus;
@@ -24,7 +25,6 @@ import io.regionevent.regioneventbackend.domain.coupon.service.CouponPolicyServi
 import io.regionevent.regioneventbackend.domain.mission.entity.Mission;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionConditionType;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
-import io.regionevent.regioneventbackend.domain.mission.entity.MissionTargetContent;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.service.RegionService;
 import io.regionevent.regioneventbackend.domain.user.service.RegionAdminAuthorizationService;
@@ -42,6 +42,7 @@ public class ApproveRegionAdminMissionUseCase {
     private final MissionService missionService;
     private final RegionService regionService;
     private final MissionTargetContentService missionTargetContentService;
+    private final ContentService contentService;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase;
     private final Clock clock;
@@ -52,6 +53,7 @@ public class ApproveRegionAdminMissionUseCase {
         MissionService missionService,
         RegionService regionService,
         MissionTargetContentService missionTargetContentService,
+        ContentService contentService,
         RecordAuditEventUseCase recordAuditEventUseCase,
         RecordFailedAuditEventUseCase recordFailedAuditEventUseCase,
         Clock clock
@@ -61,6 +63,7 @@ public class ApproveRegionAdminMissionUseCase {
         this.missionService = missionService;
         this.regionService = regionService;
         this.missionTargetContentService = missionTargetContentService;
+        this.contentService = contentService;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
         this.recordFailedAuditEventUseCase = recordFailedAuditEventUseCase;
         this.clock = clock;
@@ -93,8 +96,9 @@ public class ApproveRegionAdminMissionUseCase {
             validateRegionScope(regionAdmin, mission);
 
             Region region = regionService.findRegionForUpdate(mission.getRegion().getRegionId());
+            List<Content> targetContents = lockTargetContents(mission);
             validatePublicationConditions(region, mission, rewardCouponPolicy);
-            validateTargetContents(mission, region);
+            validateTargetContents(region, targetContents);
 
             Instant publishedAt = clock.instant().truncatedTo(ChronoUnit.MICROS);
             Mission approvedMission = missionService.approve(mission, publishedAt);
@@ -156,21 +160,31 @@ public class ApproveRegionAdminMissionUseCase {
         }
     }
 
-    private void validateTargetContents(
-        Mission mission,
-        Region region
-    ) {
+    private List<Content> lockTargetContents(Mission mission) {
         if (mission.getConditionType() != MissionConditionType.CONTENT_SET) {
-            return;
+            return List.of();
         }
 
-        List<MissionTargetContent> targetContents = missionTargetContentService
-            .findForUpdateOrderByContentId(mission.getMissionId());
-        if (targetContents.isEmpty()) {
+        List<Long> targetContentIds = missionTargetContentService
+            .findContentIdsOrderByContentId(mission.getMissionId());
+        if (targetContentIds.isEmpty()) {
             throw new BusinessException(ErrorCode.MISSION_STATE_CONFLICT);
         }
-        for (MissionTargetContent targetContent : targetContents) {
-            Content content = targetContent.getContent();
+        try {
+            return contentService.findMissionTargetContentsForUpdate(
+                targetContentIds,
+                mission.getRegion().getRegionId()
+            );
+        } catch (BusinessException exception) {
+            throw new BusinessException(ErrorCode.MISSION_STATE_CONFLICT, exception);
+        }
+    }
+
+    private void validateTargetContents(
+        Region region,
+        List<Content> targetContents
+    ) {
+        for (Content content : targetContents) {
             if (!region.getRegionId().equals(content.getRegion().getRegionId())
                 || content.getDeletedAt() != null
                 || content.getStatus() != ContentStatus.PUBLISHED) {
