@@ -29,6 +29,7 @@ import io.regionevent.regioneventbackend.domain.payment.entity.PaymentIdempotenc
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentStatus;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentVerification;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentWebhook;
+import io.regionevent.regioneventbackend.domain.payment.entity.Refund;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
@@ -53,6 +54,7 @@ class PaymentPersistenceRepositoryTest {
     private final PaymentWebhookRepository paymentWebhookRepository;
     private final PaymentDiscrepancyRepository paymentDiscrepancyRepository;
     private final PaymentDiscrepancyActionRepository paymentDiscrepancyActionRepository;
+    private final RefundRepository refundRepository;
     private final CapacityHoldRepository capacityHoldRepository;
     private final ContentSessionRepository contentSessionRepository;
     private final ContentRepository contentRepository;
@@ -69,6 +71,7 @@ class PaymentPersistenceRepositoryTest {
         PaymentWebhookRepository paymentWebhookRepository,
         PaymentDiscrepancyRepository paymentDiscrepancyRepository,
         PaymentDiscrepancyActionRepository paymentDiscrepancyActionRepository,
+        RefundRepository refundRepository,
         CapacityHoldRepository capacityHoldRepository,
         ContentSessionRepository contentSessionRepository,
         ContentRepository contentRepository,
@@ -83,6 +86,7 @@ class PaymentPersistenceRepositoryTest {
         this.paymentWebhookRepository = paymentWebhookRepository;
         this.paymentDiscrepancyRepository = paymentDiscrepancyRepository;
         this.paymentDiscrepancyActionRepository = paymentDiscrepancyActionRepository;
+        this.refundRepository = refundRepository;
         this.capacityHoldRepository = capacityHoldRepository;
         this.contentSessionRepository = contentSessionRepository;
         this.contentRepository = contentRepository;
@@ -242,6 +246,36 @@ class PaymentPersistenceRepositoryTest {
             .isLoaded(payment, "reservationPriceSnapshot")).isTrue();
         assertThat(payment.getReservationPriceSnapshot().getFinalAmount()).isEqualTo(10_000L);
         assertThat(payment.getReservationPriceSnapshot().getCurrency()).isEqualTo("KRW");
+    }
+
+    @Test
+    void 환불식별자와결제소유자가일치하는환불만조회한다() {
+        PaymentFixtures owner = createPaymentFixtures("OWNER");
+        PaymentFixtures other = createPaymentFixtures("OTHER");
+        Refund ownerRefund = refundRepository.saveAndFlush(new Refund(
+            owner.payment(),
+            owner.reservationPriceSnapshot().getFinalAmount(),
+            CREATED_AT
+        ));
+        Refund otherRefund = refundRepository.saveAndFlush(new Refund(
+            other.payment(),
+            other.reservationPriceSnapshot().getFinalAmount(),
+            CREATED_AT
+        ));
+        entityManager.clear();
+
+        assertThat(refundRepository.findByRefundIdAndPaymentOwnerUserId(
+            ownerRefund.getRefundId(),
+            owner.visitor().getUserId()
+        )).isPresent();
+        assertThat(refundRepository.findByRefundIdAndPaymentOwnerUserId(
+            otherRefund.getRefundId(),
+            owner.visitor().getUserId()
+        )).isEmpty();
+        assertThat(refundRepository.findByRefundIdAndPaymentOwnerUserId(
+            Long.MAX_VALUE,
+            owner.visitor().getUserId()
+        )).isEmpty();
     }
 
     private PaymentFixtures createPaymentFixtures() {
