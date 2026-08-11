@@ -49,7 +49,10 @@ public final class SharedMySqlTestContainer {
     }
 
     public static void grantLockMonitoringPrivileges() {
-        MySQLContainer mysql = container();
+        grantLockMonitoringPrivileges(container());
+    }
+
+    private static void grantLockMonitoringPrivileges(MySQLContainer mysql) {
         try (
             Connection connection = DriverManager.getConnection(
                 mysql.getJdbcUrl(),
@@ -60,7 +63,9 @@ public final class SharedMySqlTestContainer {
         ) {
             statement.execute("GRANT SELECT ON performance_schema.data_lock_waits TO 'test'@'%'");
             statement.execute("GRANT SELECT ON performance_schema.data_locks TO 'test'@'%'");
+            statement.execute("GRANT SELECT ON performance_schema.metadata_locks TO 'test'@'%'");
             statement.execute("GRANT SELECT ON performance_schema.threads TO 'test'@'%'");
+            statement.execute("GRANT PROCESS ON *.* TO 'test'@'%'");
         } catch (SQLException exception) {
             throw new IllegalStateException("failed to grant MySQL lock monitoring privileges", exception);
         }
@@ -84,6 +89,7 @@ public final class SharedMySqlTestContainer {
     private static MySQLContainer startContainer() {
         MySQLContainer mysql = createContainer();
         mysql.start();
+        grantLockMonitoringPrivileges(mysql);
         return mysql;
     }
 
