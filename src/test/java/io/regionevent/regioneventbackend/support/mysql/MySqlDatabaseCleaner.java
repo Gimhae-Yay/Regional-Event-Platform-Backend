@@ -26,6 +26,7 @@ public final class MySqlDatabaseCleaner {
     private static final int JDBC_NETWORK_TIMEOUT_MILLIS = 5_000;
     private static final int DIAGNOSTIC_COLLECTION_TIMEOUT_SECONDS = 1;
     private static final int CONNECTION_ABORT_TIMEOUT_SECONDS = 1;
+    private static final int STATEMENT_CLOSE_TIMEOUT_SECONDS = 1;
     private static final int CONNECTION_CLOSE_TIMEOUT_SECONDS = 1;
     private static final int MAXIMUM_DIAGNOSTIC_ROWS = 20;
     private static final Executor DIRECT_EXECUTOR = Runnable::run;
@@ -150,15 +151,39 @@ public final class MySqlDatabaseCleaner {
     private void truncate(Connection connection, String tableName, long connectionId) throws SQLException {
         String quote = connection.getMetaData().getIdentifierQuoteString().trim();
         String escapedTableName = tableName.replace(quote, quote + quote);
-        try (Statement statement = createStatement(connection)) {
-            executeTruncateWithTimeout(
-                connection,
-                statement,
-                "TRUNCATE TABLE " + quote + escapedTableName + quote,
-                connectionId
-            );
+        try {
+            executeTruncate(connection, "TRUNCATE TABLE " + quote + escapedTableName + quote, connectionId);
         } catch (SQLException exception) {
             throw createTruncateFailure(tableName, connectionId, exception);
+        }
+    }
+
+    private void executeTruncate(Connection connection, String sql, long connectionId) throws SQLException {
+        Statement statement = createStatement(connection);
+        SQLException executionFailure = null;
+        try {
+            executeTruncateWithTimeout(connection, statement, sql, connectionId);
+        } catch (SQLException exception) {
+            executionFailure = exception;
+            throw exception;
+        } finally {
+            closeStatement(statement, executionFailure);
+        }
+    }
+
+    private void closeStatement(Statement statement, SQLException executionFailure) throws SQLException {
+        if (executionFailure instanceof TruncateTimeoutException timeoutException) {
+            closeStatementWithTimeout(statement, timeoutException);
+            return;
+        }
+        try {
+            statement.close();
+        } catch (SQLException exception) {
+            if (executionFailure != null) {
+                executionFailure.addSuppressed(exception);
+                return;
+            }
+            throw exception;
         }
     }
 
@@ -244,6 +269,39 @@ public final class MySqlDatabaseCleaner {
                 return;
             }
             throw new IllegalStateException("MySQL test database cleanup connection close failed", exception);
+        }
+    }
+
+    private void closeStatementWithTimeout(
+        Statement statement,
+        TruncateTimeoutException timeoutException
+    ) {
+        ExecutorService executor = newDaemonExecutor("mysql-cleaner-statement-close");
+        Future<?> execution = executor.submit(() -> {
+            statement.close();
+            return null;
+        });
+        try {
+            execution.get(STATEMENT_CLOSE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        } catch (TimeoutException exception) {
+            timeoutException.addSuppressed(new SQLException(
+                "timed out while closing the MySQL cleanup statement",
+                exception
+            ));
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            timeoutException.addSuppressed(new SQLException(
+                "interrupted while closing the MySQL cleanup statement",
+                exception
+            ));
+        } catch (ExecutionException exception) {
+            timeoutException.addSuppressed(new SQLException(
+                "failed to close the MySQL cleanup statement",
+                exception.getCause()
+            ));
+        } finally {
+            execution.cancel(true);
+            executor.shutdownNow();
         }
     }
 

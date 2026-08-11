@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -17,6 +18,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
@@ -227,6 +229,76 @@ class MySqlDatabaseCleanerTest {
             abortExecution.countDown();
             closeExecution.countDown();
         }
+    }
+
+    @Test
+    @Timeout(8)
+    void clean_Statement종료가제한시간을넘기면_원래진단을유지한다() throws Exception {
+        CleaningConnection cleaningConnection = createCleaningConnection();
+        Connection diagnosticConnection = createDiagnosticConnection();
+        CountDownLatch truncateExecution = new CountDownLatch(1);
+        CountDownLatch statementCloseExecution = new CountDownLatch(1);
+        AtomicInteger openedConnectionCount = new AtomicInteger();
+
+        doAnswer(invocation -> {
+            awaitWithoutInterrupt(truncateExecution);
+            return false;
+        }).when(cleaningConnection.truncateStatement()).execute(any(String.class));
+        doAnswer(invocation -> {
+            awaitWithoutInterrupt(statementCloseExecution);
+            return null;
+        }).when(cleaningConnection.truncateStatement()).close();
+
+        MySqlDatabaseCleaner databaseCleaner = new MySqlDatabaseCleaner(() -> {
+            if (openedConnectionCount.getAndIncrement() == 0) {
+                return cleaningConnection.connection();
+            }
+            return diagnosticConnection;
+        });
+
+        long startedAt = System.nanoTime();
+        try {
+            IllegalStateException exception = catchThrowableOfType(
+                databaseCleaner::clean,
+                IllegalStateException.class
+            );
+
+            assertThat(Duration.ofNanos(System.nanoTime() - startedAt))
+                .isLessThan(Duration.ofSeconds(6));
+            assertThat(exception)
+                .hasMessageContaining("table=test_cleanup_parent")
+                .hasMessageContaining("connectionId=" + CLEANING_CONNECTION_ID)
+                .hasMessageContaining("timeoutDiagnostics={");
+            assertThat(exception.getCause().getSuppressed())
+                .singleElement()
+                .satisfies(suppressed -> assertThat(suppressed.getMessage())
+                    .contains("timed out while closing the MySQL cleanup statement"));
+            verify(cleaningConnection.truncateStatement()).close();
+        } finally {
+            statementCloseExecution.countDown();
+        }
+    }
+
+    @Test
+    void clean_Truncate실패뒤Statement종료가실패하면_원래예외에suppressed로보존한다() throws Exception {
+        CleaningConnection cleaningConnection = createCleaningConnection();
+        SQLException executionFailure = new SQLException("truncate execution failed");
+        SQLException statementCloseFailure = new SQLException("statement close failed");
+        doThrow(executionFailure).when(cleaningConnection.truncateStatement()).execute(any(String.class));
+        doThrow(statementCloseFailure).when(cleaningConnection.truncateStatement()).close();
+
+        MySqlDatabaseCleaner databaseCleaner = new MySqlDatabaseCleaner(
+            cleaningConnection::connection
+        );
+
+        IllegalStateException exception = catchThrowableOfType(
+            databaseCleaner::clean,
+            IllegalStateException.class
+        );
+
+        assertThat(exception.getCause())
+            .isSameAs(executionFailure)
+            .hasSuppressedException(statementCloseFailure);
     }
 
     private void awaitWithoutInterrupt(CountDownLatch latch) {
