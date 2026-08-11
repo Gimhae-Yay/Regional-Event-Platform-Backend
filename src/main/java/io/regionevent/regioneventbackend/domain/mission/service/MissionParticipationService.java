@@ -1,11 +1,13 @@
 package io.regionevent.regioneventbackend.domain.mission.service;
 
 import java.time.Instant;
+import java.util.List;
 
 import org.springframework.stereotype.Service;
 
 import io.regionevent.regioneventbackend.domain.mission.entity.Mission;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionParticipation;
+import io.regionevent.regioneventbackend.domain.mission.entity.MissionParticipationStatus;
 import io.regionevent.regioneventbackend.domain.mission.repository.MissionParticipationRepository;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 
@@ -28,5 +30,14 @@ public class MissionParticipationService {
             user,
             joinedAt
         ));
+    }
+
+    public void endInProgress(Long missionId) {
+        List<MissionParticipation> participations = missionParticipationRepository
+            .findAllByMissionIdAndStatusForUpdate(
+                missionId,
+                MissionParticipationStatus.IN_PROGRESS
+            );
+        participations.forEach(MissionParticipation::endIncomplete);
     }
 }
