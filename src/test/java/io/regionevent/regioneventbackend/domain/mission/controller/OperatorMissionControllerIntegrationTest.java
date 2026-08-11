@@ -32,6 +32,7 @@ import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicy;
 import io.regionevent.regioneventbackend.domain.coupon.repository.CouponPolicyRepository;
 import io.regionevent.regioneventbackend.domain.mission.entity.Mission;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionConditionType;
+import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
 import io.regionevent.regioneventbackend.domain.mission.repository.MissionRepository;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
@@ -160,6 +161,186 @@ class OperatorMissionControllerIntegrationTest {
             assertThat(auditEvent.getResult()).isEqualTo(AuditEventResult.SUCCESS);
             assertThat(auditEvent.getReasonCode()).isEqualTo("MISSION_CREATED");
         });
+    }
+
+    @Test
+    void submit_withDraftMission_changesStatusAndRecordsSuccessAudit() throws Exception {
+        Region region = saveRegion("SUB");
+        AppUser operator = saveOperator(region, AppUserStatus.ACTIVE);
+        Mission mission = saveVisitCountMission(region, operator);
+
+        mockMvc.perform(post("/api/v1/operator/missions/{missionId}/submit", mission.getMissionId())
+                .header("Authorization", bearerToken(operator)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.statusCode").value(200))
+            .andExpect(jsonPath("$.code").value("SUCCESS"))
+            .andExpect(jsonPath("$.message").value("미션 검토 요청에 성공했습니다."))
+            .andExpect(jsonPath("$.data.missionId").value(mission.getMissionId().toString()))
+            .andExpect(jsonPath("$.data.status").value("PENDING_REVIEW"));
+
+        entityManager.clear();
+        assertThat(missionRepository.findById(mission.getMissionId()))
+            .hasValueSatisfying(savedMission ->
+                assertThat(savedMission.getStatus()).isEqualTo(MissionStatus.PENDING_REVIEW)
+            );
+        assertThat(auditEventRepository.findAll()).singleElement().satisfies(auditEvent -> {
+            assertThat(auditEvent.getTargetType()).isEqualTo(AuditEventTargetType.MISSION);
+            assertThat(auditEvent.getTargetId()).isEqualTo(mission.getMissionId());
+            assertThat(auditEvent.getPreviousState()).isEqualTo(MissionStatus.DRAFT.name());
+            assertThat(auditEvent.getNextState()).isEqualTo(MissionStatus.PENDING_REVIEW.name());
+            assertThat(auditEvent.getResult()).isEqualTo(AuditEventResult.SUCCESS);
+            assertThat(auditEvent.getReasonCode()).isEqualTo("MISSION_SUBMITTED");
+            assertThat(auditEvent.getReason()).isNull();
+        });
+    }
+
+    @Test
+    void submit_withoutOperatorRole_returnsForbiddenWithoutChangingMissionOrAudit() throws Exception {
+        Region region = saveRegion("SUB-NO-ROLE");
+        AppUser owner = saveOperator(region, AppUserStatus.ACTIVE);
+        AppUser user = saveUser("user", AppUserStatus.ACTIVE);
+        Mission mission = saveVisitCountMission(region, owner);
+
+        mockMvc.perform(post("/api/v1/operator/missions/{missionId}/submit", mission.getMissionId())
+                .header("Authorization", bearerToken(user)))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        assertThat(missionRepository.findById(mission.getMissionId()))
+            .hasValueSatisfying(savedMission -> assertThat(savedMission.getStatus()).isEqualTo(MissionStatus.DRAFT));
+        assertThat(auditEventRepository.count()).isZero();
+    }
+
+    @Test
+    void submit_withOtherRegionOperator_returnsForbiddenWithoutChangingMissionOrAudit() throws Exception {
+        Region missionRegion = saveRegion("SUB-MISSION");
+        Region otherRegion = saveRegion("SUB-OTHER");
+        AppUser missionOperator = saveOperator(missionRegion, AppUserStatus.ACTIVE);
+        AppUser otherOperator = saveOperator(otherRegion, AppUserStatus.ACTIVE);
+        Mission mission = saveVisitCountMission(missionRegion, missionOperator);
+
+        mockMvc.perform(post("/api/v1/operator/missions/{missionId}/submit", mission.getMissionId())
+                .header("Authorization", bearerToken(otherOperator)))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        assertThat(missionRepository.findById(mission.getMissionId()))
+            .hasValueSatisfying(savedMission -> assertThat(savedMission.getStatus()).isEqualTo(MissionStatus.DRAFT));
+        assertThat(auditEventRepository.count()).isZero();
+    }
+
+    @Test
+    void submit_withMissingMission_returnsNotFound() throws Exception {
+        Region region = saveRegion("SUB-MISSING");
+        AppUser operator = saveOperator(region, AppUserStatus.ACTIVE);
+
+        mockMvc.perform(post("/api/v1/operator/missions/999999/submit")
+                .header("Authorization", bearerToken(operator)))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+
+        assertThat(auditEventRepository.count()).isZero();
+    }
+
+    @Test
+    void submit_withNonDraftMission_returnsConflictWithoutRecordingAudit() throws Exception {
+        Region region = saveRegion("SUB-STATE");
+        AppUser operator = saveOperator(region, AppUserStatus.ACTIVE);
+        Mission mission = saveVisitCountMission(region, operator);
+        setMissionStatus(mission, MissionStatus.PENDING_REVIEW);
+
+        mockMvc.perform(post("/api/v1/operator/missions/{missionId}/submit", mission.getMissionId())
+                .header("Authorization", bearerToken(operator)))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code").value("MISSION_STATE_CONFLICT"));
+
+        assertThat(missionRepository.findById(mission.getMissionId()))
+            .hasValueSatisfying(savedMission ->
+                assertThat(savedMission.getStatus()).isEqualTo(MissionStatus.PENDING_REVIEW)
+            );
+        assertThat(auditEventRepository.count()).isZero();
+    }
+
+    @Test
+    void submit_withInvalidRewardCouponPolicy_returnsConflictWithoutChangingMissionOrAudit() throws Exception {
+        Region region = saveRegion("SUB-POLICY");
+        AppUser operator = saveOperator(region, AppUserStatus.ACTIVE);
+        Mission mission = saveVisitCountMission(region, operator);
+        entityManager.createNativeQuery("""
+            UPDATE coupon_policy
+            SET issuance_type = 'VISIT'
+            WHERE coupon_policy_id = :couponPolicyId
+            """)
+            .setParameter("couponPolicyId", mission.getRewardCouponPolicy().getCouponPolicyId())
+            .executeUpdate();
+        entityManager.clear();
+
+        mockMvc.perform(post("/api/v1/operator/missions/{missionId}/submit", mission.getMissionId())
+                .header("Authorization", bearerToken(operator)))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code").value("MISSION_STATE_CONFLICT"));
+
+        assertThat(missionRepository.findById(mission.getMissionId()))
+            .hasValueSatisfying(savedMission -> assertThat(savedMission.getStatus()).isEqualTo(MissionStatus.DRAFT));
+        assertThat(auditEventRepository.count()).isZero();
+    }
+
+    @Test
+    void submit_withEndedRewardCouponPolicy_returnsConflictWithoutChangingMissionOrAudit() throws Exception {
+        Region region = saveRegion("SUB-ENDED-POLICY");
+        AppUser operator = saveOperator(region, AppUserStatus.ACTIVE);
+        Mission mission = saveVisitCountMission(region, operator);
+        entityManager.createNativeQuery("""
+            UPDATE coupon_policy
+            SET status = 'ENDED',
+                published_at = :publishedAt,
+                ended_at = :endedAt
+            WHERE coupon_policy_id = :couponPolicyId
+            """)
+            .setParameter("publishedAt", CONTENT_PUBLISHED_AT)
+            .setParameter("endedAt", CONTENT_PUBLISHED_AT.plusSeconds(1))
+            .setParameter("couponPolicyId", mission.getRewardCouponPolicy().getCouponPolicyId())
+            .executeUpdate();
+        entityManager.clear();
+
+        mockMvc.perform(post("/api/v1/operator/missions/{missionId}/submit", mission.getMissionId())
+                .header("Authorization", bearerToken(operator)))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code").value("MISSION_STATE_CONFLICT"));
+
+        assertThat(missionRepository.findById(mission.getMissionId()))
+            .hasValueSatisfying(savedMission -> assertThat(savedMission.getStatus()).isEqualTo(MissionStatus.DRAFT));
+        assertThat(auditEventRepository.count()).isZero();
+    }
+
+    @Test
+    void submit_withDifferentRegionRewardCouponPolicy_returnsForbiddenWithoutChangingMissionOrAudit()
+        throws Exception {
+        Region missionRegion = saveRegion("SUB-POLICY-MISSION");
+        Region policyRegion = saveRegion("SUB-POLICY-OTHER");
+        AppUser missionOperator = saveOperator(missionRegion, AppUserStatus.ACTIVE);
+        AppUser policyOperator = saveOperator(policyRegion, AppUserStatus.ACTIVE);
+        Mission mission = saveVisitCountMission(missionRegion, missionOperator);
+        Content policyContent = saveContent(policyRegion, policyOperator, "different-region-policy");
+        CouponPolicy differentRegionPolicy = saveMissionRewardCouponPolicy(policyContent, policyRegion);
+        entityManager.createNativeQuery("""
+            UPDATE mission
+            SET reward_coupon_policy_id = :couponPolicyId
+            WHERE mission_id = :missionId
+            """)
+            .setParameter("couponPolicyId", differentRegionPolicy.getCouponPolicyId())
+            .setParameter("missionId", mission.getMissionId())
+            .executeUpdate();
+        entityManager.clear();
+
+        mockMvc.perform(post("/api/v1/operator/missions/{missionId}/submit", mission.getMissionId())
+                .header("Authorization", bearerToken(missionOperator)))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        assertThat(missionRepository.findById(mission.getMissionId()))
+            .hasValueSatisfying(savedMission -> assertThat(savedMission.getStatus()).isEqualTo(MissionStatus.DRAFT));
+        assertThat(auditEventRepository.count()).isZero();
     }
 
     @Test
@@ -422,6 +603,18 @@ class OperatorMissionControllerIntegrationTest {
             .setParameter("endedAt", MISSION_ENDED_AT)
             .setParameter("missionId", mission.getMissionId())
             .executeUpdate();
+    }
+
+    private void setMissionStatus(Mission mission, MissionStatus status) {
+        entityManager.createNativeQuery("""
+            UPDATE mission
+            SET status = :status
+            WHERE mission_id = :missionId
+            """)
+            .setParameter("status", status.name())
+            .setParameter("missionId", mission.getMissionId())
+            .executeUpdate();
+        entityManager.clear();
     }
 
     private Region saveRegion(String prefix) {

@@ -20,6 +20,7 @@ import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentLog;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
+import io.regionevent.regioneventbackend.domain.region.service.RegionService;
 import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHoldService;
 import io.regionevent.regioneventbackend.domain.payment.service.ExpirePendingPaymentForTerminatedHoldUseCase;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
@@ -39,6 +40,7 @@ public class SuspendContentUseCase {
     private final CapacityHoldService capacityHoldService;
     private final ExpirePendingPaymentForTerminatedHoldUseCase expirePendingPaymentForTerminatedHoldUseCase;
     private final RegionAdminAuthorizationService regionAdminAuthorizationService;
+    private final RegionService regionService;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase;
     private final Clock clock;
@@ -50,6 +52,7 @@ public class SuspendContentUseCase {
         CapacityHoldService capacityHoldService,
         ExpirePendingPaymentForTerminatedHoldUseCase expirePendingPaymentForTerminatedHoldUseCase,
         RegionAdminAuthorizationService regionAdminAuthorizationService,
+        RegionService regionService,
         RecordAuditEventUseCase recordAuditEventUseCase,
         RecordFailedAuditEventUseCase recordFailedAuditEventUseCase,
         Clock clock
@@ -60,6 +63,7 @@ public class SuspendContentUseCase {
         this.capacityHoldService = capacityHoldService;
         this.expirePendingPaymentForTerminatedHoldUseCase = expirePendingPaymentForTerminatedHoldUseCase;
         this.regionAdminAuthorizationService = regionAdminAuthorizationService;
+        this.regionService = regionService;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
         this.recordFailedAuditEventUseCase = recordFailedAuditEventUseCase;
         this.clock = clock;
@@ -73,11 +77,12 @@ public class SuspendContentUseCase {
         UUID requestId
     ) {
         String normalizedReason = normalizeReason(reason);
+        Long regionId = contentService.findSuspendTargetRegionId(contentId);
+        Region region = regionService.findRegionForUpdate(regionId);
         Content content = contentService.findSuspendTargetForUpdate(contentId);
-        Region region = content.getRegion();
         UserRoleAssignment regionAdminAssignment = regionAdminAuthorizationService.authorize(
             userId,
-            region.getRegionId()
+            regionId
         );
         if (content.getStatus() != ContentStatus.PUBLISHED) {
             recordFailedSuspension(

@@ -3,6 +3,7 @@ package io.regionevent.regioneventbackend.domain.user.service;
 import org.springframework.stereotype.Service;
 
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
+import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
@@ -26,16 +27,24 @@ public class RegionAdminAuthorizationService {
         Long userId,
         Long targetRegionId
     ) {
-        UserRoleAssignment assignment = requireAuthorizedAssignment(userId);
-        Region assignedRegion = requireAssignedRegion(assignment);
-        if (!assignedRegion.getRegionId().equals(targetRegionId)) {
+        AuthorizedRegionAdmin regionAdmin = requireAuthorizedRegionAdmin(userId);
+        if (!regionAdmin.region().getRegionId().equals(targetRegionId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        return assignment;
+        return regionAdmin.roleAssignment();
     }
 
     public Long requireAuthorizedRegionId(Long userId) {
-        return requireAssignedRegion(requireAuthorizedAssignment(userId)).getRegionId();
+        return requireAuthorizedRegionAdmin(userId).region().getRegionId();
+    }
+
+    public AuthorizedRegionAdmin requireAuthorizedRegionAdmin(Long userId) {
+        UserRoleAssignment assignment = requireAuthorizedAssignment(userId);
+        return new AuthorizedRegionAdmin(
+            assignment.getAppUser(),
+            requireAssignedRegion(assignment),
+            assignment
+        );
     }
 
     private UserRoleAssignment requireAuthorizedAssignment(Long userId) {
@@ -55,5 +64,24 @@ public class RegionAdminAuthorizationService {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         return assignedRegion;
+    }
+
+    public record AuthorizedRegionAdmin(
+        AppUser user,
+        Region region,
+        UserRoleAssignment roleAssignment
+    ) {
+
+        public AuthorizedRegionAdmin {
+            if (user == null || user.getUserId() == null) {
+                throw new BusinessException(ErrorCode.FORBIDDEN);
+            }
+            if (region == null || region.getRegionId() == null) {
+                throw new BusinessException(ErrorCode.FORBIDDEN);
+            }
+            if (roleAssignment == null || roleAssignment.getRoleAssignmentId() == null) {
+                throw new BusinessException(ErrorCode.FORBIDDEN);
+            }
+        }
     }
 }
