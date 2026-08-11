@@ -212,6 +212,7 @@ class ReceivePortOneWebhookUseCaseTest {
         Payment payment = mock(Payment.class);
         when(payment.getStatus()).thenReturn(PaymentStatus.APPROVED);
         when(paymentService.findByOrderId(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        when(paymentService.findByOrderIdForUpdate(PAYMENT_ID)).thenReturn(Optional.of(payment));
         when(paymentWebhookService.existsByProviderEventId(WEBHOOK_ID)).thenReturn(false);
 
         useCase.receive(WEBHOOK_ID, WEBHOOK_TIMESTAMP, WEBHOOK_SIGNATURE, validPaymentEvent());
