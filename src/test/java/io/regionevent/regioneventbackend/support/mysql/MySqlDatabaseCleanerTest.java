@@ -4,8 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.sql.Connection;
@@ -118,6 +121,57 @@ class MySqlDatabaseCleanerTest {
         assertThat(exception.getCause().getSuppressed())
             .singleElement()
             .isInstanceOf(SQLException.class);
+    }
+
+    @Test
+    @Timeout(15)
+    void clean_연결중단시간초과면_세션복구없이원래진단을유지한다() throws Exception {
+        CleaningConnection cleaningConnection = createCleaningConnection();
+        Connection diagnosticConnection = createDiagnosticConnection();
+        CountDownLatch truncateExecution = new CountDownLatch(1);
+        CountDownLatch abortExecution = new CountDownLatch(1);
+        AtomicInteger openedConnectionCount = new AtomicInteger();
+
+        doAnswer(invocation -> {
+            try {
+                truncateExecution.await();
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+            }
+            return false;
+        }).when(cleaningConnection.truncateStatement()).execute(any(String.class));
+        doAnswer(invocation -> {
+            try {
+                abortExecution.await();
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+            }
+            return null;
+        }).when(cleaningConnection.connection()).abort(any(Executor.class));
+
+        MySqlDatabaseCleaner databaseCleaner = new MySqlDatabaseCleaner(() -> {
+            if (openedConnectionCount.getAndIncrement() == 0) {
+                return cleaningConnection.connection();
+            }
+            return diagnosticConnection;
+        });
+
+        IllegalStateException exception = catchThrowableOfType(
+            databaseCleaner::clean,
+            IllegalStateException.class
+        );
+
+        assertThat(exception)
+            .hasMessageContaining("table=test_cleanup_parent")
+            .hasMessageContaining("connectionId=" + CLEANING_CONNECTION_ID)
+            .hasMessageContaining("timeoutDiagnostics={");
+        assertThat(exception.getCause().getSuppressed())
+            .singleElement()
+            .satisfies(suppressed -> assertThat(suppressed.getMessage())
+                .contains("timed out while aborting the MySQL cleanup connection"));
+        verify(cleaningConnection.connection(), times(9)).createStatement();
+        verify(cleaningConnection.connection(), times(1))
+            .setNetworkTimeout(any(Executor.class), eq(5_000));
     }
 
     private CleaningConnection createCleaningConnection() throws SQLException {

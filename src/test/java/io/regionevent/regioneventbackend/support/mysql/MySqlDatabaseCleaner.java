@@ -53,10 +53,14 @@ public final class MySqlDatabaseCleaner {
 
     private void clean(Connection connection) throws SQLException {
         int originalNetworkTimeout = configureNetworkTimeout(connection);
+        boolean shouldRestoreNetworkTimeout = true;
         try {
             cleanWithTimeouts(connection);
+        } catch (IllegalStateException exception) {
+            shouldRestoreNetworkTimeout = !containsTruncateTimeout(exception);
+            throw exception;
         } finally {
-            if (!connection.isClosed()) {
+            if (shouldRestoreNetworkTimeout && !connection.isClosed()) {
                 connection.setNetworkTimeout(DIRECT_EXECUTOR, originalNetworkTimeout);
             }
         }
@@ -67,6 +71,7 @@ public final class MySqlDatabaseCleaner {
         boolean originalAutoCommit = connection.getAutoCommit();
         LockWaitTimeouts originalLockWaitTimeouts = configureLockWaitTimeouts(connection);
         int originalForeignKeyChecks = findForeignKeyChecks(connection);
+        boolean shouldRestoreSessionSettings = true;
         try {
             if (!originalAutoCommit) {
                 connection.setAutoCommit(true);
@@ -75,8 +80,11 @@ public final class MySqlDatabaseCleaner {
             for (String tableName : findApplicationTables(connection)) {
                 truncate(connection, tableName, connectionId);
             }
+        } catch (IllegalStateException exception) {
+            shouldRestoreSessionSettings = !containsTruncateTimeout(exception);
+            throw exception;
         } finally {
-            if (!connection.isClosed()) {
+            if (shouldRestoreSessionSettings && !connection.isClosed()) {
                 setForeignKeyChecks(connection, originalForeignKeyChecks);
                 restoreLockWaitTimeouts(connection, originalLockWaitTimeouts);
                 if (!originalAutoCommit) {
@@ -302,6 +310,17 @@ public final class MySqlDatabaseCleaner {
                 return true;
             }
             current = current.getNextException();
+        }
+        return false;
+    }
+
+    private boolean containsTruncateTimeout(Throwable exception) {
+        Throwable current = exception;
+        while (current != null) {
+            if (current instanceof TruncateTimeoutException) {
+                return true;
+            }
+            current = current.getCause();
         }
         return false;
     }
