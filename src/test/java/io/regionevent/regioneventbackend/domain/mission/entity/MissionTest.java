@@ -20,6 +20,7 @@ class MissionTest {
 
     private static final Instant ENDS_AT = Instant.parse("2026-09-30T14:59:59Z");
     private static final Instant PUBLISHED_AT = Instant.parse("2026-08-10T04:30:00Z");
+    private static final Instant ENDED_AT = Instant.parse("2026-08-11T04:30:00Z");
 
     private Mission mission;
 
@@ -65,5 +66,32 @@ class MissionTest {
         assertThatThrownBy(() -> mission.approve(ENDS_AT))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessage("publishedAt must be before endsAt");
+    }
+
+    @Test
+    void end_whenPublished_endsMissionAtGivenTime() {
+        ReflectionTestUtils.setField(mission, "status", MissionStatus.PUBLISHED);
+        ReflectionTestUtils.setField(mission, "publishedAt", PUBLISHED_AT);
+
+        mission.end(ENDED_AT);
+
+        assertThat(mission.getStatus()).isEqualTo(MissionStatus.ENDED);
+        assertThat(mission.getEndedAt()).isEqualTo(ENDED_AT);
+    }
+
+    @Test
+    void end_whenStatusIsNotPublished_rejectsTransition() {
+        assertThatThrownBy(() -> mission.end(ENDED_AT))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("mission status must be PUBLISHED");
+    }
+
+    @Test
+    void end_whenEndedAtIsNull_rejectsTransition() {
+        ReflectionTestUtils.setField(mission, "status", MissionStatus.PUBLISHED);
+
+        assertThatThrownBy(() -> mission.end(null))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("endedAt must not be null");
     }
 }

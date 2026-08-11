@@ -169,6 +169,15 @@ public class Mission {
         this.publishedAt = validatedPublishedAt;
     }
 
+    public void end(Instant endedAt) {
+        Instant validatedEndedAt = requireNotNull(endedAt, "endedAt");
+        if (status != MissionStatus.PUBLISHED) {
+            throw new IllegalStateException("mission status must be PUBLISHED");
+        }
+        status = MissionStatus.ENDED;
+        this.endedAt = validatedEndedAt;
+    }
+
     public Long getMissionId() {
         return missionId;
     }
