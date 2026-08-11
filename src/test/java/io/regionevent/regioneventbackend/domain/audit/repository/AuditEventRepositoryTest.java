@@ -3,6 +3,7 @@ package io.regionevent.regioneventbackend.domain.audit.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 import jakarta.persistence.EntityManager;
@@ -126,6 +127,110 @@ class AuditEventRepositoryTest {
         assertThat(savedActorLink.getAuditEventId()).isEqualTo(auditEvent.getAuditEventId());
         assertThat(actorLink.getActor().getUserId()).isEqualTo(actor.getUserId());
         assertThat(auditEventColumns).doesNotContain("USER_ID");
+    }
+
+    @Test
+    void findMissionHistoryAuditProjections_filtersBoundaryOrdersAndLeftJoinsActor() {
+        Region region = regionRepository.saveAndFlush(new Region("MISSION-HISTORY", "Gimhae", true));
+        AppUser actor = appUserRepository.saveAndFlush(new AppUser(
+            "mission-history-actor@example.com",
+            "password-hash",
+            "Mission history actor",
+            "010-1234-5678",
+            AppUserStatus.ACTIVE
+        ));
+        Instant databaseNow = jdbcTemplate.queryForObject(
+            "SELECT CURRENT_TIMESTAMP",
+            OffsetDateTime.class
+        ).toInstant();
+        Instant cutoff = databaseNow.minusSeconds(90L * 24 * 60 * 60);
+        Instant sameOccurredAt = databaseNow.minusSeconds(60);
+        AuditEvent boundaryEvent = auditEventRepository.saveAndFlush(createMissionAuditEvent(
+            region,
+            701L,
+            null,
+            "DRAFT",
+            AuditEventResult.SUCCESS,
+            "MISSION_CREATED",
+            "USER",
+            cutoff
+        ));
+        AuditEvent sameTimeFirstEvent = auditEventRepository.saveAndFlush(createMissionAuditEvent(
+            region,
+            701L,
+            "DRAFT",
+            "DRAFT",
+            AuditEventResult.SUCCESS,
+            "MISSION_UPDATED",
+            "USER",
+            sameOccurredAt
+        ));
+        AuditEvent sameTimeSecondEvent = auditEventRepository.saveAndFlush(createMissionAuditEvent(
+            region,
+            701L,
+            "DRAFT",
+            "PENDING_REVIEW",
+            AuditEventResult.SUCCESS,
+            "MISSION_SUBMITTED",
+            "USER",
+            sameOccurredAt
+        ));
+        auditEventActorLinkRepository.saveAndFlush(new AuditEventActorLink(boundaryEvent, actor));
+        auditEventRepository.saveAndFlush(createMissionAuditEvent(
+            region,
+            701L,
+            "DRAFT",
+            "PENDING_REVIEW",
+            AuditEventResult.FAILURE,
+            "MISSION_SUBMITTED",
+            "USER",
+            databaseNow.minusSeconds(120)
+        ));
+        auditEventRepository.saveAndFlush(createMissionAuditEvent(
+            region,
+            701L,
+            null,
+            "DRAFT",
+            AuditEventResult.SUCCESS,
+            "MISSION_CREATED",
+            "USER",
+            cutoff.minusSeconds(1)
+        ));
+        auditEventRepository.saveAndFlush(createAuditEvent(
+            "00000000-0000-0000-0000-000000000099",
+            region,
+            AuditEventTargetType.CONTENT,
+            701L,
+            AuditEventResult.SUCCESS,
+            "MISSION_CREATED",
+            databaseNow.minusSeconds(30)
+        ));
+        auditEventRepository.saveAndFlush(createMissionAuditEvent(
+            region,
+            702L,
+            null,
+            "DRAFT",
+            AuditEventResult.SUCCESS,
+            "MISSION_CREATED",
+            "USER",
+            databaseNow.minusSeconds(30)
+        ));
+        entityManager.clear();
+
+        List<MissionHistoryAuditProjection> projections = auditEventRepository
+            .findMissionHistoryAuditProjections(701L);
+
+        assertThat(projections)
+            .extracting(MissionHistoryAuditProjection::auditEventId)
+            .containsExactly(
+                boundaryEvent.getAuditEventId(),
+                sameTimeFirstEvent.getAuditEventId(),
+                sameTimeSecondEvent.getAuditEventId()
+            );
+        assertThat(projections.getFirst().actorUserId()).isEqualTo(actor.getUserId());
+        assertThat(projections.get(1).actorUserId()).isNull();
+        assertThat(projections.getFirst().previousState()).isNull();
+        assertThat(projections.getFirst().occurredAt()).isEqualTo(cutoff);
     }
 
     @Test
@@ -304,6 +409,31 @@ class AuditEventRepositoryTest {
             result,
             reasonCode,
             "SYSTEM",
+            null,
+            occurredAt
+        );
+    }
+
+    private AuditEvent createMissionAuditEvent(
+        Region region,
+        Long missionId,
+        String previousState,
+        String nextState,
+        AuditEventResult result,
+        String reasonCode,
+        String actorKind,
+        Instant occurredAt
+    ) {
+        return new AuditEvent(
+            "00000000-0000-0000-0000-000000000638",
+            region,
+            AuditEventTargetType.MISSION,
+            missionId,
+            previousState,
+            nextState,
+            result,
+            reasonCode,
+            actorKind,
             null,
             occurredAt
         );
