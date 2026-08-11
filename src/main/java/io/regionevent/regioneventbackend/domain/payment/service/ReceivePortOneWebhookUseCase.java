@@ -409,7 +409,7 @@ public class ReceivePortOneWebhookUseCase {
         try {
             JsonNode root = objectMapper.readTree(rawBody);
             String type = requiredText(root, "type");
-            requiredText(root, "timestamp");
+            Instant.parse(requiredText(root, "timestamp"));
             JsonNode data = root.get("data");
             if (data == null || !data.isObject()) {
                 throw new IllegalArgumentException();

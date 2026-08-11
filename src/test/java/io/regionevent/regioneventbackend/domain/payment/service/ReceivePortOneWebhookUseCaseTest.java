@@ -141,6 +141,26 @@ class ReceivePortOneWebhookUseCaseTest {
     }
 
     @Test
+    void receive_invalidBodyTimestamp_doesNotLookupOrPersistWebhook() {
+        String rawBody = validPaymentEvent().replace(
+            "\"timestamp\": \"2026-08-06T02:31:05Z\"",
+            "\"timestamp\": \"invalid\""
+        );
+
+        assertThatThrownBy(() -> useCase.receive(
+            WEBHOOK_ID,
+            WEBHOOK_TIMESTAMP,
+            WEBHOOK_SIGNATURE,
+            rawBody
+        )).isInstanceOf(BusinessException.class)
+            .extracting(exception -> ((BusinessException) exception).getErrorCode())
+            .isEqualTo(ErrorCode.INVALID_JSON);
+
+        verify(paymentGateway, never()).findByPaymentId(anyString());
+        verify(paymentWebhookService, never()).createIfAbsent(any());
+    }
+
+    @Test
     void receive_paymentNotFound_persistsOnlyNormalizedHashWithoutRawBody() {
         String rawBody = validPaymentEvent().replace(
             "\"data\": {",
