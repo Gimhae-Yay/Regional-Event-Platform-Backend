@@ -24,6 +24,7 @@ public final class MySqlDatabaseCleaner {
     private static final int LOCK_WAIT_TIMEOUT_SECONDS = 2;
     private static final int JDBC_QUERY_TIMEOUT_SECONDS = 3;
     private static final int JDBC_NETWORK_TIMEOUT_MILLIS = 5_000;
+    private static final int CONNECTION_OPEN_TIMEOUT_SECONDS = 1;
     private static final int DIAGNOSTIC_COLLECTION_TIMEOUT_SECONDS = 1;
     private static final int CONNECTION_ABORT_TIMEOUT_SECONDS = 1;
     private static final int STATEMENT_CLOSE_TIMEOUT_SECONDS = 1;
@@ -45,7 +46,7 @@ public final class MySqlDatabaseCleaner {
         Connection connection = null;
         RuntimeException cleanupFailure = null;
         try {
-            connection = connectionProvider.open();
+            connection = openConnectionWithTimeout();
             clean(connection);
         } catch (SQLException exception) {
             cleanupFailure = new IllegalStateException("MySQL test database cleanup failed", exception);
@@ -63,6 +64,28 @@ public final class MySqlDatabaseCleaner {
 
     static MySqlDatabaseCleaner forSharedContainer() {
         return new MySqlDatabaseCleaner(SharedMySqlTestContainer::openConnection);
+    }
+
+    private Connection openConnectionWithTimeout() throws SQLException {
+        ExecutorService executor = newDaemonExecutor("mysql-cleaner-connection-open");
+        Future<Connection> execution = executor.submit(connectionProvider::open);
+        try {
+            return execution.get(CONNECTION_OPEN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        } catch (TimeoutException exception) {
+            throw new SQLTimeoutException(
+                "MySQL cleanup connection opening exceeded the timeout",
+                exception
+            );
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new SQLException("MySQL cleanup connection opening was interrupted", exception);
+        } catch (ExecutionException exception) {
+            rethrowSqlException(exception);
+            throw new IllegalStateException("unreachable");
+        } finally {
+            execution.cancel(true);
+            executor.shutdownNow();
+        }
     }
 
     private void clean(Connection connection) throws SQLException {

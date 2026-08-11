@@ -18,6 +18,7 @@ public final class SharedMySqlTestContainer {
     private static final String MYSQL_DATA_DIRECTORY = "/var/lib/mysql";
     private static final String MYSQL_DATA_DIRECTORY_TMPFS_OPTIONS = "rw,size=512m";
     private static final int MAXIMUM_POOL_SIZE = 4;
+    private static final int CONNECTION_TIMEOUT_MILLIS = 1_000;
 
     private SharedMySqlTestContainer() {
     }
@@ -73,7 +74,16 @@ public final class SharedMySqlTestContainer {
 
     static Connection openConnection() throws SQLException {
         MySQLContainer mysql = container();
-        return DriverManager.getConnection(mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword());
+        return DriverManager.getConnection(
+            withConnectionTimeout(mysql.getJdbcUrl()),
+            mysql.getUsername(),
+            mysql.getPassword()
+        );
+    }
+
+    private static String withConnectionTimeout(String jdbcUrl) {
+        String delimiter = jdbcUrl.contains("?") ? "&" : "?";
+        return jdbcUrl + delimiter + "connectTimeout=" + CONNECTION_TIMEOUT_MILLIS;
     }
 
     private static MySQLContainer container() {

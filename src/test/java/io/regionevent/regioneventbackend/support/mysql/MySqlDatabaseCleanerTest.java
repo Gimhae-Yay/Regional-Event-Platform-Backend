@@ -17,6 +17,7 @@ import java.sql.DatabaseMetaData;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.SQLTimeoutException;
 import java.sql.Statement;
 import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
@@ -123,6 +124,32 @@ class MySqlDatabaseCleanerTest {
         assertThat(exception.getCause().getSuppressed())
             .singleElement()
             .isInstanceOf(SQLException.class);
+    }
+
+    @Test
+    @Timeout(3)
+    void clean_최초연결획득이제한시간을넘기면_단계를식별할수있는예외를던진다() {
+        CountDownLatch connectionOpening = new CountDownLatch(1);
+        MySqlDatabaseCleaner databaseCleaner = new MySqlDatabaseCleaner(() -> {
+            awaitWithoutInterrupt(connectionOpening);
+            throw new SQLException("connection opening unexpectedly completed");
+        });
+
+        long startedAt = System.nanoTime();
+        try {
+            IllegalStateException exception = catchThrowableOfType(
+                databaseCleaner::clean,
+                IllegalStateException.class
+            );
+
+            assertThat(Duration.ofNanos(System.nanoTime() - startedAt))
+                .isLessThan(Duration.ofSeconds(2));
+            assertThat(exception.getCause())
+                .isInstanceOf(SQLTimeoutException.class)
+                .hasMessageContaining("cleanup connection opening exceeded the timeout");
+        } finally {
+            connectionOpening.countDown();
+        }
     }
 
     @Test
