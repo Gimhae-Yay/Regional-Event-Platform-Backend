@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
+import java.util.List;
 
 import jakarta.persistence.EntityManager;
 
@@ -136,14 +137,14 @@ class PaymentPersistenceRepositoryTest {
             .findByCapacityHoldHoldId(fixtures.capacityHold().getHoldId()))
             .map(ReservationPriceSnapshot::getFinalAmount)
             .contains(10_000L);
-        assertThat(paymentRepository.findByOrderId("order-1"))
+        assertThat(paymentRepository.findByOrderId("order-DEFAULT"))
             .map(Payment::getPaymentId)
             .contains(fixtures.payment().getPaymentId());
         assertThat(paymentIdempotencyRepository
             .findByActorUserIdAndOperationAndIdempotencyKeyHashForUpdate(
                 fixtures.visitor().getUserId(),
                 PaymentIdempotencyOperation.PAYMENT_CREATE,
-                "idempotency-key-hash"
+                "idempotency-key-hash-DEFAULT"
             ))
             .isPresent();
         assertThat(paymentVerificationRepository
@@ -187,11 +188,71 @@ class PaymentPersistenceRepositoryTest {
         )).isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
+    void 불일치를_상태별로감지시각과식별자오름차순으로가격스냅샷과함께조회한다() {
+        PaymentFixtures oldest = createPaymentFixtures("ONE");
+        PaymentFixtures firstAtSameTime = createPaymentFixtures("TWO");
+        PaymentFixtures secondAtSameTime = createPaymentFixtures("THREE");
+        PaymentDiscrepancy oldestDiscrepancy = paymentDiscrepancyRepository.saveAndFlush(
+            new PaymentDiscrepancy(
+                oldest.payment(),
+                "LATE_APPROVAL",
+                "OPEN",
+                CREATED_AT.plusSeconds(60)
+            )
+        );
+        PaymentDiscrepancy firstAtSameTimeDiscrepancy = paymentDiscrepancyRepository.saveAndFlush(
+            new PaymentDiscrepancy(
+                firstAtSameTime.payment(),
+                "AMOUNT_MISMATCH",
+                "OPEN",
+                CREATED_AT.plusSeconds(120)
+            )
+        );
+        PaymentDiscrepancy secondAtSameTimeDiscrepancy = paymentDiscrepancyRepository.saveAndFlush(
+            new PaymentDiscrepancy(
+                secondAtSameTime.payment(),
+                "ORDER_MISMATCH",
+                "OPEN",
+                CREATED_AT.plusSeconds(120)
+            )
+        );
+        paymentDiscrepancyRepository.saveAndFlush(new PaymentDiscrepancy(
+            createPaymentFixtures("RESOLVED").payment(),
+            "TARGET_MISMATCH",
+            "RESOLVED_NO_ISSUE",
+            CREATED_AT
+        ));
+        entityManager.clear();
+
+        List<PaymentDiscrepancy> discrepancies = paymentDiscrepancyRepository
+            .findAllByStatusOrderByDetectedAtAscPaymentDiscrepancyIdAsc("OPEN");
+
+        assertThat(discrepancies)
+            .extracting(PaymentDiscrepancy::getPaymentDiscrepancyId)
+            .containsExactly(
+                oldestDiscrepancy.getPaymentDiscrepancyId(),
+                firstAtSameTimeDiscrepancy.getPaymentDiscrepancyId(),
+                secondAtSameTimeDiscrepancy.getPaymentDiscrepancyId()
+            );
+        assertThat(entityManager.getEntityManagerFactory().getPersistenceUnitUtil()
+            .isLoaded(discrepancies.getFirst(), "payment")).isTrue();
+        Payment payment = discrepancies.getFirst().getPayment();
+        assertThat(entityManager.getEntityManagerFactory().getPersistenceUnitUtil()
+            .isLoaded(payment, "reservationPriceSnapshot")).isTrue();
+        assertThat(payment.getReservationPriceSnapshot().getFinalAmount()).isEqualTo(10_000L);
+        assertThat(payment.getReservationPriceSnapshot().getCurrency()).isEqualTo("KRW");
+    }
+
     private PaymentFixtures createPaymentFixtures() {
-        Region region = regionRepository.saveAndFlush(new Region("GIMHAE", "김해시", true));
-        AppUser operator = saveUser("operator@example.com", "콘텐츠 운영자");
-        AppUser visitor = saveUser("visitor@example.com", "방문자");
-        AppUser reviewer = saveUser("reviewer@example.com", "회차 검토자");
+        return createPaymentFixtures("DEFAULT");
+    }
+
+    private PaymentFixtures createPaymentFixtures(String identifier) {
+        Region region = regionRepository.saveAndFlush(new Region("GIMHAE" + identifier, "김해시", true));
+        AppUser operator = saveUser("operator-" + identifier + "@example.com", "콘텐츠 운영자");
+        AppUser visitor = saveUser("visitor-" + identifier + "@example.com", "방문자");
+        AppUser reviewer = saveUser("reviewer-" + identifier + "@example.com", "회차 검토자");
         Content content = contentRepository.saveAndFlush(new Content(
             region,
             operator,
@@ -244,11 +305,11 @@ class PaymentPersistenceRepositoryTest {
         Payment payment = paymentRepository.saveAndFlush(new Payment(
             capacityHold,
             reservationPriceSnapshot,
-            "order-1"
+            "order-" + identifier
         ));
         paymentIdempotencyRepository.saveAndFlush(new PaymentIdempotency(
             visitor.getUserId(),
-            "idempotency-key-hash",
+            "idempotency-key-hash-" + identifier,
             "request-hash"
         ));
 

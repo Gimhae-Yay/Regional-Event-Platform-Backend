@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.mission.repository;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Optional;
 
@@ -72,6 +73,17 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
         WHERE mission.missionId = :missionId
         """)
     Optional<Mission> findByMissionIdForUpdate(@Param("missionId") Long missionId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT mission
+        FROM Mission mission
+        WHERE mission.missionId = :missionId
+        """)
+    Optional<Mission> findByMissionIdForParticipationUpdate(@Param("missionId") Long missionId);
+
+    @Query(value = "SELECT UNIX_TIMESTAMP(CURRENT_TIMESTAMP(6))", nativeQuery = true)
+    BigDecimal findCurrentEpochSeconds();
 
     boolean existsByRewardCouponPolicyCouponPolicyIdAndStatus(
         Long couponPolicyId,
