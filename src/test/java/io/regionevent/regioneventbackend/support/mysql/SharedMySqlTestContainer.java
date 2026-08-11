@@ -4,6 +4,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.UnaryOperator;
 
@@ -14,6 +15,8 @@ import org.testcontainers.utility.DockerImageName;
 public final class SharedMySqlTestContainer {
 
     public static final String IMAGE_NAME = "mysql:8.0.42";
+    private static final String MYSQL_DATA_DIRECTORY = "/var/lib/mysql";
+    private static final String MYSQL_DATA_DIRECTORY_TMPFS_OPTIONS = "rw,size=512m";
     private static final int MAXIMUM_POOL_SIZE = 4;
 
     private SharedMySqlTestContainer() {
@@ -72,8 +75,14 @@ public final class SharedMySqlTestContainer {
         return ContainerHolder.INSTANCE;
     }
 
-    private static MySQLContainer startContainer() {
+    static MySQLContainer createContainer() {
         MySQLContainer mysql = new MySQLContainer(DockerImageName.parse(IMAGE_NAME));
+        mysql.withTmpFs(Map.of(MYSQL_DATA_DIRECTORY, MYSQL_DATA_DIRECTORY_TMPFS_OPTIONS));
+        return mysql;
+    }
+
+    private static MySQLContainer startContainer() {
+        MySQLContainer mysql = createContainer();
         mysql.start();
         return mysql;
     }
