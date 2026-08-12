@@ -20,7 +20,7 @@ final class OperatorReservationPaymentIdParser {
             throw new BusinessException(ErrorCode.INVALID_TYPE, exception);
         }
         if (!POSITIVE_DECIMAL_PATTERN.matcher(value).matches()) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT);
+            throw new BusinessException(ErrorCode.INVALID_TYPE);
         }
         return reservationId;
     }

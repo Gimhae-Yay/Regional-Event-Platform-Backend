@@ -82,10 +82,10 @@ class OperatorReservationPaymentControllerWebMvcTest {
     }
 
     @Test
-    void get_whenReservationIdIsNotPositive_returnsInvalidInputWithoutReadingPayment() throws Exception {
+    void get_whenReservationIdIsNotPositive_returnsInvalidTypeWithoutReadingPayment() throws Exception {
         mockMvc.perform(authenticated(get("/api/v1/operator/reservations/0/payment")))
             .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
 
         verifyNoInteractions(getOperatorReservationPaymentUseCase);
     }
