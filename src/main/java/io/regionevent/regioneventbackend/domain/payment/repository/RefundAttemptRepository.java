@@ -15,6 +15,8 @@ import io.regionevent.regioneventbackend.domain.payment.entity.RefundAttemptOutc
 
 public interface RefundAttemptRepository extends JpaRepository<RefundAttempt, Long> {
 
+    List<RefundAttempt> findAllByRefundRefundIdIn(List<Long> refundIds);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT attempt

@@ -40,6 +40,9 @@ public interface RefundRepository extends JpaRepository<Refund, Long> {
         @Param("userId") Long userId
     );
 
+    @EntityGraph(attributePaths = {"payment", "payment.reservationPriceSnapshot", "payment.reservation"})
+    List<Refund> findAllByStatusIn(Collection<RefundStatus> statuses);
+
     boolean existsByPaymentCapacityHoldUserUserIdAndStatusIn(
         Long userId,
         Collection<RefundStatus> statuses

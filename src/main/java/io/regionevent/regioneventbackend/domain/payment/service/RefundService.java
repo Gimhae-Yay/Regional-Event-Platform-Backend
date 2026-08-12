@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.payment.service;
 
+import java.util.Collection;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
@@ -58,5 +59,10 @@ public class RefundService {
     public Refund findOwnedByRefundId(Long userId, Long refundId) {
         return refundRepository.findByRefundIdAndPaymentOwnerUserId(refundId, userId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    @Transactional(readOnly = true)
+    public List<Refund> findAllByStatuses(Collection<RefundStatus> statuses) {
+        return refundRepository.findAllByStatusIn(statuses);
     }
 }
