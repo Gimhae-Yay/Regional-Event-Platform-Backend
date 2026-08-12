@@ -65,7 +65,7 @@ public class PortOnePaymentAdapter implements PortOnePaymentGateway {
             optionalText(payment, "storeId"),
             requiredLong(requiredObject(payment, "amount"), "total"),
             requiredText(payment, "currency"),
-            requiredText(payment, "status"),
+            toPaymentStatus(requiredText(payment, "status")),
             hash(responseBody)
         );
     }
@@ -157,6 +157,13 @@ public class PortOnePaymentAdapter implements PortOnePaymentGateway {
             ));
         }
         return value;
+    }
+
+    private String toPaymentStatus(String providerStatus) {
+        return switch (providerStatus) {
+            case "CANCELLED", "FAILED" -> "DECLINED";
+            default -> providerStatus;
+        };
     }
 
     private String optionalText(JsonObject node, String fieldName) {

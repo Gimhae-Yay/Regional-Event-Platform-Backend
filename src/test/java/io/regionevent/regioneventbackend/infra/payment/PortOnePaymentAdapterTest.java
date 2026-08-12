@@ -1,12 +1,34 @@
 package io.regionevent.regioneventbackend.infra.payment;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+import java.net.http.HttpClient;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 
 import org.junit.jupiter.api.Test;
 
+import io.regionevent.regioneventbackend.domain.payment.port.out.PortOnePaymentGateway.PortOnePayment;
+import io.regionevent.regioneventbackend.domain.payment.service.PortOneProperties;
+
 class PortOnePaymentAdapterTest {
+
+    @Test
+    void findByPaymentId_취소된_결제_응답이면_DECLINED로_정규화한다() throws Exception {
+        PortOnePayment payment = findPaymentByResponse("CANCELLED");
+
+        assertThat(payment.status()).isEqualTo("DECLINED");
+    }
+
+    @Test
+    void findByPaymentId_실패한_결제_응답이면_DECLINED로_정규화한다() throws Exception {
+        PortOnePayment payment = findPaymentByResponse("FAILED");
+
+        assertThat(payment.status()).isEqualTo("DECLINED");
+    }
 
     @Test
     void hash_성공과_명시적_실패_응답_원문이_다르면_서로_다른_SHA_256을_반환한다() {
@@ -23,5 +45,23 @@ class PortOnePaymentAdapterTest {
         assertThat(failedHash).isNotEqualTo(succeededHash);
         assertThat(succeededHash).doesNotContain("cancel-1", "SUCCEEDED");
         assertThat(failedHash).doesNotContain("cancel-2", "FAILED");
+    }
+
+    private PortOnePayment findPaymentByResponse(String status) throws Exception {
+        HttpClient httpClient = mock(HttpClient.class);
+        PortOneProperties properties = mock(PortOneProperties.class);
+        @SuppressWarnings("unchecked")
+        HttpResponse<byte[]> response = mock(HttpResponse.class);
+        byte[] responseBody = ("""
+            {"id":"payment-1","transactionId":"transaction-1","storeId":"store-1",\
+            "amount":{"total":20000},"currency":"KRW","status":"%s"}
+            """).formatted(status).getBytes(StandardCharsets.UTF_8);
+        when(response.statusCode()).thenReturn(200);
+        when(response.body()).thenReturn(responseBody);
+        when(httpClient.<byte[]>send(any(), any())).thenReturn(response);
+        when(properties.getApiSecret()).thenReturn("secret");
+
+        return new PortOnePaymentAdapter(properties, httpClient)
+            .findByPaymentId("payment-1");
     }
 }
