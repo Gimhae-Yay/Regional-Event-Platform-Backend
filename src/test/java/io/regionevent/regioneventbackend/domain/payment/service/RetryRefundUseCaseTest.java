@@ -34,6 +34,7 @@ import io.regionevent.regioneventbackend.domain.payment.entity.RefundFailureReas
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundStatus;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneNoResponseException;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOnePaymentGateway;
+import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneLookupException;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -123,6 +124,39 @@ class RetryRefundUseCaseTest {
         verify(fixture.newAttempt).respond("cancel-2", "FAILED", "result-hash");
         verify(fixture.refund).fail(NOW);
         assertThat(response).isEqualTo(new RetryRefundResponse("20", 2, "FAILED", NOW));
+    }
+
+    @Test
+    void retry_PortOne_처리_오류면_대기_시도를_불일치로_확정한다() {
+        Fixture fixture = new Fixture(RefundStatus.DISCREPANT);
+        when(fixture.paymentGateway.cancelPayment("portone-payment", 10_000L, "MANUAL_REFUND_RETRY"))
+            .thenThrow(new PortOneLookupException(new IllegalStateException("invalid response")));
+
+        RetryRefundResponse response = fixture.useCase.retry(1L, "20", UUID.randomUUID());
+
+        verify(fixture.newAttempt).noResponse(RefundFailureReasonCode.UNKNOWN);
+        verify(fixture.refund).markDiscrepant(NOW);
+        assertThat(response).isEqualTo(new RetryRefundResponse("20", 2, "DISCREPANT", NOW));
+    }
+
+    @Test
+    void retry_양수가_아닌_식별자는_형식_오류로_거부한다() {
+        Fixture fixture = new Fixture(RefundStatus.FAILED);
+
+        assertThatThrownBy(() -> fixture.useCase.retry(1L, "0", UUID.randomUUID()))
+            .isInstanceOf(BusinessException.class)
+            .extracting(exception -> ((BusinessException) exception).getErrorCode())
+            .isEqualTo(ErrorCode.INVALID_TYPE);
+    }
+
+    @Test
+    void retry_Long_범위를_초과한_식별자는_형식_오류로_거부한다() {
+        Fixture fixture = new Fixture(RefundStatus.FAILED);
+
+        assertThatThrownBy(() -> fixture.useCase.retry(1L, "9223372036854775808", UUID.randomUUID()))
+            .isInstanceOf(BusinessException.class)
+            .extracting(exception -> ((BusinessException) exception).getErrorCode())
+            .isEqualTo(ErrorCode.INVALID_TYPE);
     }
 
     @Test

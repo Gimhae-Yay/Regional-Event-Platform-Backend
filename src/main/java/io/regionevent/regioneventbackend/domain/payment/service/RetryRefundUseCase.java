@@ -33,6 +33,7 @@ import io.regionevent.regioneventbackend.domain.payment.entity.RefundFailureReas
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundStatus;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneNoResponseException;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOnePaymentGateway;
+import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneLookupException;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminAssignment;
@@ -106,6 +107,10 @@ public class RetryRefundUseCase {
         } catch (PortOneNoResponseException exception) {
             return executeInTransaction(
                 () -> confirmNoResponse(actorUserId, preparedRetry, exception.getFailureReasonCode(), requestId)
+            );
+        } catch (PortOneLookupException exception) {
+            return executeInTransaction(
+                () -> confirmNoResponse(actorUserId, preparedRetry, RefundFailureReasonCode.UNKNOWN, requestId)
             );
         }
     }
@@ -295,11 +300,11 @@ public class RetryRefundUseCase {
         try {
             long id = Long.parseLong(value);
             if (id < 1) {
-                throw new BusinessException(ErrorCode.INVALID_INPUT);
+                throw new BusinessException(ErrorCode.INVALID_TYPE);
             }
             return id;
         } catch (NumberFormatException exception) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT);
+            throw new BusinessException(ErrorCode.INVALID_TYPE);
         }
     }
 
