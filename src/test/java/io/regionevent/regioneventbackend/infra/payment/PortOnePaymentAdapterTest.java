@@ -38,6 +38,26 @@ class PortOnePaymentAdapterTest {
     }
 
     @Test
+    void findByPaymentId_원문_바이트가_다르면_서로_다른_SHA_256_해시를_반환한다() throws Exception {
+        byte[] firstResponseBody = paymentResponseBody(
+            "{\"id\":\"payment-1\",\"transactionId\":\"transaction-1\",\"storeId\":\"store-1\","
+                + "\"amount\":{\"total\":20000},\"currency\":\"KRW\",\"status\":\"PAID\"}"
+        );
+        byte[] secondResponseBody = paymentResponseBody(
+            "{\"status\":\"PAID\",\"currency\":\"KRW\",\"amount\":{\"total\":20000},"
+                + "\"storeId\":\"store-1\",\"transactionId\":\"transaction-1\",\"id\":\"payment-1\"}"
+        );
+
+        PortOnePayment firstPayment = findPaymentByResponse(firstResponseBody);
+        PortOnePayment secondPayment = findPaymentByResponse(secondResponseBody);
+
+        assertThat(firstPayment.status()).isEqualTo(secondPayment.status());
+        assertThat(firstPayment.resultHash()).isEqualTo(PortOnePaymentAdapter.hash(firstResponseBody));
+        assertThat(secondPayment.resultHash()).isEqualTo(PortOnePaymentAdapter.hash(secondResponseBody));
+        assertThat(firstPayment.resultHash()).isNotEqualTo(secondPayment.resultHash());
+    }
+
+    @Test
     void hash_성공과_명시적_실패_응답_원문이_다르면_서로_다른_SHA_256을_반환한다() {
         byte[] succeededResponse = "{\"cancellation\":{\"id\":\"cancel-1\",\"status\":\"SUCCEEDED\"}}"
             .getBytes(StandardCharsets.UTF_8);
@@ -86,14 +106,17 @@ class PortOnePaymentAdapterTest {
     }
 
     private PortOnePayment findPaymentByResponse(String status) throws Exception {
+        return findPaymentByResponse(paymentResponseBody(("""
+            {\"id\":\"payment-1\",\"transactionId\":\"transaction-1\",\"storeId\":\"store-1\",\
+            \"amount\":{\"total\":20000},\"currency\":\"KRW\",\"status\":\"%s\"}
+            """).formatted(status)));
+    }
+
+    private PortOnePayment findPaymentByResponse(byte[] responseBody) throws Exception {
         HttpClient httpClient = mock(HttpClient.class);
         PortOneProperties properties = mock(PortOneProperties.class);
         @SuppressWarnings("unchecked")
         HttpResponse<byte[]> response = mock(HttpResponse.class);
-        byte[] responseBody = ("""
-            {"id":"payment-1","transactionId":"transaction-1","storeId":"store-1",\
-            "amount":{"total":20000},"currency":"KRW","status":"%s"}
-            """).formatted(status).getBytes(StandardCharsets.UTF_8);
         when(response.statusCode()).thenReturn(200);
         when(response.body()).thenReturn(responseBody);
         when(httpClient.<byte[]>send(any(), any())).thenReturn(response);
@@ -101,6 +124,10 @@ class PortOnePaymentAdapterTest {
 
         return new PortOnePaymentAdapter(properties, httpClient)
             .findByPaymentId("payment-1");
+    }
+
+    private byte[] paymentResponseBody(String responseBody) {
+        return responseBody.getBytes(StandardCharsets.UTF_8);
     }
 
     private String readRequestBody(HttpRequest request) {
