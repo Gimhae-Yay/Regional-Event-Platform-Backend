@@ -13,7 +13,6 @@ import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentDiscrepancy;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentDiscrepancyAction;
 import io.regionevent.regioneventbackend.domain.payment.entity.Refund;
-import io.regionevent.regioneventbackend.domain.payment.entity.RefundAttempt;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationPriceSnapshot;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationService;
@@ -26,7 +25,6 @@ public class GetOperatorReservationPaymentUseCase {
     private final OperatorAuthorizationService operatorAuthorizationService;
     private final PaymentService paymentService;
     private final RefundService refundService;
-    private final RefundAttemptService refundAttemptService;
     private final PaymentDiscrepancyService paymentDiscrepancyService;
     private final PaymentDiscrepancyActionService paymentDiscrepancyActionService;
 
@@ -35,7 +33,6 @@ public class GetOperatorReservationPaymentUseCase {
         OperatorAuthorizationService operatorAuthorizationService,
         PaymentService paymentService,
         RefundService refundService,
-        RefundAttemptService refundAttemptService,
         PaymentDiscrepancyService paymentDiscrepancyService,
         PaymentDiscrepancyActionService paymentDiscrepancyActionService
     ) {
@@ -43,7 +40,6 @@ public class GetOperatorReservationPaymentUseCase {
         this.operatorAuthorizationService = operatorAuthorizationService;
         this.paymentService = paymentService;
         this.refundService = refundService;
-        this.refundAttemptService = refundAttemptService;
         this.paymentDiscrepancyService = paymentDiscrepancyService;
         this.paymentDiscrepancyActionService = paymentDiscrepancyActionService;
     }
@@ -103,9 +99,6 @@ public class GetOperatorReservationPaymentUseCase {
         Instant updatedAt = refund.getRequestedAt();
         if (refund.getCompletedAt() != null) {
             updatedAt = latest(List.of(updatedAt, refund.getCompletedAt()));
-        }
-        for (RefundAttempt attempt : refundAttemptService.findAllByRefundId(refund.getRefundId())) {
-            updatedAt = latest(List.of(updatedAt, attempt.getAttemptedAt()));
         }
         return updatedAt;
     }
