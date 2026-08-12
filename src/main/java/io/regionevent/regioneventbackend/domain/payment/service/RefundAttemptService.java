@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.payment.service;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
@@ -26,5 +27,13 @@ public class RefundAttemptService {
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<RefundAttempt> findByRefundAttemptIdForUpdate(Long refundAttemptId) {
         return refundAttemptRepository.findByRefundAttemptIdForUpdate(refundAttemptId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<RefundAttempt> findAllByRefundIds(List<Long> refundIds) {
+        if (refundIds.isEmpty()) {
+            return List.of();
+        }
+        return refundAttemptRepository.findAllByRefundRefundIdIn(refundIds);
     }
 }

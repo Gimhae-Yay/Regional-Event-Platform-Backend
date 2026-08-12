@@ -2,6 +2,8 @@ package io.regionevent.regioneventbackend.domain.visit.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -18,6 +20,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Propagation;
@@ -37,6 +40,7 @@ import io.regionevent.regioneventbackend.domain.content.repository.ContentReposi
 import io.regionevent.regioneventbackend.domain.content.repository.ContentSessionRepository;
 import io.regionevent.regioneventbackend.domain.idempotency.entity.IdempotencyRecordStatus;
 import io.regionevent.regioneventbackend.domain.idempotency.repository.IdempotencyRecordRepository;
+import io.regionevent.regioneventbackend.domain.mission.service.MissionProgressVisitCompletionAdapter;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
@@ -82,6 +86,9 @@ public class CheckInUseCaseIntegrationTest {
     private final QrTokenService qrTokenService;
     private final EntityManager entityManager;
 
+    @MockitoBean
+    private MissionProgressVisitCompletionAdapter missionProgressVisitCompletionAdapter;
+
     @Autowired
     CheckInUseCaseIntegrationTest(
         CheckInUseCase checkInUseCase,
@@ -122,12 +129,13 @@ public class CheckInUseCaseIntegrationTest {
             fixture.reservation().getReservationNo(),
             ManualCheckInReason.QR_SCAN_FAILED.name()
         );
+        UUID firstRequestId = UUID.randomUUID();
 
         CheckInResult firstResult = checkInUseCase.checkInManually(
             fixture.operator().getUserId(),
             request,
             "manual-key",
-            UUID.randomUUID()
+            firstRequestId
         );
         CheckInResult retryResult = checkInUseCase.checkInManually(
             fixture.operator().getUserId(),
@@ -173,6 +181,11 @@ public class CheckInUseCaseIntegrationTest {
             .singleElement()
             .satisfies(actorLink -> assertThat(actorLink.getActor().getUserId())
                 .isEqualTo(fixture.operator().getUserId()));
+        verify(missionProgressVisitCompletionAdapter).recordAfterCommit(
+            Long.valueOf(firstResult.response().visitId()),
+            firstRequestId
+        );
+        verifyNoMoreInteractions(missionProgressVisitCompletionAdapter);
     }
 
     @Test
@@ -450,8 +463,17 @@ public class CheckInUseCaseIntegrationTest {
             "qr-success-audit-key",
             requestId
         );
+        CheckInResult rescanResult = checkInUseCase.checkInByQr(
+            fixture.operator().getUserId(),
+            new QrCheckInRequest(qrToken.token()),
+            "qr-rescan-key",
+            UUID.randomUUID()
+        );
 
         assertThat(result.isSuccessful()).isTrue();
+        assertThat(rescanResult.isSuccessful()).isTrue();
+        assertThat(rescanResult.response().visitId()).isEqualTo(result.response().visitId());
+        assertThat(visitRepository.count()).isEqualTo(1);
         assertThat(auditEventsByRequestId(requestId))
             .singleElement()
             .satisfies(auditEvent -> {
@@ -460,6 +482,11 @@ public class CheckInUseCaseIntegrationTest {
                 assertThat(auditEvent.getPreviousState()).isEqualTo(ReservationStatus.CONFIRMED.name());
                 assertThat(auditEvent.getNextState()).isEqualTo(ReservationStatus.CHECKED_IN.name());
             });
+        verify(missionProgressVisitCompletionAdapter).recordAfterCommit(
+            Long.valueOf(result.response().visitId()),
+            requestId
+        );
+        verifyNoMoreInteractions(missionProgressVisitCompletionAdapter);
     }
 
     @Test

@@ -120,6 +120,21 @@ class VisitRepositoryTest {
     }
 
     @Test
+    void 미션_진행도_방문_조회는_사용자와_지역과_콘텐츠를_함께_조회한다() {
+        VisitFixtures fixtures = createFixtures();
+        Visit visit = visitRepository.saveAndFlush(newVisit(fixtures, CheckinMethod.QR));
+        entityManager.clear();
+
+        Visit foundVisit = visitRepository.findMissionProgressSourceByVisitId(visit.getVisitId()).orElseThrow();
+        PersistenceUnitUtil persistenceUnitUtil = entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
+
+        assertThat(persistenceUnitUtil.isLoaded(foundVisit, "user")).isTrue();
+        assertThat(persistenceUnitUtil.isLoaded(foundVisit, "region")).isTrue();
+        assertThat(persistenceUnitUtil.isLoaded(foundVisit, "content")).isTrue();
+        assertThat(foundVisit.getUser().getUserId()).isEqualTo(fixtures.user().getUserId());
+    }
+
+    @Test
     void 방문은_예약_참여자와_다른_사용자로_생성할_수_없다() {
         VisitFixtures fixtures = createFixtures();
         AppUser anotherUser = saveUser("another-visitor@example.com");

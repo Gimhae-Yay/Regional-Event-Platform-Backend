@@ -192,6 +192,13 @@ public class Mission {
         this.publishedAt = validatedPublishedAt;
     }
 
+    public void reject() {
+        if (status != MissionStatus.PENDING_REVIEW) {
+            throw new IllegalStateException("mission status must be PENDING_REVIEW");
+        }
+        status = MissionStatus.DRAFT;
+    }
+
     public void end(Instant endedAt) {
         Instant validatedEndedAt = requireNotNull(endedAt, "endedAt");
         if (status != MissionStatus.PUBLISHED) {

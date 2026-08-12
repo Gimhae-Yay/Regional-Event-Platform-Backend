@@ -133,6 +133,82 @@ class ApproveRegionAdminMissionControllerIntegrationTest {
     }
 
     @Test
+    void reject_withAllowedReasonCode_returnsDraftMissionAndSuccessAudit() throws Exception {
+        Fixture fixture = createFixture(
+            MissionConditionType.VISIT_COUNT,
+            ContentStatus.PUBLISHED,
+            true,
+            true,
+            FUTURE_ENDS_AT,
+            true
+        );
+
+        mockMvc.perform(post("/api/v1/region-admin/missions/{missionId}/reject", fixture.missionId())
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(fixture.adminUserId()))
+                .contentType("application/json")
+                .content("{\"reasonCode\":\"MISSION_REWARD_POLICY_INVALID\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value("SUCCESS"))
+            .andExpect(jsonPath("$.data.status").value("DRAFT"))
+            .andExpect(jsonPath("$.data.rejectedAt", endsWith("Z")));
+
+        assertMissionState(fixture.missionId(), MissionStatus.DRAFT);
+        assertThat(auditEventRepository.findAll()).singleElement().satisfies(event -> {
+            assertThat(event.getPreviousState()).isEqualTo("PENDING_REVIEW");
+            assertThat(event.getNextState()).isEqualTo("DRAFT");
+            assertThat(event.getReasonCode()).isEqualTo("MISSION_REWARD_POLICY_INVALID");
+        });
+    }
+
+    @Test
+    void reject_withDisallowedReasonCode_returnsInvalidInputWithoutChangingMission() throws Exception {
+        Fixture fixture = createFixture(
+            MissionConditionType.VISIT_COUNT,
+            ContentStatus.PUBLISHED,
+            true,
+            true,
+            FUTURE_ENDS_AT,
+            true
+        );
+
+        mockMvc.perform(post("/api/v1/region-admin/missions/{missionId}/reject", fixture.missionId())
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(fixture.adminUserId()))
+                .contentType("application/json")
+                .content("{\"reasonCode\":\"PERSONAL_OPINION\"}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        assertMissionPending(fixture.missionId());
+        assertThat(auditEventRepository.count()).isZero();
+    }
+
+    @Test
+    void reject_whenAdminBelongsToOtherRegion_returnsForbiddenWithoutChangingMission() throws Exception {
+        Fixture fixture = createFixture(
+            MissionConditionType.VISIT_COUNT,
+            ContentStatus.PUBLISHED,
+            true,
+            true,
+            FUTURE_ENDS_AT,
+            true
+        );
+        Long otherAdminUserId = createOtherRegionAdmin();
+
+        mockMvc.perform(post("/api/v1/region-admin/missions/{missionId}/reject", fixture.missionId())
+                .header(
+                    HttpHeaders.AUTHORIZATION,
+                    "Bearer " + jwtAccessTokenService.issue(otherAdminUserId)
+                )
+                .contentType("application/json")
+                .content("{\"reasonCode\":\"MISSION_REWARD_POLICY_INVALID\"}"))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        assertMissionPending(fixture.missionId());
+        assertThat(auditEventRepository.count()).isZero();
+    }
+
+    @Test
     void approve_whenTargetContentIsNotPublished_returnsMissionStateConflict() throws Exception {
         Fixture fixture = createFixture(
             MissionConditionType.CONTENT_SET,
