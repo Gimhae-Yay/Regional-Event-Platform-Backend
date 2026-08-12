@@ -165,7 +165,7 @@ public class RefundAttempt {
         if (outcomeKind != RefundAttemptOutcomeKind.PENDING) {
             throw new IllegalStateException("only pending attempt can be responded");
         }
-        this.portoneCancellationId = requireNotBlank(portoneCancellationId, "portoneCancellationId");
+        this.portoneCancellationId = portoneCancellationId;
         this.externalStatus = requireNotBlank(externalStatus, "externalStatus");
         this.resultHash = requireNotBlank(resultHash, "resultHash");
         outcomeKind = RefundAttemptOutcomeKind.RESPONDED;
