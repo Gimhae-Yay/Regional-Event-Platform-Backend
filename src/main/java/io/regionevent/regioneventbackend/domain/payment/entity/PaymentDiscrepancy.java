@@ -89,6 +89,13 @@ public class PaymentDiscrepancy {
         status = "REFUND_REQUESTED";
     }
 
+    public void resolveNoIssue() {
+        if (!"OPEN".equals(status)) {
+            throw new IllegalStateException("only open discrepancy can be resolved without issue");
+        }
+        status = "RESOLVED_NO_ISSUE";
+    }
+
     private static <T> T requireNotNull(
         T value,
         String fieldName

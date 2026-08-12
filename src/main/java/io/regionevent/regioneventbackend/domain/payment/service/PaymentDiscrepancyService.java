@@ -30,6 +30,11 @@ public class PaymentDiscrepancyService {
         return paymentDiscrepancyRepository.findByPaymentIdForUpdate(paymentId);
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<PaymentDiscrepancy> findByIdForUpdate(Long discrepancyId) {
+        return paymentDiscrepancyRepository.findByIdForUpdate(discrepancyId);
+    }
+
     @Transactional(readOnly = true)
     public List<PaymentDiscrepancy> findAllByStatus(String status) {
         return paymentDiscrepancyRepository
