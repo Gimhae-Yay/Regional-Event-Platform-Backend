@@ -13,6 +13,22 @@ import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationPr
 
 class RefundTest {
 
+    @Test
+    void retry_failed_환불을_처리_중으로_되돌린다() {
+        Payment payment = mock(Payment.class);
+        ReservationPriceSnapshot snapshot = mock(ReservationPriceSnapshot.class);
+        when(payment.getReservationPriceSnapshot()).thenReturn(snapshot);
+        when(snapshot.getFinalAmount()).thenReturn(10_000L);
+        Refund refund = new Refund(payment, 10_000L, Instant.parse("2026-08-12T00:00:00Z"));
+        refund.startProcessing();
+        refund.fail(Instant.parse("2026-08-12T00:01:00Z"));
+
+        refund.retry();
+
+        assertThat(refund.getStatus()).isEqualTo(RefundStatus.PROCESSING);
+        assertThat(refund.getCompletedAt()).isNull();
+    }
+
     private static final Instant REQUESTED_AT = Instant.parse("2026-08-10T00:00:00Z");
 
     @Test

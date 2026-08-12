@@ -25,6 +25,7 @@ import io.regionevent.regioneventbackend.domain.payment.entity.RefundFailureReas
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneLookupException;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneNoResponseException;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOnePaymentGateway;
+import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneResponseException;
 import io.regionevent.regioneventbackend.domain.payment.service.PortOneProperties;
 
 @Component
@@ -76,18 +77,49 @@ public class PortOnePaymentAdapter implements PortOnePaymentGateway {
     @Override
     public PortOneCancellation cancelPayment(String paymentId, long amount, String reason) {
         byte[] requestBody = toCancelRequestBody(amount, reason);
-        byte[] responseBody = send(HttpRequest.newBuilder(cancellationUri(paymentId))
+        byte[] responseBody = sendCancellationRequest(HttpRequest.newBuilder(cancellationUri(paymentId))
             .header("Authorization", authorizationHeader())
             .header("Content-Type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofByteArray(requestBody))
             .timeout(RESPONSE_TIMEOUT)
             .build());
-        JsonObject cancellation = requiredObject(readResponse(responseBody), "cancellation");
-        return new PortOneCancellation(
-            requiredText(cancellation, "id"),
-            requiredText(cancellation, "status"),
-            hash(responseBody)
-        );
+        try {
+            JsonObject cancellation = requiredObject(readResponse(responseBody), "cancellation");
+            return new PortOneCancellation(
+                requiredText(cancellation, "id"),
+                requiredText(cancellation, "status"),
+                hash(responseBody)
+            );
+        } catch (PortOneLookupException exception) {
+            throw new PortOneResponseException("INVALID_RESPONSE", hash(responseBody), exception);
+        }
+    }
+
+    private byte[] sendCancellationRequest(HttpRequest request) {
+        try {
+            HttpResponse<byte[]> response = httpClient.send(
+                request,
+                HttpResponse.BodyHandlers.ofByteArray()
+            );
+            byte[] responseBody = response.body();
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new PortOneResponseException(
+                    "HTTP_" + response.statusCode(),
+                    hash(responseBody),
+                    new IllegalStateException("PortOne returned HTTP " + response.statusCode())
+                );
+            }
+            return responseBody;
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new PortOneNoResponseException(RefundFailureReasonCode.UNKNOWN, exception);
+        } catch (java.net.http.HttpTimeoutException | SocketTimeoutException exception) {
+            throw new PortOneNoResponseException(RefundFailureReasonCode.TIMEOUT, exception);
+        } catch (ConnectException exception) {
+            throw new PortOneNoResponseException(RefundFailureReasonCode.CONNECTION, exception);
+        } catch (IOException exception) {
+            throw new PortOneNoResponseException(RefundFailureReasonCode.NETWORK, exception);
+        }
     }
 
     private byte[] send(HttpRequest request) {
