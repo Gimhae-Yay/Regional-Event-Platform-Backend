@@ -20,6 +20,8 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
+import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
+import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponRedemptionService;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponService;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponStatusHistoryService;
@@ -31,6 +33,7 @@ import io.regionevent.regioneventbackend.domain.payment.entity.RefundFailureReas
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundStatus;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneLookupException;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOnePaymentGateway;
+import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 
 @ExtendWith(MockitoExtension.class)
 class RecoverPendingRefundAttemptsUseCaseTest {
@@ -56,8 +59,6 @@ class RecoverPendingRefundAttemptsUseCaseTest {
                 "payment-hash",
                 cancellation
             ));
-        when(fixture.refund.getPayment()).thenReturn(mock(Payment.class));
-
         RecoverPendingRefundAttemptsUseCase.RecoveryResult result = fixture.useCase.recover();
 
         verify(fixture.attempt).respond("cancel-1", "SUCCEEDED", "result-hash");
@@ -65,6 +66,7 @@ class RecoverPendingRefundAttemptsUseCaseTest {
         verify(fixture.refund, never()).fail(any());
         verify(fixture.refund, never()).markDiscrepant(any());
         verify(fixture.paymentGateway, never()).cancelPayment(any(), any(Long.class), any());
+        verify(fixture.auditEventUseCase).record(any(AuditEventCommand.class));
         org.assertj.core.api.Assertions.assertThat(result)
             .isEqualTo(new RecoverPendingRefundAttemptsUseCase.RecoveryResult(1, 1, 0));
     }
@@ -88,6 +90,7 @@ class RecoverPendingRefundAttemptsUseCaseTest {
         verify(fixture.attempt).respond(null, "PAID", "payment-hash");
         verify(fixture.refund).fail(NOW);
         verify(fixture.paymentGateway, never()).cancelPayment(any(), any(Long.class), any());
+        verify(fixture.auditEventUseCase).record(any(AuditEventCommand.class));
         org.assertj.core.api.Assertions.assertThat(result)
             .isEqualTo(new RecoverPendingRefundAttemptsUseCase.RecoveryResult(1, 1, 0));
     }
@@ -103,6 +106,7 @@ class RecoverPendingRefundAttemptsUseCaseTest {
         verify(fixture.attempt).noResponse(RefundFailureReasonCode.PROCESS_INTERRUPTED);
         verify(fixture.refund).markDiscrepant(NOW);
         verify(fixture.paymentGateway, never()).cancelPayment(any(), any(Long.class), any());
+        verify(fixture.auditEventUseCase).record(any(AuditEventCommand.class));
         org.assertj.core.api.Assertions.assertThat(result)
             .isEqualTo(new RecoverPendingRefundAttemptsUseCase.RecoveryResult(1, 1, 1));
     }
@@ -114,9 +118,12 @@ class RecoverPendingRefundAttemptsUseCaseTest {
         private final CouponService couponService = mock(CouponService.class);
         private final CouponRedemptionService couponRedemptionService = mock(CouponRedemptionService.class);
         private final CouponStatusHistoryService couponStatusHistoryService = mock(CouponStatusHistoryService.class);
+        private final RecordAuditEventUseCase auditEventUseCase = mock(RecordAuditEventUseCase.class);
         private final PortOnePaymentGateway paymentGateway = mock(PortOnePaymentGateway.class);
         private final Refund refund = mock(Refund.class);
         private final RefundAttempt attempt = mock(RefundAttempt.class);
+        private final Payment payment = mock(Payment.class);
+        private final CapacityHold capacityHold = mock(CapacityHold.class);
         private final RecoverPendingRefundAttemptsUseCase useCase;
 
         private Fixture() {
@@ -127,7 +134,10 @@ class RecoverPendingRefundAttemptsUseCaseTest {
             ));
             when(refundService.findByRefundIdForUpdate(1L)).thenReturn(Optional.of(refund));
             when(refundAttemptService.findByRefundAttemptIdForUpdate(2L)).thenReturn(Optional.of(attempt));
+            when(refund.getRefundId()).thenReturn(1L);
             when(refund.getStatus()).thenReturn(RefundStatus.PROCESSING);
+            when(refund.getPayment()).thenReturn(payment);
+            when(payment.getCapacityHold()).thenReturn(capacityHold);
             when(attempt.getOutcomeKind()).thenReturn(RefundAttemptOutcomeKind.PENDING);
             useCase = new RecoverPendingRefundAttemptsUseCase(
                 refundAttemptService,
@@ -135,6 +145,7 @@ class RecoverPendingRefundAttemptsUseCaseTest {
                 couponService,
                 couponRedemptionService,
                 couponStatusHistoryService,
+                auditEventUseCase,
                 paymentGateway,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 transactionManager

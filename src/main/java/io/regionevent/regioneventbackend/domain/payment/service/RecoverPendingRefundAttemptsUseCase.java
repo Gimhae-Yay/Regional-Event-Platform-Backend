@@ -4,12 +4,17 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
+import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
+import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.coupon.entity.Coupon;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponRedemption;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponRedemptionStatus;
@@ -41,6 +46,7 @@ public class RecoverPendingRefundAttemptsUseCase {
     private final CouponService couponService;
     private final CouponRedemptionService couponRedemptionService;
     private final CouponStatusHistoryService couponStatusHistoryService;
+    private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final PortOnePaymentGateway portOnePaymentGateway;
     private final Clock clock;
     private final TransactionTemplate transactionTemplate;
@@ -51,6 +57,7 @@ public class RecoverPendingRefundAttemptsUseCase {
         CouponService couponService,
         CouponRedemptionService couponRedemptionService,
         CouponStatusHistoryService couponStatusHistoryService,
+        RecordAuditEventUseCase recordAuditEventUseCase,
         PortOnePaymentGateway portOnePaymentGateway,
         Clock clock,
         PlatformTransactionManager transactionManager
@@ -60,6 +67,7 @@ public class RecoverPendingRefundAttemptsUseCase {
         this.couponService = couponService;
         this.couponRedemptionService = couponRedemptionService;
         this.couponStatusHistoryService = couponStatusHistoryService;
+        this.recordAuditEventUseCase = recordAuditEventUseCase;
         this.portOnePaymentGateway = portOnePaymentGateway;
         this.clock = clock;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
@@ -77,11 +85,15 @@ public class RecoverPendingRefundAttemptsUseCase {
                 PortOnePaymentGateway.PortOnePayment payment = portOnePaymentGateway.findByPaymentId(
                     candidate.portonePaymentId()
                 );
-                RecoveryOutcome outcome = executeInTransaction(() -> recoverFromPayment(candidate, payment));
+                RecoveryOutcome outcome = executeInTransaction(() -> recoverFromPayment(
+                    candidate,
+                    payment,
+                    UUID.randomUUID()
+                ));
                 recoveredCount += outcome.recoveredCount();
                 discrepantCount += outcome.discrepantCount();
             } catch (PortOneLookupException | PortOneNoResponseException exception) {
-                RecoveryOutcome outcome = executeInTransaction(() -> finalizeInterrupted(candidate));
+                RecoveryOutcome outcome = executeInTransaction(() -> finalizeInterrupted(candidate, UUID.randomUUID()));
                 recoveredCount += outcome.recoveredCount();
                 discrepantCount += outcome.discrepantCount();
             }
@@ -91,7 +103,8 @@ public class RecoverPendingRefundAttemptsUseCase {
 
     private RecoveryOutcome recoverFromPayment(
         RefundAttemptService.RecoveryCandidate candidate,
-        PortOnePaymentGateway.PortOnePayment payment
+        PortOnePaymentGateway.PortOnePayment payment,
+        UUID requestId
     ) {
         Refund refund = refundService.findByRefundIdForUpdate(candidate.refundId()).orElse(null);
         RefundAttempt attempt = refundAttemptService
@@ -103,24 +116,35 @@ public class RecoverPendingRefundAttemptsUseCase {
         PortOnePaymentGateway.PortOneCancellation cancellation = payment.cancellation();
         if (cancellation == null) {
             attempt.respond(null, payment.status(), payment.resultHash());
-            refund.fail(Instant.now(clock));
+            Instant completedAt = Instant.now(clock);
+            refund.fail(completedAt);
+            recordRefundAudit(refund, requestId, completedAt);
             return RecoveryOutcome.recovered();
         }
         attempt.respond(cancellation.cancellationId(), cancellation.status(), cancellation.resultHash());
         if (cancellation.isSucceeded() && payment.isExplicitlyDeclined()) {
-            refund.succeed(Instant.now(clock));
-            restoreCouponIfEligible(refund);
+            Instant completedAt = Instant.now(clock);
+            refund.succeed(completedAt);
+            restoreCouponIfEligible(refund, requestId);
+            recordRefundAudit(refund, requestId, completedAt);
             return RecoveryOutcome.recovered();
         }
         if (cancellation.isExplicitlyFailed()) {
-            refund.fail(Instant.now(clock));
+            Instant completedAt = Instant.now(clock);
+            refund.fail(completedAt);
+            recordRefundAudit(refund, requestId, completedAt);
             return RecoveryOutcome.recovered();
         }
-        refund.markDiscrepant(Instant.now(clock));
+        Instant completedAt = Instant.now(clock);
+        refund.markDiscrepant(completedAt);
+        recordRefundAudit(refund, requestId, completedAt);
         return RecoveryOutcome.discrepant();
     }
 
-    private RecoveryOutcome finalizeInterrupted(RefundAttemptService.RecoveryCandidate candidate) {
+    private RecoveryOutcome finalizeInterrupted(
+        RefundAttemptService.RecoveryCandidate candidate,
+        UUID requestId
+    ) {
         Refund refund = refundService.findByRefundIdForUpdate(candidate.refundId()).orElse(null);
         RefundAttempt attempt = refundAttemptService
             .findByRefundAttemptIdForUpdate(candidate.refundAttemptId())
@@ -129,7 +153,9 @@ public class RecoverPendingRefundAttemptsUseCase {
             return RecoveryOutcome.none();
         }
         attempt.noResponse(RefundFailureReasonCode.PROCESS_INTERRUPTED);
-        refund.markDiscrepant(Instant.now(clock));
+        Instant completedAt = Instant.now(clock);
+        refund.markDiscrepant(completedAt);
+        recordRefundAudit(refund, requestId, completedAt);
         return RecoveryOutcome.discrepant();
     }
 
@@ -140,7 +166,10 @@ public class RecoverPendingRefundAttemptsUseCase {
             && attempt.getOutcomeKind() == RefundAttemptOutcomeKind.PENDING;
     }
 
-    private void restoreCouponIfEligible(Refund refund) {
+    private void restoreCouponIfEligible(
+        Refund refund,
+        UUID requestId
+    ) {
         Reservation reservation = refund.getPayment().getReservation();
         if (reservation == null
             || reservation.getStatus() != ReservationStatus.CANCELLED
@@ -168,6 +197,39 @@ public class RecoverPendingRefundAttemptsUseCase {
             COUPON_RESTORE_REASON,
             SYSTEM_ACTOR,
             restoredAt
+        ));
+        recordAuditEventUseCase.record(new AuditEventCommand(
+            requestId,
+            reservation.getRegion(),
+            AuditEventTargetType.COUPON,
+            coupon.getCouponId(),
+            CouponStatus.USED.name(),
+            restoredStatus.name(),
+            AuditEventResult.SUCCESS,
+            COUPON_RESTORE_REASON,
+            null,
+            null,
+            restoredAt
+        ));
+    }
+
+    private void recordRefundAudit(
+        Refund refund,
+        UUID requestId,
+        Instant completedAt
+    ) {
+        recordAuditEventUseCase.record(new AuditEventCommand(
+            requestId,
+            refund.getPayment().getCapacityHold().getRegion(),
+            AuditEventTargetType.REFUND,
+            refund.getRefundId(),
+            RefundStatus.PROCESSING.name(),
+            refund.getStatus().name(),
+            AuditEventResult.SUCCESS,
+            null,
+            null,
+            null,
+            completedAt
         ));
     }
 
