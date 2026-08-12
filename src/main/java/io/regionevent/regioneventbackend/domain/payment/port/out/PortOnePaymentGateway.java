@@ -14,6 +14,10 @@ public interface PortOnePaymentGateway {
         public boolean isSucceeded() {
             return "SUCCEEDED".equals(status);
         }
+
+        public boolean isExplicitlyFailed() {
+            return "FAILED".equals(status);
+        }
     }
 
     record PortOnePayment(
