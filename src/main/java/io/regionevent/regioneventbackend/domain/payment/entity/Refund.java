@@ -115,6 +115,22 @@ public class Refund {
         complete(RefundStatus.DISCREPANT, completedAt);
     }
 
+    public void resolveAsSucceeded(Instant completedAt) {
+        if (status != RefundStatus.DISCREPANT) {
+            throw new IllegalStateException("only discrepant refund can be resolved as succeeded");
+        }
+        status = RefundStatus.SUCCEEDED;
+        this.completedAt = requireNotNull(completedAt, "completedAt");
+    }
+
+    public void resolveAsFailed() {
+        if (status != RefundStatus.DISCREPANT) {
+            throw new IllegalStateException("only discrepant refund can be resolved as failed");
+        }
+        status = RefundStatus.FAILED;
+        completedAt = null;
+    }
+
     private void complete(RefundStatus nextStatus, Instant completedAt) {
         if (status != RefundStatus.PROCESSING) {
             throw new IllegalStateException("only processing refund can be completed");
