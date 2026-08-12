@@ -39,6 +39,15 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
     Optional<Long> findRewardCouponPolicyIdByMissionId(@Param("missionId") Long missionId);
 
     @Query("""
+        SELECT mission.region AS region,
+               mission.status AS status,
+               mission.rewardCouponPolicy.couponPolicyId AS rewardCouponPolicyId
+        FROM Mission mission
+        WHERE mission.missionId = :missionId
+        """)
+    Optional<MissionUpdateSnapshot> findUpdateSnapshotByMissionId(@Param("missionId") Long missionId);
+
+    @Query("""
         SELECT DISTINCT mission
         FROM Mission mission
         JOIN FETCH mission.region region

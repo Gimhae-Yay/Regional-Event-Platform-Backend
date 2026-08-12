@@ -112,4 +112,46 @@ class MissionTest {
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessage("endedAt must not be null");
     }
+
+    @Test
+    void replaceDraftCoreValues_whenDraft_replacesAllEditableValues() {
+        Region region = mission.getRegion();
+        CouponPolicy replacementPolicy = mock(CouponPolicy.class);
+        when(replacementPolicy.getRegion()).thenReturn(region);
+        when(replacementPolicy.getIssuanceType()).thenReturn(CouponIssuanceType.MISSION_REWARD);
+        when(replacementPolicy.getStatus()).thenReturn(CouponPolicyStatus.DRAFT);
+        Instant replacementEndsAt = ENDS_AT.plusSeconds(3600);
+
+        mission.replaceDraftCoreValues(
+            MissionConditionType.CONTENT_SET,
+            null,
+            replacementPolicy,
+            replacementEndsAt
+        );
+
+        assertThat(mission.getConditionType()).isEqualTo(MissionConditionType.CONTENT_SET);
+        assertThat(mission.getRequiredVisitCount()).isNull();
+        assertThat(mission.getRewardCouponPolicy()).isSameAs(replacementPolicy);
+        assertThat(mission.getEndsAt()).isEqualTo(replacementEndsAt);
+        assertThat(mission.getStatus()).isEqualTo(MissionStatus.DRAFT);
+    }
+
+    @Test
+    void replaceDraftCoreValues_whenNotDraft_rejectsUpdateWithoutChangingValues() {
+        ReflectionTestUtils.setField(mission, "status", MissionStatus.PENDING_REVIEW);
+        CouponPolicy originalPolicy = mission.getRewardCouponPolicy();
+
+        assertThatThrownBy(() -> mission.replaceDraftCoreValues(
+            MissionConditionType.CONTENT_SET,
+            null,
+            originalPolicy,
+            ENDS_AT.plusSeconds(3600)
+        ))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("mission status must be DRAFT but was PENDING_REVIEW");
+        assertThat(mission.getConditionType()).isEqualTo(MissionConditionType.VISIT_COUNT);
+        assertThat(mission.getRequiredVisitCount()).isEqualTo(3);
+        assertThat(mission.getRewardCouponPolicy()).isSameAs(originalPolicy);
+        assertThat(mission.getEndsAt()).isEqualTo(ENDS_AT);
+    }
 }
