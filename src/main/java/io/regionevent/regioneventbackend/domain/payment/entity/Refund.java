@@ -131,6 +131,14 @@ public class Refund {
         completedAt = null;
     }
 
+    public void retry() {
+        if (status != RefundStatus.FAILED) {
+            throw new IllegalStateException("only failed refund can be retried");
+        }
+        status = RefundStatus.PROCESSING;
+        completedAt = null;
+    }
+
     private void complete(RefundStatus nextStatus, Instant completedAt) {
         if (status != RefundStatus.PROCESSING) {
             throw new IllegalStateException("only processing refund can be completed");
