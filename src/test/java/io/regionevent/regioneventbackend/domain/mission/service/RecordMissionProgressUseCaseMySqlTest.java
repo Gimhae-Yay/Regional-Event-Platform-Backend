@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.domain.mission.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.doAnswer;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -25,6 +26,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.test.util.AopTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -41,6 +44,7 @@ import io.regionevent.regioneventbackend.domain.mission.entity.Mission;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionConditionType;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionParticipation;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionParticipationStatus;
+import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
 import io.regionevent.regioneventbackend.domain.mission.repository.MissionParticipationRepository;
 import io.regionevent.regioneventbackend.domain.mission.repository.MissionProgressRepository;
 import io.regionevent.regioneventbackend.domain.mission.repository.MissionRepository;
@@ -68,10 +72,12 @@ class RecordMissionProgressUseCaseMySqlTest extends NonTransactionalMySqlTestSup
     private static final Instant ISSUE_STARTS_AT = Instant.parse("2026-08-01T00:00:00Z");
     private static final Instant ISSUE_ENDS_AT = Instant.parse("2037-12-31T00:00:00Z");
     private static final Instant MISSION_ENDS_AT = Instant.parse("2037-09-30T14:59:59Z");
+    private static final Instant ENDED_MISSION_ENDS_AT = Instant.parse("2026-08-02T00:00:00Z");
     private static final Instant JOINED_AT = Instant.parse("2026-08-10T00:00:00Z");
     private static final Instant CHECKED_AT = Instant.parse("2026-08-11T00:00:00Z");
 
     private final RecordMissionProgressUseCase recordMissionProgressUseCase;
+    private final EndMissionsUseCase endMissionsUseCase;
     private final MissionParticipationRepository missionParticipationRepository;
     private final MissionProgressRepository missionProgressRepository;
     private final MissionRepository missionRepository;
@@ -85,9 +91,13 @@ class RecordMissionProgressUseCaseMySqlTest extends NonTransactionalMySqlTestSup
     private final VisitRepository visitRepository;
     private final TransactionTemplate transactionTemplate;
 
+    @MockitoSpyBean
+    private MissionService missionService;
+
     @Autowired
     RecordMissionProgressUseCaseMySqlTest(
         RecordMissionProgressUseCase recordMissionProgressUseCase,
+        EndMissionsUseCase endMissionsUseCase,
         MissionParticipationRepository missionParticipationRepository,
         MissionProgressRepository missionProgressRepository,
         MissionRepository missionRepository,
@@ -102,6 +112,7 @@ class RecordMissionProgressUseCaseMySqlTest extends NonTransactionalMySqlTestSup
         PlatformTransactionManager transactionManager
     ) {
         this.recordMissionProgressUseCase = recordMissionProgressUseCase;
+        this.endMissionsUseCase = endMissionsUseCase;
         this.missionParticipationRepository = missionParticipationRepository;
         this.missionProgressRepository = missionProgressRepository;
         this.missionRepository = missionRepository;
@@ -187,6 +198,60 @@ class RecordMissionProgressUseCaseMySqlTest extends NonTransactionalMySqlTestSup
             .isEqualTo(MissionParticipationStatus.COMPLETED);
     }
 
+    @Test
+    @Timeout(20)
+    void 자동종료가먼저잠그면진행도반영은근거와완료를추가하지않는다() throws Exception {
+        Fixture fixture = createFixture(
+            MissionConditionType.VISIT_COUNT,
+            1,
+            1,
+            1,
+            ENDED_MISSION_ENDS_AT
+        );
+        Long missionId = fixture.missionIds().getFirst();
+        Long participationId = fixture.participationIds().getFirst();
+        CountDownLatch endMissionLocked = new CountDownLatch(1);
+        CountDownLatch progressReachedMissionLock = new CountDownLatch(1);
+        CountDownLatch releaseEnd = new CountDownLatch(1);
+        MissionService target = AopTestUtils.getTargetObject(missionService);
+        doAnswer(invocation -> {
+            Mission mission = (Mission) invocation.callRealMethod();
+            endMissionLocked.countDown();
+            if (!releaseEnd.await(5, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("자동 종료 잠금 해제를 기다리는 시간이 초과되었습니다.");
+            }
+            return mission;
+        }).when(target).findForUpdate(missionId);
+        doAnswer(invocation -> {
+            progressReachedMissionLock.countDown();
+            return invocation.callRealMethod();
+        }).when(target).findMissionForParticipationUpdate(missionId);
+
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<EndMissionSystemResult> endResult = executor.submit(() -> endMissionsUseCase.endBySystem(
+                missionId,
+                UUID.randomUUID()
+            ));
+            assertThat(endMissionLocked.await(5, TimeUnit.SECONDS)).isTrue();
+
+            Future<?> progressResult = executor.submit(() -> recordMissionProgressUseCase.record(
+                fixture.visitIds().getFirst(),
+                UUID.randomUUID()
+            ));
+            assertThat(progressReachedMissionLock.await(5, TimeUnit.SECONDS)).isTrue();
+            releaseEnd.countDown();
+
+            assertThat(endResult.get(5, TimeUnit.SECONDS).status()).isEqualTo(EndMissionSystemResult.Status.ENDED);
+            progressResult.get(5, TimeUnit.SECONDS);
+        } finally {
+            releaseEnd.countDown();
+        }
+
+        assertThat(missionRepository.findById(missionId).orElseThrow().getStatus()).isEqualTo(MissionStatus.ENDED);
+        assertThat(findParticipation(participationId).getStatus()).isEqualTo(MissionParticipationStatus.ENDED_INCOMPLETE);
+        assertThat(missionProgressRepository.countByMissionParticipationMissionParticipationId(participationId)).isZero();
+    }
+
     private void runConcurrently(
         Long firstVisitId,
         Long secondVisitId
@@ -230,6 +295,16 @@ class RecordMissionProgressUseCaseMySqlTest extends NonTransactionalMySqlTestSup
         int missionCount,
         int visitCount
     ) {
+        return createFixture(conditionType, requiredVisitCount, missionCount, visitCount, MISSION_ENDS_AT);
+    }
+
+    private Fixture createFixture(
+        MissionConditionType conditionType,
+        Integer requiredVisitCount,
+        int missionCount,
+        int visitCount,
+        Instant missionEndsAt
+    ) {
         return transactionTemplate.execute(status -> {
             Region region = regionRepository.saveAndFlush(new Region("GIMHAE", "김해시", true));
             AppUser operator = saveUser("operator@example.com", "콘텐츠 운영자");
@@ -264,6 +339,7 @@ class RecordMissionProgressUseCaseMySqlTest extends NonTransactionalMySqlTestSup
                 100L
             ));
 
+            List<Long> missionIds = new ArrayList<>();
             List<Long> participationIds = new ArrayList<>();
             for (int missionIndex = 0; missionIndex < missionCount; missionIndex++) {
                 Mission mission = new Mission(
@@ -271,7 +347,7 @@ class RecordMissionProgressUseCaseMySqlTest extends NonTransactionalMySqlTestSup
                     conditionType,
                     requiredVisitCount,
                     rewardCouponPolicy,
-                    MISSION_ENDS_AT.plusSeconds(missionIndex)
+                    missionEndsAt.plusSeconds(missionIndex)
                 );
                 if (conditionType == MissionConditionType.CONTENT_SET) {
                     mission.addTargetContent(content);
@@ -279,6 +355,7 @@ class RecordMissionProgressUseCaseMySqlTest extends NonTransactionalMySqlTestSup
                 mission.submitForReview();
                 mission.approve(ISSUE_STARTS_AT);
                 missionRepository.saveAndFlush(mission);
+                missionIds.add(mission.getMissionId());
                 MissionParticipation participation = missionParticipationRepository.saveAndFlush(
                     new MissionParticipation(mission, visitor, JOINED_AT)
                 );
@@ -289,7 +366,7 @@ class RecordMissionProgressUseCaseMySqlTest extends NonTransactionalMySqlTestSup
             for (int visitIndex = 0; visitIndex < visitCount; visitIndex++) {
                 visitIds.add(saveVisit(region, content, visitor, operator, visitIndex).getVisitId());
             }
-            return new Fixture(List.copyOf(participationIds), List.copyOf(visitIds));
+            return new Fixture(List.copyOf(missionIds), List.copyOf(participationIds), List.copyOf(visitIds));
         });
     }
 
@@ -363,6 +440,7 @@ class RecordMissionProgressUseCaseMySqlTest extends NonTransactionalMySqlTestSup
     }
 
     private record Fixture(
+        List<Long> missionIds,
         List<Long> participationIds,
         List<Long> visitIds
     ) {
