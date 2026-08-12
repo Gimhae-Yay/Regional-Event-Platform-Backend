@@ -62,6 +62,12 @@ public class RefundService {
     }
 
     @Transactional(readOnly = true)
+    public Refund findByRefundId(Long refundId) {
+        return refundRepository.findByRefundId(refundId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    @Transactional(readOnly = true)
     public List<Refund> findAllByStatuses(Collection<RefundStatus> statuses) {
         return refundRepository.findAllByStatusIn(statuses);
     }

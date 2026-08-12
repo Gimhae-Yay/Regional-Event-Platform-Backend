@@ -36,4 +36,9 @@ public class RefundAttemptService {
         }
         return refundAttemptRepository.findAllByRefundRefundIdIn(refundIds);
     }
+
+    @Transactional(readOnly = true)
+    public List<RefundAttempt> findAllByRefundId(Long refundId) {
+        return refundAttemptRepository.findAllByRefundRefundIdOrderByAttemptNoAsc(refundId);
+    }
 }
