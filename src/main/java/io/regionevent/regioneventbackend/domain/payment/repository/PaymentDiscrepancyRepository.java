@@ -18,6 +18,8 @@ public interface PaymentDiscrepancyRepository extends JpaRepository<PaymentDiscr
     @EntityGraph(attributePaths = {"payment", "payment.reservationPriceSnapshot"})
     List<PaymentDiscrepancy> findAllByStatusOrderByDetectedAtAscPaymentDiscrepancyIdAsc(String status);
 
+    Optional<PaymentDiscrepancy> findByPaymentPaymentId(Long paymentId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT discrepancy

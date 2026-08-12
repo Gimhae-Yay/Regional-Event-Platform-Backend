@@ -46,6 +46,11 @@ public class PaymentService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public Optional<Payment> findByReservationId(Long reservationId) {
+        return paymentRepository.findByReservationReservationId(reservationId);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
     public boolean hasPendingPayment(Long userId) {
         return paymentRepository.existsByCapacityHoldUserUserIdAndStatus(userId, PaymentStatus.PENDING);
     }
