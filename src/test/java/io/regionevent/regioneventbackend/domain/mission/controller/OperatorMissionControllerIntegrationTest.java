@@ -2,6 +2,7 @@ package io.regionevent.regioneventbackend.domain.mission.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -161,6 +162,172 @@ class OperatorMissionControllerIntegrationTest {
             assertThat(auditEvent.getResult()).isEqualTo(AuditEventResult.SUCCESS);
             assertThat(auditEvent.getReasonCode()).isEqualTo("MISSION_CREATED");
         });
+    }
+
+    @Test
+    void update_withDraftMission_replacesCoreValuesTargetsAndRecordsSuccessAudit() throws Exception {
+        Region region = saveRegion("UPDATE");
+        AppUser operator = saveOperator(region, AppUserStatus.ACTIVE);
+        Content currentRewardContent = saveContent(region, operator, "update-current-reward");
+        Content requestedRewardContent = saveContent(region, operator, "update-requested-reward");
+        Content previousTarget = saveContent(region, operator, "update-previous-target");
+        Content requestedTarget = saveContent(
+            region,
+            operator,
+            "update-requested-target",
+            ContentStatus.PENDING
+        );
+        CouponPolicy currentPolicy = saveMissionRewardCouponPolicy(currentRewardContent, region);
+        CouponPolicy requestedPolicy = saveMissionRewardCouponPolicy(requestedRewardContent, region);
+        Mission mission = new Mission(
+            region,
+            MissionConditionType.CONTENT_SET,
+            null,
+            currentPolicy,
+            MISSION_ENDS_AT
+        );
+        mission.addTargetContent(previousTarget);
+        mission = missionRepository.saveAndFlush(mission);
+        Long missionId = mission.getMissionId();
+
+        mockMvc.perform(patch("/api/v1/operator/missions/{missionId}", missionId)
+                .header("Authorization", bearerToken(operator))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createMissionRequest(
+                    "CONTENT_SET",
+                    null,
+                    List.of(requestedTarget.getContentId()),
+                    requestedPolicy.getCouponPolicyId()
+                )))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.statusCode").value(200))
+            .andExpect(jsonPath("$.code").value("SUCCESS"))
+            .andExpect(jsonPath("$.message").value("미션 수정에 성공했습니다."))
+            .andExpect(jsonPath("$.data.missionId").value(missionId.toString()))
+            .andExpect(jsonPath("$.data.status").value("DRAFT"));
+
+        entityManager.flush();
+        entityManager.clear();
+        Mission updatedMission = missionRepository.findMissionDetailByMissionId(missionId).orElseThrow();
+        assertThat(updatedMission.getConditionType()).isEqualTo(MissionConditionType.CONTENT_SET);
+        assertThat(updatedMission.getRequiredVisitCount()).isNull();
+        assertThat(updatedMission.getRewardCouponPolicy().getCouponPolicyId())
+            .isEqualTo(requestedPolicy.getCouponPolicyId());
+        assertThat(updatedMission.getEndsAt()).isEqualTo(Instant.parse("2027-09-30T14:59:59Z"));
+        assertThat(updatedMission.getTargetContents())
+            .extracting(targetContent -> targetContent.getContent().getContentId())
+            .containsExactly(requestedTarget.getContentId());
+        assertThat(auditEventRepository.findAll()).singleElement().satisfies(auditEvent -> {
+            assertThat(auditEvent.getTargetType()).isEqualTo(AuditEventTargetType.MISSION);
+            assertThat(auditEvent.getTargetId()).isEqualTo(missionId);
+            assertThat(auditEvent.getPreviousState()).isEqualTo("DRAFT");
+            assertThat(auditEvent.getNextState()).isEqualTo("DRAFT");
+            assertThat(auditEvent.getResult()).isEqualTo(AuditEventResult.SUCCESS);
+            assertThat(auditEvent.getReasonCode()).isEqualTo("MISSION_UPDATED");
+        });
+    }
+
+    @Test
+    void update_withNonDraftMission_returnsConflictWithoutChangingMission() throws Exception {
+        Region region = saveRegion("UPDATE-CONFLICT");
+        AppUser operator = saveOperator(region, AppUserStatus.ACTIVE);
+        Mission mission = saveVisitCountMission(region, operator);
+        Long originalPolicyId = mission.getRewardCouponPolicy().getCouponPolicyId();
+        setMissionStatus(mission, MissionStatus.PENDING_REVIEW);
+
+        mockMvc.perform(patch("/api/v1/operator/missions/{missionId}", mission.getMissionId())
+                .header("Authorization", bearerToken(operator))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createMissionRequest("VISIT_COUNT", 4, List.of(), originalPolicyId)))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code").value("MISSION_STATE_CONFLICT"));
+
+        Mission unchangedMission = missionRepository.findByMissionId(mission.getMissionId()).orElseThrow();
+        assertThat(unchangedMission.getStatus()).isEqualTo(MissionStatus.PENDING_REVIEW);
+        assertThat(unchangedMission.getRequiredVisitCount()).isEqualTo(1);
+        assertThat(unchangedMission.getRewardCouponPolicy().getCouponPolicyId()).isEqualTo(originalPolicyId);
+    }
+
+    @Test
+    void update_withOtherRegionOperator_returnsForbiddenWithoutChangingMission() throws Exception {
+        Region missionRegion = saveRegion("UPDATE-MISSION");
+        Region otherRegion = saveRegion("UPDATE-OTHER");
+        AppUser missionOperator = saveOperator(missionRegion, AppUserStatus.ACTIVE);
+        AppUser otherOperator = saveOperator(otherRegion, AppUserStatus.ACTIVE);
+        Mission mission = saveVisitCountMission(missionRegion, missionOperator);
+        Long originalPolicyId = mission.getRewardCouponPolicy().getCouponPolicyId();
+
+        mockMvc.perform(patch("/api/v1/operator/missions/{missionId}", mission.getMissionId())
+                .header("Authorization", bearerToken(otherOperator))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createMissionRequest("VISIT_COUNT", 4, List.of(), originalPolicyId)))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        Mission unchangedMission = missionRepository.findByMissionId(mission.getMissionId()).orElseThrow();
+        assertThat(unchangedMission.getConditionType()).isEqualTo(MissionConditionType.VISIT_COUNT);
+        assertThat(unchangedMission.getRequiredVisitCount()).isEqualTo(1);
+        assertThat(unchangedMission.getRewardCouponPolicy().getCouponPolicyId()).isEqualTo(originalPolicyId);
+    }
+
+    @Test
+    void update_withEndedRewardPolicy_returnsConflictWithoutChangingMission() throws Exception {
+        Region region = saveRegion("UPDATE-POLICY");
+        AppUser operator = saveOperator(region, AppUserStatus.ACTIVE);
+        Mission mission = saveVisitCountMission(region, operator);
+        Long originalPolicyId = mission.getRewardCouponPolicy().getCouponPolicyId();
+        Content endedRewardContent = saveContent(region, operator, "update-ended-policy");
+        CouponPolicy endedPolicy = saveMissionRewardCouponPolicy(endedRewardContent, region);
+        endedPolicy.publish(CONTENT_PUBLISHED_AT);
+        endedPolicy.end(COUPON_ISSUE_ENDS_AT);
+        couponPolicyRepository.saveAndFlush(endedPolicy);
+
+        mockMvc.perform(patch("/api/v1/operator/missions/{missionId}", mission.getMissionId())
+                .header("Authorization", bearerToken(operator))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createMissionRequest(
+                    "VISIT_COUNT",
+                    4,
+                    List.of(),
+                    endedPolicy.getCouponPolicyId()
+                )))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code").value("MISSION_STATE_CONFLICT"));
+
+        Mission unchangedMission = missionRepository.findByMissionId(mission.getMissionId()).orElseThrow();
+        assertThat(unchangedMission.getConditionType()).isEqualTo(MissionConditionType.VISIT_COUNT);
+        assertThat(unchangedMission.getRequiredVisitCount()).isEqualTo(1);
+        assertThat(unchangedMission.getRewardCouponPolicy().getCouponPolicyId()).isEqualTo(originalPolicyId);
+    }
+
+    @Test
+    void update_withDeletedTargetContent_returnsNotFoundWithoutChangingMission() throws Exception {
+        Region region = saveRegion("UPDATE-CONTENT");
+        AppUser operator = saveOperator(region, AppUserStatus.ACTIVE);
+        Mission mission = saveVisitCountMission(region, operator);
+        Long originalPolicyId = mission.getRewardCouponPolicy().getCouponPolicyId();
+        Content deletedTarget = saveContent(region, operator, "update-deleted-target", ContentStatus.APPROVED);
+        deletedTarget.softDelete(CONTENT_PUBLISHED_AT);
+        contentRepository.saveAndFlush(deletedTarget);
+
+        mockMvc.perform(patch("/api/v1/operator/missions/{missionId}", mission.getMissionId())
+                .header("Authorization", bearerToken(operator))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createMissionRequest(
+                    "CONTENT_SET",
+                    null,
+                    List.of(deletedTarget.getContentId()),
+                    originalPolicyId
+                )))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+
+        Mission unchangedMission = missionRepository.findMissionDetailByMissionId(mission.getMissionId())
+            .orElseThrow();
+        assertThat(unchangedMission.getConditionType()).isEqualTo(MissionConditionType.VISIT_COUNT);
+        assertThat(unchangedMission.getRequiredVisitCount()).isEqualTo(1);
+        assertThat(unchangedMission.getRewardCouponPolicy().getCouponPolicyId()).isEqualTo(originalPolicyId);
+        assertThat(unchangedMission.getTargetContents()).isEmpty();
     }
 
     @Test
