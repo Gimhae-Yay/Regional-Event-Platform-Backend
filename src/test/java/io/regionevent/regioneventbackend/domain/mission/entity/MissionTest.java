@@ -69,6 +69,24 @@ class MissionTest {
     }
 
     @Test
+    void reject_whenPendingReview_returnsMissionToDraft() {
+        ReflectionTestUtils.setField(mission, "status", MissionStatus.PENDING_REVIEW);
+
+        mission.reject();
+
+        assertThat(mission.getStatus()).isEqualTo(MissionStatus.DRAFT);
+        assertThat(mission.getPublishedAt()).isNull();
+        assertThat(mission.getEndedAt()).isNull();
+    }
+
+    @Test
+    void reject_whenStatusIsNotPendingReview_rejectsTransition() {
+        assertThatThrownBy(mission::reject)
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("mission status must be PENDING_REVIEW");
+    }
+
+    @Test
     void end_whenPublished_endsMissionAtGivenTime() {
         ReflectionTestUtils.setField(mission, "status", MissionStatus.PUBLISHED);
         ReflectionTestUtils.setField(mission, "publishedAt", PUBLISHED_AT);
