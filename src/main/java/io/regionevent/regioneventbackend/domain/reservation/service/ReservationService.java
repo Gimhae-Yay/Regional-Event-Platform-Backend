@@ -71,6 +71,12 @@ public class ReservationService {
     }
 
     @Transactional(readOnly = true)
+    public Reservation findByIdForOperatorPaymentRead(Long reservationId) {
+        return reservationRepository.findWithCheckInDetailsByReservationId(reservationId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    @Transactional(readOnly = true)
     public Reservation findByIdForCheckInResult(Long reservationId) {
         return reservationRepository.findWithCheckInDetailsByReservationId(reservationId)
             .orElseThrow(() -> new IllegalStateException("check-in result reservation does not exist"));

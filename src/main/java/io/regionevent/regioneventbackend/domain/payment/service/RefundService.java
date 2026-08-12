@@ -68,6 +68,11 @@ public class RefundService {
     }
 
     @Transactional(readOnly = true)
+    public Optional<Refund> findByPaymentId(Long paymentId) {
+        return refundRepository.findByPaymentPaymentId(paymentId);
+    }
+
+    @Transactional(readOnly = true)
     public List<Refund> findAllByStatuses(Collection<RefundStatus> statuses) {
         return refundRepository.findAllByStatusIn(statuses);
     }

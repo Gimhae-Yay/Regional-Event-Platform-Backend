@@ -46,4 +46,9 @@ public class PaymentDiscrepancyService {
         return paymentDiscrepancyRepository.findById(discrepancyId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
+
+    @Transactional(readOnly = true)
+    public Optional<PaymentDiscrepancy> findByPaymentId(Long paymentId) {
+        return paymentDiscrepancyRepository.findByPaymentPaymentId(paymentId);
+    }
 }
