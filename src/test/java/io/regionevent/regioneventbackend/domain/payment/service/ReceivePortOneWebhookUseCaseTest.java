@@ -39,6 +39,7 @@ import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUs
 import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentDiscrepancy;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentStatus;
+import io.regionevent.regioneventbackend.domain.payment.entity.PaymentVerification;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentWebhook;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneLookupException;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOnePaymentGateway;
@@ -58,6 +59,7 @@ class ReceivePortOneWebhookUseCaseTest {
     private static final String WEBHOOK_SIGNATURE = "v1,signature";
     private static final String PAYMENT_ID = "order-1";
     private static final String TRANSACTION_ID = "transaction-1";
+    private static final String RESULT_HASH = "provider-response-hash";
 
     private final PortOneWebhookSignatureVerifier signatureVerifier = mock(
         PortOneWebhookSignatureVerifier.class
@@ -231,7 +233,8 @@ class ReceivePortOneWebhookUseCaseTest {
             "store-1",
             20_000,
             "KRW",
-            "DECLINED"
+            "DECLINED",
+            RESULT_HASH
         ));
         when(paymentService.findByOrderIdForUpdate(PAYMENT_ID)).thenReturn(Optional.of(payment));
         when(paymentWebhookService.existsByProviderEventId(WEBHOOK_ID)).thenReturn(false);
@@ -239,7 +242,9 @@ class ReceivePortOneWebhookUseCaseTest {
         useCase.receive(WEBHOOK_ID, WEBHOOK_TIMESTAMP, WEBHOOK_SIGNATURE, validPaymentEvent());
 
         verify(payment).decline(any());
-        verify(paymentVerificationService).create(any());
+        ArgumentCaptor<PaymentVerification> verificationCaptor = ArgumentCaptor.forClass(PaymentVerification.class);
+        verify(paymentVerificationService).create(verificationCaptor.capture());
+        assertThat(verificationCaptor.getValue().getResponseHash()).isEqualTo(RESULT_HASH);
         verify(capacityHoldService, never()).consumeForPaidPaymentIfConfirmable(any(), any(), any());
         verify(reservationService, never()).createConfirmed(any());
     }
@@ -254,7 +259,8 @@ class ReceivePortOneWebhookUseCaseTest {
             "store-1",
             20_000,
             "KRW",
-            "DECLINED"
+            "DECLINED",
+            RESULT_HASH
         ));
         when(paymentWebhookService.existsByProviderEventId(WEBHOOK_ID)).thenReturn(false);
 
@@ -274,7 +280,8 @@ class ReceivePortOneWebhookUseCaseTest {
             "store-1",
             20_001,
             "KRW",
-            "PAID"
+            "PAID",
+            RESULT_HASH
         ));
         when(paymentService.findByOrderIdForUpdate(PAYMENT_ID)).thenReturn(Optional.of(payment));
         when(paymentWebhookService.existsByProviderEventId(WEBHOOK_ID)).thenReturn(false);
@@ -302,7 +309,8 @@ class ReceivePortOneWebhookUseCaseTest {
                 "store-1",
                 20_000,
                 "KRW",
-                "DECLINED"
+                "DECLINED",
+                RESULT_HASH
             ))
             .thenReturn(paidPayment());
         when(paymentService.findByOrderIdForUpdate(PAYMENT_ID)).thenReturn(Optional.of(payment));
@@ -350,7 +358,8 @@ class ReceivePortOneWebhookUseCaseTest {
             "store-1",
             20_000,
             "KRW",
-            "PAID"
+            "PAID",
+            RESULT_HASH
         );
     }
 
