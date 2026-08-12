@@ -58,6 +58,26 @@ class PortOnePaymentAdapterTest {
     }
 
     @Test
+    void findByPaymentId_취소_이력이_있으면_마지막_취소의_상태와_원문_해시를_보존한다() throws Exception {
+        byte[] responseBody = paymentResponseBody("""
+            {"id":"payment-1","transactionId":"transaction-1","storeId":"store-1",
+            "amount":{"total":20000},"currency":"KRW","status":"CANCELLED",
+            "cancellations":[
+              {"id":"cancel-1","status":"FAILED"},
+              {"id":"cancel-2","status":"SUCCEEDED"}
+            ]}
+            """);
+
+        PortOnePayment payment = findPaymentByResponse(responseBody);
+
+        assertThat(payment.cancellation()).isEqualTo(new PortOneCancellation(
+            "cancel-2",
+            "SUCCEEDED",
+            PortOnePaymentAdapter.hash(responseBody)
+        ));
+    }
+
+    @Test
     void hash_성공과_명시적_실패_응답_원문이_다르면_서로_다른_SHA_256을_반환한다() {
         byte[] succeededResponse = "{\"cancellation\":{\"id\":\"cancel-1\",\"status\":\"SUCCEEDED\"}}"
             .getBytes(StandardCharsets.UTF_8);
