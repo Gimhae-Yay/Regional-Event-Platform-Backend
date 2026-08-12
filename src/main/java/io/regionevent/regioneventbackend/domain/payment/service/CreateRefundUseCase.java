@@ -48,6 +48,7 @@ public class CreateRefundUseCase {
     private static final String DISCREPANCY_ACTION_REASON_CODE = "MANUAL_FULL_REFUND";
     private static final String DISCREPANCY_ACTION_RESULT_CODE = "REFUND_REQUESTED";
     private static final String COUPON_RESTORE_REASON = "REFUND_SUCCEEDED";
+    private static final String USER_REQUEST_REASON = "USER_REQUEST";
 
     private final PlatformAdminAuthorizationService platformAdminAuthorizationService;
     private final PaymentService paymentService;
@@ -141,6 +142,124 @@ public class CreateRefundUseCase {
                 requestId
             ));
         }
+    }
+
+    public CreateRefundResponse createForReservationCancellation(
+        Long paymentId,
+        AuditEventActor actor,
+        UUID requestId
+    ) {
+        PreparedRefund preparedRefund = executeInTransaction(
+            () -> prepareReservationCancellationRefund(paymentId, actor, requestId)
+        );
+        if (preparedRefund.existingResponse() != null) {
+            return preparedRefund.existingResponse();
+        }
+
+        try {
+            PortOnePaymentGateway.PortOneCancellation cancellation = portOnePaymentGateway.cancelPayment(
+                preparedRefund.portonePaymentId(),
+                preparedRefund.amount(),
+                "예약 취소"
+            );
+            return executeInTransaction(() -> confirmReservationCancellationResponse(
+                preparedRefund,
+                cancellation,
+                actor,
+                requestId
+            ));
+        } catch (PortOneNoResponseException exception) {
+            return executeInTransaction(() -> confirmReservationCancellationNoResponse(
+                preparedRefund,
+                exception.getFailureReasonCode(),
+                actor,
+                requestId
+            ));
+        }
+    }
+
+    public CreateRefundResponse findForReservationCancellation(Long paymentId) {
+        return executeInTransaction(() -> refundService.findByPaymentIdForUpdate(paymentId)
+            .map(CreateRefundResponse::from)
+            .orElse(null));
+    }
+
+    private PreparedRefund prepareReservationCancellationRefund(
+        Long paymentId,
+        AuditEventActor actor,
+        UUID requestId
+    ) {
+        Payment payment = paymentService.findByPaymentIdForUpdate(paymentId)
+            .orElseThrow(() -> new IllegalStateException("reservation payment does not exist"));
+        Refund existing = refundService.findByPaymentIdForUpdate(paymentId).orElse(null);
+        if (existing != null) {
+            return PreparedRefund.withExistingResponse(CreateRefundResponse.from(existing));
+        }
+        if (payment.getStatus() != PaymentStatus.APPROVED && payment.getStatus() != PaymentStatus.DISCREPANT) {
+            throw new BusinessException(ErrorCode.REFUND_PAYMENT_CONFLICT);
+        }
+        if (payment.getPortonePaymentId() == null) {
+            throw new BusinessException(ErrorCode.REFUND_PAYMENT_CONFLICT);
+        }
+        Instant now = Instant.now(clock);
+        Refund refund = refundService.create(new Refund(
+            payment,
+            payment.getReservationPriceSnapshot().getFinalAmount(),
+            now
+        ));
+        refund.startProcessing();
+        RefundAttempt attempt = refundAttemptService.create(new RefundAttempt(
+            refund,
+            1,
+            RefundAttemptInitiatorKind.SYSTEM,
+            now
+        ));
+        return new PreparedRefund(
+            refund.getRefundId(),
+            attempt.getRefundAttemptId(),
+            payment.getPortonePaymentId(),
+            refund.getAmount(),
+            null
+        );
+    }
+
+    private CreateRefundResponse confirmReservationCancellationResponse(
+        PreparedRefund preparedRefund,
+        PortOnePaymentGateway.PortOneCancellation cancellation,
+        AuditEventActor actor,
+        UUID requestId
+    ) {
+        Refund refund = refundService.findByRefundIdForUpdate(preparedRefund.refundId())
+            .orElseThrow(() -> new IllegalStateException("prepared refund does not exist"));
+        RefundAttempt attempt = refundAttemptService
+            .findByRefundAttemptIdForUpdate(preparedRefund.refundAttemptId())
+            .orElseThrow(() -> new IllegalStateException("prepared refund attempt does not exist"));
+        attempt.respond(cancellation.cancellationId(), cancellation.status(), cancellation.resultHash());
+        if (cancellation.isSucceeded()) {
+            refund.succeed(Instant.now(clock));
+            restoreCouponIfEligible(refund, requestId, actor);
+        } else if (cancellation.isExplicitlyFailed()) {
+            refund.fail(Instant.now(clock));
+        }
+        recordReservationCancellationRefundAudit(refund, actor, requestId, Instant.now(clock));
+        return CreateRefundResponse.from(refund);
+    }
+
+    private CreateRefundResponse confirmReservationCancellationNoResponse(
+        PreparedRefund preparedRefund,
+        RefundFailureReasonCode failureReasonCode,
+        AuditEventActor actor,
+        UUID requestId
+    ) {
+        Refund refund = refundService.findByRefundIdForUpdate(preparedRefund.refundId())
+            .orElseThrow(() -> new IllegalStateException("prepared refund does not exist"));
+        RefundAttempt attempt = refundAttemptService
+            .findByRefundAttemptIdForUpdate(preparedRefund.refundAttemptId())
+            .orElseThrow(() -> new IllegalStateException("prepared refund attempt does not exist"));
+        attempt.noResponse(failureReasonCode);
+        refund.markDiscrepant(Instant.now(clock));
+        recordReservationCancellationRefundAudit(refund, actor, requestId, Instant.now(clock));
+        return CreateRefundResponse.from(refund);
     }
 
     private PreparedRefund prepareRefund(
@@ -339,6 +458,84 @@ public class CreateRefundUseCase {
         }
     }
 
+    private void restoreCouponIfEligible(
+        Refund refund,
+        UUID requestId,
+        AuditEventActor actor
+    ) {
+        Payment payment = refund.getPayment();
+        Reservation reservation = payment.getReservation();
+        if (reservation == null
+            || payment.getReservationPriceSnapshot().getCoupon() == null) {
+            return;
+        }
+        CouponRedemption redemption = couponRedemptionService
+            .findByReservationPriceSnapshotIdForUpdate(
+                payment.getReservationPriceSnapshot().getReservationPriceSnapshotId()
+            )
+            .orElse(null);
+        if (redemption == null || redemption.getStatus() == CouponRedemptionStatus.REVERSED) {
+            return;
+        }
+        Coupon snapshotCoupon = payment.getReservationPriceSnapshot().getCoupon();
+        Coupon coupon = couponService.findByCouponIdForUpdate(snapshotCoupon.getCouponId())
+            .orElseThrow(() -> new IllegalStateException("snapshot coupon does not exist"));
+        if (redemption.getCoupon().getCouponId().equals(coupon.getCouponId())
+            && redemption.getReservation().getReservationId().equals(reservation.getReservationId())
+            && redemption.getReservationPriceSnapshot().getReservationPriceSnapshotId().equals(
+                payment.getReservationPriceSnapshot().getReservationPriceSnapshotId()
+            )
+            && coupon.getStatus() == CouponStatus.USED) {
+            Instant restoredAt = couponService.findCurrentDatabaseTime();
+            redemption.reverse(restoredAt);
+            CouponStatus restoredStatus = couponService.restoreUsedCoupon(coupon, restoredAt);
+            couponStatusHistoryService.create(new CouponStatusHistory(
+                coupon,
+                CouponStatus.USED,
+                restoredStatus,
+                COUPON_RESTORE_REASON,
+                actor.getRoleName(),
+                restoredAt
+            ));
+            recordAuditEventUseCase.record(new AuditEventCommand(
+                requestId,
+                payment.getCapacityHold().getRegion(),
+                AuditEventTargetType.COUPON,
+                coupon.getCouponId(),
+                CouponStatus.USED.name(),
+                restoredStatus.name(),
+                AuditEventResult.SUCCESS,
+                COUPON_RESTORE_REASON,
+                null,
+                null,
+                actor,
+                restoredAt
+            ));
+        }
+    }
+
+    private void recordReservationCancellationRefundAudit(
+        Refund refund,
+        AuditEventActor actor,
+        UUID requestId,
+        Instant occurredAt
+    ) {
+        recordAuditEventUseCase.record(new AuditEventCommand(
+            requestId,
+            refund.getPayment().getCapacityHold().getRegion(),
+            AuditEventTargetType.REFUND,
+            refund.getRefundId(),
+            "REQUESTED",
+            refund.getStatus().name(),
+            AuditEventResult.SUCCESS,
+            USER_REQUEST_REASON,
+            null,
+            null,
+            actor,
+            occurredAt
+        ));
+    }
+
     private long toPositiveId(String value) {
         if (value == null || value.isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
@@ -393,9 +590,6 @@ public class CreateRefundUseCase {
 
     private <T> T executeInTransaction(Supplier<T> action) {
         T result = transactionTemplate.execute(status -> action.get());
-        if (result == null) {
-            throw new IllegalStateException("transaction result must not be null");
-        }
         return result;
     }
 

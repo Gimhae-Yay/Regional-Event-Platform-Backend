@@ -20,6 +20,14 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     @Query("SELECT payment FROM Payment payment WHERE payment.paymentId = :paymentId")
     Optional<Payment> findByPaymentIdForUpdate(@Param("paymentId") Long paymentId);
 
+    @EntityGraph(attributePaths = {"capacityHold", "reservationPriceSnapshot", "reservationPriceSnapshot.coupon", "reservation"})
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT payment FROM Payment payment WHERE payment.reservation.reservationId = :reservationId")
+    Optional<Payment> findByReservationIdForUpdate(@Param("reservationId") Long reservationId);
+
+    @EntityGraph(attributePaths = {"capacityHold", "reservationPriceSnapshot", "reservationPriceSnapshot.coupon", "reservation"})
+    Optional<Payment> findByReservationReservationId(Long reservationId);
+
     @EntityGraph(attributePaths = {"capacityHold", "capacityHold.user", "reservationPriceSnapshot", "reservation"})
     Optional<Payment> findByPaymentId(Long paymentId);
 
