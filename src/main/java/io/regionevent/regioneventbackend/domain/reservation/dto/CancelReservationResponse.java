@@ -36,6 +36,19 @@ public record CancelReservationResponse(
         );
     }
 
+    public CancelReservationResponse withRefund(CreateRefundResponse refund) {
+        return new CancelReservationResponse(
+            reservationId,
+            reservationStatus,
+            RefundSummary.from(refund),
+            sessionId,
+            status,
+            cancellationReason,
+            cancelledAt,
+            capacityReleasedAt
+        );
+    }
+
     public record RefundSummary(
         String refundId,
         String paymentId,

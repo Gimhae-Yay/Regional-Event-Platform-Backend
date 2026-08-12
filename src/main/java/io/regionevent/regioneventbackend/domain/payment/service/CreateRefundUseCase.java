@@ -152,6 +152,29 @@ public class CreateRefundUseCase {
         PreparedRefund preparedRefund = executeInTransaction(
             () -> prepareReservationCancellationRefund(paymentId, actor, requestId)
         );
+        return executePreparedReservationCancellationRefund(
+            ReservationCancellationRefundPreparation.from(preparedRefund),
+            actor,
+            requestId
+        );
+    }
+
+    public ReservationCancellationRefundPreparation prepareForReservationCancellation(
+        Long paymentId,
+        AuditEventActor actor,
+        UUID requestId
+    ) {
+        return ReservationCancellationRefundPreparation.from(
+            prepareReservationCancellationRefund(paymentId, actor, requestId)
+        );
+    }
+
+    public CreateRefundResponse executePreparedReservationCancellationRefund(
+        ReservationCancellationRefundPreparation preparation,
+        AuditEventActor actor,
+        UUID requestId
+    ) {
+        PreparedRefund preparedRefund = preparation.toPreparedRefund();
         if (preparedRefund.existingResponse() != null) {
             return preparedRefund.existingResponse();
         }
@@ -603,6 +626,35 @@ public class CreateRefundUseCase {
 
         private static PreparedRefund withExistingResponse(CreateRefundResponse response) {
             return new PreparedRefund(null, null, null, 0, response);
+        }
+    }
+
+    public record ReservationCancellationRefundPreparation(
+        Long refundId,
+        Long refundAttemptId,
+        String portonePaymentId,
+        long amount,
+        CreateRefundResponse existingResponse
+    ) {
+
+        private static ReservationCancellationRefundPreparation from(PreparedRefund preparedRefund) {
+            return new ReservationCancellationRefundPreparation(
+                preparedRefund.refundId(),
+                preparedRefund.refundAttemptId(),
+                preparedRefund.portonePaymentId(),
+                preparedRefund.amount(),
+                preparedRefund.existingResponse()
+            );
+        }
+
+        private PreparedRefund toPreparedRefund() {
+            return new PreparedRefund(
+                refundId,
+                refundAttemptId,
+                portonePaymentId,
+                amount,
+                existingResponse
+            );
         }
     }
 }
