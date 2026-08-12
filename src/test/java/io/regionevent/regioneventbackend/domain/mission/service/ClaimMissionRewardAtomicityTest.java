@@ -77,7 +77,7 @@ import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 @Testcontainers(disabledWithoutDocker = true)
 class ClaimMissionRewardAtomicityTest extends NonTransactionalMySqlTestSupport {
 
-    private static final Instant BASE_TIME = Instant.parse("2026-08-11T00:00:00Z");
+    private static final Instant BASE_TIME = Instant.now();
 
     private final ClaimMissionRewardUseCase useCase;
     private final MissionRewardClaimRepository claimRepository;
