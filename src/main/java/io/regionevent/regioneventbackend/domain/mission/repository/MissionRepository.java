@@ -2,6 +2,7 @@ package io.regionevent.regioneventbackend.domain.mission.repository;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import jakarta.persistence.LockModeType;
@@ -93,6 +94,15 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
 
     @Query(value = "SELECT UNIX_TIMESTAMP(CURRENT_TIMESTAMP(6))", nativeQuery = true)
     BigDecimal findCurrentEpochSeconds();
+
+    @Query(value = """
+        SELECT mission_id
+        FROM mission
+        WHERE status = 'PUBLISHED'
+          AND ends_at <= CURRENT_TIMESTAMP(6)
+        ORDER BY mission_id ASC
+        """, nativeQuery = true)
+    List<Long> findAutoEndCandidateIds();
 
     boolean existsByRewardCouponPolicyCouponPolicyIdAndStatus(
         Long couponPolicyId,

@@ -75,6 +75,11 @@ public class MissionService {
         return toInstant(missionRepository.findCurrentEpochSeconds());
     }
 
+    @Transactional(readOnly = true)
+    public List<Long> findAutoEndCandidateIds() {
+        return missionRepository.findAutoEndCandidateIds();
+    }
+
     public Mission create(
         Region region,
         MissionConditionType conditionType,
