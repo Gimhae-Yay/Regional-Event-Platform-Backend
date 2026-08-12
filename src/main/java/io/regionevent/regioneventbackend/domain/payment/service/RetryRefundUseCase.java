@@ -33,7 +33,7 @@ import io.regionevent.regioneventbackend.domain.payment.entity.RefundFailureReas
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundStatus;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneNoResponseException;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOnePaymentGateway;
-import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneLookupException;
+import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneResponseException;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminAssignment;
@@ -108,10 +108,9 @@ public class RetryRefundUseCase {
             return executeInTransaction(
                 () -> confirmNoResponse(actorUserId, preparedRetry, exception.getFailureReasonCode(), requestId)
             );
-        } catch (PortOneLookupException exception) {
-            return executeInTransaction(
-                () -> confirmNoResponse(actorUserId, preparedRetry, RefundFailureReasonCode.UNKNOWN, requestId)
-            );
+        } catch (PortOneResponseException exception) {
+            executeInTransaction(() -> confirmReceivedError(actorUserId, preparedRetry, exception, requestId));
+            throw exception;
         }
     }
 
@@ -191,6 +190,23 @@ public class RetryRefundUseCase {
         Refund refund = findPreparedRefund(preparedRetry.refundId());
         RefundAttempt attempt = findPreparedAttempt(preparedRetry.refundAttemptId());
         attempt.noResponse(failureReasonCode);
+        Instant completedAt = Instant.now(clock);
+        refund.markDiscrepant(completedAt);
+        recordRefundAudit(refund, assignment, requestId, completedAt);
+        return RetryRefundResponse.from(refund, attempt);
+    }
+
+    private RetryRefundResponse confirmReceivedError(
+        Long actorUserId,
+        PreparedRetry preparedRetry,
+        PortOneResponseException exception,
+        UUID requestId
+    ) {
+        PlatformAdminAssignment assignment = platformAdminAuthorizationService
+            .requireAuthorizedPlatformAdmin(actorUserId);
+        Refund refund = findPreparedRefund(preparedRetry.refundId());
+        RefundAttempt attempt = findPreparedAttempt(preparedRetry.refundAttemptId());
+        attempt.respond(null, exception.getExternalStatus(), exception.getResultHash());
         Instant completedAt = Instant.now(clock);
         refund.markDiscrepant(completedAt);
         recordRefundAudit(refund, assignment, requestId, completedAt);

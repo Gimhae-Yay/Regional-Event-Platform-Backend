@@ -34,7 +34,7 @@ import io.regionevent.regioneventbackend.domain.payment.entity.RefundFailureReas
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundStatus;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneNoResponseException;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOnePaymentGateway;
-import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneLookupException;
+import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneResponseException;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -127,16 +127,20 @@ class RetryRefundUseCaseTest {
     }
 
     @Test
-    void retry_PortOne_처리_오류면_대기_시도를_불일치로_확정한다() {
+    void retry_PortOne_수신_오류면_응답_시도를_불일치로_확정하고_오류를_전파한다() {
         Fixture fixture = new Fixture(RefundStatus.DISCREPANT);
         when(fixture.paymentGateway.cancelPayment("portone-payment", 10_000L, "MANUAL_REFUND_RETRY"))
-            .thenThrow(new PortOneLookupException(new IllegalStateException("invalid response")));
+            .thenThrow(new PortOneResponseException(
+                "HTTP_500",
+                "result-hash",
+                new IllegalStateException("invalid response")
+            ));
 
-        RetryRefundResponse response = fixture.useCase.retry(1L, "20", UUID.randomUUID());
+        assertThatThrownBy(() -> fixture.useCase.retry(1L, "20", UUID.randomUUID()))
+            .isInstanceOf(PortOneResponseException.class);
 
-        verify(fixture.newAttempt).noResponse(RefundFailureReasonCode.UNKNOWN);
+        verify(fixture.newAttempt).respond(null, "HTTP_500", "result-hash");
         verify(fixture.refund).markDiscrepant(NOW);
-        assertThat(response).isEqualTo(new RetryRefundResponse("20", 2, "DISCREPANT", NOW));
     }
 
     @Test

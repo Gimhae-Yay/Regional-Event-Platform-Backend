@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.domain.payment.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.groups.Tuple.tuple;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -28,12 +29,26 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
+import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentSessionRepository;
+import io.regionevent.regioneventbackend.domain.coupon.entity.Coupon;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponIssuanceType;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicy;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponRedemption;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponRedemptionStatus;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatus;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatusHistory;
+import io.regionevent.regioneventbackend.domain.coupon.repository.CouponPolicyRepository;
+import io.regionevent.regioneventbackend.domain.coupon.repository.CouponRedemptionRepository;
+import io.regionevent.regioneventbackend.domain.coupon.repository.CouponRepository;
+import io.regionevent.regioneventbackend.domain.coupon.repository.CouponStatusHistoryRepository;
+import io.regionevent.regioneventbackend.domain.payment.dto.RetryRefundResponse;
 import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
 import io.regionevent.regioneventbackend.domain.payment.entity.Refund;
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundAttempt;
@@ -60,7 +75,6 @@ import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminAssignm
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminGrade;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.PlatformAdminAssignmentRepository;
-import io.regionevent.regioneventbackend.domain.payment.dto.RetryRefundResponse;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
@@ -86,6 +100,11 @@ class RetryRefundUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
     private final ReservationPriceSnapshotRepository reservationPriceSnapshotRepository;
     private final ReservationRepository reservationRepository;
     private final PaymentRepository paymentRepository;
+    private final CouponPolicyRepository couponPolicyRepository;
+    private final CouponRepository couponRepository;
+    private final CouponRedemptionRepository couponRedemptionRepository;
+    private final CouponStatusHistoryRepository couponStatusHistoryRepository;
+    private final AuditEventRepository auditEventRepository;
 
     @Autowired
     RetryRefundUseCaseMySqlTest(
@@ -101,7 +120,12 @@ class RetryRefundUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         CapacityHoldRepository capacityHoldRepository,
         ReservationPriceSnapshotRepository reservationPriceSnapshotRepository,
         ReservationRepository reservationRepository,
-        PaymentRepository paymentRepository
+        PaymentRepository paymentRepository,
+        CouponPolicyRepository couponPolicyRepository,
+        CouponRepository couponRepository,
+        CouponRedemptionRepository couponRedemptionRepository,
+        CouponStatusHistoryRepository couponStatusHistoryRepository,
+        AuditEventRepository auditEventRepository
     ) {
         this.useCase = useCase;
         this.paymentGateway = paymentGateway;
@@ -116,6 +140,11 @@ class RetryRefundUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         this.reservationPriceSnapshotRepository = reservationPriceSnapshotRepository;
         this.reservationRepository = reservationRepository;
         this.paymentRepository = paymentRepository;
+        this.couponPolicyRepository = couponPolicyRepository;
+        this.couponRepository = couponRepository;
+        this.couponRedemptionRepository = couponRedemptionRepository;
+        this.couponStatusHistoryRepository = couponStatusHistoryRepository;
+        this.auditEventRepository = auditEventRepository;
     }
 
     @DynamicPropertySource
@@ -158,6 +187,34 @@ class RetryRefundUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         );
     }
 
+    @Test
+    void retry_성공하면_연결된_쿠폰_사용을_복구하고_감사_이력을_남긴다() {
+        RefundFixture fixture = createFailedRefundWithCoupon();
+        UUID requestId = UUID.randomUUID();
+        when(paymentGateway.cancelPayment(fixture.portonePaymentId(), 9_000L, "MANUAL_REFUND_RETRY"))
+            .thenReturn(new PortOnePaymentGateway.PortOneCancellation("cancel-2", "SUCCEEDED", "result-hash"));
+
+        useCase.retry(fixture.adminUserId(), Long.toString(fixture.refundId()), requestId);
+
+        assertThat(refundRepository.findById(fixture.refundId()).orElseThrow().getStatus())
+            .isEqualTo(RefundStatus.SUCCEEDED);
+        assertThat(couponRedemptionRepository.findById(fixture.couponRedemptionId()).orElseThrow().getStatus())
+            .isEqualTo(CouponRedemptionStatus.REVERSED);
+        assertThat(couponRepository.findById(fixture.couponId()).orElseThrow().getStatus())
+            .isEqualTo(CouponStatus.AVAILABLE);
+        assertThat(couponStatusHistoryRepository.findAllByCouponCouponIdOrderByOccurredAtAsc(fixture.couponId()))
+            .extracting(
+                CouponStatusHistory::getPreviousStatus,
+                CouponStatusHistory::getNextStatus,
+                CouponStatusHistory::getReasonCode
+            )
+            .containsExactly(tuple(CouponStatus.USED, CouponStatus.AVAILABLE, "REFUND_SUCCEEDED"));
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(event -> requestId.toString().equals(event.getRequestId()))
+            .extracting(event -> event.getTargetType())
+            .containsExactlyInAnyOrder(AuditEventTargetType.REFUND, AuditEventTargetType.COUPON);
+    }
+
     private Object retryAfterStart(
         RefundFixture fixture,
         CountDownLatch ready,
@@ -192,6 +249,14 @@ class RetryRefundUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
     }
 
     private RefundFixture createFailedRefund() {
+        return createFailedRefund(false);
+    }
+
+    private RefundFixture createFailedRefundWithCoupon() {
+        return createFailedRefund(true);
+    }
+
+    private RefundFixture createFailedRefund(boolean withCoupon) {
         Region region = regionRepository.saveAndFlush(new Region("GIMHAE", "김해시", true));
         AppUser operator = appUserRepository.saveAndFlush(new AppUser(
             "operator-" + System.nanoTime() + "@example.com", "hashed-password", "운영자", "010-1111-1111", AppUserStatus.ACTIVE
@@ -218,25 +283,77 @@ class RetryRefundUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         CapacityHold hold = capacityHoldRepository.saveAndFlush(new CapacityHold(
             region, savedSession, visitor, 1, CapacityHoldStatus.CONSUMED, NOW.plusSeconds(600), NOW, null, null
         ));
+        Coupon coupon = withCoupon ? createUsedCoupon(content, region, visitor) : null;
         ReservationPriceSnapshot snapshot = reservationPriceSnapshotRepository.saveAndFlush(
-            new ReservationPriceSnapshot(hold, null, 10_000, 0, 10_000, "KRW", NOW)
+            new ReservationPriceSnapshot(
+                hold,
+                coupon,
+                10_000,
+                withCoupon ? 1_000 : 0,
+                withCoupon ? 9_000 : 10_000,
+                "KRW",
+                NOW
+            )
         );
         Reservation reservation = reservationRepository.saveAndFlush(new Reservation(
             "R-" + System.nanoTime(), "qr-" + System.nanoTime(), region, hold, savedSession, visitor,
             ReservationStatus.CONFIRMED, NOW, null, null, null, null
         ));
+        if (withCoupon) {
+            reservation.cancel("사용자 취소", NOW.plusSeconds(60), null);
+            reservation = reservationRepository.saveAndFlush(reservation);
+        }
         String portonePaymentId = "payment-" + System.nanoTime();
         Payment payment = new Payment(hold, snapshot, "order-" + System.nanoTime(), NOW);
         payment.approve(reservation, portonePaymentId, NOW);
         Payment savedPayment = paymentRepository.saveAndFlush(payment);
-        Refund refund = new Refund(savedPayment, 10_000L, NOW);
+        Refund refund = new Refund(savedPayment, withCoupon ? 9_000L : 10_000L, NOW);
         refund.startProcessing();
         refund.fail(NOW.plusSeconds(1));
         Refund savedRefund = refundRepository.saveAndFlush(refund);
         refundAttemptRepository.saveAndFlush(new RefundAttempt(
             savedRefund, 1, RefundAttemptInitiatorKind.SYSTEM, NOW
         ));
-        return new RefundFixture(savedRefund.getRefundId(), admin.getUserId(), portonePaymentId);
+        CouponRedemption redemption = withCoupon ? couponRedemptionRepository.saveAndFlush(
+            new CouponRedemption(coupon, snapshot, reservation, NOW)
+        ) : null;
+        return new RefundFixture(
+            savedRefund.getRefundId(),
+            admin.getUserId(),
+            portonePaymentId,
+            coupon == null ? null : coupon.getCouponId(),
+            redemption == null ? null : redemption.getCouponRedemptionId()
+        );
+    }
+
+    private Coupon createUsedCoupon(
+        Content content,
+        Region region,
+        AppUser visitor
+    ) {
+        CouponPolicy policy = new CouponPolicy(
+            content,
+            region,
+            "환불 복구 쿠폰",
+            "환불 시 복구 검증용 쿠폰",
+            CouponIssuanceType.VISIT,
+            1_000,
+            1_000,
+            30,
+            NOW.minusSeconds(3_600),
+            NOW.plusSeconds(3_600),
+            null
+        );
+        policy.publish(NOW);
+        Coupon coupon = couponRepository.saveAndFlush(new Coupon(
+            couponPolicyRepository.saveAndFlush(policy),
+            visitor,
+            NOW.minusSeconds(60),
+            NOW.plusSeconds(86_400)
+        ));
+        coupon.reserve();
+        coupon.use();
+        return couponRepository.saveAndFlush(coupon);
     }
 
     @TestConfiguration(proxyBeanMethods = false)
@@ -249,6 +366,12 @@ class RetryRefundUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         }
     }
 
-    private record RefundFixture(Long refundId, Long adminUserId, String portonePaymentId) {
+    private record RefundFixture(
+        Long refundId,
+        Long adminUserId,
+        String portonePaymentId,
+        Long couponId,
+        Long couponRedemptionId
+    ) {
     }
 }
