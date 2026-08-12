@@ -77,9 +77,8 @@ import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 @Testcontainers(disabledWithoutDocker = true)
 class ClaimMissionRewardAtomicityTest extends NonTransactionalMySqlTestSupport {
 
-    private static final Instant BASE_TIME = Instant.parse("2026-08-11T00:00:00Z");
-
     private final ClaimMissionRewardUseCase useCase;
+    private final MissionService missionService;
     private final MissionRewardClaimRepository claimRepository;
     private final CouponRepository couponRepository;
     private final CouponIssuanceRepository issuanceRepository;
@@ -108,6 +107,7 @@ class ClaimMissionRewardAtomicityTest extends NonTransactionalMySqlTestSupport {
     @Autowired
     ClaimMissionRewardAtomicityTest(
         ClaimMissionRewardUseCase useCase,
+        MissionService missionService,
         MissionRewardClaimRepository claimRepository,
         CouponRepository couponRepository,
         CouponIssuanceRepository issuanceRepository,
@@ -122,6 +122,7 @@ class ClaimMissionRewardAtomicityTest extends NonTransactionalMySqlTestSupport {
         PlatformTransactionManager transactionManager
     ) {
         this.useCase = useCase;
+        this.missionService = missionService;
         this.claimRepository = claimRepository;
         this.couponRepository = couponRepository;
         this.issuanceRepository = issuanceRepository;
@@ -194,6 +195,7 @@ class ClaimMissionRewardAtomicityTest extends NonTransactionalMySqlTestSupport {
 
     private Fixture createFixture() {
         return transactionTemplate.execute(status -> {
+            Instant operationAt = missionService.findCurrentDatabaseTime();
             String suffix = Long.toUnsignedString(System.nanoTime());
             Region region = regionRepository.saveAndFlush(new Region("A" + suffix, "김해시", true));
             AppUser operator = userRepository.saveAndFlush(user("operator-" + suffix + "@example.com"));
@@ -201,22 +203,22 @@ class ClaimMissionRewardAtomicityTest extends NonTransactionalMySqlTestSupport {
             roleRepository.saveAndFlush(new UserRoleAssignment(visitor, UserRole.VISITOR, null));
             Content content = contentRepository.saveAndFlush(new Content(
                 region, operator, ContentType.EVENT_EXPERIENCE, ContentStatus.PUBLISHED,
-                "체험", "설명", "주소", "운영시간", "055-000-0000", "안내", "전체", "복장", "정책", BASE_TIME
+                "체험", "설명", "주소", "운영시간", "055-000-0000", "안내", "전체", "복장", "정책", operationAt
             ));
             CouponPolicy policy = new CouponPolicy(
                 content, region, "미션 보상", null, CouponIssuanceType.MISSION_REWARD,
-                1_000, 1_000, 7, BASE_TIME.minusSeconds(86_400), BASE_TIME.plusSeconds(86_400), 10L
+                1_000, 1_000, 7, operationAt.minusSeconds(60), operationAt.plusSeconds(86_400), 10L
             );
-            policy.publish(BASE_TIME.minusSeconds(60));
+            policy.publish(operationAt.minusSeconds(60));
             policy = policyRepository.saveAndFlush(policy);
             Mission mission = new Mission(
-                region, MissionConditionType.VISIT_COUNT, 1, policy, BASE_TIME.plusSeconds(86_400)
+                region, MissionConditionType.VISIT_COUNT, 1, policy, operationAt.plusSeconds(86_400)
             );
             mission.submitForReview();
-            mission.approve(BASE_TIME.minusSeconds(60));
+            mission.approve(operationAt.minusSeconds(60));
             mission = missionRepository.saveAndFlush(mission);
-            MissionParticipation participation = new MissionParticipation(mission, visitor, BASE_TIME.minusSeconds(600));
-            participation.complete(BASE_TIME.minusSeconds(60));
+            MissionParticipation participation = new MissionParticipation(mission, visitor, operationAt.minusSeconds(600));
+            participation.complete(operationAt.minusSeconds(60));
             participation = participationRepository.saveAndFlush(participation);
             return new Fixture(visitor.getUserId(), participation.getMissionParticipationId(), policy.getCouponPolicyId());
         });
