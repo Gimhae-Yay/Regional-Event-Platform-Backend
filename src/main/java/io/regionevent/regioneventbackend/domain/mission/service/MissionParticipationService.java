@@ -55,12 +55,18 @@ public class MissionParticipationService {
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
-    public void endInProgress(Long missionId) {
-        List<MissionParticipation> participations = missionParticipationRepository
-            .findAllByMissionIdAndStatusForUpdate(
-                missionId,
-                MissionParticipationStatus.IN_PROGRESS
-            );
+    public List<MissionParticipation> findInProgressForUpdate(Long missionId) {
+        return missionParticipationRepository.findAllByMissionIdAndStatusForUpdate(
+            missionId,
+            MissionParticipationStatus.IN_PROGRESS
+        );
+    }
+
+    public void endInProgress(List<MissionParticipation> participations) {
         participations.forEach(MissionParticipation::endIncomplete);
+    }
+
+    public void endInProgress(Long missionId) {
+        endInProgress(findInProgressForUpdate(missionId));
     }
 }

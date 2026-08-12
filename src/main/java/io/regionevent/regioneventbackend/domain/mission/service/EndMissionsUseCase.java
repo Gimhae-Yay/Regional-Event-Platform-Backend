@@ -13,6 +13,7 @@ import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.mission.entity.Mission;
+import io.regionevent.regioneventbackend.domain.mission.entity.MissionParticipation;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
 
 @Service
@@ -54,13 +55,15 @@ public class EndMissionsUseCase {
         }
 
         try {
+            List<MissionParticipation> inProgressParticipations = missionParticipationService
+                .findInProgressForUpdate(missionId);
             Instant operationAt = missionService.findCurrentDatabaseTime();
             if (mission.getEndsAt().isAfter(operationAt)) {
                 return EndMissionSystemResult.skipped();
             }
 
             Mission endedMission = missionService.end(mission, operationAt);
-            missionParticipationService.endInProgress(missionId);
+            missionParticipationService.endInProgress(inProgressParticipations);
             recordAuditEventUseCase.record(new AuditEventCommand(
                 requestId,
                 endedMission.getRegion(),

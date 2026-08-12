@@ -3,6 +3,7 @@ package io.regionevent.regioneventbackend.domain.mission.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -11,6 +12,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
@@ -23,6 +25,7 @@ import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.mission.entity.Mission;
+import io.regionevent.regioneventbackend.domain.mission.entity.MissionParticipation;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 
@@ -48,7 +51,9 @@ class EndMissionsUseCaseTest {
     void endBySystem_종료시각에도달한공개미션을종료하고참여와성공감사를같이처리한다() {
         Mission mission = publishedMission(OPERATION_AT);
         UUID requestId = UUID.randomUUID();
+        List<MissionParticipation> participations = List.of(mock(MissionParticipation.class));
         when(missionService.findForUpdate(MISSION_ID)).thenReturn(mission);
+        when(missionParticipationService.findInProgressForUpdate(MISSION_ID)).thenReturn(participations);
         when(missionService.findCurrentDatabaseTime()).thenReturn(OPERATION_AT);
         when(missionService.end(mission, OPERATION_AT)).thenReturn(mission);
 
@@ -57,9 +62,10 @@ class EndMissionsUseCaseTest {
         assertThat(result.status()).isEqualTo(EndMissionSystemResult.Status.ENDED);
         InOrder inOrder = inOrder(missionService, missionParticipationService, recordAuditEventUseCase);
         inOrder.verify(missionService).findForUpdate(MISSION_ID);
+        inOrder.verify(missionParticipationService).findInProgressForUpdate(MISSION_ID);
         inOrder.verify(missionService).findCurrentDatabaseTime();
         inOrder.verify(missionService).end(mission, OPERATION_AT);
-        inOrder.verify(missionParticipationService).endInProgress(MISSION_ID);
+        inOrder.verify(missionParticipationService).endInProgress(participations);
         inOrder.verify(recordAuditEventUseCase).record(any(AuditEventCommand.class));
         ArgumentCaptor<AuditEventCommand> commandCaptor = ArgumentCaptor.forClass(AuditEventCommand.class);
         verify(recordAuditEventUseCase).record(commandCaptor.capture());
@@ -96,17 +102,16 @@ class EndMissionsUseCaseTest {
     void endBySystem_잠금후종료시각전이면변경하지않는다() {
         Mission mission = publishedMission(OPERATION_AT.plusSeconds(1));
         when(missionService.findForUpdate(MISSION_ID)).thenReturn(mission);
+        when(missionParticipationService.findInProgressForUpdate(MISSION_ID)).thenReturn(List.of());
         when(missionService.findCurrentDatabaseTime()).thenReturn(OPERATION_AT);
 
         EndMissionSystemResult result = useCase.endBySystem(MISSION_ID, UUID.randomUUID());
 
         assertThat(result.status()).isEqualTo(EndMissionSystemResult.Status.SKIPPED);
         verify(missionService, never()).end(any(), any());
-        verifyNoInteractions(
-            missionParticipationService,
-            recordAuditEventUseCase,
-            recordFailedAuditEventUseCase
-        );
+        verify(missionParticipationService).findInProgressForUpdate(MISSION_ID);
+        verify(missionParticipationService, never()).endInProgress(anyList());
+        verifyNoInteractions(recordAuditEventUseCase, recordFailedAuditEventUseCase);
     }
 
     @Test
@@ -114,6 +119,7 @@ class EndMissionsUseCaseTest {
         Mission mission = publishedMission(OPERATION_AT);
         UUID requestId = UUID.randomUUID();
         when(missionService.findForUpdate(MISSION_ID)).thenReturn(mission);
+        when(missionParticipationService.findInProgressForUpdate(MISSION_ID)).thenReturn(List.of());
         when(missionService.findCurrentDatabaseTime()).thenReturn(OPERATION_AT);
         when(missionService.end(mission, OPERATION_AT)).thenThrow(new IllegalStateException("종료 실패"));
 
