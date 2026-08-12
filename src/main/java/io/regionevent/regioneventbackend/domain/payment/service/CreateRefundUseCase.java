@@ -214,7 +214,7 @@ public class CreateRefundUseCase {
             Instant completedAt = Instant.now(clock);
             refund.succeed(completedAt);
             restoreCouponIfEligible(refund, requestId, assignment);
-        } else {
+        } else if (cancellation.isExplicitlyFailed()) {
             refund.fail(Instant.now(clock));
         }
         recordRefundAudit(refund, assignment, evidenceReference, reason, requestId);

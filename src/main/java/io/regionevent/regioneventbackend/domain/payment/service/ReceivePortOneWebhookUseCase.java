@@ -261,7 +261,7 @@ public class ReceivePortOneWebhookUseCase {
             observed.paymentId(),
             observed.status(),
             decision,
-            hash(observed.paymentId() + observed.transactionId() + observed.amount() + observed.currency() + observed.status()),
+            observed.resultHash(),
             now
         ));
         paymentWebhookService.createIfAbsent(new PaymentWebhook(

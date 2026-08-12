@@ -81,6 +81,7 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
     private static final String WEBHOOK_TIMESTAMP = "1785983465";
     private static final String WEBHOOK_SIGNATURE = "v1,signature";
     private static final String TRANSACTION_ID = "transaction-concurrent";
+    private static final String RESULT_HASH = "provider-response-hash";
 
     private final ReceivePortOneWebhookUseCase receivePortOneWebhookUseCase;
     private final CreatePaymentUseCase createPaymentUseCase;
@@ -173,7 +174,8 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
             "store-1",
             20_000,
             "KRW",
-            "PAID"
+            "PAID",
+            RESULT_HASH
         ));
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
@@ -214,7 +216,7 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
         );
         String orderId = paymentRepository.findAll().getFirst().getOrderId();
         when(paymentGateway.findByPaymentId(orderId)).thenReturn(new PortOnePaymentGateway.PortOnePayment(
-            orderId, TRANSACTION_ID, "store-1", 19_000, "KRW", "PAID"
+            orderId, TRANSACTION_ID, "store-1", 19_000, "KRW", "PAID", RESULT_HASH
         ));
 
         receivePortOneWebhookUseCase.receive(
@@ -247,7 +249,8 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
             "store-1",
             20_000,
             "KRW",
-            "PAID"
+            "PAID",
+            RESULT_HASH
         ));
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
@@ -293,7 +296,8 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
             "store-1",
             20_000,
             "KRW",
-            "DECLINED"
+            "DECLINED",
+            RESULT_HASH
         ));
 
         receivePortOneWebhookUseCase.receive(
@@ -334,7 +338,8 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
             "store-1",
             20_000,
             "KRW",
-            "DECLINED"
+            "DECLINED",
+            RESULT_HASH
         ));
         receivePortOneWebhookUseCase.receive(
             "webhook-declined",
