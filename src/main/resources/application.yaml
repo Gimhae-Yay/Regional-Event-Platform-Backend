@@ -58,6 +58,11 @@ content:
     initial-delay: PT1M
     fixed-delay: PT1M
 
+mission:
+  auto-ending:
+    initial-delay: PT1M
+    fixed-delay: PT1M
+
 management:
   endpoint:
     health:
