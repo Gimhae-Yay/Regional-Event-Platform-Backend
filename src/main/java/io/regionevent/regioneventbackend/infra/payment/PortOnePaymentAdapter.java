@@ -17,6 +17,7 @@ import kotlinx.serialization.json.JsonElement;
 import kotlinx.serialization.json.JsonObject;
 import kotlinx.serialization.json.JsonPrimitive;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundFailureReasonCode;
@@ -35,6 +36,7 @@ public class PortOnePaymentAdapter implements PortOnePaymentGateway {
     private final PortOneProperties properties;
     private final HttpClient httpClient;
 
+    @Autowired
     public PortOnePaymentAdapter(PortOneProperties properties) {
         this(properties, HttpClient.newBuilder()
             .connectTimeout(RESPONSE_TIMEOUT)
