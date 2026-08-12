@@ -25,4 +25,12 @@ public interface PaymentDiscrepancyRepository extends JpaRepository<PaymentDiscr
         WHERE discrepancy.payment.paymentId = :paymentId
         """)
     Optional<PaymentDiscrepancy> findByPaymentIdForUpdate(@Param("paymentId") Long paymentId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT discrepancy
+        FROM PaymentDiscrepancy discrepancy
+        WHERE discrepancy.paymentDiscrepancyId = :discrepancyId
+        """)
+    Optional<PaymentDiscrepancy> findByIdForUpdate(@Param("discrepancyId") Long discrepancyId);
 }
