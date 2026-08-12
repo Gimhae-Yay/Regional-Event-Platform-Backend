@@ -1,5 +1,7 @@
 package io.regionevent.regioneventbackend.domain.payment.service;
 
+import java.util.List;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,5 +21,11 @@ public class PaymentVerificationService {
     @Transactional(propagation = Propagation.MANDATORY)
     public PaymentVerification create(PaymentVerification verification) {
         return paymentVerificationRepository.saveAndFlush(verification);
+    }
+
+    @Transactional(readOnly = true)
+    public List<PaymentVerification> findAllByPaymentId(Long paymentId) {
+        return paymentVerificationRepository
+            .findAllByPaymentPaymentIdOrderByVerifiedAtAscPaymentVerificationIdAsc(paymentId);
     }
 }
