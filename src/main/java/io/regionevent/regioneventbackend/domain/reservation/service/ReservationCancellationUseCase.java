@@ -161,10 +161,12 @@ public class ReservationCancellationUseCase {
     ) {
         Payment payment = paymentService.findByReservationId(reservation.getReservationId())
             .orElse(null);
-        if (payment == null
-            || (payment.getStatus() != PaymentStatus.APPROVED
-                && payment.getStatus() != PaymentStatus.DISCREPANT)) {
+        if (payment == null) {
             restoreFreeReservationCoupon(reservation, actor, requestId);
+            return null;
+        }
+        if (payment.getStatus() != PaymentStatus.APPROVED
+            && payment.getStatus() != PaymentStatus.DISCREPANT) {
             return null;
         }
         return createRefundUseCase.prepareForReservationCancellation(
