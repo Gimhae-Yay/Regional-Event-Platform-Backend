@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.domain.reservation.service;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -11,6 +12,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
@@ -26,6 +29,7 @@ import io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatus;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponRedemptionService;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponService;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponStatusHistoryService;
+import io.regionevent.regioneventbackend.domain.payment.dto.CreateRefundResponse;
 import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentStatus;
 import io.regionevent.regioneventbackend.domain.payment.service.CreateRefundUseCase;
@@ -88,15 +92,73 @@ class ReservationCancellationUseCaseTest {
         verify(fixture.createRefundUseCase, never()).prepareForReservationCancellation(any(), any(), any());
     }
 
+    @ParameterizedTest
+    @EnumSource(value = PaymentStatus.class, names = {"APPROVED", "DISCREPANT"})
+    void 환불가능결제예약_최초취소에서환불을시작하고확정된환불상태를반환한다(PaymentStatus paymentStatus) {
+        Fixture fixture = fixture(ReservationStatus.CONFIRMED);
+        Payment payment = mock(Payment.class);
+        UUID requestId = UUID.randomUUID();
+        CreateRefundUseCase.ReservationCancellationRefundPreparation preparation =
+            new CreateRefundUseCase.ReservationCancellationRefundPreparation(
+                8L,
+                9L,
+                "portone-payment",
+                10_000L,
+                null
+            );
+        CreateRefundResponse refundResponse = new CreateRefundResponse(
+            "8",
+            "7",
+            10_000L,
+            "KRW",
+            "SUCCEEDED",
+            Instant.parse("2026-08-11T00:00:00Z")
+        );
+        when(fixture.paymentService.findByReservationId(2L)).thenReturn(Optional.of(payment));
+        when(payment.getPaymentId()).thenReturn(7L);
+        when(payment.getStatus()).thenReturn(paymentStatus);
+        when(fixture.createRefundUseCase.prepareForReservationCancellation(eq(7L), any(), eq(requestId)))
+            .thenReturn(preparation);
+        when(fixture.createRefundUseCase.executePreparedReservationCancellationRefund(
+            eq(preparation),
+            any(),
+            eq(requestId)
+        ))
+            .thenReturn(refundResponse);
+
+        var response = fixture.useCase.cancel(1L, 2L, requestId);
+
+        verify(fixture.createRefundUseCase).prepareForReservationCancellation(eq(7L), any(), eq(requestId));
+        verify(fixture.createRefundUseCase).executePreparedReservationCancellationRefund(
+            eq(preparation),
+            any(),
+            eq(requestId)
+        );
+        org.assertj.core.api.Assertions.assertThat(response.refund().status()).isEqualTo("SUCCEEDED");
+    }
+
     @Test
     void 이미취소된예약_쿠폰복구와환불을재실행하지않는다() {
         Fixture fixture = fixture(ReservationStatus.CANCELLED);
-        when(fixture.paymentService.findByReservationId(2L)).thenReturn(Optional.empty());
+        Payment payment = mock(Payment.class);
+        CreateRefundResponse existingRefund = new CreateRefundResponse(
+            "8",
+            "7",
+            10_000L,
+            "KRW",
+            "DISCREPANT",
+            Instant.parse("2026-08-11T00:00:00Z")
+        );
+        when(fixture.paymentService.findByReservationId(2L)).thenReturn(Optional.of(payment));
+        when(payment.getPaymentId()).thenReturn(7L);
+        when(fixture.createRefundUseCase.findForReservationCancellation(7L)).thenReturn(existingRefund);
 
-        fixture.useCase.cancel(1L, 2L, UUID.randomUUID());
+        var response = fixture.useCase.cancel(1L, 2L, UUID.randomUUID());
 
         verify(fixture.couponService, never()).restoreUsedCoupon(any(), any());
         verify(fixture.createRefundUseCase, never()).prepareForReservationCancellation(any(), any(), any());
+        verify(fixture.createRefundUseCase, never()).executePreparedReservationCancellationRefund(any(), any(), any());
+        org.assertj.core.api.Assertions.assertThat(response.refund().status()).isEqualTo("DISCREPANT");
     }
 
     private Fixture fixture(ReservationStatus reservationStatus) {

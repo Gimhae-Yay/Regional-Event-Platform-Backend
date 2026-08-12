@@ -85,6 +85,27 @@ class CreateRefundUseCaseTest {
     }
 
     @Test
+    void 예약취소환불_PortOne무응답_환불을불일치로확정하고감사를기록한다() {
+        ReservationCancellationRefundFixture fixture = reservationCancellationRefundFixture(RefundStatus.DISCREPANT);
+        when(fixture.paymentGateway().cancelPayment("portone-payment", 10_000L, "예약 취소"))
+            .thenThrow(new PortOneNoResponseException(
+                RefundFailureReasonCode.TIMEOUT,
+                new RuntimeException("timeout")
+            ));
+
+        CreateRefundResponse response = fixture.useCase().createForReservationCancellation(
+            10L,
+            null,
+            UUID.randomUUID()
+        );
+
+        verify(fixture.attempt()).noResponse(RefundFailureReasonCode.TIMEOUT);
+        verify(fixture.refund()).markDiscrepant(Instant.parse("2026-08-11T00:00:00Z"));
+        verify(fixture.auditEventUseCase()).record(any(AuditEventCommand.class));
+        org.assertj.core.api.Assertions.assertThat(response.status()).isEqualTo("DISCREPANT");
+    }
+
+    @Test
     void PortOne_호출_전에_환불과_대기_시도를_커밋한다() {
         PlatformAdminAuthorizationService authorizationService = mock(PlatformAdminAuthorizationService.class);
         PaymentService paymentService = mock(PaymentService.class);
