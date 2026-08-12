@@ -50,6 +50,16 @@ public class VisitService {
         return visitRepository.findReservationIdByVisitId(visitId);
     }
 
+    @Transactional(readOnly = true)
+    public Optional<Visit> findMissionProgressSource(Long visitId) {
+        return findValidMissionProgressSource(visitId);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<Visit> findMissionProgressSourceInCurrentTransaction(Long visitId) {
+        return findValidMissionProgressSource(visitId);
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
     public Visit create(Visit visit) {
         return visitRepository.saveAndFlush(visit);
@@ -58,5 +68,13 @@ public class VisitService {
     @Transactional(propagation = Propagation.MANDATORY)
     public void unlinkAuthorByUserId(Long userId) {
         visitRepository.unlinkAuthorByUserId(userId);
+    }
+
+    private Optional<Visit> findValidMissionProgressSource(Long visitId) {
+        if (visitId == null || visitId <= 0) {
+            return Optional.empty();
+        }
+        return visitRepository.findMissionProgressSourceByVisitId(visitId)
+            .filter(visit -> visit.getUser() != null && visit.getAuthorUnlinkedAt() == null);
     }
 }

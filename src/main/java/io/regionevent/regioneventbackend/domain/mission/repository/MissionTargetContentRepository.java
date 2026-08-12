@@ -7,6 +7,7 @@ import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -27,6 +28,11 @@ public interface MissionTargetContentRepository
 
     long countByMissionMissionId(Long missionId);
 
+    boolean existsByMissionMissionIdAndContentContentId(
+        Long missionId,
+        Long contentId
+    );
+
     @Query("""
         SELECT missionTargetContent.content.contentId
         FROM MissionTargetContent missionTargetContent
@@ -45,4 +51,11 @@ public interface MissionTargetContentRepository
     List<MissionTargetContent> findAllByMissionIdForUpdateOrderByContentIdAsc(
         @Param("missionId") Long missionId
     );
+
+    @Modifying(flushAutomatically = true)
+    @Query("""
+        DELETE FROM MissionTargetContent missionTargetContent
+        WHERE missionTargetContent.mission.missionId = :missionId
+        """)
+    int deleteAllByMissionId(@Param("missionId") Long missionId);
 }

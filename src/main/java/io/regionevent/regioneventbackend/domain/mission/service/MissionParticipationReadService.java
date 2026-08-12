@@ -1,10 +1,12 @@
 package io.regionevent.regioneventbackend.domain.mission.service;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionParticipation;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionParticipationStatus;
@@ -48,5 +50,28 @@ public class MissionParticipationReadService {
         Long userId
     ) {
         return missionParticipationRepository.findByMissionMissionIdAndUserUserId(missionId, userId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<MissionProgressCandidate> findProgressCandidates(
+        Long userId,
+        Long regionId
+    ) {
+        return missionParticipationRepository.findAllByUserIdAndRegionIdAndStatus(
+            userId,
+            regionId,
+            MissionParticipationStatus.IN_PROGRESS
+        ).stream()
+            .map(participation -> new MissionProgressCandidate(
+                participation.getMissionParticipationId(),
+                participation.getMission().getMissionId()
+            ))
+            .toList();
+    }
+
+    public record MissionProgressCandidate(
+        Long participationId,
+        Long missionId
+    ) {
     }
 }

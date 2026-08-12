@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.domain.payment.service;
 
 import java.time.Instant;
+import java.util.List;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -19,6 +20,14 @@ public class PaymentDiscrepancyActionService {
         PaymentDiscrepancyActionRepository paymentDiscrepancyActionRepository
     ) {
         this.paymentDiscrepancyActionRepository = paymentDiscrepancyActionRepository;
+    }
+
+    @Transactional(readOnly = true)
+    public List<PaymentDiscrepancyAction> findAllByDiscrepancyId(Long discrepancyId) {
+        return paymentDiscrepancyActionRepository
+            .findAllByPaymentDiscrepancyPaymentDiscrepancyIdOrderByActedAtAscPaymentDiscrepancyActionIdAsc(
+                discrepancyId
+            );
     }
 
     @Transactional(propagation = Propagation.MANDATORY)

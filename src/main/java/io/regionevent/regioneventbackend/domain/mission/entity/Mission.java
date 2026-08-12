@@ -150,6 +150,29 @@ public class Mission {
         return targetContent;
     }
 
+    public void replaceDraftCoreValues(
+        MissionConditionType conditionType,
+        Integer requiredVisitCount,
+        CouponPolicy rewardCouponPolicy,
+        Instant endsAt
+    ) {
+        if (status != MissionStatus.DRAFT) {
+            throw new IllegalStateException("mission status must be DRAFT but was " + status);
+        }
+        MissionConditionType validatedConditionType = requireNotNull(conditionType, "conditionType");
+        Integer validatedRequiredVisitCount = validateRequiredVisitCount(
+            validatedConditionType,
+            requiredVisitCount
+        );
+        CouponPolicy validatedRewardCouponPolicy = validateRewardCouponPolicy(rewardCouponPolicy, region);
+        Instant validatedEndsAt = requireNotNull(endsAt, "endsAt");
+
+        this.conditionType = validatedConditionType;
+        this.requiredVisitCount = validatedRequiredVisitCount;
+        this.rewardCouponPolicy = validatedRewardCouponPolicy;
+        this.endsAt = validatedEndsAt;
+    }
+
     public void submitForReview() {
         if (status != MissionStatus.DRAFT) {
             throw new IllegalStateException("mission status must be DRAFT but was " + status);
@@ -167,6 +190,13 @@ public class Mission {
         }
         status = MissionStatus.PUBLISHED;
         this.publishedAt = validatedPublishedAt;
+    }
+
+    public void reject() {
+        if (status != MissionStatus.PENDING_REVIEW) {
+            throw new IllegalStateException("mission status must be PENDING_REVIEW");
+        }
+        status = MissionStatus.DRAFT;
     }
 
     public void end(Instant endedAt) {
