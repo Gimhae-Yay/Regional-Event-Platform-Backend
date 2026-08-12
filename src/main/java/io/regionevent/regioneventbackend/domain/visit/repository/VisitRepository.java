@@ -29,6 +29,18 @@ public interface VisitRepository extends JpaRepository<Visit, Long> {
 
     @EntityGraph(attributePaths = {
         "region",
+        "content",
+        "user"
+    })
+    @Query("""
+        SELECT visit
+        FROM Visit visit
+        WHERE visit.visitId = :visitId
+        """)
+    Optional<Visit> findMissionProgressSourceByVisitId(@Param("visitId") Long visitId);
+
+    @EntityGraph(attributePaths = {
+        "region",
         "reservation",
         "reservation.contentSession",
         "content",
