@@ -59,7 +59,7 @@ class GetOperatorReservationPaymentUseCaseTest {
     }
 
     @Test
-    void get_whenPaymentRefundAndDiscrepancyExist_returnsLatestStatusChangeAt() {
+    void get_whenPaymentHasSingleDiscrepancy_returnsLatestStatusChangeAt() {
         Fixture fixture = new Fixture();
         Reservation reservation = fixture.reservation();
         Payment payment = mock(Payment.class);
