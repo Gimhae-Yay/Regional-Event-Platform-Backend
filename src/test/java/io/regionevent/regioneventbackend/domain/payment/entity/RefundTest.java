@@ -69,4 +69,31 @@ class RefundTest {
         assertThatThrownBy(() -> refund.succeed(REQUESTED_AT.plusSeconds(1)))
             .isInstanceOf(IllegalStateException.class);
     }
+
+    @Test
+    void 불일치_환불은성공또는재시도가능실패로확정한다() {
+        Payment payment = mock(Payment.class);
+        ReservationPriceSnapshot reservationPriceSnapshot = mock(ReservationPriceSnapshot.class);
+        when(payment.getReservationPriceSnapshot()).thenReturn(reservationPriceSnapshot);
+        when(reservationPriceSnapshot.getFinalAmount()).thenReturn(7_000L);
+        Refund succeededRefund = discrepantRefund(payment);
+        Refund failedRefund = discrepantRefund(payment);
+        Instant resolvedAt = Instant.parse("2026-08-10T00:02:00Z");
+
+        succeededRefund.resolveAsSucceeded(resolvedAt);
+        failedRefund.resolveAsFailed(resolvedAt);
+
+        assertThat(succeededRefund.getStatus()).isEqualTo(RefundStatus.SUCCEEDED);
+        assertThat(succeededRefund.getCompletedAt()).isEqualTo(resolvedAt);
+        assertThat(failedRefund.getStatus()).isEqualTo(RefundStatus.FAILED);
+        assertThat(failedRefund.getCompletedAt()).isNull();
+        assertThat(failedRefund.getResolvedAt()).isEqualTo(resolvedAt);
+    }
+
+    private Refund discrepantRefund(Payment payment) {
+        Refund refund = new Refund(payment, 7_000L, REQUESTED_AT);
+        refund.startProcessing();
+        refund.markDiscrepant(REQUESTED_AT.plusSeconds(60));
+        return refund;
+    }
 }

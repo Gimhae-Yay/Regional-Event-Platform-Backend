@@ -54,6 +54,9 @@ public record RefundFailureListInfo(
         if (refund.getCompletedAt() != null && refund.getCompletedAt().isAfter(latestUpdatedAt)) {
             latestUpdatedAt = refund.getCompletedAt();
         }
+        if (refund.getResolvedAt() != null && refund.getResolvedAt().isAfter(latestUpdatedAt)) {
+            latestUpdatedAt = refund.getResolvedAt();
+        }
         for (RefundAttempt attempt : attempts) {
             if (attempt.getAttemptedAt().isAfter(latestUpdatedAt)) {
                 latestUpdatedAt = attempt.getAttemptedAt();

@@ -443,6 +443,7 @@ erDiagram
         VARCHAR status "상태: REQUESTED|PROCESSING|SUCCEEDED|FAILED|DISCREPANT; NOT NULL"
         TIMESTAMP requested_at "환불 요청 시각; NOT NULL"
         TIMESTAMP completed_at "환불 종결 시각; 종결 전 NULL 가능"
+        TIMESTAMP resolved_at "수동 확정 시각; 수동 조치 전 NULL 가능"
     }
     refund_attempt {
         BIGINT refund_attempt_id PK "외부 환불 시도 식별자; NOT NULL"
@@ -730,7 +731,7 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 
 | 테이블 | 핵심 열 | 책임 |
 | --- | --- | --- |
-| `refund` | `refund_id`, `payment_id`, `amount`, `status`, `requested_at`, `completed_at` | 승인 결제 한 건의 전액 환불 현재 상태 |
+| `refund` | `refund_id`, `payment_id`, `amount`, `status`, `requested_at`, `completed_at`, `resolved_at` | 승인 결제 한 건의 전액 환불 현재 상태와 수동 확정 시각 |
 | `refund_attempt` | `refund_attempt_id`, `refund_id`, `attempt_no`, `initiator_kind`, 호출 결과·응답 미수신 사유·외부 취소 ID·상태·결과 해시·시각 | 외부 환불 호출의 개별 시도 |
 
 | 무결성 | 규칙 |

@@ -35,7 +35,11 @@ class GetRefundFailuresUseCaseTest {
         );
         RefundService refundService = mock(RefundService.class);
         RefundAttemptService refundAttemptService = mock(RefundAttemptService.class);
-        Refund laterRefund = refund(552L, Instant.parse("2026-08-07T01:10:00Z"));
+        Refund laterRefund = refund(
+            552L,
+            Instant.parse("2026-08-07T01:10:00Z"),
+            Instant.parse("2026-08-07T01:11:00Z")
+        );
         Refund earlierRefund = refund(551L, Instant.parse("2026-08-07T01:00:00Z"));
         Refund sameTimeEarlierIdRefund = refund(550L, Instant.parse("2026-08-07T01:00:00Z"));
         RefundAttempt attempt = attempt(552L, Instant.parse("2026-08-07T01:10:31Z"));
@@ -56,7 +60,7 @@ class GetRefundFailuresUseCaseTest {
 
         assertThat(actual).extracting(RefundFailureListInfo::refundId).containsExactly(550L, 551L, 552L);
         assertThat(actual.get(2).attemptCount()).isOne();
-        assertThat(actual.get(2).updatedAt()).isEqualTo(Instant.parse("2026-08-07T01:10:31Z"));
+        assertThat(actual.get(2).updatedAt()).isEqualTo(Instant.parse("2026-08-07T01:11:00Z"));
         verify(authorizationService).requireAuthorizedPlatformAdmin(ACTOR_USER_ID);
         verify(refundService).findAllByStatuses(Set.of(RefundStatus.FAILED, RefundStatus.DISCREPANT));
         verify(refundAttemptService).findAllByRefundIds(List.of(552L, 551L, 550L));
@@ -89,6 +93,14 @@ class GetRefundFailuresUseCaseTest {
     }
 
     private Refund refund(Long refundId, Instant requestedAt) {
+        return refund(refundId, requestedAt, null);
+    }
+
+    private Refund refund(
+        Long refundId,
+        Instant requestedAt,
+        Instant resolvedAt
+    ) {
         Reservation reservation = mock(Reservation.class);
         ReservationPriceSnapshot snapshot = mock(ReservationPriceSnapshot.class);
         Payment payment = mock(Payment.class);
@@ -103,6 +115,7 @@ class GetRefundFailuresUseCaseTest {
         when(refund.getAmount()).thenReturn(12_000L);
         when(refund.getStatus()).thenReturn(RefundStatus.DISCREPANT);
         when(refund.getRequestedAt()).thenReturn(requestedAt);
+        when(refund.getResolvedAt()).thenReturn(resolvedAt);
         return refund;
     }
 

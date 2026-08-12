@@ -58,6 +58,9 @@ public class Refund {
     @Column(name = "completed_at")
     private Instant completedAt;
 
+    @Column(name = "resolved_at")
+    private Instant resolvedAt;
+
     protected Refund() {
     }
 
@@ -96,6 +99,10 @@ public class Refund {
         return completedAt;
     }
 
+    public Instant getResolvedAt() {
+        return resolvedAt;
+    }
+
     public void startProcessing() {
         if (status != RefundStatus.REQUESTED) {
             throw new IllegalStateException("only requested refund can start processing");
@@ -113,6 +120,24 @@ public class Refund {
 
     public void markDiscrepant(Instant completedAt) {
         complete(RefundStatus.DISCREPANT, completedAt);
+    }
+
+    public void resolveAsSucceeded(Instant completedAt) {
+        if (status != RefundStatus.DISCREPANT) {
+            throw new IllegalStateException("only discrepant refund can be resolved as succeeded");
+        }
+        status = RefundStatus.SUCCEEDED;
+        this.completedAt = requireNotNull(completedAt, "completedAt");
+        resolvedAt = completedAt;
+    }
+
+    public void resolveAsFailed(Instant resolvedAt) {
+        if (status != RefundStatus.DISCREPANT) {
+            throw new IllegalStateException("only discrepant refund can be resolved as failed");
+        }
+        status = RefundStatus.FAILED;
+        completedAt = null;
+        this.resolvedAt = requireNotNull(resolvedAt, "resolvedAt");
     }
 
     public void retry() {

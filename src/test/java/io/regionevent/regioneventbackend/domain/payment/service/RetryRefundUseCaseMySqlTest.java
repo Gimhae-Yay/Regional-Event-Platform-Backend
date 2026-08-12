@@ -49,6 +49,7 @@ import io.regionevent.regioneventbackend.domain.coupon.repository.CouponRedempti
 import io.regionevent.regioneventbackend.domain.coupon.repository.CouponRepository;
 import io.regionevent.regioneventbackend.domain.coupon.repository.CouponStatusHistoryRepository;
 import io.regionevent.regioneventbackend.domain.payment.dto.RetryRefundResponse;
+import io.regionevent.regioneventbackend.domain.payment.dto.ResolveRefundFailureRequest;
 import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
 import io.regionevent.regioneventbackend.domain.payment.entity.Refund;
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundAttempt;
@@ -88,6 +89,7 @@ class RetryRefundUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
     private static final Instant NOW = Instant.parse("2026-08-12T00:00:00Z");
 
     private final RetryRefundUseCase useCase;
+    private final ResolveRefundFailureUseCase resolveRefundFailureUseCase;
     private final PortOnePaymentGateway paymentGateway;
     private final RefundRepository refundRepository;
     private final RefundAttemptRepository refundAttemptRepository;
@@ -109,6 +111,7 @@ class RetryRefundUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
     @Autowired
     RetryRefundUseCaseMySqlTest(
         RetryRefundUseCase useCase,
+        ResolveRefundFailureUseCase resolveRefundFailureUseCase,
         PortOnePaymentGateway paymentGateway,
         RefundRepository refundRepository,
         RefundAttemptRepository refundAttemptRepository,
@@ -128,6 +131,7 @@ class RetryRefundUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         AuditEventRepository auditEventRepository
     ) {
         this.useCase = useCase;
+        this.resolveRefundFailureUseCase = resolveRefundFailureUseCase;
         this.paymentGateway = paymentGateway;
         this.refundRepository = refundRepository;
         this.refundAttemptRepository = refundAttemptRepository;
@@ -215,6 +219,53 @@ class RetryRefundUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
             .containsExactlyInAnyOrder(AuditEventTargetType.REFUND, AuditEventTargetType.COUPON);
     }
 
+    @Test
+    @Timeout(10)
+    void 수동_환불_확정_동시_요청은_한_번만_쿠폰과_감사를_확정한다() throws Exception {
+        RefundFixture fixture = createDiscrepantRefundWithCoupon();
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<Object> success = executorService.submit(() -> resolveAfterStart(
+                fixture,
+                "SUCCEEDED",
+                ready,
+                start
+            ));
+            Future<Object> duplicate = executorService.submit(() -> resolveAfterStart(
+                fixture,
+                "SUCCEEDED",
+                ready,
+                start
+            ));
+            assertThat(ready.await(3, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            List<Object> results = List.of(await(success), await(duplicate));
+            assertThat(results).filteredOn(ResolveRefundFailureResult.class::isInstance).singleElement();
+            assertThat(results).filteredOn(BusinessException.class::isInstance)
+                .singleElement()
+                .extracting(result -> ((BusinessException) result).getErrorCode())
+                .isEqualTo(ErrorCode.REFUND_STATE_CONFLICT);
+        }
+
+        assertThat(refundRepository.findById(fixture.refundId()).orElseThrow().getStatus())
+            .isEqualTo(RefundStatus.SUCCEEDED);
+        assertThat(couponRedemptionRepository.findById(fixture.couponRedemptionId()).orElseThrow().getStatus())
+            .isEqualTo(CouponRedemptionStatus.REVERSED);
+        assertThat(couponRepository.findById(fixture.couponId()).orElseThrow().getStatus())
+            .isEqualTo(CouponStatus.AVAILABLE);
+        assertThat(couponStatusHistoryRepository.findAllByCouponCouponIdOrderByOccurredAtAsc(fixture.couponId()))
+            .hasSize(1);
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(event -> event.getTargetType() == AuditEventTargetType.REFUND)
+            .hasSize(1);
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(event -> event.getTargetType() == AuditEventTargetType.COUPON)
+            .hasSize(1);
+    }
+
     private Object retryAfterStart(
         RefundFixture fixture,
         CountDownLatch ready,
@@ -224,6 +275,26 @@ class RetryRefundUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         await(start);
         try {
             return useCase.retry(fixture.adminUserId(), Long.toString(fixture.refundId()), UUID.randomUUID());
+        } catch (BusinessException exception) {
+            return exception;
+        }
+    }
+
+    private Object resolveAfterStart(
+        RefundFixture fixture,
+        String confirmedStatus,
+        CountDownLatch ready,
+        CountDownLatch start
+    ) {
+        ready.countDown();
+        await(start);
+        try {
+            return resolveRefundFailureUseCase.resolve(
+                fixture.adminUserId(),
+                fixture.refundId(),
+                new ResolveRefundFailureRequest(confirmedStatus, "PortOne 재조회", "실제 처리 결과 확인"),
+                UUID.randomUUID()
+            );
         } catch (BusinessException exception) {
             return exception;
         }
@@ -256,7 +327,18 @@ class RetryRefundUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         return createFailedRefund(true);
     }
 
+    private RefundFixture createDiscrepantRefundWithCoupon() {
+        return createRefund(true, true);
+    }
+
     private RefundFixture createFailedRefund(boolean withCoupon) {
+        return createRefund(withCoupon, false);
+    }
+
+    private RefundFixture createRefund(
+        boolean withCoupon,
+        boolean discrepant
+    ) {
         Region region = regionRepository.saveAndFlush(new Region("GIMHAE", "김해시", true));
         AppUser operator = appUserRepository.saveAndFlush(new AppUser(
             "operator-" + System.nanoTime() + "@example.com", "hashed-password", "운영자", "010-1111-1111", AppUserStatus.ACTIVE
@@ -309,7 +391,11 @@ class RetryRefundUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         Payment savedPayment = paymentRepository.saveAndFlush(payment);
         Refund refund = new Refund(savedPayment, withCoupon ? 9_000L : 10_000L, NOW);
         refund.startProcessing();
-        refund.fail(NOW.plusSeconds(1));
+        if (discrepant) {
+            refund.markDiscrepant(NOW.plusSeconds(1));
+        } else {
+            refund.fail(NOW.plusSeconds(1));
+        }
         Refund savedRefund = refundRepository.saveAndFlush(refund);
         refundAttemptRepository.saveAndFlush(new RefundAttempt(
             savedRefund, 1, RefundAttemptInitiatorKind.SYSTEM, NOW
