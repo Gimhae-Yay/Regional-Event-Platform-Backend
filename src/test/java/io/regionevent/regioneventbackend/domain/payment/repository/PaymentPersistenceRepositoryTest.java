@@ -152,7 +152,9 @@ class PaymentPersistenceRepositoryTest {
             ))
             .isPresent();
         assertThat(paymentVerificationRepository
-            .findAllByPaymentPaymentIdOrderByVerifiedAtAsc(fixtures.payment().getPaymentId()))
+            .findAllByPaymentPaymentIdOrderByVerifiedAtAscPaymentVerificationIdAsc(
+                fixtures.payment().getPaymentId()
+            ))
             .extracting(PaymentVerification::getPaymentVerificationId)
             .containsExactly(verification.getPaymentVerificationId());
         assertThat(paymentWebhookRepository.findByProviderEventId("provider-event-1")).isPresent();
@@ -160,10 +162,90 @@ class PaymentPersistenceRepositoryTest {
             .findByPaymentIdForUpdate(fixtures.payment().getPaymentId()))
             .isPresent();
         assertThat(paymentDiscrepancyActionRepository
-            .findAllByPaymentDiscrepancyPaymentDiscrepancyIdOrderByActedAtAsc(
+            .findAllByPaymentDiscrepancyPaymentDiscrepancyIdOrderByActedAtAscPaymentDiscrepancyActionIdAsc(
                 discrepancy.getPaymentDiscrepancyId()
             ))
             .hasSize(1);
+    }
+
+    @Test
+    void 이력조회_동일시각이면식별자오름차순으로정렬한다() {
+        PaymentFixtures fixtures = createPaymentFixtures();
+        Instant sameTime = CREATED_AT.plusSeconds(60);
+        PaymentVerification firstVerification = paymentVerificationRepository.saveAndFlush(
+            new PaymentVerification(
+                fixtures.payment(),
+                "WEBHOOK",
+                10_000,
+                "KRW",
+                fixtures.payment().getOrderId(),
+                "PAID",
+                "APPROVE",
+                "verification-hash-1",
+                sameTime
+            )
+        );
+        PaymentVerification secondVerification = paymentVerificationRepository.saveAndFlush(
+            new PaymentVerification(
+                fixtures.payment(),
+                "CONFIRM_REQUEST",
+                10_000,
+                "KRW",
+                fixtures.payment().getOrderId(),
+                "PAID",
+                "APPROVE",
+                "verification-hash-2",
+                sameTime
+            )
+        );
+        PaymentDiscrepancy discrepancy = paymentDiscrepancyRepository.saveAndFlush(
+            new PaymentDiscrepancy(
+                fixtures.payment(),
+                "AMOUNT_MISMATCH",
+                "OPEN",
+                CREATED_AT
+            )
+        );
+        PaymentDiscrepancyAction firstAction = paymentDiscrepancyActionRepository.saveAndFlush(
+            new PaymentDiscrepancyAction(
+                discrepancy,
+                "MANUAL_REVIEW",
+                "audit-event-1",
+                "AMOUNT_MISMATCH",
+                "PENDING",
+                sameTime
+            )
+        );
+        PaymentDiscrepancyAction secondAction = paymentDiscrepancyActionRepository.saveAndFlush(
+            new PaymentDiscrepancyAction(
+                discrepancy,
+                "FULL_REFUND_REQUEST",
+                "audit-event-2",
+                "AMOUNT_MISMATCH",
+                "REQUESTED",
+                sameTime
+            )
+        );
+        entityManager.clear();
+
+        assertThat(paymentVerificationRepository
+            .findAllByPaymentPaymentIdOrderByVerifiedAtAscPaymentVerificationIdAsc(
+                fixtures.payment().getPaymentId()
+            ))
+            .extracting(PaymentVerification::getPaymentVerificationId)
+            .containsExactly(
+                firstVerification.getPaymentVerificationId(),
+                secondVerification.getPaymentVerificationId()
+            );
+        assertThat(paymentDiscrepancyActionRepository
+            .findAllByPaymentDiscrepancyPaymentDiscrepancyIdOrderByActedAtAscPaymentDiscrepancyActionIdAsc(
+                discrepancy.getPaymentDiscrepancyId()
+            ))
+            .extracting(PaymentDiscrepancyAction::getPaymentDiscrepancyActionId)
+            .containsExactly(
+                firstAction.getPaymentDiscrepancyActionId(),
+                secondAction.getPaymentDiscrepancyActionId()
+            );
     }
 
     @Test

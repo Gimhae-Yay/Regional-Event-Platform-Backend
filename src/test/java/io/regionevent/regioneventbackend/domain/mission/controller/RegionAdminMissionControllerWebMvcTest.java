@@ -27,6 +27,8 @@ import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
 import io.regionevent.regioneventbackend.domain.mission.service.ApproveRegionAdminMissionResult;
 import io.regionevent.regioneventbackend.domain.mission.service.ApproveRegionAdminMissionUseCase;
 import io.regionevent.regioneventbackend.domain.mission.service.GetRegionAdminMissionDetailUseCase;
+import io.regionevent.regioneventbackend.domain.mission.service.RejectRegionAdminMissionResult;
+import io.regionevent.regioneventbackend.domain.mission.service.RejectRegionAdminMissionUseCase;
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -35,7 +37,11 @@ import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
-@WebMvcTest({RegionAdminMissionController.class, ApproveRegionAdminMissionController.class})
+@WebMvcTest({
+    RegionAdminMissionController.class,
+    ApproveRegionAdminMissionController.class,
+    RejectRegionAdminMissionController.class
+})
 @Import({SecurityConfig.class, RequestIdFilter.class, GlobalExceptionHandler.class})
 class RegionAdminMissionControllerWebMvcTest {
 
@@ -52,6 +58,9 @@ class RegionAdminMissionControllerWebMvcTest {
 
     @MockitoBean
     private ApproveRegionAdminMissionUseCase approveRegionAdminMissionUseCase;
+
+    @MockitoBean
+    private RejectRegionAdminMissionUseCase rejectRegionAdminMissionUseCase;
 
     @MockitoBean
     private RefreshTokenStore refreshTokenStore;
@@ -173,6 +182,93 @@ class RegionAdminMissionControllerWebMvcTest {
         assertApprovalError(703L, ErrorCode.MISSION_STATE_CONFLICT);
     }
 
+    @Test
+    void reject_withValidReasonCode_returnsDraftMission() throws Exception {
+        Instant rejectedAt = Instant.parse("2026-08-10T04:30:00.123456Z");
+        when(rejectRegionAdminMissionUseCase.reject(
+            org.mockito.ArgumentMatchers.eq(REGION_ADMIN_ID),
+            org.mockito.ArgumentMatchers.eq(701L),
+            org.mockito.ArgumentMatchers.eq("MISSION_REWARD_POLICY_INVALID"),
+            org.mockito.ArgumentMatchers.any(UUID.class)
+        )).thenReturn(new RejectRegionAdminMissionResult(701L, MissionStatus.DRAFT, rejectedAt));
+
+        mockMvc.perform(authenticated(post("/api/v1/region-admin/missions/701/reject")
+                .contentType("application/json")
+                .content("{\"reasonCode\":\"MISSION_REWARD_POLICY_INVALID\"}")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.statusCode").value(200))
+            .andExpect(jsonPath("$.code").value("SUCCESS"))
+            .andExpect(jsonPath("$.data.missionId").value("701"))
+            .andExpect(jsonPath("$.data.status").value("DRAFT"))
+            .andExpect(jsonPath("$.data.rejectedAt").value("2026-08-10T04:30:00.123456Z"));
+    }
+
+    @Test
+    void reject_whenUseCaseRejectsInvalidReasonCode_returnsInvalidInput() throws Exception {
+        when(rejectRegionAdminMissionUseCase.reject(
+            org.mockito.ArgumentMatchers.eq(REGION_ADMIN_ID),
+            org.mockito.ArgumentMatchers.eq(701L),
+            org.mockito.ArgumentMatchers.eq("PERSONAL_OPINION"),
+            org.mockito.ArgumentMatchers.any(UUID.class)
+        )).thenThrow(new BusinessException(ErrorCode.INVALID_INPUT));
+
+        mockMvc.perform(authenticated(post("/api/v1/region-admin/missions/701/reject")
+                .contentType("application/json")
+                .content("{\"reasonCode\":\"PERSONAL_OPINION\"}")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+    }
+
+    @Test
+    void reject_withInvalidMissionId_returnsInputOrTypeErrorWithoutCallingUseCase() throws Exception {
+        mockMvc.perform(authenticated(post("/api/v1/region-admin/missions/01/reject")
+                .contentType("application/json")
+                .content("{\"reasonCode\":\"MISSION_REWARD_POLICY_INVALID\"}")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        mockMvc.perform(authenticated(post("/api/v1/region-admin/missions/not-a-number/reject")
+                .contentType("application/json")
+                .content("{\"reasonCode\":\"MISSION_REWARD_POLICY_INVALID\"}")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+
+        verifyNoInteractions(rejectRegionAdminMissionUseCase);
+    }
+
+    @Test
+    void reject_withInvalidJson_returnsJsonOrTypeErrorWithoutCallingUseCase() throws Exception {
+        mockMvc.perform(authenticated(post("/api/v1/region-admin/missions/701/reject")
+                .contentType("application/json")
+                .content("{")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_JSON"));
+        mockMvc.perform(authenticated(post("/api/v1/region-admin/missions/701/reject")
+                .contentType("application/json")
+                .content("{\"reasonCode\":{}}")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+
+        verifyNoInteractions(rejectRegionAdminMissionUseCase);
+    }
+
+    @Test
+    void reject_withoutAuthentication_returnsUnauthenticated() throws Exception {
+        mockMvc.perform(post("/api/v1/region-admin/missions/701/reject")
+                .contentType("application/json")
+                .content("{\"reasonCode\":\"MISSION_REWARD_POLICY_INVALID\"}"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+
+        verifyNoInteractions(rejectRegionAdminMissionUseCase);
+    }
+
+    @Test
+    void reject_whenUseCaseRejectsRequest_returnsDocumentedBusinessErrors() throws Exception {
+        assertRejectionError(701L, ErrorCode.FORBIDDEN);
+        assertRejectionError(702L, ErrorCode.NOT_FOUND);
+        assertRejectionError(703L, ErrorCode.MISSION_STATE_CONFLICT);
+    }
+
     private void assertApprovalError(
         long missionId,
         ErrorCode errorCode
@@ -187,6 +283,27 @@ class RegionAdminMissionControllerWebMvcTest {
                 "/api/v1/region-admin/missions/{missionId}/approve",
                 missionId
             )))
+            .andExpect(status().is(errorCode.httpStatus().value()))
+            .andExpect(jsonPath("$.code").value(errorCode.code()));
+    }
+
+    private void assertRejectionError(
+        long missionId,
+        ErrorCode errorCode
+    ) throws Exception {
+        when(rejectRegionAdminMissionUseCase.reject(
+            org.mockito.ArgumentMatchers.eq(REGION_ADMIN_ID),
+            org.mockito.ArgumentMatchers.eq(missionId),
+            org.mockito.ArgumentMatchers.eq("MISSION_REWARD_POLICY_INVALID"),
+            org.mockito.ArgumentMatchers.any(UUID.class)
+        )).thenThrow(new BusinessException(errorCode));
+
+        mockMvc.perform(authenticated(post(
+                "/api/v1/region-admin/missions/{missionId}/reject",
+                missionId
+            )
+                .contentType("application/json")
+                .content("{\"reasonCode\":\"MISSION_REWARD_POLICY_INVALID\"}")))
             .andExpect(status().is(errorCode.httpStatus().value()))
             .andExpect(jsonPath("$.code").value(errorCode.code()));
     }

@@ -8,7 +8,7 @@ import io.regionevent.regioneventbackend.domain.payment.entity.PaymentDiscrepanc
 
 public interface PaymentDiscrepancyActionRepository extends JpaRepository<PaymentDiscrepancyAction, Long> {
 
-    List<PaymentDiscrepancyAction> findAllByPaymentDiscrepancyPaymentDiscrepancyIdOrderByActedAtAsc(
+    List<PaymentDiscrepancyAction> findAllByPaymentDiscrepancyPaymentDiscrepancyIdOrderByActedAtAscPaymentDiscrepancyActionIdAsc(
         Long paymentDiscrepancyId
     );
 }

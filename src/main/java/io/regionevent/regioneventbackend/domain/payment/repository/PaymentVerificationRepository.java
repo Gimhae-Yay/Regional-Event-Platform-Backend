@@ -8,5 +8,7 @@ import io.regionevent.regioneventbackend.domain.payment.entity.PaymentVerificati
 
 public interface PaymentVerificationRepository extends JpaRepository<PaymentVerification, Long> {
 
-    List<PaymentVerification> findAllByPaymentPaymentIdOrderByVerifiedAtAsc(Long paymentId);
+    List<PaymentVerification> findAllByPaymentPaymentIdOrderByVerifiedAtAscPaymentVerificationIdAsc(
+        Long paymentId
+    );
 }
