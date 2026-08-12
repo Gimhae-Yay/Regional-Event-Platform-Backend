@@ -6,7 +6,9 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
@@ -15,8 +17,22 @@ import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.ContentSessionService;
+import io.regionevent.regioneventbackend.domain.coupon.entity.Coupon;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponRedemption;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponRedemptionStatus;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatus;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatusHistory;
+import io.regionevent.regioneventbackend.domain.coupon.service.CouponRedemptionService;
+import io.regionevent.regioneventbackend.domain.coupon.service.CouponService;
+import io.regionevent.regioneventbackend.domain.coupon.service.CouponStatusHistoryService;
+import io.regionevent.regioneventbackend.domain.payment.dto.CreateRefundResponse;
+import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
+import io.regionevent.regioneventbackend.domain.payment.entity.PaymentStatus;
+import io.regionevent.regioneventbackend.domain.payment.service.CreateRefundUseCase;
+import io.regionevent.regioneventbackend.domain.payment.service.PaymentService;
 import io.regionevent.regioneventbackend.domain.reservation.dto.CancelReservationResponse;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
+import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationPriceSnapshot;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
@@ -29,32 +45,70 @@ public class ReservationCancellationUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(ReservationCancellationUseCase.class);
     private static final String USER_REQUEST_REASON = "USER_REQUEST";
+    private static final String COUPON_RESTORE_REASON = "RESERVATION_CANCELLED";
 
     private final AppUserService appUserService;
     private final UserRoleAssignmentService userRoleAssignmentService;
     private final ReservationService reservationService;
     private final ContentSessionService contentSessionService;
+    private final PaymentService paymentService;
+    private final CreateRefundUseCase createRefundUseCase;
+    private final ReservationPriceSnapshotService reservationPriceSnapshotService;
+    private final CouponService couponService;
+    private final CouponRedemptionService couponRedemptionService;
+    private final CouponStatusHistoryService couponStatusHistoryService;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase;
+    private final TransactionTemplate transactionTemplate;
 
     public ReservationCancellationUseCase(
         AppUserService appUserService,
         UserRoleAssignmentService userRoleAssignmentService,
         ReservationService reservationService,
         ContentSessionService contentSessionService,
+        PaymentService paymentService,
+        CreateRefundUseCase createRefundUseCase,
+        ReservationPriceSnapshotService reservationPriceSnapshotService,
+        CouponService couponService,
+        CouponRedemptionService couponRedemptionService,
+        CouponStatusHistoryService couponStatusHistoryService,
         RecordAuditEventUseCase recordAuditEventUseCase,
-        RecordFailedAuditEventUseCase recordFailedAuditEventUseCase
+        RecordFailedAuditEventUseCase recordFailedAuditEventUseCase,
+        PlatformTransactionManager transactionManager
     ) {
         this.appUserService = appUserService;
         this.userRoleAssignmentService = userRoleAssignmentService;
         this.reservationService = reservationService;
         this.contentSessionService = contentSessionService;
+        this.paymentService = paymentService;
+        this.createRefundUseCase = createRefundUseCase;
+        this.reservationPriceSnapshotService = reservationPriceSnapshotService;
+        this.couponService = couponService;
+        this.couponRedemptionService = couponRedemptionService;
+        this.couponStatusHistoryService = couponStatusHistoryService;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
         this.recordFailedAuditEventUseCase = recordFailedAuditEventUseCase;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
-    @Transactional
     public CancelReservationResponse cancel(Long userId, Long reservationId, UUID requestId) {
+        CancellationPreparation preparation = executeInTransaction(
+            () -> prepareCancellation(userId, reservationId, requestId)
+        );
+        if (preparation.refundPreparation() == null) {
+            return preparation.response();
+        }
+        return preparation.response().withRefund(
+            createRefundUseCase.executePreparedReservationCancellationRefund(
+                preparation.refundPreparation(),
+                preparation.actor(),
+                requestId
+            )
+        );
+    }
+
+    private CancellationPreparation prepareCancellation(Long userId, Long reservationId, UUID requestId) {
         validatePositiveReservationId(reservationId);
         AppUser user = appUserService.findActiveUserForUpdate(userId)
             .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
@@ -65,7 +119,11 @@ public class ReservationCancellationUseCase {
 
         Reservation reservation = reservationService.findOwnedReservationForUpdate(reservationId, user);
         if (reservation.getStatus() == ReservationStatus.CANCELLED) {
-            return CancelReservationResponse.from(reservation);
+            return new CancellationPreparation(
+                CancelReservationResponse.from(reservation, findExistingRefund(reservation)),
+                null,
+                actor
+            );
         }
         if (reservation.getStatus() != ReservationStatus.CONFIRMED) {
             throwCancellationConflict(requestId, actor, reservation);
@@ -74,7 +132,11 @@ public class ReservationCancellationUseCase {
         if (!reservationService.cancelIfCancellable(reservationId, userId)) {
             Reservation currentReservation = reservationService.findOwnedReservationForUpdate(reservationId, user);
             if (currentReservation.getStatus() == ReservationStatus.CANCELLED) {
-                return CancelReservationResponse.from(currentReservation);
+                return new CancellationPreparation(
+                    CancelReservationResponse.from(currentReservation, findExistingRefund(currentReservation)),
+                    null,
+                    actor
+                );
             }
             throwCancellationConflict(requestId, actor, currentReservation);
         }
@@ -85,7 +147,92 @@ public class ReservationCancellationUseCase {
         );
         Reservation cancelledReservation = reservationService.findOwnedReservation(reservationId, user);
         recordSuccessfulAuditEvent(requestId, actor, cancelledReservation);
-        return CancelReservationResponse.from(cancelledReservation);
+        return new CancellationPreparation(
+            CancelReservationResponse.from(cancelledReservation),
+            prepareRefundIfRequired(cancelledReservation, actor, requestId),
+            actor
+        );
+    }
+
+    private CreateRefundUseCase.ReservationCancellationRefundPreparation prepareRefundIfRequired(
+        Reservation reservation,
+        AuditEventActor actor,
+        UUID requestId
+    ) {
+        Payment payment = paymentService.findByReservationId(reservation.getReservationId())
+            .orElse(null);
+        if (payment == null) {
+            restoreFreeReservationCoupon(reservation, actor, requestId);
+            return null;
+        }
+        if (payment.getStatus() != PaymentStatus.APPROVED
+            && payment.getStatus() != PaymentStatus.DISCREPANT) {
+            return null;
+        }
+        return createRefundUseCase.prepareForReservationCancellation(
+            payment.getPaymentId(),
+            actor,
+            requestId
+        );
+    }
+
+    private CreateRefundResponse findExistingRefund(Reservation reservation) {
+        Payment payment = paymentService.findByReservationId(reservation.getReservationId())
+            .orElse(null);
+        if (payment == null) {
+            return null;
+        }
+        return createRefundUseCase.findForReservationCancellation(payment.getPaymentId());
+    }
+
+    private void restoreFreeReservationCoupon(
+        Reservation reservation,
+        AuditEventActor actor,
+        UUID requestId
+    ) {
+        ReservationPriceSnapshot snapshot = reservationPriceSnapshotService
+            .findByHoldIdForUpdate(reservation.getCapacityHold().getHoldId())
+            .orElse(null);
+        if (snapshot == null || snapshot.getFinalAmount() != 0 || snapshot.getCoupon() == null) {
+            return;
+        }
+        CouponRedemption redemption = couponRedemptionService
+            .findByReservationPriceSnapshotIdForUpdate(snapshot.getReservationPriceSnapshotId())
+            .orElseThrow(() -> new IllegalStateException("coupon redemption does not exist"));
+        Coupon coupon = couponService.findByCouponIdForUpdate(snapshot.getCoupon().getCouponId())
+            .orElseThrow(() -> new IllegalStateException("snapshot coupon does not exist"));
+        if (redemption.getStatus() != CouponRedemptionStatus.CONFIRMED
+            || !redemption.getReservation().getReservationId().equals(reservation.getReservationId())
+            || !redemption.getReservationPriceSnapshot().getReservationPriceSnapshotId().equals(
+                snapshot.getReservationPriceSnapshotId()
+            )
+            || !redemption.getCoupon().getCouponId().equals(coupon.getCouponId())
+            || coupon.getStatus() != CouponStatus.USED) {
+            throw new IllegalStateException("coupon redemption does not match cancelled reservation");
+        }
+        Instant restoredAt = couponService.findCurrentDatabaseTime();
+        redemption.reverse(restoredAt);
+        CouponStatus restoredStatus = couponService.restoreUsedCoupon(coupon, restoredAt);
+        couponStatusHistoryService.create(new CouponStatusHistory(
+            coupon,
+            CouponStatus.USED,
+            restoredStatus,
+            COUPON_RESTORE_REASON,
+            actor.getRoleName(),
+            restoredAt
+        ));
+        recordAuditEventUseCase.record(new AuditEventCommand(
+            requestId,
+            reservation.getRegion(),
+            AuditEventTargetType.COUPON,
+            coupon.getCouponId(),
+            CouponStatus.USED.name(),
+            restoredStatus.name(),
+            AuditEventResult.SUCCESS,
+            COUPON_RESTORE_REASON,
+            actor,
+            restoredAt
+        ));
     }
 
     private void validatePositiveReservationId(Long reservationId) {
@@ -138,5 +285,17 @@ public class ReservationCancellationUseCase {
             actor,
             reservation.getCancelledAt()
         ));
+    }
+
+    private <T> T executeInTransaction(java.util.function.Supplier<T> action) {
+        T result = transactionTemplate.execute(status -> action.get());
+        return result;
+    }
+
+    private record CancellationPreparation(
+        CancelReservationResponse response,
+        CreateRefundUseCase.ReservationCancellationRefundPreparation refundPreparation,
+        AuditEventActor actor
+    ) {
     }
 }
