@@ -17,6 +17,8 @@ public interface RefundAttemptRepository extends JpaRepository<RefundAttempt, Lo
 
     List<RefundAttempt> findAllByRefundRefundIdIn(List<Long> refundIds);
 
+    List<RefundAttempt> findAllByRefundRefundIdOrderByAttemptNoAsc(Long refundId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT attempt
