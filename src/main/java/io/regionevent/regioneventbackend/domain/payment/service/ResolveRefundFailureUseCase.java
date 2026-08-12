@@ -84,7 +84,7 @@ public class ResolveRefundFailureUseCase {
             refund.resolveAsSucceeded(resolvedAt);
             restoreCouponIfEligible(refund, requestId, assignment);
         } else {
-            refund.resolveAsFailed();
+            refund.resolveAsFailed(resolvedAt);
         }
         recordRefundAudit(refund, requestId, assignment, reason, evidenceReference, resolvedAt);
         return new ResolveRefundFailureResult(refund.getRefundId(), refund.getStatus().name(), resolvedAt);

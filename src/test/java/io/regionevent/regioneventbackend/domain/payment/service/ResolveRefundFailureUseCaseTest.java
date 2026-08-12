@@ -94,7 +94,7 @@ class ResolveRefundFailureUseCaseTest {
         );
 
         assertThat(result).isEqualTo(new ResolveRefundFailureResult(552L, "FAILED", RESOLVED_AT));
-        verify(refund).resolveAsFailed();
+        verify(refund).resolveAsFailed(RESOLVED_AT);
         verifyNoInteractions(
             fixture.couponService,
             fixture.couponRedemptionService,
@@ -168,7 +168,7 @@ class ResolveRefundFailureUseCaseTest {
             .isEqualTo(ErrorCode.REFUND_STATE_CONFLICT);
 
         verify(refund, never()).resolveAsSucceeded(RESOLVED_AT);
-        verify(refund, never()).resolveAsFailed();
+        verify(refund, never()).resolveAsFailed(RESOLVED_AT);
         verifyNoInteractions(
             fixture.couponService,
             fixture.couponRedemptionService,

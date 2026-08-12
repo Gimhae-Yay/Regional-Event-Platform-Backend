@@ -81,12 +81,13 @@ class RefundTest {
         Instant resolvedAt = Instant.parse("2026-08-10T00:02:00Z");
 
         succeededRefund.resolveAsSucceeded(resolvedAt);
-        failedRefund.resolveAsFailed();
+        failedRefund.resolveAsFailed(resolvedAt);
 
         assertThat(succeededRefund.getStatus()).isEqualTo(RefundStatus.SUCCEEDED);
         assertThat(succeededRefund.getCompletedAt()).isEqualTo(resolvedAt);
         assertThat(failedRefund.getStatus()).isEqualTo(RefundStatus.FAILED);
         assertThat(failedRefund.getCompletedAt()).isNull();
+        assertThat(failedRefund.getResolvedAt()).isEqualTo(resolvedAt);
     }
 
     private Refund discrepantRefund(Payment payment) {
