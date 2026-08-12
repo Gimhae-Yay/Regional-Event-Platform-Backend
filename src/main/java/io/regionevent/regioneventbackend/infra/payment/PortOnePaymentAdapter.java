@@ -13,6 +13,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 
 import kotlinx.serialization.json.Json;
+import kotlinx.serialization.json.JsonArray;
 import kotlinx.serialization.json.JsonElement;
 import kotlinx.serialization.json.JsonObject;
 import kotlinx.serialization.json.JsonPrimitive;
@@ -59,6 +60,7 @@ public class PortOnePaymentAdapter implements PortOnePaymentGateway {
             .timeout(RESPONSE_TIMEOUT)
             .build());
         JsonObject payment = readResponse(responseBody);
+        String resultHash = hash(responseBody);
         return new PortOnePayment(
             requiredText(payment, "id"),
             requiredText(payment, "transactionId"),
@@ -66,7 +68,8 @@ public class PortOnePaymentAdapter implements PortOnePaymentGateway {
             requiredLong(requiredObject(payment, "amount"), "total"),
             requiredText(payment, "currency"),
             toPaymentStatus(requiredText(payment, "status")),
-            hash(responseBody)
+            resultHash,
+            latestCancellation(payment, resultHash)
         );
     }
 
@@ -197,6 +200,24 @@ public class PortOnePaymentAdapter implements PortOnePaymentGateway {
         throw new PortOneLookupException(new IllegalStateException(
             "PortOne response does not contain " + fieldName
         ));
+    }
+
+    private PortOneCancellation latestCancellation(JsonObject payment, String resultHash) {
+        JsonElement value = payment.get("cancellations");
+        if (!(value instanceof JsonArray cancellations) || cancellations.isEmpty()) {
+            return null;
+        }
+        JsonElement latest = cancellations.get(cancellations.size() - 1);
+        if (!(latest instanceof JsonObject cancellation)) {
+            throw new PortOneLookupException(new IllegalStateException(
+                "PortOne payment cancellation must be a JSON object"
+            ));
+        }
+        return new PortOneCancellation(
+            requiredText(cancellation, "id"),
+            requiredText(cancellation, "status"),
+            resultHash
+        );
     }
 
     private String escapeJson(String value) {

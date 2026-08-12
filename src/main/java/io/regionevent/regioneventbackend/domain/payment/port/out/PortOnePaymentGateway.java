@@ -27,8 +27,21 @@ public interface PortOnePaymentGateway {
         long amount,
         String currency,
         String status,
-        String resultHash
+        String resultHash,
+        PortOneCancellation cancellation
     ) {
+
+        public PortOnePayment(
+            String paymentId,
+            String transactionId,
+            String storeId,
+            long amount,
+            String currency,
+            String status,
+            String resultHash
+        ) {
+            this(paymentId, transactionId, storeId, amount, currency, status, resultHash, null);
+        }
 
         public PortOnePayment(
             String paymentId,
