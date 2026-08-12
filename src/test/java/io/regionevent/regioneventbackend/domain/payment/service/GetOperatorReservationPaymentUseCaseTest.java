@@ -20,6 +20,7 @@ import io.regionevent.regioneventbackend.domain.payment.entity.PaymentDiscrepanc
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentDiscrepancyAction;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentStatus;
 import io.regionevent.regioneventbackend.domain.payment.entity.Refund;
+import io.regionevent.regioneventbackend.domain.payment.entity.RefundAttempt;
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundStatus;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationPriceSnapshot;
@@ -127,6 +128,42 @@ class GetOperatorReservationPaymentUseCaseTest {
     }
 
     @Test
+    void get_whenFailedRefundIsRetried_returnsLatestRetryAttemptedAtAsUpdatedAt() {
+        Fixture fixture = new Fixture();
+        Reservation reservation = fixture.reservation();
+        Payment payment = mock(Payment.class);
+        ReservationPriceSnapshot snapshot = mock(ReservationPriceSnapshot.class);
+        Refund refund = mock(Refund.class);
+        RefundAttempt firstAttempt = mock(RefundAttempt.class);
+        RefundAttempt retryAttempt = mock(RefundAttempt.class);
+        Instant paymentFinalizedAt = Instant.parse("2026-08-12T02:00:00Z");
+        Instant refundRequestedAt = Instant.parse("2026-08-12T03:00:00Z");
+        Instant retryAttemptedAt = Instant.parse("2026-08-12T05:00:00Z");
+        when(fixture.reservationService.findByIdForOperatorPaymentRead(RESERVATION_ID)).thenReturn(reservation);
+        when(fixture.paymentService.findByReservationId(RESERVATION_ID)).thenReturn(Optional.of(payment));
+        when(payment.getPaymentId()).thenReturn(30L);
+        when(payment.getStatus()).thenReturn(PaymentStatus.APPROVED);
+        when(payment.getFinalizedAt()).thenReturn(paymentFinalizedAt);
+        when(payment.getReservationPriceSnapshot()).thenReturn(snapshot);
+        when(snapshot.getFinalAmount()).thenReturn(17_000L);
+        when(snapshot.getCurrency()).thenReturn("KRW");
+        when(fixture.refundService.findByPaymentId(30L)).thenReturn(Optional.of(refund));
+        when(refund.getRefundId()).thenReturn(40L);
+        when(refund.getStatus()).thenReturn(RefundStatus.PROCESSING);
+        when(refund.getAmount()).thenReturn(17_000L);
+        when(refund.getRequestedAt()).thenReturn(refundRequestedAt);
+        when(fixture.refundAttemptService.findAllByRefundId(40L)).thenReturn(
+            List.of(firstAttempt, retryAttempt)
+        );
+        when(retryAttempt.getAttemptedAt()).thenReturn(retryAttemptedAt);
+        when(fixture.paymentDiscrepancyService.findByPaymentId(30L)).thenReturn(Optional.empty());
+
+        OperatorReservationPaymentInfo actual = fixture.useCase().get(USER_ID, RESERVATION_ID);
+
+        assertThat(actual.updatedAt()).isEqualTo(retryAttemptedAt);
+    }
+
+    @Test
     void get_whenOperatorIsNotAuthorized_doesNotReadPayment() {
         Fixture fixture = new Fixture();
         Reservation reservation = fixture.reservation();
@@ -154,6 +191,7 @@ class GetOperatorReservationPaymentUseCaseTest {
         private final OperatorAuthorizationService authorizationService = mock(OperatorAuthorizationService.class);
         private final PaymentService paymentService = mock(PaymentService.class);
         private final RefundService refundService = mock(RefundService.class);
+        private final RefundAttemptService refundAttemptService = mock(RefundAttemptService.class);
         private final PaymentDiscrepancyService paymentDiscrepancyService = mock(PaymentDiscrepancyService.class);
         private final PaymentDiscrepancyActionService paymentDiscrepancyActionService = mock(
             PaymentDiscrepancyActionService.class
@@ -168,6 +206,7 @@ class GetOperatorReservationPaymentUseCaseTest {
                 authorizationService,
                 paymentService,
                 refundService,
+                refundAttemptService,
                 paymentDiscrepancyService,
                 paymentDiscrepancyActionService
             );
