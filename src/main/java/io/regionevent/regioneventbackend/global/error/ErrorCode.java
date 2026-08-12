@@ -24,6 +24,7 @@ public enum ErrorCode {
     PAYMENT_HOLD_CONFLICT(HttpStatus.CONFLICT, "PAYMENT_HOLD_CONFLICT", "결제를 생성할 수 없는 상태입니다."),
     PAYMENT_DISCREPANCY_STATE_CONFLICT(HttpStatus.CONFLICT, "PAYMENT_DISCREPANCY_STATE_CONFLICT", "결제 불일치 상태가 요청을 처리할 수 없습니다."),
     REFUND_PAYMENT_CONFLICT(HttpStatus.CONFLICT, "REFUND_PAYMENT_CONFLICT", "환불을 생성할 수 없는 상태입니다."),
+    REFUND_STATE_CONFLICT(HttpStatus.CONFLICT, "REFUND_STATE_CONFLICT", "환불 상태가 요청을 처리할 수 없습니다."),
     QR_ISSUE_CONFLICT(HttpStatus.CONFLICT, "QR_ISSUE_CONFLICT", "QR을 발급할 수 없는 상태입니다."),
     QR_VERIFICATION_FAILED(HttpStatus.BAD_REQUEST, "QR_VERIFICATION_FAILED", "QR을 확인할 수 없습니다."),
     CHECK_IN_CONFLICT(HttpStatus.CONFLICT, "CHECK_IN_CONFLICT", "체크인할 수 없는 상태입니다."),

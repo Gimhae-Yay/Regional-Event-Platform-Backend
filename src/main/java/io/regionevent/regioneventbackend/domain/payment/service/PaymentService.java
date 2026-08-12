@@ -36,6 +36,16 @@ public class PaymentService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<Payment> findByReservationIdForUpdate(Long reservationId) {
+        return paymentRepository.findByReservationIdForUpdate(reservationId);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<Payment> findByReservationId(Long reservationId) {
+        return paymentRepository.findByReservationReservationId(reservationId);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
     public Optional<Payment> findWebhookTargetByOrderIdForUpdate(String orderId) {
         return paymentRepository.findWebhookTargetByOrderIdForUpdate(orderId);
     }

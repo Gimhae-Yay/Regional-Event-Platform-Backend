@@ -49,6 +49,63 @@ import io.regionevent.regioneventbackend.domain.user.service.PlatformAdminAuthor
 class CreateRefundUseCaseTest {
 
     @Test
+    void 예약취소환불_PortOne성공응답_환불을성공으로확정하고감사를기록한다() {
+        ReservationCancellationRefundFixture fixture = reservationCancellationRefundFixture(RefundStatus.SUCCEEDED);
+        when(fixture.paymentGateway().cancelPayment("portone-payment", 10_000L, "예약 취소"))
+            .thenReturn(new PortOnePaymentGateway.PortOneCancellation("cancel-1", "SUCCEEDED", "hash-1"));
+
+        CreateRefundResponse response = fixture.useCase().createForReservationCancellation(
+            10L,
+            null,
+            UUID.randomUUID()
+        );
+
+        verify(fixture.attempt()).respond("cancel-1", "SUCCEEDED", "hash-1");
+        verify(fixture.refund()).succeed(Instant.parse("2026-08-11T00:00:00Z"));
+        verify(fixture.auditEventUseCase()).record(any(AuditEventCommand.class));
+        org.assertj.core.api.Assertions.assertThat(response.status()).isEqualTo("SUCCEEDED");
+    }
+
+    @Test
+    void 예약취소환불_PortOne명시실패응답_환불을실패로확정하고감사를기록한다() {
+        ReservationCancellationRefundFixture fixture = reservationCancellationRefundFixture(RefundStatus.FAILED);
+        when(fixture.paymentGateway().cancelPayment("portone-payment", 10_000L, "예약 취소"))
+            .thenReturn(new PortOnePaymentGateway.PortOneCancellation("cancel-1", "FAILED", "hash-1"));
+
+        CreateRefundResponse response = fixture.useCase().createForReservationCancellation(
+            10L,
+            null,
+            UUID.randomUUID()
+        );
+
+        verify(fixture.attempt()).respond("cancel-1", "FAILED", "hash-1");
+        verify(fixture.refund()).fail(Instant.parse("2026-08-11T00:00:00Z"));
+        verify(fixture.auditEventUseCase()).record(any(AuditEventCommand.class));
+        org.assertj.core.api.Assertions.assertThat(response.status()).isEqualTo("FAILED");
+    }
+
+    @Test
+    void 예약취소환불_PortOne무응답_환불을불일치로확정하고감사를기록한다() {
+        ReservationCancellationRefundFixture fixture = reservationCancellationRefundFixture(RefundStatus.DISCREPANT);
+        when(fixture.paymentGateway().cancelPayment("portone-payment", 10_000L, "예약 취소"))
+            .thenThrow(new PortOneNoResponseException(
+                RefundFailureReasonCode.TIMEOUT,
+                new RuntimeException("timeout")
+            ));
+
+        CreateRefundResponse response = fixture.useCase().createForReservationCancellation(
+            10L,
+            null,
+            UUID.randomUUID()
+        );
+
+        verify(fixture.attempt()).noResponse(RefundFailureReasonCode.TIMEOUT);
+        verify(fixture.refund()).markDiscrepant(Instant.parse("2026-08-11T00:00:00Z"));
+        verify(fixture.auditEventUseCase()).record(any(AuditEventCommand.class));
+        org.assertj.core.api.Assertions.assertThat(response.status()).isEqualTo("DISCREPANT");
+    }
+
+    @Test
     void PortOne_호출_전에_환불과_대기_시도를_커밋한다() {
         PlatformAdminAuthorizationService authorizationService = mock(PlatformAdminAuthorizationService.class);
         PaymentService paymentService = mock(PaymentService.class);
@@ -134,6 +191,7 @@ class CreateRefundUseCaseTest {
         ArgumentCaptor<RefundAttempt> attemptCaptor = ArgumentCaptor.forClass(RefundAttempt.class);
         verify(refundAttemptService).create(attemptCaptor.capture());
         verify(attempt).noResponse(RefundFailureReasonCode.CONNECTION);
+        verify(refund).markDiscrepant(Instant.parse("2026-08-11T00:00:00Z"));
         verify(discrepancy).requestRefund();
         verify(discrepancyActionService).create(
             discrepancy,
@@ -156,5 +214,67 @@ class CreateRefundUseCaseTest {
                 org.assertj.core.api.Assertions.assertThat(audit.nextState()).isEqualTo("REFUND_REQUESTED");
             });
         org.assertj.core.api.Assertions.assertThat(response.status()).isEqualTo("DISCREPANT");
+    }
+
+    private ReservationCancellationRefundFixture reservationCancellationRefundFixture(RefundStatus refundStatus) {
+        PaymentService paymentService = mock(PaymentService.class);
+        RefundService refundService = mock(RefundService.class);
+        RefundAttemptService refundAttemptService = mock(RefundAttemptService.class);
+        PortOnePaymentGateway paymentGateway = mock(PortOnePaymentGateway.class);
+        PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
+        RecordAuditEventUseCase auditEventUseCase = mock(RecordAuditEventUseCase.class);
+        Payment payment = mock(Payment.class);
+        CapacityHold capacityHold = mock(CapacityHold.class);
+        Region region = mock(Region.class);
+        ReservationPriceSnapshot snapshot = mock(ReservationPriceSnapshot.class);
+        Refund refund = mock(Refund.class);
+        RefundAttempt attempt = mock(RefundAttempt.class);
+
+        when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
+        when(paymentService.findByPaymentIdForUpdate(10L)).thenReturn(Optional.of(payment));
+        when(payment.getPaymentId()).thenReturn(10L);
+        when(payment.getStatus()).thenReturn(PaymentStatus.APPROVED);
+        when(payment.getPortonePaymentId()).thenReturn("portone-payment");
+        when(payment.getReservationPriceSnapshot()).thenReturn(snapshot);
+        when(payment.getCapacityHold()).thenReturn(capacityHold);
+        when(capacityHold.getRegion()).thenReturn(region);
+        when(snapshot.getFinalAmount()).thenReturn(10_000L);
+        when(refundService.findByPaymentIdForUpdate(10L)).thenReturn(Optional.empty());
+        when(refundService.create(any())).thenReturn(refund);
+        when(refund.getRefundId()).thenReturn(20L);
+        when(refund.getAmount()).thenReturn(10_000L);
+        when(refund.getPayment()).thenReturn(payment);
+        when(refund.getStatus()).thenReturn(refundStatus);
+        when(refund.getRequestedAt()).thenReturn(Instant.parse("2026-08-11T00:00:00Z"));
+        when(refundAttemptService.create(any())).thenReturn(attempt);
+        when(attempt.getRefundAttemptId()).thenReturn(30L);
+        when(refundService.findByRefundIdForUpdate(20L)).thenReturn(Optional.of(refund));
+        when(refundAttemptService.findByRefundAttemptIdForUpdate(30L)).thenReturn(Optional.of(attempt));
+
+        CreateRefundUseCase useCase = new CreateRefundUseCase(
+            mock(PlatformAdminAuthorizationService.class),
+            paymentService,
+            refundService,
+            refundAttemptService,
+            mock(PaymentDiscrepancyService.class),
+            mock(PaymentDiscrepancyActionService.class),
+            mock(CouponService.class),
+            mock(CouponRedemptionService.class),
+            mock(CouponStatusHistoryService.class),
+            auditEventUseCase,
+            paymentGateway,
+            Clock.fixed(Instant.parse("2026-08-11T00:00:00Z"), ZoneOffset.UTC),
+            transactionManager
+        );
+        return new ReservationCancellationRefundFixture(useCase, paymentGateway, refund, attempt, auditEventUseCase);
+    }
+
+    private record ReservationCancellationRefundFixture(
+        CreateRefundUseCase useCase,
+        PortOnePaymentGateway paymentGateway,
+        Refund refund,
+        RefundAttempt attempt,
+        RecordAuditEventUseCase auditEventUseCase
+    ) {
     }
 }

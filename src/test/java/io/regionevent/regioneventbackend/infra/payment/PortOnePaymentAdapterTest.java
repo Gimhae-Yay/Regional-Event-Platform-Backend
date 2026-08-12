@@ -19,6 +19,7 @@ import org.mockito.ArgumentCaptor;
 
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOnePaymentGateway.PortOneCancellation;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOnePaymentGateway.PortOnePayment;
+import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneResponseException;
 import io.regionevent.regioneventbackend.domain.payment.service.PortOneProperties;
 
 class PortOnePaymentAdapterTest {
@@ -123,6 +124,58 @@ class PortOnePaymentAdapterTest {
         assertThat(cancellation.resultHash()).isEqualTo(PortOnePaymentAdapter.hash(responseBody));
         assertThat(cancellation.isSucceeded()).isFalse();
         assertThat(cancellation.isExplicitlyFailed()).isFalse();
+    }
+
+    @Test
+    void cancelPayment_HTTP_오류_응답이면_상태와_원문_해시를_보존한다() throws Exception {
+        HttpClient httpClient = mock(HttpClient.class);
+        PortOneProperties properties = mock(PortOneProperties.class);
+        @SuppressWarnings("unchecked")
+        HttpResponse<byte[]> response = mock(HttpResponse.class);
+        byte[] responseBody = "{\"code\":\"INVALID_REQUEST\"}".getBytes(StandardCharsets.UTF_8);
+        when(response.statusCode()).thenReturn(400);
+        when(response.body()).thenReturn(responseBody);
+        when(httpClient.<byte[]>send(any(), any())).thenReturn(response);
+        when(properties.getApiSecret()).thenReturn("secret");
+
+        org.assertj.core.api.ThrowableAssert.ThrowingCallable action = () -> new PortOnePaymentAdapter(
+            properties,
+            httpClient
+        ).cancelPayment("payment-1", 20_000L, "고객 요청");
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(action)
+            .isInstanceOf(PortOneResponseException.class)
+            .satisfies(exception -> {
+                PortOneResponseException responseException = (PortOneResponseException) exception;
+                assertThat(responseException.getExternalStatus()).isEqualTo("HTTP_400");
+                assertThat(responseException.getResultHash()).isEqualTo(PortOnePaymentAdapter.hash(responseBody));
+            });
+    }
+
+    @Test
+    void cancelPayment_정상이지만_형식이_잘못된_응답이면_원문_해시를_보존한다() throws Exception {
+        HttpClient httpClient = mock(HttpClient.class);
+        PortOneProperties properties = mock(PortOneProperties.class);
+        @SuppressWarnings("unchecked")
+        HttpResponse<byte[]> response = mock(HttpResponse.class);
+        byte[] responseBody = "not-json".getBytes(StandardCharsets.UTF_8);
+        when(response.statusCode()).thenReturn(200);
+        when(response.body()).thenReturn(responseBody);
+        when(httpClient.<byte[]>send(any(), any())).thenReturn(response);
+        when(properties.getApiSecret()).thenReturn("secret");
+
+        org.assertj.core.api.ThrowableAssert.ThrowingCallable action = () -> new PortOnePaymentAdapter(
+            properties,
+            httpClient
+        ).cancelPayment("payment-1", 20_000L, "고객 요청");
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(action)
+            .isInstanceOf(PortOneResponseException.class)
+            .satisfies(exception -> {
+                PortOneResponseException responseException = (PortOneResponseException) exception;
+                assertThat(responseException.getExternalStatus()).isEqualTo("INVALID_RESPONSE");
+                assertThat(responseException.getResultHash()).isEqualTo(PortOnePaymentAdapter.hash(responseBody));
+            });
     }
 
     private PortOnePayment findPaymentByResponse(String status) throws Exception {
