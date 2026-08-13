@@ -7,6 +7,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -435,11 +436,20 @@ class RetryRefundUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
             couponPolicyRepository.saveAndFlush(policy),
             visitor,
             NOW.minusSeconds(60),
-            NOW.plusSeconds(86_400)
+            futureCouponExpirationAt()
         ));
         coupon.reserve();
         coupon.use();
         return couponRepository.saveAndFlush(coupon);
+    }
+
+    private Instant futureCouponExpirationAt() {
+        BigDecimal currentEpochSeconds = couponRepository.findCurrentEpochSeconds();
+        long epochSecond = currentEpochSeconds.longValue();
+        long nanoAdjustment = currentEpochSeconds.remainder(BigDecimal.ONE)
+            .movePointRight(9)
+            .longValue();
+        return Instant.ofEpochSecond(epochSecond, nanoAdjustment).plusSeconds(86_400);
     }
 
     @TestConfiguration(proxyBeanMethods = false)
