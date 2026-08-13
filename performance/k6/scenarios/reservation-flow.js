@@ -12,12 +12,26 @@ import {
   scenarioVus,
 } from '../lib/config.js';
 import { idempotencyKey, pickByIteration } from '../lib/data.js';
-import { authAcceptHeaders, authHeaders, get, postJson, postNoBody } from '../lib/http.js';
+import {
+  authAcceptHeaders,
+  authHeaders,
+  get,
+  postJson,
+  postNoBody,
+  requestTags,
+} from '../lib/http.js';
 import { recordOutcome, recordUnexpected } from '../lib/responses.js';
 import { markdownSummary } from '../lib/summary.js';
 
 const scenarioName = 'RESERVATION_FLOW';
 const testTag = 'reservation_flow';
+const p95Threshold = scenarioP95Threshold(scenarioName);
+const expectedRateThreshold = minExpectedOutcomeRate();
+const endpoints = {
+  createHold: 'reservationCreateHold',
+  confirm: 'reservationConfirm',
+  myReservations: 'myReservationsList',
+};
 const businessCodes = [
   'RESERVATION_HOLD_CONFLICT',
   'RESERVATION_CONFIRM_CONFLICT',
@@ -30,11 +44,17 @@ export const options = {
   vus: scenarioVus(scenarioName),
   duration: scenarioDuration(scenarioName),
   thresholds: {
-    expected_outcome_rate: [`rate>=${minExpectedOutcomeRate()}`],
+    expected_outcome_rate: [`rate>=${expectedRateThreshold}`],
+    [`expected_outcome_rate{endpoint:${endpoints.createHold}}`]: [`rate>=${expectedRateThreshold}`],
+    [`expected_outcome_rate{endpoint:${endpoints.confirm}}`]: [`rate>=${expectedRateThreshold}`],
+    [`expected_outcome_rate{endpoint:${endpoints.myReservations}}`]: [`rate>=${expectedRateThreshold}`],
     reservation_flow_success_count: ['count>0'],
     system_failure_rate: ['rate==0'],
     unexpected_failure_rate: ['rate==0'],
-    [`http_req_duration{test:${testTag}}`]: [`p(95)<${scenarioP95Threshold(scenarioName)}`],
+    [`http_req_duration{test:${testTag}}`]: [`p(95)<${p95Threshold}`],
+    [`http_req_duration{endpoint:${endpoints.createHold}}`]: [`p(95)<${p95Threshold}`],
+    [`http_req_duration{endpoint:${endpoints.confirm}}`]: [`p(95)<${p95Threshold}`],
+    [`http_req_duration{endpoint:${endpoints.myReservations}}`]: [`p(95)<${p95Threshold}`],
   },
   summaryTrendStats: ['avg', 'min', 'med', 'p(90)', 'p(95)', 'p(99)', 'max'],
 };
@@ -44,6 +64,21 @@ const visitorTokens = csvEnv('PERF_VISITOR_ACCESS_TOKENS');
 const sessionId = requiredEnv('PERF_SESSION_ID');
 const quantity = numberEnv('PERF_HOLD_QUANTITY', 1);
 const commonTags = { test: testTag };
+const createHoldTags = requestTags(
+  endpoints.createHold,
+  'POST /api/v1/reservations',
+  commonTags,
+);
+const confirmTags = requestTags(
+  endpoints.confirm,
+  'POST /api/v1/reservation-holds/{holdId}/confirm',
+  commonTags,
+);
+const myReservationsTags = requestTags(
+  endpoints.myReservations,
+  'GET /api/v1/me/reservations',
+  commonTags,
+);
 
 export function handleSummary(data) {
   return markdownSummary(data, {
@@ -69,9 +104,9 @@ export default function () {
       '/reservations',
       { sessionId, quantity },
       authHeaders(token),
-      commonTags,
+      createHoldTags,
     ),
-    { successStatuses: [201], businessCodes },
+    { successStatuses: [201], businessCodes, endpoint: endpoints.createHold },
   );
   if (!holdOutcome.success) {
     return;
@@ -79,7 +114,11 @@ export default function () {
 
   const holdId = holdOutcome.body && holdOutcome.body.data && holdOutcome.body.data.holdId;
   if (!holdId) {
-    recordUnexpected('POST /reservations', 'MISSING_HOLD_ID');
+    recordUnexpected(
+      'POST /reservations',
+      'MISSING_HOLD_ID',
+      { endpoint: endpoints.createHold },
+    );
     return;
   }
 
@@ -89,9 +128,9 @@ export default function () {
       apiBase,
       `/reservation-holds/${holdId}/confirm`,
       authAcceptHeaders(token, { 'Idempotency-Key': idempotencyKey('reservation-confirm') }),
-      commonTags,
+      confirmTags,
     ),
-    { successStatuses: [201], businessCodes },
+    { successStatuses: [201], businessCodes, endpoint: endpoints.confirm },
   );
   if (!confirmOutcome.success) {
     return;
@@ -99,7 +138,8 @@ export default function () {
 
   const listOutcome = recordOutcome(
     'GET /me/reservations',
-    get(apiBase, '/me/reservations', authAcceptHeaders(token), commonTags),
+    get(apiBase, '/me/reservations', authAcceptHeaders(token), myReservationsTags),
+    { endpoint: endpoints.myReservations },
   );
   if (listOutcome.success) {
     reservationFlowSuccessCount.add(1, commonTags);

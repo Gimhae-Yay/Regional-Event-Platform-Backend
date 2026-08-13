@@ -87,6 +87,10 @@ function renderMarkdownSummary(data, metadata) {
     '',
     endpointDurationTable(data),
     '',
+    '## Expected Outcome By Endpoint',
+    '',
+    endpointExpectedOutcomeTable(data),
+    '',
   ].join('\n');
 }
 
@@ -140,8 +144,45 @@ function endpointDurationTable(data) {
   ].join('\n');
 }
 
+function endpointExpectedOutcomeTable(data) {
+  const endpointMetrics = Object.keys(data.metrics || {})
+    .filter((metricName) => metricName.startsWith('expected_outcome_rate{endpoint:'))
+    .sort();
+  if (endpointMetrics.length === 0) {
+    return 'No endpoint expected outcome metrics were reported.';
+  }
+
+  const rows = endpointMetrics.map((metricName) => {
+    const values = metricValues(data, metricName);
+    return [
+      markdownCell(tagValue(metricName, 'endpoint')),
+      formatRate(values.rate),
+      numberValue(values.passes),
+      numberValue(values.fails),
+    ];
+  });
+  return [
+    '| Endpoint | Expected rate | Expected | Unexpected |',
+    '| --- | ---: | ---: | ---: |',
+    ...rows.map((row) => `| ${row[0]} | ${row[1]} | ${row[2]} | ${row[3]} |`),
+  ].join('\n');
+}
+
 function endpointName(metricName) {
-  return metricName.replace('http_req_duration{endpoint:', '').replace('}', '');
+  return tagValue(metricName, 'endpoint');
+}
+
+function tagValue(metricName, tagName) {
+  const prefix = `${tagName}:`;
+  const start = metricName.indexOf(prefix);
+  if (start < 0) {
+    return metricName;
+  }
+  const valueStart = start + prefix.length;
+  const comma = metricName.indexOf(',', valueStart);
+  const closingBrace = metricName.indexOf('}', valueStart);
+  const valueEnd = comma >= 0 && comma < closingBrace ? comma : closingBrace;
+  return valueEnd < 0 ? metricName.substring(valueStart) : metricName.substring(valueStart, valueEnd);
 }
 
 function allThresholdsPassed(data) {

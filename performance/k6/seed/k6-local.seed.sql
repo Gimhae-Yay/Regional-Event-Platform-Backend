@@ -20,8 +20,54 @@ SET @qr_hold_id = 900001;
 SET @manual_hold_id = 900002;
 SET @qr_reservation_id = 900001;
 SET @manual_reservation_id = 900002;
+SET @payment_create_hold_id = 900010;
+SET @paid_hold_id = 900011;
+SET @paid_reservation_id = 900010;
+SET @paid_snapshot_id = 900010;
+SET @paid_payment_id = 900010;
+SET @paid_refund_id = 900010;
+SET @paid_refund_attempt_id = 900010;
+SET @coupon_source_hold_id = 900012;
+SET @coupon_source_reservation_id = 900012;
+SET @coupon_source_visit_id = 900010;
+SET @coupon_policy_id = 900010;
+SET @mission_reward_policy_id = 900011;
+SET @mission_progress_policy_id = 900012;
+SET @mission_id = 900010;
+SET @mission_participation_id = 900010;
+SET @mission_progress_id = 900011;
+SET @mission_progress_participation_id = 900011;
 SET @password_hash = '{bcrypt}$2a$12$/SenwR03QWMkim.0.mDq7uE3vB75E5egW2.A5FQPVmlBU9VEUlmm2';
 SET @now = UTC_TIMESTAMP(6);
+
+DELETE FROM payment_webhook
+WHERE payment_id = @paid_payment_id OR provider_event_id LIKE 'k6-%';
+DELETE FROM refund_attempt WHERE refund_id = @paid_refund_id;
+DELETE FROM refund WHERE payment_id = @paid_payment_id;
+DELETE FROM payment_idempotency WHERE actor_user_id = @visitor_user_id;
+DELETE FROM payment WHERE payment_id = @paid_payment_id OR hold_id IN (@payment_create_hold_id, @paid_hold_id);
+DELETE FROM reservation_price_snapshot
+WHERE reservation_price_snapshot_id = @paid_snapshot_id
+    OR hold_id IN (@payment_create_hold_id, @paid_hold_id);
+
+DELETE FROM coupon_issuance
+WHERE coupon_policy_id IN (@coupon_policy_id, @mission_reward_policy_id, @mission_progress_policy_id);
+DELETE FROM coupon_status_history
+WHERE coupon_id IN (
+    SELECT coupon_id FROM coupon
+    WHERE coupon_policy_id IN (@coupon_policy_id, @mission_reward_policy_id, @mission_progress_policy_id)
+);
+DELETE FROM coupon
+WHERE coupon_policy_id IN (@coupon_policy_id, @mission_reward_policy_id, @mission_progress_policy_id);
+DELETE FROM mission_reward_claim
+WHERE mission_participation_id IN (@mission_participation_id, @mission_progress_participation_id);
+DELETE FROM mission_progress
+WHERE mission_participation_id IN (@mission_participation_id, @mission_progress_participation_id);
+DELETE FROM mission_participation
+WHERE mission_participation_id IN (@mission_participation_id, @mission_progress_participation_id);
+DELETE FROM mission WHERE mission_id IN (@mission_id, @mission_progress_id);
+DELETE FROM coupon_policy
+WHERE coupon_policy_id IN (@coupon_policy_id, @mission_reward_policy_id, @mission_progress_policy_id);
 
 DELETE idempotency_record
 FROM idempotency_record
@@ -92,7 +138,7 @@ INSERT INTO region (
     updated_at
 ) VALUES (
     @region_id,
-    'K6_LOCAL_REGION',
+    'K6-LOCAL-REGION',
     'K6 Local Region',
     TRUE,
     @now,
@@ -135,22 +181,24 @@ INSERT INTO user_role_assignment (
     user_id,
     role,
     region_id,
+    status,
     granted_at
 ) VALUES
-    (@operator_user_id, 'OPERATOR', @region_id, @now),
-    (@visitor_user_id, 'VISITOR', NULL, @now),
-    (@qr_visitor_user_id, 'VISITOR', NULL, @now),
-    (@manual_visitor_user_id, 'VISITOR', NULL, @now),
-    (@admin_user_id, 'REGION_ADMIN', @region_id, @now),
-    (@concurrency_visitor_04_user_id, 'VISITOR', NULL, @now),
-    (@concurrency_visitor_05_user_id, 'VISITOR', NULL, @now),
-    (@concurrency_visitor_06_user_id, 'VISITOR', NULL, @now),
-    (@concurrency_visitor_07_user_id, 'VISITOR', NULL, @now),
-    (@concurrency_visitor_08_user_id, 'VISITOR', NULL, @now),
-    (@concurrency_visitor_09_user_id, 'VISITOR', NULL, @now),
-    (@concurrency_visitor_10_user_id, 'VISITOR', NULL, @now)
+    (@operator_user_id, 'OPERATOR', @region_id, 'ACTIVE', @now),
+    (@visitor_user_id, 'VISITOR', NULL, 'ACTIVE', @now),
+    (@qr_visitor_user_id, 'VISITOR', NULL, 'ACTIVE', @now),
+    (@manual_visitor_user_id, 'VISITOR', NULL, 'ACTIVE', @now),
+    (@admin_user_id, 'REGION_ADMIN', @region_id, 'ACTIVE', @now),
+    (@concurrency_visitor_04_user_id, 'VISITOR', NULL, 'ACTIVE', @now),
+    (@concurrency_visitor_05_user_id, 'VISITOR', NULL, 'ACTIVE', @now),
+    (@concurrency_visitor_06_user_id, 'VISITOR', NULL, 'ACTIVE', @now),
+    (@concurrency_visitor_07_user_id, 'VISITOR', NULL, 'ACTIVE', @now),
+    (@concurrency_visitor_08_user_id, 'VISITOR', NULL, 'ACTIVE', @now),
+    (@concurrency_visitor_09_user_id, 'VISITOR', NULL, 'ACTIVE', @now),
+    (@concurrency_visitor_10_user_id, 'VISITOR', NULL, 'ACTIVE', @now)
 ON DUPLICATE KEY UPDATE
     region_id = VALUES(region_id),
+    status = VALUES(status),
     granted_at = VALUES(granted_at);
 
 INSERT INTO image_object (
@@ -291,7 +339,7 @@ INSERT INTO content_session (
         @now + INTERVAL 7 DAY - INTERVAL 30 MINUTE,
         @now + INTERVAL 7 DAY + INTERVAL 2 HOUR,
         10000,
-        10000,
+        9998,
         NULL,
         NULL,
         NULL,
@@ -313,7 +361,7 @@ INSERT INTO content_session (
         @now - INTERVAL 30 MINUTE,
         @now + INTERVAL 1 HOUR,
         100,
-        98,
+        97,
         NULL,
         NULL,
         NULL,
@@ -366,6 +414,10 @@ ON DUPLICATE KEY UPDATE
     reviewed_at = VALUES(reviewed_at),
     reviewed_by_user_id = VALUES(reviewed_by_user_id),
     reject_reason = VALUES(reject_reason);
+
+UPDATE content
+SET reservation_price = 10000
+WHERE content_id = @content_id;
 
 INSERT INTO capacity_hold (
     hold_id,
@@ -480,6 +532,116 @@ ON DUPLICATE KEY UPDATE
     capacity_released_at = VALUES(capacity_released_at),
     updated_at = VALUES(updated_at);
 
+INSERT INTO capacity_hold (
+    hold_id, region_id, session_id, user_id, quantity, status,
+    expires_at, terminal_at, invalidation_reason, capacity_released_at, created_at
+) VALUES (
+    @payment_create_hold_id, @region_id, @reservation_session_id, @visitor_user_id, 1, 'ACTIVE',
+    @now + INTERVAL 30 MINUTE, NULL, NULL, NULL, @now
+), (
+    @paid_hold_id, @region_id, @reservation_session_id, @visitor_user_id, 1, 'CONSUMED',
+    @now + INTERVAL 30 MINUTE, @now - INTERVAL 10 MINUTE, NULL, NULL, @now - INTERVAL 20 MINUTE
+), (
+    @coupon_source_hold_id, @region_id, @checkin_session_id, @visitor_user_id, 1, 'CONSUMED',
+    @now + INTERVAL 30 MINUTE, @now - INTERVAL 10 MINUTE, NULL, NULL, @now - INTERVAL 20 MINUTE
+);
+
+INSERT INTO reservation (
+    reservation_id, reservation_no, qr_reference, region_id, hold_id, session_id, user_id,
+    status, confirmed_at, cancelled_at, cancellation_reason, expired_at, capacity_released_at, updated_at
+) VALUES (
+    @paid_reservation_id, 'K6PY20260813000001', '90000000-0000-4000-8000-000000000010',
+    @region_id, @paid_hold_id, @reservation_session_id, @visitor_user_id,
+    'CONFIRMED', @now - INTERVAL 10 MINUTE, NULL, NULL, NULL, NULL, @now
+), (
+    @coupon_source_reservation_id, 'K6CP20260813000001', '90000000-0000-4000-8000-000000000012',
+    @region_id, @coupon_source_hold_id, @checkin_session_id, @visitor_user_id,
+    'CHECKED_IN', @now - INTERVAL 1 HOUR, NULL, NULL, NULL, NULL, @now
+);
+
+INSERT INTO reservation_price_snapshot (
+    reservation_price_snapshot_id, hold_id, coupon_id,
+    base_amount, discount_amount, final_amount, currency, created_at
+) VALUES (
+    @paid_snapshot_id, @paid_hold_id, NULL, 10000, 0, 10000, 'KRW', @now
+);
+
+INSERT INTO payment (
+    payment_id, hold_id, reservation_price_snapshot_id, reservation_id,
+    order_id, portone_payment_id, status, finalized_at, created_at
+) VALUES (
+    @paid_payment_id, @paid_hold_id, @paid_snapshot_id, @paid_reservation_id,
+    'k6-order-900010', 'k6-portone-payment-900010', 'APPROVED', @now, @now
+);
+
+INSERT INTO refund (
+    refund_id, payment_id, amount, status, requested_at, completed_at, resolved_at
+) VALUES (
+    @paid_refund_id, @paid_payment_id, 10000, 'SUCCEEDED', @now - INTERVAL 5 MINUTE,
+    @now - INTERVAL 4 MINUTE, NULL
+);
+
+INSERT INTO refund_attempt (
+    refund_attempt_id, refund_id, attempt_no, initiator_kind,
+    portone_cancellation_id, outcome_kind, failure_reason_code,
+    external_status, result_hash, attempted_at
+) VALUES (
+    @paid_refund_attempt_id, @paid_refund_id, 1, 'SYSTEM',
+    'k6-cancellation-900010', 'RESPONDED', NULL,
+    'SUCCEEDED', 'k6-refund-result-hash', @now - INTERVAL 5 MINUTE
+);
+
+INSERT INTO visit (
+    visit_id, region_id, reservation_id, user_id, content_id, session_id,
+    checked_in_by_user_id, checkin_method, checked_at, author_unlinked_at
+) VALUES (
+    @coupon_source_visit_id, @region_id, @coupon_source_reservation_id, @visitor_user_id,
+    @content_id, @checkin_session_id, @operator_user_id, 'QR', @now - INTERVAL 30 MINUTE, NULL
+);
+
+INSERT INTO coupon_policy (
+    coupon_policy_id, content_id, region_id, name, description, issuance_type,
+    discount_amount, minimum_payment_amount, valid_days,
+    issue_starts_at, issue_ends_at, total_issue_limit, issued_count,
+    status, published_at, ended_at, updated_at
+) VALUES
+    (
+        @coupon_policy_id, @content_id, @region_id, 'K6 Visit Coupon', 'K6 visit concurrency policy', 'VISIT',
+        1000, 10000, 30, @now - INTERVAL 1 DAY, @now + INTERVAL 30 DAY,
+        100, 0, 'PUBLISHED', @now - INTERVAL 1 DAY, NULL, @now
+    ),
+    (
+        @mission_reward_policy_id, @content_id, @region_id, 'K6 Mission Reward', 'K6 mission reward policy', 'MISSION_REWARD',
+        2000, 10000, 30, @now - INTERVAL 1 DAY, @now + INTERVAL 30 DAY,
+        100, 0, 'PUBLISHED', @now - INTERVAL 1 DAY, NULL, @now
+    ),
+    (
+        @mission_progress_policy_id, @content_id, @region_id, 'K6 Progress Reward', 'K6 progress reward policy', 'MISSION_REWARD',
+        2000, 10000, 30, @now - INTERVAL 1 DAY, @now + INTERVAL 30 DAY,
+        100, 0, 'PUBLISHED', @now - INTERVAL 1 DAY, NULL, @now
+    );
+
+INSERT INTO mission (
+    mission_id, region_id, condition_type, required_visit_count,
+    reward_coupon_policy_id, status, ends_at, published_at, ended_at
+) VALUES (
+    @mission_id, @region_id, 'VISIT_COUNT', 1,
+    @mission_reward_policy_id, 'PUBLISHED', @now + INTERVAL 30 DAY, @now - INTERVAL 1 DAY, NULL
+), (
+    @mission_progress_id, @region_id, 'VISIT_COUNT', 1,
+    @mission_progress_policy_id, 'PUBLISHED', @now + INTERVAL 30 DAY, @now - INTERVAL 1 DAY, NULL
+);
+
+INSERT INTO mission_participation (
+    mission_participation_id, mission_id, user_id, status, joined_at, completed_at
+) VALUES (
+    @mission_participation_id, @mission_id, @visitor_user_id,
+    'COMPLETED', @now - INTERVAL 2 DAY, @now - INTERVAL 1 HOUR
+), (
+    @mission_progress_participation_id, @mission_progress_id, @qr_visitor_user_id,
+    'IN_PROGRESS', @now - INTERVAL 2 DAY, NULL
+);
+
 SELECT
     @region_id AS perf_region_id,
     @image_object_id AS perf_image_object_id,
@@ -488,6 +650,13 @@ SELECT
     @reservation_concurrency_session_id AS perf_concurrency_session_id,
     @qr_reservation_id AS perf_qr_reservation_id,
     @manual_reservation_id AS perf_manual_reservation_id,
+    @payment_create_hold_id AS perf_payment_hold_id,
+    @paid_reservation_id AS perf_paid_reservation_id,
+    @coupon_policy_id AS perf_coupon_policy_id,
+    @coupon_source_visit_id AS perf_coupon_source_visit_id,
+    @mission_id AS perf_mission_id,
+    @mission_participation_id AS perf_mission_participation_id,
+    @mission_progress_participation_id AS perf_mission_progress_participation_id,
     'k6-visitor@example.com' AS perf_user_email,
     'k6-qr-visitor@example.com' AS perf_qr_user_email,
     'k6-manual-visitor@example.com' AS perf_manual_user_email,
