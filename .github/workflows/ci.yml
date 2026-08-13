@@ -88,6 +88,15 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: JaCoCo 실행 데이터 보관
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-exec-fast-test
+          path: build/jacoco/fastTest.exec
+          if-no-files-found: error
+          retention-days: 7
+
   container-test:
     name: Testcontainers 테스트 (shard ${{ matrix.shard }})
     needs: ci-eligibility
@@ -123,5 +132,60 @@ jobs:
           path: |
             build/test-results/containerTestShard${{ matrix.shard }}/**
             build/reports/tests/containerTestShard${{ matrix.shard }}/**
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: JaCoCo 실행 데이터 보관
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-exec-container-test-${{ matrix.shard }}
+          path: build/jacoco/containerTestShard${{ matrix.shard }}.exec
+          if-no-files-found: error
+          retention-days: 7
+
+  coverage:
+    name: JaCoCo 통합 커버리지
+    needs:
+      - ci-eligibility
+      - fast-test
+      - container-test
+    if: >-
+      ${{ always()
+          && needs.ci-eligibility.outputs.skip-tests != 'true'
+          && needs.fast-test.result == 'success'
+          && needs.container-test.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: 소스 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Amazon Corretto 21 설정
+        uses: actions/setup-java@v4
+        with:
+          distribution: corretto
+          java-version: "21"
+
+      - name: Gradle 설정 및 캐시
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: JaCoCo 실행 데이터 다운로드
+        uses: actions/download-artifact@v4
+        with:
+          pattern: jacoco-exec-*
+          merge-multiple: true
+          path: build/jacoco/ci-exec
+
+      - name: 통합 커버리지 리포트 및 품질 게이트
+        run: ./gradlew --no-daemon jacocoCiCoverageVerification
+
+      - name: 통합 커버리지 리포트 보관
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-coverage-report
+          path: build/reports/jacoco/ci/**
           if-no-files-found: ignore
           retention-days: 7

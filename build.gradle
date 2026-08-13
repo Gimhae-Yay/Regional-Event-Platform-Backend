@@ -12,6 +12,8 @@ import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.services.BuildService
 import org.gradle.api.services.BuildServiceParameters
 import org.gradle.api.tasks.testing.Test
+import org.gradle.testing.jacoco.tasks.JacocoCoverageVerification
+import org.gradle.testing.jacoco.tasks.JacocoReport
 
 plugins {
     id 'java'
@@ -201,6 +203,10 @@ def configureCiTestTask = { Test testTask, List<String> testClassNames ->
     testTask.classpath = sourceSets.test.runtimeClasspath
     testTask.useJUnitPlatform()
     testTask.maxHeapSize = '2g'
+    testTask.jacoco.destinationFile = layout.buildDirectory
+        .file("jacoco/${testTask.name}.exec")
+        .get()
+        .asFile
     testTask.filter {
         testClassNames.each { className -> includeTestsMatching(className) }
     }
@@ -240,4 +246,68 @@ tasks.named('jacocoTestReport') {
         csv.required = true
         html.required = true
     }
+}
+
+def ciJacocoExecutionDataDirectory = layout.buildDirectory.dir('jacoco/ci-exec')
+def ciJacocoExecutionDataFileNames = [
+    'fastTest.exec',
+    'containerTestShard1.exec',
+    'containerTestShard2.exec'
+]
+def ciJacocoExecutionData = fileTree(ciJacocoExecutionDataDirectory) {
+    include '*.exec'
+}
+
+def validateCiJacocoExecutionData = {
+    def missingFileNames = ciJacocoExecutionDataFileNames.findAll { fileName ->
+        !ciJacocoExecutionDataDirectory.get().file(fileName).asFile.isFile()
+    }
+
+    if (!missingFileNames.isEmpty()) {
+        throw new GradleException(
+            "통합 JaCoCo 실행 데이터가 없습니다: ${missingFileNames.join(', ')}"
+        )
+    }
+}
+
+tasks.register('jacocoCiCoverageReport', JacocoReport) {
+    group = 'verification'
+    description = '병렬 CI 테스트의 JaCoCo 실행 데이터를 통합해 커버리지 리포트를 생성한다.'
+    dependsOn tasks.named('classes')
+    executionData.from(ciJacocoExecutionData)
+    sourceDirectories.from(sourceSets.main.allSource.srcDirs)
+    classDirectories.from(sourceSets.main.output)
+    reports {
+        xml.required = true
+        xml.outputLocation = layout.buildDirectory.file('reports/jacoco/ci/jacoco.xml')
+        csv.required = true
+        csv.outputLocation = layout.buildDirectory.file('reports/jacoco/ci/jacoco.csv')
+        html.required = true
+        html.outputLocation = layout.buildDirectory.dir('reports/jacoco/ci/html')
+    }
+    doFirst(validateCiJacocoExecutionData)
+}
+
+tasks.register('jacocoCiCoverageVerification', JacocoCoverageVerification) {
+    group = 'verification'
+    description = '통합 CI JaCoCo 커버리지가 라인 85%, 브랜치 60% 이상인지 검증한다.'
+    dependsOn tasks.named('jacocoCiCoverageReport')
+    executionData.from(ciJacocoExecutionData)
+    sourceDirectories.from(sourceSets.main.allSource.srcDirs)
+    classDirectories.from(sourceSets.main.output)
+    violationRules {
+        rule {
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = 0.85
+            }
+            limit {
+                counter = 'BRANCH'
+                value = 'COVEREDRATIO'
+                minimum = 0.60
+            }
+        }
+    }
+    doFirst(validateCiJacocoExecutionData)
 }
