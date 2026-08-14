@@ -12,6 +12,7 @@ import org.springframework.data.repository.query.Param;
 
 import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentStatus;
+import io.regionevent.regioneventbackend.domain.payment.entity.RefundStatus;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
@@ -77,12 +78,14 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
               SELECT refund
               FROM Refund refund
               WHERE refund.payment = payment
+                AND refund.status = :succeededRefundStatus
           )
         """)
-    boolean existsApprovedPaymentWithConfirmedReservationWithoutRefund(
+    boolean existsApprovedPaymentWithConfirmedReservationWithoutSucceededRefund(
         @Param("userId") Long userId,
         @Param("paymentStatus") PaymentStatus paymentStatus,
-        @Param("reservationStatus") ReservationStatus reservationStatus
+        @Param("reservationStatus") ReservationStatus reservationStatus,
+        @Param("succeededRefundStatus") RefundStatus succeededRefundStatus
     );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

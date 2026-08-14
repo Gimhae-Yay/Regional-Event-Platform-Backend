@@ -20,6 +20,8 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -247,10 +249,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
     void withdraw_withSucceededRefundAndConfirmedReservation_cancelsReservationAndDeletesAccount() {
         Fixture fixture = createFixture();
         Payment payment = createApprovedPayment(fixture);
-        Refund refund = new Refund(payment, 20_000, Instant.now());
-        refund.startProcessing();
-        refund.succeed(Instant.now());
-        refundRepository.saveAndFlush(refund);
+        Refund refund = createTerminalRefund(payment, RefundStatus.SUCCEEDED);
 
         assertThat(withdraw(fixture.user().getUserId())).isNull();
 
@@ -270,6 +269,37 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
             .hasValueSatisfying(savedPayment -> assertThat(savedPayment.getStatus()).isEqualTo(PaymentStatus.APPROVED));
         assertThat(refundRepository.findById(refund.getRefundId()))
             .hasValueSatisfying(savedRefund -> assertThat(savedRefund.getStatus()).isEqualTo(RefundStatus.SUCCEEDED));
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = RefundStatus.class, names = {"FAILED", "DISCREPANT"})
+    void withdraw_withUnresolvedRefundAndConfirmedReservation_rejectsWithoutChangingPaymentReservationOrHold(
+        RefundStatus refundStatus
+    ) {
+        Fixture fixture = createFixture();
+        Payment payment = createApprovedPayment(fixture);
+        Refund refund = createTerminalRefund(payment, refundStatus);
+        CapacityHold consumedHold = fixture.reservation().getCapacityHold();
+
+        assertThat(withdraw(fixture.user().getUserId())).isEqualTo(ErrorCode.FORBIDDEN);
+
+        assertThat(appUserRepository.findById(fixture.user().getUserId()))
+            .hasValueSatisfying(user -> assertThat(user.getStatus()).isEqualTo(AppUserStatus.ACTIVE));
+        assertThat(capacityHoldRepository.findById(consumedHold.getHoldId()))
+            .hasValueSatisfying(hold -> {
+                assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.CONSUMED);
+                assertThat(hold.getUser()).isNotNull();
+            });
+        assertThat(reservationRepository.findById(fixture.reservation().getReservationId()))
+            .hasValueSatisfying(reservation -> {
+                assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.CONFIRMED);
+                assertThat(reservation.getUser()).isNotNull();
+            });
+        assertThat(paymentRepository.findByPaymentId(payment.getPaymentId()))
+            .hasValueSatisfying(savedPayment -> assertThat(savedPayment.getStatus()).isEqualTo(PaymentStatus.APPROVED));
+        assertThat(refundRepository.findById(refund.getRefundId()))
+            .hasValueSatisfying(savedRefund -> assertThat(savedRefund.getStatus()).isEqualTo(refundStatus));
+        verifyNoInteractions(refreshTokenStore);
     }
 
     @Test
@@ -483,6 +513,22 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         );
         payment.approve(fixture.reservation(), "portone-" + System.nanoTime(), Instant.now());
         return paymentRepository.saveAndFlush(payment);
+    }
+
+    private Refund createTerminalRefund(
+        Payment payment,
+        RefundStatus refundStatus
+    ) {
+        Instant now = Instant.now();
+        Refund refund = new Refund(payment, 20_000, now);
+        refund.startProcessing();
+        switch (refundStatus) {
+            case SUCCEEDED -> refund.succeed(now);
+            case FAILED -> refund.fail(now);
+            case DISCREPANT -> refund.markDiscrepant(now);
+            default -> throw new IllegalArgumentException("terminal refund status is required");
+        }
+        return refundRepository.saveAndFlush(refund);
     }
 
     private AppUser saveUser(String loginIdentifier) {

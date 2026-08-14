@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentStatus;
+import io.regionevent.regioneventbackend.domain.payment.entity.RefundStatus;
 import io.regionevent.regioneventbackend.domain.payment.repository.PaymentRepository;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 
@@ -62,11 +63,12 @@ public class PaymentService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
-    public boolean hasApprovedPaymentWithConfirmedReservationWithoutRefund(Long userId) {
-        return paymentRepository.existsApprovedPaymentWithConfirmedReservationWithoutRefund(
+    public boolean hasApprovedPaymentWithConfirmedReservationWithoutSucceededRefund(Long userId) {
+        return paymentRepository.existsApprovedPaymentWithConfirmedReservationWithoutSucceededRefund(
             userId,
             PaymentStatus.APPROVED,
-            ReservationStatus.CONFIRMED
+            ReservationStatus.CONFIRMED,
+            RefundStatus.SUCCEEDED
         );
     }
 
