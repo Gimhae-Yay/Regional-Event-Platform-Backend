@@ -3,6 +3,8 @@ package io.regionevent.regioneventbackend.domain.stampbook.service;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.stampbook.entity.Stampbook;
@@ -33,6 +35,11 @@ public class StampbookContentService {
             throw new IllegalArgumentException("stampbookId must be positive");
         }
         return List.copyOf(stampbookContentRepository.findContentIdsByStampbookId(stampbookId));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public long countTargetContents(Long stampbookId) {
+        return stampbookContentRepository.countByStampbookStampbookId(stampbookId);
     }
 
     public void replace(

@@ -41,6 +41,31 @@ public interface VisitRepository extends JpaRepository<Visit, Long> {
 
     @EntityGraph(attributePaths = {
         "region",
+        "content",
+        "user"
+    })
+    @Query("""
+        SELECT visit
+        FROM Visit visit
+        WHERE visit.visitId = :visitId
+        """)
+    Optional<Visit> findStampbookProgressSourceByVisitId(@Param("visitId") Long visitId);
+
+    @EntityGraph(attributePaths = {
+        "region",
+        "content",
+        "user"
+    })
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("""
+        SELECT visit
+        FROM Visit visit
+        WHERE visit.visitId = :visitId
+        """)
+    Optional<Visit> findStampbookProgressSourceByVisitIdForUpdate(@Param("visitId") Long visitId);
+
+    @EntityGraph(attributePaths = {
+        "region",
         "reservation",
         "reservation.contentSession",
         "content",

@@ -19,6 +19,11 @@ public class StampbookRewardGrantService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
+    public StampbookRewardGrant create(StampbookRewardGrant rewardGrant) {
+        return stampbookRewardGrantRepository.saveAndFlush(rewardGrant);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
     public StampbookRewardGrant findForCouponIssue(Long stampbookRewardGrantId) {
         return stampbookRewardGrantRepository.findByStampbookRewardGrantId(stampbookRewardGrantId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
