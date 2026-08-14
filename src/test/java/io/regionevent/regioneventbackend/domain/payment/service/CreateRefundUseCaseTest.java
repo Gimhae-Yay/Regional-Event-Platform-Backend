@@ -36,6 +36,7 @@ import io.regionevent.regioneventbackend.domain.payment.entity.RefundStatus;
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundFailureReasonCode;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneNoResponseException;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOnePaymentGateway;
+import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneResponseException;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationPriceSnapshot;
@@ -121,6 +122,38 @@ class CreateRefundUseCaseTest {
         verify(fixture.refund()).markDiscrepant(Instant.parse("2026-08-11T00:00:00Z"));
         verify(fixture.auditEventUseCase()).record(any(AuditEventCommand.class));
         org.assertj.core.api.Assertions.assertThat(response.status()).isEqualTo("DISCREPANT");
+    }
+
+    @Test
+    void 예약취소환불_PortOne비이백오류응답_응답을기록하고불일치로확정한다() {
+        assertReservationCancellationReceivedError("BAD_REQUEST", "non-2xx-hash");
+    }
+
+    @Test
+    void 예약취소환불_PortOne파싱불가이백응답_응답을기록하고불일치로확정한다() {
+        assertReservationCancellationReceivedError("INVALID_RESPONSE", "invalid-response-hash");
+    }
+
+    private void assertReservationCancellationReceivedError(
+        String externalStatus,
+        String resultHash
+    ) {
+        ReservationCancellationRefundFixture fixture = reservationCancellationRefundFixture(RefundStatus.DISCREPANT);
+        PortOneResponseException exception = new PortOneResponseException(
+            externalStatus,
+            resultHash,
+            new RuntimeException("PortOne response error")
+        );
+        when(fixture.paymentGateway().cancelPayment("portone-payment", 10_000L, "예약 취소"))
+            .thenThrow(exception);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> fixture.useCase()
+                .createForReservationCancellation(10L, null, UUID.randomUUID()))
+            .isSameAs(exception);
+
+        verify(fixture.attempt()).respond(null, externalStatus, resultHash);
+        verify(fixture.refund()).markDiscrepant(Instant.parse("2026-08-11T00:00:00Z"));
+        verify(fixture.auditEventUseCase()).record(any(AuditEventCommand.class));
     }
 
     @Test
@@ -231,6 +264,112 @@ class CreateRefundUseCaseTest {
         org.assertj.core.api.Assertions.assertThat(response.status()).isEqualTo("DISCREPANT");
     }
 
+    @Test
+    void 관리자환불_PortOne비이백오류응답_응답을기록하고불일치로확정한다() {
+        assertAdminReceivedError("BAD_REQUEST", "non-2xx-hash");
+    }
+
+    @Test
+    void 관리자환불_PortOne파싱불가이백응답_응답을기록하고불일치로확정한다() {
+        assertAdminReceivedError("INVALID_RESPONSE", "invalid-response-hash");
+    }
+
+    private void assertAdminReceivedError(
+        String externalStatus,
+        String resultHash
+    ) {
+        AdminRefundFixture fixture = adminRefundFixture();
+        PortOneResponseException exception = new PortOneResponseException(
+            externalStatus,
+            resultHash,
+            new RuntimeException("PortOne response error")
+        );
+        when(fixture.paymentGateway().cancelPayment("portone-payment", 10_000L, "관리자 요청"))
+            .thenThrow(exception);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> fixture.useCase().create(
+                1L,
+                "10",
+                new CreateRefundRequest("증빙-1", "관리자 요청"),
+                UUID.randomUUID()
+            ))
+            .isSameAs(exception);
+
+        verify(fixture.attempt()).respond(null, externalStatus, resultHash);
+        verify(fixture.refund()).markDiscrepant(Instant.parse("2026-08-11T00:00:00Z"));
+        verify(fixture.auditEventUseCase(), org.mockito.Mockito.times(2)).record(any(AuditEventCommand.class));
+    }
+
+    private AdminRefundFixture adminRefundFixture() {
+        PlatformAdminAuthorizationService authorizationService = mock(PlatformAdminAuthorizationService.class);
+        PaymentService paymentService = mock(PaymentService.class);
+        RefundService refundService = mock(RefundService.class);
+        RefundAttemptService refundAttemptService = mock(RefundAttemptService.class);
+        PaymentDiscrepancyService discrepancyService = mock(PaymentDiscrepancyService.class);
+        PaymentDiscrepancyActionService discrepancyActionService = mock(PaymentDiscrepancyActionService.class);
+        PortOnePaymentGateway paymentGateway = mock(PortOnePaymentGateway.class);
+        PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
+        RecordAuditEventUseCase auditEventUseCase = mock(RecordAuditEventUseCase.class);
+        CreateRefundUseCase useCase = new CreateRefundUseCase(
+            authorizationService,
+            paymentService,
+            refundService,
+            refundAttemptService,
+            discrepancyService,
+            discrepancyActionService,
+            mock(CouponService.class),
+            mock(CouponRedemptionService.class),
+            mock(CouponStatusHistoryService.class),
+            auditEventUseCase,
+            paymentGateway,
+            Clock.fixed(Instant.parse("2026-08-11T00:00:00Z"), ZoneOffset.UTC),
+            transactionManager
+        );
+        PlatformAdminAssignment assignment = mock(PlatformAdminAssignment.class);
+        AppUser appUser = mock(AppUser.class);
+        Payment payment = mock(Payment.class);
+        CapacityHold capacityHold = mock(CapacityHold.class);
+        Region region = mock(Region.class);
+        ReservationPriceSnapshot snapshot = mock(ReservationPriceSnapshot.class);
+        Refund refund = mock(Refund.class);
+        RefundAttempt attempt = mock(RefundAttempt.class);
+        PaymentDiscrepancy discrepancy = mock(PaymentDiscrepancy.class);
+
+        when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
+        when(authorizationService.requireAuthorizedPlatformAdmin(1L)).thenReturn(assignment);
+        when(assignment.getPlatformAdminAssignmentId()).thenReturn(1L);
+        when(assignment.getAppUser()).thenReturn(appUser);
+        when(assignment.isActive()).thenReturn(true);
+        when(assignment.getGrade()).thenReturn(PlatformAdminGrade.PLATFORM_ADMIN);
+        when(appUser.getUserId()).thenReturn(1L);
+        when(appUser.getStatus()).thenReturn(AppUserStatus.ACTIVE);
+        when(appUser.getAccountKind()).thenReturn(AppUserAccountKind.PRIVILEGED);
+        when(paymentService.findByPaymentIdForUpdate(10L)).thenReturn(Optional.of(payment));
+        when(payment.getPaymentId()).thenReturn(10L);
+        when(payment.getCapacityHold()).thenReturn(capacityHold);
+        when(capacityHold.getRegion()).thenReturn(region);
+        when(payment.getStatus()).thenReturn(PaymentStatus.APPROVED);
+        when(payment.getPortonePaymentId()).thenReturn("portone-payment");
+        when(payment.getReservationPriceSnapshot()).thenReturn(snapshot);
+        when(snapshot.getFinalAmount()).thenReturn(10_000L);
+        when(refundService.findByPaymentIdForUpdate(10L)).thenReturn(Optional.empty());
+        when(refundService.create(any())).thenReturn(refund);
+        when(refund.getRefundId()).thenReturn(20L);
+        when(refund.getAmount()).thenReturn(10_000L);
+        when(refundAttemptService.create(any())).thenReturn(attempt);
+        when(attempt.getRefundAttemptId()).thenReturn(30L);
+        when(discrepancyService.findByPaymentIdForUpdate(10L)).thenReturn(Optional.of(discrepancy));
+        when(discrepancy.getStatus()).thenReturn("OPEN");
+        when(discrepancy.getPaymentDiscrepancyId()).thenReturn(40L);
+        when(refundService.findByRefundIdForUpdate(20L)).thenReturn(Optional.of(refund));
+        when(refundAttemptService.findByRefundAttemptIdForUpdate(30L)).thenReturn(Optional.of(attempt));
+        when(refund.getPayment()).thenReturn(payment);
+        when(refund.getStatus()).thenReturn(RefundStatus.DISCREPANT);
+        when(refund.getRequestedAt()).thenReturn(Instant.parse("2026-08-11T00:00:00Z"));
+
+        return new AdminRefundFixture(useCase, paymentGateway, refund, attempt, auditEventUseCase);
+    }
+
     private ReservationCancellationRefundFixture reservationCancellationRefundFixture(RefundStatus refundStatus) {
         PaymentService paymentService = mock(PaymentService.class);
         RefundService refundService = mock(RefundService.class);
@@ -285,6 +424,15 @@ class CreateRefundUseCaseTest {
     }
 
     private record ReservationCancellationRefundFixture(
+        CreateRefundUseCase useCase,
+        PortOnePaymentGateway paymentGateway,
+        Refund refund,
+        RefundAttempt attempt,
+        RecordAuditEventUseCase auditEventUseCase
+    ) {
+    }
+
+    private record AdminRefundFixture(
         CreateRefundUseCase useCase,
         PortOnePaymentGateway paymentGateway,
         Refund refund,
