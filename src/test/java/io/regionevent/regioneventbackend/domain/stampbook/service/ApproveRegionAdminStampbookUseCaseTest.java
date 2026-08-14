@@ -150,7 +150,7 @@ class ApproveRegionAdminStampbookUseCaseTest {
         order.verify(stampbookService).findForUpdate(STAMPBOOK_ID);
         order.verify(stampbookContentService).findContentIds(STAMPBOOK_ID);
         order.verify(contentService).findStampbookTargetContentsForUpdate(List.of(CONTENT_ID));
-        order.verify(userRoleAssignmentService).findActiveOperator(CONTENT_ID);
+        order.verify(userRoleAssignmentService).findActiveOperatorForUpdate(CONTENT_ID);
         order.verify(stampbookService).findCurrentDatabaseTime();
         order.verify(stampbookService).approve(lockedStampbook, PUBLISHED_AT);
         order.verify(recordAuditEventUseCase).record(org.mockito.ArgumentMatchers.any());
@@ -178,18 +178,18 @@ class ApproveRegionAdminStampbookUseCaseTest {
     }
 
     @Test
-    void approve_대상콘텐츠가없으면찾을수없음과실패감사를기록한다() {
+    void approve_대상콘텐츠가없으면찾을수없음과감사이력미변경을반환한다() {
         when(contentService.findStampbookTargetContentsForUpdate(List.of(CONTENT_ID)))
             .thenThrow(new BusinessException(ErrorCode.NOT_FOUND));
 
         assertBusinessError(ErrorCode.NOT_FOUND);
 
-        assertFailureAudit(ErrorCode.NOT_FOUND);
+        verifyNoInteractions(recordFailedAuditEventUseCase, recordAuditEventUseCase);
     }
 
     @Test
     void approve_대상콘텐츠운영자가활성승인상태가아니면상태충돌을반환한다() {
-        when(userRoleAssignmentService.findActiveOperator(CONTENT_ID))
+        when(userRoleAssignmentService.findActiveOperatorForUpdate(CONTENT_ID))
             .thenThrow(new BusinessException(ErrorCode.FORBIDDEN));
 
         assertBusinessError(ErrorCode.STAMPBOOK_STATE_CONFLICT);
@@ -245,7 +245,8 @@ class ApproveRegionAdminStampbookUseCaseTest {
             contentRegion,
             UserRole.OPERATOR
         );
-        when(userRoleAssignmentService.findActiveOperator(CONTENT_ID)).thenReturn(operatorAssignment);
+        when(userRoleAssignmentService.findActiveOperatorForUpdate(CONTENT_ID))
+            .thenReturn(operatorAssignment);
         return content;
     }
 

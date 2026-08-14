@@ -98,13 +98,15 @@ public class ApproveRegionAdminStampbookUseCase {
             recordSuccess(requestId, approvedStampbook, regionAdmin, command.reason(), publishedAt);
             return ApproveRegionAdminStampbookResult.from(approvedStampbook);
         } catch (BusinessException exception) {
-            recordFailure(
-                requestId,
-                stampbook,
-                previousStateForFailure,
-                regionAdmin,
-                exception.getErrorCode()
-            );
+            if (exception.getErrorCode() != ErrorCode.NOT_FOUND) {
+                recordFailure(
+                    requestId,
+                    stampbook,
+                    previousStateForFailure,
+                    regionAdmin,
+                    exception.getErrorCode()
+                );
+            }
             throw exception;
         } catch (RuntimeException exception) {
             recordFailure(
@@ -184,7 +186,7 @@ public class ApproveRegionAdminStampbookUseCase {
         Content targetContent
     ) {
         try {
-            UserRoleAssignment assignment = userRoleAssignmentService.findActiveOperator(
+            UserRoleAssignment assignment = userRoleAssignmentService.findActiveOperatorForUpdate(
                 targetContent.getOperator().getUserId()
             );
             if (!stampbook.getRegion().getRegionId().equals(assignment.getRegion().getRegionId())) {
