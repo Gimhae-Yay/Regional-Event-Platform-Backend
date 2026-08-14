@@ -1,5 +1,7 @@
 package io.regionevent.regioneventbackend.domain.stampbook.service;
 
+import java.util.List;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,6 +43,13 @@ public class StampEarnService {
     @Transactional(propagation = Propagation.MANDATORY)
     public StampEarn create(StampEarn stampEarn) {
         return stampEarnRepository.saveAndFlush(stampEarn);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public List<StampEarn> findAllByProgressIdForUpdate(Long stampbookProgressId) {
+        return List.copyOf(stampEarnRepository.findAllByStampbookProgressIdForUpdate(
+            stampbookProgressId
+        ));
     }
 
     @Transactional(propagation = Propagation.MANDATORY, readOnly = true)

@@ -95,13 +95,13 @@ public class RecordStampbookProgressUseCase {
         Long progressId = progress.getStampbookProgressId();
         Long visitId = visit.getVisitId();
         Long contentId = visit.getContent().getContentId();
-        if (stampEarnService.existsByVisitId(progressId, visitId)
-            || stampEarnService.existsByContentId(progressId, contentId)) {
+        List<StampEarn> stampEarns = stampEarnService.findAllByProgressIdForUpdate(progressId);
+        if (hasDuplicateEarn(stampEarns, visitId, contentId)) {
             return;
         }
 
         stampEarnService.create(new StampEarn(progress, visit, visit.getContent(), operationAt));
-        if (stampEarnService.countByProgressId(progressId)
+        if (stampEarns.size() + 1
             < stampbookContentService.countTargetContents(stampbook.getStampbookId())) {
             return;
         }
@@ -112,5 +112,16 @@ public class RecordStampbookProgressUseCase {
             stampbook.getRewardCouponPolicy(),
             operationAt
         ));
+    }
+
+    private boolean hasDuplicateEarn(
+        List<StampEarn> stampEarns,
+        Long visitId,
+        Long contentId
+    ) {
+        return stampEarns.stream().anyMatch(stampEarn ->
+            visitId.equals(stampEarn.getVisit().getVisitId())
+                || contentId.equals(stampEarn.getContent().getContentId())
+        );
     }
 }
