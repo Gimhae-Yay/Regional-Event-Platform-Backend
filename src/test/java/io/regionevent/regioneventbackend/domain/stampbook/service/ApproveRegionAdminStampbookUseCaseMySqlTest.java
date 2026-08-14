@@ -104,7 +104,7 @@ class ApproveRegionAdminStampbookUseCaseMySqlTest extends NonTransactionalMySqlT
     @Test
     void approve_다른지역관리자면권한오류를반환하고상태를유지한다() {
         Fixture fixture = createFixture(false);
-        Long otherRegionAdminUserId = createRegionAdmin("OTHER-ADMIN", new Region(
+        Long otherRegionAdminUserId = createRegionAdminInNewRegion("OTHER-ADMIN", new Region(
             "OTHER-" + System.nanoTime(),
             "다른 지역",
             true
@@ -162,15 +162,29 @@ class ApproveRegionAdminStampbookUseCaseMySqlTest extends NonTransactionalMySqlT
 
     @Test
     @Timeout(20)
-    void approve_동시심사요청은한번만공개하고나머지는상태충돌로수렴한다() throws Exception {
+    void approve_서로다른지역관리자의동시심사요청은한번만공개하고나머지는상태충돌로수렴한다() throws Exception {
         Fixture fixture = createFixture(false);
+        Long anotherRegionAdminUserId = createRegionAdmin(
+            "another-region-admin",
+            fixture.regionId()
+        );
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
 
         List<ApprovalAttempt> attempts;
         try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
-            Future<ApprovalAttempt> first = executor.submit(() -> approveAfterStart(fixture, ready, start));
-            Future<ApprovalAttempt> second = executor.submit(() -> approveAfterStart(fixture, ready, start));
+            Future<ApprovalAttempt> first = executor.submit(() -> approveAfterStart(
+                fixture.regionAdminUserId(),
+                fixture.stampbookId(),
+                ready,
+                start
+            ));
+            Future<ApprovalAttempt> second = executor.submit(() -> approveAfterStart(
+                anotherRegionAdminUserId,
+                fixture.stampbookId(),
+                ready,
+                start
+            ));
             assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
             start.countDown();
             attempts = List.of(
@@ -189,18 +203,21 @@ class ApproveRegionAdminStampbookUseCaseMySqlTest extends NonTransactionalMySqlT
                 assertThat(stampbook.getStatus()).isEqualTo(StampbookStatus.PUBLISHED);
                 assertThat(stampbook.getPublishedAt()).isNotNull();
             });
-        assertThat(auditEventRepository.count()).isEqualTo(2);
+        assertThat(auditEventRepository.findAll())
+            .extracting(event -> event.getResult())
+            .containsExactlyInAnyOrder(AuditEventResult.SUCCESS, AuditEventResult.FAILURE);
     }
 
     private ApprovalAttempt approveAfterStart(
-        Fixture fixture,
+        Long regionAdminUserId,
+        Long stampbookId,
         CountDownLatch ready,
         CountDownLatch start
     ) {
         ready.countDown();
         await(start);
         try {
-            approve(fixture.regionAdminUserId(), fixture.stampbookId());
+            approve(regionAdminUserId, stampbookId);
             return new ApprovalAttempt(true, null);
         } catch (BusinessException exception) {
             return new ApprovalAttempt(false, exception.getErrorCode());
@@ -266,11 +283,35 @@ class ApproveRegionAdminStampbookUseCaseMySqlTest extends NonTransactionalMySqlT
             stampbook = stampbookRepository.saveAndFlush(stampbook);
             stampbookContentRepository.saveAndFlush(new StampbookContent(stampbook, targetContent));
             entityManager.clear();
-            return new Fixture(regionAdmin.getUserId(), stampbook.getStampbookId());
+            return new Fixture(
+                regionAdmin.getUserId(),
+                stampbook.getStampbookId(),
+                region.getRegionId()
+            );
         });
     }
 
-    private Long createRegionAdmin(String loginPrefix, Region region) {
+    private Long createRegionAdmin(
+        String loginPrefix,
+        Long regionId
+    ) {
+        return transactionTemplate.execute(status -> {
+            Region region = regionRepository.findById(regionId)
+                .orElseThrow(() -> new IllegalStateException("region must exist"));
+            AppUser user = appUserRepository.save(newUser(loginPrefix + "-" + System.nanoTime()));
+            userRoleAssignmentRepository.save(new UserRoleAssignment(
+                user,
+                UserRole.REGION_ADMIN,
+                region
+            ));
+            return user.getUserId();
+        });
+    }
+
+    private Long createRegionAdminInNewRegion(
+        String loginPrefix,
+        Region region
+    ) {
         return transactionTemplate.execute(status -> {
             Region savedRegion = regionRepository.save(region);
             AppUser user = appUserRepository.save(newUser(loginPrefix + "-" + System.nanoTime()));
@@ -325,7 +366,8 @@ class ApproveRegionAdminStampbookUseCaseMySqlTest extends NonTransactionalMySqlT
 
     private record Fixture(
         Long regionAdminUserId,
-        Long stampbookId
+        Long stampbookId,
+        Long regionId
     ) {
     }
 
