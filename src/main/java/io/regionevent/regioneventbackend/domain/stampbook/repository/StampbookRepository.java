@@ -20,6 +20,9 @@ import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookStatus
 public interface StampbookRepository extends JpaRepository<Stampbook, Long> {
 
     @EntityGraph(attributePaths = {"region", "rewardCouponPolicy"})
+    Optional<Stampbook> findByStampbookId(Long stampbookId);
+
+    @EntityGraph(attributePaths = {"region", "rewardCouponPolicy"})
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT stampbook

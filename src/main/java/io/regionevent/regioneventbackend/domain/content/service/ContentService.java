@@ -114,6 +114,18 @@ public class ContentService {
         return List.copyOf(contents);
     }
 
+    public List<Content> findStampbookTargetContentsForUpdate(List<Long> contentIds) {
+        if (contentIds == null || contentIds.isEmpty()) {
+            throw new BusinessException(ErrorCode.STAMPBOOK_STATE_CONFLICT);
+        }
+
+        List<Content> contents = contentRepository.findStampbookTargetsForUpdate(contentIds);
+        if (contents.size() != contentIds.size()) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+        return List.copyOf(contents);
+    }
+
     public Content markPrePublicationRevisionPending(Content content) {
         if (content.getStatus() != ContentStatus.APPROVED) {
             throw new BusinessException(ErrorCode.CONTENT_STATE_CONFLICT);
