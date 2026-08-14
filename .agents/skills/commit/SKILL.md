@@ -40,9 +40,9 @@ description: 현재 작업 트리의 검증된 변경만 논리 단위로 선별
 5. 이슈 번호가 확인되면 `gh issue view <번호>` 또는 사용 가능한 GitHub 도구로 범위와 TODO를 대조한다. 확인 수단이 없으면 번호를 추측하지 말고 검증하지 못한 항목으로 남긴다.
 6. 민감정보, 로컬 접속값, 디버그 출력, 로그와 생성물을 점검한다. 특히 `.env*`, `application-local.*`, 토큰·비밀번호·개인키, `.gradle/`, `build/`, `.idea/`, `out/`을 커밋하지 않는다.
 7. 변경 이후의 최신 검증 결과를 확보한다.
-   - 소스 코드, 리소스, Gradle 설정 변경: Windows에서는 `.\gradlew.bat build`, Unix 계열에서는 `./gradlew build`를 기본으로 실행한다.
-   - 범위가 작고 전체 build보다 관련 테스트가 적합하면 해당 테스트를 먼저 실행하되, PR 준비 수준에서는 전체 build도 실행한다.
-   - 문서 전용 변경: `git diff --check`를 실행하고 링크·경로·문서 정합성을 확인한다. Gradle build를 생략하면 보고한다.
+   - 소스 코드, 리소스, Gradle 설정 변경: Windows에서는 `.\gradlew.bat ciFastCheck`, Unix 계열에서는 `./gradlew ciFastCheck`를 기본으로 실행한다. `ciFastCheck`는 애플리케이션 패키징과 Testcontainers 기반이 아닌 `fastTest`를 검증한다.
+   - 범위가 작고 `ciFastCheck`보다 관련 테스트가 적합하면 해당 테스트를 먼저 실행하되, PR 준비 수준에서는 `ciFastCheck`도 실행한다.
+   - 문서 전용 변경: `git diff --check`를 실행하고 링크·경로·문서 정합성을 확인한다. `ciFastCheck`를 생략하면 보고한다.
 8. 모든 변경에 `git diff --check`를 실행한다. 실패하면 커밋하지 않는다.
 9. 한 논리 단위에 속한 경로만 `git add -- <경로...>`로 명시적으로 stage한다. 기존 staged 변경이 범위와 충돌하면 임의로 unstage하지 말고 중단한다.
 10. `git diff --cached --check`, `git diff --cached --stat`, `git diff --cached`로 커밋 대상과 비밀값을 다시 확인한다.
