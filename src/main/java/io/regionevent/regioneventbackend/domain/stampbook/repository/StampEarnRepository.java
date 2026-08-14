@@ -11,6 +11,11 @@ public interface StampEarnRepository extends JpaRepository<StampEarn, Long> {
 
     long countByStampbookProgressStampbookProgressId(Long stampbookProgressId);
 
+    boolean existsByStampbookProgressStampbookProgressIdAndVisitVisitId(
+        Long stampbookProgressId,
+        Long visitId
+    );
+
     boolean existsByStampbookProgressStampbookProgressIdAndContentContentId(
         Long stampbookProgressId,
         Long contentId

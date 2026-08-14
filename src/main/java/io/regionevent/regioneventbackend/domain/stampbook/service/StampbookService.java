@@ -1,6 +1,12 @@
 package io.regionevent.regioneventbackend.domain.stampbook.service;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.List;
+
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicy;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
@@ -32,6 +38,24 @@ public class StampbookService {
         }
         return stampbookRepository.findByStampbookIdForUpdate(stampbookId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public List<Stampbook> findPublishedByTargetContentIdForUpdate(Long contentId) {
+        if (contentId == null || contentId <= 0) {
+            throw new IllegalArgumentException("contentId must be positive");
+        }
+        return stampbookRepository.findPublishedByTargetContentIdForUpdate(contentId);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Instant findCurrentDatabaseTime() {
+        BigDecimal epochSeconds = stampbookRepository.findCurrentEpochSeconds();
+        long seconds = epochSeconds.longValue();
+        long nanos = epochSeconds.remainder(BigDecimal.ONE)
+            .movePointRight(9)
+            .longValue();
+        return Instant.ofEpochSecond(seconds, nanos);
     }
 
     public void validateDraft(Stampbook stampbook) {

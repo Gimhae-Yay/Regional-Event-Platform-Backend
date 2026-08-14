@@ -12,6 +12,8 @@ import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookConten
 
 public interface StampbookContentRepository extends JpaRepository<StampbookContent, StampbookContentId> {
 
+    long countByStampbookStampbookId(Long stampbookId);
+
     @Query("""
         SELECT stampbookContent.content.contentId
         FROM StampbookContent stampbookContent

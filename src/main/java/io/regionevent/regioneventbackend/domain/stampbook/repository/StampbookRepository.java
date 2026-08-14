@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.stampbook.repository;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -15,6 +16,21 @@ import io.regionevent.regioneventbackend.domain.stampbook.entity.Stampbook;
 import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookStatus;
 
 public interface StampbookRepository extends JpaRepository<Stampbook, Long> {
+
+    @EntityGraph(attributePaths = {"region", "rewardCouponPolicy"})
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT stampbook
+        FROM StampbookContent targetContent
+        JOIN targetContent.stampbook stampbook
+        WHERE targetContent.content.contentId = :contentId
+          AND stampbook.status = io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookStatus.PUBLISHED
+        ORDER BY stampbook.stampbookId ASC
+        """)
+    List<Stampbook> findPublishedByTargetContentIdForUpdate(@Param("contentId") Long contentId);
+
+    @Query(value = "SELECT UNIX_TIMESTAMP(CURRENT_TIMESTAMP(6))", nativeQuery = true)
+    BigDecimal findCurrentEpochSeconds();
 
     @EntityGraph(attributePaths = {"region", "rewardCouponPolicy"})
     @Lock(LockModeType.PESSIMISTIC_WRITE)
