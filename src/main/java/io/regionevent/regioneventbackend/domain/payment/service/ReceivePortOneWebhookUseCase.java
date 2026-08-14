@@ -183,7 +183,7 @@ public class ReceivePortOneWebhookUseCase {
                 return false;
             }
             setPaymentIdempotencyExpiration(lockedContext.payment());
-            if (paymentWebhookService.existsByProviderEventId(webhookId)) {
+            if (paymentWebhookService.existsByProviderEventIdForUpdate(webhookId)) {
                 return true;
             }
             paymentWebhookService.createIfAbsent(new PaymentWebhook(
@@ -234,7 +234,7 @@ public class ReceivePortOneWebhookUseCase {
         }
         payment = lockedContext.payment();
         ReservationPriceSnapshot snapshot = lockedContext.snapshot();
-        if (paymentWebhookService.existsByProviderEventId(webhookId)) {
+        if (paymentWebhookService.existsByProviderEventIdForUpdate(webhookId)) {
             return;
         }
         if (isTerminal(payment.getStatus())) {

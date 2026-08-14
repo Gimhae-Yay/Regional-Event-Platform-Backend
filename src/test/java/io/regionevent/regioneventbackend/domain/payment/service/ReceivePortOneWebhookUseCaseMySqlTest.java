@@ -14,10 +14,14 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -166,9 +170,15 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
         org.mockito.Mockito.reset(paymentGateway);
     }
 
-    @Test
+    @ParameterizedTest
+    @MethodSource("samePendingWebhookOutcomes")
     @Timeout(10)
-    void sameWebhookArrivingConcurrently_changesPaymentDomainStateOnlyOnce() throws Exception {
+    void samePendingWebhookArrivingConcurrently_createsOneVerification(
+        String providerStatus,
+        long providerAmount,
+        String expectedDecision,
+        PaymentStatus expectedPaymentStatus
+    ) throws Exception {
         Fixture fixture = createFixture();
         createPaymentUseCase.create(
             fixture.user().getUserId(),
@@ -182,9 +192,9 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
             orderId,
             TRANSACTION_ID,
             "store-1",
-            20_000,
+            providerAmount,
             "KRW",
-            "PAID",
+            providerStatus,
             RESULT_HASH
         ));
         CountDownLatch ready = new CountDownLatch(2);
@@ -200,14 +210,18 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
         }
 
         verify(paymentGateway, times(2)).findByPaymentId(orderId);
-        assertThat(paymentVerificationRepository.findAll())
+        assertThat(paymentVerificationRepository.findAll()).hasSize(1)
             .extracting(PaymentVerification::getInternalDecision)
-            .containsExactly("APPROVE");
+            .containsExactly(expectedDecision);
         assertThat(jdbcTemplate.queryForObject(
             "SELECT status FROM payment",
             String.class
-        )).isEqualTo(PaymentStatus.APPROVED.name());
-        assertThat(reservationRepository.findAll()).hasSize(1);
+        )).isEqualTo(expectedPaymentStatus.name());
+        if (expectedPaymentStatus == PaymentStatus.APPROVED) {
+            assertThat(reservationRepository.findAll()).hasSize(1);
+        } else {
+            assertThat(reservationRepository.findAll()).isEmpty();
+        }
         assertThat(paymentWebhookRepository.findAll())
             .filteredOn(webhook -> WEBHOOK_ID.equals(webhook.getProviderEventId()))
             .hasSize(1);
@@ -547,6 +561,14 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
         assertThat(paymentIdempotencyRepository.findAll()).singleElement()
             .extracting(PaymentIdempotency::getExpiresAt)
             .isEqualTo(finalizedPayment.getFinalizedAt().plus(24, ChronoUnit.HOURS));
+    }
+
+    private static Stream<Arguments> samePendingWebhookOutcomes() {
+        return Stream.of(
+            Arguments.of("PAID", 20_000L, "APPROVE", PaymentStatus.APPROVED),
+            Arguments.of("DECLINED", 20_000L, "DECLINE", PaymentStatus.DECLINED),
+            Arguments.of("PAID", 20_001L, "DISCREPANT", PaymentStatus.DISCREPANT)
+        );
     }
 
     private void receiveAfterStart(
