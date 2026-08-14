@@ -64,6 +64,11 @@ public class ReservationService {
         throw new IllegalStateException("failed to generate unique reservation identifiers");
     }
 
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public boolean existsByCapacityHoldId(Long holdId) {
+        return reservationRepository.existsByCapacityHoldHoldId(holdId);
+    }
+
     @Transactional(readOnly = true)
     public Reservation findById(Long reservationId) {
         return reservationRepository.findByReservationIdForUpdate(reservationId)
