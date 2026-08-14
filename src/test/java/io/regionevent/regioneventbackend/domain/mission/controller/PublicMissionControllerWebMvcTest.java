@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.mission.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -12,9 +13,16 @@ import java.time.Instant;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.mock.web.MockFilterChain;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -28,7 +36,13 @@ import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenSe
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
 @WebMvcTest(PublicMissionController.class)
-@Import({SecurityConfig.class, RequestIdFilter.class, GlobalExceptionHandler.class})
+@Import({
+    SecurityConfig.class,
+    RequestIdFilter.class,
+    PublicMissionDetailLogUriFilter.class,
+    GlobalExceptionHandler.class
+})
+@ExtendWith(OutputCaptureExtension.class)
 class PublicMissionControllerWebMvcTest {
 
     @Autowired
@@ -42,6 +56,38 @@ class PublicMissionControllerWebMvcTest {
 
     @MockitoBean
     private RefreshTokenStore refreshTokenStore;
+
+    @Test
+    void publicMissionDetailLogUriFilter_targetGet_setsTemplateUri() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/missions/someone@example.com");
+
+        new PublicMissionDetailLogUriFilter().doFilter(
+            request,
+            new MockHttpServletResponse(),
+            new MockFilterChain()
+        );
+
+        assertThat(request.getAttribute(RequestIdFilter.REQUEST_LOG_URI_ATTRIBUTE))
+            .isEqualTo("/api/v1/missions/{missionId}");
+    }
+
+    @Test
+    void publicMissionDetailLogUriFilter_nonTargetRequests_doesNotSetTemplateUri() throws Exception {
+        PublicMissionDetailLogUriFilter filter = new PublicMissionDetailLogUriFilter();
+        List<MockHttpServletRequest> requests = List.of(
+            new MockHttpServletRequest("POST", "/api/v1/missions/someone@example.com"),
+            new MockHttpServletRequest("GET", "/api/v1/missions/someone@example.com/participations"),
+            new MockHttpServletRequest("GET", "/api/v1/regions/someone@example.com")
+        );
+
+        for (MockHttpServletRequest request : requests) {
+            filter.doFilter(request, new MockHttpServletResponse(), new MockFilterChain());
+        }
+
+        assertThat(requests).allSatisfy(request -> assertThat(
+            request.getAttribute(RequestIdFilter.REQUEST_LOG_URI_ATTRIBUTE)
+        ).isNull());
+    }
 
     @Test
     void getPublicMission_anonymous_returnsContractResponse() throws Exception {
@@ -115,6 +161,35 @@ class PublicMissionControllerWebMvcTest {
             .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
 
         verifyNoInteractions(getPublicMissionUseCase);
+    }
+
+    @Test
+    void getPublicMission_invalidIdAnonymous_logsTemplateUriWithoutRawValue(CapturedOutput output) throws Exception {
+        String sensitiveMissionId = "someone@example.com";
+
+        mockMvc.perform(get("/api/v1/missions/{missionId}", sensitiveMissionId))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+
+        assertThat(output.getOut())
+            .contains("HTTP request completed. method=GET, uri=/api/v1/missions/{missionId}, status=400")
+            .doesNotContain(sensitiveMissionId);
+    }
+
+    @Test
+    void getPublicMission_invalidIdAuthenticated_logsTemplateUriWithoutRawValue(CapturedOutput output)
+        throws Exception {
+        String sensitiveMissionId = "someone@example.com";
+        String accessToken = jwtAccessTokenService.issue(100L);
+
+        mockMvc.perform(get("/api/v1/missions/{missionId}", sensitiveMissionId)
+            .header(AUTHORIZATION, "Bearer " + accessToken))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+
+        assertThat(output.getOut())
+            .contains("HTTP request completed. method=GET, uri=/api/v1/missions/{missionId}, status=400")
+            .doesNotContain(sensitiveMissionId);
     }
 
     private io.regionevent.regioneventbackend.domain.mission.entity.Mission mission() {
