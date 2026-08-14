@@ -124,7 +124,7 @@ Accept: application/json
 | `data.targetContents[].contentId` | String | 대상 콘텐츠 식별자다. |
 | `data.targetContents[].regionId` | String | 스탬프북 지역과 같은 대상 콘텐츠 지역 식별자다. |
 | `data.targetContents[].title` | String | 심사 시점의 대상 콘텐츠 제목이다. |
-| `data.targetContents[].status` | String | 심사 시점의 대상 콘텐츠 운영 상태다. 승인 시에는 다시 `PUBLISHED`인지 검증한다. |
+| `data.targetContents[].status` | String | 심사 시점의 대상 콘텐츠 운영 상태다. 승인 시에는 대상 콘텐츠의 지역·소유 관계를 잠금 뒤 다시 검증한다. |
 | `data.rewardCouponPolicy` | Object | 완료 보상 쿠폰 정책의 심사 시점 정보다. |
 | `data.rewardCouponPolicy.couponPolicyId` | String | 완료 보상 쿠폰 정책 식별자다. |
 | `data.rewardCouponPolicy.regionId` | String | 스탬프북 지역과 같은 보상 정책 지역 식별자다. |
