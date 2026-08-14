@@ -12,6 +12,7 @@ import org.springframework.data.repository.query.Param;
 
 import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentStatus;
+import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
@@ -65,6 +66,12 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     );
 
     boolean existsByCapacityHoldUserUserIdAndStatus(Long userId, PaymentStatus status);
+
+    boolean existsByCapacityHoldUserUserIdAndStatusAndReservationStatus(
+        Long userId,
+        PaymentStatus paymentStatus,
+        ReservationStatus reservationStatus
+    );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""

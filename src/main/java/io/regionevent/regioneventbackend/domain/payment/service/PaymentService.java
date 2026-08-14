@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentStatus;
 import io.regionevent.regioneventbackend.domain.payment.repository.PaymentRepository;
+import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 
 @Service
 public class PaymentService {
@@ -58,6 +59,15 @@ public class PaymentService {
     @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
     public boolean hasPendingPayment(Long userId) {
         return paymentRepository.existsByCapacityHoldUserUserIdAndStatus(userId, PaymentStatus.PENDING);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public boolean hasApprovedPaymentWithConfirmedReservation(Long userId) {
+        return paymentRepository.existsByCapacityHoldUserUserIdAndStatusAndReservationStatus(
+            userId,
+            PaymentStatus.APPROVED,
+            ReservationStatus.CONFIRMED
+        );
     }
 
     @Transactional(propagation = Propagation.MANDATORY)

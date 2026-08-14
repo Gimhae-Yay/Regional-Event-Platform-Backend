@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -41,6 +42,7 @@ import io.regionevent.regioneventbackend.domain.content.repository.ContentReposi
 import io.regionevent.regioneventbackend.domain.content.repository.ContentSessionRepository;
 import io.regionevent.regioneventbackend.domain.payment.dto.CreatePaymentRequest;
 import io.regionevent.regioneventbackend.domain.payment.dto.CreatePaymentResponse;
+import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentStatus;
 import io.regionevent.regioneventbackend.domain.payment.entity.Refund;
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundStatus;
@@ -53,9 +55,11 @@ import io.regionevent.regioneventbackend.domain.reservation.dto.CreateReservatio
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
+import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationPriceSnapshot;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.reservation.repository.CapacityHoldRepository;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationRepository;
+import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationPriceSnapshotRepository;
 import io.regionevent.regioneventbackend.domain.reservation.service.CreateReservationHoldUseCase;
 import io.regionevent.regioneventbackend.domain.reservation.service.GetMyReservationQrUseCase;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationCancellationUseCase;
@@ -89,6 +93,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
     private final ContentSessionRepository contentSessionRepository;
     private final CapacityHoldRepository capacityHoldRepository;
     private final ReservationRepository reservationRepository;
+    private final ReservationPriceSnapshotRepository reservationPriceSnapshotRepository;
     private final PaymentRepository paymentRepository;
     private final RefundRepository refundRepository;
     private final JwtAccessTokenService jwtAccessTokenService;
@@ -111,6 +116,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         ContentSessionRepository contentSessionRepository,
         CapacityHoldRepository capacityHoldRepository,
         ReservationRepository reservationRepository,
+        ReservationPriceSnapshotRepository reservationPriceSnapshotRepository,
         PaymentRepository paymentRepository,
         RefundRepository refundRepository,
         JwtAccessTokenService jwtAccessTokenService,
@@ -131,6 +137,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         this.contentSessionRepository = contentSessionRepository;
         this.capacityHoldRepository = capacityHoldRepository;
         this.reservationRepository = reservationRepository;
+        this.reservationPriceSnapshotRepository = reservationPriceSnapshotRepository;
         this.paymentRepository = paymentRepository;
         this.refundRepository = refundRepository;
         this.jwtAccessTokenService = jwtAccessTokenService;
@@ -203,6 +210,47 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         assertThat(paymentRepository.findAll()).singleElement()
             .extracting(payment -> payment.getStatus())
             .isEqualTo(PaymentStatus.PENDING);
+    }
+
+    @Test
+    void withdraw_withApprovedPaymentAndConfirmedReservation_rejectsWithoutChangingPaymentReservationOrHold() {
+        Fixture fixture = createFixture();
+        CapacityHold consumedHold = fixture.reservation().getCapacityHold();
+        ReservationPriceSnapshot snapshot = reservationPriceSnapshotRepository.saveAndFlush(
+            new ReservationPriceSnapshot(consumedHold, null, 20_000, 0, 20_000, "KRW", Instant.now())
+        );
+        Payment payment = new Payment(
+            consumedHold,
+            snapshot,
+            "withdrawal-approved-payment-" + System.nanoTime(),
+            Instant.now()
+        );
+        payment.approve(fixture.reservation(), "portone-" + System.nanoTime(), Instant.now());
+        payment = paymentRepository.saveAndFlush(payment);
+
+        assertThat(withdraw(fixture.user().getUserId())).isEqualTo(ErrorCode.FORBIDDEN);
+
+        assertThat(appUserRepository.findById(fixture.user().getUserId()))
+            .hasValueSatisfying(user -> assertThat(user.getStatus()).isEqualTo(AppUserStatus.ACTIVE));
+        assertThat(capacityHoldRepository.findById(consumedHold.getHoldId()))
+            .hasValueSatisfying(hold -> {
+                assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.CONSUMED);
+                assertThat(hold.getUser()).isNotNull();
+            });
+        assertThat(reservationRepository.findById(fixture.reservation().getReservationId()))
+            .hasValueSatisfying(reservation -> {
+                assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.CONFIRMED);
+                assertThat(reservation.getUser()).isNotNull();
+            });
+        Long paymentId = payment.getPaymentId();
+        assertThat(paymentRepository.findByPaymentId(paymentId))
+            .hasValueSatisfying(savedPayment -> {
+                assertThat(savedPayment.getStatus()).isEqualTo(PaymentStatus.APPROVED);
+                assertThat(savedPayment.getReservation().getReservationId())
+                    .isEqualTo(fixture.reservation().getReservationId());
+            });
+        assertThat(refundRepository.findAll()).isEmpty();
+        verifyNoInteractions(refreshTokenStore);
     }
 
     @Test
