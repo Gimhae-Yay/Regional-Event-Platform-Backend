@@ -50,7 +50,7 @@ public class CreateReservationHoldUseCase {
         AppUser user = appUserService.findActiveUserForUpdate(userId)
             .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
         Long contentId = contentSessionService.findPublicContentId(sessionId);
-        if (!contentService.lockPublishedReservationTarget(contentId)) {
+        if (!contentService.lockPublishedCapacityHoldTarget(contentId)) {
             throw new BusinessException(ErrorCode.RESERVATION_HOLD_CONFLICT);
         }
         ContentSession contentSession = contentSessionService.findForUpdate(sessionId);
