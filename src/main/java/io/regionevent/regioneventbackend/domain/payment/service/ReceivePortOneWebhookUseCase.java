@@ -164,6 +164,8 @@ public class ReceivePortOneWebhookUseCase {
     private boolean skipProviderLookup(String webhookId, String rawBody, WebhookEvent event) {
         return Boolean.TRUE.equals(transactionTemplate.execute(status -> {
             if (paymentWebhookService.existsByProviderEventId(webhookId)) {
+                paymentWebhookService.findByProviderEventId(webhookId)
+                    .ifPresent(this::setExistingWebhookPaymentIdempotencyExpiration);
                 return true;
             }
             Payment payment = paymentService.findByOrderId(event.paymentId()).orElse(null);
@@ -194,6 +196,17 @@ public class ReceivePortOneWebhookUseCase {
             ));
             return true;
         }));
+    }
+
+    private void setExistingWebhookPaymentIdempotencyExpiration(PaymentWebhook paymentWebhook) {
+        Payment payment = paymentWebhook.getPayment();
+        if (payment == null || !isTerminal(payment.getStatus())) {
+            return;
+        }
+        LockedPaymentContext lockedContext = lockPaymentContext(payment);
+        if (lockedContext != null && isTerminal(lockedContext.payment().getStatus())) {
+            setPaymentIdempotencyExpiration(lockedContext.payment());
+        }
     }
 
     private void apply(

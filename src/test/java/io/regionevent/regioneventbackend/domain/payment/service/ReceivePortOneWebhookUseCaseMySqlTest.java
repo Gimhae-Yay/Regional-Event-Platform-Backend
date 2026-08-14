@@ -425,6 +425,56 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
     }
 
     @Test
+    void existingWebhookForFinalizedPaymentWithNullExpiration_correctsExpirationWithoutLookupOrDuplicateHistories() {
+        Fixture fixture = createFixture();
+        createPaymentUseCase.create(
+            fixture.user().getUserId(),
+            fixture.hold().getHoldId().toString(),
+            new CreatePaymentRequest(null),
+            "payment-key-" + System.nanoTime(),
+            UUID.randomUUID()
+        );
+        Payment payment = paymentRepository.findAll().getFirst();
+        when(paymentGateway.findByPaymentId(payment.getOrderId())).thenReturn(new PortOnePaymentGateway.PortOnePayment(
+            payment.getOrderId(),
+            TRANSACTION_ID,
+            "store-1",
+            20_000,
+            "KRW",
+            "DECLINED",
+            RESULT_HASH
+        ));
+        receivePortOneWebhookUseCase.receive(
+            WEBHOOK_ID,
+            WEBHOOK_TIMESTAMP,
+            WEBHOOK_SIGNATURE,
+            paymentEvent(payment.getOrderId())
+        );
+        int existingWebhookCount = paymentWebhookRepository.findAll().size();
+        int existingVerificationCount = paymentVerificationRepository.findAll().size();
+        jdbcTemplate.update(
+            "UPDATE payment_idempotency SET expires_at = NULL WHERE payment_id = ?",
+            payment.getPaymentId()
+        );
+        org.mockito.Mockito.reset(paymentGateway);
+
+        receivePortOneWebhookUseCase.receive(
+            WEBHOOK_ID,
+            WEBHOOK_TIMESTAMP,
+            WEBHOOK_SIGNATURE,
+            paymentEvent(payment.getOrderId())
+        );
+
+        Payment finalizedPayment = paymentRepository.findById(payment.getPaymentId()).orElseThrow();
+        assertThat(paymentIdempotencyRepository.findAll()).singleElement()
+            .extracting(PaymentIdempotency::getExpiresAt)
+            .isEqualTo(finalizedPayment.getFinalizedAt().plus(24, ChronoUnit.HOURS));
+        verify(paymentGateway, times(0)).findByPaymentId(payment.getOrderId());
+        assertThat(paymentWebhookRepository.findAll()).hasSize(existingWebhookCount);
+        assertThat(paymentVerificationRepository.findAll()).hasSize(existingVerificationCount);
+    }
+
+    @Test
     void cleanupPreservesExpirationAtDatabaseCurrentTimeAndDeletesAfterIt() {
         Fixture fixture = createFixture();
         createPaymentUseCase.create(
