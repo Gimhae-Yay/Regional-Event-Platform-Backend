@@ -1,5 +1,8 @@
 package io.regionevent.regioneventbackend.domain.reservation.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.groups.Tuple.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -11,9 +14,15 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.slf4j.LoggerFactory;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
@@ -45,6 +54,8 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
 import io.regionevent.regioneventbackend.domain.user.service.UserRoleAssignmentService;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 class ReservationCancellationUseCaseTest {
 
@@ -159,6 +170,41 @@ class ReservationCancellationUseCaseTest {
         verify(fixture.createRefundUseCase, never()).prepareForReservationCancellation(any(), any(), any());
         verify(fixture.createRefundUseCase, never()).executePreparedReservationCancellationRefund(any(), any(), any());
         org.assertj.core.api.Assertions.assertThat(response.refund().status()).isEqualTo("DISCREPANT");
+    }
+
+    @Test
+    void 취소불가능상태면_개인정보없이필수식별자와오류코드만경고로그로남긴다() {
+        Fixture fixture = fixture(ReservationStatus.CHECKED_IN);
+        UUID requestId = UUID.randomUUID();
+        Logger logger = (Logger) LoggerFactory.getLogger(ReservationCancellationUseCase.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+
+        try {
+            assertThatThrownBy(() -> fixture.useCase.cancel(1L, 2L, requestId))
+                .isInstanceOfSatisfying(
+                    BusinessException.class,
+                    exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.RESERVATION_CANCEL_CONFLICT)
+                );
+
+            assertThat(appender.list).singleElement().satisfies(event -> {
+                assertThat(event.getFormattedMessage()).isEqualTo("Reservation cancellation rejected");
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getKeyValuePairs())
+                    .extracting(pair -> pair.key, pair -> pair.value)
+                    .containsExactly(
+                        tuple("requestId", requestId),
+                        tuple("reservationId", 2L),
+                        tuple("errorCode", ErrorCode.RESERVATION_CANCEL_CONFLICT.code())
+                    );
+                assertThat(event.getThrowableProxy()).isNull();
+            });
+        } finally {
+            logger.detachAppender(appender);
+            appender.stop();
+        }
     }
 
     private Fixture fixture(ReservationStatus reservationStatus) {

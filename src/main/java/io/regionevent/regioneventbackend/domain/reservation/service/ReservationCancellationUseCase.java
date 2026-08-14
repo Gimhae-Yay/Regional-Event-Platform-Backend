@@ -258,13 +258,11 @@ public class ReservationCancellationUseCase {
             actor,
             Instant.now()
         ));
-        log.warn(
-            "Reservation cancellation rejected. requestId={}, userId={}, reservationId={}, errorCode={}",
-            requestId,
-            actor.getAppUser().getUserId(),
-            reservation.getReservationId(),
-            ErrorCode.RESERVATION_CANCEL_CONFLICT.code()
-        );
+        log.atWarn()
+            .addKeyValue("requestId", requestId)
+            .addKeyValue("reservationId", reservation.getReservationId())
+            .addKeyValue("errorCode", ErrorCode.RESERVATION_CANCEL_CONFLICT.code())
+            .log("Reservation cancellation rejected");
         throw new BusinessException(ErrorCode.RESERVATION_CANCEL_CONFLICT);
     }
 
