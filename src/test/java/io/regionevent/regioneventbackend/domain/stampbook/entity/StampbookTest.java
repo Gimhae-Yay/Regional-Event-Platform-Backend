@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponIssuanceType;
@@ -17,9 +18,23 @@ class StampbookTest {
 
     private static final Instant PUBLISHED_AT = Instant.parse("2026-08-14T03:00:00Z");
 
+    private Stampbook stampbook;
+
+    @BeforeEach
+    void setUp() {
+        Region region = mock(Region.class);
+        when(region.getRegionId()).thenReturn(1L);
+
+        CouponPolicy rewardCouponPolicy = mock(CouponPolicy.class);
+        when(rewardCouponPolicy.getIssuanceType()).thenReturn(CouponIssuanceType.STAMPBOOK_COMPLETION);
+        when(rewardCouponPolicy.getRegion()).thenReturn(region);
+
+        stampbook = new Stampbook(region, rewardCouponPolicy);
+    }
+
     @Test
     void approve_심사대기스탬프북을공개하고공개시각을기록한다() {
-        Stampbook stampbook = pendingReviewStampbook();
+        stampbook.requestPublication();
 
         stampbook.approve(PUBLISHED_AT);
 
@@ -30,26 +45,25 @@ class StampbookTest {
 
     @Test
     void approve_심사대기가아닌스탬프북이면거부한다() {
-        Stampbook stampbook = new Stampbook(region(), rewardCouponPolicy());
-
         assertThatThrownBy(() -> stampbook.approve(PUBLISHED_AT))
             .isInstanceOf(IllegalStateException.class);
     }
 
-    private Stampbook pendingReviewStampbook() {
-        Stampbook stampbook = new Stampbook(region(), rewardCouponPolicy());
+    @Test
+    void reject_심사대기스탬프북을초안으로되돌린다() {
         stampbook.requestPublication();
-        return stampbook;
+
+        stampbook.reject();
+
+        assertThat(stampbook.getStatus()).isEqualTo(StampbookStatus.DRAFT);
+        assertThat(stampbook.getPublishedAt()).isNull();
+        assertThat(stampbook.getEndedAt()).isNull();
     }
 
-    private Region region() {
-        return new Region("GIMHAE", "김해", true);
-    }
-
-    private CouponPolicy rewardCouponPolicy() {
-        CouponPolicy couponPolicy = mock(CouponPolicy.class);
-        when(couponPolicy.getIssuanceType()).thenReturn(CouponIssuanceType.STAMPBOOK_COMPLETION);
-        when(couponPolicy.getRegion()).thenReturn(region());
-        return couponPolicy;
+    @Test
+    void reject_심사대기가아닌스탬프북이면예외를던진다() {
+        assertThatThrownBy(stampbook::reject)
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("only PENDING_REVIEW stampbook can be rejected");
     }
 }

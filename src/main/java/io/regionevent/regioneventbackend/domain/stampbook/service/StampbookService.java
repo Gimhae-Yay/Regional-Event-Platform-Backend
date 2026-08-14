@@ -93,6 +93,14 @@ public class StampbookService {
         return stampbookRepository.saveAndFlush(stampbook);
     }
 
+    public Stampbook reject(Stampbook stampbook) {
+        if (stampbook.getStatus() != StampbookStatus.PENDING_REVIEW) {
+            throw new BusinessException(ErrorCode.STAMPBOOK_STATE_CONFLICT);
+        }
+        stampbook.reject();
+        return stampbookRepository.saveAndFlush(stampbook);
+    }
+
     public boolean existsPublishedRewardCouponPolicy(Long couponPolicyId) {
         return stampbookRepository.existsByRewardCouponPolicyCouponPolicyIdAndStatus(
             couponPolicyId,

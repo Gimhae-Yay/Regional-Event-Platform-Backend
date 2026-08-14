@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
 
 import jakarta.persistence.EntityManager;
 
@@ -16,6 +18,10 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEvent;
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
+import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
@@ -43,6 +49,7 @@ class StampbookRepositoryTest {
 
     private final StampbookRepository stampbookRepository;
     private final StampbookContentRepository stampbookContentRepository;
+    private final AuditEventRepository auditEventRepository;
     private final CouponPolicyRepository couponPolicyRepository;
     private final ContentRepository contentRepository;
     private final RegionRepository regionRepository;
@@ -54,6 +61,7 @@ class StampbookRepositoryTest {
     StampbookRepositoryTest(
         StampbookRepository stampbookRepository,
         StampbookContentRepository stampbookContentRepository,
+        AuditEventRepository auditEventRepository,
         CouponPolicyRepository couponPolicyRepository,
         ContentRepository contentRepository,
         RegionRepository regionRepository,
@@ -63,6 +71,7 @@ class StampbookRepositoryTest {
     ) {
         this.stampbookRepository = stampbookRepository;
         this.stampbookContentRepository = stampbookContentRepository;
+        this.auditEventRepository = auditEventRepository;
         this.couponPolicyRepository = couponPolicyRepository;
         this.contentRepository = contentRepository;
         this.regionRepository = regionRepository;
@@ -156,6 +165,68 @@ class StampbookRepositoryTest {
     }
 
     @Test
+    void 담당지역의_심사대기_스탬프북을_가장최근제출시각순으로_조회한다() {
+        Region region = saveRegion("GIMHAE");
+        Content firstContent = saveContent(region);
+        Content secondContent = saveContent(region);
+        CouponPolicy firstRewardPolicy = saveRewardCouponPolicy(firstContent, region);
+        CouponPolicy secondRewardPolicy = saveRewardCouponPolicy(secondContent, region);
+        Stampbook firstStampbook = savePendingStampbook(
+            region,
+            firstRewardPolicy,
+            firstContent,
+            secondContent
+        );
+        Stampbook secondStampbook = savePendingStampbook(
+            region,
+            secondRewardPolicy,
+            secondContent
+        );
+        recordSubmissionAudit(region, firstStampbook, Instant.parse("2026-08-10T00:00:00Z"));
+        recordSubmissionAudit(region, firstStampbook, Instant.parse("2026-08-12T00:00:00Z"));
+        recordSubmissionAudit(region, secondStampbook, Instant.parse("2026-08-11T00:00:00Z"));
+
+        Region otherRegion = saveRegion("BUSAN");
+        Content otherContent = saveContent(otherRegion);
+        CouponPolicy otherRewardPolicy = saveRewardCouponPolicy(otherContent, otherRegion);
+        Stampbook otherRegionStampbook = savePendingStampbook(
+            otherRegion,
+            otherRewardPolicy,
+            otherContent
+        );
+        recordSubmissionAudit(otherRegion, otherRegionStampbook, Instant.parse("2026-08-09T00:00:00Z"));
+
+        List<PendingRegionAdminStampbookProjection> projections = stampbookRepository
+            .findPendingRegionAdminStampbookProjections(
+                region.getRegionId(),
+                StampbookStatus.PENDING_REVIEW,
+                AuditEventTargetType.STAMPBOOK,
+                AuditEventResult.SUCCESS,
+                StampbookStatus.DRAFT.name(),
+                StampbookStatus.PENDING_REVIEW.name()
+            );
+
+        assertThat(projections).containsExactly(
+            new PendingRegionAdminStampbookProjection(
+                secondStampbook.getStampbookId(),
+                region.getRegionId(),
+                StampbookStatus.PENDING_REVIEW,
+                1L,
+                secondRewardPolicy.getCouponPolicyId(),
+                Instant.parse("2026-08-11T00:00:00Z")
+            ),
+            new PendingRegionAdminStampbookProjection(
+                firstStampbook.getStampbookId(),
+                region.getRegionId(),
+                StampbookStatus.PENDING_REVIEW,
+                2L,
+                firstRewardPolicy.getCouponPolicyId(),
+                Instant.parse("2026-08-12T00:00:00Z")
+            )
+        );
+    }
+
+    @Test
     void 서로_다른_지역의_콘텐츠는_스탬프북에_연결할_수_없다() {
         Region stampbookRegion = saveRegion("GIMHAE");
         Content stampbookContent = saveContent(stampbookRegion);
@@ -226,13 +297,49 @@ class StampbookRepositoryTest {
         ));
     }
 
+    private Stampbook savePendingStampbook(
+        Region region,
+        CouponPolicy rewardCouponPolicy,
+        Content... contents
+    ) {
+        Stampbook stampbook = new Stampbook(region, rewardCouponPolicy);
+        stampbook.requestPublication();
+        stampbook = stampbookRepository.saveAndFlush(stampbook);
+        for (Content content : contents) {
+            stampbookContentRepository.saveAndFlush(new StampbookContent(stampbook, content));
+        }
+        return stampbook;
+    }
+
+    private void recordSubmissionAudit(
+        Region region,
+        Stampbook stampbook,
+        Instant occurredAt
+    ) {
+        auditEventRepository.saveAndFlush(new AuditEvent(
+            UUID.randomUUID().toString(),
+            region,
+            AuditEventTargetType.STAMPBOOK,
+            stampbook.getStampbookId(),
+            StampbookStatus.DRAFT.name(),
+            StampbookStatus.PENDING_REVIEW.name(),
+            AuditEventResult.SUCCESS,
+            null,
+            "스탬프북 공개 심사를 요청합니다.",
+            null,
+            "USER",
+            "OPERATOR",
+            occurredAt
+        ));
+    }
+
     private Region saveRegion(String regionCode) {
         return regionRepository.saveAndFlush(new Region(regionCode, regionCode + "시", true));
     }
 
     private Content saveContent(Region region) {
         AppUser operator = appUserRepository.saveAndFlush(new AppUser(
-            "operator-" + region.getRegionCode() + "@example.com",
+            "operator-" + region.getRegionCode() + "-" + System.nanoTime() + "@example.com",
             "hashed-password",
             "콘텐츠 운영자",
             "010-1234-5678",
