@@ -2,12 +2,8 @@ package io.regionevent.regioneventbackend.domain.image.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -76,6 +72,7 @@ class ImageObjectCleanupServiceTest {
     private final AppUserRepository appUserRepository;
     private final EntityManager entityManager;
     private final RecordingImageStorageGateway imageStorageGateway;
+    private final PlatformTransactionManager transactionManager;
 
     @MockitoSpyBean
     private ImageObjectRepository imageObjectRepository;
@@ -88,7 +85,8 @@ class ImageObjectCleanupServiceTest {
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
         EntityManager entityManager,
-        RecordingImageStorageGateway imageStorageGateway
+        RecordingImageStorageGateway imageStorageGateway,
+        PlatformTransactionManager transactionManager
     ) {
         this.imageObjectCleanupService = imageObjectCleanupService;
         this.contentRepository = contentRepository;
@@ -97,6 +95,7 @@ class ImageObjectCleanupServiceTest {
         this.appUserRepository = appUserRepository;
         this.entityManager = entityManager;
         this.imageStorageGateway = imageStorageGateway;
+        this.transactionManager = transactionManager;
     }
 
     @BeforeEach
@@ -248,24 +247,13 @@ class ImageObjectCleanupServiceTest {
     }
 
     @Test
-    void deletePendingObject_whenDatabaseCommitFails_returnsZeroAndLogsFailure() {
-        Long imageObjectId = 10L;
-        String objectKey = "content/delete-commit-failure.webp";
-        ImageObjectRepository repository = mock(ImageObjectRepository.class);
-        ImageStorageGateway storageGateway = mock(ImageStorageGateway.class);
-        PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
-        TransactionStatus transactionStatus = mock(TransactionStatus.class);
+    void deletePendingObject_whenDatabaseCommitFails_keepsDeletePendingAndRetryConverges() {
+        ImageObject imageObject = saveDeletePendingImageObject("content/delete-commit-failure.webp");
         TransactionSystemException commitFailure = new TransactionSystemException("database commit failed");
-        when(transactionManager.getTransaction(any(TransactionDefinition.class))).thenReturn(transactionStatus);
-        when(repository.deleteDeletePendingObjectWithoutDirectReferences(
-            imageObjectId,
-            ImageLifecycleStatus.DELETE_PENDING
-        )).thenReturn(1);
-        doThrow(commitFailure).when(transactionManager).commit(transactionStatus);
         ImageObjectCleanupService service = new ImageObjectCleanupService(
-            repository,
-            storageGateway,
-            transactionManager
+            imageObjectRepository,
+            imageStorageGateway,
+            new RollbackThenThrowTransactionManager(transactionManager, commitFailure)
         );
         Logger logger = (Logger) LoggerFactory.getLogger(ImageObjectCleanupService.class);
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
@@ -273,11 +261,26 @@ class ImageObjectCleanupServiceTest {
         logger.addAppender(appender);
 
         try {
-            int deletedCount = service.deletePendingObject(imageObjectId, objectKey);
+            int deletedCount = service.deletePendingObject(
+                imageObject.getImageObjectId(),
+                imageObject.getObjectKey()
+            );
 
             assertThat(deletedCount).isZero();
-            verify(storageGateway).delete(objectKey);
-            assertDatabaseCleanupFailureLog(appender, imageObjectId, commitFailure);
+            assertThat(imageObjectRepository.findById(imageObject.getImageObjectId()))
+                .get()
+                .extracting(ImageObject::getLifecycleStatus)
+                .isEqualTo(ImageLifecycleStatus.DELETE_PENDING);
+            assertDatabaseCleanupFailureLog(appender, imageObject.getImageObjectId(), commitFailure);
+
+            int retryDeletedCount = imageObjectCleanupService.cleanupExpiredUnlinkedUploadCandidates();
+
+            assertThat(retryDeletedCount).isOne();
+            assertThat(imageObjectRepository.existsById(imageObject.getImageObjectId())).isFalse();
+            assertThat(imageStorageGateway.deletedObjectKeys()).containsExactly(
+                "content/delete-commit-failure.webp",
+                "content/delete-commit-failure.webp"
+            );
         } finally {
             logger.detachAppender(appender);
             appender.stop();
@@ -492,6 +495,36 @@ class ImageObjectCleanupServiceTest {
                 assertThat(throwable.getMessage()).isEqualTo(exception.getMessage());
             });
         });
+    }
+
+    private static class RollbackThenThrowTransactionManager implements PlatformTransactionManager {
+
+        private final PlatformTransactionManager delegate;
+        private final RuntimeException commitFailure;
+
+        private RollbackThenThrowTransactionManager(
+            PlatformTransactionManager delegate,
+            RuntimeException commitFailure
+        ) {
+            this.delegate = delegate;
+            this.commitFailure = commitFailure;
+        }
+
+        @Override
+        public TransactionStatus getTransaction(TransactionDefinition definition) {
+            return delegate.getTransaction(definition);
+        }
+
+        @Override
+        public void commit(TransactionStatus status) {
+            delegate.rollback(status);
+            throw commitFailure;
+        }
+
+        @Override
+        public void rollback(TransactionStatus status) {
+            delegate.rollback(status);
+        }
     }
 
     @TestConfiguration
