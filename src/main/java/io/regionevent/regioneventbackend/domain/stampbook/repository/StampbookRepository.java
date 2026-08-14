@@ -12,6 +12,8 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
 import io.regionevent.regioneventbackend.domain.stampbook.entity.Stampbook;
 import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookStatus;
 
@@ -44,6 +46,41 @@ public interface StampbookRepository extends JpaRepository<Stampbook, Long> {
     boolean existsByRewardCouponPolicyCouponPolicyIdAndStatus(
         Long couponPolicyId,
         StampbookStatus status
+    );
+
+    @Query("""
+        SELECT new io.regionevent.regioneventbackend.domain.stampbook.repository.PendingRegionAdminStampbookProjection(
+            stampbook.stampbookId,
+            stampbook.region.regionId,
+            stampbook.status,
+            COUNT(DISTINCT targetContent.content.contentId),
+            stampbook.rewardCouponPolicy.couponPolicyId,
+            MAX(auditEvent.occurredAt)
+        )
+        FROM Stampbook stampbook
+        LEFT JOIN StampbookContent targetContent ON targetContent.stampbook = stampbook
+        LEFT JOIN AuditEvent auditEvent
+            ON auditEvent.region = stampbook.region
+            AND auditEvent.targetType = :targetType
+            AND auditEvent.targetId = stampbook.stampbookId
+            AND auditEvent.result = :auditResult
+            AND auditEvent.previousState = :previousState
+            AND auditEvent.nextState = :nextState
+        WHERE stampbook.region.regionId = :regionId
+          AND stampbook.status = :status
+        GROUP BY stampbook.stampbookId,
+                 stampbook.region.regionId,
+                 stampbook.status,
+                 stampbook.rewardCouponPolicy.couponPolicyId
+        ORDER BY MAX(auditEvent.occurredAt) ASC, stampbook.stampbookId ASC
+        """)
+    List<PendingRegionAdminStampbookProjection> findPendingRegionAdminStampbookProjections(
+        @Param("regionId") Long regionId,
+        @Param("status") StampbookStatus status,
+        @Param("targetType") AuditEventTargetType targetType,
+        @Param("auditResult") AuditEventResult auditResult,
+        @Param("previousState") String previousState,
+        @Param("nextState") String nextState
     );
 
     @Query("""
