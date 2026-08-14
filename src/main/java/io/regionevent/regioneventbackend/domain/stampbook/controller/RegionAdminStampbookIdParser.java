@@ -7,21 +7,23 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 final class RegionAdminStampbookIdParser {
 
+    private static final Pattern DECIMAL_INTEGER_PATTERN = Pattern.compile("^[+-]?[0-9]+$");
     private static final Pattern POSITIVE_DECIMAL_PATTERN = Pattern.compile("^[1-9][0-9]*$");
 
     private RegionAdminStampbookIdParser() {
     }
 
     static Long parseRequired(String value) {
-        Long stampbookId;
-        try {
-            stampbookId = Long.valueOf(value);
-        } catch (NumberFormatException exception) {
-            throw new BusinessException(ErrorCode.INVALID_TYPE, exception);
+        if (value == null || !DECIMAL_INTEGER_PATTERN.matcher(value).matches()) {
+            throw new BusinessException(ErrorCode.INVALID_TYPE);
         }
         if (!POSITIVE_DECIMAL_PATTERN.matcher(value).matches()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
-        return stampbookId;
+        try {
+            return Long.valueOf(value);
+        } catch (NumberFormatException exception) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, exception);
+        }
     }
 }
