@@ -49,6 +49,7 @@ import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.reservation.repository.CapacityHoldRepository;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationRepository;
+import io.regionevent.regioneventbackend.domain.stampbook.service.StampbookProgressVisitCompletionAdapter;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
@@ -88,6 +89,9 @@ public class CheckInUseCaseIntegrationTest {
 
     @MockitoBean
     private MissionProgressVisitCompletionAdapter missionProgressVisitCompletionAdapter;
+
+    @MockitoBean
+    private StampbookProgressVisitCompletionAdapter stampbookProgressVisitCompletionAdapter;
 
     @Autowired
     CheckInUseCaseIntegrationTest(
@@ -186,6 +190,10 @@ public class CheckInUseCaseIntegrationTest {
             firstRequestId
         );
         verifyNoMoreInteractions(missionProgressVisitCompletionAdapter);
+        verify(stampbookProgressVisitCompletionAdapter).recordAfterCommit(
+            Long.valueOf(firstResult.response().visitId())
+        );
+        verifyNoMoreInteractions(stampbookProgressVisitCompletionAdapter);
     }
 
     @Test
@@ -487,6 +495,10 @@ public class CheckInUseCaseIntegrationTest {
             requestId
         );
         verifyNoMoreInteractions(missionProgressVisitCompletionAdapter);
+        verify(stampbookProgressVisitCompletionAdapter).recordAfterCommit(
+            Long.valueOf(result.response().visitId())
+        );
+        verifyNoMoreInteractions(stampbookProgressVisitCompletionAdapter);
     }
 
     @Test
