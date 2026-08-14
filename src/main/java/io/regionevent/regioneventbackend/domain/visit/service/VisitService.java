@@ -67,7 +67,11 @@ public class VisitService {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<Visit> findStampbookProgressSourceInCurrentTransaction(Long visitId) {
-        return findValidStampbookProgressSource(visitId);
+        if (visitId == null || visitId <= 0) {
+            return Optional.empty();
+        }
+        return visitRepository.findStampbookProgressSourceByVisitIdForUpdate(visitId)
+            .filter(this::isValidStampbookProgressSource);
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -93,6 +97,10 @@ public class VisitService {
             return Optional.empty();
         }
         return visitRepository.findStampbookProgressSourceByVisitId(visitId)
-            .filter(visit -> visit.getUser() != null && visit.getAuthorUnlinkedAt() == null);
+            .filter(this::isValidStampbookProgressSource);
+    }
+
+    private boolean isValidStampbookProgressSource(Visit visit) {
+        return visit.getUser() != null && visit.getAuthorUnlinkedAt() == null;
     }
 }
