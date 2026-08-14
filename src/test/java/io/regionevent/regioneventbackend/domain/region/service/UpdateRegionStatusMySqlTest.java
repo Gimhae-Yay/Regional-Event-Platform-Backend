@@ -20,6 +20,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,8 +31,10 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEvent;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
@@ -75,6 +78,7 @@ class UpdateRegionStatusMySqlTest extends NonTransactionalMySqlTestSupport {
     private final AuditEventRepository auditEventRepository;
     private final AuditEventActorLinkRepository auditEventActorLinkRepository;
     private final FailingAuditEventService failingAuditEventService;
+    private final TransactionTemplate transactionTemplate;
 
     @Autowired
     UpdateRegionStatusMySqlTest(
@@ -85,7 +89,8 @@ class UpdateRegionStatusMySqlTest extends NonTransactionalMySqlTestSupport {
         PlatformAdminAssignmentRepository platformAdminAssignmentRepository,
         AuditEventRepository auditEventRepository,
         AuditEventActorLinkRepository auditEventActorLinkRepository,
-        FailingAuditEventService failingAuditEventService
+        FailingAuditEventService failingAuditEventService,
+        PlatformTransactionManager transactionManager
     ) {
         this.updateRegionStatusUseCase = updateRegionStatusUseCase;
         this.regionRepository = regionRepository;
@@ -95,6 +100,7 @@ class UpdateRegionStatusMySqlTest extends NonTransactionalMySqlTestSupport {
         this.auditEventRepository = auditEventRepository;
         this.auditEventActorLinkRepository = auditEventActorLinkRepository;
         this.failingAuditEventService = failingAuditEventService;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     @DynamicPropertySource
@@ -218,6 +224,86 @@ class UpdateRegionStatusMySqlTest extends NonTransactionalMySqlTestSupport {
             assertThat(auditEvent.getNextState()).isEqualTo("TRUE");
             assertThat(auditEvent.getReasonCode()).isEqualTo("REGION_LAUNCH");
         });
+    }
+
+    @Test
+    @Timeout(15)
+    void 고권한배정비활성화가먼저커밋되면_이미시작한지역공개요청은_FORBIDDEN으로종료하고_변경과성공감사를남기지않는다()
+        throws Exception {
+        Fixture fixture = createFixture(false, false);
+        CountDownLatch assignmentLocked = new CountDownLatch(1);
+        CountDownLatch releaseInactivation = new CountDownLatch(1);
+        CountDownLatch updateStarted = new CountDownLatch(1);
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<Void> inactivation = executorService.submit(() -> {
+                inactivateAfterRelease(fixture, assignmentLocked, releaseInactivation);
+                return null;
+            });
+            assertThat(assignmentLocked.await(3, TimeUnit.SECONDS)).isTrue();
+
+            Future<ErrorCode> update = executorService.submit(() -> {
+                updateStarted.countDown();
+                try {
+                    updateRegionStatusUseCase.update(
+                        fixture.actor().getUserId(),
+                        fixture.region().getRegionId(),
+                        new UpdateRegionStatusCommand(
+                            true,
+                            "REGION_LAUNCH",
+                            EVIDENCE_REFERENCE
+                        ),
+                        UUID.randomUUID()
+                    );
+                    return null;
+                } catch (BusinessException exception) {
+                    return exception.getErrorCode();
+                }
+            });
+            assertThat(updateStarted.await(3, TimeUnit.SECONDS)).isTrue();
+            assertThatThrownBy(() -> update.get(300, TimeUnit.MILLISECONDS))
+                .isInstanceOf(java.util.concurrent.TimeoutException.class);
+
+            releaseInactivation.countDown();
+            inactivation.get(5, TimeUnit.SECONDS);
+            assertThat(update.get(5, TimeUnit.SECONDS)).isEqualTo(ErrorCode.FORBIDDEN);
+        } finally {
+            releaseInactivation.countDown();
+        }
+
+        assertThat(regionRepository.findById(fixture.region().getRegionId()))
+            .hasValueSatisfying(region -> assertThat(region.isPublic()).isFalse());
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent -> fixture.region().getRegionId().equals(auditEvent.getTargetId()))
+            .isEmpty();
+        assertThat(auditEventActorLinkRepository.findAll()).isEmpty();
+    }
+
+    private void inactivateAfterRelease(
+        Fixture fixture,
+        CountDownLatch assignmentLocked,
+        CountDownLatch releaseInactivation
+    ) {
+        transactionTemplate.executeWithoutResult(status -> {
+            appUserRepository.findByIdForUpdate(fixture.actor().getUserId()).orElseThrow();
+            PlatformAdminAssignment assignment = platformAdminAssignmentRepository
+                .findByAppUserUserId(fixture.actor().getUserId())
+                .orElseThrow();
+            assignmentLocked.countDown();
+            await(releaseInactivation);
+            assignment.inactivate(Instant.now(), "ADMIN_ACCOUNT_INACTIVATION");
+        });
+    }
+
+    private void await(CountDownLatch latch) {
+        try {
+            if (!latch.await(5, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("concurrent request did not finish in time");
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("interrupted while waiting for concurrent request", exception);
+        }
     }
 
     private void assertRegionAvailabilityConflict(Fixture fixture, UUID requestId) {
