@@ -129,6 +129,9 @@ public class ReservationConfirmationUseCase {
                 || !contentSessionService.lockConfirmableReservationTarget(sessionId)) {
                 throw new ReservationConfirmationConflictException();
             }
+            if (reservationService.existsByCapacityHoldId(capacityHold.getHoldId())) {
+                throw new ReservationConfirmationConflictException();
+            }
             CapacityHold consumedHold = capacityHoldService.consumeIfConfirmable(
                 capacityHold.getHoldId(),
                 user.getUserId()
