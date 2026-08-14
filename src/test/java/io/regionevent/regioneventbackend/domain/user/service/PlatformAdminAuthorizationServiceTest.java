@@ -9,16 +9,18 @@ import static org.mockito.Mockito.when;
 
 import java.util.Optional;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 
+import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserAccountKind;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminAssignment;
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminAssignmentStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminGrade;
-import io.regionevent.regioneventbackend.domain.user.repository.PlatformAdminAssignmentRepository;
+import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
@@ -26,10 +28,9 @@ class PlatformAdminAuthorizationServiceTest {
 
     private static final Long USER_ID = 1L;
 
-    private final PlatformAdminAssignmentRepository platformAdminAssignmentRepository =
-        mock(PlatformAdminAssignmentRepository.class);
+    private final AppUserRepository appUserRepository = mock(AppUserRepository.class);
     private final PlatformAdminAuthorizationService platformAdminAuthorizationService =
-        new PlatformAdminAuthorizationService(platformAdminAssignmentRepository);
+        new PlatformAdminAuthorizationService(appUserRepository);
 
     @ParameterizedTest
     @EnumSource(value = PlatformAdminGrade.class)
@@ -70,12 +71,24 @@ class PlatformAdminAuthorizationServiceTest {
     void 인증_주체가_없으면_조회하지_않고_인가를_거부한다() {
         assertForbidden(() -> platformAdminAuthorizationService.requireAuthorizedPlatformAdmin(null));
 
-        verifyNoInteractions(platformAdminAssignmentRepository);
+        verifyNoInteractions(appUserRepository);
+    }
+
+    @Test
+    void 수정용_전체관리자_인가는_계정과고권한배정을순서대로잠근다() {
+        PlatformAdminAssignment assignment = assignment(PlatformAdminGrade.PLATFORM_ADMIN);
+        givenActivePrivilegedUserForUpdate();
+        givenActiveAssignmentForUpdate(Optional.of(assignment));
+
+        assertThat(platformAdminAuthorizationService.requireAuthorizedPlatformAdminForUpdate(USER_ID))
+            .isSameAs(assignment);
+        InOrder inOrder = org.mockito.Mockito.inOrder(appUserRepository);
+        inOrder.verify(appUserRepository).findByIdForUpdate(USER_ID);
+        verifyActiveAssignmentForUpdateLookup(inOrder);
     }
 
     private void givenActiveAssignment(Optional<PlatformAdminAssignment> assignment) {
-        when(platformAdminAssignmentRepository
-            .findByAppUserUserIdAndStatusAndAppUserStatusAndAppUserAccountKind(
+        when(appUserRepository.findActivePrivilegedAssignment(
                 USER_ID,
                 PlatformAdminAssignmentStatus.ACTIVE,
                 AppUserStatus.ACTIVE,
@@ -84,14 +97,39 @@ class PlatformAdminAuthorizationServiceTest {
             .thenReturn(assignment);
     }
 
+    private void givenActiveAssignmentForUpdate(Optional<PlatformAdminAssignment> assignment) {
+        when(appUserRepository.findActivePrivilegedAssignmentForUpdate(
+                USER_ID,
+                PlatformAdminAssignmentStatus.ACTIVE,
+                AppUserStatus.ACTIVE,
+                AppUserAccountKind.PRIVILEGED
+            ))
+            .thenReturn(assignment);
+    }
+
+    private void givenActivePrivilegedUserForUpdate() {
+        AppUser user = mock(AppUser.class);
+        when(user.getStatus()).thenReturn(AppUserStatus.ACTIVE);
+        when(user.getAccountKind()).thenReturn(AppUserAccountKind.PRIVILEGED);
+        when(appUserRepository.findByIdForUpdate(USER_ID)).thenReturn(Optional.of(user));
+    }
+
     private void verifyActiveAssignmentLookup() {
-        verify(platformAdminAssignmentRepository)
-            .findByAppUserUserIdAndStatusAndAppUserStatusAndAppUserAccountKind(
+        verify(appUserRepository).findActivePrivilegedAssignment(
                 USER_ID,
                 PlatformAdminAssignmentStatus.ACTIVE,
                 AppUserStatus.ACTIVE,
                 AppUserAccountKind.PRIVILEGED
             );
+    }
+
+    private void verifyActiveAssignmentForUpdateLookup(InOrder inOrder) {
+        inOrder.verify(appUserRepository).findActivePrivilegedAssignmentForUpdate(
+            USER_ID,
+            PlatformAdminAssignmentStatus.ACTIVE,
+            AppUserStatus.ACTIVE,
+            AppUserAccountKind.PRIVILEGED
+        );
     }
 
     private PlatformAdminAssignment assignment(PlatformAdminGrade grade) {

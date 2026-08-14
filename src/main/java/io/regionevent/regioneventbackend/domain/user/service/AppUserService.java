@@ -66,6 +66,19 @@ public class AppUserService {
             .filter(user -> user.getStatus() == AppUserStatus.ACTIVE);
     }
 
+    public List<AppUser> findUsersForUpdate(Long firstUserId, Long secondUserId) {
+        if (firstUserId == null && secondUserId == null) {
+            return List.of();
+        }
+        if (firstUserId == null) {
+            return appUserRepository.findAllByUserIdInForUpdate(List.of(secondUserId));
+        }
+        if (secondUserId == null || firstUserId.equals(secondUserId)) {
+            return appUserRepository.findAllByUserIdInForUpdate(List.of(firstUserId));
+        }
+        return appUserRepository.findAllByUserIdInForUpdate(List.of(firstUserId, secondUserId));
+    }
+
     public void startWithdrawal(AppUser user) {
         user.startWithdrawal();
         appUserRepository.saveAndFlush(user);
