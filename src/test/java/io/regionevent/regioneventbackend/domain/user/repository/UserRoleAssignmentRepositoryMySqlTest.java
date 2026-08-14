@@ -82,9 +82,13 @@ class UserRoleAssignmentRepositoryMySqlTest extends NonTransactionalMySqlTestSup
         });
 
         assertThat(fixture).isNotNull();
-        assertThat(userRoleAssignmentRepository.findActiveRegionAdminsForUpdate(
-            fixture.region().getRegionId()
-        )).hasSize(1);
+        Integer activeRegionAdminCount = transactionTemplate.execute(status ->
+            userRoleAssignmentRepository.findActiveRegionAdminsForUpdate(
+                fixture.region().getRegionId()
+            ).size()
+        );
+
+        assertThat(activeRegionAdminCount).isEqualTo(1);
         assertThat(userRoleAssignmentRepository.findById(fixture.assignment().getRoleAssignmentId()))
             .hasValueSatisfying(assignment -> assertThat(assignment.getRole()).isEqualTo(UserRole.REGION_ADMIN));
     }
