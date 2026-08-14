@@ -139,6 +139,14 @@ public class Stampbook {
         status = StampbookStatus.PENDING_REVIEW;
     }
 
+    public void approve(Instant publishedAt) {
+        if (status != StampbookStatus.PENDING_REVIEW) {
+            throw new IllegalStateException("only PENDING_REVIEW stampbook can approve");
+        }
+        this.publishedAt = requireNotNull(publishedAt, "publishedAt");
+        status = StampbookStatus.PUBLISHED;
+    }
+
     public void end(Instant endedAt) {
         if (status != StampbookStatus.PUBLISHED) {
             throw new IllegalStateException("only PUBLISHED stampbook can end");
