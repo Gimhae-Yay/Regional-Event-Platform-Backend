@@ -4,6 +4,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +27,8 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 @Service
 public class RejectRegionAdminStampbookUseCase {
+
+    private static final Logger log = LoggerFactory.getLogger(RejectRegionAdminStampbookUseCase.class);
 
     private final RegionAdminAuthorizationService regionAdminAuthorizationService;
     private final CouponPolicyService couponPolicyService;
@@ -168,18 +173,29 @@ public class RejectRegionAdminStampbookUseCase {
         AuthorizedRegionAdmin regionAdmin,
         ErrorCode errorCode
     ) {
-        recordFailedAuditEventUseCase.record(new AuditEventCommand(
-            requestId,
-            stampbook.getRegion(),
-            AuditEventTargetType.STAMPBOOK,
-            stampbook.getStampbookId(),
-            previousState.name(),
-            null,
-            AuditEventResult.FAILURE,
-            errorCode.code(),
-            new AuditEventActor(regionAdmin.roleAssignment()),
-            stampbookService.findCurrentDatabaseTime()
-        ));
+        try {
+            recordFailedAuditEventUseCase.record(new AuditEventCommand(
+                requestId,
+                stampbook.getRegion(),
+                AuditEventTargetType.STAMPBOOK,
+                stampbook.getStampbookId(),
+                previousState.name(),
+                null,
+                AuditEventResult.FAILURE,
+                errorCode.code(),
+                new AuditEventActor(regionAdmin.roleAssignment()),
+                stampbookService.findCurrentDatabaseTime()
+            ));
+        } catch (RuntimeException exception) {
+            log.error(
+                "스탬프북 반려 실패 감사 기록에 실패했습니다. requestId={}, stampbookId={}, originalErrorCode={}, auditWriteResult={}",
+                requestId,
+                stampbook.getStampbookId(),
+                errorCode.code(),
+                "FAILURE",
+                exception
+            );
+        }
     }
 
     public record RejectRegionAdminStampbookCommand(

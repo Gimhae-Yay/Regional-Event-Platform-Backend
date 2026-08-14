@@ -3,6 +3,7 @@ package io.regionevent.regioneventbackend.domain.stampbook.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -158,6 +159,27 @@ class RejectRegionAdminStampbookUseCaseTest {
         assertThat(auditEvent.previousState()).isEqualTo(StampbookStatus.DRAFT.name());
         assertThat(auditEvent.nextState()).isNull();
         assertThat(auditEvent.reasonCode()).isEqualTo(ErrorCode.STAMPBOOK_STATE_CONFLICT.code());
+    }
+
+    @Test
+    void reject_실패감사기록이실패해도원래상태충돌을반환한다() {
+        when(stampbookService.reject(lockedStampbook)).thenThrow(
+            new BusinessException(ErrorCode.STAMPBOOK_STATE_CONFLICT)
+        );
+        doThrow(new IllegalStateException("audit storage failure"))
+            .when(recordFailedAuditEventUseCase)
+            .record(any(AuditEventCommand.class));
+
+        assertThatThrownBy(() -> useCase.reject(
+            USER_ID,
+            new RejectRegionAdminStampbookUseCase.RejectRegionAdminStampbookCommand(
+                STAMPBOOK_ID,
+                "완료 보상 정책을 확인해 주세요."
+            ),
+            REQUEST_ID
+        )).isInstanceOfSatisfying(BusinessException.class, exception ->
+            assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.STAMPBOOK_STATE_CONFLICT)
+        );
     }
 
     @Test
