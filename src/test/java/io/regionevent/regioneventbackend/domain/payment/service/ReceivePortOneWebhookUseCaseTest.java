@@ -66,6 +66,7 @@ class ReceivePortOneWebhookUseCaseTest {
     );
     private final PortOnePaymentGateway paymentGateway = mock(PortOnePaymentGateway.class);
     private final PaymentService paymentService = mock(PaymentService.class);
+    private final PaymentIdempotencyService paymentIdempotencyService = mock(PaymentIdempotencyService.class);
     private final PaymentWebhookService paymentWebhookService = mock(PaymentWebhookService.class);
     private final PaymentVerificationService paymentVerificationService = mock(PaymentVerificationService.class);
     private final PaymentDiscrepancyService paymentDiscrepancyService = mock(PaymentDiscrepancyService.class);
@@ -106,6 +107,7 @@ class ReceivePortOneWebhookUseCaseTest {
             signatureVerifier,
             paymentGateway,
             paymentService,
+            paymentIdempotencyService,
             paymentWebhookService,
             paymentVerificationService,
             paymentDiscrepancyService,

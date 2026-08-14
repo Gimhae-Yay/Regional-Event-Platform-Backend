@@ -65,6 +65,7 @@ public class ReceivePortOneWebhookUseCase {
     private final PortOneWebhookSignatureVerifier signatureVerifier;
     private final PortOnePaymentGateway paymentGateway;
     private final PaymentService paymentService;
+    private final PaymentIdempotencyService paymentIdempotencyService;
     private final PaymentWebhookService paymentWebhookService;
     private final PaymentVerificationService paymentVerificationService;
     private final PaymentDiscrepancyService paymentDiscrepancyService;
@@ -85,6 +86,7 @@ public class ReceivePortOneWebhookUseCase {
         PortOneWebhookSignatureVerifier signatureVerifier,
         PortOnePaymentGateway paymentGateway,
         PaymentService paymentService,
+        PaymentIdempotencyService paymentIdempotencyService,
         PaymentWebhookService paymentWebhookService,
         PaymentVerificationService paymentVerificationService,
         PaymentDiscrepancyService paymentDiscrepancyService,
@@ -104,6 +106,7 @@ public class ReceivePortOneWebhookUseCase {
         this.signatureVerifier = signatureVerifier;
         this.paymentGateway = paymentGateway;
         this.paymentService = paymentService;
+        this.paymentIdempotencyService = paymentIdempotencyService;
         this.paymentWebhookService = paymentWebhookService;
         this.paymentVerificationService = paymentVerificationService;
         this.paymentDiscrepancyService = paymentDiscrepancyService;
@@ -177,6 +180,7 @@ public class ReceivePortOneWebhookUseCase {
             if (lockedContext == null || !isTerminal(lockedContext.payment().getStatus())) {
                 return false;
             }
+            setPaymentIdempotencyExpiration(lockedContext.payment());
             if (paymentWebhookService.existsByProviderEventId(webhookId)) {
                 return true;
             }
@@ -221,6 +225,7 @@ public class ReceivePortOneWebhookUseCase {
             return;
         }
         if (isTerminal(payment.getStatus())) {
+            setPaymentIdempotencyExpiration(payment);
             paymentWebhookService.createIfAbsent(new PaymentWebhook(
                 webhookId, payment, AUTHENTICATION_RESULT, "ALREADY_FINALIZED", hash(rawBody), now
             ));
@@ -252,6 +257,9 @@ public class ReceivePortOneWebhookUseCase {
             recordPaymentAudit(payment, previousStatus, PaymentStatus.DISCREPANT, requestId, now);
             recordDiscrepancyAudit(discrepancy, requestId, now);
             releaseCoupon(snapshot, COUPON_DISCREPANCY_RELEASED_REASON, requestId, now);
+        }
+        if (isTerminal(payment.getStatus())) {
+            setPaymentIdempotencyExpiration(payment);
         }
         paymentVerificationService.create(new PaymentVerification(
             payment,
@@ -480,6 +488,10 @@ public class ReceivePortOneWebhookUseCase {
             || status == PaymentStatus.DECLINED
             || status == PaymentStatus.CANCELLED
             || status == PaymentStatus.DISCREPANT;
+    }
+
+    private void setPaymentIdempotencyExpiration(Payment payment) {
+        paymentIdempotencyService.setPaymentResultExpiration(payment, payment.getFinalizedAt());
     }
 
     private String hash(String value) {
