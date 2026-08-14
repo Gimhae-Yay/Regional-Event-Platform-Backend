@@ -47,22 +47,29 @@ public class RecordStampbookProgressUseCase {
     }
 
     public void record(Long visitId) {
-        if (visitService.findStampbookProgressSource(visitId).isEmpty()) {
+        Visit sourceVisit = visitService.findStampbookProgressSource(visitId).orElse(null);
+        if (sourceVisit == null) {
             return;
         }
-        transactionTemplate.executeWithoutResult(status -> recordInCurrentTransaction(visitId));
+        transactionTemplate.executeWithoutResult(status -> recordInCurrentTransaction(
+            visitId,
+            sourceVisit.getContent().getContentId()
+        ));
     }
 
-    private void recordInCurrentTransaction(Long visitId) {
-        Visit visit = visitService.findStampbookProgressSourceInCurrentTransaction(visitId).orElse(null);
-        if (visit == null) {
+    private void recordInCurrentTransaction(
+        Long visitId,
+        Long targetContentId
+    ) {
+        List<Stampbook> stampbooks = stampbookService.findPublishedByTargetContentIdForUpdate(
+            targetContentId
+        );
+        if (stampbooks.isEmpty()) {
             return;
         }
 
-        List<Stampbook> stampbooks = stampbookService.findPublishedByTargetContentIdForUpdate(
-            visit.getContent().getContentId()
-        );
-        if (stampbooks.isEmpty()) {
+        Visit visit = visitService.findStampbookProgressSourceInCurrentTransaction(visitId).orElse(null);
+        if (visit == null) {
             return;
         }
 
