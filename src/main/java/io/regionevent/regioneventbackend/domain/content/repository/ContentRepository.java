@@ -306,6 +306,11 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
         ContentStatus status
     );
 
+    boolean existsByContentIdAndStatusAndDeletedAtIsNullAndRegionIsPublicTrue(
+        Long contentId,
+        ContentStatus status
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @EntityGraph(attributePaths = "region")
     @Query("""
