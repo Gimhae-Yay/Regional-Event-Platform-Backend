@@ -324,6 +324,10 @@ public class ContentService {
         return contentRepository.findPublishedReservationTargetIdForUpdate(contentId).isPresent();
     }
 
+    public boolean lockPublishedCapacityHoldTarget(Long contentId) {
+        return contentRepository.findPublishedCapacityHoldTargetIdForUpdate(contentId).isPresent();
+    }
+
     public Optional<Long> findPublishedPaymentReservationPriceForUpdate(Long contentId) {
         return contentRepository.findPublishedPaymentReservationPriceForUpdate(contentId);
     }
