@@ -2,6 +2,8 @@ package io.regionevent.regioneventbackend.domain.mission.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -15,6 +17,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -25,8 +28,11 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
@@ -52,6 +58,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
@@ -87,6 +94,10 @@ class MissionParticipationControllerMySqlIntegrationTest extends NonTransactiona
     private final MissionRewardClaimRepository missionRewardClaimRepository;
     private final MissionParticipationDuplicateReadService duplicateReadService;
     private final JdbcTemplate jdbcTemplate;
+    private final TransactionTemplate transactionTemplate;
+
+    @MockitoSpyBean
+    private AppUserService appUserService;
 
     @Autowired
     MissionParticipationControllerMySqlIntegrationTest(
@@ -104,7 +115,8 @@ class MissionParticipationControllerMySqlIntegrationTest extends NonTransactiona
         MissionProgressRepository missionProgressRepository,
         MissionRewardClaimRepository missionRewardClaimRepository,
         MissionParticipationDuplicateReadService duplicateReadService,
-        JdbcTemplate jdbcTemplate
+        JdbcTemplate jdbcTemplate,
+        PlatformTransactionManager transactionManager
     ) {
         this.mockMvc = mockMvc;
         this.objectMapper = objectMapper;
@@ -121,6 +133,7 @@ class MissionParticipationControllerMySqlIntegrationTest extends NonTransactiona
         this.missionRewardClaimRepository = missionRewardClaimRepository;
         this.duplicateReadService = duplicateReadService;
         this.jdbcTemplate = jdbcTemplate;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     @DynamicPropertySource
@@ -185,6 +198,92 @@ class MissionParticipationControllerMySqlIntegrationTest extends NonTransactiona
         }
 
         assertThat(missionParticipationRepository.count()).isOne();
+    }
+
+    @Test
+    @Timeout(15)
+    void create_사용자행잠금선행이면참여커밋후탈퇴가완료된다() throws Exception {
+        Fixture fixture = createFixture(true, true);
+        CountDownLatch userLocked = new CountDownLatch(1);
+        CountDownLatch releaseCreate = new CountDownLatch(1);
+
+        doAnswer(invocation -> {
+            Object lockedUser = invocation.callRealMethod();
+            userLocked.countDown();
+            await(releaseCreate);
+            return lockedUser;
+        }).when(appUserService).findActiveUserForUpdate(fixture.visitor().getUserId());
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<MvcResult> creation = executorService.submit(
+                () -> performCreate(fixture.visitor(), fixture.mission()).andReturn()
+            );
+            assertThat(userLocked.await(3, TimeUnit.SECONDS)).isTrue();
+
+            Future<?> withdrawal = executorService.submit(
+                () -> withdrawVisitor(fixture.visitor().getUserId())
+            );
+            try {
+                assertThatThrownBy(() -> withdrawal.get(300, TimeUnit.MILLISECONDS))
+                    .isInstanceOf(TimeoutException.class);
+            } finally {
+                releaseCreate.countDown();
+            }
+
+            MvcResult response = creation.get(5, TimeUnit.SECONDS);
+            assertThat(response.getResponse().getStatus()).isEqualTo(201);
+            assertThat(responseCode(response)).isEqualTo("SUCCESS");
+            withdrawal.get(5, TimeUnit.SECONDS);
+        } finally {
+            releaseCreate.countDown();
+        }
+
+        assertThat(appUserRepository.findById(fixture.visitor().getUserId())).isEmpty();
+        assertThat(missionParticipationRepository.findAll()).singleElement().satisfies(participation ->
+            assertThat(participation.getUser()).isNull()
+        );
+    }
+
+    @Test
+    @Timeout(15)
+    void create_탈퇴잠금선행이면탈퇴커밋후새참여없이금지한다() throws Exception {
+        Fixture fixture = createFixture(true, true);
+        CountDownLatch withdrawalStarted = new CountDownLatch(1);
+        CountDownLatch releaseWithdrawal = new CountDownLatch(1);
+
+        doAnswer(invocation -> {
+            invocation.callRealMethod();
+            withdrawalStarted.countDown();
+            await(releaseWithdrawal);
+            return null;
+        }).when(appUserService).startWithdrawal(any(AppUser.class));
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<?> withdrawal = executorService.submit(
+                () -> withdrawVisitor(fixture.visitor().getUserId())
+            );
+            assertThat(withdrawalStarted.await(3, TimeUnit.SECONDS)).isTrue();
+
+            Future<MvcResult> creation = executorService.submit(
+                () -> performCreate(fixture.visitor(), fixture.mission()).andReturn()
+            );
+            try {
+                assertThatThrownBy(() -> creation.get(300, TimeUnit.MILLISECONDS))
+                    .isInstanceOf(TimeoutException.class);
+            } finally {
+                releaseWithdrawal.countDown();
+            }
+
+            withdrawal.get(5, TimeUnit.SECONDS);
+            MvcResult response = creation.get(5, TimeUnit.SECONDS);
+            assertThat(response.getResponse().getStatus()).isEqualTo(403);
+            assertThat(responseCode(response)).isEqualTo("FORBIDDEN");
+        } finally {
+            releaseWithdrawal.countDown();
+        }
+
+        assertThat(appUserRepository.findById(fixture.visitor().getUserId())).isEmpty();
+        assertThat(missionParticipationRepository.count()).isZero();
     }
 
     @Test
@@ -279,6 +378,14 @@ class MissionParticipationControllerMySqlIntegrationTest extends NonTransactiona
     private JsonNode responseData(MvcResult result) {
         try {
             return objectMapper.readTree(result.getResponse().getContentAsString()).get("data");
+        } catch (Exception exception) {
+            throw new IllegalStateException("failed to parse mission participation response", exception);
+        }
+    }
+
+    private String responseCode(MvcResult result) {
+        try {
+            return objectMapper.readTree(result.getResponse().getContentAsString()).get("code").asString();
         } catch (Exception exception) {
             throw new IllegalStateException("failed to parse mission participation response", exception);
         }
@@ -395,6 +502,36 @@ class MissionParticipationControllerMySqlIntegrationTest extends NonTransactiona
 
     private String bearerToken(AppUser user) {
         return "Bearer " + jwtAccessTokenService.issue(user.getUserId());
+    }
+
+    private void withdrawVisitor(Long userId) {
+        transactionTemplate.executeWithoutResult(status -> {
+            AppUser user = appUserService.findActiveUserForUpdate(userId).orElseThrow();
+            appUserService.startWithdrawal(user);
+            jdbcTemplate.update(
+                """
+                UPDATE user_role_assignment
+                SET status = 'REVOKED',
+                    revoked_at = CURRENT_TIMESTAMP(6),
+                    revoke_reason_code = 'USER_WITHDRAWAL',
+                    user_id = NULL
+                WHERE user_id = ?
+                """,
+                userId
+            );
+            appUserService.delete(user);
+        });
+    }
+
+    private void await(CountDownLatch latch) {
+        try {
+            if (!latch.await(3, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("concurrent test latch timed out");
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("concurrent test interrupted", exception);
+        }
     }
 
     private record Fixture(
