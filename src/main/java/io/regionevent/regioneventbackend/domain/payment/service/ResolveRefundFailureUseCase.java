@@ -74,7 +74,7 @@ public class ResolveRefundFailureUseCase {
         String evidenceReference = normalizeRequired(request == null ? null : request.evidenceReference());
         String reason = normalizeRequired(request == null ? null : request.reason());
         PlatformAdminAssignment assignment = platformAdminAuthorizationService
-            .requireAuthorizedPlatformAdmin(actorUserId);
+            .requireAuthorizedPlatformAdminForUpdate(actorUserId);
         Refund refund = refundService.findByRefundIdForUpdate(refundId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
         validateDiscrepant(refund);

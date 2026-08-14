@@ -331,7 +331,7 @@ public class CreateRefundUseCase {
         UUID requestId
     ) {
         PlatformAdminAssignment assignment = platformAdminAuthorizationService
-            .requireAuthorizedPlatformAdmin(actorUserId);
+            .requireAuthorizedPlatformAdminForUpdate(actorUserId);
         Payment payment = paymentService.findByPaymentIdForUpdate(paymentId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
         Refund existing = refundService.findByPaymentIdForUpdate(paymentId).orElse(null);
@@ -383,7 +383,7 @@ public class CreateRefundUseCase {
         UUID requestId
     ) {
         PlatformAdminAssignment assignment = platformAdminAuthorizationService
-            .requireAuthorizedPlatformAdmin(actorUserId);
+            .requireAuthorizedPlatformAdminForUpdate(actorUserId);
         Refund refund = refundService.findByRefundIdForUpdate(preparedRefund.refundId())
             .orElseThrow(() -> new IllegalStateException("prepared refund does not exist"));
         RefundAttempt attempt = refundAttemptService
@@ -412,7 +412,7 @@ public class CreateRefundUseCase {
         UUID requestId
     ) {
         PlatformAdminAssignment assignment = platformAdminAuthorizationService
-            .requireAuthorizedPlatformAdmin(actorUserId);
+            .requireAuthorizedPlatformAdminForUpdate(actorUserId);
         Refund refund = refundService.findByRefundIdForUpdate(preparedRefund.refundId())
             .orElseThrow(() -> new IllegalStateException("prepared refund does not exist"));
         RefundAttempt attempt = refundAttemptService
@@ -433,7 +433,7 @@ public class CreateRefundUseCase {
         UUID requestId
     ) {
         PlatformAdminAssignment assignment = platformAdminAuthorizationService
-            .requireAuthorizedPlatformAdmin(actorUserId);
+            .requireAuthorizedPlatformAdminForUpdate(actorUserId);
         Refund refund = refundService.findByRefundIdForUpdate(preparedRefund.refundId())
             .orElseThrow(() -> new IllegalStateException("prepared refund does not exist"));
         RefundAttempt attempt = refundAttemptService

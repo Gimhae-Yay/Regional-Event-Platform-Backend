@@ -193,7 +193,7 @@ class CreateRefundUseCaseTest {
         PaymentDiscrepancy discrepancy = mock(PaymentDiscrepancy.class);
 
         when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
-        when(authorizationService.requireAuthorizedPlatformAdmin(1L)).thenReturn(assignment);
+        when(authorizationService.requireAuthorizedPlatformAdminForUpdate(1L)).thenReturn(assignment);
         when(assignment.getPlatformAdminAssignmentId()).thenReturn(1L);
         when(assignment.getAppUser()).thenReturn(appUser);
         when(assignment.isActive()).thenReturn(true);
@@ -336,7 +336,7 @@ class CreateRefundUseCaseTest {
         PaymentDiscrepancy discrepancy = mock(PaymentDiscrepancy.class);
 
         when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
-        when(authorizationService.requireAuthorizedPlatformAdmin(1L)).thenReturn(assignment);
+        when(authorizationService.requireAuthorizedPlatformAdminForUpdate(1L)).thenReturn(assignment);
         when(assignment.getPlatformAdminAssignmentId()).thenReturn(1L);
         when(assignment.getAppUser()).thenReturn(appUser);
         when(assignment.isActive()).thenReturn(true);

@@ -119,7 +119,7 @@ public class RetryRefundUseCase {
         long refundId
     ) {
         PlatformAdminAssignment assignment = platformAdminAuthorizationService
-            .requireAuthorizedPlatformAdmin(actorUserId);
+            .requireAuthorizedPlatformAdminForUpdate(actorUserId);
         Refund refund = refundService.findByRefundIdForUpdate(refundId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
         if (refund.getStatus() != RefundStatus.FAILED) {
@@ -162,7 +162,7 @@ public class RetryRefundUseCase {
         UUID requestId
     ) {
         PlatformAdminAssignment assignment = platformAdminAuthorizationService
-            .requireAuthorizedPlatformAdmin(actorUserId);
+            .requireAuthorizedPlatformAdminForUpdate(actorUserId);
         Refund refund = findPreparedRefund(preparedRetry.refundId());
         RefundAttempt attempt = findPreparedAttempt(preparedRetry.refundAttemptId());
         attempt.respond(cancellation.cancellationId(), cancellation.status(), cancellation.resultHash());
@@ -186,7 +186,7 @@ public class RetryRefundUseCase {
         UUID requestId
     ) {
         PlatformAdminAssignment assignment = platformAdminAuthorizationService
-            .requireAuthorizedPlatformAdmin(actorUserId);
+            .requireAuthorizedPlatformAdminForUpdate(actorUserId);
         Refund refund = findPreparedRefund(preparedRetry.refundId());
         RefundAttempt attempt = findPreparedAttempt(preparedRetry.refundAttemptId());
         attempt.noResponse(failureReasonCode);
@@ -203,7 +203,7 @@ public class RetryRefundUseCase {
         UUID requestId
     ) {
         PlatformAdminAssignment assignment = platformAdminAuthorizationService
-            .requireAuthorizedPlatformAdmin(actorUserId);
+            .requireAuthorizedPlatformAdminForUpdate(actorUserId);
         Refund refund = findPreparedRefund(preparedRetry.refundId());
         RefundAttempt attempt = findPreparedAttempt(preparedRetry.refundAttemptId());
         attempt.respond(null, exception.getExternalStatus(), exception.getResultHash());

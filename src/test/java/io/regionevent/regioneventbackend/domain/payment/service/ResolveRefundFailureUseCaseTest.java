@@ -50,7 +50,7 @@ class ResolveRefundFailureUseCaseTest {
         Fixture fixture = new Fixture();
         Refund refund = fixture.discrepantRefund();
         when(refund.getStatus()).thenReturn(RefundStatus.DISCREPANT, RefundStatus.SUCCEEDED);
-        when(fixture.authorizationService.requireAuthorizedPlatformAdmin(1L)).thenReturn(fixture.assignment);
+        when(fixture.authorizationService.requireAuthorizedPlatformAdminForUpdate(1L)).thenReturn(fixture.assignment);
         when(fixture.refundService.findByRefundIdForUpdate(552L)).thenReturn(Optional.of(refund));
 
         ResolveRefundFailureResult result = fixture.useCase.resolve(
@@ -83,7 +83,7 @@ class ResolveRefundFailureUseCaseTest {
         Fixture fixture = new Fixture();
         Refund refund = fixture.discrepantRefund();
         when(refund.getStatus()).thenReturn(RefundStatus.DISCREPANT, RefundStatus.FAILED);
-        when(fixture.authorizationService.requireAuthorizedPlatformAdmin(1L)).thenReturn(fixture.assignment);
+        when(fixture.authorizationService.requireAuthorizedPlatformAdminForUpdate(1L)).thenReturn(fixture.assignment);
         when(fixture.refundService.findByRefundIdForUpdate(552L)).thenReturn(Optional.of(refund));
 
         ResolveRefundFailureResult result = fixture.useCase.resolve(
@@ -117,7 +117,7 @@ class ResolveRefundFailureUseCaseTest {
         );
         Instant restoredAt = Instant.parse("2026-08-12T01:02:04Z");
         when(refund.getStatus()).thenReturn(RefundStatus.DISCREPANT, RefundStatus.SUCCEEDED);
-        when(fixture.authorizationService.requireAuthorizedPlatformAdmin(1L)).thenReturn(fixture.assignment);
+        when(fixture.authorizationService.requireAuthorizedPlatformAdminForUpdate(1L)).thenReturn(fixture.assignment);
         when(fixture.refundService.findByRefundIdForUpdate(552L)).thenReturn(Optional.of(refund));
         when(coupon.getCouponId()).thenReturn(701L);
         when(coupon.getStatus()).thenReturn(
@@ -155,7 +155,7 @@ class ResolveRefundFailureUseCaseTest {
         Fixture fixture = new Fixture();
         Refund refund = mock(Refund.class);
         when(refund.getStatus()).thenReturn(RefundStatus.SUCCEEDED);
-        when(fixture.authorizationService.requireAuthorizedPlatformAdmin(1L)).thenReturn(fixture.assignment);
+        when(fixture.authorizationService.requireAuthorizedPlatformAdminForUpdate(1L)).thenReturn(fixture.assignment);
         when(fixture.refundService.findByRefundIdForUpdate(552L)).thenReturn(Optional.of(refund));
 
         assertThatThrownBy(() -> fixture.useCase.resolve(

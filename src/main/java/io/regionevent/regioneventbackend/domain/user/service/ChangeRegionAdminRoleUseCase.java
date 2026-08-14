@@ -65,7 +65,7 @@ public class ChangeRegionAdminRoleUseCase {
         UUID requestId
     ) {
         PlatformAdminAssignment actor = platformAdminAuthorizationService
-            .requireAuthorizedPlatformAdmin(actorUserId);
+            .requireAuthorizedPlatformAdminForUpdate(actorUserId);
         AppUser targetUser = appUserService.findActiveUserForUpdate(targetUserId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
         validateOrdinaryTarget(targetUser);
