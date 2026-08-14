@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -17,7 +18,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentStatus;
-import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
@@ -27,10 +28,9 @@ class RegionAdminAuthorizationServiceTest {
     private static final Long GIMHAE_REGION_ID = 10L;
     private static final Long DONGHAE_REGION_ID = 20L;
 
-    private final UserRoleAssignmentRepository userRoleAssignmentRepository =
-        mock(UserRoleAssignmentRepository.class);
+    private final AppUserRepository appUserRepository = mock(AppUserRepository.class);
     private final RegionAdminAuthorizationService authorizationService =
-        new RegionAdminAuthorizationService(userRoleAssignmentRepository);
+        new RegionAdminAuthorizationService(appUserRepository);
 
     @Test
     void 전체_단위_계약을_보존한다() {
@@ -115,13 +115,42 @@ class RegionAdminAuthorizationServiceTest {
         assertThat(authorizationService.authorize(USER_ID, GIMHAE_REGION_ID)).isSameAs(assignment);
     }
 
+    @Test
+    void 수정용_지역관리자_인가는_계정과역할배정을순서대로잠근다() {
+        UserRoleAssignment assignment = assignmentInRegion(GIMHAE_REGION_ID);
+        givenActiveUserForUpdate();
+        when(appUserRepository.findActiveRoleAssignmentForUpdate(
+                USER_ID,
+                UserRole.REGION_ADMIN,
+                UserRoleAssignmentStatus.ACTIVE,
+                AppUserStatus.ACTIVE
+            )).thenReturn(Optional.of(assignment));
+
+        assertThat(authorizationService.authorizeForUpdate(USER_ID, GIMHAE_REGION_ID))
+            .isSameAs(assignment);
+        InOrder inOrder = org.mockito.Mockito.inOrder(appUserRepository);
+        inOrder.verify(appUserRepository).findByIdForUpdate(USER_ID);
+        inOrder.verify(appUserRepository).findActiveRoleAssignmentForUpdate(
+            USER_ID,
+            UserRole.REGION_ADMIN,
+            UserRoleAssignmentStatus.ACTIVE,
+            AppUserStatus.ACTIVE
+        );
+    }
+
     private void givenAuthorizationAssignment(Optional<UserRoleAssignment> assignment) {
-        when(userRoleAssignmentRepository.findByAppUserUserIdAndRoleAndStatusAndAppUserStatus(
+        when(appUserRepository.findActiveRoleAssignment(
                 USER_ID,
                 UserRole.REGION_ADMIN,
                 UserRoleAssignmentStatus.ACTIVE,
                 AppUserStatus.ACTIVE
             )).thenReturn(assignment);
+    }
+
+    private void givenActiveUserForUpdate() {
+        AppUser user = mock(AppUser.class);
+        when(user.getStatus()).thenReturn(AppUserStatus.ACTIVE);
+        when(appUserRepository.findByIdForUpdate(USER_ID)).thenReturn(Optional.of(user));
     }
 
     private UserRoleAssignment assignmentInRegion(Long regionId) {

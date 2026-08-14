@@ -13,9 +13,11 @@ import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetTyp
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventActor;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
+import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminAssignment;
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminAssignmentStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminGrade;
+import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
 import io.regionevent.regioneventbackend.domain.user.service.PlatformAdminAssignmentService;
 import io.regionevent.regioneventbackend.domain.user.service.PlatformAdminAuthorizationService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -26,17 +28,20 @@ public class DeactivateAdminAccountUseCase {
 
     private final PlatformAdminAuthorizationService platformAdminAuthorizationService;
     private final PlatformAdminAssignmentService platformAdminAssignmentService;
+    private final AppUserService appUserService;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final Clock clock;
 
     public DeactivateAdminAccountUseCase(
         PlatformAdminAuthorizationService platformAdminAuthorizationService,
         PlatformAdminAssignmentService platformAdminAssignmentService,
+        AppUserService appUserService,
         RecordAuditEventUseCase recordAuditEventUseCase,
         Clock clock
     ) {
         this.platformAdminAuthorizationService = platformAdminAuthorizationService;
         this.platformAdminAssignmentService = platformAdminAssignmentService;
+        this.appUserService = appUserService;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
         this.clock = clock;
     }
@@ -49,13 +54,17 @@ public class DeactivateAdminAccountUseCase {
         UUID requestId
     ) {
         validateCommand(command);
+        List<AppUser> lockedUsers = appUserService.findUsersForUpdate(actorUserId, targetUserId);
         PlatformAdminAssignment actor = platformAdminAuthorizationService
-            .requireAuthorizedSuperAdmin(actorUserId);
+            .requireAuthorizedSuperAdminForUpdate(actorUserId);
+        AppUser targetUser = lockedUsers.stream()
+            .filter(user -> user.getUserId().equals(targetUserId))
+            .findFirst()
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+        PlatformAdminAssignment target = platformAdminAssignmentService.findAssignmentForUpdate(targetUser.getUserId())
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
         List<PlatformAdminAssignment> activeSuperAdmins = platformAdminAssignmentService
             .findActiveSuperAdminsForUpdate();
-        actor = platformAdminAuthorizationService.requireAuthorizedSuperAdminForUpdate(actorUserId);
-        PlatformAdminAssignment target = platformAdminAssignmentService.findAssignmentForUpdate(targetUserId)
-            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
         validateDeactivation(actor, target, activeSuperAdmins);
 
         Instant inactivatedAt = clock.instant();
