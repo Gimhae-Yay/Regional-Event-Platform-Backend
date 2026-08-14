@@ -85,6 +85,24 @@ class CreateRefundUseCaseTest {
     }
 
     @Test
+    void 예약취소환불_PortOne요청접수응답_환불을불일치로확정하고응답기록을보존한다() {
+        ReservationCancellationRefundFixture fixture = reservationCancellationRefundFixture(RefundStatus.DISCREPANT);
+        when(fixture.paymentGateway().cancelPayment("portone-payment", 10_000L, "예약 취소"))
+            .thenReturn(new PortOnePaymentGateway.PortOneCancellation("cancel-1", "REQUESTED", "hash-1"));
+
+        CreateRefundResponse response = fixture.useCase().createForReservationCancellation(
+            10L,
+            null,
+            UUID.randomUUID()
+        );
+
+        verify(fixture.attempt()).respond("cancel-1", "REQUESTED", "hash-1");
+        verify(fixture.refund()).markDiscrepant(Instant.parse("2026-08-11T00:00:00Z"));
+        verify(fixture.auditEventUseCase()).record(any(AuditEventCommand.class));
+        org.assertj.core.api.Assertions.assertThat(response.status()).isEqualTo("DISCREPANT");
+    }
+
+    @Test
     void 예약취소환불_PortOne무응답_환불을불일치로확정하고감사를기록한다() {
         ReservationCancellationRefundFixture fixture = reservationCancellationRefundFixture(RefundStatus.DISCREPANT);
         when(fixture.paymentGateway().cancelPayment("portone-payment", 10_000L, "예약 취소"))
@@ -106,7 +124,7 @@ class CreateRefundUseCaseTest {
     }
 
     @Test
-    void PortOne_호출_전에_환불과_대기_시도를_커밋한다() {
+    void 관리자환불_PortOne요청접수응답_환불을불일치로확정하고응답기록을보존한다() {
         PlatformAdminAuthorizationService authorizationService = mock(PlatformAdminAuthorizationService.class);
         PaymentService paymentService = mock(PaymentService.class);
         RefundService refundService = mock(RefundService.class);
@@ -168,10 +186,7 @@ class CreateRefundUseCaseTest {
         when(discrepancy.getStatus()).thenReturn("OPEN");
         when(discrepancy.getPaymentDiscrepancyId()).thenReturn(40L);
         when(paymentGateway.cancelPayment("portone-payment", 10_000L, "관리자 요청"))
-            .thenThrow(new PortOneNoResponseException(
-                RefundFailureReasonCode.CONNECTION,
-                new RuntimeException("connection failed")
-            ));
+            .thenReturn(new PortOnePaymentGateway.PortOneCancellation("cancel-1", "REQUESTED", "hash-1"));
         when(refundService.findByRefundIdForUpdate(20L)).thenReturn(Optional.of(refund));
         when(refundAttemptService.findByRefundAttemptIdForUpdate(30L)).thenReturn(Optional.of(attempt));
         when(refund.getPayment()).thenReturn(payment);
@@ -190,7 +205,7 @@ class CreateRefundUseCaseTest {
         inOrder.verify(paymentGateway).cancelPayment("portone-payment", 10_000L, "관리자 요청");
         ArgumentCaptor<RefundAttempt> attemptCaptor = ArgumentCaptor.forClass(RefundAttempt.class);
         verify(refundAttemptService).create(attemptCaptor.capture());
-        verify(attempt).noResponse(RefundFailureReasonCode.CONNECTION);
+        verify(attempt).respond("cancel-1", "REQUESTED", "hash-1");
         verify(refund).markDiscrepant(Instant.parse("2026-08-11T00:00:00Z"));
         verify(discrepancy).requestRefund();
         verify(discrepancyActionService).create(
