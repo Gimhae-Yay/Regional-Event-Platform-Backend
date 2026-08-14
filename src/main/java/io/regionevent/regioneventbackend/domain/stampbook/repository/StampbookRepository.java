@@ -43,6 +43,39 @@ public interface StampbookRepository extends JpaRepository<Stampbook, Long> {
         """)
     Optional<Stampbook> findByStampbookIdForUpdate(@Param("stampbookId") Long stampbookId);
 
+    @Query("""
+        SELECT stampbook
+        FROM Stampbook stampbook
+        JOIN FETCH stampbook.region region
+        JOIN FETCH stampbook.rewardCouponPolicy rewardCouponPolicy
+        JOIN FETCH rewardCouponPolicy.region rewardCouponPolicyRegion
+        WHERE stampbook.stampbookId = :stampbookId
+          AND region.regionId = :regionId
+          AND stampbook.status = :status
+        """)
+    Optional<Stampbook> findReviewDetailByStampbookIdAndRegionIdAndStatus(
+        @Param("stampbookId") Long stampbookId,
+        @Param("regionId") Long regionId,
+        @Param("status") StampbookStatus status
+    );
+
+    @Query("""
+        SELECT new io.regionevent.regioneventbackend.domain.stampbook.repository.StampbookReviewTargetContentProjection(
+            content.contentId,
+            contentRegion.regionId,
+            content.title,
+            content.status
+        )
+        FROM StampbookContent targetContent
+        JOIN targetContent.content content
+        JOIN content.region contentRegion
+        WHERE targetContent.stampbook.stampbookId = :stampbookId
+        ORDER BY content.contentId ASC
+        """)
+    List<StampbookReviewTargetContentProjection> findReviewTargetContentsByStampbookId(
+        @Param("stampbookId") Long stampbookId
+    );
+
     boolean existsByRewardCouponPolicyCouponPolicyIdAndStatus(
         Long couponPolicyId,
         StampbookStatus status
