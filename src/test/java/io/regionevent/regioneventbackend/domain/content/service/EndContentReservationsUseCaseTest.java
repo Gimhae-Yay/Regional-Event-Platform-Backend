@@ -72,7 +72,7 @@ class EndContentReservationsUseCaseTest {
         UserRoleAssignment regionAdmin = activeRegionAdmin();
         ContentSession contentSession = mock(ContentSession.class);
         when(contentService.findEndTargetForUpdate(CONTENT_ID)).thenReturn(content);
-        when(regionAdminAuthorizationService.authorize(ADMIN_ID, REGION_ID)).thenReturn(regionAdmin);
+        givenAuthorizedRegionAdmin(regionAdmin);
         when(contentSessionService.hasNonTerminalSessionForEnd(CONTENT_ID)).thenReturn(false);
         when(contentSessionService.findCurrentSessionsByContentId(CONTENT_ID)).thenReturn(List.of(contentSession));
         when(contentService.findCurrentDatabaseTime()).thenReturn(ENDED_AT);
@@ -121,7 +121,7 @@ class EndContentReservationsUseCaseTest {
         when(endedContent.getStatus()).thenReturn(ContentStatus.ENDED);
         when(endedContent.getRegion()).thenReturn(region);
         when(contentService.findEndTargetForUpdate(CONTENT_ID)).thenReturn(endedContent);
-        when(regionAdminAuthorizationService.authorize(ADMIN_ID, REGION_ID)).thenReturn(regionAdmin);
+        givenAuthorizedRegionAdmin(regionAdmin);
         when(contentLogService.findLatestEnded(CONTENT_ID)).thenReturn(endedLog);
         when(endedLog.getDate()).thenReturn(ENDED_AT);
 
@@ -155,5 +155,14 @@ class EndContentReservationsUseCaseTest {
         when(assignment.getAppUser()).thenReturn(appUser);
         when(appUser.getUserId()).thenReturn(ADMIN_ID);
         return assignment;
+    }
+
+    private void givenAuthorizedRegionAdmin(UserRoleAssignment assignment) {
+        RegionAdminAuthorizationService.AuthorizedRegionAdmin regionAdmin = mock(
+            RegionAdminAuthorizationService.AuthorizedRegionAdmin.class
+        );
+        when(regionAdminAuthorizationService.requireAuthorizedRegionAdminForUpdate(ADMIN_ID))
+            .thenReturn(regionAdmin);
+        when(regionAdmin.authorize(REGION_ID)).thenReturn(assignment);
     }
 }

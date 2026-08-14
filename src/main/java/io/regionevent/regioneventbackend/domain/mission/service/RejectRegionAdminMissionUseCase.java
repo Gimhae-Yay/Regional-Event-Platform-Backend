@@ -58,7 +58,7 @@ public class RejectRegionAdminMissionUseCase {
     ) {
         validateReasonCode(reasonCode);
         AuthorizedRegionAdmin regionAdmin = regionAdminAuthorizationService
-            .requireAuthorizedRegionAdmin(userId);
+            .requireAuthorizedRegionAdminForUpdate(userId);
         Mission mission = missionService.findMission(missionId);
         validateRegionScope(regionAdmin, mission);
 
