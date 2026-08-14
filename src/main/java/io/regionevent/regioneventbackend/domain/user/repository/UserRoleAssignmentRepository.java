@@ -34,7 +34,6 @@ public interface UserRoleAssignmentRepository extends JpaRepository<UserRoleAssi
         AppUserStatus appUserStatus
     );
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @EntityGraph(attributePaths = {"appUser", "region"})
     @Query("""
         SELECT assignment
@@ -43,7 +42,7 @@ public interface UserRoleAssignmentRepository extends JpaRepository<UserRoleAssi
           AND assignment.role = :role
           AND assignment.status = :status
         """)
-    Optional<UserRoleAssignment> findActiveRoleAssignmentForUpdate(
+    Optional<UserRoleAssignment> findActiveRoleAssignment(
         @Param("userId") Long userId,
         @Param("role") UserRole role,
         @Param("status") UserRoleAssignmentStatus status
@@ -74,5 +73,15 @@ public interface UserRoleAssignmentRepository extends JpaRepository<UserRoleAssi
           AND assignment.status = io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentStatus.ACTIVE
         """)
     long countActiveRegionAdminsByRegionRegionId(@Param("regionId") Long regionId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT assignment
+        FROM UserRoleAssignment assignment
+        WHERE assignment.region.regionId = :regionId
+          AND assignment.role = io.regionevent.regioneventbackend.domain.user.entity.UserRole.REGION_ADMIN
+          AND assignment.status = io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentStatus.ACTIVE
+        """)
+    List<UserRoleAssignment> findActiveRegionAdminsForUpdate(@Param("regionId") Long regionId);
 
 }

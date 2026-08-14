@@ -49,8 +49,8 @@ public class UserRoleAssignmentService {
         ));
     }
 
-    public Optional<UserRoleAssignment> findActiveRegionAdminForUpdate(Long userId) {
-        return userRoleAssignmentRepository.findActiveRoleAssignmentForUpdate(
+    public Optional<UserRoleAssignment> findActiveRegionAdmin(Long userId) {
+        return userRoleAssignmentRepository.findActiveRoleAssignment(
             userId,
             UserRole.REGION_ADMIN,
             UserRoleAssignmentStatus.ACTIVE
@@ -66,8 +66,8 @@ public class UserRoleAssignmentService {
         return userRoleAssignmentRepository.saveAndFlush(assignment);
     }
 
-    public long countActiveRegionAdmins(Long regionId) {
-        return userRoleAssignmentRepository.countActiveRegionAdminsByRegionRegionId(regionId);
+    public long countActiveRegionAdminsForUpdate(Long regionId) {
+        return userRoleAssignmentRepository.findActiveRegionAdminsForUpdate(regionId).size();
     }
 
     public List<UserRole> findRolesByUserId(Long userId) {
