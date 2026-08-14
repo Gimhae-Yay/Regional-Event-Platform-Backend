@@ -34,6 +34,7 @@ import io.regionevent.regioneventbackend.domain.payment.entity.RefundAttemptInit
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundFailureReasonCode;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneNoResponseException;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOnePaymentGateway;
+import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneResponseException;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminAssignment;
@@ -141,6 +142,16 @@ public class CreateRefundUseCase {
                 reason,
                 requestId
             ));
+        } catch (PortOneResponseException exception) {
+            executeInTransaction(() -> confirmReceivedError(
+                actorUserId,
+                preparedRefund,
+                exception,
+                evidenceReference,
+                reason,
+                requestId
+            ));
+            throw exception;
         }
     }
 
@@ -198,6 +209,14 @@ public class CreateRefundUseCase {
                 actor,
                 requestId
             ));
+        } catch (PortOneResponseException exception) {
+            executeInTransaction(() -> confirmReservationCancellationReceivedError(
+                preparedRefund,
+                exception,
+                actor,
+                requestId
+            ));
+            throw exception;
         }
     }
 
@@ -282,6 +301,23 @@ public class CreateRefundUseCase {
             .findByRefundAttemptIdForUpdate(preparedRefund.refundAttemptId())
             .orElseThrow(() -> new IllegalStateException("prepared refund attempt does not exist"));
         attempt.noResponse(failureReasonCode);
+        refund.markDiscrepant(Instant.now(clock));
+        recordReservationCancellationRefundAudit(refund, actor, requestId, Instant.now(clock));
+        return CreateRefundResponse.from(refund);
+    }
+
+    private CreateRefundResponse confirmReservationCancellationReceivedError(
+        PreparedRefund preparedRefund,
+        PortOneResponseException exception,
+        AuditEventActor actor,
+        UUID requestId
+    ) {
+        Refund refund = refundService.findByRefundIdForUpdate(preparedRefund.refundId())
+            .orElseThrow(() -> new IllegalStateException("prepared refund does not exist"));
+        RefundAttempt attempt = refundAttemptService
+            .findByRefundAttemptIdForUpdate(preparedRefund.refundAttemptId())
+            .orElseThrow(() -> new IllegalStateException("prepared refund attempt does not exist"));
+        attempt.respond(null, exception.getExternalStatus(), exception.getResultHash());
         refund.markDiscrepant(Instant.now(clock));
         recordReservationCancellationRefundAudit(refund, actor, requestId, Instant.now(clock));
         return CreateRefundResponse.from(refund);
@@ -383,6 +419,27 @@ public class CreateRefundUseCase {
             .findByRefundAttemptIdForUpdate(preparedRefund.refundAttemptId())
             .orElseThrow(() -> new IllegalStateException("prepared refund attempt does not exist"));
         attempt.noResponse(failureReasonCode);
+        refund.markDiscrepant(Instant.now(clock));
+        recordRefundAudit(refund, assignment, evidenceReference, reason, requestId);
+        return CreateRefundResponse.from(refund);
+    }
+
+    private CreateRefundResponse confirmReceivedError(
+        Long actorUserId,
+        PreparedRefund preparedRefund,
+        PortOneResponseException exception,
+        String evidenceReference,
+        String reason,
+        UUID requestId
+    ) {
+        PlatformAdminAssignment assignment = platformAdminAuthorizationService
+            .requireAuthorizedPlatformAdmin(actorUserId);
+        Refund refund = refundService.findByRefundIdForUpdate(preparedRefund.refundId())
+            .orElseThrow(() -> new IllegalStateException("prepared refund does not exist"));
+        RefundAttempt attempt = refundAttemptService
+            .findByRefundAttemptIdForUpdate(preparedRefund.refundAttemptId())
+            .orElseThrow(() -> new IllegalStateException("prepared refund attempt does not exist"));
+        attempt.respond(null, exception.getExternalStatus(), exception.getResultHash());
         refund.markDiscrepant(Instant.now(clock));
         recordRefundAudit(refund, assignment, evidenceReference, reason, requestId);
         return CreateRefundResponse.from(refund);
