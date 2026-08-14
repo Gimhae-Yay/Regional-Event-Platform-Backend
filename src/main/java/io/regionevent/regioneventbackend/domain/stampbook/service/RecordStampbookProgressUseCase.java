@@ -4,9 +4,7 @@ import java.time.Instant;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
-import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.stampbook.entity.StampEarn;
 import io.regionevent.regioneventbackend.domain.stampbook.entity.Stampbook;
@@ -25,7 +23,6 @@ public class RecordStampbookProgressUseCase {
     private final StampbookProgressService stampbookProgressService;
     private final StampEarnService stampEarnService;
     private final StampbookRewardGrantService stampbookRewardGrantService;
-    private final TransactionTemplate transactionTemplate;
 
     public RecordStampbookProgressUseCase(
         VisitService visitService,
@@ -33,8 +30,7 @@ public class RecordStampbookProgressUseCase {
         StampbookContentService stampbookContentService,
         StampbookProgressService stampbookProgressService,
         StampEarnService stampEarnService,
-        StampbookRewardGrantService stampbookRewardGrantService,
-        PlatformTransactionManager transactionManager
+        StampbookRewardGrantService stampbookRewardGrantService
     ) {
         this.visitService = visitService;
         this.stampbookService = stampbookService;
@@ -42,19 +38,18 @@ public class RecordStampbookProgressUseCase {
         this.stampbookProgressService = stampbookProgressService;
         this.stampEarnService = stampEarnService;
         this.stampbookRewardGrantService = stampbookRewardGrantService;
-        transactionTemplate = new TransactionTemplate(transactionManager);
-        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
+    @Transactional
     public void record(Long visitId) {
         Visit sourceVisit = visitService.findStampbookProgressSource(visitId).orElse(null);
         if (sourceVisit == null) {
             return;
         }
-        transactionTemplate.executeWithoutResult(status -> recordInCurrentTransaction(
+        recordInCurrentTransaction(
             visitId,
             sourceVisit.getContent().getContentId()
-        ));
+        );
     }
 
     private void recordInCurrentTransaction(
@@ -84,6 +79,10 @@ public class RecordStampbookProgressUseCase {
         Visit visit,
         Instant operationAt
     ) {
+        if (visit.getCheckedAt().isBefore(stampbook.getPublishedAt())) {
+            return;
+        }
+
         StampbookProgress progress = stampbookProgressService.findOrCreateForUpdate(
             stampbook,
             visit.getUser()

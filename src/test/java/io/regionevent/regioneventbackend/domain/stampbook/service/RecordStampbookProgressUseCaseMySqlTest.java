@@ -206,6 +206,23 @@ class RecordStampbookProgressUseCaseMySqlTest extends NonTransactionalMySqlTestS
     }
 
     @Test
+    void 공개전방문은스탬프북공개후에도적립하지않는다() {
+        Fixture fixture = createFixture(
+            StampbookStatus.PUBLISHED,
+            PUBLISHED_AT.minusSeconds(1),
+            1,
+            0
+        );
+
+        recordStampbookProgressUseCase.record(fixture.visitIds().getFirst());
+
+        assertThat(stampbookProgressRepository.findByStampbookStampbookIdAndUserUserId(
+            fixture.stampbookId(),
+            fixture.userId()
+        )).isEmpty();
+    }
+
+    @Test
     @Timeout(20)
     void 서로다른대상콘텐츠방문을동시에적립하면완료와보상근거한건으로수렴한다() throws Exception {
         Fixture fixture = createFixture(StampbookStatus.PUBLISHED, 2, 0, 1);
@@ -267,6 +284,15 @@ class RecordStampbookProgressUseCaseMySqlTest extends NonTransactionalMySqlTestS
         int targetContentCount,
         int... visitTargetIndexes
     ) {
+        return createFixture(stampbookStatus, CHECKED_AT, targetContentCount, visitTargetIndexes);
+    }
+
+    private Fixture createFixture(
+        StampbookStatus stampbookStatus,
+        Instant checkedAt,
+        int targetContentCount,
+        int... visitTargetIndexes
+    ) {
         return transactionTemplate.execute(status -> {
             String suffix = Long.toUnsignedString(System.nanoTime());
             Region region = regionRepository.saveAndFlush(new Region("GIMHAE-" + suffix, "김해시", true));
@@ -304,7 +330,8 @@ class RecordStampbookProgressUseCaseMySqlTest extends NonTransactionalMySqlTestS
                     visitor,
                     operator,
                     suffix,
-                    visitIndex
+                    visitIndex,
+                    checkedAt
                 ).getVisitId());
             }
             return new Fixture(
@@ -371,9 +398,10 @@ class RecordStampbookProgressUseCaseMySqlTest extends NonTransactionalMySqlTestS
         AppUser visitor,
         AppUser operator,
         String suffix,
-        int visitIndex
+        int visitIndex,
+        Instant checkedAt
     ) {
-        Instant sessionStartsAt = CHECKED_AT.plusSeconds(3_600L * visitIndex);
+        Instant sessionStartsAt = checkedAt.plusSeconds(3_600L * visitIndex);
         ContentSession contentSession = new ContentSession(
             content,
             region,
@@ -418,7 +446,7 @@ class RecordStampbookProgressUseCaseMySqlTest extends NonTransactionalMySqlTestS
             contentSession,
             operator,
             CheckinMethod.QR,
-            CHECKED_AT.plusSeconds(visitIndex)
+            checkedAt.plusSeconds(visitIndex)
         ));
     }
 

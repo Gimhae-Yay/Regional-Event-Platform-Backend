@@ -13,10 +13,6 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
-import org.springframework.transaction.TransactionStatus;
-
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicy;
 import io.regionevent.regioneventbackend.domain.stampbook.entity.StampEarn;
@@ -43,15 +39,13 @@ class RecordStampbookProgressUseCaseTest {
     private final StampbookRewardGrantService stampbookRewardGrantService = mock(
         StampbookRewardGrantService.class
     );
-    private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
     private final RecordStampbookProgressUseCase useCase = new RecordStampbookProgressUseCase(
         visitService,
         stampbookService,
         stampbookContentService,
         stampbookProgressService,
         stampEarnService,
-        stampbookRewardGrantService,
-        transactionManager
+        stampbookRewardGrantService
     );
 
     private final Visit visit = mock(Visit.class);
@@ -63,19 +57,19 @@ class RecordStampbookProgressUseCaseTest {
 
     @BeforeEach
     void setUp() {
-        when(transactionManager.getTransaction(any(TransactionDefinition.class)))
-            .thenReturn(mock(TransactionStatus.class));
         when(visitService.findStampbookProgressSource(VISIT_ID)).thenReturn(Optional.of(visit));
         when(visitService.findStampbookProgressSourceInCurrentTransaction(VISIT_ID))
             .thenReturn(Optional.of(visit));
         when(visit.getVisitId()).thenReturn(VISIT_ID);
         when(visit.getUser()).thenReturn(user);
         when(visit.getContent()).thenReturn(content);
+        when(visit.getCheckedAt()).thenReturn(OPERATION_AT);
         when(content.getContentId()).thenReturn(CONTENT_ID);
         when(stampbookService.findPublishedByTargetContentIdForUpdate(CONTENT_ID))
             .thenReturn(List.of(stampbook));
         when(stampbookService.findCurrentDatabaseTime()).thenReturn(OPERATION_AT);
         when(stampbook.getStampbookId()).thenReturn(STAMPBOOK_ID);
+        when(stampbook.getPublishedAt()).thenReturn(OPERATION_AT);
         when(stampbook.getRewardCouponPolicy()).thenReturn(couponPolicy);
         when(stampbookProgressService.findOrCreateForUpdate(stampbook, user)).thenReturn(progress);
         when(progress.getStampbookProgressId()).thenReturn(PROGRESS_ID);
@@ -112,6 +106,17 @@ class RecordStampbookProgressUseCaseTest {
         verify(stampEarnService, never()).create(any());
         verify(stampbookProgressService, never()).complete(any(), any());
         verify(stampbookRewardGrantService, never()).create(any());
+    }
+
+    @Test
+    void record_공개전방문이면적립하지않는다() {
+        when(visit.getCheckedAt()).thenReturn(OPERATION_AT.minusSeconds(1));
+        when(stampbook.getPublishedAt()).thenReturn(OPERATION_AT);
+
+        useCase.record(VISIT_ID);
+
+        verify(stampbookProgressService, never()).findOrCreateForUpdate(any(), any());
+        verify(stampEarnService, never()).create(any());
     }
 
     private StampEarn existingEarn(
