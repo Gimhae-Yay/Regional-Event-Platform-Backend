@@ -53,7 +53,9 @@ public class RejectOperatorApplicationUseCase {
         String rejectedReason,
         UUID requestId
     ) {
-        Long regionId = regionAdminAuthorizationService.requireAuthorizedRegionId(reviewerUserId);
+        RegionAdminAuthorizationService.AuthorizedRegionAdmin reviewer =
+            regionAdminAuthorizationService.requireAuthorizedRegionAdminForUpdate(reviewerUserId);
+        Long regionId = reviewer.region().getRegionId();
         OperatorApplicationStatus status = operatorApplicationService.findReviewStatus(
             operatorApplicationId,
             regionId
@@ -81,7 +83,7 @@ public class RejectOperatorApplicationUseCase {
         }
 
         Instant rejectedAt = clock.instant();
-        UserRoleAssignment reviewerAssignment = regionAdminAuthorizationService.authorize(reviewerUserId, regionId);
+        UserRoleAssignment reviewerAssignment = reviewer.roleAssignment();
         application.reject(reviewerAssignment.getAppUser(), rejectedReason, rejectedAt);
         recordAuditEventUseCase.record(new AuditEventCommand(
             requestId,

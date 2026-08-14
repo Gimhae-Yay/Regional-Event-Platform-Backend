@@ -103,7 +103,7 @@ class ApproveRegionAdminMissionUseCaseTest {
         when(assignment.getRegion()).thenReturn(region);
         when(assignment.getRole()).thenReturn(UserRole.REGION_ADMIN);
         regionAdmin = new AuthorizedRegionAdmin(user, region, assignment);
-        when(authorizationService.requireAuthorizedRegionAdmin(USER_ID)).thenReturn(regionAdmin);
+        when(authorizationService.requireAuthorizedRegionAdminForUpdate(USER_ID)).thenReturn(regionAdmin);
 
         rewardCouponPolicy = mock(CouponPolicy.class);
         when(rewardCouponPolicy.getCouponPolicyId()).thenReturn(COUPON_POLICY_ID);

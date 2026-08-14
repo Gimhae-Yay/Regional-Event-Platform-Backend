@@ -55,11 +55,12 @@ public class ApproveContentRevisionUseCase {
         Long revisionId,
         UUID requestId
     ) {
+        RegionAdminAuthorizationService.AuthorizedRegionAdmin regionAdmin =
+            regionAdminAuthorizationService.requireAuthorizedRegionAdminForUpdate(userId);
         Long contentId = contentRevisionService.findContentIdByRevisionId(revisionId);
         Content content = contentService.findApprovalTargetForUpdate(contentId);
         ContentRevision revision = contentRevisionService.findReviewTargetForUpdate(revisionId);
-        UserRoleAssignment reviewerAssignment = regionAdminAuthorizationService.authorize(
-            userId,
+        UserRoleAssignment reviewerAssignment = regionAdmin.authorize(
             content.getRegion().getRegionId()
         );
         boolean isPrePublicationRevisionByHistory = isPrePublicationRevisionByHistory(content);

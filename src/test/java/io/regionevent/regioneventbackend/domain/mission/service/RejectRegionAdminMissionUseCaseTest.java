@@ -68,7 +68,7 @@ class RejectRegionAdminMissionUseCaseTest {
         when(assignment.getAppUser()).thenReturn(user);
         when(assignment.getRole()).thenReturn(UserRole.REGION_ADMIN);
         AuthorizedRegionAdmin regionAdmin = new AuthorizedRegionAdmin(user, region, assignment);
-        when(authorizationService.requireAuthorizedRegionAdmin(USER_ID))
+        when(authorizationService.requireAuthorizedRegionAdminForUpdate(USER_ID))
             .thenReturn(regionAdmin);
 
         initialMission = mission();

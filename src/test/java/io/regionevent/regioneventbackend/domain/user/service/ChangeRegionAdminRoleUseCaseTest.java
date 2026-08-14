@@ -284,7 +284,7 @@ class ChangeRegionAdminRoleUseCaseTest {
 
     private void givenAuthorizedActor() {
         PlatformAdminAssignment actor = platformAdminActor();
-        when(platformAdminAuthorizationService.requireAuthorizedPlatformAdmin(ACTOR_USER_ID))
+        when(platformAdminAuthorizationService.requireAuthorizedPlatformAdminForUpdate(ACTOR_USER_ID))
             .thenReturn(actor);
     }
 

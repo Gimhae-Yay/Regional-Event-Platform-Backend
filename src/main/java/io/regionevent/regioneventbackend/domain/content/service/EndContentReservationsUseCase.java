@@ -78,10 +78,11 @@ public class EndContentReservationsUseCase {
         Long contentId,
         UUID requestId
     ) {
+        RegionAdminAuthorizationService.AuthorizedRegionAdmin regionAdmin =
+            regionAdminAuthorizationService.requireAuthorizedRegionAdminForUpdate(userId);
         Content content = contentService.findEndTargetForUpdate(contentId);
         Region region = content.getRegion();
-        UserRoleAssignment regionAdminAssignment = regionAdminAuthorizationService.authorize(
-            userId,
+        UserRoleAssignment regionAdminAssignment = regionAdmin.authorize(
             region.getRegionId()
         );
 

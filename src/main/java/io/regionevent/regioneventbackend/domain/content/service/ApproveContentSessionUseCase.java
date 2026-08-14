@@ -57,12 +57,13 @@ public class ApproveContentSessionUseCase {
         Long sessionId,
         UUID requestId
     ) {
+        RegionAdminAuthorizationService.AuthorizedRegionAdmin regionAdmin =
+            regionAdminAuthorizationService.requireAuthorizedRegionAdminForUpdate(userId);
         Long contentId = contentSessionService.findContentIdBySessionId(sessionId);
         Content content = contentService.findApprovalTargetForUpdate(contentId);
         ContentSession contentSession = contentSessionService.findApprovalTargetForUpdate(sessionId);
         validateTarget(content, contentSession);
-        UserRoleAssignment reviewerAssignment = regionAdminAuthorizationService.authorize(
-            userId,
+        UserRoleAssignment reviewerAssignment = regionAdmin.authorize(
             content.getRegion().getRegionId()
         );
         Instant reviewedAt = clock.instant().truncatedTo(ChronoUnit.MICROS);

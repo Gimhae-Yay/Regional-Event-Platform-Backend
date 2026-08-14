@@ -61,7 +61,7 @@ class ResolvePaymentDiscrepancyUseCaseTest {
         Payment payment = mock(Payment.class);
         CapacityHold hold = mock(CapacityHold.class);
         Region region = mock(Region.class);
-        when(authorizationService.requireAuthorizedPlatformAdmin(1L)).thenReturn(assignment);
+        when(authorizationService.requireAuthorizedPlatformAdminForUpdate(1L)).thenReturn(assignment);
         when(discrepancyService.findByIdForUpdate(301L)).thenReturn(Optional.of(discrepancy));
         when(discrepancy.getStatus()).thenReturn("OPEN");
         when(discrepancy.getPaymentDiscrepancyId()).thenReturn(301L);
@@ -126,7 +126,7 @@ class ResolvePaymentDiscrepancyUseCaseTest {
         );
         PaymentDiscrepancy discrepancy = mock(PaymentDiscrepancy.class);
         PlatformAdminAssignment assignment = authorizedAssignment();
-        when(authorizationService.requireAuthorizedPlatformAdmin(1L)).thenReturn(assignment);
+        when(authorizationService.requireAuthorizedPlatformAdminForUpdate(1L)).thenReturn(assignment);
         when(discrepancyService.findByIdForUpdate(301L)).thenReturn(Optional.of(discrepancy));
         when(discrepancy.getStatus()).thenReturn("REFUND_REQUESTED");
 
@@ -184,7 +184,7 @@ class ResolvePaymentDiscrepancyUseCaseTest {
             actionService,
             auditEventUseCase
         );
-        when(authorizationService.requireAuthorizedPlatformAdmin(2L))
+        when(authorizationService.requireAuthorizedPlatformAdminForUpdate(2L))
             .thenThrow(new BusinessException(ErrorCode.FORBIDDEN));
 
         assertThatThrownBy(() -> useCase.resolve(

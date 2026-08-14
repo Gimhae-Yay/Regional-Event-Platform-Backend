@@ -77,7 +77,7 @@ class RejectContentUseCaseTest {
         when(pendingContent.getRegion()).thenReturn(region);
         when(pendingContent.getStatus()).thenReturn(ContentStatus.PENDING);
         when(region.getRegionId()).thenReturn(REGION_ID);
-        when(regionAdminAuthorizationService.authorize(USER_ID, REGION_ID)).thenReturn(reviewerAssignment);
+        givenAuthorizedRegionAdmin(reviewerAssignment);
         when(reviewerAssignment.getRoleAssignmentId())
             .thenReturn(1L);
         when(reviewerAssignment.getAppUser()).thenReturn(reviewer);
@@ -130,7 +130,7 @@ class RejectContentUseCaseTest {
         when(rejectedContent.getRegion()).thenReturn(region);
         when(rejectedContent.getStatus()).thenReturn(ContentStatus.REJECTED);
         when(region.getRegionId()).thenReturn(REGION_ID);
-        when(regionAdminAuthorizationService.authorize(USER_ID, REGION_ID)).thenReturn(reviewerAssignment);
+        givenAuthorizedRegionAdmin(reviewerAssignment);
         when(contentLogService.findLatestRejected(CONTENT_ID)).thenReturn(rejectedLog);
         when(rejectedLog.getReason()).thenReturn(REJECT_REASON);
         when(rejectedLog.getDate()).thenReturn(rejectedAt);
@@ -164,7 +164,7 @@ class RejectContentUseCaseTest {
         when(rejectedContent.getRegion()).thenReturn(region);
         when(rejectedContent.getStatus()).thenReturn(ContentStatus.REJECTED);
         when(region.getRegionId()).thenReturn(REGION_ID);
-        when(regionAdminAuthorizationService.authorize(USER_ID, REGION_ID)).thenReturn(reviewerAssignment);
+        givenAuthorizedRegionAdmin(reviewerAssignment);
         when(contentLogService.findLatestRejected(CONTENT_ID)).thenReturn(rejectedLog);
         when(rejectedLog.getReason()).thenReturn(REJECT_REASON);
 
@@ -174,5 +174,14 @@ class RejectContentUseCaseTest {
             .isEqualTo(ErrorCode.CONTENT_STATE_CONFLICT);
         verify(contentService, never()).reject(rejectedContent, CLOCK_INSTANT);
         verify(recordAuditEventUseCase, never()).record(org.mockito.ArgumentMatchers.any());
+    }
+
+    private void givenAuthorizedRegionAdmin(UserRoleAssignment assignment) {
+        RegionAdminAuthorizationService.AuthorizedRegionAdmin regionAdmin = mock(
+            RegionAdminAuthorizationService.AuthorizedRegionAdmin.class
+        );
+        when(regionAdminAuthorizationService.requireAuthorizedRegionAdminForUpdate(USER_ID))
+            .thenReturn(regionAdmin);
+        when(regionAdmin.authorize(REGION_ID)).thenReturn(assignment);
     }
 }

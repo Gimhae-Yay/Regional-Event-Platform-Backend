@@ -68,7 +68,7 @@ class CreateRegionUseCaseTest {
         PlatformAdminAssignment actor = authorizedPlatformAdmin();
         Region region = createdRegion();
         UUID requestId = UUID.randomUUID();
-        when(platformAdminAuthorizationService.requireAuthorizedPlatformAdmin(ACTOR_USER_ID))
+        when(platformAdminAuthorizationService.requireAuthorizedPlatformAdminForUpdate(ACTOR_USER_ID))
             .thenReturn(actor);
         when(regionService.createPrivateRegion("JEONJU", "전주시")).thenReturn(region);
 
@@ -122,14 +122,14 @@ class CreateRegionUseCaseTest {
             assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT)
         );
 
-        verify(platformAdminAuthorizationService, never()).requireAuthorizedPlatformAdmin(any());
+        verify(platformAdminAuthorizationService, never()).requireAuthorizedPlatformAdminForUpdate(any());
         verify(regionService, never()).createPrivateRegion(any(), any());
         verify(recordAuditEventUseCase, never()).record(any());
     }
 
     @Test
     void create_고권한배정이없음_지역과감사를생성하지않는다() {
-        when(platformAdminAuthorizationService.requireAuthorizedPlatformAdmin(ACTOR_USER_ID))
+        when(platformAdminAuthorizationService.requireAuthorizedPlatformAdminForUpdate(ACTOR_USER_ID))
             .thenThrow(new BusinessException(ErrorCode.FORBIDDEN));
 
         assertThatThrownBy(() -> createRegionUseCase.create(
@@ -147,7 +147,7 @@ class CreateRegionUseCaseTest {
     @Test
     void create_정규화코드충돌_감사를생성하지않는다() {
         PlatformAdminAssignment actor = org.mockito.Mockito.mock(PlatformAdminAssignment.class);
-        when(platformAdminAuthorizationService.requireAuthorizedPlatformAdmin(ACTOR_USER_ID))
+        when(platformAdminAuthorizationService.requireAuthorizedPlatformAdminForUpdate(ACTOR_USER_ID))
             .thenReturn(actor);
         when(regionService.createPrivateRegion(eq("JEONJU"), eq("전주시")))
             .thenThrow(new BusinessException(ErrorCode.REGION_CODE_ALREADY_EXISTS));
