@@ -96,7 +96,7 @@ public class WithdrawUserUseCase {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         if (paymentService.hasPendingPayment(userId)
-            || paymentService.hasApprovedPaymentWithConfirmedReservation(userId)
+            || paymentService.hasApprovedPaymentWithConfirmedReservationWithoutRefund(userId)
             || refundService.hasInProgressRefund(userId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }

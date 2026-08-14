@@ -67,10 +67,22 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     boolean existsByCapacityHoldUserUserIdAndStatus(Long userId, PaymentStatus status);
 
-    boolean existsByCapacityHoldUserUserIdAndStatusAndReservationStatus(
-        Long userId,
-        PaymentStatus paymentStatus,
-        ReservationStatus reservationStatus
+    @Query("""
+        SELECT CASE WHEN COUNT(payment) > 0 THEN true ELSE false END
+        FROM Payment payment
+        WHERE payment.capacityHold.user.userId = :userId
+          AND payment.status = :paymentStatus
+          AND payment.reservation.status = :reservationStatus
+          AND NOT EXISTS (
+              SELECT refund
+              FROM Refund refund
+              WHERE refund.payment = payment
+          )
+        """)
+    boolean existsApprovedPaymentWithConfirmedReservationWithoutRefund(
+        @Param("userId") Long userId,
+        @Param("paymentStatus") PaymentStatus paymentStatus,
+        @Param("reservationStatus") ReservationStatus reservationStatus
     );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

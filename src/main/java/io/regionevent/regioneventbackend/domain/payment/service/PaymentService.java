@@ -62,8 +62,8 @@ public class PaymentService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
-    public boolean hasApprovedPaymentWithConfirmedReservation(Long userId) {
-        return paymentRepository.existsByCapacityHoldUserUserIdAndStatusAndReservationStatus(
+    public boolean hasApprovedPaymentWithConfirmedReservationWithoutRefund(Long userId) {
+        return paymentRepository.existsApprovedPaymentWithConfirmedReservationWithoutRefund(
             userId,
             PaymentStatus.APPROVED,
             ReservationStatus.CONFIRMED

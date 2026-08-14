@@ -215,18 +215,8 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
     @Test
     void withdraw_withApprovedPaymentAndConfirmedReservation_rejectsWithoutChangingPaymentReservationOrHold() {
         Fixture fixture = createFixture();
+        Payment payment = createApprovedPayment(fixture);
         CapacityHold consumedHold = fixture.reservation().getCapacityHold();
-        ReservationPriceSnapshot snapshot = reservationPriceSnapshotRepository.saveAndFlush(
-            new ReservationPriceSnapshot(consumedHold, null, 20_000, 0, 20_000, "KRW", Instant.now())
-        );
-        Payment payment = new Payment(
-            consumedHold,
-            snapshot,
-            "withdrawal-approved-payment-" + System.nanoTime(),
-            Instant.now()
-        );
-        payment.approve(fixture.reservation(), "portone-" + System.nanoTime(), Instant.now());
-        payment = paymentRepository.saveAndFlush(payment);
 
         assertThat(withdraw(fixture.user().getUserId())).isEqualTo(ErrorCode.FORBIDDEN);
 
@@ -251,6 +241,35 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
             });
         assertThat(refundRepository.findAll()).isEmpty();
         verifyNoInteractions(refreshTokenStore);
+    }
+
+    @Test
+    void withdraw_withSucceededRefundAndConfirmedReservation_cancelsReservationAndDeletesAccount() {
+        Fixture fixture = createFixture();
+        Payment payment = createApprovedPayment(fixture);
+        Refund refund = new Refund(payment, 20_000, Instant.now());
+        refund.startProcessing();
+        refund.succeed(Instant.now());
+        refundRepository.saveAndFlush(refund);
+
+        assertThat(withdraw(fixture.user().getUserId())).isNull();
+
+        assertThat(appUserRepository.findById(fixture.user().getUserId())).isEmpty();
+        assertThat(capacityHoldRepository.findById(fixture.reservation().getCapacityHold().getHoldId()))
+            .hasValueSatisfying(hold -> {
+                assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.CONSUMED);
+                assertThat(hold.getUser()).isNull();
+            });
+        assertThat(reservationRepository.findById(fixture.reservation().getReservationId()))
+            .hasValueSatisfying(reservation -> {
+                assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.CANCELLED);
+                assertThat(reservation.getUser()).isNull();
+                assertThat(reservation.getCancellationReason()).isEqualTo("USER_WITHDRAWAL");
+            });
+        assertThat(paymentRepository.findByPaymentId(payment.getPaymentId()))
+            .hasValueSatisfying(savedPayment -> assertThat(savedPayment.getStatus()).isEqualTo(PaymentStatus.APPROVED));
+        assertThat(refundRepository.findById(refund.getRefundId()))
+            .hasValueSatisfying(savedRefund -> assertThat(savedRefund.getStatus()).isEqualTo(RefundStatus.SUCCEEDED));
     }
 
     @Test
@@ -449,6 +468,21 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         ));
         jdbcTemplate.update("UPDATE content_session SET remaining_capacity = 8 WHERE session_id = ?", session.getSessionId());
         return new Fixture(user, session, activeHold, reservation);
+    }
+
+    private Payment createApprovedPayment(Fixture fixture) {
+        CapacityHold consumedHold = fixture.reservation().getCapacityHold();
+        ReservationPriceSnapshot snapshot = reservationPriceSnapshotRepository.saveAndFlush(
+            new ReservationPriceSnapshot(consumedHold, null, 20_000, 0, 20_000, "KRW", Instant.now())
+        );
+        Payment payment = new Payment(
+            consumedHold,
+            snapshot,
+            "withdrawal-approved-payment-" + System.nanoTime(),
+            Instant.now()
+        );
+        payment.approve(fixture.reservation(), "portone-" + System.nanoTime(), Instant.now());
+        return paymentRepository.saveAndFlush(payment);
     }
 
     private AppUser saveUser(String loginIdentifier) {
