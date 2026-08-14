@@ -33,12 +33,12 @@ public class RegionAdminStampbookListController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<GetPendingRegionAdminStampbooksResponse>> getPendingStampbooks(
+    public ResponseEntity<ApiResponse<GetPendingRegionAdminStampbooksResponse>> findPendingStampbooks(
         @AuthenticationPrincipal Long userId,
         @RequestParam(required = false) String status
     ) {
         validateStatus(status);
-        List<PendingRegionAdminStampbookResult> results = getPendingRegionAdminStampbooksUseCase.get(
+        List<PendingRegionAdminStampbookResult> results = getPendingRegionAdminStampbooksUseCase.find(
             userId
         );
         return ApiResponse.success(

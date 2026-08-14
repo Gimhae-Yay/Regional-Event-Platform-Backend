@@ -47,7 +47,7 @@ class GetPendingRegionAdminStampbooksUseCaseTest {
         when(stampbookReadService.findPendingRegionAdminStampbooks(REGION_ID)).thenReturn(expected);
 
         List<PendingRegionAdminStampbookResult> results = getPendingRegionAdminStampbooksUseCase
-            .get(USER_ID);
+            .find(USER_ID);
 
         assertThat(results).isEqualTo(expected);
         verify(regionAdminAuthorizationService).requireAuthorizedRegionId(USER_ID);

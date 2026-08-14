@@ -22,7 +22,7 @@ public class GetPendingRegionAdminStampbooksUseCase {
     }
 
     @Transactional(readOnly = true)
-    public List<PendingRegionAdminStampbookResult> get(Long userId) {
+    public List<PendingRegionAdminStampbookResult> find(Long userId) {
         Long regionId = regionAdminAuthorizationService.requireAuthorizedRegionId(userId);
         return stampbookReadService.findPendingRegionAdminStampbooks(regionId);
     }

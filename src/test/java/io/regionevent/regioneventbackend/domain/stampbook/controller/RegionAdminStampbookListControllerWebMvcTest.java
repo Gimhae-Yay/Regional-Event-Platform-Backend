@@ -48,7 +48,7 @@ class RegionAdminStampbookListControllerWebMvcTest {
 
     @Test
     void 심사대기상태로_조회하면_명세응답을_반환한다() throws Exception {
-        when(getPendingRegionAdminStampbooksUseCase.get(REGION_ADMIN_USER_ID)).thenReturn(List.of(
+        when(getPendingRegionAdminStampbooksUseCase.find(REGION_ADMIN_USER_ID)).thenReturn(List.of(
             new PendingRegionAdminStampbookResult(
                 101L,
                 10L,
@@ -72,7 +72,7 @@ class RegionAdminStampbookListControllerWebMvcTest {
             .andExpect(jsonPath("$.data.stampbooks[0].rewardCouponPolicyId").value("301"))
             .andExpect(jsonPath("$.data.stampbooks[0].requestedAt").value("2026-08-14T02:20:00Z"));
 
-        verify(getPendingRegionAdminStampbooksUseCase).get(REGION_ADMIN_USER_ID);
+        verify(getPendingRegionAdminStampbooksUseCase).find(REGION_ADMIN_USER_ID);
     }
 
     @Test
