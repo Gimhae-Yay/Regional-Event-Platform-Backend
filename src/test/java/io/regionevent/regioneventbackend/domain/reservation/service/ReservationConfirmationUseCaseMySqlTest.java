@@ -836,6 +836,13 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
             reservationLockOrderTracker.recordContentLock(contentId);
             return locked;
         }
+
+        @Override
+        public boolean lockPublishedCapacityHoldTarget(Long contentId) {
+            boolean locked = super.lockPublishedCapacityHoldTarget(contentId);
+            reservationLockOrderTracker.recordContentLock(contentId);
+            return locked;
+        }
     }
 
     static class LockTrackingContentSessionService extends ContentSessionService {
