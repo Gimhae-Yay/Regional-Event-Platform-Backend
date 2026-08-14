@@ -4,7 +4,7 @@
 P1 가격 스냅샷, 결제 또는 선점 쿠폰이 연결된 홀드는 이 API로 확정하지 않고 해당 P1 확정 흐름에서 처리한다.
 성공하면 정원을 추가로 차감하지 않고 홀드를 `CONSUMED`로 전환하며 `CONFIRMED` 예약을 생성한다.
 
-예약 확정은 영속 멱등 처리 대상이다. 동일한 `Idempotency-Key`와 `holdId`를 재전송하면 최초 성공 결과를 반환한다.
+예약 확정은 영속 멱등 처리 대상이다. 동일한 `Idempotency-Key`와 `holdId`를 재전송하면 최초에 생성한 동일 예약을 반환하며, `data.status`에는 재응답 시점의 현재 예약 상태를 반환한다. 이 계약은 [ADR-0099](../../../adr/0099-return-current-reservation-status-on-confirm-idempotency-replay.md)를 따른다.
 
 ### Request
 
@@ -62,7 +62,7 @@ Accept: application/json
 201 Created
 ```
 
-동일한 `Idempotency-Key`와 `holdId`로 완료된 요청을 재시도한 경우에도 최초 성공과 동일하게 `201 Created`와 저장된 결과를 반환한다.
+동일한 `Idempotency-Key`와 `holdId`로 완료된 요청을 재시도한 경우에도 `201 Created`와 최초에 생성한 동일 예약을 반환한다. 이 상태 코드는 최초 요청이 해당 예약을 성공적으로 생성했고 재시도는 그 결과를 식별했음을 뜻하며, 재시도 시점에 새 예약 또는 상태 전이가 생겼다는 뜻은 아니다.
 
 #### Response Body
 
@@ -93,7 +93,7 @@ Accept: application/json
 | `data.reservationNo` | String | 시스템 전체에서 유일한 예약 번호. 서버가 `Asia/Seoul` 날짜의 `RyyyyMMdd`와 12자리 Crockford Base32 난수 접미사로 생성한다. |
 | `data.holdId` | String | 소비된 정원 홀드 식별자 |
 | `data.sessionId` | String | 예약한 회차 식별자 |
-| `data.status` | String | 예약 상태. 항상 `CONFIRMED` |
+| `data.status` | String | 재응답 시점의 현재 예약 상태. 최초 성공 응답은 `CONFIRMED`이며, 같은 멱등 요청을 재시도할 때는 `CONFIRMED`, `CANCELLED`, `CHECKED_IN`, `EXPIRED` 중 하나다. |
 | `data.confirmedAt` | String | 예약 확정 시각. API 공통 규칙에 따른 UTC ISO 8601 일시다. |
 
 예약 QR은 이 API에서 발급하지 않는다. `CONFIRMED` 예약은 체크인 창에서 `GET /me/reservations/{reservationId}/qr`로 내 예약 QR을 조회해 발급받을 수 있다.
@@ -129,7 +129,7 @@ Accept: application/json
 2. 인증 회원과 대상 홀드의 `user_id`가 일치해야 한다.
 3. `holdId`와 `Idempotency-Key`의 필수 여부와 형식을 먼저 검증한다.
 4. 멱등 키의 논리 유일 범위는 `(actor_user_id, operation = RESERVATION_CONFIRM, idempotency_key_hash)`다.
-5. 같은 멱등 키와 같은 `holdId`의 `SUCCEEDED` 기록이 있으면 해당 `result_reservation_id`로 최초 성공 응답을 재구성해 반환한다. 홀드 소비와 예약 생성을 다시 실행하지 않는다.
+5. 같은 멱등 키와 같은 `holdId`의 `SUCCEEDED` 기록이 있으면 해당 `result_reservation_id`로 같은 예약을 조회해 재응답 시점의 현재 상태를 포함한 응답을 반환한다. 홀드 소비와 예약 생성, 상태 전이를 다시 실행하지 않는다. 재응답의 `data.status`는 `CONFIRMED`, `CANCELLED`, `CHECKED_IN`, `EXPIRED` 중 하나다.
 6. 같은 멱등 키에 다른 `holdId`를 요청하면 `409 IDEMPOTENCY_KEY_CONFLICT`로 거부한다.
 7. 같은 멱등 키와 같은 `holdId`의 최초 요청이 `PROCESSING`이면 `409 IDEMPOTENCY_REQUEST_IN_PROGRESS`로 응답한다. DB 대기 제한은 운영 설정으로 짧게 관리하며, 제한을 넘긴 뒤에도 새 도메인 작업을 실행하거나 `PROCESSING` 기록을 자동 탈취하지 않는다.
 8. 대상 홀드는 유효한 `ACTIVE` 상태여야 하고 `expires_at`이 MySQL 기준 현재 시각보다 미래여야 한다.
