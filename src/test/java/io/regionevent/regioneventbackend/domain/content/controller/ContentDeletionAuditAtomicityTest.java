@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -33,6 +34,7 @@ import io.regionevent.regioneventbackend.domain.content.service.DeleteContentUse
 import io.regionevent.regioneventbackend.domain.image.entity.ImageLifecycleStatus;
 import io.regionevent.regioneventbackend.domain.image.entity.ImageObject;
 import io.regionevent.regioneventbackend.domain.image.repository.ImageObjectRepository;
+import io.regionevent.regioneventbackend.domain.image.service.ImageObjectCleanupService;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -77,6 +79,9 @@ class ContentDeletionAuditAtomicityTest {
     @Autowired
     private AuditEventActorLinkRepository auditEventActorLinkRepository;
 
+    @Autowired
+    private ImageObjectCleanupService imageObjectCleanupService;
+
     @MockitoBean
     private RecordAuditEventUseCase recordAuditEventUseCase;
 
@@ -116,6 +121,7 @@ class ContentDeletionAuditAtomicityTest {
             assertThat(auditEvent.getActorRole()).isNull();
             assertThat(auditEventActorLinkRepository.findById(auditEvent.getAuditEventId())).isEmpty();
         });
+        verifyNoInteractions(imageObjectCleanupService);
     }
 
     private Fixture createFixture() {
