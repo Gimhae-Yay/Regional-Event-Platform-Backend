@@ -263,6 +263,8 @@ public class CreateRefundUseCase {
             restoreCouponIfEligible(refund, requestId, actor);
         } else if (cancellation.isExplicitlyFailed()) {
             refund.fail(Instant.now(clock));
+        } else {
+            refund.markDiscrepant(Instant.now(clock));
         }
         recordReservationCancellationRefundAudit(refund, actor, requestId, Instant.now(clock));
         return CreateRefundResponse.from(refund);
@@ -358,6 +360,8 @@ public class CreateRefundUseCase {
             restoreCouponIfEligible(refund, requestId, assignment);
         } else if (cancellation.isExplicitlyFailed()) {
             refund.fail(Instant.now(clock));
+        } else {
+            refund.markDiscrepant(Instant.now(clock));
         }
         recordRefundAudit(refund, assignment, evidenceReference, reason, requestId);
         return CreateRefundResponse.from(refund);
