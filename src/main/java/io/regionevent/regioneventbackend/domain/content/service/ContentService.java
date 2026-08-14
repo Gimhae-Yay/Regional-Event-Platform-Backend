@@ -170,8 +170,8 @@ public class ContentService {
         return contentRepository.saveAndFlush(content);
     }
 
-    public boolean existsPublishedAndNotDeletedById(Long contentId) {
-        return contentRepository.existsByContentIdAndStatusAndDeletedAtIsNull(
+    public boolean existsPublicPublishedAndNotDeletedById(Long contentId) {
+        return contentRepository.existsByContentIdAndStatusAndDeletedAtIsNullAndRegionIsPublicTrue(
             contentId,
             ContentStatus.PUBLISHED
         );
