@@ -2,6 +2,8 @@ package io.regionevent.regioneventbackend.domain.visit.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
@@ -49,6 +51,7 @@ import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.reservation.repository.CapacityHoldRepository;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationRepository;
+import io.regionevent.regioneventbackend.domain.stampbook.service.RecordStampbookProgressUseCase;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
@@ -88,6 +91,9 @@ public class CheckInUseCaseIntegrationTest {
 
     @MockitoBean
     private MissionProgressVisitCompletionAdapter missionProgressVisitCompletionAdapter;
+
+    @MockitoBean
+    private RecordStampbookProgressUseCase recordStampbookProgressUseCase;
 
     @Autowired
     CheckInUseCaseIntegrationTest(
@@ -186,6 +192,8 @@ public class CheckInUseCaseIntegrationTest {
             firstRequestId
         );
         verifyNoMoreInteractions(missionProgressVisitCompletionAdapter);
+        verify(recordStampbookProgressUseCase).record(Long.valueOf(firstResult.response().visitId()));
+        verifyNoMoreInteractions(recordStampbookProgressUseCase);
     }
 
     @Test
@@ -487,6 +495,35 @@ public class CheckInUseCaseIntegrationTest {
             requestId
         );
         verifyNoMoreInteractions(missionProgressVisitCompletionAdapter);
+        verify(recordStampbookProgressUseCase).record(Long.valueOf(result.response().visitId()));
+        verifyNoMoreInteractions(recordStampbookProgressUseCase);
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void manualCheckIn_whenStampbookProgressRecordingFails_rollsBackCheckIn() {
+        Fixture fixture = createFixture();
+        doThrow(new IllegalStateException("stampbook progress recording failed"))
+            .when(recordStampbookProgressUseCase)
+            .record(any(Long.class));
+
+        assertThatThrownBy(() -> checkInUseCase.checkInManually(
+            fixture.operator().getUserId(),
+            new ManualCheckInRequest(
+                fixture.reservation().getReservationNo(),
+                ManualCheckInReason.QR_SCAN_FAILED.name()
+            ),
+            "manual-stampbook-progress-failure-key",
+            UUID.randomUUID()
+        )).isInstanceOf(IllegalStateException.class);
+
+        entityManager.clear();
+        assertThat(visitRepository.count()).isZero();
+        assertThat(idempotencyRecordRepository.count()).isZero();
+        assertThat(reservationRepository.findById(fixture.reservation().getReservationId()))
+            .hasValueSatisfying(reservation ->
+                assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.CONFIRMED)
+            );
     }
 
     @Test
