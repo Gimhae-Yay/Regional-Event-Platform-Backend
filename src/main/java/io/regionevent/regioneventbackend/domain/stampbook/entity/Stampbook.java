@@ -139,6 +139,13 @@ public class Stampbook {
         status = StampbookStatus.PENDING_REVIEW;
     }
 
+    public void reject() {
+        if (status != StampbookStatus.PENDING_REVIEW) {
+            throw new IllegalStateException("only PENDING_REVIEW stampbook can be rejected");
+        }
+        status = StampbookStatus.DRAFT;
+    }
+
     public void end(Instant endedAt) {
         if (status != StampbookStatus.PUBLISHED) {
             throw new IllegalStateException("only PUBLISHED stampbook can end");
