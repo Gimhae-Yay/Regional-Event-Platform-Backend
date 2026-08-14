@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -49,9 +50,12 @@ import io.regionevent.regioneventbackend.domain.coupon.repository.CouponRedempti
 import io.regionevent.regioneventbackend.domain.coupon.repository.CouponRepository;
 import io.regionevent.regioneventbackend.domain.coupon.repository.CouponStatusHistoryRepository;
 import io.regionevent.regioneventbackend.domain.payment.dto.CreatePaymentRequest;
+import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentVerification;
+import io.regionevent.regioneventbackend.domain.payment.entity.PaymentIdempotency;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentStatus;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOnePaymentGateway;
+import io.regionevent.regioneventbackend.domain.payment.repository.PaymentIdempotencyRepository;
 import io.regionevent.regioneventbackend.domain.payment.repository.PaymentRepository;
 import io.regionevent.regioneventbackend.domain.payment.repository.PaymentVerificationRepository;
 import io.regionevent.regioneventbackend.domain.payment.repository.PaymentWebhookRepository;
@@ -93,6 +97,7 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
     private final ContentSessionRepository contentSessionRepository;
     private final CapacityHoldRepository capacityHoldRepository;
     private final PaymentRepository paymentRepository;
+    private final PaymentIdempotencyRepository paymentIdempotencyRepository;
     private final PaymentWebhookRepository paymentWebhookRepository;
     private final PaymentVerificationRepository paymentVerificationRepository;
     private final ReservationRepository reservationRepository;
@@ -100,6 +105,7 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
     private final CouponRepository couponRepository;
     private final CouponStatusHistoryRepository couponStatusHistoryRepository;
     private final CouponRedemptionRepository couponRedemptionRepository;
+    private final PaymentIdempotencyService paymentIdempotencyService;
     private final TransactionTemplate transactionTemplate;
     private final JdbcTemplate jdbcTemplate;
 
@@ -115,6 +121,7 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
         ContentSessionRepository contentSessionRepository,
         CapacityHoldRepository capacityHoldRepository,
         PaymentRepository paymentRepository,
+        PaymentIdempotencyRepository paymentIdempotencyRepository,
         PaymentWebhookRepository paymentWebhookRepository,
         PaymentVerificationRepository paymentVerificationRepository,
         ReservationRepository reservationRepository,
@@ -122,6 +129,7 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
         CouponRepository couponRepository,
         CouponStatusHistoryRepository couponStatusHistoryRepository,
         CouponRedemptionRepository couponRedemptionRepository,
+        PaymentIdempotencyService paymentIdempotencyService,
         JdbcTemplate jdbcTemplate,
         PlatformTransactionManager transactionManager
     ) {
@@ -135,6 +143,7 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
         this.contentSessionRepository = contentSessionRepository;
         this.capacityHoldRepository = capacityHoldRepository;
         this.paymentRepository = paymentRepository;
+        this.paymentIdempotencyRepository = paymentIdempotencyRepository;
         this.paymentWebhookRepository = paymentWebhookRepository;
         this.paymentVerificationRepository = paymentVerificationRepository;
         this.reservationRepository = reservationRepository;
@@ -142,6 +151,7 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
         this.couponRepository = couponRepository;
         this.couponStatusHistoryRepository = couponStatusHistoryRepository;
         this.couponRedemptionRepository = couponRedemptionRepository;
+        this.paymentIdempotencyService = paymentIdempotencyService;
         this.jdbcTemplate = jdbcTemplate;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
@@ -367,6 +377,126 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
         assertThat(paymentWebhookRepository.findAll())
             .filteredOn(webhook -> WEBHOOK_ID.equals(webhook.getProviderEventId()))
             .hasSize(1);
+    }
+
+    @Test
+    void approvedWebhook_setsPaymentIdempotencyExpirationFromFinalizedAt() {
+        assertWebhookTerminalPaymentIdempotencyExpiration("PAID", 20_000, PaymentStatus.APPROVED);
+    }
+
+    @Test
+    void declinedWebhook_setsPaymentIdempotencyExpirationFromFinalizedAt() {
+        assertWebhookTerminalPaymentIdempotencyExpiration("DECLINED", 20_000, PaymentStatus.DECLINED);
+    }
+
+    @Test
+    void discrepantWebhook_setsPaymentIdempotencyExpirationFromFinalizedAt() {
+        assertWebhookTerminalPaymentIdempotencyExpiration("PAID", 20_001, PaymentStatus.DISCREPANT);
+    }
+
+    @Test
+    void alreadyFinalizedPaymentWithNullExpiration_isCorrectedWithoutProviderLookup() {
+        Fixture fixture = createFixture();
+        createPaymentUseCase.create(
+            fixture.user().getUserId(),
+            fixture.hold().getHoldId().toString(),
+            new CreatePaymentRequest(null),
+            "payment-key-" + System.nanoTime(),
+            UUID.randomUUID()
+        );
+        Payment payment = paymentRepository.findAll().getFirst();
+        jdbcTemplate.update(
+            "UPDATE payment SET status = 'DECLINED', finalized_at = CURRENT_TIMESTAMP(6) WHERE payment_id = ?",
+            payment.getPaymentId()
+        );
+
+        receivePortOneWebhookUseCase.receive(
+            "webhook-existing-terminal",
+            WEBHOOK_TIMESTAMP,
+            WEBHOOK_SIGNATURE,
+            paymentEvent(payment.getOrderId())
+        );
+
+        Payment finalizedPayment = paymentRepository.findById(payment.getPaymentId()).orElseThrow();
+        assertThat(paymentIdempotencyRepository.findAll()).singleElement()
+            .extracting(PaymentIdempotency::getExpiresAt)
+            .isEqualTo(finalizedPayment.getFinalizedAt().plus(24, ChronoUnit.HOURS));
+        verify(paymentGateway, times(0)).findByPaymentId(payment.getOrderId());
+    }
+
+    @Test
+    void cleanupPreservesExpirationAtDatabaseCurrentTimeAndDeletesAfterIt() {
+        Fixture fixture = createFixture();
+        createPaymentUseCase.create(
+            fixture.user().getUserId(),
+            fixture.hold().getHoldId().toString(),
+            new CreatePaymentRequest(null),
+            "payment-key-" + System.nanoTime(),
+            UUID.randomUUID()
+        );
+
+        transactionTemplate.executeWithoutResult(status -> {
+            jdbcTemplate.execute("SET timestamp = UNIX_TIMESTAMP('2030-01-01 00:00:00')");
+            try {
+                jdbcTemplate.update("""
+                    UPDATE payment_idempotency
+                    SET expires_at = CURRENT_TIMESTAMP(6)
+                    WHERE actor_user_id = ?
+                    """, fixture.user().getUserId());
+
+                assertThat(paymentIdempotencyService.deleteExpiredTerminalRecords()).isZero();
+
+                jdbcTemplate.update("""
+                    UPDATE payment_idempotency
+                    SET expires_at = CURRENT_TIMESTAMP(6) - INTERVAL 1 MICROSECOND
+                    WHERE actor_user_id = ?
+                    """, fixture.user().getUserId());
+
+                assertThat(paymentIdempotencyService.deleteExpiredTerminalRecords()).isOne();
+            } finally {
+                jdbcTemplate.execute("SET timestamp = DEFAULT");
+            }
+        });
+
+        assertThat(paymentIdempotencyRepository.findAll()).isEmpty();
+    }
+
+    private void assertWebhookTerminalPaymentIdempotencyExpiration(
+        String providerStatus,
+        long providerAmount,
+        PaymentStatus expectedStatus
+    ) {
+        Fixture fixture = createFixture();
+        createPaymentUseCase.create(
+            fixture.user().getUserId(),
+            fixture.hold().getHoldId().toString(),
+            new CreatePaymentRequest(null),
+            "payment-key-" + System.nanoTime(),
+            UUID.randomUUID()
+        );
+        Payment payment = paymentRepository.findAll().getFirst();
+        when(paymentGateway.findByPaymentId(payment.getOrderId())).thenReturn(new PortOnePaymentGateway.PortOnePayment(
+            payment.getOrderId(),
+            TRANSACTION_ID,
+            "store-1",
+            providerAmount,
+            "KRW",
+            providerStatus,
+            RESULT_HASH
+        ));
+
+        receivePortOneWebhookUseCase.receive(
+            "webhook-terminal-" + expectedStatus.name(),
+            WEBHOOK_TIMESTAMP,
+            WEBHOOK_SIGNATURE,
+            paymentEvent(payment.getOrderId())
+        );
+
+        Payment finalizedPayment = paymentRepository.findAll().getFirst();
+        assertThat(finalizedPayment.getStatus()).isEqualTo(expectedStatus);
+        assertThat(paymentIdempotencyRepository.findAll()).singleElement()
+            .extracting(PaymentIdempotency::getExpiresAt)
+            .isEqualTo(finalizedPayment.getFinalizedAt().plus(24, ChronoUnit.HOURS));
     }
 
     private void receiveAfterStart(
