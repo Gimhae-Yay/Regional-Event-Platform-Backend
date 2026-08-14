@@ -28,11 +28,7 @@ public class RegionAdminAuthorizationService {
         Long userId,
         Long targetRegionId
     ) {
-        AuthorizedRegionAdmin regionAdmin = requireAuthorizedRegionAdmin(userId);
-        if (!regionAdmin.region().getRegionId().equals(targetRegionId)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
-        return regionAdmin.roleAssignment();
+        return requireAuthorizedRegionAdmin(userId).authorize(targetRegionId);
     }
 
     public Long requireAuthorizedRegionId(Long userId) {
@@ -44,11 +40,7 @@ public class RegionAdminAuthorizationService {
         Long userId,
         Long targetRegionId
     ) {
-        AuthorizedRegionAdmin regionAdmin = requireAuthorizedRegionAdminForUpdate(userId);
-        if (!regionAdmin.region().getRegionId().equals(targetRegionId)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
-        return regionAdmin.roleAssignment();
+        return requireAuthorizedRegionAdminForUpdate(userId).authorize(targetRegionId);
     }
 
     @Transactional
@@ -134,6 +126,13 @@ public class RegionAdminAuthorizationService {
             if (roleAssignment == null || roleAssignment.getRoleAssignmentId() == null) {
                 throw new BusinessException(ErrorCode.FORBIDDEN);
             }
+        }
+
+        public UserRoleAssignment authorize(Long targetRegionId) {
+            if (!region.getRegionId().equals(targetRegionId)) {
+                throw new BusinessException(ErrorCode.FORBIDDEN);
+            }
+            return roleAssignment;
         }
     }
 }

@@ -135,8 +135,7 @@ class ApproveContentRevisionUseCaseTest {
             .thenReturn(fixture.content());
         when(contentRevisionService.findReviewTargetForUpdate(REVISION_ID))
             .thenReturn(fixture.revision());
-        when(regionAdminAuthorizationService.authorize(USER_ID, REGION_ID))
-            .thenReturn(fixture.reviewerAssignment());
+        givenAuthorizedRegionAdmin(fixture.reviewerAssignment());
         when(contentRevisionService.approve(
             fixture.revision(),
             fixture.reviewer(),
@@ -169,5 +168,14 @@ class ApproveContentRevisionUseCaseTest {
         AppUser reviewer,
         UserRoleAssignment reviewerAssignment
     ) {
+    }
+
+    private void givenAuthorizedRegionAdmin(UserRoleAssignment assignment) {
+        RegionAdminAuthorizationService.AuthorizedRegionAdmin regionAdmin = mock(
+            RegionAdminAuthorizationService.AuthorizedRegionAdmin.class
+        );
+        when(regionAdminAuthorizationService.requireAuthorizedRegionAdminForUpdate(USER_ID))
+            .thenReturn(regionAdmin);
+        when(regionAdmin.authorize(REGION_ID)).thenReturn(assignment);
     }
 }

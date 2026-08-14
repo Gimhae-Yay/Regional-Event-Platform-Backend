@@ -57,7 +57,7 @@ public class ResolvePaymentDiscrepancyUseCase {
         String evidenceReference = normalizeRequired(request == null ? null : request.evidenceReference());
         String reason = normalizeRequired(request == null ? null : request.reason());
         PlatformAdminAssignment assignment = platformAdminAuthorizationService
-            .requireAuthorizedPlatformAdmin(actorUserId);
+            .requireAuthorizedPlatformAdminForUpdate(actorUserId);
         PaymentDiscrepancy discrepancy = paymentDiscrepancyService.findByIdForUpdate(discrepancyId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
         validateOpen(discrepancy);

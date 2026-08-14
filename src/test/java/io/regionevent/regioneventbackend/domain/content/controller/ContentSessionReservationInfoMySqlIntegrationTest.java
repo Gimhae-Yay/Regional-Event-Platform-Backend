@@ -136,6 +136,36 @@ class ContentSessionReservationInfoMySqlIntegrationTest {
     }
 
     @Test
+    void 공개_콘텐츠_회차_목록_조회는_공개_지역의_회차를_반환한다() throws Exception {
+        ContentSession session = createScheduledSession(true);
+
+        mockMvc.perform(get("/api/v1/contents/{contentId}/sessions", session.getContent().getContentId()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.contentId").value(session.getContent().getContentId().toString()))
+            .andExpect(jsonPath("$.data.sessions[0].sessionId").value(session.getSessionId().toString()));
+    }
+
+    @Test
+    void 공개_콘텐츠_회차_목록_조회는_비공개_지역의_회차를_노출하지_않는다() throws Exception {
+        ContentSession session = createScheduledSession(false);
+
+        mockMvc.perform(get("/api/v1/contents/{contentId}/sessions", session.getContent().getContentId()))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.code").value("NOT_FOUND"))
+            .andExpect(jsonPath("$.data").doesNotExist());
+    }
+
+    @Test
+    void 회차_예약정보_조회는_비공개_지역의_회차를_노출하지_않는다() throws Exception {
+        ContentSession session = createScheduledSession(false);
+
+        mockMvc.perform(get("/api/v1/sessions/{sessionId}", session.getSessionId()))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.code").value("NOT_FOUND"))
+            .andExpect(jsonPath("$.data").doesNotExist());
+    }
+
+    @Test
     void publicSessionReservationInfo_returnsContentReservationPrice() throws Exception {
         ContentSession session = createScheduledSession();
 
@@ -145,8 +175,12 @@ class ContentSessionReservationInfoMySqlIntegrationTest {
     }
 
     private ContentSession createScheduledSession() {
+        return createScheduledSession(true);
+    }
+
+    private ContentSession createScheduledSession(boolean regionPublic) {
         String suffix = Long.toUnsignedString(System.nanoTime());
-        Region region = regionRepository.saveAndFlush(new Region("R" + suffix, "김해시", true));
+        Region region = regionRepository.saveAndFlush(new Region("R" + suffix, "김해시", regionPublic));
         AppUser operator = appUserRepository.saveAndFlush(new AppUser(
             "operator-" + suffix + "@example.com",
             "hashed-password",

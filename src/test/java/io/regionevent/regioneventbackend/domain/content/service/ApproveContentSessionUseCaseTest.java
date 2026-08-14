@@ -126,7 +126,7 @@ class ApproveContentSessionUseCaseTest {
         when(session.getContent()).thenReturn(content);
         when(session.getSessionId()).thenReturn(SESSION_ID);
         when(session.getStatus()).thenReturn(sessionStatus);
-        when(regionAdminAuthorizationService.authorize(USER_ID, REGION_ID)).thenReturn(assignment);
+        givenAuthorizedRegionAdmin(assignment);
         when(assignment.getRoleAssignmentId()).thenReturn(1L);
         when(assignment.getAppUser()).thenReturn(reviewer);
         when(reviewer.getStatus()).thenReturn(AppUserStatus.ACTIVE);
@@ -140,5 +140,14 @@ class ApproveContentSessionUseCaseTest {
         ContentSession session,
         AppUser reviewer
     ) {
+    }
+
+    private void givenAuthorizedRegionAdmin(UserRoleAssignment assignment) {
+        RegionAdminAuthorizationService.AuthorizedRegionAdmin regionAdmin = mock(
+            RegionAdminAuthorizationService.AuthorizedRegionAdmin.class
+        );
+        when(regionAdminAuthorizationService.requireAuthorizedRegionAdminForUpdate(USER_ID))
+            .thenReturn(regionAdmin);
+        when(regionAdmin.authorize(REGION_ID)).thenReturn(assignment);
     }
 }

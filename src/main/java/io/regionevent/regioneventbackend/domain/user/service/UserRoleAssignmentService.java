@@ -105,6 +105,15 @@ public class UserRoleAssignmentService {
         ).orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
     }
 
+    public UserRoleAssignment findActiveOperatorForUpdate(Long userId) {
+        return userRoleAssignmentRepository.findByAppUserUserIdAndRoleAndStatusAndAppUserStatusForUpdate(
+            userId,
+            UserRole.OPERATOR,
+            UserRoleAssignmentStatus.ACTIVE,
+            AppUserStatus.ACTIVE
+        ).orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+    }
+
     public boolean hasPrivilegedRole(Long userId) {
         List<UserRole> roles = findRolesByUserId(userId);
         return roles.contains(UserRole.OPERATOR) || roles.contains(UserRole.REGION_ADMIN);

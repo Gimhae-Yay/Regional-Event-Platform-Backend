@@ -40,6 +40,15 @@ public class StampbookService {
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+    public Stampbook findStampbook(Long stampbookId) {
+        if (stampbookId == null || stampbookId <= 0) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        return stampbookRepository.findByStampbookId(stampbookId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
     public List<Stampbook> findPublishedByTargetContentIdForUpdate(Long contentId) {
         if (contentId == null || contentId <= 0) {
@@ -68,6 +77,28 @@ public class StampbookService {
         if (stampbook.getStatus() != StampbookStatus.PUBLISHED) {
             throw new BusinessException(ErrorCode.STAMPBOOK_STATE_CONFLICT);
         }
+    }
+
+    public Stampbook approve(
+        Stampbook stampbook,
+        Instant publishedAt
+    ) {
+        if (stampbook.getStatus() != StampbookStatus.PENDING_REVIEW) {
+            throw new BusinessException(ErrorCode.STAMPBOOK_STATE_CONFLICT);
+        }
+        if (publishedAt == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        stampbook.approve(publishedAt);
+        return stampbookRepository.saveAndFlush(stampbook);
+    }
+
+    public Stampbook reject(Stampbook stampbook) {
+        if (stampbook.getStatus() != StampbookStatus.PENDING_REVIEW) {
+            throw new BusinessException(ErrorCode.STAMPBOOK_STATE_CONFLICT);
+        }
+        stampbook.reject();
+        return stampbookRepository.saveAndFlush(stampbook);
     }
 
     public boolean existsPublishedRewardCouponPolicy(Long couponPolicyId) {

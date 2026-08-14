@@ -82,7 +82,7 @@ class UpdateRegionStatusUseCaseTest {
         Region privateRegion = visibilityRegion(false);
         Region publicRegion = resultRegion(true, OCCURRED_AT);
         UUID requestId = UUID.randomUUID();
-        when(platformAdminAuthorizationService.requireAuthorizedPlatformAdmin(ACTOR_USER_ID))
+        when(platformAdminAuthorizationService.requireAuthorizedPlatformAdminForUpdate(ACTOR_USER_ID))
             .thenReturn(actor);
         when(regionService.findRegionForUpdate(REGION_ID)).thenReturn(privateRegion);
         when(regionService.changeVisibility(privateRegion, true)).thenReturn(publicRegion);
@@ -120,7 +120,7 @@ class UpdateRegionStatusUseCaseTest {
     void update_동일상태요청은지역과감사를변경하지않는다() {
         PlatformAdminAssignment actor = org.mockito.Mockito.mock(PlatformAdminAssignment.class);
         Region privateRegion = resultRegion(false, UPDATED_AT);
-        when(platformAdminAuthorizationService.requireAuthorizedPlatformAdmin(ACTOR_USER_ID))
+        when(platformAdminAuthorizationService.requireAuthorizedPlatformAdminForUpdate(ACTOR_USER_ID))
             .thenReturn(actor);
         when(regionService.findRegionForUpdate(REGION_ID)).thenReturn(privateRegion);
 
@@ -144,7 +144,7 @@ class UpdateRegionStatusUseCaseTest {
         PlatformAdminAssignment actor = authorizedPlatformAdmin();
         Region publicRegion = lockedRegion(true);
         UUID requestId = UUID.randomUUID();
-        when(platformAdminAuthorizationService.requireAuthorizedPlatformAdmin(ACTOR_USER_ID))
+        when(platformAdminAuthorizationService.requireAuthorizedPlatformAdminForUpdate(ACTOR_USER_ID))
             .thenReturn(actor);
         when(regionService.findRegionForUpdate(REGION_ID)).thenReturn(publicRegion);
         when(contentService.hasUndeletedContentInRegion(REGION_ID)).thenReturn(true);
@@ -187,7 +187,7 @@ class UpdateRegionStatusUseCaseTest {
             assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT)
         );
 
-        verify(platformAdminAuthorizationService, never()).requireAuthorizedPlatformAdmin(any());
+        verify(platformAdminAuthorizationService, never()).requireAuthorizedPlatformAdminForUpdate(any());
         verify(regionService, never()).findRegionForUpdate(any());
         verify(recordAuditEventUseCase, never()).record(any());
         verify(recordFailedAuditEventUseCase, never()).record(any());
@@ -195,7 +195,7 @@ class UpdateRegionStatusUseCaseTest {
 
     @Test
     void update_고권한배정이없으면_지역과감사를변경하지않는다() {
-        when(platformAdminAuthorizationService.requireAuthorizedPlatformAdmin(ACTOR_USER_ID))
+        when(platformAdminAuthorizationService.requireAuthorizedPlatformAdminForUpdate(ACTOR_USER_ID))
             .thenThrow(new BusinessException(ErrorCode.FORBIDDEN));
 
         assertThatThrownBy(() -> updateRegionStatusUseCase.update(

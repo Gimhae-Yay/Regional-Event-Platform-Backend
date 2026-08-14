@@ -164,6 +164,53 @@ class GetOperatorReservationPaymentUseCaseTest {
     }
 
     @Test
+    void get_whenDiscrepantRefundIsManuallyResolvedAsSucceeded_returnsResolvedAtAsUpdatedAt() {
+        Fixture fixture = new Fixture();
+        Reservation reservation = fixture.reservation();
+        Payment payment = fixture.payment(30L);
+        Refund refund = mock(Refund.class);
+        Instant refundRequestedAt = Instant.parse("2026-08-12T03:00:00Z");
+        Instant resolvedAt = Instant.parse("2026-08-12T05:00:00Z");
+        when(fixture.reservationService.findByIdForOperatorPaymentRead(RESERVATION_ID)).thenReturn(reservation);
+        when(fixture.paymentService.findByReservationId(RESERVATION_ID)).thenReturn(Optional.of(payment));
+        when(fixture.refundService.findByPaymentId(30L)).thenReturn(Optional.of(refund));
+        when(refund.getRefundId()).thenReturn(40L);
+        when(refund.getStatus()).thenReturn(RefundStatus.SUCCEEDED);
+        when(refund.getAmount()).thenReturn(17_000L);
+        when(refund.getRequestedAt()).thenReturn(refundRequestedAt);
+        when(refund.getCompletedAt()).thenReturn(resolvedAt);
+        when(refund.getResolvedAt()).thenReturn(resolvedAt);
+        when(fixture.paymentDiscrepancyService.findByPaymentId(30L)).thenReturn(Optional.empty());
+
+        OperatorReservationPaymentInfo actual = fixture.useCase().get(USER_ID, RESERVATION_ID);
+
+        assertThat(actual.updatedAt()).isEqualTo(resolvedAt);
+    }
+
+    @Test
+    void get_whenDiscrepantRefundIsManuallyResolvedAsFailed_returnsResolvedAtAsUpdatedAt() {
+        Fixture fixture = new Fixture();
+        Reservation reservation = fixture.reservation();
+        Payment payment = fixture.payment(30L);
+        Refund refund = mock(Refund.class);
+        Instant refundRequestedAt = Instant.parse("2026-08-12T03:00:00Z");
+        Instant resolvedAt = Instant.parse("2026-08-12T05:00:00Z");
+        when(fixture.reservationService.findByIdForOperatorPaymentRead(RESERVATION_ID)).thenReturn(reservation);
+        when(fixture.paymentService.findByReservationId(RESERVATION_ID)).thenReturn(Optional.of(payment));
+        when(fixture.refundService.findByPaymentId(30L)).thenReturn(Optional.of(refund));
+        when(refund.getRefundId()).thenReturn(40L);
+        when(refund.getStatus()).thenReturn(RefundStatus.FAILED);
+        when(refund.getAmount()).thenReturn(17_000L);
+        when(refund.getRequestedAt()).thenReturn(refundRequestedAt);
+        when(refund.getResolvedAt()).thenReturn(resolvedAt);
+        when(fixture.paymentDiscrepancyService.findByPaymentId(30L)).thenReturn(Optional.empty());
+
+        OperatorReservationPaymentInfo actual = fixture.useCase().get(USER_ID, RESERVATION_ID);
+
+        assertThat(actual.updatedAt()).isEqualTo(resolvedAt);
+    }
+
+    @Test
     void get_whenOperatorIsNotAuthorized_doesNotReadPayment() {
         Fixture fixture = new Fixture();
         Reservation reservation = fixture.reservation();
@@ -225,6 +272,18 @@ class GetOperatorReservationPaymentUseCaseTest {
             when(content.getOperator()).thenReturn(operator);
             when(content.getRegion()).thenReturn(region);
             return reservation;
+        }
+
+        private Payment payment(Long paymentId) {
+            Payment payment = mock(Payment.class);
+            ReservationPriceSnapshot snapshot = mock(ReservationPriceSnapshot.class);
+            when(payment.getPaymentId()).thenReturn(paymentId);
+            when(payment.getStatus()).thenReturn(PaymentStatus.APPROVED);
+            when(payment.getCreatedAt()).thenReturn(CONFIRMED_AT);
+            when(payment.getReservationPriceSnapshot()).thenReturn(snapshot);
+            when(snapshot.getFinalAmount()).thenReturn(17_000L);
+            when(snapshot.getCurrency()).thenReturn("KRW");
+            return payment;
         }
     }
 }

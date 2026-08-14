@@ -45,10 +45,11 @@ public class RejectContentRevisionUseCase {
         String reason,
         UUID requestId
     ) {
+        RegionAdminAuthorizationService.AuthorizedRegionAdmin regionAdmin =
+            regionAdminAuthorizationService.requireAuthorizedRegionAdminForUpdate(userId);
         ContentRevision revision = contentRevisionService.findReviewTargetForUpdate(revisionId);
         Content content = revision.getContent();
-        UserRoleAssignment reviewerAssignment = regionAdminAuthorizationService.authorize(
-            userId,
+        UserRoleAssignment reviewerAssignment = regionAdmin.authorize(
             content.getRegion().getRegionId()
         );
         Instant reviewedAt = clock.instant();

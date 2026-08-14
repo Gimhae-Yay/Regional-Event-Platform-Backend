@@ -47,9 +47,10 @@ public class RejectSessionRevisionUseCase {
         UUID requestId
     ) {
         String normalizedReason = normalizeReason(reason);
+        RegionAdminAuthorizationService.AuthorizedRegionAdmin regionAdmin =
+            regionAdminAuthorizationService.requireAuthorizedRegionAdminForUpdate(userId);
         SessionRevision revision = sessionRevisionService.findReviewTargetForUpdate(revisionId);
-        UserRoleAssignment reviewerAssignment = regionAdminAuthorizationService.authorize(
-            userId,
+        UserRoleAssignment reviewerAssignment = regionAdmin.authorize(
             revision.getRegion().getRegionId()
         );
         AuditEventActor reviewer = new AuditEventActor(reviewerAssignment);
