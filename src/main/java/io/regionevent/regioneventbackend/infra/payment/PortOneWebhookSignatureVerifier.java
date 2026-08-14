@@ -17,7 +17,7 @@ public class PortOneWebhookSignatureVerifier {
 
     public void verify(String webhookId, String timestamp, String signature, String rawBody) {
         try {
-            new WebhookVerifier(requireSecret()).verify(webhookId, timestamp, signature, rawBody);
+            new WebhookVerifier(requireSecret()).verify(rawBody, webhookId, signature, timestamp);
         } catch (WebhookVerificationException | IllegalArgumentException exception) {
             throw new InvalidWebhookSignatureException();
         }
