@@ -9,7 +9,7 @@
 
 ## 1. 개요
 
-이 문서는 쿠폰 정책 운영, 쿠폰 발급, 내 쿠폰 조회, 사용 가능 판단과 사용 이력 조회를 HTTP API 계약으로 구체화한다.
+이 문서는 쿠폰 정책 목록 조회·운영, 쿠폰 발급, 내 쿠폰 조회, 사용 가능 판단과 사용 이력 조회를 HTTP API 계약으로 구체화한다.
 요청·응답의 공통 형식, 인증, 시간·식별자 표현과 오류 구조는 `common/` 문서를 단일 출처로 삼으며,
 이 문서에는 쿠폰 API에만 적용되는 값과 규칙만 작성한다.
 
@@ -22,6 +22,8 @@ P1 쿠폰은 정책이 가리키는 콘텐츠의 유료 예약에 적용하는 �
 
 | 요구사항 | HTTP 계약 | 주요 데이터 |
 | --- | --- | --- |
+| `P1-FR-05`, `CPN-01` | `GET /operator/coupon-policies` | `coupon_policy`, `content` |
+| `P1-FR-05`, `CPN-01` | `GET /operator/coupon-policies/{couponPolicyId}` | `coupon_policy`, `content` |
 | `P1-FR-05`, `CPN-01` | `POST /operator/coupon-policies` | `coupon_policy`, `coupon_policy_history` |
 | `P1-FR-05`, `CPN-01` | `PATCH /operator/coupon-policies/{couponPolicyId}` | `coupon_policy`, `coupon_policy_history` |
 | `P1-FR-05`, `CPN-01` | `POST /operator/coupon-policies/{couponPolicyId}/publish` | `coupon_policy.status`, `coupon_policy_history` |
@@ -49,6 +51,8 @@ P1 쿠폰은 정책이 가리키는 콘텐츠의 유료 예약에 적용하는 �
 | 기능 | API 경로 | 명세 |
 | --- | --- | --- |
 | 쿠폰 공통 값 | 별도 HTTP 경로 없음 | [coupon-common.md](coupon-common.md) |
+| 내 쿠폰 정책 목록 조회 | `GET /operator/coupon-policies` | [list-operator-coupon-policies.md](list-operator-coupon-policies.md) |
+| 내 쿠폰 정책 상세 조회 | `GET /operator/coupon-policies/{couponPolicyId}` | [get-operator-coupon-policy.md](get-operator-coupon-policy.md) |
 | 내 쿠폰 목록 조회 | `GET /me/coupons` | [list-my-coupons.md](list-my-coupons.md) |
 | 사용 가능한 내 쿠폰 목록 조회 | `GET /me/coupons/available` | [list-my-available-coupons.md](list-my-available-coupons.md) |
 | 내 쿠폰 상세 조회 | `GET /me/coupons/{couponId}` | [get-my-coupon.md](get-my-coupon.md) |
