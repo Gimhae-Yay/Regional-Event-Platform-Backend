@@ -36,6 +36,8 @@ class EndContentReservationsUseCaseTest {
     private static final Instant ENDED_AT = Instant.parse("2026-08-06T00:00:00Z");
 
     private final ContentService contentService = mock(ContentService.class);
+    private final ContentRevisionInvalidationService contentRevisionInvalidationService =
+        mock(ContentRevisionInvalidationService.class);
     private final ContentSessionService contentSessionService = mock(ContentSessionService.class);
     private final ContentLogService contentLogService = mock(ContentLogService.class);
     private final CapacityHoldService capacityHoldService = mock(CapacityHoldService.class);
@@ -50,6 +52,7 @@ class EndContentReservationsUseCaseTest {
         mock(PublicCatalogCacheInvalidator.class);
     private final EndContentReservationsUseCase useCase = new EndContentReservationsUseCase(
         contentService,
+        contentRevisionInvalidationService,
         contentSessionService,
         contentLogService,
         capacityHoldService,
