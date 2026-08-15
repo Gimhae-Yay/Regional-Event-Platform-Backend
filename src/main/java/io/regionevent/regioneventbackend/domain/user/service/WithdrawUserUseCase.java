@@ -95,7 +95,9 @@ public class WithdrawUserUseCase {
         if (userRoleAssignmentService.hasPrivilegedRole(userId) || contentService.hasOwnedContent(userId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        if (paymentService.hasPendingPayment(userId) || refundService.hasInProgressRefund(userId)) {
+        if (paymentService.hasPendingPayment(userId)
+            || paymentService.hasApprovedPaymentWithConfirmedReservationWithoutSucceededRefund(userId)
+            || refundService.hasInProgressRefund(userId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
     }

@@ -13,7 +13,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.function.Consumer;
+import java.util.function.Function;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
@@ -22,7 +22,6 @@ import io.regionevent.regioneventbackend.domain.user.dto.RefreshAccessTokenResul
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.InvalidRefreshTokenException;
-import io.regionevent.regioneventbackend.global.security.refresh.JwtRefreshTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshToken;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenService;
 
@@ -32,12 +31,10 @@ class RefreshAccessTokenUseCaseTest {
 
     private final AppUserService appUserService = mock(AppUserService.class);
     private final JwtAccessTokenService jwtAccessTokenService = mock(JwtAccessTokenService.class);
-    private final JwtRefreshTokenService jwtRefreshTokenService = mock(JwtRefreshTokenService.class);
     private final RefreshTokenService refreshTokenService = mock(RefreshTokenService.class);
     private final RefreshAccessTokenUseCase refreshAccessTokenUseCase = new RefreshAccessTokenUseCase(
         appUserService,
         jwtAccessTokenService,
-        jwtRefreshTokenService,
         refreshTokenService,
         Clock.fixed(NOW, ZoneOffset.UTC)
     );
@@ -51,14 +48,15 @@ class RefreshAccessTokenUseCaseTest {
             .thenReturn(Optional.of(mock(AppUser.class)));
         when(refreshTokenService.rotate(
             ArgumentMatchers.eq("current-token"),
-            ArgumentMatchers.<Consumer<RefreshToken>>any()
+            ArgumentMatchers.<Function<RefreshToken, String>>any()
         )).thenAnswer(invocation -> {
-            Consumer<RefreshToken> beforeCompletion = invocation.getArgument(1);
-            beforeCompletion.accept(currentToken);
-            return "rotated-token";
+            Function<RefreshToken, String> prepareBeforeCompletion = invocation.getArgument(1);
+            return new RefreshTokenService.RotationResult<>(
+                "rotated-token",
+                rotatedToken,
+                prepareBeforeCompletion.apply(currentToken)
+            );
         });
-        when(jwtRefreshTokenService.authenticate("rotated-token"))
-            .thenReturn(rotatedToken);
         when(jwtAccessTokenService.issue(rotatedToken.userId())).thenReturn("access-token");
 
         RefreshAccessTokenResult result = refreshAccessTokenUseCase.reissue("current-token");
@@ -69,7 +67,7 @@ class RefreshAccessTokenUseCaseTest {
         assertThat(result).hasToString("RefreshAccessTokenResult[redacted]");
         verify(refreshTokenService).rotate(
             ArgumentMatchers.eq("current-token"),
-            ArgumentMatchers.<Consumer<RefreshToken>>any()
+            ArgumentMatchers.<Function<RefreshToken, String>>any()
         );
     }
 
@@ -81,11 +79,14 @@ class RefreshAccessTokenUseCaseTest {
             .thenReturn(Optional.empty());
         when(refreshTokenService.rotate(
             ArgumentMatchers.eq("current-token"),
-            ArgumentMatchers.<Consumer<RefreshToken>>any()
+            ArgumentMatchers.<Function<RefreshToken, String>>any()
         )).thenAnswer(invocation -> {
-            Consumer<RefreshToken> beforeCompletion = invocation.getArgument(1);
-            beforeCompletion.accept(currentToken);
-            return "rotated-token";
+            Function<RefreshToken, String> prepareBeforeCompletion = invocation.getArgument(1);
+            return new RefreshTokenService.RotationResult<>(
+                "rotated-token",
+                refreshToken(NOW.plus(Duration.ofDays(7))),
+                prepareBeforeCompletion.apply(currentToken)
+            );
         });
 
         assertThatThrownBy(() -> refreshAccessTokenUseCase.reissue("current-token"))
