@@ -35,8 +35,9 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
@@ -115,8 +116,8 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
     private final GetMyReservationQrUseCase getMyReservationQrUseCase;
     private final CreatePaymentUseCase createPaymentUseCase;
 
-    @MockitoSpyBean
-    private CapacityHoldRepository capacityHoldRepository;
+    private final CapacityHoldRepository capacityHoldRepository;
+    private final TransactionTemplate transactionTemplate;
 
     @Autowired
     WithdrawalControllerMySqlIntegrationTest(
@@ -126,6 +127,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         RegionRepository regionRepository,
         ContentRepository contentRepository,
         ContentSessionRepository contentSessionRepository,
+        CapacityHoldRepository capacityHoldRepository,
         ReservationRepository reservationRepository,
         ReservationPriceSnapshotRepository reservationPriceSnapshotRepository,
         PaymentRepository paymentRepository,
@@ -140,7 +142,8 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         ReservationConfirmationUseCase reservationConfirmationUseCase,
         ReservationCancellationUseCase reservationCancellationUseCase,
         GetMyReservationQrUseCase getMyReservationQrUseCase,
-        CreatePaymentUseCase createPaymentUseCase
+        CreatePaymentUseCase createPaymentUseCase,
+        PlatformTransactionManager transactionManager
     ) {
         this.mockMvc = mockMvc;
         this.appUserRepository = appUserRepository;
@@ -148,6 +151,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         this.regionRepository = regionRepository;
         this.contentRepository = contentRepository;
         this.contentSessionRepository = contentSessionRepository;
+        this.capacityHoldRepository = capacityHoldRepository;
         this.reservationRepository = reservationRepository;
         this.reservationPriceSnapshotRepository = reservationPriceSnapshotRepository;
         this.paymentRepository = paymentRepository;
@@ -163,6 +167,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         this.reservationCancellationUseCase = reservationCancellationUseCase;
         this.getMyReservationQrUseCase = getMyReservationQrUseCase;
         this.createPaymentUseCase = createPaymentUseCase;
+        transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     @DynamicPropertySource
@@ -173,7 +178,6 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
     @BeforeEach
     void setUp() {
         reset(refreshTokenStore);
-        reset(capacityHoldRepository);
         failingWithdrawalCapacityHoldService.reset();
     }
 
@@ -252,16 +256,15 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         expireActiveHold(fixture);
         CountDownLatch withdrawalSnapshotRead = new CountDownLatch(1);
         CountDownLatch releaseWithdrawal = new CountDownLatch(1);
-        doAnswer(invocation -> {
-            Object activeHoldIds = invocation.callRealMethod();
-            withdrawalSnapshotRead.countDown();
-            await(releaseWithdrawal);
-            return activeHoldIds;
-        }).when(capacityHoldRepository).findActiveHoldIdsByUserId(fixture.user().getUserId());
 
         try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
             Future<Void> withdrawal = executorService.submit(() -> {
-                withdrawUserUseCase.withdraw(fixture.user().getUserId());
+                transactionTemplate.executeWithoutResult(status -> {
+                    capacityHoldRepository.findActiveHoldIdsByUserId(fixture.user().getUserId());
+                    withdrawalSnapshotRead.countDown();
+                    await(releaseWithdrawal);
+                    withdrawUserUseCase.withdraw(fixture.user().getUserId());
+                });
                 return null;
             });
             assertThat(withdrawalSnapshotRead.await(3, TimeUnit.SECONDS)).isTrue();
