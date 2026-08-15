@@ -166,6 +166,10 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 `CONFIRMED` 예약을 취소해야 하면 먼저 명시적으로 회차를 취소한다.
 자동·수동 종료와 추가 회차 생성은 같은 `content` 행을 먼저 잠그고, 잠금을 얻은 뒤 콘텐츠와 전체 회차 상태를
 다시 확인한다. 따라서 `ENDED` 콘텐츠와 새 `PENDING` 회차를 함께 커밋할 수 없다.
+`PUBLISHED → ENDED`가 성공할 때 활성 `EDIT_REQUESTED` 콘텐츠 수정본이 있으면 같은 트랜잭션에서
+`EDIT_INVALIDATED`로 종결한다. 수동 종료에서는 종료를 처리한 지역 관리자를, 시스템 종료에서는 처리자 없이
+무효화 시각·`CONTENT_ENDED` 사유를 기록한다. 콘텐츠 행을 먼저 잠근 뒤 수정본 행, 회차와 홀드 순으로 잠그며,
+콘텐츠 종료·수정본 무효화·콘텐츠 로그·감사·홀드 처리는 함께 커밋하거나 함께 롤백한다.
 자동 종료의 `@Scheduled` 실행은 별도 Scheduler가 담당하고, Scheduler와 수동 Controller는 같은
 `EndContentReservationsUseCase`를 호출한다. UseCase는 콘텐츠 한 건마다 트랜잭션을 열어 각 Service의 작업을
 조정하며, Scheduler와 Controller는 개별 Service를 직접 호출하지 않는다.
@@ -218,7 +222,13 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 철회 시각·처리자·사유를 기록하며 반복 철회 요청은 기존 결과를 반환한다.
 승인·반려·철회는 모두 `EDIT_REQUESTED` 상태를 조건으로 전이하며 경합하면 성공한 최초 전이만 적용한다.
 승인·반려가 먼저 성공하면 이후 철회를 거부하고, 철회가 먼저 성공하면 이후 승인·반려를 거부한다.
-`EDIT_REJECTED`와 `EDIT_WITHDRAWN` 수정본은 원본 후보 필드를 반영하지 않고 상태와 사유 이력을 보존한다.
+콘텐츠가 `PUBLISHED → SUSPENDED` 또는 `PUBLISHED → ENDED`로 먼저 전이하면 활성 수정본은
+`EDIT_INVALIDATED`로 종결한다. 중단에서는 중단을 처리한 지역 관리자를, 수동 종료에서는 종료를 처리한 지역
+관리자를, 시스템 종료에서는 처리자 없이 무효화 시각과 각각 `CONTENT_SUSPENDED` 또는 `CONTENT_ENDED` 사유를
+기록한다. 콘텐츠 행을 먼저 잠근 뒤 활성 수정본 행을 잠그므로 수정 심사·철회와 경합하면 `EDIT_REQUESTED` 상태
+전이에 먼저 성공한 하나만 반영한다. 무효화된 수정본은 후보 필드를 원본에 반영하지 않는 터미널 상태이며,
+목록에서는 제외하고 심사 상세 조회는 `404 NOT_FOUND`, 승인·반려·철회는 `409 CONTENT_STATE_CONFLICT`를 반환한다.
+`EDIT_REJECTED`, `EDIT_WITHDRAWN`, `EDIT_INVALIDATED` 수정본은 원본 후보 필드를 반영하지 않고 상태와 사유 이력을 보존한다.
 `EDIT_APPROVED` 반영 후에는 기존 수정본을 철회하지 않고 새 수정본 또는 전체 콘텐츠 철회 절차를 사용한다.
 수정본의 관계형 리비전 영속 모델과 승인 시 원자 반영은
 [ADR-0014](../adr/0014-store-published-content-edits-in-relational-revision-tables.md)와
@@ -230,6 +240,8 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 
 지역 관리자는 공개 콘텐츠를 `PUBLISHED → SUSPENDED`로 전환할 수 있다.
 `SUSPENDED` 상태의 `content_log`에 중단 시각, 처리자와 사유를 기록하고 방문자에게 최신 사유를 표시한다.
+활성 `EDIT_REQUESTED` 수정본이 있으면 콘텐츠 행 잠금 뒤 수정본 행을 잠가 `EDIT_INVALIDATED`로 종결하고,
+중단 처리자·시각과 `CONTENT_SUSPENDED` 사유 및 수정본 상태 전이 감사 이력을 함께 기록한다.
 신규 홀드를 차단하고 `ACTIVE` 홀드를 무효화해 정원을 한 번 복구하지만,
 기존 `CONFIRMED` 예약은 명시적인 회차 취소가 없으면 유지한다.
 
@@ -261,7 +273,7 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 
 ### `CON-09`
 
-최초 콘텐츠 소유자 설정, 승인·반려·자동 공개·수정 심사·수정본 `EDIT_WITHDRAWN`,
+최초 콘텐츠 소유자 설정, 승인·반려·자동 공개·수정 심사·수정본 `EDIT_WITHDRAWN`·`EDIT_INVALIDATED`,
 운영 중단·전체 콘텐츠 `WITHDRAWN`·종료·삭제의 상태 전이는 감사 대상이다.
 공통 감사 필드와 재현 요건은 [P0 명세](../p0-spec.md#88-감사-및-운영-로그)의 8.8절을 적용한다.
 
@@ -292,7 +304,7 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 | --- | --- | --- |
 | 지역 | `region_id`, 공개 상태 | 지역 선택과 공개 범위 |
 | 콘텐츠 | `content_id`, `region_id`, type, status, operator_id, `reservation_price`, 행사·체험 표시 필드(연령 조건·준비물·취소 안내), publish_at, deleted_at | 탐색·승인·자동 공개, 서버가 설정한 소유 관계와 공개 전 소프트 삭제 현재 상태 |
-| 콘텐츠 수정본 | `content_revision_id`, content_id, editor_id, status, 후보 `reservation_price`, 행사·체험 후보 표시 필드, 후보 `publish_at`, submitted_at, reviewed_at, withdrawn_at, withdrawn_by, withdrawal_reason | 공개·공개 전 승인본을 분리한 수정 심사·철회 |
+| 콘텐츠 수정본 | `content_revision_id`, content_id, editor_id, status, 후보 `reservation_price`, 행사·체험 후보 표시 필드, 후보 `publish_at`, submitted_at, reviewed_at, withdrawn_at, withdrawn_by, withdrawal_reason, invalidated_at, invalidated_by, invalidation_reason | 공개·공개 전 승인본을 분리한 수정 심사·철회·콘텐츠 종결에 따른 무효화 |
 | 콘텐츠 상태 로그 | id, `content_id`, `actor_id`, status, reason, date | 생성·승인·자동 공개·중단·철회·종료·삭제의 처리자, 사유와 상태 변경 시각 |
 | 행사·체험 회차 | `session_id`, `content_id`, 시작·종료 시각, 정원, status, 체크인 시작·종료 시각 | 무료 예약 마감·QR 가능 단위 |
 | 회차 수정 심사 요청 | `session_revision_id`, content_id, target_session_id, 후보 일정·정원, base_session_version, status, submitted_at, reviewed_at | 기존 `SCHEDULED` 회차 변경의 심사 후보. 승인 때만 실제 회차에 반영 |

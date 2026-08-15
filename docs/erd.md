@@ -459,6 +459,14 @@ erDiagram
 - `content_revision`의 논리 유일 키는 `(content_id, revision_no)`다.
 - 콘텐츠당 `EDIT_REQUESTED` 수정본은 최대 한 건이다. MySQL에서는 생성 컬럼을 포함한 유일 제약 또는
   동등한 조건부 쓰기 제약으로 강제한다.
+- 콘텐츠가 `PUBLISHED → SUSPENDED` 또는 `PUBLISHED → ENDED`로 전이하면, 같은 트랜잭션에서 활성
+  `EDIT_REQUESTED` 수정본을 `EDIT_INVALIDATED`로 전이한다. 콘텐츠 행을 먼저 잠근 뒤 수정본 행을 잠그고,
+  수정 심사·철회와 경합하면 `EDIT_REQUESTED`를 먼저 전이한 하나만 성공한다.
+- `EDIT_INVALIDATED` 수정본은 `invalidated_at`, `invalidation_reason`을 반드시 보관하고,
+  `invalidated_by_user_id`는 수동 중단·종료 처리자에게는 필수이며 시스템 종료에서는 `NULL`이다.
+  `invalidation_reason`은 `CONTENT_SUSPENDED` 또는 `CONTENT_ENDED`만 허용한다. 이 수정본은 후보 필드를
+  원본에 반영하지 않는 터미널 상태이며, 상태 전이 감사 이벤트는 원본 콘텐츠를 대상으로 이전·다음 수정본 상태와
+  사유 코드를 기록한다.
 - 공개 콘텐츠 수정본의 승인 조건은 원본 `PUBLISHED`, 수정본 `EDIT_REQUESTED`,
   `content.version_no = content_revision.base_content_version`, `content_revision.publish_at IS NULL`이다.
   승인 시 후보 필드를 원본에 반영하지만 원본 상태와 `content.publish_at`은 유지한다.
@@ -470,7 +478,7 @@ erDiagram
   `content.version_no = content_revision.base_content_version`, `content_revision.publish_at IS NOT NULL`이다.
   승인 시 모든 후보 필드와 후보 `publish_at`을 원본에 반영하고 `PENDING → APPROVED` 상태 로그, 원본 버전 증가,
   수정본 종결과 성공 감사 이벤트를 한 트랜잭션에서 처리한다.
-- `EDIT_REJECTED`와 `EDIT_WITHDRAWN` 수정본은 원본 후보 필드를 반영하지 않고 보존한다. 원본이 공개 전 수정 심사로
+- `EDIT_REJECTED`, `EDIT_WITHDRAWN`, `EDIT_INVALIDATED` 수정본은 원본 후보 필드를 반영하지 않고 보존한다. 원본이 공개 전 수정 심사로
   `PENDING`이 된 경우에는 이 종결 뒤에도 `PENDING`을 유지한다.
 - 추가 회차는 `content_session`을 `PENDING`, `remaining_capacity = capacity`로 생성한다. 지역 관리자 승인 시에만
   `SCHEDULED`로 전이하며, `PENDING`·`REJECTED` 회차는 홀드·예약·공개 조회의 대상이 아니다.
@@ -791,7 +799,7 @@ erDiagram
 | `operator_application` | `PENDING`, `APPROVED`, `REJECTED`, `CANCELLED` | `PENDING → {APPROVED, REJECTED, CANCELLED}` |
 | `content` | `PENDING`, `REJECTED`, `APPROVED`, `PUBLISHED`, `SUSPENDED`, `WITHDRAWN`, `ENDED` | `PENDING → {APPROVED, REJECTED}`, `REJECTED → PENDING`, `APPROVED → {PENDING, PUBLISHED}`, `PUBLISHED → {SUSPENDED, WITHDRAWN, ENDED}` |
 | `content_log.status` | `content` 상태 카탈로그의 값, `DELETED` | 생성·상태 변경 뒤의 `content.status` 또는 소프트 삭제 이벤트를 추가 전용으로 기록 |
-| `content_revision` | `EDIT_REQUESTED`, `EDIT_APPROVED`, `EDIT_REJECTED`, `EDIT_WITHDRAWN` | `EDIT_REQUESTED → {EDIT_APPROVED, EDIT_REJECTED, EDIT_WITHDRAWN}` |
+| `content_revision` | `EDIT_REQUESTED`, `EDIT_APPROVED`, `EDIT_REJECTED`, `EDIT_WITHDRAWN`, `EDIT_INVALIDATED` | `EDIT_REQUESTED → {EDIT_APPROVED, EDIT_REJECTED, EDIT_WITHDRAWN, EDIT_INVALIDATED}` |
 | `content_session` | `PENDING`, `SCHEDULED`, `REJECTED`, `COMPLETED`, `CANCELLED` | `PENDING → {SCHEDULED, REJECTED}`, `SCHEDULED → {COMPLETED, CANCELLED}` |
 | `session_revision.status` | `PENDING`, `APPROVED`, `REJECTED` | `PENDING → {APPROVED, REJECTED}` |
 | `image_object` | `ACTIVE`, `DELETE_PENDING` | 참조 제거 또는 만료된 미연결 업로드 후보 정리 후 `ACTIVE → DELETE_PENDING`; S3 삭제 성공 후 행 파기 |
