@@ -5,7 +5,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.function.Consumer;
+import java.util.function.Function;
 
 public class RefreshTokenService {
 
@@ -40,12 +40,14 @@ public class RefreshTokenService {
     }
 
     public String rotate(String token) {
-        return rotate(token, ignored -> {
-        });
+        return rotate(token, ignored -> null).rotatedTokenValue();
     }
 
-    public String rotate(String token, Consumer<RefreshToken> beforeCompletion) {
-        Objects.requireNonNull(beforeCompletion, "beforeCompletion must not be null");
+    public <T> RotationResult<T> rotate(
+        String token,
+        Function<RefreshToken, T> prepareBeforeCompletion
+    ) {
+        Objects.requireNonNull(prepareBeforeCompletion, "prepareBeforeCompletion must not be null");
 
         RefreshToken currentToken = jwtRefreshTokenService.authenticate(token);
         UUID attemptId = UUID.randomUUID();
@@ -58,8 +60,7 @@ public class RefreshTokenService {
         }
 
         try {
-            beforeCompletion.accept(currentToken);
-
+            T preparationResult = prepareBeforeCompletion.apply(currentToken);
             RefreshToken nextToken = currentToken.rotate(UUID.randomUUID(), currentInstant());
             String rotatedToken = jwtRefreshTokenService.issue(nextToken);
             RefreshTokenStore.RotationCompletionResult completionResult = refreshTokenStore.completeRotation(
@@ -73,7 +74,7 @@ public class RefreshTokenService {
             if (completionResult == RefreshTokenStore.RotationCompletionResult.INVALID) {
                 throw new InvalidRefreshTokenException();
             }
-            return rotatedToken;
+            return new RotationResult<>(rotatedToken, nextToken, preparationResult);
         } catch (RuntimeException exception) {
             refreshTokenStore.cancelRotation(currentToken, attemptId);
             throw exception;
@@ -100,6 +101,18 @@ public class RefreshTokenService {
     private void validateUserId(Long userId) {
         if (userId == null || userId <= 0) {
             throw new IllegalArgumentException("userId must be positive");
+        }
+    }
+
+    public record RotationResult<T>(
+        String rotatedTokenValue,
+        RefreshToken rotatedToken,
+        T preparationResult
+    ) {
+
+        @Override
+        public String toString() {
+            return "RotationResult[redacted]";
         }
     }
 }
