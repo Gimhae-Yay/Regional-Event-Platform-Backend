@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -44,6 +45,9 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentSessionRepository;
+import io.regionevent.regioneventbackend.domain.operator.entity.OperatorApplication;
+import io.regionevent.regioneventbackend.domain.operator.entity.OperatorApplicationStatus;
+import io.regionevent.regioneventbackend.domain.operator.repository.OperatorApplicationRepository;
 import io.regionevent.regioneventbackend.domain.payment.dto.CreatePaymentRequest;
 import io.regionevent.regioneventbackend.domain.payment.dto.CreatePaymentResponse;
 import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
@@ -102,6 +106,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
     private final ReservationPriceSnapshotRepository reservationPriceSnapshotRepository;
     private final PaymentRepository paymentRepository;
     private final RefundRepository refundRepository;
+    private final OperatorApplicationRepository operatorApplicationRepository;
     private final JwtAccessTokenService jwtAccessTokenService;
     private final JdbcTemplate jdbcTemplate;
     private final WithdrawUserUseCase withdrawUserUseCase;
@@ -127,6 +132,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         ReservationPriceSnapshotRepository reservationPriceSnapshotRepository,
         PaymentRepository paymentRepository,
         RefundRepository refundRepository,
+        OperatorApplicationRepository operatorApplicationRepository,
         JwtAccessTokenService jwtAccessTokenService,
         JdbcTemplate jdbcTemplate,
         WithdrawUserUseCase withdrawUserUseCase,
@@ -150,6 +156,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         this.reservationPriceSnapshotRepository = reservationPriceSnapshotRepository;
         this.paymentRepository = paymentRepository;
         this.refundRepository = refundRepository;
+        this.operatorApplicationRepository = operatorApplicationRepository;
         this.jwtAccessTokenService = jwtAccessTokenService;
         this.jdbcTemplate = jdbcTemplate;
         this.withdrawUserUseCase = withdrawUserUseCase;
@@ -450,6 +457,47 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
             .isEqualTo(RefundStatus.REQUESTED);
     }
 
+    @ParameterizedTest
+    @EnumSource(value = OperatorApplicationStatus.class, names = {"APPROVED", "REJECTED"})
+    void withdraw_afterReviewerRoleRevocation_unlinksInspectorAndPreservesReviewResult(
+        OperatorApplicationStatus applicationStatus
+    ) throws Exception {
+        String suffix = Long.toUnsignedString(System.nanoTime());
+        Region region = regionRepository.saveAndFlush(new Region("R" + suffix, "김해시", true));
+        AppUser reviewer = saveUser("reviewer-" + suffix + "@example.com");
+        UserRoleAssignment reviewerRole = userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(
+            reviewer,
+            UserRole.REGION_ADMIN,
+            region
+        ));
+        AppUser applicant = saveUser("applicant-" + suffix + "@example.com");
+        String rejectedReason = applicationStatus == OperatorApplicationStatus.REJECTED ? "사업자 정보 미비" : null;
+        OperatorApplication application = operatorApplicationRepository.saveAndFlush(new OperatorApplication(
+            applicant,
+            region,
+            "사업자 정보",
+            applicationStatus,
+            reviewer,
+            rejectedReason
+        ));
+        Instant reviewedAt = findReviewTime(application.getOperatorApplicationId());
+        reviewerRole.revoke(Instant.now(), "ROLE_REVOKED");
+        userRoleAssignmentRepository.saveAndFlush(reviewerRole);
+
+        mockMvc.perform(delete(WITHDRAWAL_PATH)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(reviewer.getUserId())))
+            .andExpect(status().isOk());
+
+        assertThat(appUserRepository.findById(reviewer.getUserId())).isEmpty();
+        assertThat(operatorApplicationRepository.findById(application.getOperatorApplicationId()))
+            .hasValueSatisfying(savedApplication -> {
+                assertThat(savedApplication.getStatus()).isEqualTo(applicationStatus);
+                assertThat(savedApplication.getInspectedUser()).isNull();
+                assertThat(savedApplication.getRejectedReason()).isEqualTo(rejectedReason);
+            });
+        assertThat(findReviewTime(application.getOperatorApplicationId())).isEqualTo(reviewedAt);
+    }
+
     @Test
     @Timeout(10)
     void withdraw_whenConcurrentRequestWaits_returnsUnauthenticatedAfterFirstRequestDeletesAccount() throws Exception {
@@ -669,6 +717,14 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         } catch (BusinessException exception) {
             return exception.getErrorCode();
         }
+    }
+
+    private Instant findReviewTime(Long operatorApplicationId) {
+        return jdbcTemplate.queryForObject(
+            "SELECT updated_at FROM operator_application WHERE operator_application_id = ?",
+            Timestamp.class,
+            operatorApplicationId
+        ).toInstant();
     }
 
     private void assertUserCommandWaitsForWithdrawalAndIsRejected(

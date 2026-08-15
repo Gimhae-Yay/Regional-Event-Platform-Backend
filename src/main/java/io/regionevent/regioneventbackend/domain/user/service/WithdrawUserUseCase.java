@@ -81,6 +81,7 @@ public class WithdrawUserUseCase {
         capacityHoldService.invalidateActiveHoldsForWithdrawal(userId);
         reservationService.cancelConfirmedReservationsForWithdrawal(userId);
         operatorApplicationService.cancelAndUnlinkByApplicantUserId(userId);
+        operatorApplicationService.unlinkInspectorByUserId(userId);
         capacityHoldService.unlinkUserByUserId(userId);
         reservationService.unlinkUserByUserId(userId);
         visitService.unlinkAuthorByUserId(userId);
