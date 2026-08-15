@@ -11,7 +11,6 @@ import java.util.UUID;
 import jakarta.persistence.EntityManager;
 
 import org.junit.jupiter.api.Test;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -53,11 +52,12 @@ import io.regionevent.regioneventbackend.support.jpa.CleanH2Database;
 @SpringBootTest
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 @CleanH2Database
-class SubmitOperatorMissionAuditAtomicityTest {
+class RejectRegionAdminMissionAuditAtomicityTest {
 
-    private static final Instant NOW = Instant.parse("2026-08-11T00:00:00Z");
+    private static final Instant BASE_TIME = Instant.parse("2026-08-10T00:00:00Z");
+    private static final String REASON_CODE = "MISSION_REWARD_POLICY_INVALID";
 
-    private final SubmitOperatorMissionUseCase submitOperatorMissionUseCase;
+    private final RejectRegionAdminMissionUseCase rejectRegionAdminMissionUseCase;
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
@@ -73,8 +73,8 @@ class SubmitOperatorMissionAuditAtomicityTest {
     private RecordAuditEventUseCase recordAuditEventUseCase;
 
     @Autowired
-    SubmitOperatorMissionAuditAtomicityTest(
-        SubmitOperatorMissionUseCase submitOperatorMissionUseCase,
+    RejectRegionAdminMissionAuditAtomicityTest(
+        RejectRegionAdminMissionUseCase rejectRegionAdminMissionUseCase,
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
         UserRoleAssignmentRepository userRoleAssignmentRepository,
@@ -86,7 +86,7 @@ class SubmitOperatorMissionAuditAtomicityTest {
         PlatformTransactionManager transactionManager,
         EntityManager entityManager
     ) {
-        this.submitOperatorMissionUseCase = submitOperatorMissionUseCase;
+        this.rejectRegionAdminMissionUseCase = rejectRegionAdminMissionUseCase;
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
         this.userRoleAssignmentRepository = userRoleAssignmentRepository;
@@ -100,121 +100,76 @@ class SubmitOperatorMissionAuditAtomicityTest {
     }
 
     @Test
-    void submit_whenSuccessAuditFails_rollsBackMissionState() {
-        Fixture fixture = createFixture();
+    void reject_whenSuccessAuditFails_rollsBackStateAndCommitsFailureAudit() {
+        Fixture fixture = createFixture(true);
         doThrow(new IllegalStateException("audit storage failure"))
             .when(recordAuditEventUseCase)
             .record(any(AuditEventCommand.class));
 
-        assertThatThrownBy(() -> submitOperatorMissionUseCase.submit(
-            fixture.operatorId(),
+        assertThatThrownBy(() -> rejectRegionAdminMissionUseCase.reject(
+            fixture.adminUserId(),
             fixture.missionId(),
+            REASON_CODE,
             UUID.randomUUID()
         )).isInstanceOf(IllegalStateException.class);
 
-        assertThat(missionRepository.findById(fixture.missionId()))
-            .hasValueSatisfying(mission -> assertThat(mission.getStatus()).isEqualTo(MissionStatus.DRAFT));
-        assertFailureAudit(fixture, fixture.operatorId(), MissionStatus.DRAFT, "INTERNAL_SERVER_ERROR");
+        assertMissionStatus(fixture.missionId(), MissionStatus.PENDING_REVIEW);
+        assertFailureAudit(fixture, fixture.adminUserId(), "INTERNAL_SERVER_ERROR");
     }
 
     @Test
-    void submit_whenMissionIsNotDraft_preservesStateAndCommitsFailureAudit() {
-        Fixture fixture = createFixture();
-        transactionTemplate.executeWithoutResult(status -> {
-            Mission mission = missionRepository.findById(fixture.missionId()).orElseThrow();
-            mission.submitForReview();
-            missionRepository.saveAndFlush(mission);
-        });
+    void reject_whenMissionIsNotPendingReview_preservesStateAndCommitsFailureAudit() {
+        Fixture fixture = createFixture(false);
 
-        assertThatThrownBy(() -> submitOperatorMissionUseCase.submit(
-            fixture.operatorId(),
+        assertThatThrownBy(() -> rejectRegionAdminMissionUseCase.reject(
+            fixture.adminUserId(),
             fixture.missionId(),
+            REASON_CODE,
             UUID.randomUUID()
         )).isInstanceOfSatisfying(BusinessException.class, exception ->
             assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.MISSION_STATE_CONFLICT)
         );
 
-        assertThat(missionRepository.findById(fixture.missionId()))
-            .hasValueSatisfying(mission ->
-                assertThat(mission.getStatus()).isEqualTo(MissionStatus.PENDING_REVIEW)
-            );
-        assertFailureAudit(
-            fixture,
-            fixture.operatorId(),
-            MissionStatus.PENDING_REVIEW,
-            "MISSION_STATE_CONFLICT"
-        );
+        assertMissionStatus(fixture.missionId(), MissionStatus.DRAFT);
+        assertFailureAudit(fixture, fixture.adminUserId(), "MISSION_STATE_CONFLICT");
     }
 
     @Test
-    void submit_withOtherRegionOperator_preservesStateAndCommitsFailureAudit() {
-        Fixture fixture = createFixture();
-        Long otherOperatorId = transactionTemplate.execute(status -> {
-            String suffix = Long.toUnsignedString(System.nanoTime());
-            Region otherRegion = regionRepository.save(new Region("MSN-OTHER-" + suffix, "Busan", true));
-            AppUser otherOperator = appUserRepository.save(new AppUser(
-                "other-operator-" + suffix + "@example.com",
-                "password-hash",
-                "other operator",
-                "010-9876-5432",
-                AppUserStatus.ACTIVE
-            ));
-            userRoleAssignmentRepository.save(new UserRoleAssignment(
-                otherOperator,
-                UserRole.OPERATOR,
-                otherRegion
-            ));
-            return otherOperator.getUserId();
-        });
+    void reject_withOtherRegionAdmin_preservesStateAndCommitsFailureAudit() {
+        Fixture fixture = createFixture(true);
+        Long otherAdminUserId = createOtherRegionAdmin();
 
-        assertThatThrownBy(() -> submitOperatorMissionUseCase.submit(
-            otherOperatorId,
+        assertThatThrownBy(() -> rejectRegionAdminMissionUseCase.reject(
+            otherAdminUserId,
             fixture.missionId(),
+            REASON_CODE,
             UUID.randomUUID()
         )).isInstanceOfSatisfying(BusinessException.class, exception ->
             assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN)
         );
 
-        assertThat(missionRepository.findById(fixture.missionId()))
-            .hasValueSatisfying(mission -> assertThat(mission.getStatus()).isEqualTo(MissionStatus.DRAFT));
-        assertFailureAudit(fixture, otherOperatorId, MissionStatus.DRAFT, "FORBIDDEN");
+        assertMissionStatus(fixture.missionId(), MissionStatus.PENDING_REVIEW);
+        assertFailureAudit(fixture, otherAdminUserId, "FORBIDDEN");
     }
 
-    @Test
-    void submit_withInvalidRewardPolicy_preservesStateAndCommitsFailureAudit() {
-        Fixture fixture = createFixture();
-        transactionTemplate.executeWithoutResult(status -> entityManager.createNativeQuery("""
-            UPDATE coupon_policy
-            SET issuance_type = 'VISIT'
-            WHERE coupon_policy_id = :couponPolicyId
-            """)
-            .setParameter("couponPolicyId", fixture.couponPolicyId())
-            .executeUpdate());
-
-        assertThatThrownBy(() -> submitOperatorMissionUseCase.submit(
-            fixture.operatorId(),
-            fixture.missionId(),
-            UUID.randomUUID()
-        )).isInstanceOfSatisfying(BusinessException.class, exception ->
-            assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.MISSION_STATE_CONFLICT)
-        );
-
-        assertThat(missionRepository.findById(fixture.missionId()))
-            .hasValueSatisfying(mission -> assertThat(mission.getStatus()).isEqualTo(MissionStatus.DRAFT));
-        assertFailureAudit(fixture, fixture.operatorId(), MissionStatus.DRAFT, "MISSION_STATE_CONFLICT");
+    private void assertMissionStatus(
+        Long missionId,
+        MissionStatus status
+    ) {
+        assertThat(missionRepository.findById(missionId))
+            .hasValueSatisfying(mission -> assertThat(mission.getStatus()).isEqualTo(status));
     }
 
     private void assertFailureAudit(
         Fixture fixture,
         Long actorUserId,
-        MissionStatus previousState,
         String reasonCode
     ) {
         assertThat(auditEventRepository.findAll()).singleElement().satisfies(auditEvent -> {
             assertThat(auditEvent.getRegion().getRegionId()).isEqualTo(fixture.regionId());
             assertThat(auditEvent.getTargetType()).isEqualTo(AuditEventTargetType.MISSION);
             assertThat(auditEvent.getTargetId()).isEqualTo(fixture.missionId());
-            assertThat(auditEvent.getPreviousState()).isEqualTo(previousState.name());
+            assertThat(auditEvent.getPreviousState()).isEqualTo(fixture.initialStatus().name());
             assertThat(auditEvent.getNextState()).isNull();
             assertThat(auditEvent.getResult()).isEqualTo(AuditEventResult.FAILURE);
             assertThat(auditEvent.getReasonCode()).isEqualTo(reasonCode);
@@ -226,25 +181,18 @@ class SubmitOperatorMissionAuditAtomicityTest {
             );
     }
 
-    private Fixture createFixture() {
+    private Fixture createFixture(boolean pendingReview) {
         return transactionTemplate.execute(status -> {
             String suffix = Long.toUnsignedString(System.nanoTime());
-            Region region = regionRepository.save(new Region("MSN-" + suffix, "Gimhae", true));
-            AppUser operator = appUserRepository.save(new AppUser(
-                "operator-" + suffix + "@example.com",
-                "password-hash",
-                "operator",
-                "010-1234-5678",
-                AppUserStatus.ACTIVE
-            ));
-            userRoleAssignmentRepository.save(new UserRoleAssignment(operator, UserRole.OPERATOR, region));
-            Content content = contentRepository.save(new Content(
+            Region region = regionRepository.save(new Region("REJECT-" + suffix, "Gimhae", true));
+            AppUser admin = saveAdmin(region, "admin-" + suffix);
+            Content rewardContent = contentRepository.save(new Content(
                 region,
-                operator,
+                admin,
                 ContentType.EVENT_EXPERIENCE,
                 ContentStatus.PUBLISHED,
-                "mission reward content",
-                "mission reward content description",
+                "Reward content",
+                "Mission reward content",
                 "Gimhae",
                 "10:00-18:00",
                 "055-1234-5678",
@@ -252,42 +200,78 @@ class SubmitOperatorMissionAuditAtomicityTest {
                 "all",
                 "none",
                 "policy",
-                NOW
+                BASE_TIME
             ));
-            CouponPolicy couponPolicy = couponPolicyRepository.save(new CouponPolicy(
-                content,
+            CouponPolicy rewardPolicy = couponPolicyRepository.save(new CouponPolicy(
+                rewardContent,
                 region,
-                "mission reward",
+                "Mission reward",
                 null,
                 CouponIssuanceType.MISSION_REWARD,
                 1_000,
                 1_000,
                 7,
-                NOW.minusSeconds(3_600),
-                NOW.plusSeconds(3_600),
+                BASE_TIME.minusSeconds(3_600),
+                BASE_TIME.plusSeconds(86_400),
                 null
             ));
-            Mission mission = missionRepository.save(new Mission(
+            Mission mission = missionRepository.saveAndFlush(new Mission(
                 region,
                 MissionConditionType.VISIT_COUNT,
-                1,
-                couponPolicy,
-                NOW.plusSeconds(86_400)
+                3,
+                rewardPolicy,
+                BASE_TIME.plusSeconds(172_800)
             ));
+            MissionStatus initialStatus = MissionStatus.DRAFT;
+            if (pendingReview) {
+                entityManager.createNativeQuery("""
+                    UPDATE mission
+                    SET status = 'PENDING_REVIEW'
+                    WHERE mission_id = :missionId
+                    """)
+                    .setParameter("missionId", mission.getMissionId())
+                    .executeUpdate();
+                initialStatus = MissionStatus.PENDING_REVIEW;
+            }
+            entityManager.flush();
+            entityManager.clear();
             return new Fixture(
-                operator.getUserId(),
+                admin.getUserId(),
                 region.getRegionId(),
-                couponPolicy.getCouponPolicyId(),
-                mission.getMissionId()
+                mission.getMissionId(),
+                initialStatus
             );
         });
     }
 
+    private Long createOtherRegionAdmin() {
+        return transactionTemplate.execute(status -> {
+            String suffix = Long.toUnsignedString(System.nanoTime());
+            Region otherRegion = regionRepository.save(new Region("REJECT-OTHER-" + suffix, "Busan", true));
+            return saveAdmin(otherRegion, "other-admin-" + suffix).getUserId();
+        });
+    }
+
+    private AppUser saveAdmin(
+        Region region,
+        String prefix
+    ) {
+        AppUser admin = appUserRepository.save(new AppUser(
+            prefix + "@example.com",
+            "hashed-password",
+            "Region admin",
+            "010-1234-5678",
+            AppUserStatus.ACTIVE
+        ));
+        userRoleAssignmentRepository.save(new UserRoleAssignment(admin, UserRole.REGION_ADMIN, region));
+        return admin;
+    }
+
     private record Fixture(
-        Long operatorId,
+        Long adminUserId,
         Long regionId,
-        Long couponPolicyId,
-        Long missionId
+        Long missionId,
+        MissionStatus initialStatus
     ) {
     }
 }
