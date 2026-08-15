@@ -22,12 +22,14 @@ import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
+import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponIssuanceType;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicy;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicyStatus;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponPolicyService;
 import io.regionevent.regioneventbackend.domain.mission.entity.Mission;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
+import io.regionevent.regioneventbackend.domain.mission.repository.MissionUpdateSnapshot;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
@@ -51,6 +53,7 @@ class SubmitOperatorMissionUseCaseTest {
     private CouponPolicyService couponPolicyService;
     private MissionService missionService;
     private RecordAuditEventUseCase recordAuditEventUseCase;
+    private RecordFailedAuditEventUseCase recordFailedAuditEventUseCase;
     private SubmitOperatorMissionUseCase useCase;
 
     @BeforeEach
@@ -59,11 +62,13 @@ class SubmitOperatorMissionUseCaseTest {
         couponPolicyService = mock(CouponPolicyService.class);
         missionService = mock(MissionService.class);
         recordAuditEventUseCase = mock(RecordAuditEventUseCase.class);
+        recordFailedAuditEventUseCase = mock(RecordFailedAuditEventUseCase.class);
         useCase = new SubmitOperatorMissionUseCase(
             operatorAuthorizationService,
             couponPolicyService,
             missionService,
             recordAuditEventUseCase,
+            recordFailedAuditEventUseCase,
             Clock.fixed(NOW, ZoneOffset.UTC)
         );
     }
@@ -75,7 +80,8 @@ class SubmitOperatorMissionUseCaseTest {
         AuthorizedOperator operator = operator();
         CouponPolicy rewardCouponPolicy = rewardCouponPolicy(REGION_ID, CouponIssuanceType.MISSION_REWARD,
             CouponPolicyStatus.DRAFT);
-        when(missionService.findRewardCouponPolicyId(MISSION_ID)).thenReturn(COUPON_POLICY_ID);
+        org.mockito.Mockito.doReturn(snapshot(REGION_ID, MissionStatus.DRAFT, COUPON_POLICY_ID))
+            .when(missionService).findUpdateSnapshot(MISSION_ID);
         when(operatorAuthorizationService.requireAuthorizedOperatorForUpdate(USER_ID)).thenReturn(operator);
         when(couponPolicyService.findForUpdate(COUPON_POLICY_ID)).thenReturn(rewardCouponPolicy);
         when(missionService.findByMissionIdForUpdate(MISSION_ID)).thenReturn(lockedMission);
@@ -100,6 +106,7 @@ class SubmitOperatorMissionUseCaseTest {
             assertThat(audit.reason()).isNull();
             assertThat(audit.occurredAt()).isEqualTo(NOW);
         });
+        verifyNoInteractions(recordFailedAuditEventUseCase);
     }
 
     @Test
@@ -111,7 +118,8 @@ class SubmitOperatorMissionUseCaseTest {
             CouponIssuanceType.MISSION_REWARD,
             CouponPolicyStatus.PUBLISHED
         );
-        when(missionService.findRewardCouponPolicyId(MISSION_ID)).thenReturn(COUPON_POLICY_ID);
+        org.mockito.Mockito.doReturn(snapshot(REGION_ID, MissionStatus.DRAFT, COUPON_POLICY_ID))
+            .when(missionService).findUpdateSnapshot(MISSION_ID);
         when(operatorAuthorizationService.requireAuthorizedOperatorForUpdate(USER_ID)).thenReturn(operator);
         when(couponPolicyService.findForUpdate(COUPON_POLICY_ID)).thenReturn(rewardCouponPolicy);
         when(missionService.findByMissionIdForUpdate(MISSION_ID)).thenReturn(lockedMission);
@@ -124,6 +132,7 @@ class SubmitOperatorMissionUseCaseTest {
         verify(couponPolicyService).findForUpdate(COUPON_POLICY_ID);
         verifyNoInteractions(recordAuditEventUseCase);
         verify(missionService, org.mockito.Mockito.never()).submitForReview(lockedMission);
+        assertFailureAudit(ErrorCode.MISSION_STATE_CONFLICT, MissionStatus.DRAFT);
     }
 
     @Test
@@ -135,7 +144,8 @@ class SubmitOperatorMissionUseCaseTest {
             CouponIssuanceType.MISSION_REWARD,
             CouponPolicyStatus.PUBLISHED
         );
-        when(missionService.findRewardCouponPolicyId(MISSION_ID)).thenReturn(COUPON_POLICY_ID);
+        org.mockito.Mockito.doReturn(snapshot(REGION_ID, MissionStatus.PENDING_REVIEW, COUPON_POLICY_ID))
+            .when(missionService).findUpdateSnapshot(MISSION_ID);
         when(operatorAuthorizationService.requireAuthorizedOperatorForUpdate(USER_ID)).thenReturn(operator);
         when(couponPolicyService.findForUpdate(COUPON_POLICY_ID)).thenReturn(rewardCouponPolicy);
         when(missionService.findByMissionIdForUpdate(MISSION_ID)).thenReturn(lockedMission);
@@ -147,12 +157,14 @@ class SubmitOperatorMissionUseCaseTest {
 
         verify(missionService, org.mockito.Mockito.never()).submitForReview(lockedMission);
         verifyNoInteractions(recordAuditEventUseCase);
+        assertFailureAudit(ErrorCode.MISSION_STATE_CONFLICT, MissionStatus.PENDING_REVIEW);
     }
 
     @Test
     void submit_whenRewardCouponPolicyDoesNotExist_propagatesNotFoundWithoutLockingMission() {
         AuthorizedOperator operator = operator();
-        when(missionService.findRewardCouponPolicyId(MISSION_ID)).thenReturn(COUPON_POLICY_ID);
+        org.mockito.Mockito.doReturn(snapshot(REGION_ID, MissionStatus.DRAFT, COUPON_POLICY_ID))
+            .when(missionService).findUpdateSnapshot(MISSION_ID);
         when(operatorAuthorizationService.requireAuthorizedOperatorForUpdate(USER_ID)).thenReturn(operator);
         when(couponPolicyService.findForUpdate(COUPON_POLICY_ID))
             .thenThrow(new BusinessException(ErrorCode.NOT_FOUND));
@@ -164,6 +176,59 @@ class SubmitOperatorMissionUseCaseTest {
 
         verifyNoInteractions(recordAuditEventUseCase);
         verify(missionService, org.mockito.Mockito.never()).findByMissionIdForUpdate(MISSION_ID);
+        assertFailureAudit(ErrorCode.NOT_FOUND, MissionStatus.DRAFT);
+    }
+
+    @Test
+    void submit_withoutAuthorizedOperator_doesNotRecordFailureAudit() {
+        when(operatorAuthorizationService.requireAuthorizedOperatorForUpdate(USER_ID))
+            .thenThrow(new BusinessException(ErrorCode.FORBIDDEN));
+
+        assertThatThrownBy(() -> useCase.submit(USER_ID, MISSION_ID, REQUEST_ID))
+            .isInstanceOf(BusinessException.class)
+            .extracting(exception -> ((BusinessException) exception).getErrorCode())
+            .isEqualTo(ErrorCode.FORBIDDEN);
+
+        verifyNoInteractions(couponPolicyService, recordAuditEventUseCase, recordFailedAuditEventUseCase);
+        verify(missionService, org.mockito.Mockito.never()).findUpdateSnapshot(MISSION_ID);
+    }
+
+    @Test
+    void submit_whenMissionDoesNotExist_doesNotRecordFailureAudit() {
+        org.mockito.Mockito.doReturn(operator())
+            .when(operatorAuthorizationService).requireAuthorizedOperatorForUpdate(USER_ID);
+        when(missionService.findUpdateSnapshot(MISSION_ID)).thenThrow(new BusinessException(ErrorCode.NOT_FOUND));
+
+        assertThatThrownBy(() -> useCase.submit(USER_ID, MISSION_ID, REQUEST_ID))
+            .isInstanceOf(BusinessException.class)
+            .extracting(exception -> ((BusinessException) exception).getErrorCode())
+            .isEqualTo(ErrorCode.NOT_FOUND);
+
+        verifyNoInteractions(couponPolicyService, recordAuditEventUseCase, recordFailedAuditEventUseCase);
+    }
+
+    @Test
+    void submit_whenProcessingExceptionOccurs_recordsInternalServerErrorFailureAudit() {
+        Mission lockedMission = mission(COUPON_POLICY_ID, MissionStatus.DRAFT, REGION_ID);
+        org.mockito.Mockito.doReturn(operator())
+            .when(operatorAuthorizationService).requireAuthorizedOperatorForUpdate(USER_ID);
+        org.mockito.Mockito.doReturn(snapshot(REGION_ID, MissionStatus.DRAFT, COUPON_POLICY_ID))
+            .when(missionService).findUpdateSnapshot(MISSION_ID);
+        org.mockito.Mockito.doReturn(rewardCouponPolicy(
+                REGION_ID,
+                CouponIssuanceType.MISSION_REWARD,
+                CouponPolicyStatus.DRAFT
+            ))
+            .when(couponPolicyService).findForUpdate(COUPON_POLICY_ID);
+        when(missionService.findByMissionIdForUpdate(MISSION_ID)).thenReturn(lockedMission);
+        when(missionService.submitForReview(lockedMission))
+            .thenThrow(new IllegalStateException("storage failure"));
+
+        assertThatThrownBy(() -> useCase.submit(USER_ID, MISSION_ID, REQUEST_ID))
+            .isInstanceOf(IllegalStateException.class);
+
+        verifyNoInteractions(recordAuditEventUseCase);
+        assertFailureAudit(ErrorCode.INTERNAL_SERVER_ERROR, MissionStatus.DRAFT);
     }
 
     private AuthorizedOperator operator() {
@@ -176,6 +241,39 @@ class SubmitOperatorMissionUseCaseTest {
         when(roleAssignment.getAppUser()).thenReturn(user);
         when(roleAssignment.getRole()).thenReturn(UserRole.OPERATOR);
         return new AuthorizedOperator(user, region, roleAssignment);
+    }
+
+    private MissionUpdateSnapshot snapshot(
+        Long regionId,
+        MissionStatus status,
+        Long couponPolicyId
+    ) {
+        MissionUpdateSnapshot snapshot = mock(MissionUpdateSnapshot.class);
+        Region region = region(regionId);
+        when(snapshot.getRegion()).thenReturn(region);
+        when(snapshot.getStatus()).thenReturn(status);
+        when(snapshot.getRewardCouponPolicyId()).thenReturn(couponPolicyId);
+        return snapshot;
+    }
+
+    private void assertFailureAudit(
+        ErrorCode errorCode,
+        MissionStatus previousState
+    ) {
+        ArgumentCaptor<AuditEventCommand> auditCaptor = ArgumentCaptor.forClass(AuditEventCommand.class);
+        verify(recordFailedAuditEventUseCase).record(auditCaptor.capture());
+        assertThat(auditCaptor.getValue()).satisfies(audit -> {
+            assertThat(audit.requestId()).isEqualTo(REQUEST_ID);
+            assertThat(audit.region().getRegionId()).isEqualTo(REGION_ID);
+            assertThat(audit.targetType()).isEqualTo(AuditEventTargetType.MISSION);
+            assertThat(audit.targetId()).isEqualTo(MISSION_ID);
+            assertThat(audit.previousState()).isEqualTo(previousState.name());
+            assertThat(audit.nextState()).isNull();
+            assertThat(audit.result()).isEqualTo(AuditEventResult.FAILURE);
+            assertThat(audit.reasonCode()).isEqualTo(errorCode.code());
+            assertThat(audit.actor().getRole()).isEqualTo(UserRole.OPERATOR);
+            assertThat(audit.occurredAt()).isEqualTo(NOW);
+        });
     }
 
     private Mission mission(

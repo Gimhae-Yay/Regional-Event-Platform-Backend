@@ -183,7 +183,7 @@ class ApproveRegionAdminMissionControllerIntegrationTest {
     }
 
     @Test
-    void reject_whenAdminBelongsToOtherRegion_returnsForbiddenWithoutChangingMission() throws Exception {
+    void reject_whenAdminBelongsToOtherRegion_returnsForbiddenAndRecordsFailureAudit() throws Exception {
         Fixture fixture = createFixture(
             MissionConditionType.VISIT_COUNT,
             ContentStatus.PUBLISHED,
@@ -205,7 +205,15 @@ class ApproveRegionAdminMissionControllerIntegrationTest {
             .andExpect(jsonPath("$.code").value("FORBIDDEN"));
 
         assertMissionPending(fixture.missionId());
-        assertThat(auditEventRepository.count()).isZero();
+        assertThat(auditEventRepository.findAll()).singleElement().satisfies(event -> {
+            assertThat(event.getTargetType()).isEqualTo(AuditEventTargetType.MISSION);
+            assertThat(event.getTargetId()).isEqualTo(fixture.missionId());
+            assertThat(event.getPreviousState()).isEqualTo(MissionStatus.PENDING_REVIEW.name());
+            assertThat(event.getNextState()).isNull();
+            assertThat(event.getResult()).isEqualTo(AuditEventResult.FAILURE);
+            assertThat(event.getReasonCode()).isEqualTo("FORBIDDEN");
+        });
+        assertThat(auditEventActorLinkRepository.count()).isEqualTo(1);
     }
 
     @Test

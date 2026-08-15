@@ -22,6 +22,7 @@ import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
+import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.service.ContentService;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponIssuanceType;
@@ -51,6 +52,7 @@ class CreateOperatorMissionUseCaseTest {
     private CouponPolicyService couponPolicyService;
     private MissionService missionService;
     private RecordAuditEventUseCase recordAuditEventUseCase;
+    private RecordFailedAuditEventUseCase recordFailedAuditEventUseCase;
     private CreateOperatorMissionUseCase useCase;
 
     @BeforeEach
@@ -60,12 +62,14 @@ class CreateOperatorMissionUseCaseTest {
         couponPolicyService = mock(CouponPolicyService.class);
         missionService = mock(MissionService.class);
         recordAuditEventUseCase = mock(RecordAuditEventUseCase.class);
+        recordFailedAuditEventUseCase = mock(RecordFailedAuditEventUseCase.class);
         useCase = new CreateOperatorMissionUseCase(
             operatorAuthorizationService,
             contentService,
             couponPolicyService,
             missionService,
             recordAuditEventUseCase,
+            recordFailedAuditEventUseCase,
             Clock.fixed(NOW, ZoneOffset.UTC)
         );
     }
@@ -107,6 +111,7 @@ class CreateOperatorMissionUseCaseTest {
             assertThat(audit.reasonCode()).isEqualTo("MISSION_CREATED");
             assertThat(audit.occurredAt()).isEqualTo(NOW);
         });
+        verifyNoInteractions(recordFailedAuditEventUseCase);
     }
 
     @Test
@@ -175,6 +180,7 @@ class CreateOperatorMissionUseCaseTest {
             .isEqualTo(ErrorCode.MISSION_STATE_CONFLICT);
 
         verifyNoInteractions(contentService, missionService, recordAuditEventUseCase);
+        assertFailureAudit(ErrorCode.MISSION_STATE_CONFLICT, operator.region());
     }
 
     @Test
@@ -197,6 +203,7 @@ class CreateOperatorMissionUseCaseTest {
             .isEqualTo(ErrorCode.MISSION_STATE_CONFLICT);
 
         verifyNoInteractions(contentService, missionService, recordAuditEventUseCase);
+        assertFailureAudit(ErrorCode.MISSION_STATE_CONFLICT, operator.region());
     }
 
     @Test
@@ -214,6 +221,7 @@ class CreateOperatorMissionUseCaseTest {
             .isEqualTo(ErrorCode.NOT_FOUND);
 
         verifyNoInteractions(contentService, missionService, recordAuditEventUseCase);
+        assertFailureAudit(ErrorCode.NOT_FOUND, operator.region());
     }
 
     @Test
@@ -230,6 +238,8 @@ class CreateOperatorMissionUseCaseTest {
         )).isInstanceOf(BusinessException.class)
             .extracting(exception -> ((BusinessException) exception).getErrorCode())
             .isEqualTo(ErrorCode.FORBIDDEN);
+
+        assertFailureAudit(ErrorCode.FORBIDDEN, operator.region());
     }
 
     @Test
@@ -245,7 +255,43 @@ class CreateOperatorMissionUseCaseTest {
             .extracting(exception -> ((BusinessException) exception).getErrorCode())
             .isEqualTo(ErrorCode.FORBIDDEN);
 
-        verifyNoInteractions(couponPolicyService, contentService, missionService, recordAuditEventUseCase);
+        verifyNoInteractions(
+            couponPolicyService,
+            contentService,
+            missionService,
+            recordAuditEventUseCase,
+            recordFailedAuditEventUseCase
+        );
+    }
+
+    @Test
+    void create_whenProcessingExceptionOccurs_recordsInternalServerErrorFailureAudit() {
+        AuthorizedOperator operator = operator(100L, 11L, 900L);
+        CouponPolicy rewardCouponPolicy = rewardCouponPolicy(
+            11L,
+            CouponIssuanceType.MISSION_REWARD,
+            CouponPolicyStatus.DRAFT
+        );
+        Mission mission = mission(701L, MissionStatus.DRAFT);
+        when(operatorAuthorizationService.requireAuthorizedOperatorForUpdate(100L)).thenReturn(operator);
+        when(couponPolicyService.findForUpdate(501L)).thenReturn(rewardCouponPolicy);
+        when(missionService.create(
+            operator.region(),
+            MissionConditionType.VISIT_COUNT,
+            3,
+            rewardCouponPolicy,
+            Instant.parse("2026-09-30T14:59:59Z")
+        )).thenReturn(mission);
+        when(missionService.save(mission)).thenThrow(new IllegalStateException("storage failure"));
+
+        assertThatThrownBy(() -> useCase.create(
+            100L,
+            command("VISIT_COUNT", 3, List.of(), 501L, "2026-09-30T23:59:59+09:00"),
+            REQUEST_ID
+        )).isInstanceOf(IllegalStateException.class);
+
+        verifyNoInteractions(recordAuditEventUseCase);
+        assertFailureAudit(ErrorCode.INTERNAL_SERVER_ERROR, operator.region());
     }
 
     private void assertInvalidInput(CreateOperatorMissionUseCase.CreateOperatorMissionCommand command) {
@@ -253,6 +299,27 @@ class CreateOperatorMissionUseCaseTest {
             .isInstanceOf(BusinessException.class)
             .extracting(exception -> ((BusinessException) exception).getErrorCode())
             .isEqualTo(ErrorCode.INVALID_INPUT);
+        verifyNoInteractions(recordFailedAuditEventUseCase);
+    }
+
+    private void assertFailureAudit(
+        ErrorCode errorCode,
+        Region region
+    ) {
+        ArgumentCaptor<AuditEventCommand> auditCaptor = ArgumentCaptor.forClass(AuditEventCommand.class);
+        verify(recordFailedAuditEventUseCase).record(auditCaptor.capture());
+        assertThat(auditCaptor.getValue()).satisfies(audit -> {
+            assertThat(audit.requestId()).isEqualTo(REQUEST_ID);
+            assertThat(audit.region()).isSameAs(region);
+            assertThat(audit.targetType()).isEqualTo(AuditEventTargetType.MISSION);
+            assertThat(audit.targetId()).isNull();
+            assertThat(audit.previousState()).isNull();
+            assertThat(audit.nextState()).isNull();
+            assertThat(audit.result()).isEqualTo(AuditEventResult.FAILURE);
+            assertThat(audit.reasonCode()).isEqualTo(errorCode.code());
+            assertThat(audit.actor().getRole()).isEqualTo(UserRole.OPERATOR);
+            assertThat(audit.occurredAt()).isEqualTo(NOW);
+        });
     }
 
     private CreateOperatorMissionUseCase.CreateOperatorMissionCommand command(
