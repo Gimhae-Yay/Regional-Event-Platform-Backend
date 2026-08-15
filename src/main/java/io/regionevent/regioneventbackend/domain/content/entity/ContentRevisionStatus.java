@@ -5,5 +5,6 @@ public enum ContentRevisionStatus {
     EDIT_REQUESTED,
     EDIT_APPROVED,
     EDIT_REJECTED,
-    EDIT_WITHDRAWN
+    EDIT_WITHDRAWN,
+    EDIT_INVALIDATED
 }

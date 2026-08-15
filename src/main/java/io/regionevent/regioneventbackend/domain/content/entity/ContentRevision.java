@@ -39,7 +39,7 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
     check = {
         @CheckConstraint(
             name = "ck_content_revision_status",
-            constraint = "status REGEXP '^(EDIT_REQUESTED|EDIT_APPROVED|EDIT_REJECTED|EDIT_WITHDRAWN)$'"
+            constraint = "status REGEXP '^(EDIT_REQUESTED|EDIT_APPROVED|EDIT_REJECTED|EDIT_WITHDRAWN|EDIT_INVALIDATED)$'"
         ),
         @CheckConstraint(
             name = "ck_content_revision_reviewed",
@@ -61,6 +61,14 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
             constraint = """
                 status <> 'EDIT_WITHDRAWN'
                 OR (withdrawn_at IS NOT NULL AND withdrawn_by_user_id IS NOT NULL AND withdrawal_reason IS NOT NULL)
+                """
+        ),
+        @CheckConstraint(
+            name = "ck_content_revision_invalidated",
+            constraint = """
+                status <> 'EDIT_INVALIDATED'
+                OR (invalidated_at IS NOT NULL
+                    AND invalidation_reason IN ('CONTENT_SUSPENDED', 'CONTENT_ENDED'))
                 """
         ),
         @CheckConstraint(
@@ -173,6 +181,20 @@ public class ContentRevision {
 
     @Column(name = "withdrawal_reason", columnDefinition = "TEXT")
     private String withdrawalReason;
+
+    @Column(name = "invalidated_at")
+    private Instant invalidatedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+        name = "invalidated_by_user_id",
+        foreignKey = @ForeignKey(name = "fk_content_revision_invalidator")
+    )
+    private AppUser invalidatedBy;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "invalidation_reason", length = 30)
+    private ContentRevisionInvalidationReason invalidationReason;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -336,6 +358,23 @@ public class ContentRevision {
         reviewReason = null;
     }
 
+    public void invalidate(
+        AppUser invalidator,
+        Instant invalidationTime,
+        ContentRevisionInvalidationReason reason
+    ) {
+        Instant validatedInvalidationTime = requireNotNull(invalidationTime, "invalidationTime");
+        ContentRevisionInvalidationReason validatedReason = requireNotNull(reason, "reason");
+        if (status != ContentRevisionStatus.EDIT_REQUESTED) {
+            throw new BusinessException(ErrorCode.CONTENT_STATE_CONFLICT);
+        }
+
+        status = ContentRevisionStatus.EDIT_INVALIDATED;
+        invalidatedAt = validatedInvalidationTime;
+        invalidatedBy = invalidator;
+        invalidationReason = validatedReason;
+    }
+
     public void replaceRejectedCandidateFields(
         String title,
         String description,
@@ -469,6 +508,18 @@ public class ContentRevision {
         return withdrawalReason;
     }
 
+    public Instant getInvalidatedAt() {
+        return invalidatedAt;
+    }
+
+    public AppUser getInvalidatedBy() {
+        return invalidatedBy;
+    }
+
+    public ContentRevisionInvalidationReason getInvalidationReason() {
+        return invalidationReason;
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
     }
@@ -496,6 +547,10 @@ public class ContentRevision {
             requireNotNull(withdrawnAt, "withdrawnAt");
             requireNotNull(withdrawnBy, "withdrawnBy");
             requireNotBlank(withdrawalReason, "withdrawalReason");
+        }
+
+        if (status == ContentRevisionStatus.EDIT_INVALIDATED) {
+            throw new IllegalArgumentException("invalidated revision must be created through invalidate");
         }
     }
 
