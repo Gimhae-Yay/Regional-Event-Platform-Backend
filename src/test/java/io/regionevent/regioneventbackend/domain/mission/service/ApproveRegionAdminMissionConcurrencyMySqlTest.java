@@ -31,6 +31,8 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEvent;
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
@@ -171,7 +173,25 @@ class ApproveRegionAdminMissionConcurrencyMySqlTest extends NonTransactionalMySq
             .containsExactly(ErrorCode.MISSION_STATE_CONFLICT);
         assertThat(missionRepository.findById(fixture.missionId()).orElseThrow().getStatus())
             .isEqualTo(MissionStatus.DRAFT);
-        assertThat(auditEventRepository.count()).isEqualTo(1);
+        List<AuditEvent> auditEvents = auditEventRepository.findAll();
+        assertThat(auditEvents).hasSize(2);
+        assertThat(auditEvents)
+            .filteredOn(event -> event.getResult() == AuditEventResult.SUCCESS)
+            .singleElement()
+            .satisfies(event -> {
+                assertThat(event.getTargetId()).isEqualTo(fixture.missionId());
+                assertThat(event.getPreviousState()).isEqualTo(MissionStatus.PENDING_REVIEW.name());
+                assertThat(event.getNextState()).isEqualTo(MissionStatus.DRAFT.name());
+            });
+        assertThat(auditEvents)
+            .filteredOn(event -> event.getResult() == AuditEventResult.FAILURE)
+            .singleElement()
+            .satisfies(event -> {
+                assertThat(event.getTargetId()).isEqualTo(fixture.missionId());
+                assertThat(event.getPreviousState()).isEqualTo(MissionStatus.DRAFT.name());
+                assertThat(event.getNextState()).isNull();
+                assertThat(event.getReasonCode()).isEqualTo(ErrorCode.MISSION_STATE_CONFLICT.code());
+            });
     }
 
     @Test

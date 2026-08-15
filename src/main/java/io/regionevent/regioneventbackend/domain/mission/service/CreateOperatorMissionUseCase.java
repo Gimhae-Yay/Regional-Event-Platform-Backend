@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -17,6 +18,7 @@ import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetTyp
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventActor;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
+import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.service.ContentService;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponIssuanceType;
@@ -42,6 +44,7 @@ public class CreateOperatorMissionUseCase {
     private final CouponPolicyService couponPolicyService;
     private final MissionService missionService;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
+    private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase;
     private final Clock clock;
 
     public CreateOperatorMissionUseCase(
@@ -50,6 +53,7 @@ public class CreateOperatorMissionUseCase {
         CouponPolicyService couponPolicyService,
         MissionService missionService,
         RecordAuditEventUseCase recordAuditEventUseCase,
+        RecordFailedAuditEventUseCase recordFailedAuditEventUseCase,
         Clock clock
     ) {
         this.operatorAuthorizationService = operatorAuthorizationService;
@@ -57,6 +61,7 @@ public class CreateOperatorMissionUseCase {
         this.couponPolicyService = couponPolicyService;
         this.missionService = missionService;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
+        this.recordFailedAuditEventUseCase = recordFailedAuditEventUseCase;
         this.clock = clock;
     }
 
@@ -68,42 +73,53 @@ public class CreateOperatorMissionUseCase {
     ) {
         ValidatedCommand validatedCommand = validateCommand(command);
         AuthorizedOperator operator = operatorAuthorizationService.requireAuthorizedOperatorForUpdate(userId);
-        CouponPolicy rewardCouponPolicy = couponPolicyService.findForUpdate(validatedCommand.rewardCouponPolicyId());
-        validateRewardCouponPolicy(rewardCouponPolicy, operator.region().getRegionId());
 
-        List<Content> targetContents = List.of();
-        if (validatedCommand.conditionType() == MissionConditionType.CONTENT_SET) {
-            targetContents = contentService.findMissionTargetContentsForUpdate(
-                validatedCommand.targetContentIds(),
-                operator.region().getRegionId()
+        try {
+            CouponPolicy rewardCouponPolicy = couponPolicyService.findForUpdate(
+                validatedCommand.rewardCouponPolicyId()
             );
-        }
+            validateRewardCouponPolicy(rewardCouponPolicy, operator.region().getRegionId());
 
-        Mission mission = missionService.create(
-            operator.region(),
-            validatedCommand.conditionType(),
-            validatedCommand.requiredVisitCount(),
-            rewardCouponPolicy,
-            validatedCommand.endsAt()
-        );
-        for (Content targetContent : targetContents) {
-            mission.addTargetContent(targetContent);
-        }
-        mission = missionService.save(mission);
+            List<Content> targetContents = List.of();
+            if (validatedCommand.conditionType() == MissionConditionType.CONTENT_SET) {
+                targetContents = contentService.findMissionTargetContentsForUpdate(
+                    validatedCommand.targetContentIds(),
+                    operator.region().getRegionId()
+                );
+            }
 
-        recordAuditEventUseCase.record(new AuditEventCommand(
-            requestId,
-            operator.region(),
-            AuditEventTargetType.MISSION,
-            mission.getMissionId(),
-            null,
-            MissionStatus.DRAFT.name(),
-            AuditEventResult.SUCCESS,
-            SUCCESS_REASON_CODE,
-            new AuditEventActor(operator.roleAssignment()),
-            clock.instant()
-        ));
-        return CreateOperatorMissionResult.from(mission);
+            Mission mission = missionService.create(
+                operator.region(),
+                validatedCommand.conditionType(),
+                validatedCommand.requiredVisitCount(),
+                rewardCouponPolicy,
+                validatedCommand.endsAt()
+            );
+            for (Content targetContent : targetContents) {
+                mission.addTargetContent(targetContent);
+            }
+            mission = missionService.save(mission);
+
+            recordAuditEventUseCase.record(new AuditEventCommand(
+                requestId,
+                operator.region(),
+                AuditEventTargetType.MISSION,
+                mission.getMissionId(),
+                null,
+                MissionStatus.DRAFT.name(),
+                AuditEventResult.SUCCESS,
+                SUCCESS_REASON_CODE,
+                new AuditEventActor(operator.roleAssignment()),
+                clock.instant()
+            ));
+            return CreateOperatorMissionResult.from(mission);
+        } catch (BusinessException exception) {
+            recordFailure(requestId, operator, exception.getErrorCode());
+            throw exception;
+        } catch (RuntimeException exception) {
+            recordFailure(requestId, operator, ErrorCode.INTERNAL_SERVER_ERROR);
+            throw exception;
+        }
     }
 
     private ValidatedCommand validateCommand(CreateOperatorMissionCommand command) {
@@ -181,6 +197,25 @@ public class CreateOperatorMissionUseCase {
             || rewardCouponPolicy.getStatus() == CouponPolicyStatus.ENDED) {
             throw new BusinessException(ErrorCode.MISSION_STATE_CONFLICT);
         }
+    }
+
+    private void recordFailure(
+        UUID requestId,
+        AuthorizedOperator operator,
+        ErrorCode errorCode
+    ) {
+        recordFailedAuditEventUseCase.record(new AuditEventCommand(
+            requestId,
+            operator.region(),
+            AuditEventTargetType.MISSION,
+            null,
+            null,
+            null,
+            AuditEventResult.FAILURE,
+            errorCode.code(),
+            new AuditEventActor(operator.roleAssignment()),
+            clock.instant().truncatedTo(ChronoUnit.MICROS)
+        ));
     }
 
     public record CreateOperatorMissionCommand(
