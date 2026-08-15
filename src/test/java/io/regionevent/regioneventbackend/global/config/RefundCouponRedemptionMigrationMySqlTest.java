@@ -8,10 +8,11 @@ import java.sql.Statement;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.UncategorizedSQLException;
 import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.springframework.jdbc.UncategorizedSQLException;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -41,6 +42,7 @@ class RefundCouponRedemptionMigrationMySqlTest {
         insertCouponRedemption(jdbcTemplate);
         assertThatThrownBy(() -> insertCouponRedemption(jdbcTemplate))
             .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+        assertCouponRedemptionReversalConstraints(jdbcTemplate);
     }
 
     private JdbcTemplate createJdbcTemplate() {
@@ -175,5 +177,80 @@ class RefundCouponRedemptionMigrationMySqlTest {
             ) VALUES (1, 1, 1, 'CONFIRMED', CURRENT_TIMESTAMP(6), NULL)
             """
         );
+    }
+
+    private void assertCouponRedemptionReversalConstraints(JdbcTemplate jdbcTemplate) {
+        Integer uniqueRefundIndexCount = jdbcTemplate.queryForObject(
+            """
+            SELECT COUNT(*)
+            FROM information_schema.statistics
+            WHERE table_schema = DATABASE()
+                AND table_name = 'coupon_redemption'
+                AND index_name = 'uk_coupon_redemption_refund'
+                AND non_unique = 0
+            """,
+            Integer.class
+        );
+        String deleteRule = jdbcTemplate.queryForObject(
+            """
+            SELECT delete_rule
+            FROM information_schema.referential_constraints
+            WHERE constraint_schema = DATABASE()
+                AND table_name = 'coupon_redemption'
+                AND constraint_name = 'fk_coupon_redemption_refund'
+            """,
+            String.class
+        );
+        assertThat(uniqueRefundIndexCount).isEqualTo(1);
+        assertThat(deleteRule).isEqualTo("RESTRICT");
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+            "UPDATE coupon_redemption SET refund_id = 1 WHERE reservation_id = 1"
+        )).isInstanceOfAny(DataIntegrityViolationException.class, UncategorizedSQLException.class);
+
+        jdbcTemplate.update(
+            """
+            UPDATE coupon_redemption
+            SET status = 'REVERSED',
+                refund_id = 1,
+                reversal_reason_code = 'REFUND_SUCCEEDED',
+                reversed_at = CURRENT_TIMESTAMP(6)
+            WHERE reservation_id = 1
+            """
+        );
+        assertThatThrownBy(() -> jdbcTemplate.update("DELETE FROM refund WHERE refund_id = 1"))
+            .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbcTemplate.update(
+            """
+            UPDATE coupon_redemption
+            SET refund_id = NULL,
+                reversal_reason_code = 'REFUND_SUCCEEDED'
+            WHERE reservation_id = 1
+            """
+        )).isInstanceOfAny(DataIntegrityViolationException.class, UncategorizedSQLException.class);
+
+        jdbcTemplate.update(
+            """
+            UPDATE coupon_redemption
+            SET status = 'CONFIRMED',
+                refund_id = NULL,
+                reversal_reason_code = NULL,
+                reversed_at = NULL
+            WHERE reservation_id = 1
+            """
+        );
+        jdbcTemplate.update(
+            """
+            UPDATE coupon_redemption
+            SET status = 'REVERSED',
+                reversal_reason_code = 'RESERVATION_CANCELLED',
+                reversed_at = CURRENT_TIMESTAMP(6)
+            WHERE reservation_id = 1
+            """
+        );
+        assertThat(jdbcTemplate.queryForObject(
+            "SELECT refund_id FROM coupon_redemption WHERE reservation_id = 1",
+            Long.class
+        )).isNull();
     }
 }

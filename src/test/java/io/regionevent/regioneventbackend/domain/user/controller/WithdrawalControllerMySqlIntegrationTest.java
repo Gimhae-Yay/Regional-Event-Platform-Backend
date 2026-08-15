@@ -37,6 +37,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
@@ -72,6 +74,7 @@ import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHold
 import io.regionevent.regioneventbackend.domain.reservation.service.CreateReservationHoldUseCase;
 import io.regionevent.regioneventbackend.domain.reservation.service.ExpireOrInvalidateCapacityHoldsUseCase;
 import io.regionevent.regioneventbackend.domain.reservation.service.GetMyReservationQrUseCase;
+import io.regionevent.regioneventbackend.domain.reservation.service.HoldTerminationResult;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationCancellationUseCase;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationConfirmationUseCase;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -101,7 +104,6 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
     private final RegionRepository regionRepository;
     private final ContentRepository contentRepository;
     private final ContentSessionRepository contentSessionRepository;
-    private final CapacityHoldRepository capacityHoldRepository;
     private final ReservationRepository reservationRepository;
     private final ReservationPriceSnapshotRepository reservationPriceSnapshotRepository;
     private final PaymentRepository paymentRepository;
@@ -118,6 +120,9 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
     private final ReservationCancellationUseCase reservationCancellationUseCase;
     private final GetMyReservationQrUseCase getMyReservationQrUseCase;
     private final CreatePaymentUseCase createPaymentUseCase;
+
+    private final CapacityHoldRepository capacityHoldRepository;
+    private final TransactionTemplate transactionTemplate;
 
     @Autowired
     WithdrawalControllerMySqlIntegrationTest(
@@ -143,7 +148,8 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         ReservationConfirmationUseCase reservationConfirmationUseCase,
         ReservationCancellationUseCase reservationCancellationUseCase,
         GetMyReservationQrUseCase getMyReservationQrUseCase,
-        CreatePaymentUseCase createPaymentUseCase
+        CreatePaymentUseCase createPaymentUseCase,
+        PlatformTransactionManager transactionManager
     ) {
         this.mockMvc = mockMvc;
         this.appUserRepository = appUserRepository;
@@ -168,6 +174,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         this.reservationCancellationUseCase = reservationCancellationUseCase;
         this.getMyReservationQrUseCase = getMyReservationQrUseCase;
         this.createPaymentUseCase = createPaymentUseCase;
+        transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     @DynamicPropertySource
@@ -251,28 +258,36 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
 
     @Test
     @Timeout(10)
-    void withdraw_whenSchedulerRacesForExpiredActiveHold_terminatesAndRestoresCapacityOnce() throws Exception {
+    void withdraw_whenSchedulerTerminatesExpiredHoldAfterSnapshot_completesWithoutSchedulerFailure() throws Exception {
         Fixture fixture = createFixture();
         expireActiveHold(fixture);
-        CountDownLatch ready = new CountDownLatch(2);
-        CountDownLatch start = new CountDownLatch(1);
+        CountDownLatch withdrawalSnapshotRead = new CountDownLatch(1);
+        CountDownLatch releaseWithdrawal = new CountDownLatch(1);
 
         try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
             Future<Void> withdrawal = executorService.submit(() -> {
-                ready.countDown();
-                await(start);
-                withdrawUserUseCase.withdraw(fixture.user().getUserId());
+                transactionTemplate.executeWithoutResult(status -> {
+                    capacityHoldRepository.findActiveHoldIdsByUserId(fixture.user().getUserId());
+                    withdrawalSnapshotRead.countDown();
+                    await(releaseWithdrawal);
+                    withdrawUserUseCase.withdraw(fixture.user().getUserId());
+                });
                 return null;
             });
-            Future<?> scheduler = executorService.submit(() -> {
-                ready.countDown();
-                await(start);
-                expireOrInvalidateCapacityHoldsUseCase.execute();
-            });
-            assertThat(ready.await(3, TimeUnit.SECONDS)).isTrue();
-            start.countDown();
+            assertThat(withdrawalSnapshotRead.await(3, TimeUnit.SECONDS)).isTrue();
+
+            Future<HoldTerminationResult> scheduler = executorService.submit(
+                expireOrInvalidateCapacityHoldsUseCase::execute
+            );
+            try {
+                HoldTerminationResult schedulerResult = scheduler.get(5, TimeUnit.SECONDS);
+                assertThat(schedulerResult.expiredHoldCount()).isOne();
+                assertThat(schedulerResult.invalidatedHoldCount()).isZero();
+                assertThat(schedulerResult.failedHoldCount()).isZero();
+            } finally {
+                releaseWithdrawal.countDown();
+            }
             withdrawal.get(5, TimeUnit.SECONDS);
-            scheduler.get(5, TimeUnit.SECONDS);
         }
 
         assertThat(appUserRepository.findById(fixture.user().getUserId())).isEmpty();

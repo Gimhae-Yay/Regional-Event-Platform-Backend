@@ -42,6 +42,7 @@ import io.regionevent.regioneventbackend.domain.coupon.entity.Coupon;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponIssuanceType;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicy;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponRedemption;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponRedemptionReversalReason;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponRedemptionStatus;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatus;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatusHistory;
@@ -203,8 +204,14 @@ class RetryRefundUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
 
         assertThat(refundRepository.findById(fixture.refundId()).orElseThrow().getStatus())
             .isEqualTo(RefundStatus.SUCCEEDED);
-        assertThat(couponRedemptionRepository.findById(fixture.couponRedemptionId()).orElseThrow().getStatus())
-            .isEqualTo(CouponRedemptionStatus.REVERSED);
+        assertThat(couponRedemptionRepository.findById(fixture.couponRedemptionId()).orElseThrow())
+            .satisfies(redemption -> {
+                assertThat(redemption.getStatus()).isEqualTo(CouponRedemptionStatus.REVERSED);
+                assertThat(redemption.getRefund().getRefundId()).isEqualTo(fixture.refundId());
+                assertThat(redemption.getReversalReasonCode())
+                    .isEqualTo(CouponRedemptionReversalReason.REFUND_SUCCEEDED);
+                assertThat(redemption.getReversedAt()).isNotNull();
+            });
         assertThat(couponRepository.findById(fixture.couponId()).orElseThrow().getStatus())
             .isEqualTo(CouponStatus.AVAILABLE);
         assertThat(couponStatusHistoryRepository.findAllByCouponCouponIdOrderByOccurredAtAsc(fixture.couponId()))
@@ -253,8 +260,14 @@ class RetryRefundUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
 
         assertThat(refundRepository.findById(fixture.refundId()).orElseThrow().getStatus())
             .isEqualTo(RefundStatus.SUCCEEDED);
-        assertThat(couponRedemptionRepository.findById(fixture.couponRedemptionId()).orElseThrow().getStatus())
-            .isEqualTo(CouponRedemptionStatus.REVERSED);
+        assertThat(couponRedemptionRepository.findById(fixture.couponRedemptionId()).orElseThrow())
+            .satisfies(redemption -> {
+                assertThat(redemption.getStatus()).isEqualTo(CouponRedemptionStatus.REVERSED);
+                assertThat(redemption.getRefund().getRefundId()).isEqualTo(fixture.refundId());
+                assertThat(redemption.getReversalReasonCode())
+                    .isEqualTo(CouponRedemptionReversalReason.REFUND_SUCCEEDED);
+                assertThat(redemption.getReversedAt()).isNotNull();
+            });
         assertThat(couponRepository.findById(fixture.couponId()).orElseThrow().getStatus())
             .isEqualTo(CouponStatus.AVAILABLE);
         assertThat(couponStatusHistoryRepository.findAllByCouponCouponIdOrderByOccurredAtAsc(fixture.couponId()))

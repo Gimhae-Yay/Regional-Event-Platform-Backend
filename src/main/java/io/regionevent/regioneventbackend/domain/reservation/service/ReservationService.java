@@ -214,7 +214,7 @@ public class ReservationService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public int cancelUncheckedInReservationsForSession(
+    public SessionReservationCancellationResult cancelUncheckedInReservationsForSession(
         ContentSession contentSession,
         String cancellationReason,
         Instant cancelledAt
@@ -235,7 +235,10 @@ public class ReservationService {
             reservation.cancel(cancellationReason, cancelledAt, capacityReleasedAt)
         );
         reservationRepository.saveAllAndFlush(confirmedReservations);
-        return releasedQuantity;
+        return new SessionReservationCancellationResult(
+            List.copyOf(confirmedReservations),
+            releasedQuantity
+        );
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -304,6 +307,12 @@ public class ReservationService {
     }
 
     public record ReservationCancellationLockTarget(Long sessionId) {
+    }
+
+    public record SessionReservationCancellationResult(
+        List<Reservation> cancelledReservations,
+        int releasedQuantity
+    ) {
     }
 
     public record ManualCheckInLookup(
