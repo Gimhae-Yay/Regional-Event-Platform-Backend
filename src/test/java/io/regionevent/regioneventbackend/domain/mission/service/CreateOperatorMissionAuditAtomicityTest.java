@@ -22,6 +22,10 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEvent;
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
+import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventActorLinkRepository;
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
@@ -62,6 +66,7 @@ class CreateOperatorMissionAuditAtomicityTest {
     private final MissionRepository missionRepository;
     private final MissionTargetContentRepository missionTargetContentRepository;
     private final AuditEventRepository auditEventRepository;
+    private final AuditEventActorLinkRepository auditEventActorLinkRepository;
     private final JwtAccessTokenService jwtAccessTokenService;
     private final TransactionTemplate transactionTemplate;
 
@@ -79,6 +84,7 @@ class CreateOperatorMissionAuditAtomicityTest {
         MissionRepository missionRepository,
         MissionTargetContentRepository missionTargetContentRepository,
         AuditEventRepository auditEventRepository,
+        AuditEventActorLinkRepository auditEventActorLinkRepository,
         JwtAccessTokenService jwtAccessTokenService,
         PlatformTransactionManager transactionManager
     ) {
@@ -91,6 +97,7 @@ class CreateOperatorMissionAuditAtomicityTest {
         this.missionRepository = missionRepository;
         this.missionTargetContentRepository = missionTargetContentRepository;
         this.auditEventRepository = auditEventRepository;
+        this.auditEventActorLinkRepository = auditEventActorLinkRepository;
         this.jwtAccessTokenService = jwtAccessTokenService;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
@@ -122,7 +129,83 @@ class CreateOperatorMissionAuditAtomicityTest {
 
         assertThat(missionRepository.count()).isZero();
         assertThat(missionTargetContentRepository.count()).isZero();
-        assertThat(auditEventRepository.count()).isZero();
+        assertFailureAudit(fixture, "INTERNAL_SERVER_ERROR");
+    }
+
+    @Test
+    void createRequest_whenRewardPolicyDoesNotExist_recordsNullableTargetFailureAudit() throws Exception {
+        Fixture fixture = createFixture();
+
+        performCreate(fixture, fixture.targetContent().getContentId(), Long.MAX_VALUE)
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+
+        assertThat(missionRepository.count()).isZero();
+        assertThat(missionTargetContentRepository.count()).isZero();
+        assertFailureAudit(fixture, "NOT_FOUND");
+    }
+
+    @Test
+    void createRequest_whenTargetContentIsDeleted_recordsNullableTargetFailureAudit() throws Exception {
+        Fixture fixture = createFixture();
+        transactionTemplate.executeWithoutResult(status -> {
+            Content targetContent = contentRepository.findById(fixture.targetContent().getContentId()).orElseThrow();
+            targetContent.softDelete(CREATED_AT);
+            contentRepository.saveAndFlush(targetContent);
+        });
+
+        performCreate(
+            fixture,
+            fixture.targetContent().getContentId(),
+            fixture.rewardCouponPolicy().getCouponPolicyId()
+        )
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+
+        assertThat(missionRepository.count()).isZero();
+        assertThat(missionTargetContentRepository.count()).isZero();
+        assertFailureAudit(fixture, "NOT_FOUND");
+    }
+
+    private org.springframework.test.web.servlet.ResultActions performCreate(
+        Fixture fixture,
+        Long targetContentId,
+        Long rewardCouponPolicyId
+    ) throws Exception {
+        return mockMvc.perform(post("/api/v1/operator/missions")
+            .header("Authorization", "Bearer " + jwtAccessTokenService.issue(fixture.operator().getUserId()))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "conditionType": "CONTENT_SET",
+                  "requiredVisitCount": null,
+                  "targetContentIds": ["%d"],
+                  "rewardCouponPolicyId": "%d",
+                  "endsAt": "2026-09-30T23:59:59+09:00"
+                }
+                """.formatted(targetContentId, rewardCouponPolicyId)));
+    }
+
+    private void assertFailureAudit(
+        Fixture fixture,
+        String reasonCode
+    ) {
+        assertThat(auditEventRepository.findAll()).singleElement().satisfies(auditEvent -> {
+            assertThat(auditEvent.getRequestId()).isNotNull();
+            assertThat(auditEvent.getRegion().getRegionId())
+                .isEqualTo(fixture.rewardCouponPolicy().getRegion().getRegionId());
+            assertThat(auditEvent.getTargetType()).isEqualTo(AuditEventTargetType.MISSION);
+            assertThat(auditEvent.getTargetId()).isNull();
+            assertThat(auditEvent.getPreviousState()).isNull();
+            assertThat(auditEvent.getNextState()).isNull();
+            assertThat(auditEvent.getResult()).isEqualTo(AuditEventResult.FAILURE);
+            assertThat(auditEvent.getReasonCode()).isEqualTo(reasonCode);
+        });
+        AuditEvent auditEvent = auditEventRepository.findAll().getFirst();
+        assertThat(auditEventActorLinkRepository.findById(auditEvent.getAuditEventId()))
+            .hasValueSatisfying(actorLink ->
+                assertThat(actorLink.getActor().getUserId()).isEqualTo(fixture.operator().getUserId())
+            );
     }
 
     private Fixture createFixture() {
