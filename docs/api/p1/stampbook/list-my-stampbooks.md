@@ -16,7 +16,7 @@
 
 | 요구사항 | HTTP 계약 | 주요 데이터 |
 | --- | --- | --- |
-| P1-FR-02, STB-04 | `GET /api/v1/me/stampbooks` | `stampbook_progress`, `stampbook`, `stampbook_content`, `stamp_earn` |
+| P1-FR-02, STB-04 | `GET /api/v1/me/stampbooks` | `stampbook_progress`, `stampbook`, `stampbook_content`, `stamp_earn`, `stampbook_reward_grant`, `coupon_policy` |
 
 ## 2. 공통 계약 참조
 
@@ -90,7 +90,25 @@ Accept: application/json
           "earnedCount": 2,
           "targetCount": 4,
           "completedAt": null,
-          "lastEarnedAt": "2026-08-06T01:00:00Z"
+          "lastEarnedAt": "2026-08-06T01:00:00Z",
+          "completionReward": null
+        }
+      },
+      {
+        "stampbookId": "102",
+        "regionId": "1",
+        "status": "ENDED",
+        "publishedAt": "2026-07-01T01:00:00Z",
+        "progress": {
+          "status": "COMPLETED",
+          "earnedCount": 3,
+          "targetCount": 3,
+          "completedAt": "2026-07-12T01:00:00Z",
+          "lastEarnedAt": "2026-07-12T01:00:00Z",
+          "completionReward": {
+            "couponPolicyId": "501",
+            "stampbookRewardGrantId": "9001"
+          }
         }
       }
     ]
@@ -117,6 +135,9 @@ Accept: application/json
 | `data.stampbooks[].progress.targetCount` | Integer | 스탬프북에 지정된 대상 콘텐츠 수이자 완료 목표 수다. |
 | `data.stampbooks[].progress.completedAt` | String 또는 null | 진행 상태가 `COMPLETED`이면 완료 시각이고, 그 외에는 `null`이다. UTC ISO 8601 형식이다. |
 | `data.stampbooks[].progress.lastEarnedAt` | String 또는 null | 해당 진행의 가장 최근 스탬프 적립 시각이다. `NOT_STARTED`이면 `null`이다. UTC ISO 8601 형식이다. |
+| `data.stampbooks[].progress.completionReward` | Object 또는 null | 응답에는 항상 포함한다. 본인 진행이 `COMPLETED`일 때만 완료 보상 쿠폰 발급에 필요한 식별자를 함께 담는 객체이고, 그 외 상태에서는 `null`이다. |
+| `data.stampbooks[].progress.completionReward.couponPolicyId` | String | 완료 보상 쿠폰 정책 식별자다. 상위 객체가 `null`이면 이 필드는 반환하지 않는다. 기존 [쿠폰 발급 요청](../coupon/issue-coupon.md#13-쿠폰-발급-요청)의 경로 `couponPolicyId`로 사용한다. |
+| `data.stampbooks[].progress.completionReward.stampbookRewardGrantId` | String | 본인 완료 보상 근거 식별자다. 상위 객체가 `null`이면 이 필드는 반환하지 않는다. 쿠폰 발급 요청 본문의 `issueSourceType = STAMPBOOK_COMPLETION`일 때 `sourceId`로 사용한다. |
 
 ### Error Code
 
@@ -124,7 +145,7 @@ Accept: application/json
 | --- | --- | --- |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 진행 정보는 반환하지 않으며 유효한 Token으로 재시도할 수 있다. |
 | `403` | `FORBIDDEN` | 인증 주체가 활성 회원이 아니다. 진행 정보는 반환하지 않는다. |
-| `500` | `INTERNAL_SERVER_ERROR` | 예상하지 못한 서버 오류 또는 스탬프북·진행·적립 연결 정합성 오류가 발생했다. 조회 상태를 변경하지 않는다. |
+| `500` | `INTERNAL_SERVER_ERROR` | 예상하지 못한 서버 오류 또는 스탬프북·진행·적립·완료 보상 근거·쿠폰 정책 연결 정합성 오류가 발생했다. 조회 상태를 변경하지 않는다. |
 
 #### Error Response Body
 
@@ -142,7 +163,9 @@ Accept: application/json
 1. 서버는 현재 `PUBLISHED`인 스탬프북과 `stampbook_progress.user_id = 인증 회원 식별자`인 종료 스탬프북을 반환한다. 다른 회원의 종료 이력은 반환하지 않는다.
 2. 목록은 `publishedAt` 내림차순, 같은 시각이면 `stampbookId` 내림차순으로 고정 정렬한다.
 3. `earnedCount`는 해당 진행에 연결된 `stamp_earn` 행 수이고, 진행 행이 없으면 `0`이다. `targetCount`는 `stampbook_content` 행 수다.
-4. 진행 행이 없는 공개 스탬프북은 `progress.status = NOT_STARTED`, `completedAt = null`, `lastEarnedAt = null`으로 응답한다. `NOT_STARTED`는 저장하지 않는 응답 전용 상태다.
+4. 진행 행이 없는 공개 스탬프북은 `progress.status = NOT_STARTED`, `completedAt = null`, `lastEarnedAt = null`, `completionReward = null`으로 응답한다. `NOT_STARTED`는 저장하지 않는 응답 전용 상태다.
 5. `COMPLETED` 진행은 스탬프북이 `ENDED`가 된 뒤에도 `COMPLETED` 상태를 유지한다. 종료 시 미완료 진행만 `ENDED_INCOMPLETE`로 보존한다.
-6. 이 API는 단순 목록이다. 페이지·커서·총 건수·상태 필터와 사용자 지정 정렬을 제공하지 않는다.
-7. 조회 시 스탬프북, 진행도, 적립 이력, 쿠폰과 감사 이력을 생성·수정·삭제하지 않는다.
+6. 본인 진행이 `COMPLETED`이면 `completionReward`는 해당 진행의 단일 `stampbook_reward_grant`와 그 행의 `coupon_policy_id`를 사용해 `couponPolicyId`, `stampbookRewardGrantId`를 함께 반환한다. 둘 중 하나가 없거나 스탬프북의 완료 보상 정책·진행 소유자와 일치하지 않으면 정상 응답으로 대체하지 않고 정합성 오류로 처리한다.
+7. `NOT_STARTED`, `IN_PROGRESS`, `ENDED_INCOMPLETE` 진행은 `completionReward = null`이다. 목록은 인증 회원의 진행만 조립하므로 다른 회원의 `COMPLETED` 진행과 완료 보상 근거는 반환하지 않는다.
+8. 이 API는 단순 목록이다. 페이지·커서·총 건수·상태 필터와 사용자 지정 정렬을 제공하지 않는다.
+9. 조회 시 스탬프북, 진행도, 적립 이력, 완료 보상 근거, 쿠폰과 감사 이력을 생성·수정·삭제하지 않는다.
