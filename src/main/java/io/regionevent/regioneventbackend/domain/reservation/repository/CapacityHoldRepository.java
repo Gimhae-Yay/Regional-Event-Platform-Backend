@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.reservation.repository;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -15,6 +16,9 @@ import org.springframework.data.repository.query.Param;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 
 public interface CapacityHoldRepository extends JpaRepository<CapacityHold, Long> {
+
+    @Query(value = "SELECT UNIX_TIMESTAMP(CURRENT_TIMESTAMP(6))", nativeQuery = true)
+    BigDecimal findCurrentEpochSeconds();
 
     @EntityGraph(attributePaths = {"region", "contentSession", "contentSession.content", "user"})
     Optional<CapacityHold> findByHoldId(Long holdId);

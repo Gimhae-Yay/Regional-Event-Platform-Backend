@@ -3,7 +3,10 @@ package io.regionevent.regioneventbackend.domain.reservation.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -54,7 +57,10 @@ import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTest
 import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 
 @SpringBootTest
-@Import(CreateReservationHoldUseCaseMySqlTest.FailingCapacityHoldServiceConfig.class)
+@Import({
+    CreateReservationHoldUseCaseMySqlTest.FailingCapacityHoldServiceConfig.class,
+    CreateReservationHoldUseCaseMySqlTest.FixedApplicationClockConfig.class
+})
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class CreateReservationHoldUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
@@ -68,6 +74,8 @@ class CreateReservationHoldUseCaseMySqlTest extends NonTransactionalMySqlTestSup
     private final CapacityHoldRepository capacityHoldRepository;
     private final EntityManager entityManager;
     private final TransactionTemplate transactionTemplate;
+
+    private static final Instant APP_CLOCK_INSTANT = Instant.parse("2040-01-01T00:00:00Z");
 
     @Autowired
     CreateReservationHoldUseCaseMySqlTest(
@@ -175,6 +183,25 @@ class CreateReservationHoldUseCaseMySqlTest extends NonTransactionalMySqlTestSup
         CapacityState capacityState = readCapacityStateInNewTransaction(fixture.sessionId());
         assertThat(capacityState.remainingCapacity()).isEqualTo(fixture.capacity());
         assertThat(capacityState.holds()).isEmpty();
+    }
+
+    @Test
+    void 앱_시계가_MySQL_시계와_달라도_생성된_홀드는_DB_기준으로_확정_가능하다() {
+        Fixture fixture = createFixture(1, 1);
+
+        CreateReservationHoldResponse response = createReservationHoldUseCase.create(
+            fixture.userIds().getFirst(),
+            new CreateReservationHoldRequest(fixture.sessionId().toString(), 1)
+        );
+
+        CapacityHold capacityHold = capacityHoldRepository.findById(Long.valueOf(response.holdId())).orElseThrow();
+        assertThat(capacityHold.getCreatedAt()).isBefore(APP_CLOCK_INSTANT);
+        assertThat(capacityHold.getExpiresAt()).isAfter(readCurrentDatabaseInstant());
+        int consumedCount = transactionTemplate.execute(status -> capacityHoldRepository.consumeIfConfirmable(
+            capacityHold.getHoldId(),
+            fixture.userIds().getFirst()
+        ));
+        assertThat(consumedCount).isEqualTo(1);
     }
 
     private List<HoldCreationResult> createConcurrently(
@@ -301,6 +328,17 @@ class CreateReservationHoldUseCaseMySqlTest extends NonTransactionalMySqlTestSup
         });
     }
 
+    private Instant readCurrentDatabaseInstant() {
+        return transactionTemplate.execute(status -> {
+            entityManager.clear();
+            BigDecimal epochSeconds = capacityHoldRepository.findCurrentEpochSeconds();
+            return Instant.ofEpochSecond(
+                epochSeconds.longValue(),
+                epochSeconds.remainder(BigDecimal.ONE).movePointRight(9).longValue()
+            );
+        });
+    }
+
     private void await(CountDownLatch latch) {
         try {
             if (!latch.await(3, TimeUnit.SECONDS)) {
@@ -324,6 +362,16 @@ class CreateReservationHoldUseCaseMySqlTest extends NonTransactionalMySqlTestSup
         @Primary
         FailingCapacityHoldService failingCapacityHoldService(CapacityHoldRepository capacityHoldRepository) {
             return new FailingCapacityHoldService(capacityHoldRepository);
+        }
+    }
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class FixedApplicationClockConfig {
+
+        @Bean
+        @Primary
+        Clock applicationClock() {
+            return Clock.fixed(APP_CLOCK_INSTANT, ZoneOffset.UTC);
         }
     }
 
