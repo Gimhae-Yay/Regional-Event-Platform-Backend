@@ -30,8 +30,9 @@
 
 ## 3. 운영자 승인 요청 상세 조회
 
-신청의 현재 상태를 조회한다. 탈퇴 처리로 신청자 연결이 제거된 `CANCELLED` 신청은 해당 필드를 `null`로 반환하며,
-다른 지역의 신청은 존재 여부를 노출하지 않는다.
+신청의 현재 상태를 조회한다. 신청자 탈퇴로 연결이 제거된 신청은 `applicantUserId`와 `businessInformation`을
+`null`로 반환한다. 과거 심사자가 탈퇴한 승인·반려 신청은 심사 결과·심사 시각·반려 사유를 보존하고
+`inspectedUserId`만 `null`로 반환한다. 다른 지역의 신청은 존재 여부를 노출하지 않는다.
 
 ### Request
 
@@ -112,18 +113,18 @@ Accept: application/json
 
 | Name | Type | Description |
 | --- | --- | --- |
-| `data.businessInformation` | String 또는 null | 담당 지역의 `REGION_ADMIN`이 수동 심사하는 사업자 정보 원문. `CANCELLED` 신청이면 `null`이다. 로그, 감사 이벤트, 오류 응답과 지표에 기록하거나 포함하지 않는다. |
+| `data.businessInformation` | String 또는 null | 담당 지역의 `REGION_ADMIN`이 수동 심사하는 사업자 정보 원문. 신청자 탈퇴로 제거된 신청이면 `null`이다. 로그, 감사 이벤트, 오류 응답과 지표에 기록하거나 포함하지 않는다. |
 | `statusCode` | Integer | HTTP 상태와 같은 `200` |
 | `code` | String | 성공 코드 `SUCCESS` |
 | `message` | String | 성공 메시지 `운영자 승인 요청 상세 조회에 성공했습니다.` |
 | `data.operatorApplicationId` | Long | 운영자 신청 식별자. 양의 정수다. |
-| `data.applicantUserId` | Long 또는 null | 신청자 회원 식별자. 탈퇴 처리된 `CANCELLED` 신청이면 `null`이다. |
+| `data.applicantUserId` | Long 또는 null | 신청자 회원 식별자. 신청자 탈퇴로 연결이 제거된 신청이면 `null`이다. |
 | `data.requestedRegionId` | Long | 요청 지역 식별자. 인증된 지역 관리자의 담당 지역과 같다. |
 | `data.status` | String | `PENDING`, `APPROVED`, `REJECTED`, `CANCELLED` 중 하나 |
-| `data.inspectedUserId` | Long 또는 null | 승인·반려 처리자 식별자. `PENDING` 또는 `CANCELLED`이면 `null`이다. |
-| `data.rejectedReason` | String 또는 null | `REJECTED`일 때의 반려 사유. 다른 상태면 `null`이다. |
+| `data.inspectedUserId` | Long 또는 null | 승인·반려 처리자 식별자. `PENDING`, `CANCELLED`이거나 승인·반려 처리자가 탈퇴해 연결이 제거된 경우 `null`이다. |
+| `data.rejectedReason` | String 또는 null | `REJECTED`일 때의 반려 사유. 심사자 탈퇴 뒤에도 보존한다. 다른 상태면 `null`이다. |
 | `data.requestedAt` | String | 신청 생성 시각. ISO 8601 오프셋 일시다. |
-| `data.updatedAt` | String | 신청의 마지막 변경 시각. 승인·반려가 종결되면 심사 시각이다. ISO 8601 오프셋 일시다. |
+| `data.updatedAt` | String | 신청의 마지막 상태 변경 시각. 승인·반려가 종결되면 심사 시각이며, 이후 심사자 탈퇴로 `inspectedUserId` 연결을 제거해도 이 시각은 변경하지 않는다. ISO 8601 오프셋 일시다. |
 
 ### Error Code
 
