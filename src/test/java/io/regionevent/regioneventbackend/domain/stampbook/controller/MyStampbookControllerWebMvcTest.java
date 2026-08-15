@@ -24,6 +24,7 @@ import io.regionevent.regioneventbackend.domain.stampbook.service.GetMyStampbook
 import io.regionevent.regioneventbackend.domain.stampbook.service.GetMyStampbooksUseCase;
 import io.regionevent.regioneventbackend.domain.stampbook.service.MyStampbookListResult;
 import io.regionevent.regioneventbackend.domain.stampbook.service.MyStampbookProgressStatus;
+import io.regionevent.regioneventbackend.domain.stampbook.service.StampbookCompletionReward;
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
@@ -67,7 +68,8 @@ class MyStampbookControllerWebMvcTest {
             .andExpect(jsonPath("$.data.stampbooks[0].progress.earnedCount").value(0))
             .andExpect(jsonPath("$.data.stampbooks[0].progress.targetCount").value(3))
             .andExpect(jsonPath("$.data.stampbooks[0].progress.completedAt").value(nullValue()))
-            .andExpect(jsonPath("$.data.stampbooks[0].progress.lastEarnedAt").value(nullValue()));
+            .andExpect(jsonPath("$.data.stampbooks[0].progress.lastEarnedAt").value(nullValue()))
+            .andExpect(jsonPath("$.data.stampbooks[0].progress.completionReward").value(nullValue()));
 
         verify(getMyStampbooksUseCase).findAll(USER_ID);
     }
@@ -89,6 +91,19 @@ class MyStampbookControllerWebMvcTest {
             .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
     }
 
+    @Test
+    void getMyStampbooks_완료한_진행의_보상_쿠폰_발급_식별자를_반환한다() throws Exception {
+        when(getMyStampbooksUseCase.findAll(USER_ID)).thenReturn(List.of(completedResult()));
+
+        mockMvc.perform(authenticated(get("/api/v1/me/stampbooks")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.stampbooks[0].progress.status").value("COMPLETED"))
+            .andExpect(jsonPath("$.data.stampbooks[0].progress.completionReward.couponPolicyId")
+                .value("301"))
+            .andExpect(jsonPath("$.data.stampbooks[0].progress.completionReward.stampbookRewardGrantId")
+                .value("901"));
+    }
+
     private MyStampbookListResult result() {
         return new MyStampbookListResult(
             101L,
@@ -100,7 +115,25 @@ class MyStampbookControllerWebMvcTest {
                 0L,
                 3L,
                 null,
+                null,
                 null
+            )
+        );
+    }
+
+    private MyStampbookListResult completedResult() {
+        return new MyStampbookListResult(
+            101L,
+            10L,
+            StampbookStatus.ENDED,
+            Instant.parse("2026-08-01T00:00:00Z"),
+            new MyStampbookListResult.Progress(
+                MyStampbookProgressStatus.COMPLETED,
+                3L,
+                3L,
+                Instant.parse("2026-08-04T00:00:00Z"),
+                Instant.parse("2026-08-04T00:00:00Z"),
+                new StampbookCompletionReward(301L, 901L)
             )
         );
     }

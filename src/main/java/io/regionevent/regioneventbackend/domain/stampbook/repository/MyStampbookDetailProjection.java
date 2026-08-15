@@ -11,10 +11,15 @@ public record MyStampbookDetailProjection(
     StampbookStatus stampbookStatus,
     Instant publishedAt,
     Instant endedAt,
+    Long stampbookProgressId,
+    Long progressUserId,
     StampbookProgressStatus progressStatus,
     Instant completedAt,
     Long contentId,
     String contentTitle,
-    Instant earnedAt
+    Instant earnedAt,
+    Long stampbookRewardGrantId,
+    Long completionRewardCouponPolicyId,
+    Long stampbookRewardCouponPolicyId
 ) {
 }
