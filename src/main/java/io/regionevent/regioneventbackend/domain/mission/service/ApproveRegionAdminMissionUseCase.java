@@ -76,7 +76,7 @@ public class ApproveRegionAdminMissionUseCase {
         UUID requestId
     ) {
         AuthorizedRegionAdmin regionAdmin = regionAdminAuthorizationService
-            .requireAuthorizedRegionAdmin(userId);
+            .requireAuthorizedRegionAdminForUpdate(userId);
         Mission mission = missionService.findMission(missionId);
         MissionStatus previousStateForFailure = mission.getStatus();
 

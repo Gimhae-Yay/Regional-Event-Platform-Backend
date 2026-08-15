@@ -48,9 +48,10 @@ public class RejectContentSessionUseCase {
         UUID requestId
     ) {
         String normalizedReason = normalizeReason(reason);
+        RegionAdminAuthorizationService.AuthorizedRegionAdmin regionAdmin =
+            regionAdminAuthorizationService.requireAuthorizedRegionAdminForUpdate(userId);
         ContentSession contentSession = contentSessionService.findRejectTargetForUpdate(sessionId);
-        UserRoleAssignment reviewer = regionAdminAuthorizationService.authorize(
-            userId,
+        UserRoleAssignment reviewer = regionAdmin.authorize(
             contentSession.getRegion().getRegionId()
         );
         Instant reviewedAt = clock.instant().truncatedTo(ChronoUnit.MICROS);

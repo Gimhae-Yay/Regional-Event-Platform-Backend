@@ -47,6 +47,7 @@ import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
+import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
 import io.regionevent.regioneventbackend.domain.user.service.UserRoleAssignmentService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
@@ -63,6 +64,7 @@ class ClaimMissionRewardUseCaseTest {
     private final FindMissionRewardClaimResultUseCase findMissionRewardClaimResultUseCase = mock(
         FindMissionRewardClaimResultUseCase.class
     );
+    private final AppUserService appUserService = mock(AppUserService.class);
     private final UserRoleAssignmentService roleAssignmentService = mock(UserRoleAssignmentService.class);
     private final MissionParticipationReadService participationReadService = mock(MissionParticipationReadService.class);
     private final MissionParticipationService participationService = mock(MissionParticipationService.class);
@@ -77,6 +79,7 @@ class ClaimMissionRewardUseCaseTest {
     private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
     private final ClaimMissionRewardUseCase useCase = new ClaimMissionRewardUseCase(
         findMissionRewardClaimResultUseCase,
+        appUserService,
         roleAssignmentService,
         participationReadService,
         participationService,
@@ -100,6 +103,7 @@ class ClaimMissionRewardUseCaseTest {
     void setUp() {
         when(transactionManager.getTransaction(any(TransactionDefinition.class)))
             .thenReturn(mock(TransactionStatus.class));
+        when(appUserService.findActiveUserForUpdate(USER_ID)).thenReturn(Optional.of(user));
         when(roleAssignmentService.findActiveVisitor(USER_ID)).thenReturn(visitor);
         when(user.getUserId()).thenReturn(USER_ID);
         when(user.getStatus()).thenReturn(AppUserStatus.ACTIVE);
@@ -120,19 +124,27 @@ class ClaimMissionRewardUseCaseTest {
         ClaimMissionRewardResult result = useCase.claim(USER_ID, PARTICIPATION_ID, REQUEST_ID);
 
         assertThat(result).isEqualTo(existing);
-        verifyNoInteractions(couponPolicyService, claimService, couponService, issuanceService, statusHistoryService);
+        verifyNoInteractions(
+            appUserService,
+            couponPolicyService,
+            claimService,
+            couponService,
+            issuanceService,
+            statusHistoryService
+        );
         verify(missionService, never()).findCurrentDatabaseTime();
     }
 
     @Test
-    void claim_신규수령이면정책_미션_참여순서로잠그고DB시각을한번만사용한다() {
+    void claim_신규수령이면사용자_정책_미션_참여순서로잠그고DB시각을한번만사용한다() {
         SuccessFixture fixture = prepareSuccess();
 
         ClaimMissionRewardResult result = useCase.claim(USER_ID, PARTICIPATION_ID, REQUEST_ID);
 
         assertThat(result.missionRewardClaimId()).isEqualTo(9001L);
         assertThat(result.couponId()).isEqualTo(8001L);
-        InOrder locks = inOrder(couponPolicyService, missionService, participationService);
+        InOrder locks = inOrder(appUserService, couponPolicyService, missionService, participationService);
+        locks.verify(appUserService).findActiveUserForUpdate(USER_ID);
         locks.verify(couponPolicyService).findForUpdate(POLICY_ID);
         locks.verify(missionService).findByMissionIdForUpdate(MISSION_ID);
         locks.verify(participationService).findForUpdate(PARTICIPATION_ID);
@@ -142,11 +154,48 @@ class ClaimMissionRewardUseCaseTest {
     }
 
     @Test
+    void claim_비활성또는삭제사용자이면도메인잠금과변경없이금지한다() {
+        when(appUserService.findActiveUserForUpdate(USER_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> useCase.claim(USER_ID, PARTICIPATION_ID, REQUEST_ID))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN)
+            );
+
+        verifyNoInteractions(
+            couponPolicyService,
+            participationService,
+            claimService,
+            couponService,
+            issuanceService,
+            statusHistoryService,
+            auditUseCase,
+            failedAuditUseCase
+        );
+        verify(missionService, never()).findByMissionIdForUpdate(any());
+        verify(missionService, never()).findCurrentDatabaseTime();
+    }
+
+    @Test
     void claim_잠금후참여자가변경되면소유권을다시검증한다() {
         SuccessFixture fixture = prepareSuccess();
         AppUser otherUser = mock(AppUser.class);
         when(otherUser.getUserId()).thenReturn(USER_ID + 1);
         when(fixture.participation().getUser()).thenReturn(otherUser);
+
+        assertThatThrownBy(() -> useCase.claim(USER_ID, PARTICIPATION_ID, REQUEST_ID))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN)
+            );
+
+        verify(missionService, never()).findCurrentDatabaseTime();
+        verifyNoInteractions(claimService, couponService, issuanceService, statusHistoryService, auditUseCase);
+    }
+
+    @Test
+    void claim_잠금후참여자연결이없으면null역참조없이금지한다() {
+        SuccessFixture fixture = prepareSuccess();
+        when(fixture.participation().getUser()).thenReturn(null);
 
         assertThatThrownBy(() -> useCase.claim(USER_ID, PARTICIPATION_ID, REQUEST_ID))
             .isInstanceOfSatisfying(BusinessException.class, exception ->

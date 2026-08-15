@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.stampbook.repository;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -11,10 +12,30 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
 import io.regionevent.regioneventbackend.domain.stampbook.entity.Stampbook;
 import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookStatus;
 
 public interface StampbookRepository extends JpaRepository<Stampbook, Long> {
+
+    @EntityGraph(attributePaths = {"region", "rewardCouponPolicy"})
+    Optional<Stampbook> findByStampbookId(Long stampbookId);
+
+    @EntityGraph(attributePaths = {"region", "rewardCouponPolicy"})
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT stampbook
+        FROM StampbookContent targetContent
+        JOIN targetContent.stampbook stampbook
+        WHERE targetContent.content.contentId = :contentId
+          AND stampbook.status = io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookStatus.PUBLISHED
+        ORDER BY stampbook.stampbookId ASC
+        """)
+    List<Stampbook> findPublishedByTargetContentIdForUpdate(@Param("contentId") Long contentId);
+
+    @Query(value = "SELECT UNIX_TIMESTAMP(CURRENT_TIMESTAMP(6))", nativeQuery = true)
+    BigDecimal findCurrentEpochSeconds();
 
     @EntityGraph(attributePaths = {"region", "rewardCouponPolicy"})
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -25,9 +46,77 @@ public interface StampbookRepository extends JpaRepository<Stampbook, Long> {
         """)
     Optional<Stampbook> findByStampbookIdForUpdate(@Param("stampbookId") Long stampbookId);
 
+    @Query("""
+        SELECT stampbook
+        FROM Stampbook stampbook
+        JOIN FETCH stampbook.region region
+        JOIN FETCH stampbook.rewardCouponPolicy rewardCouponPolicy
+        JOIN FETCH rewardCouponPolicy.region rewardCouponPolicyRegion
+        WHERE stampbook.stampbookId = :stampbookId
+          AND region.regionId = :regionId
+          AND stampbook.status = :status
+        """)
+    Optional<Stampbook> findReviewDetailByStampbookIdAndRegionIdAndStatus(
+        @Param("stampbookId") Long stampbookId,
+        @Param("regionId") Long regionId,
+        @Param("status") StampbookStatus status
+    );
+
+    @Query("""
+        SELECT new io.regionevent.regioneventbackend.domain.stampbook.repository.StampbookReviewTargetContentProjection(
+            content.contentId,
+            contentRegion.regionId,
+            content.title,
+            content.status
+        )
+        FROM StampbookContent targetContent
+        JOIN targetContent.content content
+        JOIN content.region contentRegion
+        WHERE targetContent.stampbook.stampbookId = :stampbookId
+        ORDER BY content.contentId ASC
+        """)
+    List<StampbookReviewTargetContentProjection> findReviewTargetContentsByStampbookId(
+        @Param("stampbookId") Long stampbookId
+    );
+
     boolean existsByRewardCouponPolicyCouponPolicyIdAndStatus(
         Long couponPolicyId,
         StampbookStatus status
+    );
+
+    @Query("""
+        SELECT new io.regionevent.regioneventbackend.domain.stampbook.repository.PendingRegionAdminStampbookProjection(
+            stampbook.stampbookId,
+            stampbook.region.regionId,
+            stampbook.status,
+            COUNT(DISTINCT targetContent.content.contentId),
+            stampbook.rewardCouponPolicy.couponPolicyId,
+            MAX(auditEvent.occurredAt)
+        )
+        FROM Stampbook stampbook
+        LEFT JOIN StampbookContent targetContent ON targetContent.stampbook = stampbook
+        LEFT JOIN AuditEvent auditEvent
+            ON auditEvent.region = stampbook.region
+            AND auditEvent.targetType = :targetType
+            AND auditEvent.targetId = stampbook.stampbookId
+            AND auditEvent.result = :auditResult
+            AND auditEvent.previousState = :previousState
+            AND auditEvent.nextState = :nextState
+        WHERE stampbook.region.regionId = :regionId
+          AND stampbook.status = :status
+        GROUP BY stampbook.stampbookId,
+                 stampbook.region.regionId,
+                 stampbook.status,
+                 stampbook.rewardCouponPolicy.couponPolicyId
+        ORDER BY MAX(auditEvent.occurredAt) ASC, stampbook.stampbookId ASC
+        """)
+    List<PendingRegionAdminStampbookProjection> findPendingRegionAdminStampbookProjections(
+        @Param("regionId") Long regionId,
+        @Param("status") StampbookStatus status,
+        @Param("targetType") AuditEventTargetType targetType,
+        @Param("auditResult") AuditEventResult auditResult,
+        @Param("previousState") String previousState,
+        @Param("nextState") String nextState
     );
 
     @Query("""

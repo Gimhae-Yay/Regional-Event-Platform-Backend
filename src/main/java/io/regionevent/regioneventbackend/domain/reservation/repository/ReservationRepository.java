@@ -21,6 +21,8 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
 
     Optional<Reservation> findByQrReference(String qrReference);
 
+    boolean existsByCapacityHoldHoldId(Long holdId);
+
     @EntityGraph(attributePaths = {
         "region",
         "contentSession",

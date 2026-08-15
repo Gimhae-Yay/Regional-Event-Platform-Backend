@@ -105,6 +105,9 @@ public class GetOperatorReservationPaymentUseCase {
         if (refund.getCompletedAt() != null) {
             updatedAt = latest(List.of(updatedAt, refund.getCompletedAt()));
         }
+        if (refund.getResolvedAt() != null) {
+            updatedAt = latest(List.of(updatedAt, refund.getResolvedAt()));
+        }
         if (refund.getStatus() == RefundStatus.PROCESSING) {
             Instant retryAttemptedAt = latestRetryAttemptedAt(refund);
             if (retryAttemptedAt != null) {

@@ -208,7 +208,7 @@ class RetryRefundUseCaseTest {
             Region region = mock(Region.class);
 
             when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
-            when(authorizationService.requireAuthorizedPlatformAdmin(1L)).thenReturn(assignment);
+            when(authorizationService.requireAuthorizedPlatformAdminForUpdate(1L)).thenReturn(assignment);
             when(assignment.getPlatformAdminAssignmentId()).thenReturn(1L);
             when(assignment.getAppUser()).thenReturn(appUser);
             when(assignment.getGrade()).thenReturn(PlatformAdminGrade.PLATFORM_ADMIN);

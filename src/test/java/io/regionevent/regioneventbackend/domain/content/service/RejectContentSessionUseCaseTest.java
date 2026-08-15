@@ -63,7 +63,7 @@ class RejectContentSessionUseCaseTest {
         when(contentSessionService.findRejectTargetForUpdate(SESSION_ID)).thenReturn(pendingSession);
         when(pendingSession.getRegion()).thenReturn(region);
         when(region.getRegionId()).thenReturn(REGION_ID);
-        when(regionAdminAuthorizationService.authorize(USER_ID, REGION_ID)).thenReturn(reviewer);
+        givenAuthorizedRegionAdmin(reviewer);
         when(reviewer.getRoleAssignmentId()).thenReturn(1L);
         when(reviewer.getAppUser()).thenReturn(reviewerUser);
         when(reviewerUser.getStatus()).thenReturn(AppUserStatus.ACTIVE);
@@ -111,11 +111,20 @@ class RejectContentSessionUseCaseTest {
         when(contentSessionService.findRejectTargetForUpdate(SESSION_ID)).thenReturn(pendingSession);
         when(pendingSession.getRegion()).thenReturn(region);
         when(region.getRegionId()).thenReturn(REGION_ID);
-        when(regionAdminAuthorizationService.authorize(USER_ID, REGION_ID)).thenReturn(reviewer);
+        givenAuthorizedRegionAdmin(reviewer);
 
         assertThatThrownBy(() -> useCase.reject(USER_ID, SESSION_ID, " ", REQUEST_ID))
             .isInstanceOf(BusinessException.class)
             .extracting(exception -> ((BusinessException) exception).getErrorCode())
             .isEqualTo(ErrorCode.INVALID_INPUT);
+    }
+
+    private void givenAuthorizedRegionAdmin(UserRoleAssignment assignment) {
+        RegionAdminAuthorizationService.AuthorizedRegionAdmin regionAdmin = mock(
+            RegionAdminAuthorizationService.AuthorizedRegionAdmin.class
+        );
+        when(regionAdminAuthorizationService.requireAuthorizedRegionAdminForUpdate(USER_ID))
+            .thenReturn(regionAdmin);
+        when(regionAdmin.authorize(REGION_ID)).thenReturn(assignment);
     }
 }

@@ -55,9 +55,10 @@ public class RejectContentUseCase {
         UUID requestId
     ) {
         String normalizedReason = normalizeReason(reason);
+        RegionAdminAuthorizationService.AuthorizedRegionAdmin regionAdmin =
+            regionAdminAuthorizationService.requireAuthorizedRegionAdminForUpdate(userId);
         Content content = contentService.findApprovalTargetForUpdate(contentId);
-        UserRoleAssignment reviewerAssignment = regionAdminAuthorizationService.authorize(
-            userId,
+        UserRoleAssignment reviewerAssignment = regionAdmin.authorize(
             content.getRegion().getRegionId()
         );
 

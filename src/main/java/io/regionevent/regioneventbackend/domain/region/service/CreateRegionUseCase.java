@@ -61,7 +61,7 @@ public class CreateRegionUseCase {
     ) {
         validateCommand(command);
         PlatformAdminAssignment actor = platformAdminAuthorizationService
-            .requireAuthorizedPlatformAdmin(actorUserId);
+            .requireAuthorizedPlatformAdminForUpdate(actorUserId);
         Region region = regionService.createPrivateRegion(command.regionCode(), command.name());
         Instant occurredAt = clock.instant();
         recordAuditEventUseCase.record(new AuditEventCommand(

@@ -203,6 +203,7 @@ public interface ContentSessionRepository extends JpaRepository<ContentSession, 
         WHERE contentSession.sessionId = :sessionId
             AND contentSession.content.status = :contentStatus
             AND contentSession.content.deletedAt IS NULL
+            AND contentSession.content.region.isPublic = true
             AND contentSession.status = :sessionStatus
         """)
     Optional<PublicSessionReservationInfoProjection> findPublicScheduledReservationInfo(

@@ -5,11 +5,14 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
 import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookProgressStatus;
 import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookStatus;
 import io.regionevent.regioneventbackend.domain.stampbook.repository.MyStampbookDetailProjection;
 import io.regionevent.regioneventbackend.domain.stampbook.repository.MyStampEarningProjection;
 import io.regionevent.regioneventbackend.domain.stampbook.repository.MyStampbookListProjection;
+import io.regionevent.regioneventbackend.domain.stampbook.repository.PendingRegionAdminStampbookProjection;
 import io.regionevent.regioneventbackend.domain.stampbook.repository.StampbookRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
@@ -33,6 +36,22 @@ public class StampbookReadService {
             )
             .stream()
             .map(this::toResult)
+            .toList();
+    }
+
+    public List<PendingRegionAdminStampbookResult> findPendingRegionAdminStampbooks(Long regionId) {
+        validateRegionId(regionId);
+
+        return stampbookRepository.findPendingRegionAdminStampbookProjections(
+                regionId,
+                StampbookStatus.PENDING_REVIEW,
+                AuditEventTargetType.STAMPBOOK,
+                AuditEventResult.SUCCESS,
+                StampbookStatus.DRAFT.name(),
+                StampbookStatus.PENDING_REVIEW.name()
+            )
+            .stream()
+            .map(this::toPendingRegionAdminResult)
             .toList();
     }
 
@@ -96,6 +115,34 @@ public class StampbookReadService {
             projection.stampbookStatus(),
             projection.publishedAt(),
             toProgress(projection)
+        );
+    }
+
+    private PendingRegionAdminStampbookResult toPendingRegionAdminResult(
+        PendingRegionAdminStampbookProjection projection
+    ) {
+        if (projection == null
+            || projection.stampbookId() == null
+            || projection.stampbookId() <= 0
+            || projection.regionId() == null
+            || projection.regionId() <= 0
+            || projection.status() != StampbookStatus.PENDING_REVIEW
+            || projection.targetCount() == null
+            || projection.targetCount() <= 0
+            || projection.targetCount() > Integer.MAX_VALUE
+            || projection.rewardCouponPolicyId() == null
+            || projection.rewardCouponPolicyId() <= 0
+            || projection.requestedAt() == null) {
+            throw new IllegalStateException("stampbook review read data is inconsistent");
+        }
+
+        return new PendingRegionAdminStampbookResult(
+            projection.stampbookId(),
+            projection.regionId(),
+            projection.status(),
+            projection.targetCount().intValue(),
+            projection.rewardCouponPolicyId(),
+            projection.requestedAt()
         );
     }
 
@@ -428,6 +475,12 @@ public class StampbookReadService {
     private void validateUserId(Long userId) {
         if (userId == null || userId <= 0) {
             throw new IllegalArgumentException("userId must be positive");
+        }
+    }
+
+    private void validateRegionId(Long regionId) {
+        if (regionId == null || regionId <= 0) {
+            throw new IllegalArgumentException("regionId must be positive");
         }
     }
 

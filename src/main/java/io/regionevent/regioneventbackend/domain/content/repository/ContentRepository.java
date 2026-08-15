@@ -264,6 +264,17 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
         """)
     List<Content> findMissionTargetsForUpdate(@Param("contentIds") List<Long> contentIds);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = {"operator", "region"})
+    @Query("""
+        SELECT content
+        FROM Content content
+        WHERE content.contentId IN :contentIds
+          AND content.deletedAt IS NULL
+        ORDER BY content.contentId ASC
+        """)
+    List<Content> findStampbookTargetsForUpdate(@Param("contentIds") List<Long> contentIds);
+
     @EntityGraph(attributePaths = {"operator", "region", "representativeImageObject"})
     @Query("""
         SELECT content
@@ -302,6 +313,11 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
     Optional<Content> findByContentIdForUpdate(@Param("contentId") Long contentId);
 
     boolean existsByContentIdAndStatusAndDeletedAtIsNull(
+        Long contentId,
+        ContentStatus status
+    );
+
+    boolean existsByContentIdAndStatusAndDeletedAtIsNullAndRegionIsPublicTrue(
         Long contentId,
         ContentStatus status
     );

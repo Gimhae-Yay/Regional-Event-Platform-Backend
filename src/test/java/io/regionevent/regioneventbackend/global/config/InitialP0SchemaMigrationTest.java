@@ -96,6 +96,15 @@ class InitialP0SchemaMigrationTest {
                 FROM information_schema.indexes
                 WHERE table_schema = 'PUBLIC'
                   AND table_name = 'CAPACITY_HOLD'
+            """,
+            String.class
+        );
+        List<String> auditEventIndexNames = jdbcTemplate.queryForList(
+            """
+                SELECT index_name
+                FROM information_schema.indexes
+                WHERE table_schema = 'PUBLIC'
+                  AND table_name = 'AUDIT_EVENT'
                 """,
             String.class
         );
@@ -154,7 +163,8 @@ class InitialP0SchemaMigrationTest {
             "33",
             "34",
             "35",
-            "36"
+            "36",
+            "37"
         );
         assertThat(tableNames).contains(
             "REGION",
@@ -394,6 +404,7 @@ class InitialP0SchemaMigrationTest {
             "REJECT_REASON"
         );
         assertThat(capacityHoldIndexNames).contains("IDX_CAPACITY_HOLD_STATUS_EXPIRES_AT");
+        assertThat(auditEventIndexNames).contains("IDX_AUDIT_EVENT_TARGET_HISTORY");
         assertThat(userRoleAssignmentColumnNames).contains(
             "ROLE_ASSIGNMENT_ID",
             "STATUS",

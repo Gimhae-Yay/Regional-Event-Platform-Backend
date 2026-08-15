@@ -14,11 +14,14 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
 import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookProgressStatus;
 import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookStatus;
 import io.regionevent.regioneventbackend.domain.stampbook.repository.MyStampbookDetailProjection;
 import io.regionevent.regioneventbackend.domain.stampbook.repository.MyStampEarningProjection;
 import io.regionevent.regioneventbackend.domain.stampbook.repository.MyStampbookListProjection;
+import io.regionevent.regioneventbackend.domain.stampbook.repository.PendingRegionAdminStampbookProjection;
 import io.regionevent.regioneventbackend.domain.stampbook.repository.StampbookRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
@@ -92,6 +95,69 @@ class StampbookReadServiceTest {
             StampbookStatus.PUBLISHED,
             StampbookStatus.ENDED
         );
+    }
+
+    @Test
+    void 담당지역_심사대기_스탬프북은_제출감사시각과_목표수를_반환한다() {
+        Instant requestedAt = Instant.parse("2026-08-14T02:20:00Z");
+        when(stampbookRepository.findPendingRegionAdminStampbookProjections(
+            10L,
+            StampbookStatus.PENDING_REVIEW,
+            AuditEventTargetType.STAMPBOOK,
+            AuditEventResult.SUCCESS,
+            StampbookStatus.DRAFT.name(),
+            StampbookStatus.PENDING_REVIEW.name()
+        )).thenReturn(List.of(new PendingRegionAdminStampbookProjection(
+            101L,
+            10L,
+            StampbookStatus.PENDING_REVIEW,
+            2L,
+            301L,
+            requestedAt
+        )));
+
+        List<PendingRegionAdminStampbookResult> results = stampbookReadService
+            .findPendingRegionAdminStampbooks(10L);
+
+        assertThat(results).containsExactly(new PendingRegionAdminStampbookResult(
+            101L,
+            10L,
+            StampbookStatus.PENDING_REVIEW,
+            2,
+            301L,
+            requestedAt
+        ));
+        verify(stampbookRepository).findPendingRegionAdminStampbookProjections(
+            10L,
+            StampbookStatus.PENDING_REVIEW,
+            AuditEventTargetType.STAMPBOOK,
+            AuditEventResult.SUCCESS,
+            StampbookStatus.DRAFT.name(),
+            StampbookStatus.PENDING_REVIEW.name()
+        );
+    }
+
+    @Test
+    void 심사대기_스탬프북에_제출감사가_없으면_정합성오류로_처리한다() {
+        when(stampbookRepository.findPendingRegionAdminStampbookProjections(
+            10L,
+            StampbookStatus.PENDING_REVIEW,
+            AuditEventTargetType.STAMPBOOK,
+            AuditEventResult.SUCCESS,
+            StampbookStatus.DRAFT.name(),
+            StampbookStatus.PENDING_REVIEW.name()
+        )).thenReturn(List.of(new PendingRegionAdminStampbookProjection(
+            101L,
+            10L,
+            StampbookStatus.PENDING_REVIEW,
+            2L,
+            301L,
+            null
+        )));
+
+        assertThatThrownBy(() -> stampbookReadService.findPendingRegionAdminStampbooks(10L))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("stampbook review read data is inconsistent");
     }
 
     @Test

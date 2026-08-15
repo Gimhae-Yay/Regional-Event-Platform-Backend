@@ -14,6 +14,28 @@ import io.regionevent.regioneventbackend.domain.audit.entity.AuditEvent;
 public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
 
     @Query("""
+        SELECT new io.regionevent.regioneventbackend.domain.audit.repository.StampbookReviewRequestAuditProjection(
+            auditEvent.occurredAt,
+            auditEvent.reason
+        )
+        FROM AuditEvent auditEvent
+        WHERE auditEvent.targetType = io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType.STAMPBOOK
+          AND auditEvent.targetId = :stampbookId
+          AND auditEvent.region.regionId = :regionId
+          AND auditEvent.result = io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult.SUCCESS
+          AND auditEvent.previousState = :previousState
+          AND auditEvent.nextState = :nextState
+        ORDER BY auditEvent.occurredAt DESC, auditEvent.auditEventId DESC
+        """)
+    List<StampbookReviewRequestAuditProjection> findLatestStampbookReviewRequestAuditProjections(
+        @Param("stampbookId") Long stampbookId,
+        @Param("regionId") Long regionId,
+        @Param("previousState") String previousState,
+        @Param("nextState") String nextState,
+        Pageable pageable
+    );
+
+    @Query("""
         SELECT new io.regionevent.regioneventbackend.domain.audit.repository.MissionHistoryAuditProjection(
             auditEvent.auditEventId,
             auditEvent.requestId,

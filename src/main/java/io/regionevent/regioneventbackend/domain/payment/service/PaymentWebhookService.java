@@ -29,6 +29,11 @@ public class PaymentWebhookService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
+    public boolean existsByProviderEventIdForUpdate(String providerEventId) {
+        return paymentWebhookRepository.findByProviderEventIdForUpdate(providerEventId).isPresent();
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
     public PaymentWebhook create(PaymentWebhook paymentWebhook) {
         return paymentWebhookRepository.saveAndFlush(paymentWebhook);
     }
