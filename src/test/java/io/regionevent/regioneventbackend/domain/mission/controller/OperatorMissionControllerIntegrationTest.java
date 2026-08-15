@@ -19,6 +19,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
@@ -44,10 +45,12 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
+import io.regionevent.regioneventbackend.support.jpa.CleanH2Database;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
+@CleanH2Database
 class OperatorMissionControllerIntegrationTest {
 
     private static final Instant CONTENT_PUBLISHED_AT = Instant.parse("2026-08-01T00:00:00Z");
@@ -379,7 +382,8 @@ class OperatorMissionControllerIntegrationTest {
     }
 
     @Test
-    void submit_withOtherRegionOperator_returnsForbiddenWithoutChangingMissionOrAudit() throws Exception {
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void submit_withOtherRegionOperator_returnsForbiddenAndRecordsFailureAudit() throws Exception {
         Region missionRegion = saveRegion("SUB-MISSION");
         Region otherRegion = saveRegion("SUB-OTHER");
         AppUser missionOperator = saveOperator(missionRegion, AppUserStatus.ACTIVE);
@@ -393,7 +397,7 @@ class OperatorMissionControllerIntegrationTest {
 
         assertThat(missionRepository.findById(mission.getMissionId()))
             .hasValueSatisfying(savedMission -> assertThat(savedMission.getStatus()).isEqualTo(MissionStatus.DRAFT));
-        assertThat(auditEventRepository.count()).isZero();
+        assertFailureAudit(mission.getMissionId(), MissionStatus.DRAFT, "FORBIDDEN");
     }
 
     @Test
@@ -511,6 +515,7 @@ class OperatorMissionControllerIntegrationTest {
     }
 
     @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void create_withNonMissionRewardPolicy_returnsMissionStateConflict() throws Exception {
         Region region = saveRegion("IP");
         AppUser operator = saveOperator(region, AppUserStatus.ACTIVE);
@@ -529,10 +534,11 @@ class OperatorMissionControllerIntegrationTest {
             .andExpect(status().isConflict())
             .andExpect(jsonPath("$.code").value("MISSION_STATE_CONFLICT"));
 
-        assertMissionWasNotCreated();
+        assertMissionCreationFailedWithAudit("MISSION_STATE_CONFLICT");
     }
 
     @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void create_withEndedRewardCouponPolicy_returnsMissionStateConflict() throws Exception {
         Region region = saveRegion("EP");
         AppUser operator = saveOperator(region, AppUserStatus.ACTIVE);
@@ -554,10 +560,11 @@ class OperatorMissionControllerIntegrationTest {
             .andExpect(status().isConflict())
             .andExpect(jsonPath("$.code").value("MISSION_STATE_CONFLICT"));
 
-        assertMissionWasNotCreated();
+        assertMissionCreationFailedWithAudit("MISSION_STATE_CONFLICT");
     }
 
     @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void create_withDeletedTargetContent_returnsNotFound() throws Exception {
         Region region = saveRegion("DT");
         AppUser operator = saveOperator(region, AppUserStatus.ACTIVE);
@@ -579,10 +586,11 @@ class OperatorMissionControllerIntegrationTest {
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.code").value("NOT_FOUND"));
 
-        assertMissionWasNotCreated();
+        assertMissionCreationFailedWithAudit("NOT_FOUND");
     }
 
     @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void create_withDifferentRegionTargetContent_returnsForbidden() throws Exception {
         Region region = saveRegion("TR");
         Region otherRegion = saveRegion("OTR");
@@ -604,7 +612,7 @@ class OperatorMissionControllerIntegrationTest {
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.code").value("FORBIDDEN"));
 
-        assertMissionWasNotCreated();
+        assertMissionCreationFailedWithAudit("FORBIDDEN");
     }
 
     @Test
@@ -1050,6 +1058,33 @@ class OperatorMissionControllerIntegrationTest {
     private void assertMissionWasNotCreated() {
         assertThat(missionRepository.count()).isZero();
         assertThat(auditEventRepository.count()).isZero();
+    }
+
+    private void assertMissionCreationFailedWithAudit(String reasonCode) {
+        assertThat(missionRepository.count()).isZero();
+        assertThat(auditEventRepository.findAll()).singleElement().satisfies(auditEvent -> {
+            assertThat(auditEvent.getTargetType()).isEqualTo(AuditEventTargetType.MISSION);
+            assertThat(auditEvent.getTargetId()).isNull();
+            assertThat(auditEvent.getPreviousState()).isNull();
+            assertThat(auditEvent.getNextState()).isNull();
+            assertThat(auditEvent.getResult()).isEqualTo(AuditEventResult.FAILURE);
+            assertThat(auditEvent.getReasonCode()).isEqualTo(reasonCode);
+        });
+    }
+
+    private void assertFailureAudit(
+        Long missionId,
+        MissionStatus previousState,
+        String reasonCode
+    ) {
+        assertThat(auditEventRepository.findAll()).singleElement().satisfies(auditEvent -> {
+            assertThat(auditEvent.getTargetType()).isEqualTo(AuditEventTargetType.MISSION);
+            assertThat(auditEvent.getTargetId()).isEqualTo(missionId);
+            assertThat(auditEvent.getPreviousState()).isEqualTo(previousState.name());
+            assertThat(auditEvent.getNextState()).isNull();
+            assertThat(auditEvent.getResult()).isEqualTo(AuditEventResult.FAILURE);
+            assertThat(auditEvent.getReasonCode()).isEqualTo(reasonCode);
+        });
     }
 
     private String createMissionRequest(

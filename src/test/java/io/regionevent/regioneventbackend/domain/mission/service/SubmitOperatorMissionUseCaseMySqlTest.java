@@ -41,6 +41,7 @@ import io.regionevent.regioneventbackend.domain.mission.entity.Mission;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionConditionType;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
 import io.regionevent.regioneventbackend.domain.mission.repository.MissionRepository;
+import io.regionevent.regioneventbackend.domain.mission.repository.MissionUpdateSnapshot;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -128,8 +129,11 @@ class SubmitOperatorMissionUseCaseMySqlTest extends NonTransactionalMySqlTestSup
             .hasSize(1);
         assertThat(missionRepository.findById(fixture.missionId()))
             .hasValueSatisfying(mission -> assertThat(mission.getStatus()).isEqualTo(MissionStatus.PENDING_REVIEW));
-        assertThat(auditEventRepository.findAll())
-            .filteredOn(event -> event.getTargetType() == AuditEventTargetType.MISSION)
+        List<AuditEvent> auditEvents = auditEventRepository.findAll().stream()
+            .filter(event -> event.getTargetType() == AuditEventTargetType.MISSION)
+            .toList();
+        assertThat(auditEvents)
+            .filteredOn(event -> event.getResult() == AuditEventResult.SUCCESS)
             .singleElement()
             .satisfies(event -> {
                 assertThat(event.getTargetId()).isEqualTo(fixture.missionId());
@@ -138,20 +142,29 @@ class SubmitOperatorMissionUseCaseMySqlTest extends NonTransactionalMySqlTestSup
                 assertThat(event.getNextState()).isEqualTo(MissionStatus.PENDING_REVIEW.name());
                 assertThat(event.getReasonCode()).isEqualTo("MISSION_SUBMITTED");
             });
+        assertThat(auditEvents)
+            .filteredOn(event -> event.getResult() == AuditEventResult.FAILURE)
+            .singleElement()
+            .satisfies(event -> {
+                assertThat(event.getTargetId()).isEqualTo(fixture.missionId());
+                assertThat(event.getPreviousState()).isEqualTo(MissionStatus.PENDING_REVIEW.name());
+                assertThat(event.getNextState()).isNull();
+                assertThat(event.getReasonCode()).isEqualTo("MISSION_STATE_CONFLICT");
+            });
     }
 
     @Test
     @Timeout(15)
-    void submit_whenRewardCouponPolicyChangesAfterInitialLookup_returnsConflictWithoutAudit() throws Exception {
+    void submit_whenRewardCouponPolicyChangesAfterInitialLookup_returnsConflictWithFailureAudit() throws Exception {
         Fixture fixture = createFixture();
         CountDownLatch initialLookupCompleted = new CountDownLatch(1);
         CountDownLatch rewardCouponPolicyChanged = new CountDownLatch(1);
         org.mockito.Mockito.doAnswer(invocation -> {
-            Long couponPolicyId = (Long) invocation.callRealMethod();
+            MissionUpdateSnapshot snapshot = (MissionUpdateSnapshot) invocation.callRealMethod();
             initialLookupCompleted.countDown();
             await(rewardCouponPolicyChanged);
-            return couponPolicyId;
-        }).when(missionService).findRewardCouponPolicyId(fixture.missionId());
+            return snapshot;
+        }).when(missionService).findUpdateSnapshot(fixture.missionId());
 
         Attempt attempt;
         try (ExecutorService executorService = Executors.newSingleThreadExecutor()) {
@@ -175,7 +188,14 @@ class SubmitOperatorMissionUseCaseMySqlTest extends NonTransactionalMySqlTestSup
             .hasValueSatisfying(mission -> assertThat(mission.getStatus()).isEqualTo(MissionStatus.DRAFT));
         assertThat(auditEventRepository.findAll())
             .filteredOn(event -> event.getTargetType() == AuditEventTargetType.MISSION)
-            .isEmpty();
+            .singleElement()
+            .satisfies(event -> {
+                assertThat(event.getTargetId()).isEqualTo(fixture.missionId());
+                assertThat(event.getPreviousState()).isEqualTo(MissionStatus.DRAFT.name());
+                assertThat(event.getNextState()).isNull();
+                assertThat(event.getResult()).isEqualTo(AuditEventResult.FAILURE);
+                assertThat(event.getReasonCode()).isEqualTo("MISSION_STATE_CONFLICT");
+            });
     }
 
     private Attempt submitAfterStart(

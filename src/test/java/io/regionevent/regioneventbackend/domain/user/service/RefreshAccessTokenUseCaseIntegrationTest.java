@@ -2,6 +2,8 @@ package io.regionevent.regioneventbackend.domain.user.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -17,6 +19,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +32,7 @@ import io.regionevent.regioneventbackend.domain.user.dto.RefreshAccessTokenResul
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
+import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.JwtRefreshTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshToken;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenConflictException;
@@ -52,6 +56,9 @@ class RefreshAccessTokenUseCaseIntegrationTest extends NonTransactionalMySqlTest
     private final AppUserRepository appUserRepository;
     private final StringRedisTemplate stringRedisTemplate;
     private final TransactionTemplate transactionTemplate;
+
+    @MockitoSpyBean
+    private JwtAccessTokenService jwtAccessTokenService;
 
     @Autowired
     RefreshAccessTokenUseCaseIntegrationTest(
@@ -158,6 +165,33 @@ class RefreshAccessTokenUseCaseIntegrationTest extends NonTransactionalMySqlTest
         }
     }
 
+    @Test
+    void accessToken발급실패는_회전완료전에_기존토큰을유지하고_재시도를허용한다() {
+        AppUser user = createUser();
+        String refreshToken = refreshTokenService.issue(user.getUserId());
+        RefreshToken currentToken = jwtRefreshTokenService.authenticate(refreshToken);
+        doThrow(new IllegalStateException("access token issuance failed"))
+            .when(jwtAccessTokenService)
+            .issue(user.getUserId());
+
+        assertThatThrownBy(() -> refreshAccessTokenUseCase.reissue(refreshToken))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("access token issuance failed");
+
+        assertThat(stringRedisTemplate.opsForValue().get(activeFamilyKey(currentToken)))
+            .isEqualTo(currentToken.tokenId().toString());
+        assertThat(stringRedisTemplate.hasKey(consumedTokenKey(currentToken))).isFalse();
+        assertThat(stringRedisTemplate.hasKey(rotationKey(currentToken))).isFalse();
+
+        doReturn("retried-access-token")
+            .when(jwtAccessTokenService)
+            .issue(user.getUserId());
+        RefreshAccessTokenResult result = refreshAccessTokenUseCase.reissue(refreshToken);
+
+        assertThat(result.accessToken()).isEqualTo("retried-access-token");
+        assertThat(result.refreshToken()).isNotEqualTo(refreshToken);
+    }
+
     private AppUser createUser() {
         return transactionTemplate.execute(status -> appUserRepository.saveAndFlush(new AppUser(
             "refresh-" + System.nanoTime() + "@example.com",
@@ -193,6 +227,18 @@ class RefreshAccessTokenUseCaseIntegrationTest extends NonTransactionalMySqlTest
             sleep();
         }
         throw new IllegalStateException("refresh token rotation marker did not expire");
+    }
+
+    private String activeFamilyKey(RefreshToken refreshToken) {
+        return "auth:refresh:family:" + refreshToken.familyId() + ":active";
+    }
+
+    private String consumedTokenKey(RefreshToken refreshToken) {
+        return "auth:refresh:token:" + refreshToken.tokenId() + ":consumed";
+    }
+
+    private String rotationKey(RefreshToken refreshToken) {
+        return "auth:refresh:token:" + refreshToken.tokenId() + ":rotation";
     }
 
     private void await(CountDownLatch latch) {

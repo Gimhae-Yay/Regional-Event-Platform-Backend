@@ -147,7 +147,14 @@ class ApproveRegionAdminMissionAuditAtomicityTest {
 
         Mission mission = missionRepository.findById(fixture.missionId()).orElseThrow();
         assertThat(mission.getStatus()).isEqualTo(MissionStatus.PENDING_REVIEW);
-        assertThat(auditEventRepository.count()).isZero();
+        assertThat(auditEventRepository.findAll())
+            .singleElement()
+            .satisfies(event -> {
+                assertThat(event.getResult()).isEqualTo(AuditEventResult.FAILURE);
+                assertThat(event.getReasonCode()).isEqualTo("INTERNAL_SERVER_ERROR");
+                assertThat(event.getPreviousState()).isEqualTo("PENDING_REVIEW");
+                assertThat(event.getNextState()).isNull();
+            });
     }
 
     private Fixture createFixture() {
