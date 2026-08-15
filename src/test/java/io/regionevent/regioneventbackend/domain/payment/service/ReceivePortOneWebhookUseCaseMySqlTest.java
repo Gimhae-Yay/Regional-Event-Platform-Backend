@@ -256,6 +256,72 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
     }
 
     @Test
+    void declinedCouponPaymentRetriedWithNewKeyThenPaid_reReservesAndUsesCoupon() {
+        Fixture fixture = createFixture();
+        Coupon coupon = createCoupon(fixture);
+        createPaymentUseCase.create(
+            fixture.user().getUserId(),
+            fixture.hold().getHoldId().toString(),
+            new CreatePaymentRequest(JsonNodeFactory.instance.stringNode(coupon.getCouponId().toString())),
+            "payment-key-first-" + System.nanoTime(),
+            UUID.randomUUID()
+        );
+        String firstOrderId = paymentRepository.findAll().getFirst().getOrderId();
+        when(paymentGateway.findByPaymentId(firstOrderId)).thenReturn(new PortOnePaymentGateway.PortOnePayment(
+            firstOrderId, TRANSACTION_ID, "store-1", 19_000, "KRW", "DECLINED", RESULT_HASH
+        ));
+
+        receivePortOneWebhookUseCase.receive(
+            "webhook-coupon-declined", WEBHOOK_TIMESTAMP, WEBHOOK_SIGNATURE, paymentEvent(firstOrderId)
+        );
+
+        assertThat(couponRepository.findById(coupon.getCouponId()))
+            .hasValueSatisfying(savedCoupon -> assertThat(savedCoupon.getStatus()).isEqualTo(CouponStatus.AVAILABLE));
+
+        createPaymentUseCase.create(
+            fixture.user().getUserId(),
+            fixture.hold().getHoldId().toString(),
+            new CreatePaymentRequest(JsonNodeFactory.instance.stringNode(coupon.getCouponId().toString())),
+            "payment-key-retry-" + System.nanoTime(),
+            UUID.randomUUID()
+        );
+        Payment retryPayment = paymentRepository.findAll().stream()
+            .filter(payment -> payment.getStatus() == PaymentStatus.PENDING)
+            .findFirst()
+            .orElseThrow();
+        assertThat(couponRepository.findById(coupon.getCouponId()))
+            .hasValueSatisfying(savedCoupon -> assertThat(savedCoupon.getStatus()).isEqualTo(CouponStatus.RESERVED));
+        when(paymentGateway.findByPaymentId(retryPayment.getOrderId())).thenReturn(
+            new PortOnePaymentGateway.PortOnePayment(
+                retryPayment.getOrderId(),
+                TRANSACTION_ID,
+                "store-1",
+                19_000,
+                "KRW",
+                "PAID",
+                RESULT_HASH
+            )
+        );
+
+        receivePortOneWebhookUseCase.receive(
+            "webhook-coupon-retry-approved",
+            WEBHOOK_TIMESTAMP,
+            WEBHOOK_SIGNATURE,
+            paymentEvent(retryPayment.getOrderId())
+        );
+
+        assertThat(paymentRepository.findAll()).extracting(Payment::getStatus)
+            .containsExactlyInAnyOrder(PaymentStatus.DECLINED, PaymentStatus.APPROVED);
+        assertThat(capacityHoldRepository.findById(fixture.hold().getHoldId()))
+            .hasValueSatisfying(hold -> assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.CONSUMED));
+        assertThat(reservationRepository.findAll()).singleElement();
+        assertThat(couponRepository.findById(coupon.getCouponId()))
+            .hasValueSatisfying(savedCoupon -> assertThat(savedCoupon.getStatus()).isEqualTo(CouponStatus.USED));
+        assertThat(couponStatusHistoryRepository.findAll()).hasSize(4);
+        assertThat(couponRedemptionRepository.findAll()).singleElement();
+    }
+
+    @Test
     @Timeout(10)
     void differentWebhooksArrivingConcurrently_changePaymentDomainStateOnlyOnce() throws Exception {
         Fixture fixture = createFixture();

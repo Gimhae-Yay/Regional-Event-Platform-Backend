@@ -129,11 +129,15 @@ public class CreatePaymentUseCase {
         if (pendingPayment != null) {
             throw new BusinessException(ErrorCode.PAYMENT_HOLD_CONFLICT);
         }
+        boolean snapshotCreated = snapshot == null;
         if (snapshot == null) {
             snapshot = createSnapshot(hold, couponId, user, baseAmount);
         }
         validateSnapshotCoupon(snapshot, couponId);
         if (snapshot.getFinalAmount() > 0) {
+            if (!snapshotCreated && snapshot.getCoupon() != null) {
+                reReserveSnapshotCoupon(snapshot, hold, user);
+            }
             hold = capacityHoldService.findActiveOwnedHoldForUpdate(holdId, user);
             Payment payment = paymentService.create(new Payment(
                 hold,
@@ -234,6 +238,19 @@ public class CreatePaymentUseCase {
             currentDatabaseTime
         ));
         return coupon;
+    }
+
+    private void reReserveSnapshotCoupon(
+        ReservationPriceSnapshot snapshot,
+        CapacityHold hold,
+        AppUser user
+    ) {
+        lockAndReserveCoupon(
+            snapshot.getCoupon().getCouponId(),
+            hold,
+            user,
+            snapshot.getBaseAmount()
+        );
     }
 
     private void validateSnapshotCoupon(ReservationPriceSnapshot snapshot, Long couponId) {
