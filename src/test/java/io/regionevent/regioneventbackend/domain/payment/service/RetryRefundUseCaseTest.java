@@ -22,9 +22,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
-import io.regionevent.regioneventbackend.domain.coupon.service.CouponRedemptionService;
-import io.regionevent.regioneventbackend.domain.coupon.service.CouponService;
-import io.regionevent.regioneventbackend.domain.coupon.service.CouponStatusHistoryService;
+import io.regionevent.regioneventbackend.domain.coupon.service.RestoreCouponUseCase;
 import io.regionevent.regioneventbackend.domain.payment.dto.RetryRefundResponse;
 import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
 import io.regionevent.regioneventbackend.domain.payment.entity.Refund;
@@ -182,9 +180,7 @@ class RetryRefundUseCaseTest {
         );
         private final RefundService refundService = mock(RefundService.class);
         private final RefundAttemptService attemptService = mock(RefundAttemptService.class);
-        private final CouponService couponService = mock(CouponService.class);
-        private final CouponRedemptionService couponRedemptionService = mock(CouponRedemptionService.class);
-        private final CouponStatusHistoryService couponStatusHistoryService = mock(CouponStatusHistoryService.class);
+        private final RestoreCouponUseCase restoreCouponUseCase = mock(RestoreCouponUseCase.class);
         private final RecordAuditEventUseCase auditEventUseCase = mock(RecordAuditEventUseCase.class);
         private final PortOnePaymentGateway paymentGateway = mock(PortOnePaymentGateway.class);
         private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
@@ -236,9 +232,7 @@ class RetryRefundUseCaseTest {
                 authorizationService,
                 refundService,
                 attemptService,
-                couponService,
-                couponRedemptionService,
-                couponStatusHistoryService,
+                restoreCouponUseCase,
                 auditEventUseCase,
                 paymentGateway,
                 Clock.fixed(NOW, ZoneOffset.UTC),
