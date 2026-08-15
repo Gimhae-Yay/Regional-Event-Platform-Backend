@@ -193,6 +193,16 @@ class CouponPolicyControllerIntegrationTest {
     }
 
     @Test
+    void 내_쿠폰_정책_목록_조회_대상이_없으면_빈배열을_응답한다() throws Exception {
+        when(getOperatorCouponPoliciesUseCase.findAll(AUTHENTICATED_USER_ID)).thenReturn(List.of());
+
+        mockMvc.perform(authenticated(get("/api/v1/operator/coupon-policies")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.couponPolicies").isArray())
+            .andExpect(jsonPath("$.data.couponPolicies").isEmpty());
+    }
+
+    @Test
     void 내_쿠폰_정책_상세_조회_유효하면_정책과_발급현황을_응답한다() throws Exception {
         when(getOperatorCouponPoliciesUseCase.find(AUTHENTICATED_USER_ID, 300L)).thenReturn(detailResult());
 
