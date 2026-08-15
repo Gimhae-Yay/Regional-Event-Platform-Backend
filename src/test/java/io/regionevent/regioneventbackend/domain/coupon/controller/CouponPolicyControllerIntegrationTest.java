@@ -7,12 +7,14 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
@@ -27,6 +29,9 @@ import io.regionevent.regioneventbackend.domain.coupon.entity.CouponIssuanceType
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicyStatus;
 import io.regionevent.regioneventbackend.domain.coupon.service.CreateCouponPolicyResult;
 import io.regionevent.regioneventbackend.domain.coupon.service.CreateCouponPolicyUseCase;
+import io.regionevent.regioneventbackend.domain.coupon.service.GetOperatorCouponPoliciesUseCase;
+import io.regionevent.regioneventbackend.domain.coupon.service.OperatorCouponPolicyDetail;
+import io.regionevent.regioneventbackend.domain.coupon.service.OperatorCouponPolicySummary;
 import io.regionevent.regioneventbackend.domain.coupon.service.PublishCouponPolicyResult;
 import io.regionevent.regioneventbackend.domain.coupon.service.PublishCouponPolicyUseCase;
 import io.regionevent.regioneventbackend.domain.coupon.service.UpdateCouponPolicyResult;
@@ -75,6 +80,9 @@ class CouponPolicyControllerIntegrationTest {
 
     @MockitoBean
     private CreateCouponPolicyUseCase createCouponPolicyUseCase;
+
+    @MockitoBean
+    private GetOperatorCouponPoliciesUseCase getOperatorCouponPoliciesUseCase;
 
     @MockitoBean
     private PublishCouponPolicyUseCase publishCouponPolicyUseCase;
@@ -154,6 +162,72 @@ class CouponPolicyControllerIntegrationTest {
         expectBusinessError(ErrorCode.FORBIDDEN, 403, "FORBIDDEN");
         expectBusinessError(ErrorCode.NOT_FOUND, 404, "NOT_FOUND");
         expectBusinessError(ErrorCode.COUPON_POLICY_CONFLICT, 409, "COUPON_POLICY_CONFLICT");
+    }
+
+    @Test
+    void 내_쿠폰_정책_목록_조회_유효하면_요약을_응답한다() throws Exception {
+        when(getOperatorCouponPoliciesUseCase.findAll(AUTHENTICATED_USER_ID)).thenReturn(List.of(
+            new OperatorCouponPolicySummary(301L, CONTENT_ID, "공개 정책", CouponPolicyStatus.PUBLISHED),
+            new OperatorCouponPolicySummary(300L, CONTENT_ID, "초안 정책", CouponPolicyStatus.DRAFT)
+        ));
+
+        mockMvc.perform(authenticated(get("/api/v1/operator/coupon-policies")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value("SUCCESS"))
+            .andExpect(jsonPath("$.message").value("내 쿠폰 정책 목록 조회에 성공했습니다."))
+            .andExpect(jsonPath("$.data.couponPolicies[0].couponPolicyId").value("301"))
+            .andExpect(jsonPath("$.data.couponPolicies[0].contentId").value("200"))
+            .andExpect(jsonPath("$.data.couponPolicies[0].name").value("공개 정책"))
+            .andExpect(jsonPath("$.data.couponPolicies[0].status").value("PUBLISHED"));
+
+        verify(getOperatorCouponPoliciesUseCase).findAll(AUTHENTICATED_USER_ID);
+    }
+
+    @Test
+    void 내_쿠폰_정책_목록_조회_인증이_없으면_유스케이스를_호출하지_않는다() throws Exception {
+        mockMvc.perform(get("/api/v1/operator/coupon-policies"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+
+        verify(getOperatorCouponPoliciesUseCase, never()).findAll(any());
+    }
+
+    @Test
+    void 내_쿠폰_정책_상세_조회_유효하면_정책과_발급현황을_응답한다() throws Exception {
+        when(getOperatorCouponPoliciesUseCase.find(AUTHENTICATED_USER_ID, 300L)).thenReturn(detailResult());
+
+        mockMvc.perform(authenticated(get("/api/v1/operator/coupon-policies/300")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value("SUCCESS"))
+            .andExpect(jsonPath("$.message").value("내 쿠폰 정책 상세 조회에 성공했습니다."))
+            .andExpect(jsonPath("$.data.couponPolicyId").value("300"))
+            .andExpect(jsonPath("$.data.contentId").value("200"))
+            .andExpect(jsonPath("$.data.regionId").value("10"))
+            .andExpect(jsonPath("$.data.issueSourceType").value("VISIT"))
+            .andExpect(jsonPath("$.data.issuedCount").value(42))
+            .andExpect(jsonPath("$.data.publishedAt").value("2026-08-01T00:00:00Z"));
+
+        verify(getOperatorCouponPoliciesUseCase).find(AUTHENTICATED_USER_ID, 300L);
+    }
+
+    @Test
+    void 내_쿠폰_정책_상세_조회_식별자가_잘못되면_입력오류를_응답한다() throws Exception {
+        mockMvc.perform(authenticated(get("/api/v1/operator/coupon-policies/0")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        verify(getOperatorCouponPoliciesUseCase, never()).find(any(), any());
+    }
+
+    @Test
+    void 내_쿠폰_정책_상세_조회_대상이_없거나_권한이_없으면_공통오류를_응답한다() throws Exception {
+        when(getOperatorCouponPoliciesUseCase.find(AUTHENTICATED_USER_ID, 300L)).thenThrow(
+            new BusinessException(ErrorCode.NOT_FOUND),
+            new BusinessException(ErrorCode.FORBIDDEN)
+        );
+
+        expectGetBusinessError(404, "NOT_FOUND");
+        expectGetBusinessError(403, "FORBIDDEN");
     }
 
     @Test
@@ -248,6 +322,12 @@ class CouponPolicyControllerIntegrationTest {
             .andExpect(jsonPath("$.code").value(code));
     }
 
+    private void expectGetBusinessError(int statusCode, String code) throws Exception {
+        mockMvc.perform(authenticated(get("/api/v1/operator/coupon-policies/300")))
+            .andExpect(status().is(statusCode))
+            .andExpect(jsonPath("$.code").value(code));
+    }
+
     private void expectPublishBusinessError(
         ErrorCode errorCode,
         int statusCode,
@@ -297,6 +377,27 @@ class CouponPolicyControllerIntegrationTest {
             Instant.parse("2026-08-31T00:00:00Z"),
             1_000L,
             Instant.parse("2026-08-08T00:00:00Z")
+        );
+    }
+
+    private OperatorCouponPolicyDetail detailResult() {
+        return new OperatorCouponPolicyDetail(
+            300L,
+            CONTENT_ID,
+            10L,
+            "재방문 할인",
+            "방문 혜택",
+            CouponPolicyStatus.PUBLISHED,
+            CouponIssuanceType.VISIT,
+            3_000L,
+            10_000L,
+            30,
+            Instant.parse("2026-08-01T00:00:00Z"),
+            Instant.parse("2026-08-31T00:00:00Z"),
+            1_000L,
+            42L,
+            Instant.parse("2026-08-01T00:00:00Z"),
+            null
         );
     }
 
