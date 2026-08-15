@@ -33,6 +33,7 @@ import io.regionevent.regioneventbackend.domain.content.service.WithdrawContentR
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponRedemptionService;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponService;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponStatusHistoryService;
+import io.regionevent.regioneventbackend.domain.coupon.service.RestoreCouponUseCase;
 import io.regionevent.regioneventbackend.domain.image.service.ImageObjectCleanupService;
 import io.regionevent.regioneventbackend.domain.image.service.ImageObjectService;
 import io.regionevent.regioneventbackend.domain.payment.service.CreateRefundUseCase;
@@ -130,6 +131,11 @@ public class ContentAtomicityJpaTestConfiguration {
     @Bean
     CouponStatusHistoryService couponStatusHistoryService() {
         return mock(CouponStatusHistoryService.class);
+    }
+
+    @Bean
+    RestoreCouponUseCase restoreCouponUseCase() {
+        return mock(RestoreCouponUseCase.class);
     }
 
     @Bean

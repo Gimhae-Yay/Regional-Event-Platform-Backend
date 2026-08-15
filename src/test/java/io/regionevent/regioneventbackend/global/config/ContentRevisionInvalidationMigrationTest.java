@@ -19,7 +19,7 @@ class ContentRevisionInvalidationMigrationTest {
     private static final Instant ENDED_AT = Instant.parse("2026-08-15T10:00:00Z");
 
     @Test
-    void V39_종결_콘텐츠의_활성_수정본을_한번만_무효화한다() {
+    void V40_종결_콘텐츠의_활성_수정본을_한번만_무효화한다() {
         DriverManagerDataSource dataSource = new DriverManagerDataSource(
             "jdbc:h2:mem:content-revision-invalidation-" + UUID.randomUUID()
                 + ";MODE=MySQL;DB_CLOSE_DELAY=-1",
@@ -27,7 +27,7 @@ class ContentRevisionInvalidationMigrationTest {
             ""
         );
         JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
-        migrateToVersion(dataSource, "38");
+        migrateToVersion(dataSource, "39");
         insertPreexistingTerminationData(jdbcTemplate);
 
         migrateToLatest(dataSource);

@@ -5,7 +5,7 @@
 | 대상 릴리스 | P1 |
 | 관련 요구사항 | [P1-FR-08](../../../p1-spec.md#6-기능-요구사항과-소유-문서), [P1-FR-10](../../../p1-spec.md#6-기능-요구사항과-소유-문서), `PAY-05`~`PAY-07`, `ADM-04` |
 | 소유 도메인 | 환불 |
-| 기준 문서 | [유료 결제·환불](../../../p1/payment-refund.md), [전체관리자](../../../p1/platform-admin.md), [P1 ERD](../../../p1-erd.md), [ADR-0070](../../../adr/0070-use-full-refund-with-bounded-manual-retry-and-discrepancy-closure.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [유료 결제·환불](../../../p1/payment-refund.md), [전체관리자](../../../p1/platform-admin.md), [P1 ERD](../../../p1-erd.md), [ADR-0070](../../../adr/0070-use-full-refund-with-bounded-manual-retry-and-discrepancy-closure.md), [ADR-0100](../../../adr/0100-use-coupon-redemption-as-reversal-record.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
@@ -45,14 +45,30 @@
 
 ### 쿠폰 복구 계약
 
-수동 환불, 환불 재시도, 환불 실패 수동 조치와 1분 고정 지연 복구 작업 중 어느 경로에서든 `refund.status`가
-최초로 `SUCCEEDED`가 되면 다음 계약을 같은 상태 반영 트랜잭션에 적용한다.
+`coupon_redemption`은 쿠폰 사용 반전의 공식 영속 기록이다. 공통 감사 이벤트는 같은 `requestId`로 남기지만 공식 출처 조회에 사용하지 않는다. 반전 출처·사유·시각은 다음 열로 조회한다.
+
+| 열 | 계약 |
+| --- | --- |
+| `reservation_id` | 모든 사용 이력의 확정 예약이다. 최종 금액 0원 예약 취소에서는 이 예약이 공식 반전 출처다. |
+| `refund_id` | 유료 환불 반전의 실제 환불 식별자다. `refund` FK이며 값이 있을 때 유일하다. 0원 예약 취소에서는 `NULL`이다. |
+| `reversal_reason_code` | 유료 환불은 `REFUND_SUCCEEDED`, 0원 예약 취소는 `RESERVATION_CANCELLED`다. |
+| `reversed_at` | MySQL 현재 시각으로 고정한 반전 시각이다. |
+
+`CONFIRMED`는 `refund_id`, `reversal_reason_code`, `reversed_at`이 모두 `NULL`이어야 한다. `REVERSED`는 다음 두 조합 중 하나만 허용한다.
+
+- 유료 환불: `refund_id IS NOT NULL`, `reversal_reason_code = REFUND_SUCCEEDED`, `reversed_at IS NOT NULL`
+- 0원 예약 취소: `refund_id IS NULL`, `reversal_reason_code = RESERVATION_CANCELLED`, `reversed_at IS NOT NULL`
+
+수동 환불, 환불 재시도, 환불 실패 수동 조치와 1분 고정 지연 복구 작업 중 어느 경로에서든 `refund.status`가 최초로 `SUCCEEDED`가 되면 다음 계약을 같은 상태 반영 트랜잭션에 적용한다.
 
 1. 환불에 연결된 예약이 `CANCELLED`이고 `reservation.cancelled_at < content_session.starts_at`인지 검증한다. 회차 시작 전 사용자·운영자 취소가 아니거나 확정 예약이 없는 결제 불일치 환불은 쿠폰을 복구하지 않는다.
-2. 가격 스냅샷에 적용 쿠폰이 있으면 예약의 `hold_id`와 가격 스냅샷의 `hold_id`, 사용 이력의 `reservation_id`·`price_snapshot_id`·`coupon_id`가 각각 환불 대상 예약·스냅샷·적용 쿠폰과 일치하는지 검증한다. 연결된 `coupon_redemption`이 `CONFIRMED`, 쿠폰이 `USED`인 경우에만 복구하며, 적용 쿠폰이 없으면 쿠폰 처리 없이 환불만 확정한다.
-3. `coupon_redemption`을 `REVERSED`로 전이하고 환불 식별자, 반전 사유와 반전 시각을 기록한다. 쿠폰은 원래 `expires_at`이 MySQL 기준 복구 시각보다 미래면 `AVAILABLE`, 그렇지 않으면 `EXPIRED`로 전이하고 `coupon_status_history`를 남긴다.
-4. 같은 환불·취소 근거로 이미 `REVERSED`인 사용 이력은 새 반전 이력이나 쿠폰 상태 전이를 만들지 않는다. 환불 재요청·재시도·수동 확정·복구 작업의 중복 실행도 최초 복구 결과로 수렴한다.
-5. 환불 `SUCCEEDED` 전이, 사용 이력 반전, 쿠폰 상태 전이·상태 이력과 `REFUND`, `COUPON` 감사 이벤트는 같은 `requestId`로 하나의 MySQL 트랜잭션에서 커밋한다.
+2. 가격 스냅샷에 적용 쿠폰이 있으면 예약의 `hold_id`와 가격 스냅샷의 `hold_id`, 사용 이력의 `reservation_id`·`reservation_price_snapshot_id`·`coupon_id`가 각각 환불 대상 예약·스냅샷·적용 쿠폰과 일치하는지 검증한다. 연결된 `coupon_redemption`이 `CONFIRMED`, 쿠폰이 `USED`인 경우에만 복구하며, 적용 쿠폰이 없으면 쿠폰 처리 없이 환불만 확정한다.
+3. `coupon_redemption`을 `REVERSED`로 전이하고 실제 `refund_id`, `REFUND_SUCCEEDED`와 반전 시각을 기록한다. 쿠폰은 원래 `expires_at`이 MySQL 기준 복구 시각보다 미래면 `AVAILABLE`, 그렇지 않으면 `EXPIRED`로 전이하고 `coupon_status_history`를 남긴다.
+4. 환불 `SUCCEEDED` 전이, 사용 이력 반전, 쿠폰 상태 전이·상태 이력과 `REFUND`, `COUPON` 감사 이벤트는 같은 `requestId`로 하나의 MySQL 트랜잭션에서 커밋한다.
+
+최종 금액 0원 예약은 결제·환불 행을 만들지 않는다. 회차 시작 전 사용자·운영자 취소가 성공하면 가격 스냅샷의 `final_amount = 0`, 연결된 결제·환불 행 없음과 사용 이력·예약·스냅샷·쿠폰의 일치를 검증한 뒤 같은 취소 트랜잭션에서 `coupon_redemption`을 `REVERSED`로 전이한다. `refund_id = NULL`, `reversal_reason_code = RESERVATION_CANCELLED`와 MySQL 기준 반전 시각을 기록하고 같은 시각으로 쿠폰 상태와 `coupon_status_history`, 취소·`COUPON` 감사를 반영한다.
+
+같은 공식 출처와 사유로 이미 `REVERSED`인 사용 이력의 재처리는 저장된 기록과 최초 복구 결과를 유지하는 무변경 성공이다. 다른 출처 또는 사유로 이미 반전된 사용 이력을 재처리하면 기존 기록을 덮어쓰지 않고 내부 정합성 실패로 상태 반영 트랜잭션을 롤백한다. 이 실패를 위한 새 공개 오류 코드는 만들지 않는다.
 
 ## 기능별 API 명세
 

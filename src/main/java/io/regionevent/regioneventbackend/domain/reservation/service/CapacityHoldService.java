@@ -178,10 +178,15 @@ public class CapacityHoldService {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public List<TerminatedCapacityHold> invalidateActiveHoldsForWithdrawal(Long userId) {
-        return capacityHoldRepository.findActiveHoldIdsByUserId(userId).stream()
-            .map(holdId -> invalidateAndReleaseCapacityIfActive(holdId, "USER_WITHDRAWAL"))
+        List<TerminatedCapacityHold> terminatedCapacityHolds = capacityHoldRepository.findActiveHoldIdsByUserId(userId)
+            .stream()
+            .map(this::invalidateAndReleaseCapacityForWithdrawalIfActive)
             .flatMap(Optional::stream)
             .toList();
+        if (!capacityHoldRepository.findActiveHoldIdsByUserIdForUpdate(userId).isEmpty()) {
+            throw new IllegalStateException("active capacity hold remains after withdrawal termination");
+        }
+        return terminatedCapacityHolds;
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -233,6 +238,19 @@ public class CapacityHoldService {
         capacityHoldRepository.invalidateAndReleaseCapacityIfActive(
             holdId,
             invalidationReason
+        );
+        CapacityHold capacityHold = capacityHoldRepository.findByHoldId(holdId)
+            .orElseThrow(() -> new IllegalStateException("invalidated capacity hold does not exist"));
+        return Optional.of(TerminatedCapacityHold.from(capacityHold));
+    }
+
+    private Optional<TerminatedCapacityHold> invalidateAndReleaseCapacityForWithdrawalIfActive(Long holdId) {
+        if (capacityHoldRepository.findActiveForWithdrawalByHoldIdForUpdate(holdId).isEmpty()) {
+            return Optional.empty();
+        }
+        capacityHoldRepository.invalidateAndReleaseCapacityIfActive(
+            holdId,
+            "USER_WITHDRAWAL"
         );
         CapacityHold capacityHold = capacityHoldRepository.findByHoldId(holdId)
             .orElseThrow(() -> new IllegalStateException("invalidated capacity hold does not exist"));
