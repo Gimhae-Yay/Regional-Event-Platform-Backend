@@ -248,13 +248,10 @@ public class CapacityHoldService {
         if (capacityHoldRepository.findActiveForWithdrawalByHoldIdForUpdate(holdId).isEmpty()) {
             return Optional.empty();
         }
-        int updatedCount = capacityHoldRepository.invalidateAndReleaseCapacityIfActive(
+        capacityHoldRepository.invalidateAndReleaseCapacityIfActive(
             holdId,
             "USER_WITHDRAWAL"
         );
-        if (updatedCount != 1) {
-            throw new IllegalStateException("withdrawal capacity hold invalidation failed");
-        }
         CapacityHold capacityHold = capacityHoldRepository.findByHoldId(holdId)
             .orElseThrow(() -> new IllegalStateException("invalidated capacity hold does not exist"));
         return Optional.of(TerminatedCapacityHold.from(capacityHold));

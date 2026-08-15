@@ -243,6 +243,44 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
     }
 
     @Test
+    @Timeout(10)
+    void withdraw_whenSchedulerRacesForExpiredActiveHold_terminatesAndRestoresCapacityOnce() throws Exception {
+        Fixture fixture = createFixture();
+        expireActiveHold(fixture);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<Void> withdrawal = executorService.submit(() -> {
+                ready.countDown();
+                await(start);
+                withdrawUserUseCase.withdraw(fixture.user().getUserId());
+                return null;
+            });
+            Future<?> scheduler = executorService.submit(() -> {
+                ready.countDown();
+                await(start);
+                expireOrInvalidateCapacityHoldsUseCase.execute();
+            });
+            assertThat(ready.await(3, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            withdrawal.get(5, TimeUnit.SECONDS);
+            scheduler.get(5, TimeUnit.SECONDS);
+        }
+
+        assertThat(appUserRepository.findById(fixture.user().getUserId())).isEmpty();
+        assertThat(capacityHoldRepository.findById(fixture.activeHold().getHoldId()))
+            .hasValueSatisfying(hold -> {
+                assertThat(hold.getStatus()).isIn(CapacityHoldStatus.EXPIRED, CapacityHoldStatus.INVALIDATED);
+                assertThat(hold.getUser()).isNull();
+                assertThat(hold.getTerminalAt()).isNotNull();
+                assertThat(hold.getCapacityReleasedAt()).isNotNull();
+            });
+        assertThat(contentSessionRepository.findById(fixture.session().getSessionId()))
+            .hasValueSatisfying(session -> assertThat(session.getRemainingCapacity()).isEqualTo(10));
+    }
+
+    @Test
     void withdraw_whenHoldTerminationFails_rollsBackExpiredActiveHoldAndCapacity() {
         Fixture fixture = createFixture();
         expireActiveHold(fixture);
