@@ -16,6 +16,8 @@ import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUs
 import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentLog;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentRevisionInvalidationReason;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentRevisionStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
@@ -32,6 +34,7 @@ public class EndContentReservationsUseCase {
     private static final String CONTENT_ENDED_INVALIDATION_REASON = "CONTENT_ENDED";
 
     private final ContentService contentService;
+    private final ContentRevisionInvalidationService contentRevisionInvalidationService;
     private final ContentSessionService contentSessionService;
     private final ContentLogService contentLogService;
     private final CapacityHoldService capacityHoldService;
@@ -43,6 +46,7 @@ public class EndContentReservationsUseCase {
 
     public EndContentReservationsUseCase(
         ContentService contentService,
+        ContentRevisionInvalidationService contentRevisionInvalidationService,
         ContentSessionService contentSessionService,
         ContentLogService contentLogService,
         CapacityHoldService capacityHoldService,
@@ -53,6 +57,7 @@ public class EndContentReservationsUseCase {
         PublicCatalogCacheInvalidator publicCatalogCacheInvalidator
     ) {
         this.contentService = contentService;
+        this.contentRevisionInvalidationService = contentRevisionInvalidationService;
         this.contentSessionService = contentSessionService;
         this.contentLogService = contentLogService;
         this.capacityHoldService = capacityHoldService;
@@ -101,6 +106,13 @@ public class EndContentReservationsUseCase {
 
             Instant endedAt = contentService.findCurrentDatabaseTime();
             Content endedContent = contentService.end(content, endedAt);
+            invalidateActiveRevision(
+                requestId,
+                endedContent,
+                actor,
+                endedAt,
+                ContentRevisionInvalidationReason.CONTENT_ENDED
+            );
             contentLogService.recordEnded(endedContent, actor.getAppUser(), endedAt);
             capacityHoldService.invalidateAllActiveHoldsForContent(
                 contentId,
@@ -163,6 +175,13 @@ public class EndContentReservationsUseCase {
         try {
             Instant endedAt = contentService.findCurrentDatabaseTime();
             Content endedContent = contentService.end(content, endedAt);
+            invalidateActiveRevision(
+                requestId,
+                endedContent,
+                null,
+                endedAt,
+                ContentRevisionInvalidationReason.CONTENT_ENDED
+            );
             contentLogService.recordEnded(endedContent, null, endedAt);
             capacityHoldService.invalidateAllActiveHoldsForContent(
                 contentId,
@@ -218,6 +237,32 @@ public class EndContentReservationsUseCase {
             content.getContentId(),
             content.getVersionNo()
         );
+    }
+
+    private void invalidateActiveRevision(
+        UUID requestId,
+        Content content,
+        AuditEventActor actor,
+        Instant invalidatedAt,
+        ContentRevisionInvalidationReason reason
+    ) {
+        contentRevisionInvalidationService.invalidateActiveRevisionForContent(
+            content.getContentId(),
+            actor == null ? null : actor.getAppUser(),
+            invalidatedAt,
+            reason
+        ).ifPresent(revision -> recordAuditEventUseCase.record(new AuditEventCommand(
+            requestId,
+            content.getRegion(),
+            AuditEventTargetType.CONTENT,
+            content.getContentId(),
+            ContentRevisionStatus.EDIT_REQUESTED.name(),
+            ContentRevisionStatus.EDIT_INVALIDATED.name(),
+            AuditEventResult.SUCCESS,
+            reason.name(),
+            actor,
+            invalidatedAt
+        )));
     }
 
     private Instant findTerminalAt(ContentSession contentSession) {

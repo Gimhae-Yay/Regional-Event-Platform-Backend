@@ -22,17 +22,20 @@ import io.regionevent.regioneventbackend.domain.user.service.RegionAdminAuthoriz
 public class RejectContentRevisionUseCase {
 
     private final ContentRevisionService contentRevisionService;
+    private final ContentService contentService;
     private final RegionAdminAuthorizationService regionAdminAuthorizationService;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final Clock clock;
 
     public RejectContentRevisionUseCase(
         ContentRevisionService contentRevisionService,
+        ContentService contentService,
         RegionAdminAuthorizationService regionAdminAuthorizationService,
         RecordAuditEventUseCase recordAuditEventUseCase,
         Clock clock
     ) {
         this.contentRevisionService = contentRevisionService;
+        this.contentService = contentService;
         this.regionAdminAuthorizationService = regionAdminAuthorizationService;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
         this.clock = clock;
@@ -47,8 +50,9 @@ public class RejectContentRevisionUseCase {
     ) {
         RegionAdminAuthorizationService.AuthorizedRegionAdmin regionAdmin =
             regionAdminAuthorizationService.requireAuthorizedRegionAdminForUpdate(userId);
+        Long contentId = contentRevisionService.findContentIdByRevisionId(revisionId);
+        Content content = contentService.findApprovalTargetForUpdate(contentId);
         ContentRevision revision = contentRevisionService.findReviewTargetForUpdate(revisionId);
-        Content content = revision.getContent();
         UserRoleAssignment reviewerAssignment = regionAdmin.authorize(
             content.getRegion().getRegionId()
         );
