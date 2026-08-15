@@ -13,6 +13,7 @@
 - `docs/p1/stampbook.md`, `docs/p1/regional-mission.md`, `docs/p1/coupon.md`
 - `docs/p1/payment-refund.md`, `docs/p1/platform-admin.md`
 - `docs/adr/0012-retain-author-unlinked-reviews-and-visits-after-withdrawal.md`
+- `docs/adr/0100-use-coupon-redemption-as-reversal-record.md`
 - 각 P1 정책 문서가 연결한 핵심 ADR. 지역 결정의 핵심·세부·보정 기록 분류는 `docs/p1/platform-admin.md`를 따른다.
 
 P1은 다음 P0 사실을 변경하지 않고 재사용한다.
@@ -219,7 +220,7 @@ erDiagram
 
 ### 3.4 쿠폰 발급과 사용
 
-`mission_reward_claim`, `stampbook_reward_grant`는 [스탬프북](#32-스탬프북)과 [지역 미션](#33-지역-미션) 그림에서 전체 열을 확인한다. 이 그림에서는 세 발급 근거 중 정확히 하나만 `coupon_issuance`에 연결된다는 점을 보여 준다. `app_user`, `region`, `content`, `visit`, `reservation`은 P0 재사용 테이블이며, 모든 외래 키의 부모를 관계선과 PK로 표시한다.
+`mission_reward_claim`, `stampbook_reward_grant`는 [스탬프북](#32-스탬프북)과 [지역 미션](#33-지역-미션) 그림에서, `refund`는 [가격·결제·환불](#35-가격결제환불) 그림에서 전체 열을 확인한다. 이 그림에서는 세 발급 근거 중 정확히 하나만 `coupon_issuance`에 연결되고, 유료 반전만 `refund`에 연결된다는 점을 보여 준다. `app_user`, `region`, `content`, `visit`, `reservation`은 P0 재사용 테이블이며, 모든 외래 키의 부모를 관계선과 PK로 표시한다.
 
 ```mermaid
 erDiagram
@@ -237,6 +238,7 @@ erDiagram
     coupon ||--o{ coupon_redemption : redemption_history
     reservation ||--o| coupon_redemption : consumes
     reservation_price_snapshot ||--o| coupon_redemption : proves_price
+    refund o|--o| coupon_redemption : reversal_source
 
     app_user {
         BIGINT user_id PK "P0 사용자 식별자; NOT NULL"
@@ -257,6 +259,9 @@ erDiagram
     }
     reservation_price_snapshot {
         BIGINT reservation_price_snapshot_id PK "가격을 고정한 스냅샷 식별자; NOT NULL"
+    }
+    refund {
+        BIGINT refund_id PK "유료 전액 환불 식별자; NOT NULL"
     }
     mission_reward_claim {
         BIGINT mission_reward_claim_id PK "미션 보상 수령 요청 식별자; NOT NULL"
@@ -315,15 +320,17 @@ erDiagram
         BIGINT coupon_id FK "사용된 쿠폰; 스냅샷 쿠폰과 일치; NOT NULL"
         BIGINT reservation_price_snapshot_id FK "쿠폰을 적용한 가격 스냅샷; NOT NULL"
         BIGINT reservation_id FK "스냅샷 홀드에서 확정된 예약; NOT NULL"
+        BIGINT refund_id FK "유료 반전의 실제 환불; 0원 취소·CONFIRMED면 NULL; UNIQUE"
         VARCHAR status "상태: CONFIRMED|REVERSED; NOT NULL"
+        VARCHAR reversal_reason_code "REFUND_SUCCEEDED|RESERVATION_CANCELLED; CONFIRMED면 NULL"
         TIMESTAMP redeemed_at "사용 확정 시각; NOT NULL"
-        TIMESTAMP reversed_at "회차 시작 전 취소·환불 복구 시각; CONFIRMED면 NULL"
+        TIMESTAMP reversed_at "회차 시작 전 취소·환불 복구 시각; REVERSED면 NOT NULL"
     }
 ```
 
 ### 3.5 가격·결제·환불
 
-`app_user`, `capacity_hold`, `reservation`은 P0 재사용 테이블이고, `coupon`의 전체 열은 [3.4 쿠폰](#34-쿠폰-발급과-사용)에 있다. `payment_webhook.payment_id`는 결제 연결을 찾지 못한 웹훅도 남겨야 하므로 nullable이다.
+`app_user`, `capacity_hold`, `reservation`은 P0 재사용 테이블이고, `coupon`과 `coupon_redemption`의 전체 열은 [3.4 쿠폰](#34-쿠폰-발급과-사용)에 있다. `payment_webhook.payment_id`는 결제 연결을 찾지 못한 웹훅도 남겨야 하므로 nullable이다.
 
 ```mermaid
 erDiagram
@@ -342,6 +349,7 @@ erDiagram
     payment_discrepancy ||--o{ payment_discrepancy_action : resolves
     payment ||--o| refund : refunds
     refund ||--o{ refund_attempt : retries
+    refund o|--o| coupon_redemption : reverses_coupon_use
 
     app_user {
         BIGINT user_id PK "P0 사용자 식별자; NOT NULL"
@@ -365,6 +373,9 @@ erDiagram
     }
     coupon {
         BIGINT coupon_id PK "적용 쿠폰 식별자; NOT NULL"
+    }
+    coupon_redemption {
+        BIGINT coupon_redemption_id PK "쿠폰 사용 이력 식별자; NOT NULL"
     }
     reservation_price_snapshot {
         BIGINT reservation_price_snapshot_id PK "홀드 가격 스냅샷 식별자; NOT NULL"
@@ -606,7 +617,7 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 | `coupon` | `coupon_id`, `coupon_policy_id`, `user_id`, `status`, `issued_at`, `expires_at` | 사용자가 보유한 현재 쿠폰 상태 |
 | `coupon_issuance` | `coupon_issuance_id`, `coupon_id`, `coupon_policy_id`, `recipient_user_id`, 발급 근거 FK 3종, 발급 식별 키, `issued_at` | 발급 근거와 중복 지급 차단 |
 | `coupon_status_history` | `coupon_status_history_id`, `coupon_id`, 이전·이후 상태, 사유, actor 종류, 시각 | 모든 쿠폰 상태 전이의 추가 전용 이력 |
-| `coupon_redemption` | `coupon_redemption_id`, `coupon_id`, `reservation_price_snapshot_id`, `reservation_id`, 상태·확정·복구 시각 | 가격 스냅샷과 예약에 연결한 쿠폰 사용·복구 이력 |
+| `coupon_redemption` | `coupon_redemption_id`, `coupon_id`, `reservation_price_snapshot_id`, `reservation_id`, nullable `refund_id`, 상태·반전 사유·확정·복구 시각 | 가격 스냅샷과 예약에 연결하고 환불 또는 0원 예약 취소 출처를 직접 보존하는 쿠폰 사용·복구 공식 기록 |
 
 `DRAFT` 정책 수정은 잠근 정책의 이전 값과 갱신 뒤 값을 `coupon_policy_update_history`에 한 행으로 기록한다. 이력의 전·후 값은 `name`, `description`, `discount_amount`, `minimum_payment_amount`, `valid_days_after_issue`, `issue_starts_at`, `issue_ends_at`, `total_issue_limit`을 각각 보존한다. `description`과 `total_issue_limit`의 전·후 값은 nullable이고, 나머지 전·후 값은 정책과 같은 타입·제약을 따른다. `content_id`, `region_id`, `issuance_type`, 상태·공개·종료 시각, `issued_count`는 정책 수정 대상이 아니므로 이력에 저장하지 않는다. 요청 필드를 반영한 뒤 8개 수정 가능 필드가 모두 기존 값과 같으면 무변경 성공으로 처리하고 정책·`updated_at`·이력·성공 감사는 바꾸거나 만들지 않는다.
 
@@ -670,7 +681,21 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 회원 탈퇴:         AVAILABLE 또는 RESERVED → INVALIDATED
 ```
 
-스냅샷에 쿠폰이 있으면 `RESERVED → USED`와 `coupon_redemption(CONFIRMED)` 삽입, `USED` 복구와 기존 사용 이력의 `REVERSED` 전이는 각각 `coupon_status_history`와 같은 트랜잭션에서 처리한다. `coupon_redemption`은 `UNIQUE (reservation_id)`, `UNIQUE (reservation_price_snapshot_id)`를 둔다. `(reservation_price_snapshot_id, coupon_id)`는 가격 스냅샷의 같은 복합 키를 참조해 적용 쿠폰과 일치시킨다. `status = CONFIRMED`이면 `reversed_at IS NULL`, `REVERSED`이면 `reversed_at IS NOT NULL`이다. 예약의 `hold_id`와 스냅샷의 `hold_id`는 확정 트랜잭션에서 같아야 한다. 쿠폰당 `CONFIRMED` 사용 이력은 조건부 유일 제약으로 최대 하나만 두며, `REVERSED` 이력은 보존해 복구 뒤 다음 사용 이력을 허용한다. `EXPIRED`, `INVALIDATED`는 종결 상태다.
+스냅샷에 쿠폰이 있으면 `RESERVED → USED`와 `coupon_redemption(CONFIRMED)` 삽입, `USED` 복구와 기존 사용 이력의 `REVERSED` 전이는 각각 `coupon_status_history`와 같은 트랜잭션에서 처리한다. `coupon_redemption`은 `UNIQUE (reservation_id)`, `UNIQUE (reservation_price_snapshot_id)`를 둔다. `(reservation_price_snapshot_id, coupon_id)`는 가격 스냅샷의 같은 복합 키를 참조해 적용 쿠폰과 일치시킨다. 예약의 `hold_id`와 스냅샷의 `hold_id`는 확정 트랜잭션에서 같아야 한다. 쿠폰당 `CONFIRMED` 사용 이력은 조건부 유일 제약으로 최대 하나만 두며, `REVERSED` 이력은 보존해 복구 뒤 다음 사용 이력을 허용한다. `EXPIRED`, `INVALIDATED`는 종결 상태다.
+
+`coupon_redemption.refund_id`는 nullable `refund.refund_id` FK이며 `fk_coupon_redemption_refund`에 `ON DELETE RESTRICT`를 적용한다. `uk_coupon_redemption_refund`로 값이 있을 때 유일하게 한다. `reversal_reason_code`는 `VARCHAR(50)`이고 `REFUND_SUCCEEDED`, `RESERVATION_CANCELLED`만 허용한다. 별도 반전 출처 유형이나 취소 예약 FK를 만들지 않고, 유료 환불은 `refund_id`, 최종 금액 0원 예약 취소는 기존 `reservation_id`를 공식 출처로 사용한다.
+
+기존 `ck_coupon_redemption_status`는 유지한다. `ck_coupon_redemption_reversed_at`은 다음 상태별 열 조합을 강제하는 `ck_coupon_redemption_reversal`로 대체한다.
+
+| 상태와 출처 | `refund_id` | `reversal_reason_code` | `reversed_at` |
+| --- | --- | --- | --- |
+| `CONFIRMED` | `NULL` | `NULL` | `NULL` |
+| 유료 환불 `REVERSED` | `NOT NULL` | `REFUND_SUCCEEDED` | `NOT NULL` |
+| 0원 취소 `REVERSED` | `NULL` | `RESERVATION_CANCELLED` | `NOT NULL` |
+
+유료 환불 반전은 잠근 행에서 `refund.status = SUCCEEDED`, 환불의 결제·예약·가격 스냅샷과 사용 이력의 연결 일치, 회차 시작 전 사용자·운영자 취소를 검증한다. 0원 취소 반전은 `reservation_price_snapshot.final_amount = 0`, 연결된 결제·환불 행 없음, 사용 이력의 예약·스냅샷·쿠폰 일치와 회차 시작 전 취소를 검증한다. 이 조건은 여러 테이블을 가로지르므로 애플리케이션의 같은 상태 반영 트랜잭션에서 조건부 쓰기로 강제한다.
+
+같은 공식 출처와 사유의 재처리는 저장된 반전 기록을 유지하는 무변경 성공이다. 다른 출처 또는 사유로 이미 `REVERSED`인 행의 재처리는 기존 `refund_id`, `reversal_reason_code`, `reversed_at`을 바꾸지 않고 내부 정합성 실패로 전체 상태 반영 트랜잭션을 롤백한다. 공통 감사 이벤트는 같은 `requestId`로 기록하지만 공식 반전 출처를 대신하지 않는다.
 
 ## 6. 가격·결제·환불
 
@@ -733,6 +758,7 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 | --- | --- | --- |
 | `refund` | `refund_id`, `payment_id`, `amount`, `status`, `requested_at`, `completed_at`, `resolved_at` | 승인 결제 한 건의 전액 환불 현재 상태와 수동 확정 시각 |
 | `refund_attempt` | `refund_attempt_id`, `refund_id`, `attempt_no`, `initiator_kind`, 호출 결과·응답 미수신 사유·외부 취소 ID·상태·결과 해시·시각 | 외부 환불 호출의 개별 시도 |
+| `coupon_redemption` | nullable `refund_id`, `reversal_reason_code`, `reversed_at` | 환불 성공 또는 0원 예약 취소로 반전된 쿠폰 사용의 공식 출처·사유·시각 |
 
 | 무결성 | 규칙 |
 | --- | --- |
@@ -744,7 +770,7 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 | `PENDING` 복구 | 1분 고정 지연 복구 작업은 `attempted_at` 뒤 1분이 지난 `PENDING` 행을 잠근다. PortOne에서 원 결제·취소 상태를 재조회해 결과가 확인되면 같은 행을 `RESPONDED`로 확정하고, 확인된 성공·미처리·불일치에 따라 `refund`를 각각 `SUCCEEDED`·`FAILED`·`DISCREPANT`로 전이한다. 재조회 결과도 확인하지 못하면 `NO_RESPONSE(PROCESS_INTERRUPTED)`와 `DISCREPANT`로 확정한다. 이 작업은 기존 행만 갱신하므로 `attempt_no`를 새로 점유하거나 외부 환불 호출 횟수를 늘리지 않는다. |
 | 재시도 | 최초 시도는 `SYSTEM`, 이후는 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN`만. 자동 재시도 금지 |
 | 응답 미수신 | `NO_RESPONSE`는 `refund`를 `DISCREPANT`로 전이한다. PortOne 재조회 증빙으로 실제 환불 미처리가 확인된 경우에만 `FAILED`로 전이해 남은 횟수 안에서 수동 재시도할 수 있다. 성공·미확인은 각각 `SUCCEEDED`·`DISCREPANT`를 유지한다. |
-| 쿠폰 복구 | 회차 시작 전 유효 취소와 환불 성공에만 원래 만료 시각을 유지해 복구 |
+| 쿠폰 복구 | 회차 시작 전 유효 취소와 환불 성공에만 원래 만료 시각을 유지해 복구한다. 유료 환불은 실제 `refund_id`와 `REFUND_SUCCEEDED`, 0원 취소는 기존 `reservation_id`와 `RESERVATION_CANCELLED`를 `coupon_redemption`에 보존한다. |
 
 환불 상태 전이는 `REQUESTED → PROCESSING → SUCCEEDED | FAILED | DISCREPANT`다. 환불 성공은 `payment` 상태에 `REFUNDED`를 추가하지 않는다.
 
@@ -772,6 +798,8 @@ ACTIVE capacity_hold
 ```
 
 P0 예약 확정의 콘텐츠·회차·홀드 잠금과 `ACTIVE → CONSUMED` 조건부 전이만 재사용하며, P0 공개 무료 확정 API는 호출하지 않는다. 따라서 가격 스냅샷의 `final_amount = 0`이면 원본 `content.reservation_price`가 양수여도 확정할 수 있고, `payment`·PortOne 호출·웹훅 행은 만들지 않는다.
+
+회차 시작 전 사용자·운영자 취소에서는 0원 스냅샷과 결제·환불 행 없음, 예약·사용 이력 연결을 검증하고 같은 취소 트랜잭션에서 `coupon_redemption(REVERSED, refund_id = NULL, reversal_reason_code = RESERVATION_CANCELLED)`과 쿠폰 상태·상태 이력을 반영한다. 양수 결제 예약은 최초 환불·재시도·1분 복구·수동 확정 중 어느 경로에서든 환불이 `SUCCEEDED`가 된 상태 반영 트랜잭션에서 `coupon_redemption(REVERSED, refund_id = 실제 환불 식별자, reversal_reason_code = REFUND_SUCCEEDED)`를 반영한다.
 
 ### 7.3 결제 불일치와 환불 실패
 
@@ -826,7 +854,7 @@ PUBLISHED mission AND ends_at <= 현재 시각
 | 높음 | `stampbook_reward_grant` | `UNIQUE (stampbook_progress_id)`, 원본 `stampbook.reward_coupon_policy_id` 일치 조건부 쓰기 |
 | 높음 | `coupon_policy` | `content_id` FK, `(content_id, region_id)` 복합 FK, 금액·기간·유효 일수·발급 한도·상태별 시각 CHECK; 정책 작업 시 `content.operator_id` 소유권 조건부 쓰기 |
 | 높음 | `coupon_issuance` | `coupon_id`, 발급 식별 키, `mission_reward_claim_id`, `stampbook_reward_grant_id` 유일; 세 FK 중 정확히 하나 CHECK; 방문 근거의 콘텐츠·지역과 정책 일치 |
-| 높음 | `coupon_redemption` | `UNIQUE (reservation_id)`, `UNIQUE (reservation_price_snapshot_id)`, 쿠폰당 `CONFIRMED` 행 하나를 위한 조건부 유일 제약, 상태·`reversed_at` CHECK, 스냅샷·쿠폰 복합 FK |
+| 높음 | `coupon_redemption` | `UNIQUE (reservation_id)`, `UNIQUE (reservation_price_snapshot_id)`, `UNIQUE (refund_id)`, 쿠폰당 `CONFIRMED` 행 하나를 위한 조건부 유일 제약, 상태·`refund_id`·`reversal_reason_code`·`reversed_at` 조합 CHECK, 스냅샷·쿠폰 복합 FK, `refund_id` FK `ON DELETE RESTRICT` |
 | 높음 | `reservation_price_snapshot` | `UNIQUE (hold_id)`, `(reservation_price_snapshot_id, coupon_id)` 유일 복합 키, 금액 CHECK; 쿠폰 정책 콘텐츠·지역과 홀드 회차 콘텐츠·지역 일치 조건부 쓰기 |
 | 높음 | `payment` | `order_id`, `portone_payment_id` 유일; 홀드당 진행 중 결제 하나 |
 | 높음 | `payment_idempotency` | `(actor_user_id, operation, idempotency_key_hash)`, `payment_id`·`reservation_id` 각각 유일, 성공 시 두 결과 FK 중 정확히 하나; `actor_user_id`는 비-FK; `expires_at` 정리 인덱스 |
