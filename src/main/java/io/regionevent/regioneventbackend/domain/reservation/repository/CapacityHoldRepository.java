@@ -184,6 +184,16 @@ public interface CapacityHoldRepository extends JpaRepository<CapacityHold, Long
         """)
     List<Long> findActiveHoldIdsByUserId(@Param("userId") Long userId);
 
+    @Query(value = """
+        SELECT hold_id
+        FROM capacity_hold
+        WHERE user_id = :userId
+            AND status = 'ACTIVE'
+        ORDER BY hold_id ASC
+        FOR UPDATE
+        """, nativeQuery = true)
+    List<Long> findActiveHoldIdsByUserIdForUpdate(@Param("userId") Long userId);
+
     @Query("""
         SELECT capacityHold.contentSession.sessionId
         FROM CapacityHold capacityHold

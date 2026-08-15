@@ -21,9 +21,7 @@ import org.springframework.transaction.support.SimpleTransactionStatus;
 
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
-import io.regionevent.regioneventbackend.domain.coupon.service.CouponRedemptionService;
-import io.regionevent.regioneventbackend.domain.coupon.service.CouponService;
-import io.regionevent.regioneventbackend.domain.coupon.service.CouponStatusHistoryService;
+import io.regionevent.regioneventbackend.domain.coupon.service.RestoreCouponUseCase;
 import io.regionevent.regioneventbackend.domain.payment.dto.CreateRefundRequest;
 import io.regionevent.regioneventbackend.domain.payment.dto.CreateRefundResponse;
 import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
@@ -174,9 +172,7 @@ class CreateRefundUseCaseTest {
             refundAttemptService,
             discrepancyService,
             discrepancyActionService,
-            mock(CouponService.class),
-            mock(CouponRedemptionService.class),
-            mock(CouponStatusHistoryService.class),
+            mock(RestoreCouponUseCase.class),
             auditEventUseCase,
             paymentGateway,
             Clock.fixed(Instant.parse("2026-08-11T00:00:00Z"), ZoneOffset.UTC),
@@ -317,9 +313,7 @@ class CreateRefundUseCaseTest {
             refundAttemptService,
             discrepancyService,
             discrepancyActionService,
-            mock(CouponService.class),
-            mock(CouponRedemptionService.class),
-            mock(CouponStatusHistoryService.class),
+            mock(RestoreCouponUseCase.class),
             auditEventUseCase,
             paymentGateway,
             Clock.fixed(Instant.parse("2026-08-11T00:00:00Z"), ZoneOffset.UTC),
@@ -412,9 +406,7 @@ class CreateRefundUseCaseTest {
             refundAttemptService,
             mock(PaymentDiscrepancyService.class),
             mock(PaymentDiscrepancyActionService.class),
-            mock(CouponService.class),
-            mock(CouponRedemptionService.class),
-            mock(CouponStatusHistoryService.class),
+            mock(RestoreCouponUseCase.class),
             auditEventUseCase,
             paymentGateway,
             Clock.fixed(Instant.parse("2026-08-11T00:00:00Z"), ZoneOffset.UTC),
