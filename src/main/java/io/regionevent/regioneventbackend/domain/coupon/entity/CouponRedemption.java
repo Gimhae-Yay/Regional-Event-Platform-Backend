@@ -14,9 +14,12 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
+import io.regionevent.regioneventbackend.domain.payment.entity.Refund;
+import io.regionevent.regioneventbackend.domain.payment.entity.RefundStatus;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationPriceSnapshot;
@@ -32,6 +35,10 @@ import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationPr
         @UniqueConstraint(
             name = "uk_coupon_redemption_snapshot",
             columnNames = "reservation_price_snapshot_id"
+        ),
+        @UniqueConstraint(
+            name = "uk_coupon_redemption_refund",
+            columnNames = "refund_id"
         )
     },
     check = {
@@ -40,10 +47,20 @@ import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationPr
             constraint = "status REGEXP '^(CONFIRMED|REVERSED)$'"
         ),
         @CheckConstraint(
-            name = "ck_coupon_redemption_reversed_at",
+            name = "ck_coupon_redemption_reversal",
             constraint = """
-                (status = 'CONFIRMED' AND reversed_at IS NULL)
-                OR (status = 'REVERSED' AND reversed_at IS NOT NULL)
+                (status = 'CONFIRMED'
+                    AND refund_id IS NULL
+                    AND reversal_reason_code IS NULL
+                    AND reversed_at IS NULL)
+                OR (status = 'REVERSED'
+                    AND refund_id IS NOT NULL
+                    AND reversal_reason_code = 'REFUND_SUCCEEDED'
+                    AND reversed_at IS NOT NULL)
+                OR (status = 'REVERSED'
+                    AND refund_id IS NULL
+                    AND reversal_reason_code = 'RESERVATION_CANCELLED'
+                    AND reversed_at IS NOT NULL)
                 """
         )
     }
@@ -79,6 +96,14 @@ public class CouponRedemption {
     )
     private Reservation reservation;
 
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+        name = "refund_id",
+        unique = true,
+        foreignKey = @ForeignKey(name = "fk_coupon_redemption_refund")
+    )
+    private Refund refund;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)
     private CouponRedemptionStatus status;
@@ -88,6 +113,10 @@ public class CouponRedemption {
 
     @Column(name = "reversed_at")
     private Instant reversedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "reversal_reason_code", length = 50)
+    private CouponRedemptionReversalReason reversalReasonCode;
 
     protected CouponRedemption() {
     }
@@ -130,6 +159,10 @@ public class CouponRedemption {
         return status;
     }
 
+    public Refund getRefund() {
+        return refund;
+    }
+
     public Instant getRedeemedAt() {
         return redeemedAt;
     }
@@ -138,12 +171,77 @@ public class CouponRedemption {
         return reversedAt;
     }
 
-    public void reverse(Instant reversedAt) {
-        if (status != CouponRedemptionStatus.CONFIRMED) {
-            throw new IllegalStateException("only confirmed coupon redemption can be reversed");
+    public CouponRedemptionReversalReason getReversalReasonCode() {
+        return reversalReasonCode;
+    }
+
+    public boolean reverseForRefund(
+        Refund refund,
+        Instant reversedAt
+    ) {
+        Refund reversalRefund = requireNotNull(refund, "refund");
+        Instant reversalTime = requireNotNull(reversedAt, "reversedAt");
+        if (reversalRefund.getRefundId() == null) {
+            throw new IllegalArgumentException("refund must be persisted");
         }
+        if (reversalRefund.getStatus() != RefundStatus.SUCCEEDED) {
+            throw new IllegalStateException("refund must be succeeded");
+        }
+        validateRefundSource(reversalRefund);
+        if (!prepareReversal(reversalRefund, CouponRedemptionReversalReason.REFUND_SUCCEEDED)) {
+            return false;
+        }
+        this.refund = reversalRefund;
+        reversalReasonCode = CouponRedemptionReversalReason.REFUND_SUCCEEDED;
+        completeReversal(reversalTime);
+        return true;
+    }
+
+    public boolean reverseForReservationCancellation(Instant reversedAt) {
+        Instant reversalTime = requireNotNull(reversedAt, "reversedAt");
+        if (!prepareReversal(null, CouponRedemptionReversalReason.RESERVATION_CANCELLED)) {
+            return false;
+        }
+        reversalReasonCode = CouponRedemptionReversalReason.RESERVATION_CANCELLED;
+        completeReversal(reversalTime);
+        return true;
+    }
+
+    private boolean prepareReversal(
+        Refund requestedRefund,
+        CouponRedemptionReversalReason requestedReason
+    ) {
+        if (status == CouponRedemptionStatus.CONFIRMED) {
+            return true;
+        }
+        if (status == CouponRedemptionStatus.REVERSED
+            && hasSameRefund(requestedRefund)
+            && reversalReasonCode == requestedReason) {
+            return false;
+        }
+        throw new IllegalStateException("coupon redemption was reversed by a different source");
+    }
+
+    private boolean hasSameRefund(Refund requestedRefund) {
+        if (refund == null || requestedRefund == null) {
+            return refund == requestedRefund;
+        }
+        return refund == requestedRefund || refund.getRefundId().equals(requestedRefund.getRefundId());
+    }
+
+    private void completeReversal(Instant reversedAt) {
         status = CouponRedemptionStatus.REVERSED;
-        this.reversedAt = requireNotNull(reversedAt, "reversedAt");
+        this.reversedAt = reversedAt;
+    }
+
+    private void validateRefundSource(Refund refund) {
+        if (refund.getPayment().getReservation() == null
+            || !refund.getPayment().getReservation().getReservationId().equals(reservation.getReservationId())
+            || !refund.getPayment().getReservationPriceSnapshot().getReservationPriceSnapshotId().equals(
+                reservationPriceSnapshot.getReservationPriceSnapshotId()
+            )) {
+            throw new IllegalArgumentException("refund must belong to coupon redemption reservation");
+        }
     }
 
     private static void validateSnapshotCoupon(
