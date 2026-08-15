@@ -164,7 +164,8 @@ class InitialP0SchemaMigrationTest {
             "34",
             "35",
             "36",
-            "37"
+            "37",
+            "38"
         );
         assertThat(tableNames).contains(
             "REGION",
@@ -380,11 +381,13 @@ class InitialP0SchemaMigrationTest {
             "UK_COUPON_REDEMPTION_RESERVATION",
             "UK_COUPON_REDEMPTION_SNAPSHOT",
             "UK_COUPON_REDEMPTION_CONFIRMED_COUPON",
+            "UK_COUPON_REDEMPTION_REFUND",
             "FK_COUPON_REDEMPTION_COUPON",
             "FK_COUPON_REDEMPTION_SNAPSHOT_COUPON",
             "FK_COUPON_REDEMPTION_RESERVATION",
+            "FK_COUPON_REDEMPTION_REFUND",
             "CK_COUPON_REDEMPTION_STATUS",
-            "CK_COUPON_REDEMPTION_REVERSED_AT"
+            "CK_COUPON_REDEMPTION_REVERSAL"
         );
         assertThat(appUserColumnNames).contains("ACCOUNT_KIND");
         assertThat(contentColumnNames).contains(
