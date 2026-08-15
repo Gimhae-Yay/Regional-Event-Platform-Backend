@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 
 import org.junit.jupiter.api.Test;
@@ -24,6 +25,16 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentSessionRepository;
+import io.regionevent.regioneventbackend.domain.coupon.entity.Coupon;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponIssuanceType;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicy;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponRedemption;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponRedemptionReversalReason;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponRedemptionStatus;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatus;
+import io.regionevent.regioneventbackend.domain.coupon.repository.CouponPolicyRepository;
+import io.regionevent.regioneventbackend.domain.coupon.repository.CouponRedemptionRepository;
+import io.regionevent.regioneventbackend.domain.coupon.repository.CouponRepository;
 import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
 import io.regionevent.regioneventbackend.domain.payment.entity.Refund;
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundAttempt;
@@ -71,6 +82,9 @@ class RecoverPendingRefundAttemptsUseCaseMySqlTest extends NonTransactionalMySql
     private final ContentRepository contentRepository;
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
+    private final CouponPolicyRepository couponPolicyRepository;
+    private final CouponRepository couponRepository;
+    private final CouponRedemptionRepository couponRedemptionRepository;
 
     @Autowired
     RecoverPendingRefundAttemptsUseCaseMySqlTest(
@@ -85,7 +99,10 @@ class RecoverPendingRefundAttemptsUseCaseMySqlTest extends NonTransactionalMySql
         ContentSessionRepository contentSessionRepository,
         ContentRepository contentRepository,
         RegionRepository regionRepository,
-        AppUserRepository appUserRepository
+        AppUserRepository appUserRepository,
+        CouponPolicyRepository couponPolicyRepository,
+        CouponRepository couponRepository,
+        CouponRedemptionRepository couponRedemptionRepository
     ) {
         this.useCase = useCase;
         this.paymentGateway = paymentGateway;
@@ -99,6 +116,9 @@ class RecoverPendingRefundAttemptsUseCaseMySqlTest extends NonTransactionalMySql
         this.contentRepository = contentRepository;
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
+        this.couponPolicyRepository = couponPolicyRepository;
+        this.couponRepository = couponRepository;
+        this.couponRedemptionRepository = couponRedemptionRepository;
     }
 
     @DynamicPropertySource
@@ -121,6 +141,16 @@ class RecoverPendingRefundAttemptsUseCaseMySqlTest extends NonTransactionalMySql
         Refund refund = refundRepository.findById(fixture.refundId()).orElseThrow();
         assertThat(attempt.getOutcomeKind()).isEqualTo(RefundAttemptOutcomeKind.RESPONDED);
         assertThat(refund.getStatus()).isEqualTo(RefundStatus.SUCCEEDED);
+        assertThat(couponRedemptionRepository.findById(fixture.redemptionId()).orElseThrow())
+            .satisfies(redemption -> {
+                assertThat(redemption.getStatus()).isEqualTo(CouponRedemptionStatus.REVERSED);
+                assertThat(redemption.getRefund().getRefundId()).isEqualTo(fixture.refundId());
+                assertThat(redemption.getReversalReasonCode())
+                    .isEqualTo(CouponRedemptionReversalReason.REFUND_SUCCEEDED);
+                assertThat(redemption.getReversedAt()).isNotNull();
+            });
+        assertThat(couponRepository.findById(fixture.couponId()).orElseThrow().getStatus())
+            .isEqualTo(CouponStatus.AVAILABLE);
         assertThat(refundAttemptRepository.findAllByRefundRefundIdOrderByAttemptNoAsc(fixture.refundId()))
             .hasSize(1)
             .extracting(RefundAttempt::getAttemptNo)
@@ -219,10 +249,11 @@ class RecoverPendingRefundAttemptsUseCaseMySqlTest extends NonTransactionalMySql
             null,
             null
         ));
+        Coupon coupon = createUsedCoupon(content, region, visitor);
         ReservationPriceSnapshot snapshot = reservationPriceSnapshotRepository.saveAndFlush(
-            new ReservationPriceSnapshot(hold, null, 10_000, 0, 10_000, "KRW", NOW)
+            new ReservationPriceSnapshot(hold, coupon, 10_000, 1_000, 9_000, "KRW", NOW)
         );
-        Reservation reservation = reservationRepository.saveAndFlush(new Reservation(
+        Reservation reservation = new Reservation(
             "R-1",
             "qr-1",
             region,
@@ -235,12 +266,14 @@ class RecoverPendingRefundAttemptsUseCaseMySqlTest extends NonTransactionalMySql
             null,
             null,
             null
-        ));
+        );
+        reservation.cancel("사용자 취소", NOW.plusSeconds(60), null);
+        Reservation savedReservation = reservationRepository.saveAndFlush(reservation);
         String portonePaymentId = "payment-" + System.nanoTime();
         Payment payment = new Payment(hold, snapshot, "order-" + System.nanoTime(), NOW);
-        payment.approve(reservation, portonePaymentId, NOW);
+        payment.approve(savedReservation, portonePaymentId, NOW);
         Payment savedPayment = paymentRepository.saveAndFlush(payment);
-        Refund refund = new Refund(savedPayment, 10_000L, NOW.minusSeconds(120));
+        Refund refund = new Refund(savedPayment, 9_000L, NOW.minusSeconds(120));
         refund.startProcessing();
         Refund savedRefund = refundRepository.saveAndFlush(refund);
         RefundAttempt attempt = refundAttemptRepository.saveAndFlush(new RefundAttempt(
@@ -249,7 +282,57 @@ class RecoverPendingRefundAttemptsUseCaseMySqlTest extends NonTransactionalMySql
             RefundAttemptInitiatorKind.SYSTEM,
             NOW.minusSeconds(120)
         ));
-        return new RefundFixture(savedRefund.getRefundId(), attempt.getRefundAttemptId(), portonePaymentId);
+        CouponRedemption redemption = couponRedemptionRepository.saveAndFlush(new CouponRedemption(
+            coupon,
+            snapshot,
+            savedReservation,
+            NOW
+        ));
+        return new RefundFixture(
+            savedRefund.getRefundId(),
+            attempt.getRefundAttemptId(),
+            portonePaymentId,
+            coupon.getCouponId(),
+            redemption.getCouponRedemptionId()
+        );
+    }
+
+    private Coupon createUsedCoupon(
+        Content content,
+        Region region,
+        AppUser visitor
+    ) {
+        CouponPolicy policy = new CouponPolicy(
+            content,
+            region,
+            "복구 쿠폰",
+            "1분 복구 검증용 쿠폰",
+            CouponIssuanceType.VISIT,
+            1_000,
+            1_000,
+            30,
+            NOW.minusSeconds(3_600),
+            NOW.plusSeconds(3_600),
+            null
+        );
+        policy.publish(NOW);
+        Coupon coupon = couponRepository.saveAndFlush(new Coupon(
+            couponPolicyRepository.saveAndFlush(policy),
+            visitor,
+            NOW.minusSeconds(60),
+            currentDatabaseTime().plusSeconds(86_400)
+        ));
+        coupon.reserve();
+        coupon.use();
+        return couponRepository.saveAndFlush(coupon);
+    }
+
+    private Instant currentDatabaseTime() {
+        BigDecimal epochSeconds = couponRepository.findCurrentEpochSeconds();
+        return Instant.ofEpochSecond(
+            epochSeconds.longValue(),
+            epochSeconds.remainder(BigDecimal.ONE).movePointRight(9).longValue()
+        );
     }
 
     private PortOnePaymentGateway.PortOnePayment paymentWithCancellation(
@@ -261,7 +344,7 @@ class RecoverPendingRefundAttemptsUseCaseMySqlTest extends NonTransactionalMySql
             paymentId,
             "transaction-1",
             null,
-            10_000L,
+            9_000L,
             "KRW",
             paymentStatus,
             "payment-hash",
@@ -279,6 +362,12 @@ class RecoverPendingRefundAttemptsUseCaseMySqlTest extends NonTransactionalMySql
         }
     }
 
-    private record RefundFixture(Long refundId, Long attemptId, String portonePaymentId) {
+    private record RefundFixture(
+        Long refundId,
+        Long attemptId,
+        String portonePaymentId,
+        Long couponId,
+        Long redemptionId
+    ) {
     }
 }

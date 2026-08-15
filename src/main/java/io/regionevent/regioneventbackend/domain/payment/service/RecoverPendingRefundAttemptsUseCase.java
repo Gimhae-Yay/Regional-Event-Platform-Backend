@@ -15,14 +15,7 @@ import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
-import io.regionevent.regioneventbackend.domain.coupon.entity.Coupon;
-import io.regionevent.regioneventbackend.domain.coupon.entity.CouponRedemption;
-import io.regionevent.regioneventbackend.domain.coupon.entity.CouponRedemptionStatus;
-import io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatus;
-import io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatusHistory;
-import io.regionevent.regioneventbackend.domain.coupon.service.CouponRedemptionService;
-import io.regionevent.regioneventbackend.domain.coupon.service.CouponService;
-import io.regionevent.regioneventbackend.domain.coupon.service.CouponStatusHistoryService;
+import io.regionevent.regioneventbackend.domain.coupon.service.RestoreCouponUseCase;
 import io.regionevent.regioneventbackend.domain.payment.entity.Refund;
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundAttempt;
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundAttemptOutcomeKind;
@@ -31,21 +24,15 @@ import io.regionevent.regioneventbackend.domain.payment.entity.RefundStatus;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneLookupException;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneNoResponseException;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOnePaymentGateway;
-import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
-import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 
 @Service
 public class RecoverPendingRefundAttemptsUseCase {
 
     private static final Duration RECOVERY_DELAY = Duration.ofMinutes(1);
-    private static final String COUPON_RESTORE_REASON = "REFUND_SUCCEEDED";
-    private static final String SYSTEM_ACTOR = "SYSTEM";
 
     private final RefundAttemptService refundAttemptService;
     private final RefundService refundService;
-    private final CouponService couponService;
-    private final CouponRedemptionService couponRedemptionService;
-    private final CouponStatusHistoryService couponStatusHistoryService;
+    private final RestoreCouponUseCase restoreCouponUseCase;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final PortOnePaymentGateway portOnePaymentGateway;
     private final Clock clock;
@@ -54,9 +41,7 @@ public class RecoverPendingRefundAttemptsUseCase {
     public RecoverPendingRefundAttemptsUseCase(
         RefundAttemptService refundAttemptService,
         RefundService refundService,
-        CouponService couponService,
-        CouponRedemptionService couponRedemptionService,
-        CouponStatusHistoryService couponStatusHistoryService,
+        RestoreCouponUseCase restoreCouponUseCase,
         RecordAuditEventUseCase recordAuditEventUseCase,
         PortOnePaymentGateway portOnePaymentGateway,
         Clock clock,
@@ -64,9 +49,7 @@ public class RecoverPendingRefundAttemptsUseCase {
     ) {
         this.refundAttemptService = refundAttemptService;
         this.refundService = refundService;
-        this.couponService = couponService;
-        this.couponRedemptionService = couponRedemptionService;
-        this.couponStatusHistoryService = couponStatusHistoryService;
+        this.restoreCouponUseCase = restoreCouponUseCase;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
         this.portOnePaymentGateway = portOnePaymentGateway;
         this.clock = clock;
@@ -125,7 +108,7 @@ public class RecoverPendingRefundAttemptsUseCase {
         if (cancellation.isSucceeded() && payment.isExplicitlyDeclined()) {
             Instant completedAt = Instant.now(clock);
             refund.succeed(completedAt);
-            restoreCouponIfEligible(refund, requestId);
+            restoreCouponUseCase.restoreForRefund(refund, requestId, null);
             recordRefundAudit(refund, requestId, completedAt);
             return RecoveryOutcome.recovered();
         }
@@ -164,53 +147,6 @@ public class RecoverPendingRefundAttemptsUseCase {
             && refund.getStatus() == RefundStatus.PROCESSING
             && attempt != null
             && attempt.getOutcomeKind() == RefundAttemptOutcomeKind.PENDING;
-    }
-
-    private void restoreCouponIfEligible(
-        Refund refund,
-        UUID requestId
-    ) {
-        Reservation reservation = refund.getPayment().getReservation();
-        if (reservation == null
-            || reservation.getStatus() != ReservationStatus.CANCELLED
-            || !reservation.getCancelledAt().isBefore(reservation.getContentSession().getStartsAt())
-            || refund.getPayment().getReservationPriceSnapshot().getCoupon() == null) {
-            return;
-        }
-        CouponRedemption redemption = couponRedemptionService.findByReservationPriceSnapshotIdForUpdate(
-            refund.getPayment().getReservationPriceSnapshot().getReservationPriceSnapshotId()
-        ).orElse(null);
-        if (redemption == null || redemption.getStatus() == CouponRedemptionStatus.REVERSED) {
-            return;
-        }
-        Coupon coupon = couponService.findByCouponIdForUpdate(redemption.getCoupon().getCouponId()).orElse(null);
-        if (coupon == null || coupon.getStatus() != CouponStatus.USED) {
-            return;
-        }
-        Instant restoredAt = couponService.findCurrentDatabaseTime();
-        redemption.reverse(restoredAt);
-        CouponStatus restoredStatus = couponService.restoreUsedCoupon(coupon, restoredAt);
-        couponStatusHistoryService.create(new CouponStatusHistory(
-            coupon,
-            CouponStatus.USED,
-            restoredStatus,
-            COUPON_RESTORE_REASON,
-            SYSTEM_ACTOR,
-            restoredAt
-        ));
-        recordAuditEventUseCase.record(new AuditEventCommand(
-            requestId,
-            reservation.getRegion(),
-            AuditEventTargetType.COUPON,
-            coupon.getCouponId(),
-            CouponStatus.USED.name(),
-            restoredStatus.name(),
-            AuditEventResult.SUCCESS,
-            COUPON_RESTORE_REASON,
-            null,
-            null,
-            restoredAt
-        ));
     }
 
     private void recordRefundAudit(

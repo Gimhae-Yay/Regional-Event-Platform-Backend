@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.groups.Tuple.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -31,13 +32,8 @@ import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUs
 import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.content.service.ContentSessionService;
-import io.regionevent.regioneventbackend.domain.coupon.entity.Coupon;
-import io.regionevent.regioneventbackend.domain.coupon.entity.CouponRedemption;
-import io.regionevent.regioneventbackend.domain.coupon.entity.CouponRedemptionStatus;
-import io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatus;
-import io.regionevent.regioneventbackend.domain.coupon.service.CouponRedemptionService;
-import io.regionevent.regioneventbackend.domain.coupon.service.CouponService;
-import io.regionevent.regioneventbackend.domain.coupon.service.CouponStatusHistoryService;
+import io.regionevent.regioneventbackend.domain.audit.service.AuditEventActor;
+import io.regionevent.regioneventbackend.domain.coupon.service.RestoreCouponUseCase;
 import io.regionevent.regioneventbackend.domain.payment.dto.CreateRefundResponse;
 import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentStatus;
@@ -46,7 +42,6 @@ import io.regionevent.regioneventbackend.domain.payment.service.PaymentService;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
-import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationPriceSnapshot;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
@@ -62,32 +57,15 @@ class ReservationCancellationUseCaseTest {
     @Test
     void 결제행없는0원예약_최초취소에서만검증된쿠폰사용이력을복구하고감사를기록한다() {
         Fixture fixture = fixture(ReservationStatus.CONFIRMED);
-        ReservationPriceSnapshot snapshot = mock(ReservationPriceSnapshot.class);
-        Coupon coupon = mock(Coupon.class);
-        CouponRedemption redemption = mock(CouponRedemption.class);
-        Instant restoredAt = Instant.parse("2026-08-11T00:00:00Z");
-        when(fixture.priceSnapshotService.findByHoldIdForUpdate(3L)).thenReturn(Optional.of(snapshot));
-        when(snapshot.getReservationPriceSnapshotId()).thenReturn(4L);
-        when(snapshot.getFinalAmount()).thenReturn(0L);
-        when(snapshot.getCoupon()).thenReturn(coupon);
-        when(coupon.getCouponId()).thenReturn(5L);
-        when(fixture.couponRedemptionService.findByReservationPriceSnapshotIdForUpdate(4L))
-            .thenReturn(Optional.of(redemption));
-        when(fixture.couponService.findByCouponIdForUpdate(5L)).thenReturn(Optional.of(coupon));
-        when(redemption.getStatus()).thenReturn(CouponRedemptionStatus.CONFIRMED);
-        when(redemption.getReservation()).thenReturn(fixture.reservation);
-        when(redemption.getReservationPriceSnapshot()).thenReturn(snapshot);
-        when(redemption.getCoupon()).thenReturn(coupon);
-        when(coupon.getStatus()).thenReturn(CouponStatus.USED);
-        when(fixture.couponService.findCurrentDatabaseTime()).thenReturn(restoredAt);
-        when(fixture.couponService.restoreUsedCoupon(coupon, restoredAt)).thenReturn(CouponStatus.AVAILABLE);
+        UUID requestId = UUID.randomUUID();
 
-        fixture.useCase.cancel(1L, 2L, UUID.randomUUID());
+        fixture.useCase.cancel(1L, 2L, requestId);
 
-        verify(redemption).reverse(restoredAt);
-        verify(fixture.couponService).restoreUsedCoupon(coupon, restoredAt);
-        verify(fixture.couponStatusHistoryService).create(any());
-        verify(fixture.recordAuditEventUseCase, org.mockito.Mockito.times(2)).record(any());
+        verify(fixture.restoreCouponUseCase).restoreForReservationCancellation(
+            eq(fixture.reservation),
+            eq(requestId),
+            any(AuditEventActor.class)
+        );
     }
 
     @Test
@@ -99,7 +77,7 @@ class ReservationCancellationUseCaseTest {
 
         fixture.useCase.cancel(1L, 2L, UUID.randomUUID());
 
-        verify(fixture.couponService, never()).restoreUsedCoupon(any(), any());
+        verify(fixture.restoreCouponUseCase, never()).restoreForReservationCancellation(any(), any(), any());
         verify(fixture.createRefundUseCase, never()).prepareForReservationCancellation(any(), any(), any());
     }
 
@@ -166,7 +144,7 @@ class ReservationCancellationUseCaseTest {
 
         var response = fixture.useCase.cancel(1L, 2L, UUID.randomUUID());
 
-        verify(fixture.couponService, never()).restoreUsedCoupon(any(), any());
+        verify(fixture.restoreCouponUseCase, never()).restoreForReservationCancellation(any(), any(), any());
         verify(fixture.createRefundUseCase, never()).prepareForReservationCancellation(any(), any(), any());
         verify(fixture.createRefundUseCase, never()).executePreparedReservationCancellationRefund(any(), any(), any());
         org.assertj.core.api.Assertions.assertThat(response.refund().status()).isEqualTo("DISCREPANT");
@@ -214,10 +192,7 @@ class ReservationCancellationUseCaseTest {
         ContentSessionService contentSessionService = mock(ContentSessionService.class);
         PaymentService paymentService = mock(PaymentService.class);
         CreateRefundUseCase createRefundUseCase = mock(CreateRefundUseCase.class);
-        ReservationPriceSnapshotService priceSnapshotService = mock(ReservationPriceSnapshotService.class);
-        CouponService couponService = mock(CouponService.class);
-        CouponRedemptionService couponRedemptionService = mock(CouponRedemptionService.class);
-        CouponStatusHistoryService couponStatusHistoryService = mock(CouponStatusHistoryService.class);
+        RestoreCouponUseCase restoreCouponUseCase = mock(RestoreCouponUseCase.class);
         RecordAuditEventUseCase recordAuditEventUseCase = mock(RecordAuditEventUseCase.class);
         PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
         AppUser user = mock(AppUser.class);
@@ -257,10 +232,7 @@ class ReservationCancellationUseCaseTest {
             contentSessionService,
             paymentService,
             createRefundUseCase,
-            priceSnapshotService,
-            couponService,
-            couponRedemptionService,
-            couponStatusHistoryService,
+            restoreCouponUseCase,
             recordAuditEventUseCase,
             mock(RecordFailedAuditEventUseCase.class),
             transactionManager
@@ -270,10 +242,7 @@ class ReservationCancellationUseCaseTest {
             reservation,
             paymentService,
             createRefundUseCase,
-            priceSnapshotService,
-            couponService,
-            couponRedemptionService,
-            couponStatusHistoryService,
+            restoreCouponUseCase,
             recordAuditEventUseCase
         );
     }
@@ -283,10 +252,7 @@ class ReservationCancellationUseCaseTest {
         Reservation reservation,
         PaymentService paymentService,
         CreateRefundUseCase createRefundUseCase,
-        ReservationPriceSnapshotService priceSnapshotService,
-        CouponService couponService,
-        CouponRedemptionService couponRedemptionService,
-        CouponStatusHistoryService couponStatusHistoryService,
+        RestoreCouponUseCase restoreCouponUseCase,
         RecordAuditEventUseCase recordAuditEventUseCase
     ) {
     }
