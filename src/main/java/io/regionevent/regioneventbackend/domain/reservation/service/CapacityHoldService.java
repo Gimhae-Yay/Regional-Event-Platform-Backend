@@ -183,7 +183,7 @@ public class CapacityHoldService {
             .map(this::invalidateAndReleaseCapacityForWithdrawalIfActive)
             .flatMap(Optional::stream)
             .toList();
-        if (!capacityHoldRepository.findActiveHoldIdsByUserId(userId).isEmpty()) {
+        if (!capacityHoldRepository.findActiveHoldIdsByUserIdForUpdate(userId).isEmpty()) {
             throw new IllegalStateException("active capacity hold remains after withdrawal termination");
         }
         return terminatedCapacityHolds;
