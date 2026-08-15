@@ -286,6 +286,7 @@ erDiagram
         VARCHAR status "상태: DRAFT|PUBLISHED|ENDED; NOT NULL"
         TIMESTAMP published_at "공개 시각; 공개 전 NULL"
         TIMESTAMP ended_at "종료 시각; 종료 전 NULL"
+        TIMESTAMP updated_at "생성 또는 DRAFT 정책 값 마지막 수정 시각; NOT NULL"
     }
     coupon {
         BIGINT coupon_id PK "발급 쿠폰 식별자; NOT NULL"
