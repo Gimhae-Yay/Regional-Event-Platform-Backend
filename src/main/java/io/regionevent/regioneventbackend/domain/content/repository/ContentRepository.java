@@ -413,9 +413,11 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
     @Query(value = """
         SELECT reservation_price
         FROM content
+        JOIN region ON region.region_id = content.region_id
         WHERE content_id = :contentId
             AND status = 'PUBLISHED'
             AND deleted_at IS NULL
+            AND region.is_public = true
         FOR UPDATE
         """, nativeQuery = true)
     Optional<Long> findPublishedPaymentReservationPriceForUpdate(@Param("contentId") Long contentId);
