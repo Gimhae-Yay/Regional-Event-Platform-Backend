@@ -12,6 +12,8 @@ import org.springframework.data.repository.query.Param;
 
 import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentStatus;
+import io.regionevent.regioneventbackend.domain.payment.entity.RefundStatus;
+import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
@@ -65,6 +67,26 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     );
 
     boolean existsByCapacityHoldUserUserIdAndStatus(Long userId, PaymentStatus status);
+
+    @Query("""
+        SELECT CASE WHEN COUNT(payment) > 0 THEN true ELSE false END
+        FROM Payment payment
+        WHERE payment.capacityHold.user.userId = :userId
+          AND payment.status = :paymentStatus
+          AND payment.reservation.status = :reservationStatus
+          AND NOT EXISTS (
+              SELECT refund
+              FROM Refund refund
+              WHERE refund.payment = payment
+                AND refund.status = :succeededRefundStatus
+          )
+        """)
+    boolean existsApprovedPaymentWithConfirmedReservationWithoutSucceededRefund(
+        @Param("userId") Long userId,
+        @Param("paymentStatus") PaymentStatus paymentStatus,
+        @Param("reservationStatus") ReservationStatus reservationStatus,
+        @Param("succeededRefundStatus") RefundStatus succeededRefundStatus
+    );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
