@@ -23,12 +23,15 @@
 | [ADR-0004](../adr/0004-use-hmac-signed-reservation-qr.md#결정) | HMAC 서명, 키 관리와 예약당 방문 한 건 제약 |
 | [ADR-0010](../adr/0010-issue-short-lived-qr-on-demand-and-separate-retry-idempotency.md#결정) | 체크인 창 온디맨드 QR 발급·갱신과 재시도·재스캔 구분 |
 | [ADR-0101](../adr/0101-reject-new-qr-rescans-after-check-in.md#결정) | 동일 키 결과 재생과 이미 체크인된 예약의 새로운 QR 재스캔 충돌 |
+| [ADR-0102](../adr/0102-preserve-qr-check-in-validation-precedence-for-rescan-conflict.md#결정) | 재스캔 충돌 적용 시 기존 QR 검증 우선순위 유지 |
+| [ADR-0103](../adr/0103-record-rejected-qr-rescans-without-visit-result-or-progress-trigger.md#결정) | 거부된 재스캔의 결과 FK 부재와 미션 진행도 호출 제외 |
 | [ADR-0040](../adr/0040-use-single-get-endpoint-for-my-reservation-qr.md#결정) | 내 예약 QR 조회 시 단기 QR을 발급하고 별도 발급 경로를 두지 않는 HTTP 계약 |
 | [ADR-0057](../adr/0057-define-compact-hmac-qr-token-profile.md#결정) | QR 토큰 직렬화, TTL 상한, 키 회전과 MySQL 시각 전달 계약 |
 | [ADR-0012](../adr/0012-retain-author-unlinked-reviews-and-visits-after-withdrawal.md#결정) | 탈퇴 회원의 미사용 QR·미체크인 예약 종결 |
 
 > QR 발급 시점과 동일 키 재시도·새 키 스캔 구분은 ADR-0010을 적용하고, 이미 체크인된 예약의 새로운 QR
-> 재스캔 응답은 ADR-0101을 우선 적용한다. HTTP 경로는 ADR-0040을 따라 내 예약 QR 조회 시 발급하며,
+> 재스캔 응답은 ADR-0101을, 기존 검증 우선순위 유지는 ADR-0102를 적용한다. HTTP 경로는 ADR-0040을 따라
+> 내 예약 QR 조회 시 발급하며,
 > ADR-0004는 HMAC·키 관리·방문 고유 제약에 적용한다. 토큰 형식과 수명·키 회전의 구현 계약은 ADR-0057을 따른다.
 
 ### 기능 범위

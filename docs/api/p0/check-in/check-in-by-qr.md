@@ -3,7 +3,10 @@
 소유 운영자가 방문자의 단기 예약 QR을 검증하고 체크인을 완료한다.
 성공하면 예약을 `CHECKED_IN`으로 전환하고 `QR` 방식의 방문 기록을 최대 한 건 생성한다.
 동일 키 재시도와 이미 체크인된 예약의 새로운 키 재스캔은
-[ADR-0101](../../../adr/0101-reject-new-qr-rescans-after-check-in.md)의 결정을 따른다.
+[ADR-0101](../../../adr/0101-reject-new-qr-rescans-after-check-in.md)의 결정을 따르고, 기존 검증 우선순위는
+[ADR-0102](../../../adr/0102-preserve-qr-check-in-validation-precedence-for-rescan-conflict.md)에 따라 유지한다.
+거부된 재스캔의 멱등 결과 참조와 후속 호출은
+[ADR-0103](../../../adr/0103-record-rejected-qr-rescans-without-visit-result-or-progress-trigger.md)을 따른다.
 
 ### Request
 
