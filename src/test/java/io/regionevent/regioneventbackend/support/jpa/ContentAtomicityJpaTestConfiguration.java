@@ -17,6 +17,7 @@ import io.regionevent.regioneventbackend.domain.content.service.ApproveContentSe
 import io.regionevent.regioneventbackend.domain.content.service.ApproveContentUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.CancelContentSessionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.ContentLogService;
+import io.regionevent.regioneventbackend.domain.content.service.ContentRevisionInvalidationService;
 import io.regionevent.regioneventbackend.domain.content.service.ContentRevisionService;
 import io.regionevent.regioneventbackend.domain.content.service.ContentService;
 import io.regionevent.regioneventbackend.domain.content.service.ContentSessionService;
@@ -42,6 +43,7 @@ import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHold
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationIdentifierGenerator;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationPriceSnapshotService;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationService;
+import io.regionevent.regioneventbackend.domain.region.service.RegionService;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService;
 import io.regionevent.regioneventbackend.domain.user.service.RegionAdminAuthorizationService;
 import io.regionevent.regioneventbackend.global.security.qr.QrTokenService;
@@ -59,6 +61,7 @@ import io.regionevent.regioneventbackend.global.security.qr.QrTokenService;
     SubmitContentUseCase.class,
     EndContentReservationsUseCase.class,
     ContentService.class,
+    ContentRevisionInvalidationService.class,
     ContentRevisionService.class,
     OriginalContentReviewTargetService.class,
     OriginalContentReviewTargetPolicy.class,
@@ -67,6 +70,7 @@ import io.regionevent.regioneventbackend.global.security.qr.QrTokenService;
     ImageObjectService.class,
     CapacityHoldService.class,
     ReservationService.class,
+    RegionService.class,
     RegionAdminAuthorizationService.class,
     OperatorAuthorizationService.class,
     RecordAuditEventUseCase.class,

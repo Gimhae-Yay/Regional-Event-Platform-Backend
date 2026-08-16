@@ -17,6 +17,8 @@ import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentRevision;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentRevisionStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
+import io.regionevent.regioneventbackend.domain.region.entity.Region;
+import io.regionevent.regioneventbackend.domain.region.service.RegionService;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.service.RegionAdminAuthorizationService;
 
@@ -25,6 +27,7 @@ public class ApproveContentRevisionUseCase {
 
     private final ContentRevisionService contentRevisionService;
     private final ContentService contentService;
+    private final RegionService regionService;
     private final OriginalContentReviewTargetService originalContentReviewTargetService;
     private final ContentLogService contentLogService;
     private final RegionAdminAuthorizationService regionAdminAuthorizationService;
@@ -34,6 +37,7 @@ public class ApproveContentRevisionUseCase {
     public ApproveContentRevisionUseCase(
         ContentRevisionService contentRevisionService,
         ContentService contentService,
+        RegionService regionService,
         OriginalContentReviewTargetService originalContentReviewTargetService,
         ContentLogService contentLogService,
         RegionAdminAuthorizationService regionAdminAuthorizationService,
@@ -42,6 +46,7 @@ public class ApproveContentRevisionUseCase {
     ) {
         this.contentRevisionService = contentRevisionService;
         this.contentService = contentService;
+        this.regionService = regionService;
         this.originalContentReviewTargetService = originalContentReviewTargetService;
         this.contentLogService = contentLogService;
         this.regionAdminAuthorizationService = regionAdminAuthorizationService;
@@ -58,10 +63,12 @@ public class ApproveContentRevisionUseCase {
         RegionAdminAuthorizationService.AuthorizedRegionAdmin regionAdmin =
             regionAdminAuthorizationService.requireAuthorizedRegionAdminForUpdate(userId);
         Long contentId = contentRevisionService.findContentIdByRevisionId(revisionId);
+        Long regionId = contentService.findContentRegionId(contentId);
+        Region region = regionService.findRegionForUpdate(regionId);
         Content content = contentService.findApprovalTargetForUpdate(contentId);
         ContentRevision revision = contentRevisionService.findReviewTargetForUpdate(revisionId);
         UserRoleAssignment reviewerAssignment = regionAdmin.authorize(
-            content.getRegion().getRegionId()
+            region.getRegionId()
         );
         boolean isPrePublicationRevisionByHistory = isPrePublicationRevisionByHistory(content);
         ContentStatus previousContentStatus = content.getStatus();
@@ -82,7 +89,7 @@ public class ApproveContentRevisionUseCase {
         }
         recordAuditEventUseCase.record(new AuditEventCommand(
             requestId,
-            content.getRegion(),
+            region,
             AuditEventTargetType.CONTENT,
             content.getContentId(),
             ContentRevisionStatus.EDIT_REQUESTED.name(),
