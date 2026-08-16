@@ -80,6 +80,7 @@ class StampbookReadServiceTest {
                 0L,
                 3L,
                 null,
+                null,
                 null
             ));
         assertThat(results.get(1).progress())
@@ -88,13 +89,78 @@ class StampbookReadServiceTest {
                 3L,
                 3L,
                 completedAt,
-                lastEarnedAt
+                lastEarnedAt,
+                new StampbookCompletionReward(301L, 901L)
             ));
         verify(stampbookRepository).findMyStampbookListProjections(
             USER_ID,
             StampbookStatus.PUBLISHED,
             StampbookStatus.ENDED
         );
+    }
+
+    @Test
+    void 내_스탬프북_목록_조회는_완료_보상_정책이_스탬프북_보상_정책과_다르면_정합성_오류로_처리한다() {
+        when(stampbookRepository.findMyStampbookListProjections(
+            USER_ID,
+            StampbookStatus.PUBLISHED,
+            StampbookStatus.ENDED
+        )).thenReturn(List.of(new MyStampbookListProjection(
+            101L,
+            10L,
+            StampbookStatus.ENDED,
+            Instant.parse("2026-08-01T00:00:00Z"),
+            201L,
+            USER_ID,
+            StampbookProgressStatus.COMPLETED,
+            Instant.parse("2026-08-04T00:00:00Z"),
+            1L,
+            1L,
+            Instant.parse("2026-08-04T00:00:00Z"),
+            901L,
+            302L,
+            301L
+        )));
+
+        assertThatThrownBy(() -> stampbookReadService.findMyStampbooks(USER_ID))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("stampbook completion reward read data is inconsistent");
+    }
+
+    @Test
+    void 내_스탬프북_목록_조회는_미완료_진행과_종료_미완료_진행에_보상정보를_반환하지_않는다() {
+        when(stampbookRepository.findMyStampbookListProjections(
+            USER_ID,
+            StampbookStatus.PUBLISHED,
+            StampbookStatus.ENDED
+        )).thenReturn(List.of(
+            projection(
+                101L,
+                StampbookStatus.PUBLISHED,
+                Instant.parse("2026-08-01T00:00:00Z"),
+                StampbookProgressStatus.IN_PROGRESS,
+                null,
+                1L,
+                3L,
+                Instant.parse("2026-08-02T00:00:00Z")
+            ),
+            projection(
+                102L,
+                StampbookStatus.ENDED,
+                Instant.parse("2026-08-01T00:00:00Z"),
+                StampbookProgressStatus.ENDED_INCOMPLETE,
+                null,
+                1L,
+                3L,
+                Instant.parse("2026-08-02T00:00:00Z")
+            )
+        ));
+
+        List<MyStampbookListResult> results = stampbookReadService.findMyStampbooks(USER_ID);
+
+        assertThat(results)
+            .extracting(result -> result.progress().completionReward())
+            .containsOnlyNulls();
     }
 
     @Test
@@ -270,6 +336,7 @@ class StampbookReadServiceTest {
             MyStampbookProgressStatus.IN_PROGRESS,
             1L,
             2L,
+            null,
             null
         ));
         verify(stampbookRepository).findMyStampbookDetailProjections(
@@ -278,6 +345,61 @@ class StampbookReadServiceTest {
             StampbookStatus.PUBLISHED,
             StampbookStatus.ENDED
         );
+    }
+
+    @Test
+    void 내_스탬프북_상세_조회는_완료한_본인의_보상_발급_근거를_반환한다() {
+        Instant completedAt = Instant.parse("2026-08-04T00:00:00Z");
+        when(stampbookRepository.findMyStampbookDetailProjections(
+            USER_ID,
+            101L,
+            StampbookStatus.PUBLISHED,
+            StampbookStatus.ENDED
+        )).thenReturn(List.of(detailProjection(
+            101L,
+            StampbookStatus.ENDED,
+            Instant.parse("2026-08-01T00:00:00Z"),
+            Instant.parse("2026-08-05T00:00:00Z"),
+            StampbookProgressStatus.COMPLETED,
+            completedAt,
+            201L,
+            "첫 번째 콘텐츠",
+            completedAt
+        )));
+
+        MyStampbookDetailResult result = stampbookReadService.findMyStampbookDetail(USER_ID, 101L);
+
+        assertThat(result.progress()).isEqualTo(new MyStampbookDetailResult.Progress(
+            MyStampbookProgressStatus.COMPLETED,
+            1L,
+            1L,
+            completedAt,
+            new StampbookCompletionReward(301L, 901L)
+        ));
+    }
+
+    @Test
+    void 종료_미완료_스탬프북은_완료_보상_정보를_반환하지_않는다() {
+        when(stampbookRepository.findMyStampbookDetailProjections(
+            USER_ID,
+            101L,
+            StampbookStatus.PUBLISHED,
+            StampbookStatus.ENDED
+        )).thenReturn(List.of(detailProjection(
+            101L,
+            StampbookStatus.ENDED,
+            Instant.parse("2026-08-01T00:00:00Z"),
+            Instant.parse("2026-08-05T00:00:00Z"),
+            StampbookProgressStatus.ENDED_INCOMPLETE,
+            null,
+            201L,
+            "첫 번째 콘텐츠",
+            null
+        )));
+
+        MyStampbookDetailResult result = stampbookReadService.findMyStampbookDetail(USER_ID, 101L);
+
+        assertThat(result.progress().completionReward()).isNull();
     }
 
     @Test
@@ -305,6 +427,7 @@ class StampbookReadServiceTest {
             MyStampbookProgressStatus.NOT_STARTED,
             0L,
             1L,
+            null,
             null
         ));
     }
@@ -535,11 +658,16 @@ class StampbookReadServiceTest {
             10L,
             stampbookStatus,
             publishedAt,
+            progressStatus == null ? null : 201L,
+            progressStatus == null ? null : USER_ID,
             progressStatus,
             completedAt,
             earnedCount,
             targetCount,
-            lastEarnedAt
+            lastEarnedAt,
+            progressStatus == StampbookProgressStatus.COMPLETED ? 901L : null,
+            progressStatus == StampbookProgressStatus.COMPLETED ? 301L : null,
+            301L
         );
     }
 
@@ -560,11 +688,16 @@ class StampbookReadServiceTest {
             stampbookStatus,
             publishedAt,
             endedAt,
+            progressStatus == null ? null : 201L,
+            progressStatus == null ? null : USER_ID,
             progressStatus,
             completedAt,
             contentId,
             contentTitle,
-            earnedAt
+            earnedAt,
+            progressStatus == StampbookProgressStatus.COMPLETED ? 901L : null,
+            progressStatus == StampbookProgressStatus.COMPLETED ? 301L : null,
+            301L
         );
     }
 

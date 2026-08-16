@@ -37,6 +37,7 @@ import io.regionevent.regioneventbackend.domain.stampbook.entity.Stampbook;
 import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookContent;
 import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookProgress;
 import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookProgressStatus;
+import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookRewardGrant;
 import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookStatus;
 import io.regionevent.regioneventbackend.domain.stampbook.repository.MyStampbookListProjection;
 import io.regionevent.regioneventbackend.domain.stampbook.service.StampbookReadService;
@@ -63,6 +64,7 @@ class MyStampbookListProjectionRepositoryTest {
     private final StampbookProgressRepository stampbookProgressRepository;
     private final StampbookContentRepository stampbookContentRepository;
     private final StampEarnRepository stampEarnRepository;
+    private final StampbookRewardGrantRepository stampbookRewardGrantRepository;
     private final CouponPolicyRepository couponPolicyRepository;
     private final ContentRepository contentRepository;
     private final ContentSessionRepository contentSessionRepository;
@@ -80,6 +82,7 @@ class MyStampbookListProjectionRepositoryTest {
         StampbookProgressRepository stampbookProgressRepository,
         StampbookContentRepository stampbookContentRepository,
         StampEarnRepository stampEarnRepository,
+        StampbookRewardGrantRepository stampbookRewardGrantRepository,
         CouponPolicyRepository couponPolicyRepository,
         ContentRepository contentRepository,
         ContentSessionRepository contentSessionRepository,
@@ -95,6 +98,7 @@ class MyStampbookListProjectionRepositoryTest {
         this.stampbookProgressRepository = stampbookProgressRepository;
         this.stampbookContentRepository = stampbookContentRepository;
         this.stampEarnRepository = stampEarnRepository;
+        this.stampbookRewardGrantRepository = stampbookRewardGrantRepository;
         this.couponPolicyRepository = couponPolicyRepository;
         this.contentRepository = contentRepository;
         this.contentSessionRepository = contentSessionRepository;
@@ -131,7 +135,14 @@ class MyStampbookListProjectionRepositoryTest {
             secondTargetContent
         );
         updateStampbookStatus(sameTimeSecond, StampbookStatus.PUBLISHED, FIRST_PUBLISHED_AT, null);
-        stampbookProgressRepository.saveAndFlush(new StampbookProgress(sameTimeSecond, otherUser));
+        StampbookProgress otherPublishedProgress = new StampbookProgress(sameTimeSecond, otherUser);
+        otherPublishedProgress.complete(COMPLETED_AT);
+        stampbookProgressRepository.saveAndFlush(otherPublishedProgress);
+        stampbookRewardGrantRepository.saveAndFlush(new StampbookRewardGrant(
+            otherPublishedProgress,
+            rewardCouponPolicy,
+            COMPLETED_AT
+        ));
 
         Stampbook ownedEnded = saveStampbook(
             region,
@@ -148,6 +159,9 @@ class MyStampbookListProjectionRepositoryTest {
         StampbookProgress completedProgress = new StampbookProgress(ownedEnded, viewer);
         completedProgress.complete(COMPLETED_AT);
         stampbookProgressRepository.saveAndFlush(completedProgress);
+        StampbookRewardGrant ownedRewardGrant = stampbookRewardGrantRepository.saveAndFlush(
+            new StampbookRewardGrant(completedProgress, rewardCouponPolicy, COMPLETED_AT)
+        );
 
         Stampbook otherEnded = saveStampbook(
             region,
@@ -161,7 +175,14 @@ class MyStampbookListProjectionRepositoryTest {
             Instant.parse("2026-08-04T00:00:00Z"),
             Instant.parse("2026-08-05T00:00:00Z")
         );
-        stampbookProgressRepository.saveAndFlush(new StampbookProgress(otherEnded, otherUser));
+        StampbookProgress otherEndedProgress = new StampbookProgress(otherEnded, otherUser);
+        otherEndedProgress.complete(COMPLETED_AT);
+        stampbookProgressRepository.saveAndFlush(otherEndedProgress);
+        stampbookRewardGrantRepository.saveAndFlush(new StampbookRewardGrant(
+            otherEndedProgress,
+            rewardCouponPolicy,
+            COMPLETED_AT
+        ));
 
         saveStampbook(region, rewardCouponPolicy, targetContent, secondTargetContent);
         entityManager.clear();
@@ -187,16 +208,28 @@ class MyStampbookListProjectionRepositoryTest {
                 MyStampbookListProjection::earnedCount,
                 MyStampbookListProjection::targetCount,
                 MyStampbookListProjection::completedAt,
-                MyStampbookListProjection::lastEarnedAt
+                MyStampbookListProjection::lastEarnedAt,
+                MyStampbookListProjection::stampbookRewardGrantId,
+                MyStampbookListProjection::completionRewardCouponPolicyId
             )
-            .containsExactly(StampbookStatus.PUBLISHED, null, 0L, 2L, null, null);
+            .containsExactly(StampbookStatus.PUBLISHED, null, 0L, 2L, null, null, null, null);
         assertThat(projections.get(2))
             .extracting(
                 MyStampbookListProjection::stampbookStatus,
                 MyStampbookListProjection::progressStatus,
-                MyStampbookListProjection::completedAt
+                MyStampbookListProjection::completedAt,
+                MyStampbookListProjection::stampbookRewardGrantId,
+                MyStampbookListProjection::completionRewardCouponPolicyId,
+                MyStampbookListProjection::stampbookRewardCouponPolicyId
             )
-            .containsExactly(StampbookStatus.ENDED, StampbookProgressStatus.COMPLETED, COMPLETED_AT);
+            .containsExactly(
+                StampbookStatus.ENDED,
+                StampbookProgressStatus.COMPLETED,
+                COMPLETED_AT,
+                ownedRewardGrant.getStampbookRewardGrantId(),
+                rewardCouponPolicy.getCouponPolicyId(),
+                rewardCouponPolicy.getCouponPolicyId()
+            );
         assertThat(stampbookProgressRepository.findById(completedProgress.getStampbookProgressId()).orElseThrow())
             .extracting(StampbookProgress::getStatus, StampbookProgress::getCompletedAt)
             .containsExactly(StampbookProgressStatus.COMPLETED, COMPLETED_AT);
@@ -314,6 +347,9 @@ class MyStampbookListProjectionRepositoryTest {
         );
         completedProgress.complete(COMPLETED_AT);
         stampbookProgressRepository.saveAndFlush(completedProgress);
+        StampbookRewardGrant ownedRewardGrant = stampbookRewardGrantRepository.saveAndFlush(
+            new StampbookRewardGrant(completedProgress, rewardCouponPolicy, COMPLETED_AT)
+        );
 
         Stampbook otherEndedStampbook = saveStampbook(
             region,
@@ -327,7 +363,14 @@ class MyStampbookListProjectionRepositoryTest {
             Instant.parse("2026-08-04T00:00:00Z"),
             Instant.parse("2026-08-05T00:00:00Z")
         );
-        stampbookProgressRepository.saveAndFlush(new StampbookProgress(otherEndedStampbook, otherUser));
+        StampbookProgress otherEndedProgress = new StampbookProgress(otherEndedStampbook, otherUser);
+        otherEndedProgress.complete(COMPLETED_AT);
+        stampbookProgressRepository.saveAndFlush(otherEndedProgress);
+        stampbookRewardGrantRepository.saveAndFlush(new StampbookRewardGrant(
+            otherEndedProgress,
+            rewardCouponPolicy,
+            COMPLETED_AT
+        ));
 
         Stampbook draftStampbook = saveStampbook(
             region,
@@ -377,9 +420,11 @@ class MyStampbookListProjectionRepositoryTest {
             .extracting(
                 MyStampbookDetailProjection::progressStatus,
                 MyStampbookDetailProjection::contentId,
-                MyStampbookDetailProjection::earnedAt
+                MyStampbookDetailProjection::earnedAt,
+                MyStampbookDetailProjection::stampbookRewardGrantId,
+                MyStampbookDetailProjection::completionRewardCouponPolicyId
             )
-            .containsExactly(StampbookProgressStatus.IN_PROGRESS, firstTarget.getContentId(), null);
+            .containsExactly(StampbookProgressStatus.IN_PROGRESS, firstTarget.getContentId(), null, null, null);
         assertThat(publishedProjections.get(1))
             .extracting(
                 MyStampbookDetailProjection::contentId,
@@ -391,6 +436,12 @@ class MyStampbookListProjectionRepositoryTest {
                 assertThat(projection.stampbookStatus()).isEqualTo(StampbookStatus.ENDED);
                 assertThat(projection.progressStatus()).isEqualTo(StampbookProgressStatus.COMPLETED);
                 assertThat(projection.completedAt()).isEqualTo(COMPLETED_AT);
+                assertThat(projection.stampbookRewardGrantId())
+                    .isEqualTo(ownedRewardGrant.getStampbookRewardGrantId());
+                assertThat(projection.completionRewardCouponPolicyId())
+                    .isEqualTo(rewardCouponPolicy.getCouponPolicyId());
+                assertThat(projection.stampbookRewardCouponPolicyId())
+                    .isEqualTo(rewardCouponPolicy.getCouponPolicyId());
             });
         assertThat(otherEndedProjections).isEmpty();
         assertThat(draftProjections).isEmpty();

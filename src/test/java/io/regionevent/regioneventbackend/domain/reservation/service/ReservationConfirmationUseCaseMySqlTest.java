@@ -421,6 +421,29 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
     }
 
     @Test
+    void 비공개_지역의_활성_홀드는_무료_예약으로_확정하지_않는다() {
+        Fixture fixture = createFixture();
+        changeRegionVisibility(fixture.capacityHold().getRegion().getRegionId(), false);
+
+        ReservationConfirmationResult result = confirm(
+            fixture,
+            fixture.capacityHold().getHoldId(),
+            "private-region-" + System.nanoTime()
+        );
+
+        assertThat(result.isSuccessful()).isFalse();
+        assertThat(result.errorCode()).isEqualTo(ErrorCode.RESERVATION_CONFIRM_CONFLICT);
+        assertThat(capacityHoldRepository.findById(fixture.capacityHold().getHoldId()))
+            .hasValueSatisfying(hold -> assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.ACTIVE));
+        assertThat(reservationRepository.findAll())
+            .noneMatch(reservation -> reservation.getCapacityHold().getHoldId()
+                .equals(fixture.capacityHold().getHoldId()));
+        assertThat(reservationPriceSnapshotRepository.findAll())
+            .noneMatch(snapshot -> snapshot.getCapacityHold().getHoldId()
+                .equals(fixture.capacityHold().getHoldId()));
+    }
+
+    @Test
     void p1PriceSnapshotLinkedHold_isRejectedByP0FreeReservationConfirmation() {
         Fixture fixture = createFixture();
         reservationPriceSnapshotRepository.saveAndFlush(new ReservationPriceSnapshot(
@@ -565,6 +588,12 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
             idempotencyKey,
             UUID.randomUUID()
         );
+    }
+
+    private void changeRegionVisibility(Long regionId, boolean isPublic) {
+        transactionTemplate.executeWithoutResult(status -> regionRepository.findById(regionId)
+            .orElseThrow()
+            .changeVisibility(isPublic));
     }
 
     private org.springframework.test.web.servlet.ResultActions performConfirmRequest(

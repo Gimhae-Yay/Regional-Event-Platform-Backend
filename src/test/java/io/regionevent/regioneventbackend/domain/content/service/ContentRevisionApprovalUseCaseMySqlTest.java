@@ -194,7 +194,7 @@ class ContentRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestS
 
     @Test
     @Timeout(15)
-    void approve_and_withdraw_whenApprovalHoldsContentLock_thenWithdrawReturnsConflict() throws Exception {
+    void approve_and_withdraw_whenApprovalHoldsLockTargets_thenWithdrawReturnsConflict() throws Exception {
         Fixture fixture = createFixture(ContentStatus.PUBLISHED, null, false);
         CountDownLatch contentLocked = new CountDownLatch(1);
         CountDownLatch continueApproval = new CountDownLatch(1);
@@ -208,7 +208,7 @@ class ContentRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestS
                 executeCapturingConflict(() -> withdraw(fixture))
             );
             try {
-                assertThat(awaitContentLockWait()).isTrue();
+                assertThat(awaitPessimisticLockWait()).isTrue();
             } finally {
                 continueApproval.countDown();
             }
@@ -296,6 +296,7 @@ class ContentRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestS
         CountDownLatch continueApproval
     ) {
         return transactionTemplate.execute(status -> {
+            regionRepository.findByRegionIdForUpdate(fixture.regionId()).orElseThrow();
             contentRepository.findApprovalTargetForUpdate(fixture.contentId()).orElseThrow();
             contentLocked.countDown();
             await(continueApproval);
@@ -416,6 +417,7 @@ class ContentRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestS
             return new Fixture(
                 admin.getUserId(),
                 operator.getUserId(),
+                region.getRegionId(),
                 content.getContentId(),
                 revision.getContentRevisionId()
             );
@@ -457,7 +459,7 @@ class ContentRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestS
         }
     }
 
-    private boolean awaitContentLockWait() {
+    private boolean awaitPessimisticLockWait() {
         for (int attempt = 0; attempt < LOCK_WAIT_CONFIRM_ATTEMPTS; attempt++) {
             Integer waitingWithdrawalCount = jdbcTemplate.queryForObject(
                 """
@@ -499,6 +501,7 @@ class ContentRevisionApprovalUseCaseMySqlTest extends NonTransactionalMySqlTestS
     private record Fixture(
         Long adminId,
         Long operatorId,
+        Long regionId,
         Long contentId,
         Long revisionId
     ) {

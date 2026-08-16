@@ -125,11 +125,16 @@ public interface StampbookRepository extends JpaRepository<Stampbook, Long> {
             stampbook.region.regionId,
             stampbook.status,
             stampbook.publishedAt,
+            progress.stampbookProgressId,
+            progress.user.userId,
             progress.status,
             progress.completedAt,
             COUNT(DISTINCT stampEarn.stampEarnId),
             COUNT(DISTINCT stampbookContent.content.contentId),
-            MAX(stampEarn.earnedAt)
+            MAX(stampEarn.earnedAt),
+            rewardGrant.stampbookRewardGrantId,
+            completionRewardCouponPolicy.couponPolicyId,
+            stampbook.rewardCouponPolicy.couponPolicyId
         )
         FROM Stampbook stampbook
         LEFT JOIN StampbookProgress progress
@@ -137,6 +142,8 @@ public interface StampbookRepository extends JpaRepository<Stampbook, Long> {
             AND progress.user.userId = :userId
         LEFT JOIN StampEarn stampEarn ON stampEarn.stampbookProgress = progress
         LEFT JOIN StampbookContent stampbookContent ON stampbookContent.stampbook = stampbook
+        LEFT JOIN StampbookRewardGrant rewardGrant ON rewardGrant.stampbookProgress = progress
+        LEFT JOIN rewardGrant.couponPolicy completionRewardCouponPolicy
         WHERE stampbook.status = :publishedStatus
            OR stampbook.status = :endedStatus
             AND progress.stampbookProgressId IS NOT NULL
@@ -144,8 +151,13 @@ public interface StampbookRepository extends JpaRepository<Stampbook, Long> {
             stampbook.region.regionId,
             stampbook.status,
             stampbook.publishedAt,
+            progress.stampbookProgressId,
+            progress.user.userId,
             progress.status,
-            progress.completedAt
+            progress.completedAt,
+            rewardGrant.stampbookRewardGrantId,
+            completionRewardCouponPolicy.couponPolicyId,
+            stampbook.rewardCouponPolicy.couponPolicyId
         ORDER BY stampbook.publishedAt DESC, stampbook.stampbookId DESC
         """)
     List<MyStampbookListProjection> findMyStampbookListProjections(
@@ -161,11 +173,16 @@ public interface StampbookRepository extends JpaRepository<Stampbook, Long> {
             stampbook.status,
             stampbook.publishedAt,
             stampbook.endedAt,
+            progress.stampbookProgressId,
+            progress.user.userId,
             progress.status,
             progress.completedAt,
             stampbookContent.content.contentId,
             stampbookContent.content.title,
-            stampEarn.earnedAt
+            stampEarn.earnedAt,
+            rewardGrant.stampbookRewardGrantId,
+            completionRewardCouponPolicy.couponPolicyId,
+            stampbook.rewardCouponPolicy.couponPolicyId
         )
         FROM Stampbook stampbook
         LEFT JOIN StampbookProgress progress
@@ -175,6 +192,8 @@ public interface StampbookRepository extends JpaRepository<Stampbook, Long> {
         LEFT JOIN StampEarn stampEarn
             ON stampEarn.stampbookProgress = progress
             AND stampEarn.content = stampbookContent.content
+        LEFT JOIN StampbookRewardGrant rewardGrant ON rewardGrant.stampbookProgress = progress
+        LEFT JOIN rewardGrant.couponPolicy completionRewardCouponPolicy
         WHERE stampbook.stampbookId = :stampbookId
           AND (
             stampbook.status = :publishedStatus

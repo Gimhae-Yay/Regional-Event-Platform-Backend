@@ -204,6 +204,23 @@ class CreateReservationHoldUseCaseMySqlTest extends NonTransactionalMySqlTestSup
         assertThat(consumedCount).isEqualTo(1);
     }
 
+    @Test
+    void 비공개_지역의_미래_회차에는_홀드를_생성하지_않고_정원을_유지한다() {
+        Fixture fixture = createFixture(2, 1);
+        changeRegionVisibility(fixture.regionId(), false);
+
+        assertThatThrownBy(() -> createReservationHoldUseCase.create(
+            fixture.userIds().getFirst(),
+            new CreateReservationHoldRequest(fixture.sessionId().toString(), 1)
+        )).isInstanceOfSatisfying(BusinessException.class, exception ->
+            assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.NOT_FOUND)
+        );
+
+        CapacityState capacityState = readCapacityStateInNewTransaction(fixture.sessionId());
+        assertThat(capacityState.remainingCapacity()).isEqualTo(fixture.capacity());
+        assertThat(capacityState.holds()).isEmpty();
+    }
+
     private List<HoldCreationResult> createConcurrently(
         Fixture fixture,
         List<Integer> quantities
@@ -307,8 +324,14 @@ class CreateReservationHoldUseCaseMySqlTest extends NonTransactionalMySqlTestSup
             );
             session.approve(operator, now);
             contentSessionRepository.save(session);
-            return new Fixture(session.getSessionId(), capacity, userIds);
+            return new Fixture(region.getRegionId(), session.getSessionId(), capacity, userIds);
         });
+    }
+
+    private void changeRegionVisibility(Long regionId, boolean isPublic) {
+        transactionTemplate.executeWithoutResult(status -> regionRepository.findById(regionId)
+            .orElseThrow()
+            .changeVisibility(isPublic));
     }
 
     private CapacityState readCapacityStateInNewTransaction(Long sessionId) {
@@ -417,6 +440,7 @@ class CreateReservationHoldUseCaseMySqlTest extends NonTransactionalMySqlTestSup
     }
 
     private record Fixture(
+        Long regionId,
         Long sessionId,
         int capacity,
         List<Long> userIds
