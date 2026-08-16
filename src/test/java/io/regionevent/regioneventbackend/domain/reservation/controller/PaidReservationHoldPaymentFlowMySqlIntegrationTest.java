@@ -1,6 +1,8 @@
 package io.regionevent.regioneventbackend.domain.reservation.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -11,7 +13,11 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -26,13 +32,22 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentSessionRepository;
+import io.regionevent.regioneventbackend.domain.coupon.entity.Coupon;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponIssuanceType;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicy;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatus;
+import io.regionevent.regioneventbackend.domain.coupon.repository.CouponPolicyRepository;
+import io.regionevent.regioneventbackend.domain.coupon.repository.CouponRepository;
+import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentStatus;
+import io.regionevent.regioneventbackend.domain.payment.port.out.PortOnePaymentGateway;
 import io.regionevent.regioneventbackend.domain.payment.repository.PaymentRepository;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus;
 import io.regionevent.regioneventbackend.domain.reservation.repository.CapacityHoldRepository;
+import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationRepository;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationPriceSnapshotRepository;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
@@ -41,16 +56,22 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
+import io.regionevent.regioneventbackend.infra.payment.PortOneWebhookSignatureVerifier;
 import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
 import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers(disabledWithoutDocker = true)
+@Import(PaidReservationHoldPaymentFlowMySqlIntegrationTest.PaymentWebhookTestConfiguration.class)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class PaidReservationHoldPaymentFlowMySqlIntegrationTest extends NonTransactionalMySqlTestSupport {
 
     private static final int RESERVATION_PRICE = 20_000;
+    private static final String WEBHOOK_TIMESTAMP = "1785983465";
+    private static final String WEBHOOK_SIGNATURE = "v1,signature";
+    private static final String TRANSACTION_ID = "transaction-payment-retry";
+    private static final String RESULT_HASH = "provider-response-hash";
 
     private final MockMvc mockMvc;
     private final RegionRepository regionRepository;
@@ -60,8 +81,12 @@ class PaidReservationHoldPaymentFlowMySqlIntegrationTest extends NonTransactiona
     private final ContentSessionRepository contentSessionRepository;
     private final CapacityHoldRepository capacityHoldRepository;
     private final PaymentRepository paymentRepository;
+    private final ReservationRepository reservationRepository;
     private final ReservationPriceSnapshotRepository reservationPriceSnapshotRepository;
+    private final CouponPolicyRepository couponPolicyRepository;
+    private final CouponRepository couponRepository;
     private final JwtAccessTokenService jwtAccessTokenService;
+    private final PortOnePaymentGateway paymentGateway;
 
     @Autowired
     PaidReservationHoldPaymentFlowMySqlIntegrationTest(
@@ -73,8 +98,12 @@ class PaidReservationHoldPaymentFlowMySqlIntegrationTest extends NonTransactiona
         ContentSessionRepository contentSessionRepository,
         CapacityHoldRepository capacityHoldRepository,
         PaymentRepository paymentRepository,
+        ReservationRepository reservationRepository,
         ReservationPriceSnapshotRepository reservationPriceSnapshotRepository,
-        JwtAccessTokenService jwtAccessTokenService
+        CouponPolicyRepository couponPolicyRepository,
+        CouponRepository couponRepository,
+        JwtAccessTokenService jwtAccessTokenService,
+        PortOnePaymentGateway paymentGateway
     ) {
         this.mockMvc = mockMvc;
         this.regionRepository = regionRepository;
@@ -84,8 +113,12 @@ class PaidReservationHoldPaymentFlowMySqlIntegrationTest extends NonTransactiona
         this.contentSessionRepository = contentSessionRepository;
         this.capacityHoldRepository = capacityHoldRepository;
         this.paymentRepository = paymentRepository;
+        this.reservationRepository = reservationRepository;
         this.reservationPriceSnapshotRepository = reservationPriceSnapshotRepository;
+        this.couponPolicyRepository = couponPolicyRepository;
+        this.couponRepository = couponRepository;
         this.jwtAccessTokenService = jwtAccessTokenService;
+        this.paymentGateway = paymentGateway;
     }
 
     @DynamicPropertySource
@@ -139,6 +172,61 @@ class PaidReservationHoldPaymentFlowMySqlIntegrationTest extends NonTransactiona
             .hasValueSatisfying(snapshot -> assertThat(snapshot.getFinalAmount()).isEqualTo(RESERVATION_PRICE));
     }
 
+    @Test
+    void 거절된_쿠폰_결제를_새_멱등키로_재시도하면_쿠폰을_다시_선점하고_승인한다() throws Exception {
+        Fixture fixture = createFixture();
+        Long holdId = createPublicHold(fixture);
+        Coupon coupon = createCoupon(fixture);
+
+        createPaymentThroughHttp(fixture.user(), holdId, coupon.getCouponId(), "payment-key-first");
+        Payment firstPayment = paymentRepository.findAll().getFirst();
+        when(paymentGateway.findByPaymentId(firstPayment.getOrderId())).thenReturn(
+            new PortOnePaymentGateway.PortOnePayment(
+                firstPayment.getOrderId(),
+                TRANSACTION_ID,
+                "store-1",
+                19_000,
+                "KRW",
+                "DECLINED",
+                RESULT_HASH
+            )
+        );
+
+        receiveWebhookThroughHttp("webhook-coupon-declined", firstPayment.getOrderId());
+
+        assertThat(couponRepository.findById(coupon.getCouponId()))
+            .hasValueSatisfying(savedCoupon -> assertThat(savedCoupon.getStatus()).isEqualTo(CouponStatus.AVAILABLE));
+
+        createPaymentThroughHttp(fixture.user(), holdId, coupon.getCouponId(), "payment-key-retry");
+        Payment retryPayment = paymentRepository.findAll().stream()
+            .filter(payment -> payment.getStatus() == PaymentStatus.PENDING)
+            .findFirst()
+            .orElseThrow();
+        assertThat(couponRepository.findById(coupon.getCouponId()))
+            .hasValueSatisfying(savedCoupon -> assertThat(savedCoupon.getStatus()).isEqualTo(CouponStatus.RESERVED));
+        when(paymentGateway.findByPaymentId(retryPayment.getOrderId())).thenReturn(
+            new PortOnePaymentGateway.PortOnePayment(
+                retryPayment.getOrderId(),
+                TRANSACTION_ID,
+                "store-1",
+                19_000,
+                "KRW",
+                "PAID",
+                RESULT_HASH
+            )
+        );
+
+        receiveWebhookThroughHttp("webhook-coupon-retry-approved", retryPayment.getOrderId());
+
+        assertThat(paymentRepository.findAll()).extracting(Payment::getStatus)
+            .containsExactlyInAnyOrder(PaymentStatus.DECLINED, PaymentStatus.APPROVED);
+        assertThat(capacityHoldRepository.findById(holdId))
+            .hasValueSatisfying(hold -> assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.CONSUMED));
+        assertThat(reservationRepository.findAll()).singleElement();
+        assertThat(couponRepository.findById(coupon.getCouponId()))
+            .hasValueSatisfying(savedCoupon -> assertThat(savedCoupon.getStatus()).isEqualTo(CouponStatus.USED));
+    }
+
     private Fixture createFixture() {
         String suffix = Long.toUnsignedString(System.nanoTime());
         Instant now = Instant.now();
@@ -177,6 +265,87 @@ class PaidReservationHoldPaymentFlowMySqlIntegrationTest extends NonTransactiona
         return new Fixture(user, contentSessionRepository.saveAndFlush(session));
     }
 
+    private Long createPublicHold(Fixture fixture) throws Exception {
+        mockMvc.perform(post("/api/v1/reservations")
+                .header("Authorization", bearerToken(fixture.user()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "sessionId": "%d",
+                      "quantity": 1
+                    }
+                    """.formatted(fixture.session().getSessionId())))
+            .andExpect(status().isCreated());
+        return capacityHoldRepository.findAll().getFirst().getHoldId();
+    }
+
+    private Coupon createCoupon(Fixture fixture) {
+        Instant now = Instant.now();
+        Content content = contentRepository.findById(fixture.session().getContent().getContentId()).orElseThrow();
+        CouponPolicy couponPolicy = new CouponPolicy(
+            content,
+            content.getRegion(),
+            "결제 재시도 쿠폰",
+            null,
+            CouponIssuanceType.VISIT,
+            1_000,
+            1_000,
+            30,
+            now.minusSeconds(60),
+            now.plusSeconds(3_600),
+            null
+        );
+        couponPolicy.publish(now);
+        CouponPolicy savedCouponPolicy = couponPolicyRepository.saveAndFlush(couponPolicy);
+        return couponRepository.saveAndFlush(new Coupon(
+            savedCouponPolicy,
+            appUserRepository.getReferenceById(fixture.user().getUserId()),
+            now,
+            now.plusSeconds(3_600)
+        ));
+    }
+
+    private void createPaymentThroughHttp(AppUser user, Long holdId, Long couponId, String idempotencyKey)
+        throws Exception {
+        mockMvc.perform(post("/api/v1/me/reservation-holds/{holdId}/payments", holdId)
+                .header("Authorization", bearerToken(user))
+                .header("Idempotency-Key", idempotencyKey)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "couponId": "%d"
+                    }
+                    """.formatted(couponId)))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.data.requiresPayment").value(true))
+            .andExpect(jsonPath("$.data.payment.status").value("PENDING"));
+    }
+
+    private void receiveWebhookThroughHttp(String webhookId, String orderId) throws Exception {
+        mockMvc.perform(post("/api/v1/webhooks/portone")
+                .header("webhook-id", webhookId)
+                .header("webhook-timestamp", WEBHOOK_TIMESTAMP)
+                .header("webhook-signature", WEBHOOK_SIGNATURE)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(paymentEvent(orderId)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value("SUCCESS"));
+    }
+
+    private String paymentEvent(String orderId) {
+        return """
+            {
+              "type": "Transaction.Paid",
+              "timestamp": "2026-08-06T02:31:05Z",
+              "data": {
+                "storeId": "store-1",
+                "paymentId": "%s",
+                "transactionId": "%s"
+              }
+            }
+            """.formatted(orderId, TRANSACTION_ID);
+    }
+
     private AppUser saveUser(String loginIdentifier) {
         return appUserRepository.saveAndFlush(new AppUser(
             loginIdentifier,
@@ -189,6 +358,22 @@ class PaidReservationHoldPaymentFlowMySqlIntegrationTest extends NonTransactiona
 
     private String bearerToken(AppUser user) {
         return "Bearer " + jwtAccessTokenService.issue(user.getUserId());
+    }
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class PaymentWebhookTestConfiguration {
+
+        @Bean
+        @Primary
+        PortOneWebhookSignatureVerifier portOneWebhookSignatureVerifier() {
+            return mock(PortOneWebhookSignatureVerifier.class);
+        }
+
+        @Bean
+        @Primary
+        PortOnePaymentGateway portOnePaymentGateway() {
+            return mock(PortOnePaymentGateway.class);
+        }
     }
 
     private record Fixture(AppUser user, ContentSession session) {
