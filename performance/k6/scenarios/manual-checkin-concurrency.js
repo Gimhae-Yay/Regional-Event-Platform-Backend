@@ -11,12 +11,13 @@ import {
   scenarioVus,
 } from '../lib/config.js';
 import { idempotencyKey } from '../lib/data.js';
-import { authHeaders, postJson } from '../lib/http.js';
+import { authHeaders, postJson, requestTags } from '../lib/http.js';
 import { recordOutcome } from '../lib/responses.js';
 import { markdownSummary } from '../lib/summary.js';
 
 const scenarioName = 'MANUAL_CHECKIN_CONCURRENCY';
 const testTag = 'manual_checkin_concurrency';
+const endpoint = 'manualCheckIn';
 const businessCodes = [
   'CHECK_IN_CONFLICT',
   'IDEMPOTENCY_KEY_CONFLICT',
@@ -24,6 +25,7 @@ const businessCodes = [
 ];
 const concurrencyVus = scenarioVus(scenarioName, 2);
 const maxDuration = scenarioDuration(scenarioName);
+const p95Threshold = scenarioP95Threshold(scenarioName);
 
 if (!Number.isInteger(concurrencyVus) || concurrencyVus < 2) {
   fail(`PERF_${scenarioName}_VUS must be an integer greater than or equal to 2`);
@@ -43,11 +45,13 @@ export const options = {
   },
   thresholds: {
     expected_outcome_rate: ['rate==1'],
+    [`expected_outcome_rate{endpoint:${endpoint}}`]: ['rate==1'],
     manual_checkin_success_count: ['count==1'],
     manual_checkin_conflict_count: [`count==${concurrencyVus - 1}`],
     system_failure_rate: ['rate==0'],
     unexpected_failure_rate: ['rate==0'],
-    [`http_req_duration{test:${testTag}}`]: [`p(95)<${scenarioP95Threshold(scenarioName)}`],
+    [`http_req_duration{test:${testTag}}`]: [`p(95)<${p95Threshold}`],
+    [`http_req_duration{endpoint:${endpoint}}`]: [`p(95)<${p95Threshold}`],
   },
   summaryTrendStats: ['avg', 'min', 'med', 'p(90)', 'p(95)', 'p(99)', 'max'],
 };
@@ -57,6 +61,11 @@ const operatorToken = csvEnv('PERF_OPERATOR_ACCESS_TOKENS')[0];
 const reservationNo = requiredEnv('PERF_RESERVATION_NO');
 const reason = env('PERF_MANUAL_CHECKIN_REASON', 'QR_SCAN_FAILED');
 const commonTags = { test: testTag };
+const checkInTags = requestTags(
+  endpoint,
+  'POST /api/v1/operator/check-ins/manual',
+  commonTags,
+);
 
 export function handleSummary(data) {
   return markdownSummary(data, {
@@ -80,9 +89,9 @@ export default function () {
       '/operator/check-ins/manual',
       { reservationNo, reason },
       authHeaders(operatorToken, { 'Idempotency-Key': idempotencyKey('manual-check-in') }),
-      commonTags,
+      checkInTags,
     ),
-    { businessCodes },
+    { businessCodes, endpoint },
   );
   if (outcome.success) {
     manualCheckinSuccessCount.add(1, commonTags);

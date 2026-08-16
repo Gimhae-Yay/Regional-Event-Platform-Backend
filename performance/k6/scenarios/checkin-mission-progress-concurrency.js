@@ -21,12 +21,12 @@ import {
 import { recordOutcome, recordUnexpected } from '../lib/responses.js';
 import { markdownSummary } from '../lib/summary.js';
 
-const scenarioName = 'QR_CHECKIN_CONCURRENCY';
-const testTag = 'qr_checkin_concurrency';
-const setupTestTag = 'qr_checkin_concurrency_setup';
+const scenarioName = 'CHECKIN_MISSION_PROGRESS_CONCURRENCY';
+const testTag = 'checkin_mission_progress_concurrency';
+const setupTestTag = 'checkin_mission_progress_concurrency_setup';
 const endpoints = {
-  issueQr: 'myReservationQrIssue',
-  checkIn: 'qrCheckIn',
+  issueQr: 'missionProgressQrIssue',
+  checkIn: 'missionProgressQrCheckIn',
 };
 const businessCodes = [
   'QR_ISSUE_CONFLICT',
@@ -42,11 +42,11 @@ if (!Number.isInteger(concurrencyVus) || concurrencyVus < 2) {
   fail(`PERF_${scenarioName}_VUS must be an integer greater than or equal to 2`);
 }
 
-const qrCheckinSuccessCount = new Counter('qr_checkin_success_count');
+const checkinSuccessCount = new Counter('checkin_mission_progress_success_count');
 
 export const options = {
   scenarios: {
-    qr_checkin_same_reservation: {
+    checkin_mission_progress_same_reservation: {
       executor: 'per-vu-iterations',
       vus: concurrencyVus,
       iterations: 1,
@@ -57,7 +57,7 @@ export const options = {
     expected_outcome_rate: ['rate==1'],
     [`expected_outcome_rate{endpoint:${endpoints.issueQr}}`]: ['rate==1'],
     [`expected_outcome_rate{endpoint:${endpoints.checkIn}}`]: ['rate==1'],
-    qr_checkin_success_count: [`count==${concurrencyVus}`],
+    checkin_mission_progress_success_count: [`count==${concurrencyVus}`],
     system_failure_rate: ['rate==0'],
     unexpected_failure_rate: ['rate==0'],
     [`http_req_duration{test:${testTag}}`]: [`p(95)<${p95Threshold}`],
@@ -71,6 +71,7 @@ const apiBase = apiBaseUrl();
 const visitorToken = csvEnv('PERF_VISITOR_ACCESS_TOKENS')[0];
 const operatorToken = csvEnv('PERF_OPERATOR_ACCESS_TOKENS')[0];
 const reservationId = requiredEnv('PERF_RESERVATION_ID');
+const missionParticipationId = requiredEnv('PERF_MISSION_PARTICIPATION_ID');
 const commonTags = { test: testTag, reservation_id: reservationId };
 const setupTags = requestTags(
   endpoints.issueQr,
@@ -85,8 +86,8 @@ const checkInTags = requestTags(
 
 export function handleSummary(data) {
   return markdownSummary(data, {
-    title: 'k6 QR Check-in Concurrency Summary',
-    scenario: 'qr-checkin-concurrency',
+    title: 'k6 Check-in Mission Progress Concurrency Summary',
+    scenario: 'checkin-mission-progress-concurrency',
     testTag,
     baseUrl: env('PERF_BASE_URL', ''),
     apiBase,
@@ -95,6 +96,7 @@ export function handleSummary(data) {
     visitorTokens: 1,
     operatorTokens: 1,
     reservationId,
+    mode: `mission-participation:${missionParticipationId}`,
   });
 }
 
@@ -110,7 +112,7 @@ export function setup() {
     { businessCodes, endpoint: endpoints.issueQr },
   );
   if (!qrOutcome.success) {
-    throw new Error('QR setup failed. Check PERF_RESERVATION_ID and check-in window fixture.');
+    throw new Error('QR setup failed. Check reservation and active mission participation fixtures.');
   }
 
   const qrToken = qrOutcome.body && qrOutcome.body.data && qrOutcome.body.data.qrToken;
@@ -132,12 +134,14 @@ export default function (data) {
       apiBase,
       '/operator/check-ins',
       { qrToken: data.qrToken },
-      authHeaders(operatorToken, { 'Idempotency-Key': idempotencyKey('qr-check-in') }),
+      authHeaders(operatorToken, {
+        'Idempotency-Key': idempotencyKey('checkin-mission-progress'),
+      }),
       checkInTags,
     ),
     { businessCodes, endpoint: endpoints.checkIn },
   );
   if (outcome.success) {
-    qrCheckinSuccessCount.add(1, commonTags);
+    checkinSuccessCount.add(1, commonTags);
   }
 }
