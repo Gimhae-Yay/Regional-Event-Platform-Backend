@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.domain.payment.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -39,6 +40,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import tools.jackson.databind.node.JsonNodeFactory;
 
+import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
@@ -75,6 +77,8 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.infra.payment.PortOneWebhookSignatureVerifier;
 import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
 import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
@@ -109,6 +113,7 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
     private final CouponRepository couponRepository;
     private final CouponStatusHistoryRepository couponStatusHistoryRepository;
     private final CouponRedemptionRepository couponRedemptionRepository;
+    private final AuditEventRepository auditEventRepository;
     private final PaymentIdempotencyService paymentIdempotencyService;
     private final TransactionTemplate transactionTemplate;
     private final JdbcTemplate jdbcTemplate;
@@ -133,6 +138,7 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
         CouponRepository couponRepository,
         CouponStatusHistoryRepository couponStatusHistoryRepository,
         CouponRedemptionRepository couponRedemptionRepository,
+        AuditEventRepository auditEventRepository,
         PaymentIdempotencyService paymentIdempotencyService,
         JdbcTemplate jdbcTemplate,
         PlatformTransactionManager transactionManager
@@ -155,6 +161,7 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
         this.couponRepository = couponRepository;
         this.couponStatusHistoryRepository = couponStatusHistoryRepository;
         this.couponRedemptionRepository = couponRedemptionRepository;
+        this.auditEventRepository = auditEventRepository;
         this.paymentIdempotencyService = paymentIdempotencyService;
         this.jdbcTemplate = jdbcTemplate;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
@@ -319,6 +326,52 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
             .hasValueSatisfying(savedCoupon -> assertThat(savedCoupon.getStatus()).isEqualTo(CouponStatus.USED));
         assertThat(couponStatusHistoryRepository.findAll()).hasSize(4);
         assertThat(couponRedemptionRepository.findAll()).singleElement();
+    }
+
+    @Test
+    void declinedCouponPaymentRetriedWithNewKeyAndExpiredCoupon_rollsBackNewPaymentRecords() {
+        Fixture fixture = createFixture();
+        Coupon coupon = createCoupon(fixture);
+        createPaymentUseCase.create(
+            fixture.user().getUserId(),
+            fixture.hold().getHoldId().toString(),
+            new CreatePaymentRequest(JsonNodeFactory.instance.stringNode(coupon.getCouponId().toString())),
+            "payment-key-first-" + System.nanoTime(),
+            UUID.randomUUID()
+        );
+        String firstOrderId = paymentRepository.findAll().getFirst().getOrderId();
+        when(paymentGateway.findByPaymentId(firstOrderId)).thenReturn(new PortOnePaymentGateway.PortOnePayment(
+            firstOrderId, TRANSACTION_ID, "store-1", 19_000, "KRW", "DECLINED", RESULT_HASH
+        ));
+        receivePortOneWebhookUseCase.receive(
+            "webhook-coupon-declined", WEBHOOK_TIMESTAMP, WEBHOOK_SIGNATURE, paymentEvent(firstOrderId)
+        );
+        jdbcTemplate.update(
+            "UPDATE coupon SET expires_at = CURRENT_TIMESTAMP(6) - INTERVAL 1 MICROSECOND WHERE coupon_id = ?",
+            coupon.getCouponId()
+        );
+        long paymentCount = paymentRepository.count();
+        long idempotencyCount = paymentIdempotencyRepository.count();
+        long couponStatusHistoryCount = couponStatusHistoryRepository.count();
+        long auditEventCount = auditEventRepository.count();
+
+        assertThatThrownBy(() -> createPaymentUseCase.create(
+            fixture.user().getUserId(),
+            fixture.hold().getHoldId().toString(),
+            new CreatePaymentRequest(JsonNodeFactory.instance.stringNode(coupon.getCouponId().toString())),
+            "payment-key-retry-" + System.nanoTime(),
+            UUID.randomUUID()
+        ))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(exception -> assertThat(((BusinessException) exception).getErrorCode())
+                .isEqualTo(ErrorCode.PAYMENT_HOLD_CONFLICT));
+
+        assertThat(paymentRepository.count()).isEqualTo(paymentCount);
+        assertThat(paymentIdempotencyRepository.count()).isEqualTo(idempotencyCount);
+        assertThat(couponStatusHistoryRepository.count()).isEqualTo(couponStatusHistoryCount);
+        assertThat(auditEventRepository.count()).isEqualTo(auditEventCount);
+        assertThat(couponRepository.findById(coupon.getCouponId()))
+            .hasValueSatisfying(savedCoupon -> assertThat(savedCoupon.getStatus()).isEqualTo(CouponStatus.AVAILABLE));
     }
 
     @Test
