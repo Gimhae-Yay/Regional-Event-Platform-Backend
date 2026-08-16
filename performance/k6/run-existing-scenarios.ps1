@@ -3,6 +3,7 @@ param(
     [ValidateSet(
         'all',
         'auth-session',
+        'public-api-response-time',
         'public-content',
         'reservation-flow',
         'reservation-hold',
@@ -39,6 +40,7 @@ $visitorEmails = @(
 $scenarioNames = if ($Scenario -eq 'all') {
     @(
         'auth-session',
+        'public-api-response-time',
         'public-content',
         'reservation-flow',
         'reservation-hold',
@@ -180,6 +182,14 @@ foreach ($scenarioName in $scenarioNames) {
                 @{ email = 'k6-visitor@example.com'; password = $password },
                 @{ email = 'k6-qr-visitor@example.com'; password = $password }
             ) | ConvertTo-Json -Compress
+        }
+        'public-api-response-time' {
+            $scenarioFile = 'scenarios/public-api-response-time.js'
+            $environment.PERF_REGION_ID = '900001'
+            $environment.PERF_CONTENT_ID = '900001'
+            $environment.PERF_SESSION_ID = '900001'
+            $environment.PERF_MISSION_ID = '900010'
+            $environment.PERF_RESERVATION_AVAILABLE = 'true'
         }
         'public-content' {
             $scenarioFile = 'scenarios/public-content-readonly.js'

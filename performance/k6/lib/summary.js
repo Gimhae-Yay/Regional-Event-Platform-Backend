@@ -46,6 +46,7 @@ function renderMarkdownSummary(data, metadata) {
     ['Base URL', metadata.baseUrl || metadata.apiBase],
     ['Target VUs', metadata.vus],
     ['Duration', metadata.duration],
+    ['Iterations', metadata.iterations],
     ['Test tag', metadata.testTag],
     ['Mode', metadata.mode],
     ['Auth users', metadata.authUsers],
