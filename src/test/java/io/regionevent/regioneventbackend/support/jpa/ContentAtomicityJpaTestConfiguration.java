@@ -39,7 +39,6 @@ import io.regionevent.regioneventbackend.domain.image.service.ImageObjectService
 import io.regionevent.regioneventbackend.domain.payment.service.CreateRefundUseCase;
 import io.regionevent.regioneventbackend.domain.payment.service.ExpirePendingPaymentForTerminatedHoldUseCase;
 import io.regionevent.regioneventbackend.domain.payment.service.PaymentService;
-import io.regionevent.regioneventbackend.domain.region.service.RegionService;
 import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHoldService;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationIdentifierGenerator;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationPriceSnapshotService;
@@ -70,7 +69,6 @@ import io.regionevent.regioneventbackend.global.security.qr.QrTokenService;
     ImageObjectService.class,
     CapacityHoldService.class,
     ReservationService.class,
-    RegionService.class,
     RegionAdminAuthorizationService.class,
     OperatorAuthorizationService.class,
     RecordAuditEventUseCase.class,

@@ -323,7 +323,6 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
     );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @EntityGraph(attributePaths = "region")
     @Query("""
         SELECT content
         FROM Content content
@@ -333,7 +332,6 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
     Optional<Content> findApprovalTargetForUpdate(@Param("contentId") Long contentId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @EntityGraph(attributePaths = "region")
     @Query("""
         SELECT content
         FROM Content content
@@ -351,7 +349,6 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
     Optional<Long> findRegionIdByContentIdAndDeletedAtIsNull(@Param("contentId") Long contentId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @EntityGraph(attributePaths = "region")
     @Query("""
         SELECT content
         FROM Content content
