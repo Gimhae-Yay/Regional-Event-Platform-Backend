@@ -118,6 +118,40 @@ public class CheckInControllerIntegrationTest {
     }
 
     @Test
+    void checkInByQr_whenValidQrIsRescannedWithNewKey_returnsAlreadyCheckedInResponse() throws Exception {
+        Fixture fixture = createFixture();
+        QrTokenService.IssuedQrToken issuedQrToken = qrTokenService.issue(
+            fixture.reservation().getQrReference(),
+            fixture.session().getSessionId(),
+            Instant.now(),
+            fixture.session().getCheckinCloseAt()
+        );
+        String requestBody = """
+            {
+              "qrToken": "%s"
+            }
+            """.formatted(issuedQrToken.token());
+
+        mockMvc.perform(post("/api/v1/operator/check-ins")
+                .header("Authorization", bearerToken(fixture.operator()))
+                .header("Idempotency-Key", "qr-controller-first-scan-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(requestBody))
+            .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/operator/check-ins")
+                .header("Authorization", bearerToken(fixture.operator()))
+                .header("Idempotency-Key", "qr-controller-rescan-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(requestBody))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.statusCode").value(409))
+            .andExpect(jsonPath("$.code").value("QR_ALREADY_CHECKED_IN"))
+            .andExpect(jsonPath("$.message").value("이미 체크인된 QR입니다."))
+            .andExpect(jsonPath("$.data").value(Matchers.nullValue()));
+    }
+
+    @Test
     void checkInByQr_whenUnversionedPathIsUsed_returnsSuccessResponse() throws Exception {
         Fixture fixture = createFixture();
         QrTokenService.IssuedQrToken issuedQrToken = qrTokenService.issue(
