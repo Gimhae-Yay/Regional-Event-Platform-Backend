@@ -25,8 +25,6 @@ SET @paid_hold_id = 900011;
 SET @paid_reservation_id = 900010;
 SET @paid_snapshot_id = 900010;
 SET @paid_payment_id = 900010;
-SET @paid_refund_id = 900010;
-SET @paid_refund_attempt_id = 900010;
 SET @coupon_source_hold_id = 900012;
 SET @coupon_source_reservation_id = 900012;
 SET @coupon_source_visit_id = 900010;
@@ -42,7 +40,12 @@ SET @now = UTC_TIMESTAMP(6);
 
 DELETE FROM payment_webhook
 WHERE payment_id = @paid_payment_id OR provider_event_id LIKE 'k6-%';
-DELETE FROM refund_attempt WHERE refund_id = @paid_refund_id;
+DELETE FROM refund_attempt
+WHERE refund_id IN (
+    SELECT refund_id
+    FROM refund
+    WHERE payment_id = @paid_payment_id
+);
 DELETE FROM refund WHERE payment_id = @paid_payment_id;
 DELETE FROM payment_idempotency WHERE actor_user_id = @visitor_user_id;
 DELETE FROM payment WHERE payment_id = @paid_payment_id OR hold_id IN (@payment_create_hold_id, @paid_hold_id);
@@ -572,23 +575,6 @@ INSERT INTO payment (
 ) VALUES (
     @paid_payment_id, @paid_hold_id, @paid_snapshot_id, @paid_reservation_id,
     'k6-order-900010', 'k6-portone-payment-900010', 'APPROVED', @now, @now
-);
-
-INSERT INTO refund (
-    refund_id, payment_id, amount, status, requested_at, completed_at, resolved_at
-) VALUES (
-    @paid_refund_id, @paid_payment_id, 10000, 'SUCCEEDED', @now - INTERVAL 5 MINUTE,
-    @now - INTERVAL 4 MINUTE, NULL
-);
-
-INSERT INTO refund_attempt (
-    refund_attempt_id, refund_id, attempt_no, initiator_kind,
-    portone_cancellation_id, outcome_kind, failure_reason_code,
-    external_status, result_hash, attempted_at
-) VALUES (
-    @paid_refund_attempt_id, @paid_refund_id, 1, 'SYSTEM',
-    'k6-cancellation-900010', 'RESPONDED', NULL,
-    'SUCCEEDED', 'k6-refund-result-hash', @now - INTERVAL 5 MINUTE
 );
 
 INSERT INTO visit (

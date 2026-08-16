@@ -49,9 +49,22 @@ FROM content_session WHERE session_id = 900001
 HAVING @perf_scenario = 'paid-cancel';
 
 INSERT INTO perf_new_invariant_result
-SELECT 'paid cancellation refund', CONCAT(COUNT(*), ':', COALESCE(MAX(status), 'NONE')),
-       '1 terminal refund', COUNT(*) = 1 AND MAX(status) IN ('SUCCEEDED', 'FAILED', 'DISCREPANT')
-FROM refund WHERE payment_id = 900010
+SELECT 'paid cancellation refund',
+       CONCAT(
+           'refunds=', COUNT(DISTINCT r.refund_id),
+           ',attempts=', COUNT(DISTINCT ra.refund_attempt_id),
+           ',refund_status=', COALESCE(MAX(r.status), 'NONE'),
+           ',attempt_outcome=', COALESCE(MAX(ra.outcome_kind), 'NONE')
+       ),
+       'refunds=1,attempts=1,terminal refund and attempt',
+       COUNT(DISTINCT r.refund_id) = 1
+           AND COUNT(DISTINCT ra.refund_attempt_id) = 1
+           AND MAX(r.status) IN ('SUCCEEDED', 'FAILED', 'DISCREPANT')
+           AND MAX(ra.attempt_no) = 1
+           AND MAX(ra.outcome_kind) IN ('RESPONDED', 'NO_RESPONSE')
+FROM refund r
+LEFT JOIN refund_attempt ra ON ra.refund_id = r.refund_id
+WHERE r.payment_id = 900010
 HAVING @perf_scenario = 'paid-cancel';
 
 INSERT INTO perf_new_invariant_result
