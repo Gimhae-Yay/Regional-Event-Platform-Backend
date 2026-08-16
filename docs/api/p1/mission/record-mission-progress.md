@@ -8,7 +8,8 @@
 
 이 계약에서 유효 방문은 `visit` 행이 영속되어 있고 `user_id IS NOT NULL`이며
 `author_unlinked_at IS NULL`인 방문이다. 방문 완료 어댑터의 호출·재호출 경계는
-[ADR-0096](../../../adr/0096-trigger-mission-progress-after-new-visit-commit.md)을 따른다.
+[ADR-0096](../../../adr/0096-trigger-mission-progress-after-new-visit-commit.md)을 따르고, 거부된 QR 재스캔의
+결과 참조·호출 제외는 [ADR-0103](../../../adr/0103-record-rejected-qr-rescans-without-visit-result-or-progress-trigger.md)을 따른다.
 
 ### 실행 계약
 
@@ -16,7 +17,7 @@
 | --- | --- |
 | 실행 방식 | 방문 완료 뒤 내부 실행 어댑터가 호출 |
 | 호출 등록 | 새 `visit` 행을 영속화한 체크인 트랜잭션에서만 커밋 후 실행을 등록 |
-| 호출 제외 | 체크인 멱등 결과 재조회와 QR 재스캔으로 기존 방문을 반환하는 경우 |
+| 호출 제외 | 체크인 멱등 결과 재조회와 새 방문을 만들지 않고 거부된 QR 재스캔 |
 | HTTP Endpoint | 없음 |
 | 관련 요구사항 | `P1-FR-04`, `MSN-03`, `P1-AC-03` |
 | 입력 | 영속 `visitId` |

@@ -3,9 +3,9 @@
 | 항목 | 내용 |
 | --- | --- |
 | 대상 릴리스 | P0 |
-| 관련 요구사항 | `FR-07`, `FR-10`, `FR-11`, `AUTH-01`, `QR-03`, `QR-05`, `RSV-04` |
+| 관련 요구사항 | `FR-07`, `FR-10`, `FR-11`, `AUTH-01`, `QR-02`, `QR-03`, `QR-05`, `RSV-04` |
 | 소유 도메인 | 예약 QR·체크인 |
-| 기준 문서 | [예약 QR·체크인](../../../p0/check-in.md), [정원 홀드·무료 예약](../../../p0/reservation.md), [ADR-0003](../../../adr/0003-use-persisted-idempotency-for-reservation-and-checkin.md), [ADR-0010](../../../adr/0010-issue-short-lived-qr-on-demand-and-separate-retry-idempotency.md), [ADR-0040](../../../adr/0040-use-single-get-endpoint-for-my-reservation-qr.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [예약 QR·체크인](../../../p0/check-in.md), [정원 홀드·무료 예약](../../../p0/reservation.md), [ADR-0003](../../../adr/0003-use-persisted-idempotency-for-reservation-and-checkin.md), [ADR-0010](../../../adr/0010-issue-short-lived-qr-on-demand-and-separate-retry-idempotency.md), [ADR-0101](../../../adr/0101-reject-new-qr-rescans-after-check-in.md), [ADR-0102](../../../adr/0102-preserve-qr-check-in-validation-precedence-for-rescan-conflict.md), [ADR-0103](../../../adr/0103-record-rejected-qr-rescans-without-visit-result-or-progress-trigger.md), [ADR-0040](../../../adr/0040-use-single-get-endpoint-for-my-reservation-qr.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 

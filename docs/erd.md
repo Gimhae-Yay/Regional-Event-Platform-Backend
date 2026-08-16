@@ -720,8 +720,9 @@ erDiagram
 - `PROCESSING`·`FAILED`에는 두 결과 FK가 모두 없다. 저장한 결정적 실패는 `result_code`로 재응답한다.
 - P0의 결과 유형은 둘뿐이므로 범용 `result_type`·`result_id` 대신 작업별 결과 FK를
   `idempotency_record`에 직접 둔다.
-- 서로 다른 체크인 요청 ID의 유효한 새 QR 재스캔은 기존 `visit` 결과를 반환할 수 있으므로,
-  결과 FK에는 유일 제약을 두지 않는다.
+- 새로운 체크인 요청 ID로 이미 `CHECKED_IN`된 예약의 QR을 재스캔하면 멱등 기록을 `FAILED`와
+  `result_code = QR_ALREADY_CHECKED_IN`으로 완료하고 결과 FK를 두지 않는다. 이 정책 변경만으로 기존 결과 FK의
+  제약을 추가하거나 제거하지 않으며 [ADR-0103](adr/0103-record-rejected-qr-rescans-without-visit-result-or-progress-trigger.md)을 따른다.
 - `request_hash`는 개인정보 원문을 포함하지 않는 정규화된 명령 의미로 계산한다.
 - 방문자 탈퇴 시 `actor_user_id`, 사용자 기반 키와 역참조 가능한 요청·응답 정보를 제거한다.
   운영 보존이 필요한 비개인 결과만 남긴다.
