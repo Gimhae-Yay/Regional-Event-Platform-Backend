@@ -26,6 +26,7 @@ import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentRevision;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentRevisionStatus;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
+import io.regionevent.regioneventbackend.domain.region.service.RegionService;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
@@ -46,12 +47,14 @@ class WithdrawContentRevisionUseCaseTest {
 
     private final ContentRevisionService contentRevisionService = mock(ContentRevisionService.class);
     private final ContentService contentService = mock(ContentService.class);
+    private final RegionService regionService = mock(RegionService.class);
     private final OperatorAuthorizationService operatorAuthorizationService =
         mock(OperatorAuthorizationService.class);
     private final RecordAuditEventUseCase recordAuditEventUseCase = mock(RecordAuditEventUseCase.class);
     private final WithdrawContentRevisionUseCase useCase = new WithdrawContentRevisionUseCase(
         contentRevisionService,
         contentService,
+        regionService,
         operatorAuthorizationService,
         recordAuditEventUseCase,
         Clock.fixed(WITHDRAWN_AT, ZoneOffset.UTC)
@@ -83,8 +86,9 @@ class WithdrawContentRevisionUseCaseTest {
         assertThat(result.revisionId()).isEqualTo(REVISION_ID);
         assertThat(result.contentId()).isEqualTo(CONTENT_ID);
         assertThat(result.status()).isEqualTo(ContentRevisionStatus.EDIT_WITHDRAWN);
-        InOrder lockOrder = inOrder(contentRevisionService, contentService);
+        InOrder lockOrder = inOrder(contentRevisionService, contentService, regionService);
         lockOrder.verify(contentRevisionService).findContentIdByRevisionId(REVISION_ID);
+        lockOrder.verify(regionService).findRegionForUpdate(REGION_ID);
         lockOrder.verify(contentService).findApprovalTargetForUpdate(CONTENT_ID);
         lockOrder.verify(contentRevisionService).findReviewTargetForUpdate(REVISION_ID);
         verify(contentRevisionService).withdraw(
@@ -143,6 +147,7 @@ class WithdrawContentRevisionUseCaseTest {
         when(fixture.content().isScopedTo(REGION_ID)).thenReturn(true);
         when(operatorAuthorizationService.requireAuthorizedOperator(USER_ID)).thenReturn(fixture.authorizedOperator());
         when(contentRevisionService.findContentIdByRevisionId(REVISION_ID)).thenReturn(CONTENT_ID);
+        when(regionService.findRegionForUpdate(REGION_ID)).thenReturn(fixture.region());
         when(contentService.findApprovalTargetForUpdate(CONTENT_ID)).thenReturn(fixture.content());
         when(contentRevisionService.findReviewTargetForUpdate(REVISION_ID)).thenReturn(fixture.revision());
 
@@ -180,6 +185,7 @@ class WithdrawContentRevisionUseCaseTest {
     private void stubCommon(Fixture fixture) {
         when(operatorAuthorizationService.requireAuthorizedOperator(USER_ID)).thenReturn(fixture.authorizedOperator());
         when(contentRevisionService.findContentIdByRevisionId(REVISION_ID)).thenReturn(CONTENT_ID);
+        when(regionService.findRegionForUpdate(REGION_ID)).thenReturn(fixture.region());
         when(contentService.findApprovalTargetForUpdate(CONTENT_ID)).thenReturn(fixture.content());
         when(contentRevisionService.findReviewTargetForUpdate(REVISION_ID)).thenReturn(fixture.revision());
     }
