@@ -26,6 +26,7 @@ public enum ErrorCode {
     REFUND_PAYMENT_CONFLICT(HttpStatus.CONFLICT, "REFUND_PAYMENT_CONFLICT", "환불을 생성할 수 없는 상태입니다."),
     REFUND_STATE_CONFLICT(HttpStatus.CONFLICT, "REFUND_STATE_CONFLICT", "환불 상태가 요청을 처리할 수 없습니다."),
     QR_ISSUE_CONFLICT(HttpStatus.CONFLICT, "QR_ISSUE_CONFLICT", "QR을 발급할 수 없는 상태입니다."),
+    QR_ALREADY_CHECKED_IN(HttpStatus.CONFLICT, "QR_ALREADY_CHECKED_IN", "이미 체크인된 QR입니다."),
     QR_VERIFICATION_FAILED(HttpStatus.BAD_REQUEST, "QR_VERIFICATION_FAILED", "QR을 확인할 수 없습니다."),
     CHECK_IN_CONFLICT(HttpStatus.CONFLICT, "CHECK_IN_CONFLICT", "체크인할 수 없는 상태입니다."),
     RESERVATION_CANCEL_CONFLICT(HttpStatus.CONFLICT, "RESERVATION_CANCEL_CONFLICT", "예약을 취소할 수 없는 상태입니다."),
