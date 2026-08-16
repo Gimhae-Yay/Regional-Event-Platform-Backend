@@ -2,6 +2,8 @@ package io.regionevent.regioneventbackend.domain.content.service;
 
 import java.util.Objects;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -10,6 +12,8 @@ import io.regionevent.regioneventbackend.domain.region.service.PublicRegionCache
 
 @Component
 public class PublicCatalogCacheInvalidator {
+
+    private static final Logger log = LoggerFactory.getLogger(PublicCatalogCacheInvalidator.class);
 
     private final PublicRegionCache publicRegionCache;
     private final PublicContentCache publicContentCache;
@@ -43,7 +47,11 @@ public class PublicCatalogCacheInvalidator {
 
             @Override
             public void afterCommit() {
-                operation.run();
+                try {
+                    operation.run();
+                } catch (RuntimeException exception) {
+                    log.warn("Public catalog cache invalidation failed after commit", exception);
+                }
             }
         });
     }

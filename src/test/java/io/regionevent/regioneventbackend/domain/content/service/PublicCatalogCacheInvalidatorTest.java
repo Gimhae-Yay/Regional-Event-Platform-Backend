@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.content.service;
 
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -44,5 +45,19 @@ class PublicCatalogCacheInvalidatorTest {
         invalidator.invalidateRegionAfterCommit(10L);
 
         verify(publicRegionCache).evictRegion(10L);
+    }
+
+    @Test
+    void invalidateContentAfterCommit_캐시_삭제_실패를_커밋_결과로_전파하지_않는다() {
+        TransactionSynchronizationManager.initSynchronization();
+        doThrow(new IllegalStateException("cache unavailable"))
+            .when(publicContentCache)
+            .evictContent(10L, 200L, 3);
+        invalidator.invalidateContentAfterCommit(10L, 200L, 3);
+
+        TransactionSynchronizationManager.getSynchronizations()
+            .forEach(TransactionSynchronization::afterCommit);
+
+        verify(publicContentCache).evictContent(10L, 200L, 3);
     }
 }

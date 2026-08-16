@@ -16,6 +16,25 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentWithdrawal
 public interface ContentWithdrawalRequestRepository
     extends JpaRepository<ContentWithdrawalRequest, Long> {
 
+    @Query("""
+        SELECT request.content.contentId
+        FROM ContentWithdrawalRequest request
+        WHERE request.contentWithdrawalRequestId = :withdrawalRequestId
+        """)
+    Optional<Long> findContentIdByWithdrawalRequestId(
+        @Param("withdrawalRequestId") Long withdrawalRequestId
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT request
+        FROM ContentWithdrawalRequest request
+        WHERE request.contentWithdrawalRequestId = :withdrawalRequestId
+        """)
+    Optional<ContentWithdrawalRequest> findApprovalTargetForUpdate(
+        @Param("withdrawalRequestId") Long withdrawalRequestId
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT request

@@ -222,6 +222,13 @@ public class ContentWithdrawalRequest {
         status = ContentWithdrawalRequestStatus.INVALIDATED;
     }
 
+    public void approve(AppUser reviewer, Instant reviewedAt) {
+        requirePending();
+        this.reviewedBy = requireNotNull(reviewer, "reviewer");
+        this.reviewedAt = requireNotNull(reviewedAt, "reviewedAt");
+        status = ContentWithdrawalRequestStatus.APPROVED;
+    }
+
     public Long getContentWithdrawalRequestId() {
         return contentWithdrawalRequestId;
     }

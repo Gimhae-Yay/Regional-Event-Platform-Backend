@@ -51,13 +51,13 @@ public class ExpirePendingPaymentForTerminatedHoldUseCase {
         UUID requestId,
         AuditEventActor actor
     ) {
+        recordCapacityHoldAuditEvent(capacityHold, requestId, actor);
         return paymentService.expirePendingByHoldId(capacityHold.holdId(), capacityHold.occurredAt())
             .map(payment -> {
                 paymentIdempotencyService.setPaymentResultExpiration(
                     payment,
                     payment.getFinalizedAt()
                 );
-                recordCapacityHoldAuditEvent(capacityHold, requestId, actor);
                 recordPaymentAuditEvent(payment, capacityHold, requestId, actor);
                 releaseSnapshotCoupon(
                     payment.getReservationPriceSnapshot().getCoupon(),

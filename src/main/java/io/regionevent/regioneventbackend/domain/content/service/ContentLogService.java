@@ -133,6 +133,21 @@ public class ContentLogService {
         ));
     }
 
+    public ContentLog recordWithdrawn(
+        Content content,
+        AppUser actor,
+        Instant withdrawnAt,
+        String reason
+    ) {
+        return contentLogRepository.saveAndFlush(new ContentLog(
+            content,
+            actor,
+            ContentLogStatus.WITHDRAWN,
+            reason,
+            withdrawnAt
+        ));
+    }
+
     public ContentLog findLatestEnded(Long contentId) {
         return contentLogRepository.findTopByContentContentIdAndStatusOrderByDateDescIdDesc(
             contentId,

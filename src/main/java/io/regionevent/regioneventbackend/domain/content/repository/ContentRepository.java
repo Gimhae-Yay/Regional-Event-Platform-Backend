@@ -481,4 +481,13 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
             suspendedAt
         );
     }
+
+    default int withdrawPublishedByContentId(Long contentId, Instant withdrawnAt) {
+        return updateStatusIfExpected(
+            contentId,
+            ContentStatus.PUBLISHED,
+            ContentStatus.WITHDRAWN,
+            withdrawnAt
+        );
+    }
 }

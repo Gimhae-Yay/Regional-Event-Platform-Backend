@@ -35,6 +35,7 @@ class ContentRevisionTest {
             () -> new ContentRevisionTest().approve_whenEditIsRequested_recordsReviewerWithoutReason(),
             () -> new ContentRevisionTest().approve_whenRevisionIsAlreadyTerminal_throwsContentStateConflict(),
             () -> new ContentRevisionTest().invalidate_whenEditIsRequested_recordsInvalidationDetails(),
+            () -> new ContentRevisionTest().invalidate_contentWithdrawn_recordsInvalidationReason(),
             () -> new ContentRevisionTest()
                 .invalidate_whenRevisionIsAlreadyTerminal_throwsContentStateConflictWithoutOverwritingState(),
             () -> new ContentRevisionTest().invalidatedRevision_cannotBeReviewedOrWithdrawn(),
@@ -204,6 +205,16 @@ class ContentRevisionTest {
         assertThat(revision.getInvalidatedBy()).isSameAs(invalidator);
         assertThat(revision.getInvalidationReason())
             .isEqualTo(ContentRevisionInvalidationReason.CONTENT_SUSPENDED);
+    }
+
+    void invalidate_contentWithdrawn_recordsInvalidationReason() {
+        ContentRevision revision = newRevision();
+
+        revision.invalidate(null, REVIEWED_AT, ContentRevisionInvalidationReason.CONTENT_WITHDRAWN);
+
+        assertThat(revision.getStatus()).isEqualTo(ContentRevisionStatus.EDIT_INVALIDATED);
+        assertThat(revision.getInvalidationReason())
+            .isEqualTo(ContentRevisionInvalidationReason.CONTENT_WITHDRAWN);
     }
 
     void invalidate_whenRevisionIsAlreadyTerminal_throwsContentStateConflictWithoutOverwritingState() {

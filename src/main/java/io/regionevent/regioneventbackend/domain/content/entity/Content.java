@@ -283,6 +283,16 @@ public class Content {
         status = ContentStatus.SUSPENDED;
     }
 
+    public void withdraw() {
+        if (deletedAt != null) {
+            throw new IllegalStateException("soft deleted content cannot be withdrawn");
+        }
+        if (status != ContentStatus.PUBLISHED) {
+            throw new IllegalStateException("content status must be PUBLISHED but was " + status);
+        }
+        status = ContentStatus.WITHDRAWN;
+    }
+
     public void assignRepresentativeImage(ImageObject imageObject, Instant assignedAt) {
         representativeImageObject = requireNotNull(imageObject, "imageObject");
         representativeImageAssignedAt = requireNotNull(assignedAt, "assignedAt");

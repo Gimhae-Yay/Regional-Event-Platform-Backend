@@ -465,7 +465,20 @@ class SuspendContentConcurrencyMySqlTest extends NonTransactionalMySqlTestSuppor
             .filteredOn(event -> event.getTargetId().equals(contentId))
             .filteredOn(event -> event.getResult() == AuditEventResult.FAILURE)
             .hasSize(failureCount);
-        assertThat(auditEventActorLinkRepository.count()).isEqualTo(successCount);
+        long linkedSuccessCount = auditEventRepository.findAll().stream()
+            .filter(event -> event.getTargetType() == AuditEventTargetType.CONTENT)
+            .filter(event -> event.getTargetId().equals(contentId))
+            .filter(event -> event.getResult() == AuditEventResult.SUCCESS)
+            .filter(event -> auditEventActorLinkRepository.existsById(event.getAuditEventId()))
+            .count();
+        long linkedFailureCount = auditEventRepository.findAll().stream()
+            .filter(event -> event.getTargetType() == AuditEventTargetType.CONTENT)
+            .filter(event -> event.getTargetId().equals(contentId))
+            .filter(event -> event.getResult() == AuditEventResult.FAILURE)
+            .filter(event -> auditEventActorLinkRepository.existsById(event.getAuditEventId()))
+            .count();
+        assertThat(linkedSuccessCount).isEqualTo(successCount);
+        assertThat(linkedFailureCount).isZero();
     }
 
     private Fixture createFixture() {
