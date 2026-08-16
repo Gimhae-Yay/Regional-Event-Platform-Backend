@@ -39,6 +39,7 @@ public class CancelContentSessionUseCase {
     private static final String OPERATOR_SESSION_CANCEL_REASON = "OPERATOR_SESSION_CANCEL";
 
     private final OperatorAuthorizationService operatorAuthorizationService;
+    private final ContentService contentService;
     private final ContentSessionService contentSessionService;
     private final CapacityHoldService capacityHoldService;
     private final ExpirePendingPaymentForTerminatedHoldUseCase expirePendingPaymentForTerminatedHoldUseCase;
@@ -52,6 +53,7 @@ public class CancelContentSessionUseCase {
 
     public CancelContentSessionUseCase(
         OperatorAuthorizationService operatorAuthorizationService,
+        ContentService contentService,
         ContentSessionService contentSessionService,
         CapacityHoldService capacityHoldService,
         ExpirePendingPaymentForTerminatedHoldUseCase expirePendingPaymentForTerminatedHoldUseCase,
@@ -64,6 +66,7 @@ public class CancelContentSessionUseCase {
         PlatformTransactionManager transactionManager
     ) {
         this.operatorAuthorizationService = operatorAuthorizationService;
+        this.contentService = contentService;
         this.contentSessionService = contentSessionService;
         this.capacityHoldService = capacityHoldService;
         this.expirePendingPaymentForTerminatedHoldUseCase = expirePendingPaymentForTerminatedHoldUseCase;
@@ -102,6 +105,8 @@ public class CancelContentSessionUseCase {
         String validatedReason = validateCancellationReason(cancellationReason);
         OperatorAuthorizationService.AuthorizedOperator operator = operatorAuthorizationService
             .requireAuthorizedOperator(operatorUserId);
+        Long contentId = contentSessionService.findContentIdBySessionId(sessionId);
+        contentService.findForUpdate(contentId);
         ContentSession contentSession = contentSessionService.findCancelTargetForUpdate(sessionId);
         validateOwnership(operator, contentSession);
 

@@ -270,24 +270,38 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
         Fixture fixture = createFixture();
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
+        reservationLockOrderTracker.prepare(
+            fixture.contentSession().getContent().getContentId(),
+            fixture.contentSession().getSessionId()
+        );
 
-        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
-            Future<?> cancel = executorService.submit(() -> cancelAfterStart(fixture, ready, start));
-            Future<ReservationConfirmationResult> confirmation = executorService.submit(
-                () -> confirmAfterStart(fixture, "cancel-race-key-" + System.nanoTime(), ready, start)
-            );
+        try {
+            try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+                Future<?> cancel = executorService.submit(
+                    () -> reservationLockOrderTracker.runAsSessionCancel(
+                        () -> cancelAfterStart(fixture, ready, start)
+                    )
+                );
+                Future<ReservationConfirmationResult> confirmation = executorService.submit(
+                    () -> confirmAfterStart(fixture, "cancel-race-key-" + System.nanoTime(), ready, start)
+                );
 
-            assertThat(ready.await(3, TimeUnit.SECONDS)).isTrue();
-            start.countDown();
+                assertThat(ready.await(3, TimeUnit.SECONDS)).isTrue();
+                start.countDown();
 
-            cancel.get(5, TimeUnit.SECONDS);
-            ReservationConfirmationResult confirmationResult = confirmation.get(5, TimeUnit.SECONDS);
-            if (!confirmationResult.isSuccessful()) {
-                assertThat(confirmationResult.errorCode()).isEqualTo(ErrorCode.RESERVATION_CONFIRM_CONFLICT);
+                cancel.get(5, TimeUnit.SECONDS);
+                ReservationConfirmationResult confirmationResult = confirmation.get(5, TimeUnit.SECONDS);
+                if (!confirmationResult.isSuccessful()) {
+                    assertThat(confirmationResult.errorCode()).isEqualTo(ErrorCode.RESERVATION_CONFIRM_CONFLICT);
+                }
             }
-        }
 
-        assertSessionCancellationTerminalState(fixture);
+            assertThat(reservationLockOrderTracker.sessionCancelLockOrder())
+                .containsExactly(ReservationLockTarget.CONTENT, ReservationLockTarget.CONTENT_SESSION);
+            assertSessionCancellationTerminalState(fixture);
+        } finally {
+            reservationLockOrderTracker.reset();
+        }
     }
 
     @Test
@@ -947,6 +961,13 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
             reservationLockOrderTracker.recordContentLock(contentId);
             return locked;
         }
+
+        @Override
+        public Content findForUpdate(Long contentId) {
+            Content content = super.findForUpdate(contentId);
+            reservationLockOrderTracker.recordContentLock(contentId);
+            return content;
+        }
     }
 
     static class LockTrackingContentSessionService extends ContentSessionService {
@@ -975,6 +996,13 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
             reservationLockOrderTracker.recordReservationConfirmSessionLock(sessionId);
             return locked;
         }
+
+        @Override
+        public ContentSession findCancelTargetForUpdate(Long sessionId) {
+            ContentSession contentSession = super.findCancelTargetForUpdate(sessionId);
+            reservationLockOrderTracker.recordSessionCancelSessionLock(sessionId);
+            return contentSession;
+        }
     }
 
     static class ReservationLockOrderTracker {
@@ -982,6 +1010,7 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
         private final ThreadLocal<ReservationLockOperation> currentOperation = new ThreadLocal<>();
         private final List<ReservationLockTarget> holdCreateLockOrder = new CopyOnWriteArrayList<>();
         private final List<ReservationLockTarget> reservationConfirmLockOrder = new CopyOnWriteArrayList<>();
+        private final List<ReservationLockTarget> sessionCancelLockOrder = new CopyOnWriteArrayList<>();
         private volatile Long targetContentId;
         private volatile Long targetSessionId;
         private volatile CountDownLatch holdCreateContentLocked = new CountDownLatch(1);
@@ -993,6 +1022,7 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
             targetSessionId = sessionId;
             holdCreateLockOrder.clear();
             reservationConfirmLockOrder.clear();
+            sessionCancelLockOrder.clear();
             holdCreateContentLocked = new CountDownLatch(1);
             allowHoldCreateSessionLock = new CountDownLatch(1);
             reservationConfirmContentLockAttempted = new CountDownLatch(1);
@@ -1010,6 +1040,10 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
 
         <T> T runAsReservationConfirm(Supplier<T> action) {
             return runAs(ReservationLockOperation.RESERVATION_CONFIRM, action);
+        }
+
+        <T> T runAsSessionCancel(Supplier<T> action) {
+            return runAs(ReservationLockOperation.SESSION_CANCEL, action);
         }
 
         boolean awaitHoldCreateContentLock() throws InterruptedException {
@@ -1032,6 +1066,10 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
             return List.copyOf(reservationConfirmLockOrder);
         }
 
+        List<ReservationLockTarget> sessionCancelLockOrder() {
+            return List.copyOf(sessionCancelLockOrder);
+        }
+
         void recordReservationConfirmContentLockAttempt(Long contentId) {
             if (isReservationConfirmContent(contentId)) {
                 reservationConfirmContentLockAttempted.countDown();
@@ -1047,6 +1085,10 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
             }
             if (isReservationConfirmContent(contentId)) {
                 reservationConfirmLockOrder.add(ReservationLockTarget.CONTENT);
+                return;
+            }
+            if (isSessionCancelContent(contentId)) {
+                sessionCancelLockOrder.add(ReservationLockTarget.CONTENT);
             }
         }
 
@@ -1059,6 +1101,12 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
         void recordReservationConfirmSessionLock(Long sessionId) {
             if (isReservationConfirmSession(sessionId)) {
                 reservationConfirmLockOrder.add(ReservationLockTarget.CONTENT_SESSION);
+            }
+        }
+
+        void recordSessionCancelSessionLock(Long sessionId) {
+            if (isSessionCancelSession(sessionId)) {
+                sessionCancelLockOrder.add(ReservationLockTarget.CONTENT_SESSION);
             }
         }
 
@@ -1091,6 +1139,16 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
                 && sessionId.equals(targetSessionId);
         }
 
+        private boolean isSessionCancelContent(Long contentId) {
+            return currentOperation.get() == ReservationLockOperation.SESSION_CANCEL
+                && contentId.equals(targetContentId);
+        }
+
+        private boolean isSessionCancelSession(Long sessionId) {
+            return currentOperation.get() == ReservationLockOperation.SESSION_CANCEL
+                && sessionId.equals(targetSessionId);
+        }
+
         private void await(CountDownLatch latch) {
             try {
                 if (!latch.await(5, TimeUnit.SECONDS)) {
@@ -1105,7 +1163,8 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
 
     private enum ReservationLockOperation {
         HOLD_CREATE,
-        RESERVATION_CONFIRM
+        RESERVATION_CONFIRM,
+        SESSION_CANCEL
     }
 
     private enum ReservationLockTarget {
