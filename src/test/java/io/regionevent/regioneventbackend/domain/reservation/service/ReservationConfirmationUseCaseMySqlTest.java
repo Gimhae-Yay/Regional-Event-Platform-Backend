@@ -26,6 +26,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpHeaders;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -265,29 +266,105 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
     }
 
     @Test
-    @Timeout(10)
-    void cancelSessionAndConfirmReservationConcurrently_terminalizesMutableReservationState() throws Exception {
+    @Timeout(15)
+    void 회차취소가_콘텐츠잠금을_선점하면_예약확정은_충돌하고_홀드를_무효화한다() throws Exception {
         Fixture fixture = createFixture();
-        CountDownLatch ready = new CountDownLatch(2);
-        CountDownLatch start = new CountDownLatch(1);
+        reservationLockOrderTracker.prepareSessionCancelRace(
+            fixture.contentSession().getContent().getContentId(),
+            fixture.contentSession().getSessionId(),
+            ReservationLockOperation.SESSION_CANCEL
+        );
 
-        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
-            Future<?> cancel = executorService.submit(() -> cancelAfterStart(fixture, ready, start));
-            Future<ReservationConfirmationResult> confirmation = executorService.submit(
-                () -> confirmAfterStart(fixture, "cancel-race-key-" + System.nanoTime(), ready, start)
-            );
+        try {
+            try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+                Future<?> cancel;
+                Future<ReservationConfirmationResult> confirmation;
+                try {
+                    cancel = executorService.submit(
+                        () -> reservationLockOrderTracker.runAsSessionCancel(
+                            () -> cancelSession(fixture)
+                        )
+                    );
+                    assertThat(reservationLockOrderTracker.awaitLeadingContentLock()).isTrue();
 
-            assertThat(ready.await(3, TimeUnit.SECONDS)).isTrue();
-            start.countDown();
-
-            cancel.get(5, TimeUnit.SECONDS);
-            ReservationConfirmationResult confirmationResult = confirmation.get(5, TimeUnit.SECONDS);
-            if (!confirmationResult.isSuccessful()) {
+                    confirmation = executorService.submit(
+                        () -> reservationLockOrderTracker.runAsReservationConfirm(() -> confirm(
+                            fixture,
+                            fixture.capacityHold().getHoldId(),
+                            "cancel-first-key-" + System.nanoTime()
+                        ))
+                    );
+                    assertThat(reservationLockOrderTracker.awaitFollowerContentLockWait()).isTrue();
+                } finally {
+                    reservationLockOrderTracker.releaseLeadingContentLock();
+                }
+                cancel.get(5, TimeUnit.SECONDS);
+                ReservationConfirmationResult confirmationResult = confirmation.get(5, TimeUnit.SECONDS);
+                assertThat(confirmationResult.isSuccessful()).isFalse();
                 assertThat(confirmationResult.errorCode()).isEqualTo(ErrorCode.RESERVATION_CONFIRM_CONFLICT);
             }
+
+            assertThat(reservationLockOrderTracker.sessionCancelLockOrder())
+                .containsExactly(ReservationLockTarget.CONTENT, ReservationLockTarget.CONTENT_SESSION);
+            assertThat(reservationLockOrderTracker.reservationConfirmLockOrder())
+                .containsExactly(ReservationLockTarget.CONTENT, ReservationLockTarget.CONTENT_SESSION);
+        } finally {
+            reservationLockOrderTracker.releaseLeadingContentLock();
+            reservationLockOrderTracker.reset();
         }
 
-        assertSessionCancellationTerminalState(fixture);
+        assertCancellationPrecededConfirmationState(fixture);
+    }
+
+    @Test
+    @Timeout(15)
+    void 예약확정이_콘텐츠잠금을_선점하면_회차취소가_예약을_취소하고_정원을_복구한다() throws Exception {
+        Fixture fixture = createFixture();
+        reservationLockOrderTracker.prepareSessionCancelRace(
+            fixture.contentSession().getContent().getContentId(),
+            fixture.contentSession().getSessionId(),
+            ReservationLockOperation.RESERVATION_CONFIRM
+        );
+
+        ReservationConfirmationResult confirmationResult;
+        try {
+            try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+                Future<ReservationConfirmationResult> confirmation;
+                Future<?> cancel;
+                try {
+                    confirmation = executorService.submit(
+                        () -> reservationLockOrderTracker.runAsReservationConfirm(() -> confirm(
+                            fixture,
+                            fixture.capacityHold().getHoldId(),
+                            "confirmation-first-key-" + System.nanoTime()
+                        ))
+                    );
+                    assertThat(reservationLockOrderTracker.awaitLeadingContentLock()).isTrue();
+
+                    cancel = executorService.submit(
+                        () -> reservationLockOrderTracker.runAsSessionCancel(
+                            () -> cancelSession(fixture)
+                        )
+                    );
+                    assertThat(reservationLockOrderTracker.awaitFollowerContentLockWait()).isTrue();
+                } finally {
+                    reservationLockOrderTracker.releaseLeadingContentLock();
+                }
+                confirmationResult = confirmation.get(5, TimeUnit.SECONDS);
+                assertThat(confirmationResult.isSuccessful()).isTrue();
+                cancel.get(5, TimeUnit.SECONDS);
+            }
+
+            assertThat(reservationLockOrderTracker.reservationConfirmLockOrder())
+                .containsExactly(ReservationLockTarget.CONTENT, ReservationLockTarget.CONTENT_SESSION);
+            assertThat(reservationLockOrderTracker.sessionCancelLockOrder())
+                .containsExactly(ReservationLockTarget.CONTENT, ReservationLockTarget.CONTENT_SESSION);
+        } finally {
+            reservationLockOrderTracker.releaseLeadingContentLock();
+            reservationLockOrderTracker.reset();
+        }
+
+        assertConfirmationPrecededCancellationState(fixture, confirmationResult.response().reservationId());
     }
 
     @Test
@@ -565,13 +642,7 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
         }
     }
 
-    private Void cancelAfterStart(
-        Fixture fixture,
-        CountDownLatch ready,
-        CountDownLatch start
-    ) {
-        ready.countDown();
-        await(start);
+    private Void cancelSession(Fixture fixture) {
         cancelContentSessionUseCase.cancel(
             fixture.operator().getUserId(),
             fixture.contentSession().getSessionId(),
@@ -647,18 +718,36 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
         });
     }
 
-    private void assertSessionCancellationTerminalState(Fixture fixture) {
+    private void assertCancellationPrecededConfirmationState(Fixture fixture) {
         transactionTemplate.executeWithoutResult(status -> {
             ContentSession session = contentSessionRepository.findById(fixture.contentSession().getSessionId())
                 .orElseThrow();
             assertThat(session.getStatus()).isEqualTo(ContentSessionStatus.CANCELLED);
             assertThat(session.getRemainingCapacity()).isEqualTo(1);
-            assertThat(capacityHoldRepository.findAll())
-                .filteredOn(hold -> hold.getContentSession().getSessionId().equals(session.getSessionId()))
-                .noneMatch(hold -> hold.getStatus() == CapacityHoldStatus.ACTIVE);
+            assertThat(capacityHoldRepository.findById(fixture.capacityHold().getHoldId()))
+                .hasValueSatisfying(hold -> assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.INVALIDATED));
             assertThat(reservationRepository.findAll())
-                .filteredOn(reservation -> reservation.getContentSession().getSessionId().equals(session.getSessionId()))
-                .noneMatch(reservation -> reservation.getStatus() == ReservationStatus.CONFIRMED);
+                .noneMatch(reservation -> reservation.getCapacityHold().getHoldId()
+                    .equals(fixture.capacityHold().getHoldId()));
+        });
+    }
+
+    private void assertConfirmationPrecededCancellationState(Fixture fixture, String reservationId) {
+        transactionTemplate.executeWithoutResult(status -> {
+            ContentSession session = contentSessionRepository.findById(fixture.contentSession().getSessionId())
+                .orElseThrow();
+            assertThat(session.getStatus()).isEqualTo(ContentSessionStatus.CANCELLED);
+            assertThat(session.getRemainingCapacity()).isEqualTo(1);
+            assertThat(capacityHoldRepository.findById(fixture.capacityHold().getHoldId()))
+                .hasValueSatisfying(hold -> assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.CONSUMED));
+            assertThat(reservationRepository.findAll())
+                .filteredOn(reservation -> reservation.getCapacityHold().getHoldId()
+                    .equals(fixture.capacityHold().getHoldId()))
+                .singleElement()
+                .satisfies(reservation -> {
+                    assertThat(reservation.getReservationId().toString()).isEqualTo(reservationId);
+                    assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.CANCELLED);
+                });
         });
     }
 
@@ -898,8 +987,8 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
     static class ReservationLockOrderConfig {
 
         @Bean
-        ReservationLockOrderTracker reservationLockOrderTracker() {
-            return new ReservationLockOrderTracker();
+        ReservationLockOrderTracker reservationLockOrderTracker(JdbcTemplate jdbcTemplate) {
+            return new ReservationLockOrderTracker(jdbcTemplate);
         }
 
         @Bean
@@ -947,6 +1036,14 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
             reservationLockOrderTracker.recordContentLock(contentId);
             return locked;
         }
+
+        @Override
+        public Content findForUpdate(Long contentId) {
+            reservationLockOrderTracker.recordSessionCancelContentLockAttempt(contentId);
+            Content content = super.findForUpdate(contentId);
+            reservationLockOrderTracker.recordContentLock(contentId);
+            return content;
+        }
     }
 
     static class LockTrackingContentSessionService extends ContentSessionService {
@@ -975,32 +1072,69 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
             reservationLockOrderTracker.recordReservationConfirmSessionLock(sessionId);
             return locked;
         }
+
+        @Override
+        public ContentSession findCancelTargetForUpdate(Long sessionId) {
+            ContentSession contentSession = super.findCancelTargetForUpdate(sessionId);
+            reservationLockOrderTracker.recordSessionCancelSessionLock(sessionId);
+            return contentSession;
+        }
     }
 
     static class ReservationLockOrderTracker {
 
+        private static final int LOCK_WAIT_CONFIRMATION_ATTEMPTS = 40;
+        private static final long LOCK_WAIT_CONFIRMATION_INTERVAL_MILLIS = 25;
+
+        private final JdbcTemplate jdbcTemplate;
         private final ThreadLocal<ReservationLockOperation> currentOperation = new ThreadLocal<>();
         private final List<ReservationLockTarget> holdCreateLockOrder = new CopyOnWriteArrayList<>();
         private final List<ReservationLockTarget> reservationConfirmLockOrder = new CopyOnWriteArrayList<>();
+        private final List<ReservationLockTarget> sessionCancelLockOrder = new CopyOnWriteArrayList<>();
         private volatile Long targetContentId;
         private volatile Long targetSessionId;
+        private volatile Long followerConnectionId;
+        private volatile ReservationLockOperation leadingContentLockOperation;
         private volatile CountDownLatch holdCreateContentLocked = new CountDownLatch(1);
         private volatile CountDownLatch allowHoldCreateSessionLock = new CountDownLatch(1);
         private volatile CountDownLatch reservationConfirmContentLockAttempted = new CountDownLatch(1);
+        private volatile CountDownLatch leadingContentLocked = new CountDownLatch(1);
+        private volatile CountDownLatch allowLeadingContentLockRelease = new CountDownLatch(1);
+
+        ReservationLockOrderTracker(JdbcTemplate jdbcTemplate) {
+            this.jdbcTemplate = jdbcTemplate;
+        }
 
         void prepare(Long contentId, Long sessionId) {
             targetContentId = contentId;
             targetSessionId = sessionId;
+            followerConnectionId = null;
+            leadingContentLockOperation = null;
             holdCreateLockOrder.clear();
             reservationConfirmLockOrder.clear();
+            sessionCancelLockOrder.clear();
             holdCreateContentLocked = new CountDownLatch(1);
             allowHoldCreateSessionLock = new CountDownLatch(1);
             reservationConfirmContentLockAttempted = new CountDownLatch(1);
+            leadingContentLocked = new CountDownLatch(1);
+            allowLeadingContentLockRelease = new CountDownLatch(1);
+        }
+
+        void prepareSessionCancelRace(
+            Long contentId,
+            Long sessionId,
+            ReservationLockOperation leadingOperation
+        ) {
+            prepare(contentId, sessionId);
+            leadingContentLockOperation = leadingOperation;
         }
 
         void reset() {
+            releaseLeadingContentLock();
             targetContentId = null;
             targetSessionId = null;
+            followerConnectionId = null;
+            leadingContentLockOperation = null;
             currentOperation.remove();
         }
 
@@ -1012,6 +1146,10 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
             return runAs(ReservationLockOperation.RESERVATION_CONFIRM, action);
         }
 
+        <T> T runAsSessionCancel(Supplier<T> action) {
+            return runAs(ReservationLockOperation.SESSION_CANCEL, action);
+        }
+
         boolean awaitHoldCreateContentLock() throws InterruptedException {
             return holdCreateContentLocked.await(3, TimeUnit.SECONDS);
         }
@@ -1020,8 +1158,27 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
             return reservationConfirmContentLockAttempted.await(3, TimeUnit.SECONDS);
         }
 
+        boolean awaitLeadingContentLock() throws InterruptedException {
+            return leadingContentLocked.await(3, TimeUnit.SECONDS);
+        }
+
+        boolean awaitFollowerContentLockWait() {
+            for (int attempt = 0; attempt < LOCK_WAIT_CONFIRMATION_ATTEMPTS; attempt++) {
+                Long connectionId = followerConnectionId;
+                if (connectionId != null && hasContentLockWait(connectionId)) {
+                    return true;
+                }
+                pauseBeforeLockWaitRetry();
+            }
+            return false;
+        }
+
         void releaseHoldCreateSessionLock() {
             allowHoldCreateSessionLock.countDown();
+        }
+
+        void releaseLeadingContentLock() {
+            allowLeadingContentLockRelease.countDown();
         }
 
         List<ReservationLockTarget> holdCreateLockOrder() {
@@ -1032,9 +1189,20 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
             return List.copyOf(reservationConfirmLockOrder);
         }
 
+        List<ReservationLockTarget> sessionCancelLockOrder() {
+            return List.copyOf(sessionCancelLockOrder);
+        }
+
         void recordReservationConfirmContentLockAttempt(Long contentId) {
             if (isReservationConfirmContent(contentId)) {
                 reservationConfirmContentLockAttempted.countDown();
+                recordFollowerConnection(ReservationLockOperation.RESERVATION_CONFIRM);
+            }
+        }
+
+        void recordSessionCancelContentLockAttempt(Long contentId) {
+            if (isSessionCancelContent(contentId)) {
+                recordFollowerConnection(ReservationLockOperation.SESSION_CANCEL);
             }
         }
 
@@ -1047,6 +1215,12 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
             }
             if (isReservationConfirmContent(contentId)) {
                 reservationConfirmLockOrder.add(ReservationLockTarget.CONTENT);
+                awaitIfLeadingOperation(ReservationLockOperation.RESERVATION_CONFIRM);
+                return;
+            }
+            if (isSessionCancelContent(contentId)) {
+                sessionCancelLockOrder.add(ReservationLockTarget.CONTENT);
+                awaitIfLeadingOperation(ReservationLockOperation.SESSION_CANCEL);
             }
         }
 
@@ -1059,6 +1233,12 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
         void recordReservationConfirmSessionLock(Long sessionId) {
             if (isReservationConfirmSession(sessionId)) {
                 reservationConfirmLockOrder.add(ReservationLockTarget.CONTENT_SESSION);
+            }
+        }
+
+        void recordSessionCancelSessionLock(Long sessionId) {
+            if (isSessionCancelSession(sessionId)) {
+                sessionCancelLockOrder.add(ReservationLockTarget.CONTENT_SESSION);
             }
         }
 
@@ -1091,6 +1271,60 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
                 && sessionId.equals(targetSessionId);
         }
 
+        private boolean isSessionCancelContent(Long contentId) {
+            return currentOperation.get() == ReservationLockOperation.SESSION_CANCEL
+                && contentId.equals(targetContentId);
+        }
+
+        private boolean isSessionCancelSession(Long sessionId) {
+            return currentOperation.get() == ReservationLockOperation.SESSION_CANCEL
+                && sessionId.equals(targetSessionId);
+        }
+
+        private void recordFollowerConnection(ReservationLockOperation operation) {
+            if (leadingContentLockOperation != null && leadingContentLockOperation != operation) {
+                followerConnectionId = jdbcTemplate.queryForObject("SELECT CONNECTION_ID()", Long.class);
+            }
+        }
+
+        private void awaitIfLeadingOperation(ReservationLockOperation operation) {
+            if (leadingContentLockOperation == operation) {
+                leadingContentLocked.countDown();
+                await(allowLeadingContentLockRelease);
+            }
+        }
+
+        private boolean hasContentLockWait(Long connectionId) {
+            Integer waitingLockCount = jdbcTemplate.queryForObject(
+                """
+                    SELECT COUNT(*)
+                    FROM performance_schema.data_lock_waits AS lock_wait
+                    JOIN performance_schema.threads AS requesting_thread
+                        ON requesting_thread.thread_id = lock_wait.requesting_thread_id
+                    JOIN performance_schema.data_locks AS requested_lock
+                        ON requested_lock.engine = lock_wait.engine
+                        AND requested_lock.engine_lock_id = lock_wait.requesting_engine_lock_id
+                    WHERE requesting_thread.processlist_id = ?
+                        AND requested_lock.object_schema = DATABASE()
+                        AND requested_lock.object_name = 'content'
+                        AND requested_lock.index_name = 'PRIMARY'
+                        AND requested_lock.lock_type = 'RECORD'
+                    """,
+                Integer.class,
+                connectionId
+            );
+            return waitingLockCount != null && waitingLockCount > 0;
+        }
+
+        private void pauseBeforeLockWaitRetry() {
+            try {
+                Thread.sleep(LOCK_WAIT_CONFIRMATION_INTERVAL_MILLIS);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("reservation lock wait verification interrupted", exception);
+            }
+        }
+
         private void await(CountDownLatch latch) {
             try {
                 if (!latch.await(5, TimeUnit.SECONDS)) {
@@ -1105,7 +1339,8 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
 
     private enum ReservationLockOperation {
         HOLD_CREATE,
-        RESERVATION_CONFIRM
+        RESERVATION_CONFIRM,
+        SESSION_CANCEL
     }
 
     private enum ReservationLockTarget {
