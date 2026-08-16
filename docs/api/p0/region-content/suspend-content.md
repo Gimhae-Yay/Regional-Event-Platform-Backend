@@ -5,19 +5,20 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | `FR-10`, `FR-14`, `AUTH-01`, `CON-06`, `CON-09`, `SES-02` |
 | 소유 도메인 | 콘텐츠·지역 관리자 |
-| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [인증·프로필](../../../p0/auth-profile.md), [정원 홀드·무료 예약](../../../p0/reservation.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [인증·프로필](../../../p0/auth-profile.md), [정원 홀드·무료 예약](../../../p0/reservation.md), [ADR-0101](../../../adr/0101-store-content-withdrawal-requests-and-serialize-review.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
 담당 지역 관리자가 공개 콘텐츠를 사유와 함께 운영 중단한다. 성공하면 콘텐츠는 `PUBLISHED → SUSPENDED`로
 전이하고, 신규 홀드를 차단하며 활성 홀드는 무효화한다. 활성 `EDIT_REQUESTED` 콘텐츠 수정본이 있으면
-같은 트랜잭션에서 `EDIT_INVALIDATED`로 종결한다.
+같은 트랜잭션에서 `EDIT_INVALIDATED`로 종결한다. 처리 대기 전체 철회 요청이 있으면 철회 심사와 혼동하지 않고
+`CONTENT_SUSPENDED` 사유의 `INVALIDATED`로 종결한다.
 
 ### 요구사항 추적
 
 | 요구사항 | HTTP 계약 | 주요 데이터 |
 | --- | --- | --- |
-| `FR-14`, `CON-06` | `POST /region-admin/contents/{contentId}/suspend` | `content`, `content_revision`, `content_log`, `capacity_hold` |
+| `FR-14`, `CON-06` | `POST /region-admin/contents/{contentId}/suspend` | `content`, `content_withdrawal_request`, `content_revision`, `content_log`, `capacity_hold` |
 | `AUTH-01`, `CON-09` | `POST /region-admin/contents/{contentId}/suspend` | `content.region_id`, `user_role_assignment`, `audit_event` |
 
 ## 2. 공통 계약 참조
@@ -79,7 +80,7 @@ Accept: application/json
 #### Request Field
 
 | Name | Type | Required | Description |
-| --- | --- | --- |
+| --- | --- | --- | --- |
 | `reason` | String | Y | 운영 중단 사유. 공백만으로 구성할 수 없으며 `content_log.status = SUSPENDED` 로그에 기록한다. |
 
 ### Response
@@ -149,17 +150,19 @@ Accept: application/json
 3. 서버는 대상 `content` 행을 잠근 뒤 `PUBLISHED`인 경우에만 `PUBLISHED → SUSPENDED` 전이를 적용한다.
 4. 신규 홀드 생성은 `content → content_session` 순서로 실제 정원 행을 잠근 뒤 콘텐츠가 `PUBLISHED`인지 다시 확인한다. 이어서 `content_session.remaining_capacity >= quantity` 조건부 갱신으로 정원을 차감한 경우에만 `ACTIVE` 홀드를 생성한다. 아직 없는 `capacity_hold` 행은 잠금 대상으로 삼지 않는다.
 5. 예약 확정은 `content → content_session → capacity_hold` 순서로 잠금과 조건부 전이를 수행한다. `content`와 `content_session` 잠금을 획득한 뒤 콘텐츠가 `PUBLISHED`, 회차가 `SCHEDULED`이고 시작 전인지 다시 확인하며, 홀드가 미만료 `ACTIVE`인 경우에만 `ACTIVE → CONSUMED` 조건부 전이를 적용한다. 예약 확정은 이미 차감된 정원을 다시 변경하지 않는다.
-6. 콘텐츠 행 잠금 뒤 활성 `EDIT_REQUESTED` 수정본 행을 잠가 `EDIT_INVALIDATED`로 전이한다. 무효화 시각과
+6. 콘텐츠 행 잠금 뒤 `PENDING` 전체 철회 요청 행을 잠근다. 있으면 중단 처리자·중단 시각과
+   `CONTENT_SUSPENDED` 사유를 가진 `INVALIDATED`로 종결하고 요청 상태 전이 성공 감사를 추가한다. 이미 승인·반려·무효화된 요청은 다시 변경하지 않는다.
+7. 철회 요청 행 뒤 활성 `EDIT_REQUESTED` 수정본 행을 잠가 `EDIT_INVALIDATED`로 전이한다. 무효화 시각과
    중단 처리자, `CONTENT_SUSPENDED` 사유를 보관하고 원본 콘텐츠를 대상으로 이전·다음 수정본 상태와 사유 코드를
    가진 성공 `audit_event`를 추가한다. 활성 수정본이 없으면 수정본 행과 수정본 감사는 추가하지 않는다.
-7. 중단 전이는 `content`과 활성 수정본 행을 잠근 뒤 대상 `content_session`과 해당 회차의 `ACTIVE` 홀드를 차례로 잠근다. 각 홀드를 `ACTIVE → INVALIDATED`로 조건부 전이하고, 전이에 성공한 홀드의 수량만 각 `content_session.remaining_capacity`에 한 번 복구한다. 중단 전이가 먼저 커밋되면 신규 홀드 생성과 예약 확정은 성공하지 않고, 홀드 생성 또는 확정이 먼저 커밋된 경우에만 그 결과를 기존 홀드 또는 기존 `CONFIRMED` 예약으로 처리한다.
-8. 성공 시 사유가 있는 `SUSPENDED` `content_log`를 추가한다. 해당 로그의 시각과 처리자가 중단 시각과 처리자다.
-9. 기존 `CONFIRMED` 예약은 명시적인 회차 취소가 없으면 유지한다.
-10. 방문자에게 표시할 운영 중단 안내와 사유는 최신 `SUSPENDED` 로그의 `reason`에서 파생한다.
+8. 중단 전이는 `content`, 철회 요청과 활성 수정본 행을 잠근 뒤 대상 `content_session`과 해당 회차의 `ACTIVE` 홀드를 차례로 잠근다. 각 홀드를 `ACTIVE → INVALIDATED`로 조건부 전이하고, 전이에 성공한 홀드의 수량만 각 `content_session.remaining_capacity`에 한 번 복구한다. 중단 전이가 먼저 커밋되면 전체 철회 승인·신규 홀드 생성·예약 확정은 성공하지 않고, 홀드 생성 또는 확정이 먼저 커밋된 경우에만 그 결과를 기존 홀드 또는 기존 `CONFIRMED` 예약으로 처리한다.
+9. 성공 시 사유가 있는 `SUSPENDED` `content_log`를 추가한다. 해당 로그의 시각과 처리자가 중단 시각과 처리자다.
+10. 기존 `CONFIRMED` 예약은 명시적인 회차 취소가 없으면 유지한다.
+11. 방문자에게 표시할 운영 중단 안내와 사유는 최신 `SUSPENDED` 로그의 `reason`에서 파생한다.
 
 ### 감사 및 정합성
 
-- 콘텐츠 행 잠금·상태 전이, 활성 수정본의 조건부 무효화와 수정본 감사, 사유가 있는 `SUSPENDED` 로그, 활성 홀드의 조건부 무효화·정원 1회 복구와 성공 `audit_event`는 하나의 MySQL 트랜잭션에서 함께 커밋하거나 함께 롤백한다. 신규 홀드는 `content → content_session`, 예약 확정과 중단에 따른 처리 순서는 `content → content_revision → content_session → capacity_hold`를 따른다. 각 경로는 잠금 획득 뒤 `PUBLISHED` 및 각 행의 전이 조건을 다시 확인한다.
+- 콘텐츠 행 잠금·상태 전이, 대기 철회 요청의 조건부 무효화와 요청 감사, 활성 수정본의 조건부 무효화와 수정본 감사, 사유가 있는 `SUSPENDED` 로그, 활성 홀드의 조건부 무효화·정원 1회 복구와 성공 `audit_event`는 하나의 MySQL 트랜잭션에서 함께 커밋하거나 함께 롤백한다. 신규 홀드는 `content → content_session`, 예약 확정은 `content → content_session → capacity_hold`, 중단은 `content → content_withdrawal_request → content_revision → content_session → capacity_hold`를 따른다. 각 경로는 잠금 획득 뒤 `PUBLISHED` 및 각 행의 전이 조건을 다시 확인한다.
 - 성공 감사 기록은 처리자, 처리 시각, 콘텐츠 식별자와 중단 사유를 재현할 수 있어야 한다.
 - 실패 시 콘텐츠 상태, 기존 예약과 홀드 정원을 변경하지 않는다.
 - 롤백된 중단 거부·충돌은 콘텐츠·홀드·로그·성공 감사 이벤트를 남기지 않고, 롤백 완료 뒤 별도 트랜잭션에서 비개인 `FAILURE` `audit_event`로 기록한다.
