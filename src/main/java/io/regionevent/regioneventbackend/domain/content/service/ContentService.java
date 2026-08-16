@@ -439,6 +439,18 @@ public class ContentService {
         return content;
     }
 
+    public Content withdraw(Content content, Instant withdrawnAt) {
+        int updatedCount = contentRepository.withdrawPublishedByContentId(
+            content.getContentId(),
+            withdrawnAt
+        );
+        if (updatedCount != 1) {
+            throw new BusinessException(ErrorCode.CONTENT_STATE_CONFLICT);
+        }
+        content.withdraw();
+        return content;
+    }
+
     private Instant toInstant(BigDecimal epochSeconds) {
         long seconds = epochSeconds.longValue();
         return Instant.ofEpochSecond(seconds, epochSeconds.remainder(BigDecimal.ONE).movePointRight(9).longValue());

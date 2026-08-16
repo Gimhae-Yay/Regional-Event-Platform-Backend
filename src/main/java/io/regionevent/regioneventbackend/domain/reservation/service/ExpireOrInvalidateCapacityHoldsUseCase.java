@@ -9,10 +9,6 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
-import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
-import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
-import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.ContentSessionService;
 import io.regionevent.regioneventbackend.domain.payment.service.ExpirePendingPaymentForTerminatedHoldUseCase;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus;
@@ -26,20 +22,17 @@ public class ExpireOrInvalidateCapacityHoldsUseCase {
     private final CapacityHoldService capacityHoldService;
     private final ContentSessionService contentSessionService;
     private final ExpirePendingPaymentForTerminatedHoldUseCase expirePendingPaymentForTerminatedHoldUseCase;
-    private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final TransactionTemplate holdTransactionTemplate;
 
     public ExpireOrInvalidateCapacityHoldsUseCase(
         CapacityHoldService capacityHoldService,
         ContentSessionService contentSessionService,
         ExpirePendingPaymentForTerminatedHoldUseCase expirePendingPaymentForTerminatedHoldUseCase,
-        RecordAuditEventUseCase recordAuditEventUseCase,
         PlatformTransactionManager transactionManager
     ) {
         this.capacityHoldService = capacityHoldService;
         this.contentSessionService = contentSessionService;
         this.expirePendingPaymentForTerminatedHoldUseCase = expirePendingPaymentForTerminatedHoldUseCase;
-        this.recordAuditEventUseCase = recordAuditEventUseCase;
         holdTransactionTemplate = new TransactionTemplate(transactionManager);
         holdTransactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -72,14 +65,11 @@ public class ExpireOrInvalidateCapacityHoldsUseCase {
                     SESSION_STARTED_INVALIDATION_REASON
                 )
                     .map(capacityHold -> {
-                        boolean paymentTerminated = expirePendingPaymentForTerminatedHoldUseCase.expire(
+                        expirePendingPaymentForTerminatedHoldUseCase.expire(
                             capacityHold,
                             requestId,
                             null
                         );
-                        if (!paymentTerminated) {
-                            recordTerminationAuditEvent(requestId, capacityHold);
-                        }
                         return toProcessingResult(capacityHold.nextStatus());
                     })
                     .orElse(HoldTerminationProcessingResult.SKIPPED)
@@ -101,14 +91,11 @@ public class ExpireOrInvalidateCapacityHoldsUseCase {
                     SESSION_STARTED_INVALIDATION_REASON
                 )
                     .map(capacityHold -> {
-                        boolean paymentTerminated = expirePendingPaymentForTerminatedHoldUseCase.expire(
+                        expirePendingPaymentForTerminatedHoldUseCase.expire(
                             capacityHold,
                             requestId,
                             null
                         );
-                        if (!paymentTerminated) {
-                            recordTerminationAuditEvent(requestId, capacityHold);
-                        }
                         return toProcessingResult(capacityHold.nextStatus());
                     })
                     .orElse(HoldTerminationProcessingResult.SKIPPED)
@@ -152,24 +139,6 @@ public class ExpireOrInvalidateCapacityHoldsUseCase {
                 return true;
             })
             .orElse(false);
-    }
-
-    private void recordTerminationAuditEvent(
-        UUID requestId,
-        CapacityHoldService.TerminatedCapacityHold capacityHold
-    ) {
-        recordAuditEventUseCase.record(new AuditEventCommand(
-            requestId,
-            capacityHold.region(),
-            AuditEventTargetType.CAPACITY_HOLD,
-            capacityHold.holdId(),
-            CapacityHoldStatus.ACTIVE.name(),
-            capacityHold.nextStatus().name(),
-            AuditEventResult.SUCCESS,
-            capacityHold.reasonCode(),
-            null,
-            capacityHold.occurredAt()
-        ));
     }
 
     private HoldTerminationProcessingResult toProcessingResult(CapacityHoldStatus capacityHoldStatus) {

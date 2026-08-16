@@ -28,7 +28,9 @@ class ContentTest {
             () -> new ContentTest().submitForReview_whenStatusIsNotRejected_throwsExceptionWithoutChanges(),
             () -> new ContentTest().publish_whenApprovedAndActive_changesStatusToPublished(),
             () -> new ContentTest().publish_whenStatusIsNotApproved_throwsExceptionWithoutChanges(),
-            () -> new ContentTest().publish_whenSoftDeleted_throwsExceptionWithoutChanges()
+            () -> new ContentTest().publish_whenSoftDeleted_throwsExceptionWithoutChanges(),
+            () -> new ContentTest().withdraw_whenPublishedAndActive_changesStatusToWithdrawn(),
+            () -> new ContentTest().withdraw_whenStatusIsNotPublished_throwsExceptionWithoutChanges()
         );
     }
 
@@ -120,6 +122,21 @@ class ContentTest {
 
         assertThatThrownBy(content::publish)
             .isInstanceOf(IllegalStateException.class);
+        assertThat(content.getStatus()).isEqualTo(ContentStatus.APPROVED);
+    }
+
+    void withdraw_whenPublishedAndActive_changesStatusToWithdrawn() {
+        Content content = createContent(ContentStatus.PUBLISHED);
+
+        content.withdraw();
+
+        assertThat(content.getStatus()).isEqualTo(ContentStatus.WITHDRAWN);
+    }
+
+    void withdraw_whenStatusIsNotPublished_throwsExceptionWithoutChanges() {
+        Content content = createContent(ContentStatus.APPROVED);
+
+        assertThatThrownBy(content::withdraw).isInstanceOf(IllegalStateException.class);
         assertThat(content.getStatus()).isEqualTo(ContentStatus.APPROVED);
     }
 

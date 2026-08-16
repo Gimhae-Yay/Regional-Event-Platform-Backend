@@ -36,6 +36,29 @@ public class ContentWithdrawalRequestService {
         this.contentWithdrawalRequestRepository = contentWithdrawalRequestRepository;
     }
 
+    public Long findContentId(Long withdrawalRequestId) {
+        return contentWithdrawalRequestRepository.findContentIdByWithdrawalRequestId(
+            withdrawalRequestId
+        ).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ContentWithdrawalRequest findApprovalTargetForUpdate(Long withdrawalRequestId) {
+        return contentWithdrawalRequestRepository.findApprovalTargetForUpdate(
+            withdrawalRequestId
+        ).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ContentWithdrawalRequest approve(
+        ContentWithdrawalRequest request,
+        AppUser reviewer,
+        Instant reviewedAt
+    ) {
+        request.approve(reviewer, reviewedAt);
+        return contentWithdrawalRequestRepository.saveAndFlush(request);
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<ContentWithdrawalRequest> findByIdempotencyKeyForUpdate(
         Long contentId,

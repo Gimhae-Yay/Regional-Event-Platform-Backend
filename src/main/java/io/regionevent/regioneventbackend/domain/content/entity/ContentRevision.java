@@ -68,7 +68,7 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
             constraint = """
                 status <> 'EDIT_INVALIDATED'
                 OR (invalidated_at IS NOT NULL
-                    AND invalidation_reason IN ('CONTENT_SUSPENDED', 'CONTENT_ENDED'))
+                    AND invalidation_reason REGEXP '^(CONTENT_SUSPENDED|CONTENT_ENDED|CONTENT_WITHDRAWN)$')
                 """
         ),
         @CheckConstraint(

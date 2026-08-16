@@ -255,6 +255,8 @@ class ContentServiceTest {
                 .thenReturn(updatedCount);
             case "suspend" -> when(contentRepository.suspendPublishedByContentId(CONTENT_ID, UPDATED_AT))
                 .thenReturn(updatedCount);
+            case "withdraw" -> when(contentRepository.withdrawPublishedByContentId(CONTENT_ID, UPDATED_AT))
+                .thenReturn(updatedCount);
             default -> throw new IllegalArgumentException(operation);
         }
 
@@ -272,16 +274,19 @@ class ContentServiceTest {
         when(contentRepository.submitRejectedByContentId(CONTENT_ID, UPDATED_AT)).thenReturn(1);
         when(contentRepository.endPublishedByContentId(CONTENT_ID, UPDATED_AT)).thenReturn(1);
         when(contentRepository.suspendPublishedByContentId(CONTENT_ID, UPDATED_AT)).thenReturn(1);
+        when(contentRepository.withdrawPublishedByContentId(CONTENT_ID, UPDATED_AT)).thenReturn(1);
 
         contentService.reject(content, UPDATED_AT);
         contentService.submitForReview(content, UPDATED_AT);
         contentService.end(content, UPDATED_AT);
         contentService.suspend(content, UPDATED_AT);
+        contentService.withdraw(content, UPDATED_AT);
 
         verify(content).reject();
         verify(content).submitForReview();
         verify(content).end();
         verify(content).suspend();
+        verify(content).withdraw();
     }
 
     @Test
@@ -345,7 +350,8 @@ class ContentServiceTest {
             Arguments.of("reject", 0, ErrorCode.CONTENT_STATE_CONFLICT),
             Arguments.of("submit", 2, ErrorCode.CONTENT_STATE_CONFLICT),
             Arguments.of("end", 0, ErrorCode.CONTENT_END_CONFLICT),
-            Arguments.of("suspend", 2, ErrorCode.CONTENT_SUSPEND_CONFLICT)
+            Arguments.of("suspend", 2, ErrorCode.CONTENT_SUSPEND_CONFLICT),
+            Arguments.of("withdraw", 0, ErrorCode.CONTENT_STATE_CONFLICT)
         );
     }
 
@@ -355,6 +361,7 @@ class ContentServiceTest {
             case "submit" -> contentService.submitForReview(content, UPDATED_AT);
             case "end" -> contentService.end(content, UPDATED_AT);
             case "suspend" -> contentService.suspend(content, UPDATED_AT);
+            case "withdraw" -> contentService.withdraw(content, UPDATED_AT);
             default -> throw new IllegalArgumentException(operation);
         }
     }

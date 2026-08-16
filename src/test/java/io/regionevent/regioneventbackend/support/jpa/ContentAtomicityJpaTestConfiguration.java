@@ -15,6 +15,7 @@ import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditE
 import io.regionevent.regioneventbackend.domain.content.service.ApproveContentRevisionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.ApproveContentSessionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.ApproveContentUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.ApproveContentWithdrawalUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.CancelContentSessionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.ContentLogService;
 import io.regionevent.regioneventbackend.domain.content.service.ContentRevisionInvalidationService;
@@ -52,6 +53,7 @@ import io.regionevent.regioneventbackend.global.security.qr.QrTokenService;
 @TestConfiguration
 @Import({
     ApproveContentUseCase.class,
+    ApproveContentWithdrawalUseCase.class,
     ApproveContentSessionUseCase.class,
     DeleteContentUseCase.class,
     RejectContentUseCase.class,

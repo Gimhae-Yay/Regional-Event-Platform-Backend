@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.global.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -58,6 +59,45 @@ class ContentRevisionInvalidationMigrationTest {
             2L,
             "CONTENT_SUSPENDED"
         );
+    }
+
+    @Test
+    void V43_CONTENT_WITHDRAWN을_허용하고_기존_무효화_사유를_유지한다() {
+        DriverManagerDataSource dataSource = new DriverManagerDataSource(
+            "jdbc:h2:mem:content-withdrawn-revision-invalidation-" + UUID.randomUUID()
+                + ";MODE=MySQL;DB_CLOSE_DELAY=-1",
+            "sa",
+            ""
+        );
+        JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
+        migrateToVersion(dataSource, "42");
+        insertPreexistingTerminationData(jdbcTemplate);
+
+        migrateToLatest(dataSource);
+
+        assertThat(jdbcTemplate.update(
+            """
+                UPDATE content_revision
+                SET status = 'EDIT_INVALIDATED', invalidated_at = ?, invalidation_reason = 'CONTENT_WITHDRAWN'
+                WHERE content_revision_id = 201
+                """,
+            Timestamp.from(SUSPENDED_AT)
+        )).isOne();
+        assertThat(jdbcTemplate.update(
+            """
+                UPDATE content_revision
+                SET status = 'EDIT_INVALIDATED', invalidated_at = ?, invalidation_reason = 'CONTENT_ENDED'
+                WHERE content_revision_id = 202
+                """,
+            Timestamp.from(ENDED_AT)
+        )).isOne();
+        assertThatThrownBy(() -> jdbcTemplate.update(
+            """
+                UPDATE content_revision
+                SET invalidation_reason = 'UNKNOWN_REASON'
+                WHERE content_revision_id = 201
+                """
+        )).isInstanceOf(RuntimeException.class);
     }
 
     private int migrateToLatest(DriverManagerDataSource dataSource) {
