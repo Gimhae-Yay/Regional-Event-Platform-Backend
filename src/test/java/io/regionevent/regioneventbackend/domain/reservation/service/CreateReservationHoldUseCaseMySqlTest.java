@@ -75,7 +75,7 @@ class CreateReservationHoldUseCaseMySqlTest extends NonTransactionalMySqlTestSup
     private final EntityManager entityManager;
     private final TransactionTemplate transactionTemplate;
 
-    private static final Instant APP_CLOCK_INSTANT = Instant.parse("2040-01-01T00:00:00Z");
+    private static final Instant APP_CLOCK_INSTANT = Instant.parse("2025-12-31T23:50:00Z");
 
     @Autowired
     CreateReservationHoldUseCaseMySqlTest(
@@ -195,7 +195,7 @@ class CreateReservationHoldUseCaseMySqlTest extends NonTransactionalMySqlTestSup
         );
 
         CapacityHold capacityHold = capacityHoldRepository.findById(Long.valueOf(response.holdId())).orElseThrow();
-        assertThat(capacityHold.getCreatedAt()).isBefore(APP_CLOCK_INSTANT);
+        assertThat(capacityHold.getCreatedAt()).isAfter(APP_CLOCK_INSTANT);
         assertThat(capacityHold.getExpiresAt()).isAfter(readCurrentDatabaseInstant());
         int consumedCount = transactionTemplate.execute(status -> capacityHoldRepository.consumeIfConfirmable(
             capacityHold.getHoldId(),
