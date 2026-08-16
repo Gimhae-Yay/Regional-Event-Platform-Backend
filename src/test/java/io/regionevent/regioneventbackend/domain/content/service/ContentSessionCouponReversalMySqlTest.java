@@ -338,6 +338,10 @@ class ContentSessionCouponReversalMySqlTest extends NonTransactionalMySqlTestSup
             .isEqualTo(CouponStatus.USED);
         assertThat(couponRepository.findById(discrepant.couponId()).orElseThrow().getStatus())
             .isEqualTo(CouponStatus.USED);
+        assertThat(countCouponHistory(failed.couponId())).isZero();
+        assertThat(countCouponHistory(discrepant.couponId())).isZero();
+        assertThat(countAudit("COUPON", failed.couponId())).isZero();
+        assertThat(countAudit("COUPON", discrepant.couponId())).isZero();
         assertThat(couponRepository.findById(free.couponId()).orElseThrow().getStatus())
             .isEqualTo(CouponStatus.EXPIRED);
         assertReversal(succeeded.redemptionId(), refundId(succeeded.paymentId()), "REFUND_SUCCEEDED");
