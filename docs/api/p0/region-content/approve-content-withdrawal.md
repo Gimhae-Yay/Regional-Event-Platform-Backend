@@ -5,7 +5,7 @@
 | 대상 릴리스 | P0, P1 연결 데이터 정리 포함 |
 | 관련 요구사항 | `FR-14`, `AUTH-01`, `CON-05`~`CON-07`, `CON-09`, `SES-02` |
 | 소유 도메인 | 콘텐츠·지역 관리자 |
-| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [ERD](../../../erd.md), [ADR-0101](../../../adr/0101-store-content-withdrawal-requests-and-serialize-review.md), [홀드 종결](../reservation/expire-or-invalidate-holds.md), [예약 확정](../reservation/confirm-reservation-hold.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [ERD](../../../erd.md), [ADR-0101](../../../adr/0101-store-content-withdrawal-requests-and-serialize-review.md), [ADR-0104](../../../adr/0104-audit-identified-content-withdrawal-approval-failures.md), [홀드 종결](../reservation/expire-or-invalidate-holds.md), [예약 확정](../reservation/confirm-reservation-hold.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
@@ -131,10 +131,48 @@ Accept: application/json
 }
 ```
 
+#### 실패 감사·구조화 로그 경계
+
+`식별 완료`는 대상 철회 요청, 요청 콘텐츠의 지역, 현재 철회 요청 상태와 활성 `REGION_ADMIN` actor를 모두 확인한
+시점을 뜻한다. 실패 감사는 이 시점 뒤에 감지한 실패만 기록한다. `식별 전` 구조화 로그에는 `requestId`,
+`targetType = CONTENT_WITHDRAWAL_REQUEST`, 공개 오류 코드와 식별 단계만 포함하고, 경로의 원문 식별자·인증 정보·
+자유 텍스트와 개인정보는 포함하지 않는다.
+
+| 공개 오류 코드 | 식별 단계 | 기록 결과 | 근거 |
+| --- | --- | --- | --- |
+| `INVALID_INPUT` | 식별 전 | 추가 기록 제외 | 유효한 요청 ID가 아니며 승인 실패 감사 대상을 확인하지 않았다. |
+| `INVALID_TYPE` | 식별 전 | 추가 기록 제외 | 요청 ID를 내부 식별자 타입으로 변환하지 못했다. |
+| `UNAUTHENTICATED` | 식별 전 | 추가 기록 제외 | 안전하게 연결할 활성 actor가 없다. |
+| `NOT_FOUND` | 식별 전 | 추가 기록 제외 | 대상 철회 요청이 존재하지 않아 감사 대상을 확인할 수 없다. |
+| `FORBIDDEN` | 식별 전 | 비개인 구조화 로그 | 활성 지역 관리자 actor 또는 대상·지역·상태 확인이 끝나지 않았다. |
+| `FORBIDDEN` | 식별 완료 후 | 실패 감사 | 확인된 actor의 담당 지역과 요청 콘텐츠 지역이 일치하지 않는 거부를 재현한다. |
+| `CONTENT_STATE_CONFLICT` | 식별 전 | 비개인 구조화 로그 | 감사 필수 식별 정보가 모두 확인되기 전에 충돌이 감지됐다. |
+| `CONTENT_STATE_CONFLICT` | 식별 완료 후 | 실패 감사 | 확인한 요청 상태 또는 콘텐츠 상태에 따른 거부를 재현한다. |
+| `INTERNAL_SERVER_ERROR` | 식별 전 | 비개인 구조화 로그 | 감사 필수 식별 정보가 모두 확인되기 전에 예상하지 못한 오류가 발생했다. |
+| `INTERNAL_SERVER_ERROR` | 식별 완료 후 | 실패 감사 | 확인 완료 뒤 승인 트랜잭션에서 발생해 롤백된 시스템 실패를 재현한다. |
+
+식별 완료 후 실패 감사는 다음 필드와 nullable 규칙을 사용한다.
+
+| 필드 | 값 | nullable |
+| --- | --- | --- |
+| `target_type` | `CONTENT_WITHDRAWAL_REQUEST` | N |
+| `target_id` | 확인한 `withdrawalRequestId` | N |
+| `region` | 요청 콘텐츠의 지역 | N |
+| `previous_state` | 실패 전에 확인한 철회 요청 상태 | N |
+| `next_state` | 실제 전이가 없으므로 `NULL` | Y, 항상 `NULL` |
+| `result` | `FAILURE` | N |
+| `actor` | 확인된 활성 `REGION_ADMIN` 사용자와 actor link | N |
+| `reason_code` | 반환할 공개 오류 코드 | N |
+| `reason`, `evidence_reference` | 저장하지 않음 | Y, 항상 `NULL` |
+| `requestId` | 현재 HTTP 요청 ID | N |
+| `occurred_at` | 원 승인 트랜잭션에서 실패를 감지한 시각 | N |
+
+이미 `APPROVED`인 요청의 저장 결과 재응답은 성공이므로 새 성공·실패 감사와 부수 효과를 만들지 않는다.
+
 ### 처리 규칙
 
 1. 서버는 요청에서 `content_id`를 조회한 뒤 권한용 actor·역할, `region → content → content_withdrawal_request` 순서로 잠그고 요청 지역과 관리자 담당 지역, 요청·콘텐츠 상태를 다시 검증한다.
-2. 이미 `APPROVED`인 요청은 저장된 승인 결과를 반환하고 로그·감사·홀드·정원·결제·쿠폰 처리를 반복하지 않는다.
+2. 이미 `APPROVED`인 요청은 저장된 승인 결과를 반환하고 로그·감사·홀드·정원·결제·쿠폰 처리를 반복하지 않는다. 이 자연 멱등 재응답은 승인 실패가 아니므로 새 실패 감사도 만들지 않는다.
 3. 최초 승인은 요청을 `PENDING → APPROVED`, 콘텐츠를 `PUBLISHED → WITHDRAWN`으로 전이한다.
 4. 요청 때 저장한 사유를 가진 `WITHDRAWN` `content_log`를 추가한다. 로그 actor는 승인 관리자이고 로그 시각은 `approvedAt`이다.
 5. 콘텐츠 행 뒤 활성 `EDIT_REQUESTED` 수정본을 잠근다. 있으면 승인 관리자·`approvedAt`·`CONTENT_WITHDRAWN` 사유를 가진 `EDIT_INVALIDATED`로 종결하고 후보를 원본에 반영하지 않는다.
@@ -143,7 +181,7 @@ Accept: application/json
 8. 같은 스냅샷의 쿠폰이 `RESERVED`이면 원래 만료 시각 전에는 `AVAILABLE`, 이후에는 `EXPIRED`로 전이하고 쿠폰 상태 이력을 추가한다. 가격 스냅샷은 변경하지 않는다.
 9. 요청·콘텐츠·수정본·실제로 전이된 홀드·결제·쿠폰마다 성공 `audit_event`를 같은 HTTP `requestId`로 기록한다. 요청 대상 유형은 `CONTENT_WITHDRAWAL_REQUEST`다.
 10. 기존 `CONSUMED` 홀드와 `CONFIRMED`·`CHECKED_IN` 예약, 회차, 방문, 후기, 가격 스냅샷은 변경하지 않는다. 회차 취소·예약 취소·환불을 생성하지 않는다.
-11. 커밋 뒤 공개 콘텐츠 정적 캐시를 최선 노력으로 삭제한다. 삭제 실패는 MySQL 승인을 롤백하지 않으며 공개 조회는 MySQL의 `WITHDRAWN` 상태를 먼저 검증한다.
+11. 커밋 뒤 공개 콘텐츠 정적 캐시를 최선 노력으로 삭제한다. 삭제 실패는 MySQL 승인을 롤백하거나 승인 실패로 바꾸지 않는다. 비개인 구조화 로그만 남기고 기존 `200 OK`를 유지하며, 공개 조회는 MySQL의 `WITHDRAWN` 상태를 먼저 검증한다.
 
 ### 트랜잭션 범위
 
@@ -159,6 +197,15 @@ Accept: application/json
 - 위 상태 전이의 성공 감사 이벤트와 actor link
 
 Redis 캐시 삭제와 외부 결제 API 호출은 이 원자성 범위에 없다. 이 API는 외부 결제 취소·환불을 호출하지 않는다.
+
+식별 완료 뒤 승인 실패가 발생하면 원 승인 트랜잭션에 실패 감사 명령을 등록하고 예외를 원래 공개 오류로 전파한다.
+원 승인 트랜잭션의 롤백 완료가 확인된 뒤에만 별도 `REQUIRES_NEW` 트랜잭션으로 실패 감사와 actor link를 한 번
+저장한다. `occurred_at`은 독립 저장 시각이 아니라 원 트랜잭션에서 실패를 감지한 시각을 유지한다.
+
+독립 실패 감사 저장 자체가 실패해도 원래 롤백 결과, HTTP 상태와 공개 오류 코드를 바꾸지 않으며 원 승인과 감사
+저장을 자동 재시도하지 않는다. 감사 누락은 `requestId`, `targetType`, `targetId`, `originalErrorCode`,
+`auditWriteResult = FAILURE`만 포함한 비개인 `error` 구조화 로그 한 건으로 관찰한다. 이 로그에는 요청 사유,
+인증 정보, 토큰, 비밀값과 개인정보를 포함하지 않는다.
 
 ### 동시 요청 및 MySQL 검증 조건
 
