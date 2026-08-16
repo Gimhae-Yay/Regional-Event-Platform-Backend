@@ -21,6 +21,7 @@ import io.regionevent.regioneventbackend.domain.content.service.ContentRevisionI
 import io.regionevent.regioneventbackend.domain.content.service.ContentRevisionService;
 import io.regionevent.regioneventbackend.domain.content.service.ContentService;
 import io.regionevent.regioneventbackend.domain.content.service.ContentSessionService;
+import io.regionevent.regioneventbackend.domain.content.service.ContentWithdrawalRequestService;
 import io.regionevent.regioneventbackend.domain.content.service.DeleteContentUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.EndContentReservationsUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.OriginalContentReviewTargetPolicy;
@@ -66,6 +67,7 @@ import io.regionevent.regioneventbackend.global.security.qr.QrTokenService;
     OriginalContentReviewTargetService.class,
     OriginalContentReviewTargetPolicy.class,
     ContentSessionService.class,
+    ContentWithdrawalRequestService.class,
     ContentLogService.class,
     ImageObjectService.class,
     CapacityHoldService.class,

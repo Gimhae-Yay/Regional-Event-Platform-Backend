@@ -31,9 +31,12 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentLogStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentWithdrawalRequest;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentWithdrawalRequestStatus;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentLogRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentSessionRepository;
+import io.regionevent.regioneventbackend.domain.content.repository.ContentWithdrawalRequestRepository;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
@@ -63,6 +66,7 @@ class EndContentReservationsRollbackMySqlTest extends NonTransactionalMySqlTestS
     private final ContentRepository contentRepository;
     private final ContentSessionRepository contentSessionRepository;
     private final ContentLogRepository contentLogRepository;
+    private final ContentWithdrawalRequestRepository contentWithdrawalRequestRepository;
     private final CapacityHoldRepository capacityHoldRepository;
     private final AuditEventRepository auditEventRepository;
     private final RegionRepository regionRepository;
@@ -80,6 +84,7 @@ class EndContentReservationsRollbackMySqlTest extends NonTransactionalMySqlTestS
         ContentRepository contentRepository,
         ContentSessionRepository contentSessionRepository,
         ContentLogRepository contentLogRepository,
+        ContentWithdrawalRequestRepository contentWithdrawalRequestRepository,
         CapacityHoldRepository capacityHoldRepository,
         AuditEventRepository auditEventRepository,
         RegionRepository regionRepository,
@@ -92,6 +97,7 @@ class EndContentReservationsRollbackMySqlTest extends NonTransactionalMySqlTestS
         this.contentRepository = contentRepository;
         this.contentSessionRepository = contentSessionRepository;
         this.contentLogRepository = contentLogRepository;
+        this.contentWithdrawalRequestRepository = contentWithdrawalRequestRepository;
         this.capacityHoldRepository = capacityHoldRepository;
         this.auditEventRepository = auditEventRepository;
         this.regionRepository = regionRepository;
@@ -120,11 +126,38 @@ class EndContentReservationsRollbackMySqlTest extends NonTransactionalMySqlTestS
         )).isInstanceOf(IllegalStateException.class)
             .hasMessage("audit storage failure");
 
+        assertAtomicRollback(fixture);
+    }
+
+    @Test
+    void 자동_종료의_감사_기록이_실패하면_철회_요청_무효화를_함께_롤백한다() {
+        Fixture fixture = createFixture();
+        doThrow(new IllegalStateException("audit storage failure"))
+            .when(recordAuditEventUseCase)
+            .record(any(AuditEventCommand.class));
+
+        assertThatThrownBy(() -> endContentReservationsUseCase.endBySystem(
+            fixture.contentId(),
+            UUID.randomUUID()
+        )).isInstanceOf(IllegalStateException.class)
+            .hasMessage("audit storage failure");
+
+        assertAtomicRollback(fixture);
+    }
+
+    private void assertAtomicRollback(Fixture fixture) {
         assertThat(contentRepository.findById(fixture.contentId()))
             .hasValueSatisfying(content -> assertThat(content.getStatus()).isEqualTo(ContentStatus.PUBLISHED));
         assertThat(contentLogRepository.findByContentContentIdOrderByDateAscIdAsc(fixture.contentId()))
             .extracting(ContentLog::getStatus)
             .containsExactly(ContentLogStatus.PUBLISHED);
+        assertThat(contentWithdrawalRequestRepository.findById(fixture.withdrawalRequestId()))
+            .hasValueSatisfying(request -> {
+                assertThat(request.getStatus()).isEqualTo(ContentWithdrawalRequestStatus.PENDING);
+                assertThat(request.getInvalidatedAt()).isNull();
+                assertThat(request.getInvalidatedBy()).isNull();
+                assertThat(request.getInvalidationReason()).isNull();
+            });
         assertThat(capacityHoldRepository.findById(fixture.firstHoldId()))
             .hasValueSatisfying(this::assertActive);
         assertThat(capacityHoldRepository.findById(fixture.secondHoldId()))
@@ -174,6 +207,15 @@ class EndContentReservationsRollbackMySqlTest extends NonTransactionalMySqlTestS
                 null,
                 now.minusSeconds(86_400)
             ));
+            ContentWithdrawalRequest withdrawalRequest = contentWithdrawalRequestRepository.save(
+                ContentWithdrawalRequest.createPending(
+                    content,
+                    operator,
+                    "a".repeat(64),
+                    "운영 계획 변경",
+                    now
+                )
+            );
             ContentSession firstSession = saveCompletedSession(content, region, admin, now.plusSeconds(3_600));
             ContentSession secondSession = saveCompletedSession(content, region, admin, now.plusSeconds(10_800));
             CapacityHold firstHold = saveActiveHold(region, firstSession, visitor, 2, now);
@@ -181,6 +223,7 @@ class EndContentReservationsRollbackMySqlTest extends NonTransactionalMySqlTestS
             return new Fixture(
                 admin.getUserId(),
                 content.getContentId(),
+                withdrawalRequest.getContentWithdrawalRequestId(),
                 firstSession.getSessionId(),
                 secondSession.getSessionId(),
                 firstHold.getHoldId(),
@@ -255,6 +298,7 @@ class EndContentReservationsRollbackMySqlTest extends NonTransactionalMySqlTestS
     private record Fixture(
         Long adminId,
         Long contentId,
+        Long withdrawalRequestId,
         Long firstSessionId,
         Long secondSessionId,
         Long firstHoldId,
