@@ -1,9 +1,7 @@
 package io.regionevent.regioneventbackend.domain.reservation.service;
 
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,20 +26,17 @@ public class CreateReservationHoldUseCase {
     private final ContentService contentService;
     private final ContentSessionService contentSessionService;
     private final CapacityHoldService capacityHoldService;
-    private final Clock clock;
 
     public CreateReservationHoldUseCase(
         AppUserService appUserService,
         ContentService contentService,
         ContentSessionService contentSessionService,
-        CapacityHoldService capacityHoldService,
-        Clock clock
+        CapacityHoldService capacityHoldService
     ) {
         this.appUserService = appUserService;
         this.contentService = contentService;
         this.contentSessionService = contentSessionService;
         this.capacityHoldService = capacityHoldService;
-        this.clock = clock;
     }
 
     @Transactional
@@ -54,7 +49,7 @@ public class CreateReservationHoldUseCase {
             throw new BusinessException(ErrorCode.RESERVATION_HOLD_CONFLICT);
         }
         ContentSession contentSession = contentSessionService.findForUpdate(sessionId);
-        Instant createdAt = clock.instant().truncatedTo(ChronoUnit.MICROS);
+        Instant createdAt = capacityHoldService.findCurrentDatabaseInstant();
 
         contentSessionService.reserveCapacity(sessionId, request.quantity());
         Instant expiresAt = calculateExpiresAt(createdAt, contentSession.getStartsAt());
