@@ -22,12 +22,14 @@
 | [ADR-0048](../adr/0048-retain-terminal-idempotency-records-for-24-hours.md#결정) | 종결 멱등 결과 24시간 보관과 `PROCESSING` 자동 탈취 금지 |
 | [ADR-0004](../adr/0004-use-hmac-signed-reservation-qr.md#결정) | HMAC 서명, 키 관리와 예약당 방문 한 건 제약 |
 | [ADR-0010](../adr/0010-issue-short-lived-qr-on-demand-and-separate-retry-idempotency.md#결정) | 체크인 창 온디맨드 QR 발급·갱신과 재시도·재스캔 구분 |
+| [ADR-0101](../adr/0101-reject-new-qr-rescans-after-check-in.md#결정) | 동일 키 결과 재생과 이미 체크인된 예약의 새로운 QR 재스캔 충돌 |
 | [ADR-0040](../adr/0040-use-single-get-endpoint-for-my-reservation-qr.md#결정) | 내 예약 QR 조회 시 단기 QR을 발급하고 별도 발급 경로를 두지 않는 HTTP 계약 |
 | [ADR-0057](../adr/0057-define-compact-hmac-qr-token-profile.md#결정) | QR 토큰 직렬화, TTL 상한, 키 회전과 MySQL 시각 전달 계약 |
 | [ADR-0012](../adr/0012-retain-author-unlinked-reviews-and-visits-after-withdrawal.md#결정) | 탈퇴 회원의 미사용 QR·미체크인 예약 종결 |
 
-> QR 발급 시점과 재스캔 판정은 ADR-0010을 우선 적용한다. HTTP 경로는 ADR-0040을 따라 내 예약 QR 조회 시
-> 발급하며, ADR-0004는 HMAC·키 관리·방문 고유 제약에 적용한다. 토큰 형식과 수명·키 회전의 구현 계약은 ADR-0057을 따른다.
+> QR 발급 시점과 동일 키 재시도·새 키 스캔 구분은 ADR-0010을 적용하고, 이미 체크인된 예약의 새로운 QR
+> 재스캔 응답은 ADR-0101을 우선 적용한다. HTTP 경로는 ADR-0040을 따라 내 예약 QR 조회 시 발급하며,
+> ADR-0004는 HMAC·키 관리·방문 고유 제약에 적용한다. 토큰 형식과 수명·키 회전의 구현 계약은 ADR-0057을 따른다.
 
 ### 기능 범위
 
@@ -56,8 +58,8 @@
 ##### 예외 흐름
 
 - 통신 실패로 동일 `checkInRequestId`와 같은 운영자·예약·회차·요청 의미를 재전송하면 저장된 최초 결과를 반환한다.
-- 새로운 스캔은 현재 권한과 QR·시간·회차 상태를 다시 검증하고,
-  유효하면서 방문이 이미 있으면 새 방문 없이 기존 성공 결과를 반환한다.
+- 새로운 스캔은 현재 권한과 QR·시간·회차 상태를 다시 검증하고, 검증을 통과했더라도 이미 `CHECKED_IN`된
+  예약과 일치하는 방문이 있으면 `409 QR_ALREADY_CHECKED_IN`과 `이미 체크인된 QR입니다.`로 거부한다.
 - 만료, 체크인 창 밖, 위·변조, 취소 예약·회차, 다른 회차, 권한 없는 운영자의 새로운 스캔은
   기존 방문 존재 여부와 관계없이 실패 사유를 구분해 거부한다.
 - QR을 표시할 수 없거나 스캔에 실패하면 운영자가 예약 번호로 보조 조회하고,
@@ -89,8 +91,9 @@ QR은 HMAC-SHA256으로 서명하고 토큰 버전·키 식별자·불투명 예
 취소·만료 예약, 취소 회차, 체크인 창 밖, 다른 회차, 위변조 QR과 권한 없는 운영자 요청은
 기존 방문이 있어도 실패 사유를 구분해 거부한다.
 방문이 없으면 예약이 `CONFIRMED`일 때만 새 체크인을 허용한다.
-방문이 있으면 예약이 `CHECKED_IN`이고 그 방문이 같은 예약·회차에 연결된 경우만 유효한 재스캔으로 인정하며,
-`CHECKED_IN` 예약에 방문이 없거나 상태·연결이 맞지 않으면 정합성 오류로 거부하고 관찰한다.
+방문이 있고 예약이 `CHECKED_IN`이며 그 방문이 같은 예약·회차에 연결된 경우, 새로운 키의 재스캔은
+`409 QR_ALREADY_CHECKED_IN`과 공개 메시지 `이미 체크인된 QR입니다.`로 거부한다.
+`CHECKED_IN` 예약에 방문이 없거나 상태·연결이 맞지 않으면 기존과 같이 정합성 오류로 거부하고 관찰한다.
 
 #### `QR-03`
 
@@ -100,7 +103,11 @@ QR은 HMAC-SHA256으로 서명하고 토큰 버전·키 식별자·불투명 예
 저장된 결과를 반환하며, 운영자·예약·회차 또는 요청 의미가 다르면 거부한다.
 `SUCCEEDED`와 저장 대상으로 정한 `FAILED` 멱등 기록은 `completed_at`부터 24시간 보관하며,
 `PROCESSING` 기록은 만료·정리·재점유로 자동 탈취하지 않는다. 보관 기간 변경은 새 ADR로 재검토한다.
-새로운 ID의 스캔은 `QR-02` 검증을 모두 통과해야 하고, 기존 방문이 있으면 기존 성공 결과를 반환한다.
+동일 ID와 동일 요청의 완료 기록은 최초 결과를 그대로 재생하며, 최초 결과가 `200 OK`이면 같은 방문 결과와
+`200 OK`를 반환한다. 새로운 ID의 스캔은 `QR-02` 검증을 모두 통과해야 하고, 이미 `CHECKED_IN`된 예약과
+일치하는 기존 방문이 있으면 기존 성공 결과를 반환하지 않고 `409 QR_ALREADY_CHECKED_IN`으로 거부한다.
+이 결정적 실패는 멱등 기록을 `FAILED`, `result_code = QR_ALREADY_CHECKED_IN`으로 완료하고, 감사 이벤트에
+`reason_code = QR_CHECK_IN_RESERVATION_ALREADY_CHECKED_IN`을 기록한다.
 방문이 없으면 예약당 방문 기록을 한 건만 생성하고
 [정원 홀드·무료 예약](reservation.md)의 `RSV-04`에 따라 예약을 `CHECKED_IN`으로 전환한다.
 
@@ -124,7 +131,9 @@ QR을 표시할 수 없거나 스캔에 실패하면 운영자가 담당 콘텐�
 운영자 권한과 예약자 마스킹은 [인증·프로필](auth-profile.md#auth-privacy-policies)을 적용한다.
 QR 조회 시 발급·갱신과 요청 재시도·재스캔 구분은
 [ADR-0040](../adr/0040-use-single-get-endpoint-for-my-reservation-qr.md)와
-[ADR-0010](../adr/0010-issue-short-lived-qr-on-demand-and-separate-retry-idempotency.md)을 따른다.
+[ADR-0010](../adr/0010-issue-short-lived-qr-on-demand-and-separate-retry-idempotency.md)을 따르며,
+이미 체크인된 예약의 새로운 QR 재스캔 충돌은
+[ADR-0101](../adr/0101-reject-new-qr-rescans-after-check-in.md)을 따른다.
 
 ### 데이터 요구사항
 
@@ -133,7 +142,7 @@ QR 조회 시 발급·갱신과 요청 재시도·재스캔 구분은
 | 회차 | `session_id`, status, 체크인 시작·종료 시각 | QR 발급·검증과 노쇼 경계 |
 | 예약 | `reservation_id`, 활성 회원 연결, session_id, status | QR 발급·체크인 자격과 탈퇴 시 미사용 QR 무효화 |
 | 방문 | `visit_id`, 예약 중복 방지 연결, 활성 회원 연결, content_id, session_id, checked_at, 작성자 연결 제거 상태 | 실제 참여·중복 방지와 탈퇴 후 작성자 비연결 방문 사실 유지 |
-| 체크인 멱등 기록 | `checkInRequestId`, actor, operation, 요청 해시, 처리 상태, 비개인 결과 참조, 보관 만료 시각 | 네트워크 재시도 결과 재생과 다른 요청의 키 재사용 거부 |
+| 체크인 멱등 기록 | `checkInRequestId`, actor, operation, 요청 해시, 처리 상태, 비개인 결과 참조 또는 실패 코드, 보관 만료 시각 | 네트워크 재시도 결과 재생과 다른 요청의 키 재사용 거부 |
 
 상세 엔티티, 컬럼, 관계와 DB 제약은 [ERD](../erd.md)를 기준으로 한다.
 
