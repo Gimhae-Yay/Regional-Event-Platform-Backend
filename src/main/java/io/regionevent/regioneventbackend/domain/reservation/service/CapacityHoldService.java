@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.reservation.service;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -45,6 +46,14 @@ public class CapacityHoldService {
             null,
             createdAt
         ));
+    }
+
+    @Transactional(readOnly = true)
+    public Instant findCurrentDatabaseInstant() {
+        BigDecimal epochSeconds = capacityHoldRepository.findCurrentEpochSeconds();
+        long seconds = epochSeconds.longValue();
+        long nanos = epochSeconds.remainder(BigDecimal.ONE).movePointRight(9).longValue();
+        return Instant.ofEpochSecond(seconds, nanos);
     }
 
     @Transactional(readOnly = true)

@@ -5,9 +5,7 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -45,6 +43,7 @@ class CreateReservationHoldUseCaseTest {
         when(contentService.lockPublishedCapacityHoldTarget(CONTENT_ID)).thenReturn(true);
         when(contentSessionService.findForUpdate(SESSION_ID)).thenReturn(contentSession);
         when(contentSession.getStartsAt()).thenReturn(SESSION_STARTS_AT);
+        when(capacityHoldService.findCurrentDatabaseInstant()).thenReturn(CREATED_AT);
         when(capacityHoldService.createActiveHold(
             user,
             contentSession,
@@ -61,8 +60,7 @@ class CreateReservationHoldUseCaseTest {
             appUserService,
             contentService,
             contentSessionService,
-            capacityHoldService,
-            Clock.fixed(CREATED_AT, ZoneOffset.UTC)
+            capacityHoldService
         );
 
         CreateReservationHoldResponse response = useCase.create(

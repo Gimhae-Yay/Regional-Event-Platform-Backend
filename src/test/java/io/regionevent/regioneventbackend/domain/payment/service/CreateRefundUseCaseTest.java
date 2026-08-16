@@ -1,9 +1,12 @@
 package io.regionevent.regioneventbackend.domain.payment.service;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -130,6 +133,25 @@ class CreateRefundUseCaseTest {
     @Test
     void 예약취소환불_PortOne파싱불가이백응답_응답을기록하고불일치로확정한다() {
         assertReservationCancellationReceivedError("INVALID_RESPONSE", "invalid-response-hash");
+    }
+
+    @Test
+    void 예약취소환불_기존환불이있으면기존결과만반환하고시도와외부호출을추가하지않는다() {
+        ReservationCancellationRefundFixture fixture = reservationCancellationRefundFixture(
+            RefundStatus.FAILED,
+            true
+        );
+
+        CreateRefundResponse response = fixture.useCase().createForReservationCancellation(
+            10L,
+            null,
+            UUID.randomUUID()
+        );
+
+        org.assertj.core.api.Assertions.assertThat(response.status()).isEqualTo("FAILED");
+        verify(fixture.refundService(), never()).create(any());
+        verify(fixture.refundAttemptService(), never()).create(any());
+        verify(fixture.paymentGateway(), never()).cancelPayment(anyString(), anyLong(), anyString());
     }
 
     private void assertReservationCancellationReceivedError(
@@ -365,6 +387,13 @@ class CreateRefundUseCaseTest {
     }
 
     private ReservationCancellationRefundFixture reservationCancellationRefundFixture(RefundStatus refundStatus) {
+        return reservationCancellationRefundFixture(refundStatus, false);
+    }
+
+    private ReservationCancellationRefundFixture reservationCancellationRefundFixture(
+        RefundStatus refundStatus,
+        boolean existingRefund
+    ) {
         PaymentService paymentService = mock(PaymentService.class);
         RefundService refundService = mock(RefundService.class);
         RefundAttemptService refundAttemptService = mock(RefundAttemptService.class);
@@ -387,7 +416,8 @@ class CreateRefundUseCaseTest {
         when(payment.getCapacityHold()).thenReturn(capacityHold);
         when(capacityHold.getRegion()).thenReturn(region);
         when(snapshot.getFinalAmount()).thenReturn(10_000L);
-        when(refundService.findByPaymentIdForUpdate(10L)).thenReturn(Optional.empty());
+        when(refundService.findByPaymentIdForUpdate(10L))
+            .thenReturn(existingRefund ? Optional.of(refund) : Optional.empty());
         when(refundService.create(any())).thenReturn(refund);
         when(refund.getRefundId()).thenReturn(20L);
         when(refund.getAmount()).thenReturn(10_000L);
@@ -412,12 +442,22 @@ class CreateRefundUseCaseTest {
             Clock.fixed(Instant.parse("2026-08-11T00:00:00Z"), ZoneOffset.UTC),
             transactionManager
         );
-        return new ReservationCancellationRefundFixture(useCase, paymentGateway, refund, attempt, auditEventUseCase);
+        return new ReservationCancellationRefundFixture(
+            useCase,
+            paymentGateway,
+            refundService,
+            refundAttemptService,
+            refund,
+            attempt,
+            auditEventUseCase
+        );
     }
 
     private record ReservationCancellationRefundFixture(
         CreateRefundUseCase useCase,
         PortOnePaymentGateway paymentGateway,
+        RefundService refundService,
+        RefundAttemptService refundAttemptService,
         Refund refund,
         RefundAttempt attempt,
         RecordAuditEventUseCase auditEventUseCase

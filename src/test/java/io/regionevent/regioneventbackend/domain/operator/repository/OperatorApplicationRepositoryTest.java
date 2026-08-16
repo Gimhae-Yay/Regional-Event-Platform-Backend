@@ -95,7 +95,7 @@ class OperatorApplicationRepositoryTest {
     }
 
     @Test
-    void 심사_결과_필수값을_데이터베이스_제약으로_검증한다() {
+    void 심사자_탈퇴_후_심사_결과를_데이터베이스_제약으로_허용한다() {
         AppUser applicant = saveUser("constraint-applicant@example.com");
         AppUser inspector = saveUser("constraint-inspector@example.com");
         Region region = saveRegion();
@@ -121,7 +121,7 @@ class OperatorApplicationRepositoryTest {
             "반려 사유"
         )).isEqualTo(1);
 
-        assertThatThrownBy(() -> jdbcTemplate.update(
+        assertThat(jdbcTemplate.update(
             """
                 INSERT INTO operator_application (
                     applicant_user_id,
@@ -140,7 +140,28 @@ class OperatorApplicationRepositoryTest {
             "REJECTED",
             null,
             "심사자 없음"
-        )).isInstanceOf(DataIntegrityViolationException.class);
+        )).isEqualTo(1);
+
+        assertThat(jdbcTemplate.update(
+            """
+                INSERT INTO operator_application (
+                    applicant_user_id,
+                    requested_region_id,
+                    business_information,
+                    status,
+                    inspected_user_id,
+                    rejected_reason,
+                    created_at,
+                    updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """,
+            applicant.getUserId(),
+            region.getRegionId(),
+            "사업자 정보",
+            "APPROVED",
+            null,
+            null
+        )).isEqualTo(1);
 
         assertThatThrownBy(() -> jdbcTemplate.update(
             """

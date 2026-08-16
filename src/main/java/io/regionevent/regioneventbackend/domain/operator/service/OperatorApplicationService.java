@@ -85,4 +85,9 @@ public class OperatorApplicationService {
     public void cancelAndUnlinkByApplicantUserId(Long userId) {
         operatorApplicationRepository.cancelAndUnlinkByApplicantUserId(userId);
     }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void unlinkInspectorByUserId(Long userId) {
+        operatorApplicationRepository.unlinkInspectorByUserId(userId);
+    }
 }
