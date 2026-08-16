@@ -2,12 +2,14 @@ package io.regionevent.regioneventbackend.domain.user.service;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventActorLinkService;
 import io.regionevent.regioneventbackend.domain.content.service.ContentService;
+import io.regionevent.regioneventbackend.domain.content.service.ContentSessionService;
 import io.regionevent.regioneventbackend.domain.coupon.entity.Coupon;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatus;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatusHistory;
@@ -36,6 +38,7 @@ public class WithdrawUserUseCase {
     private final AppUserService appUserService;
     private final UserRoleAssignmentService userRoleAssignmentService;
     private final ContentService contentService;
+    private final ContentSessionService contentSessionService;
     private final RefreshTokenService refreshTokenService;
     private final CouponService couponService;
     private final CouponIssuanceService couponIssuanceService;
@@ -55,6 +58,7 @@ public class WithdrawUserUseCase {
         AppUserService appUserService,
         UserRoleAssignmentService userRoleAssignmentService,
         ContentService contentService,
+        ContentSessionService contentSessionService,
         RefreshTokenService refreshTokenService,
         CouponService couponService,
         CouponIssuanceService couponIssuanceService,
@@ -73,6 +77,7 @@ public class WithdrawUserUseCase {
         this.appUserService = appUserService;
         this.userRoleAssignmentService = userRoleAssignmentService;
         this.contentService = contentService;
+        this.contentSessionService = contentSessionService;
         this.refreshTokenService = refreshTokenService;
         this.couponService = couponService;
         this.couponIssuanceService = couponIssuanceService;
@@ -97,10 +102,12 @@ public class WithdrawUserUseCase {
         appUserService.startWithdrawal(user);
 
         refreshTokenService.revokeAllFamilies(userId);
+        List<Long> activeSessionIds = capacityHoldService.findActiveSessionIdsForWithdrawal(userId);
+        activeSessionIds.forEach(contentSessionService::lockForUpdate);
         invalidateActiveCoupons(userId);
         couponIssuanceService.unlinkRecipientUserByUserId(userId);
         couponService.unlinkUserByUserId(userId);
-        capacityHoldService.invalidateActiveHoldsForWithdrawal(userId);
+        capacityHoldService.invalidateActiveHoldsForWithdrawal(userId, activeSessionIds);
         reservationService.cancelConfirmedReservationsForWithdrawal(userId);
         operatorApplicationService.cancelAndUnlinkByApplicantUserId(userId);
         operatorApplicationService.unlinkInspectorByUserId(userId);

@@ -168,8 +168,9 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 다시 확인한다. 따라서 `ENDED` 콘텐츠와 새 `PENDING` 회차를 함께 커밋할 수 없다.
 `PUBLISHED → ENDED`가 성공할 때 활성 `EDIT_REQUESTED` 콘텐츠 수정본이 있으면 같은 트랜잭션에서
 `EDIT_INVALIDATED`로 종결한다. 수동 종료에서는 종료를 처리한 지역 관리자를, 시스템 종료에서는 처리자 없이
-무효화 시각·`CONTENT_ENDED` 사유를 기록한다. 콘텐츠 행을 먼저 잠근 뒤 수정본 행, 회차와 홀드 순으로 잠그며,
-콘텐츠 종료·수정본 무효화·콘텐츠 로그·감사·홀드 처리는 함께 커밋하거나 함께 롤백한다.
+무효화 시각·`CONTENT_ENDED` 사유를 기록한다. 콘텐츠 행을 먼저 잠근 뒤 처리 대기 전체 철회 요청, 수정본 행,
+회차와 홀드 순으로 잠그며, 처리 대기 요청이 있으면 `CONTENT_ENDED` 사유의 `INVALIDATED`로 먼저 종결한다. 콘텐츠 종료·철회
+요청 무효화·수정본 무효화·콘텐츠 로그·감사·홀드 처리는 함께 커밋하거나 함께 롤백한다.
 자동 종료의 `@Scheduled` 실행은 별도 Scheduler가 담당하고, Scheduler와 수동 Controller는 같은
 `EndContentReservationsUseCase`를 호출한다. UseCase는 콘텐츠 한 건마다 트랜잭션을 열어 각 Service의 작업을
 조정하며, Scheduler와 Controller는 개별 Service를 직접 호출하지 않는다.
@@ -191,6 +192,7 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 | [ADR-0037](../adr/0037-block-automatic-publication-during-pre-publication-revision-review.md#결정) | 공개 전 수정 심사 중 자동 공개 차단과 후보 공개 예정 시각 |
 | [P0 명세](../p0-spec.md#88-감사-및-운영-로그)                                           | 수정본 철회·중단·철회·삭제 상태 전이 감사    |
 | [ADR-0021](../adr/0021-record-content-reasons-in-content-log.md#결정)              | 콘텐츠 사유를 상태 로그에 기록하고 현재 상태와 분리하는 모델 |
+| [ADR-0101](../adr/0101-store-content-withdrawal-requests-and-serialize-review.md#결정) | 전체 콘텐츠 철회 요청·심사, 활성 수정본 종결과 경합 모델 |
 
 ### 기능 범위
 
@@ -222,9 +224,10 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 철회 시각·처리자·사유를 기록하며 반복 철회 요청은 기존 결과를 반환한다.
 승인·반려·철회는 모두 `EDIT_REQUESTED` 상태를 조건으로 전이하며 경합하면 성공한 최초 전이만 적용한다.
 승인·반려가 먼저 성공하면 이후 철회를 거부하고, 철회가 먼저 성공하면 이후 승인·반려를 거부한다.
-콘텐츠가 `PUBLISHED → SUSPENDED` 또는 `PUBLISHED → ENDED`로 먼저 전이하면 활성 수정본은
+콘텐츠가 `PUBLISHED → SUSPENDED`, `PUBLISHED → WITHDRAWN` 또는 `PUBLISHED → ENDED`로 먼저 전이하면 활성 수정본은
 `EDIT_INVALIDATED`로 종결한다. 중단에서는 중단을 처리한 지역 관리자를, 수동 종료에서는 종료를 처리한 지역
-관리자를, 시스템 종료에서는 처리자 없이 무효화 시각과 각각 `CONTENT_SUSPENDED` 또는 `CONTENT_ENDED` 사유를
+관리자를, 전체 철회에서는 승인한 지역 관리자를, 시스템 종료에서는 처리자 없이 무효화 시각과 각각
+`CONTENT_SUSPENDED`, `CONTENT_WITHDRAWN` 또는 `CONTENT_ENDED` 사유를
 기록한다. 콘텐츠 행을 먼저 잠근 뒤 활성 수정본 행을 잠그므로 수정 심사·철회와 경합하면 `EDIT_REQUESTED` 상태
 전이에 먼저 성공한 하나만 반영한다. 무효화된 수정본은 후보 필드를 원본에 반영하지 않는 터미널 상태이며,
 목록에서는 제외하고 심사 상세 조회는 `404 NOT_FOUND`, 승인·반려·철회는 `409 CONTENT_STATE_CONFLICT`를 반환한다.
@@ -240,6 +243,8 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 
 지역 관리자는 공개 콘텐츠를 `PUBLISHED → SUSPENDED`로 전환할 수 있다.
 `SUSPENDED` 상태의 `content_log`에 중단 시각, 처리자와 사유를 기록하고 방문자에게 최신 사유를 표시한다.
+처리 대기 전체 철회 요청이 있으면 중단과 같은 트랜잭션에서 `CONTENT_SUSPENDED` 사유의 `INVALIDATED`로
+종결하고 중단 처리자·시각과 요청 상태 전이 감사를 기록한다.
 활성 `EDIT_REQUESTED` 수정본이 있으면 콘텐츠 행 잠금 뒤 수정본 행을 잠가 `EDIT_INVALIDATED`로 종결하고,
 중단 처리자·시각과 `CONTENT_SUSPENDED` 사유 및 수정본 상태 전이 감사 이력을 함께 기록한다.
 신규 홀드를 차단하고 `ACTIVE` 홀드를 무효화해 정원을 한 번 복구하지만,
@@ -247,11 +252,25 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 
 #### `CON-07`
 
-운영자는 자신이 소유한 공개 콘텐츠만 전체 콘텐츠 철회를 요청할 수 있다.
-지역 관리자가 승인하면 `PUBLISHED → WITHDRAWN`으로 전환하고 `WITHDRAWN` `content_log`에 철회 시각·처리자·사유를 보존한다.
-신규 홀드를 차단하고 `ACTIVE` 홀드를 무효화해 정원을 한 번 복구하지만,
-기존 `CONFIRMED` 예약은 명시적인 회차 취소가 없으면 유지한다.
-전체 콘텐츠 `WITHDRAWN`은 수정본 `EDIT_WITHDRAWN`과 다른 상태다.
+소유 운영자는 자신이 소유한 `PUBLISHED` 콘텐츠의 전체 철회를 사유와 함께 요청한다. 요청은 별도
+`content_withdrawal_request`에 `PENDING`으로 보관하고 콘텐츠당 처리 대기 요청은 최대 한 건이다. 요청 생성은
+필수 `Idempotency-Key`의 해시를 요청 행에 보관하며 같은 콘텐츠·키·정규화 사유의 재시도는 심사 종결 뒤에도
+최초 생성 결과를 반환한다. 같은 키의 다른 사유와 새 키의 처리 대기 중복 요청은 충돌로 거부한다.
+
+담당 지역 관리자는 `PENDING` 요청을 승인하거나 필수 사유와 함께 반려한다. 반려는 요청만 `REJECTED`로 종결하고
+콘텐츠·수정본·로그·홀드·예약·결제·쿠폰을 변경하지 않는다. 콘텐츠가 계속 `PUBLISHED`이면 운영자는 새
+`Idempotency-Key`와 새 요청 행으로 재요청할 수 있다. 요청 대기 중 운영 중단 또는 종료가 먼저 성공하면 요청은 각각
+`CONTENT_SUSPENDED`, `CONTENT_ENDED` 사유의 `INVALIDATED`로 종결한다.
+
+승인하면 요청을 `APPROVED`, 콘텐츠를 `PUBLISHED → WITHDRAWN`으로 전환하고 요청 사유가 있는
+`WITHDRAWN` `content_log`에 승인 시각과 승인 관리자를 보존한다. 활성 `EDIT_REQUESTED` 수정본은 승인 관리자,
+승인 시각과 `CONTENT_WITHDRAWN` 사유를 가진 `EDIT_INVALIDATED`로 종결하며 후보 필드를 원본에 반영하지 않는다.
+남은 `ACTIVE` 홀드는 한 번만 `INVALIDATED`로 전환하고 정원을 한 번 복구한다. 연결된 `PENDING` 결제와
+`RESERVED` 쿠폰은 기존 홀드 종결 계약에 따라 같은 MySQL 트랜잭션에서 각각 종결·선점 해제한다.
+
+요청 상태, 콘텐츠, 수정본, 콘텐츠 로그, 감사, 홀드, 정원, 결제와 쿠폰 변경은 하나의 MySQL 트랜잭션에서
+함께 커밋하거나 롤백한다. 기존 `CONFIRMED` 예약은 명시적인 회차 취소가 없으면 유지하며, 전체 콘텐츠
+`WITHDRAWN`은 수정본 `EDIT_WITHDRAWN`, 운영 중단 `SUSPENDED`, 콘텐츠 종료 `ENDED`와 다른 흐름이다.
 
 #### `CON-08`
 
@@ -274,7 +293,7 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 ### `CON-09`
 
 최초 콘텐츠 소유자 설정, 승인·반려·자동 공개·수정 심사·수정본 `EDIT_WITHDRAWN`·`EDIT_INVALIDATED`,
-운영 중단·전체 콘텐츠 `WITHDRAWN`·종료·삭제의 상태 전이는 감사 대상이다.
+전체 철회 요청의 생성·승인·반려·무효화, 운영 중단·전체 콘텐츠 `WITHDRAWN`·종료·삭제의 상태 전이는 감사 대상이다.
 공통 감사 필드와 재현 요건은 [P0 명세](../p0-spec.md#88-감사-및-운영-로그)의 8.8절을 적용한다.
 
 ### 완료 기준
@@ -291,6 +310,9 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 `ACTIVE` 홀드를 `INVALIDATED`로 전환해 정원을 한 번 복구하되
 기존 `CONFIRMED`·`CHECKED_IN` 예약과 방문·후기는 유지한다.
 콘텐츠 전이와 예약 확정이 경합하면 먼저 성공한 조건부 상태 전이를 기준으로 다른 요청을 거부한다.
+전체 철회 요청 생성과 반려는 콘텐츠의 예약 가능 상태를 바꾸지 않는다. 전체 철회 승인이 먼저 커밋되면 홀드
+생성과 예약 확정은 `WITHDRAWN` 상태 또는 무효화된 홀드를 확인해 실패한다. 홀드 생성이 먼저 커밋되면 승인이
+해당 활성 홀드를 무효화하고 정원을 복구하며, 예약 확정이 먼저 커밋되면 생성된 `CONFIRMED` 예약을 유지한다.
 
 ## 전체 콘텐츠 기능 공통 연계 기준
 
@@ -304,6 +326,7 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 | --- | --- | --- |
 | 지역 | `region_id`, 공개 상태 | 지역 선택과 공개 범위 |
 | 콘텐츠 | `content_id`, `region_id`, type, status, operator_id, `reservation_price`, 행사·체험 표시 필드(연령 조건·준비물·취소 안내), publish_at, deleted_at | 탐색·승인·자동 공개, 서버가 설정한 소유 관계와 공개 전 소프트 삭제 현재 상태 |
+| 전체 콘텐츠 철회 요청 | `content_withdrawal_request_id`, `content_id`, `idempotency_key_hash`, requester, status, request_reason, requested_at, reviewer, reviewed_at, rejection_reason, invalidator, invalidated_at, invalidation_reason | 전체 철회 요청·승인·반려·재요청과 중단·종료에 따른 요청 무효화의 현재 상태 및 이력 |
 | 콘텐츠 수정본 | `content_revision_id`, content_id, editor_id, status, 후보 `reservation_price`, 행사·체험 후보 표시 필드, 후보 `publish_at`, submitted_at, reviewed_at, withdrawn_at, withdrawn_by, withdrawal_reason, invalidated_at, invalidated_by, invalidation_reason | 공개·공개 전 승인본을 분리한 수정 심사·철회·콘텐츠 종결에 따른 무효화 |
 | 콘텐츠 상태 로그 | id, `content_id`, `actor_id`, status, reason, date | 생성·승인·자동 공개·중단·철회·종료·삭제의 처리자, 사유와 상태 변경 시각 |
 | 행사·체험 회차 | `session_id`, `content_id`, 시작·종료 시각, 정원, status, 체크인 시작·종료 시각 | 무료 예약 마감·QR 가능 단위 |

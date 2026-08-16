@@ -46,10 +46,13 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentSessionRepository;
+import io.regionevent.regioneventbackend.domain.content.service.CancelContentSessionUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.ContentSessionService;
 import io.regionevent.regioneventbackend.domain.coupon.entity.Coupon;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponIssuance;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponIssuanceType;
@@ -136,8 +139,10 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
     private final JwtAccessTokenService jwtAccessTokenService;
     private final JdbcTemplate jdbcTemplate;
     private final WithdrawUserUseCase withdrawUserUseCase;
+    private final CancelContentSessionUseCase cancelContentSessionUseCase;
     private final ExpireOrInvalidateCapacityHoldsUseCase expireOrInvalidateCapacityHoldsUseCase;
     private final FailingWithdrawalCapacityHoldService failingWithdrawalCapacityHoldService;
+    private final LockOrderContentSessionService lockOrderContentSessionService;
     private final RefreshTokenStore refreshTokenStore;
     private final CreateReservationHoldUseCase createReservationHoldUseCase;
     private final ReservationConfirmationUseCase reservationConfirmationUseCase;
@@ -174,8 +179,10 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         JwtAccessTokenService jwtAccessTokenService,
         JdbcTemplate jdbcTemplate,
         WithdrawUserUseCase withdrawUserUseCase,
+        CancelContentSessionUseCase cancelContentSessionUseCase,
         ExpireOrInvalidateCapacityHoldsUseCase expireOrInvalidateCapacityHoldsUseCase,
         FailingWithdrawalCapacityHoldService failingWithdrawalCapacityHoldService,
+        LockOrderContentSessionService lockOrderContentSessionService,
         RefreshTokenStore refreshTokenStore,
         CreateReservationHoldUseCase createReservationHoldUseCase,
         ReservationConfirmationUseCase reservationConfirmationUseCase,
@@ -205,8 +212,10 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         this.jwtAccessTokenService = jwtAccessTokenService;
         this.jdbcTemplate = jdbcTemplate;
         this.withdrawUserUseCase = withdrawUserUseCase;
+        this.cancelContentSessionUseCase = cancelContentSessionUseCase;
         this.expireOrInvalidateCapacityHoldsUseCase = expireOrInvalidateCapacityHoldsUseCase;
         this.failingWithdrawalCapacityHoldService = failingWithdrawalCapacityHoldService;
+        this.lockOrderContentSessionService = lockOrderContentSessionService;
         this.refreshTokenStore = refreshTokenStore;
         this.createReservationHoldUseCase = createReservationHoldUseCase;
         this.reservationConfirmationUseCase = reservationConfirmationUseCase;
@@ -226,6 +235,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
     void setUp() {
         reset(refreshTokenStore, AopTestUtils.<CouponService>getTargetObject(couponService));
         failingWithdrawalCapacityHoldService.reset();
+        lockOrderContentSessionService.reset();
     }
 
     @Test
@@ -455,6 +465,64 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
             });
         assertThat(contentSessionRepository.findById(fixture.session().getSessionId()))
             .hasValueSatisfying(session -> assertThat(session.getRemainingCapacity()).isEqualTo(8));
+    }
+
+    @Test
+    @Timeout(15)
+    void withdraw_whenWithdrawalLocksSessionFirst_completesAfterConcurrentSessionCancellation() throws Exception {
+        Fixture fixture = createFixture();
+        lockOrderContentSessionService.pauseAfterWithdrawalSessionLock();
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<?> withdrawal = executorService.submit(() -> withdrawUserUseCase.withdraw(fixture.user().getUserId()));
+            assertThat(lockOrderContentSessionService.awaitSessionLock()).isTrue();
+
+            Future<?> cancellation = executorService.submit(() -> cancelContentSessionUseCase.cancel(
+                fixture.owner().getUserId(),
+                fixture.session().getSessionId(),
+                "운영상 취소",
+                UUID.randomUUID()
+            ));
+            assertThat(lockOrderContentSessionService.awaitCancellationLockAttempt()).isTrue();
+            assertThat(cancellation.isDone()).isFalse();
+
+            lockOrderContentSessionService.releaseSessionLock();
+            withdrawal.get(5, TimeUnit.SECONDS);
+            cancellation.get(5, TimeUnit.SECONDS);
+        } finally {
+            lockOrderContentSessionService.reset();
+        }
+
+        assertWithdrawalAndCancellationCompleted(fixture);
+    }
+
+    @Test
+    @Timeout(15)
+    void withdraw_whenSessionCancellationLocksSessionFirst_completesAfterConcurrentWithdrawal() throws Exception {
+        Fixture fixture = createFixture();
+        lockOrderContentSessionService.pauseAfterCancellationSessionLock();
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<?> cancellation = executorService.submit(() -> cancelContentSessionUseCase.cancel(
+                fixture.owner().getUserId(),
+                fixture.session().getSessionId(),
+                "운영상 취소",
+                UUID.randomUUID()
+            ));
+            assertThat(lockOrderContentSessionService.awaitSessionLock()).isTrue();
+
+            Future<?> withdrawal = executorService.submit(() -> withdrawUserUseCase.withdraw(fixture.user().getUserId()));
+            assertThat(lockOrderContentSessionService.awaitWithdrawalLockAttempt()).isTrue();
+            assertThat(withdrawal.isDone()).isFalse();
+
+            lockOrderContentSessionService.releaseSessionLock();
+            cancellation.get(5, TimeUnit.SECONDS);
+            withdrawal.get(5, TimeUnit.SECONDS);
+        } finally {
+            lockOrderContentSessionService.reset();
+        }
+
+        assertWithdrawalAndCancellationCompleted(fixture);
     }
 
     @Test
@@ -959,6 +1027,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         AppUser reviewer = saveUser("reviewer-" + suffix + "@example.com");
         Region region = regionRepository.saveAndFlush(new Region("R" + suffix, "김해시", true));
         userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(user, UserRole.VISITOR, null));
+        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(owner, UserRole.OPERATOR, region));
 
         Content content = contentRepository.saveAndFlush(new Content(
             region,
@@ -1027,7 +1096,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
             null
         ));
         jdbcTemplate.update("UPDATE content_session SET remaining_capacity = 8 WHERE session_id = ?", session.getSessionId());
-        return new Fixture(user, session, activeHold, reservation);
+        return new Fixture(user, owner, session, activeHold, reservation);
     }
 
     private Payment createApprovedPayment(Fixture fixture) {
@@ -1076,6 +1145,20 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
             "UPDATE capacity_hold SET expires_at = CURRENT_TIMESTAMP(6) - INTERVAL 1 SECOND WHERE hold_id = ?",
             fixture.activeHold().getHoldId()
         );
+    }
+
+    private void assertWithdrawalAndCancellationCompleted(Fixture fixture) {
+        assertThat(appUserRepository.findById(fixture.user().getUserId())).isEmpty();
+        assertThat(contentSessionRepository.findById(fixture.session().getSessionId()))
+            .hasValueSatisfying(session -> {
+                assertThat(session.getStatus()).isEqualTo(ContentSessionStatus.CANCELLED);
+                assertThat(session.getRemainingCapacity()).isEqualTo(10);
+            });
+        assertThat(capacityHoldRepository.findById(fixture.activeHold().getHoldId()))
+            .hasValueSatisfying(hold -> {
+                assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.INVALIDATED);
+                assertThat(hold.getCapacityReleasedAt()).isNotNull();
+            });
     }
 
     private ErrorCode withdraw(Long userId) {
@@ -1147,6 +1230,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
 
     private record Fixture(
         AppUser user,
+        AppUser owner,
         ContentSession session,
         CapacityHold activeHold,
         Reservation reservation
@@ -1180,6 +1264,14 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         ) {
             return new FailingWithdrawalCapacityHoldService(capacityHoldRepository);
         }
+
+        @Bean
+        @Primary
+        LockOrderContentSessionService lockOrderContentSessionService(
+            ContentSessionRepository contentSessionRepository
+        ) {
+            return new LockOrderContentSessionService(contentSessionRepository);
+        }
     }
 
     static class FailingWithdrawalCapacityHoldService extends CapacityHoldService {
@@ -1191,8 +1283,14 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         }
 
         @Override
-        public List<TerminatedCapacityHold> invalidateActiveHoldsForWithdrawal(Long userId) {
-            List<TerminatedCapacityHold> terminatedCapacityHolds = super.invalidateActiveHoldsForWithdrawal(userId);
+        public List<TerminatedCapacityHold> invalidateActiveHoldsForWithdrawal(
+            Long userId,
+            List<Long> sessionIds
+        ) {
+            List<TerminatedCapacityHold> terminatedCapacityHolds = super.invalidateActiveHoldsForWithdrawal(
+                userId,
+                sessionIds
+            );
             if (failAfterWithdrawalTermination) {
                 throw new IllegalStateException("simulated withdrawal capacity hold termination failure");
             }
@@ -1205,6 +1303,93 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
 
         void reset() {
             failAfterWithdrawalTermination = false;
+        }
+    }
+
+    static class LockOrderContentSessionService extends ContentSessionService {
+
+        private volatile CountDownLatch sessionLocked;
+        private volatile CountDownLatch releaseSessionLock;
+        private volatile CountDownLatch withdrawalLockAttempted;
+        private volatile CountDownLatch cancellationLockAttempted;
+        private volatile boolean pauseWithdrawal;
+        private volatile boolean pauseCancellation;
+
+        LockOrderContentSessionService(ContentSessionRepository contentSessionRepository) {
+            super(contentSessionRepository);
+        }
+
+        @Override
+        public void lockForUpdate(Long sessionId) {
+            withdrawalLockAttempted.countDown();
+            super.lockForUpdate(sessionId);
+            pauseIfNeeded(pauseWithdrawal);
+        }
+
+        @Override
+        public ContentSession findCancelTargetForUpdate(Long sessionId) {
+            cancellationLockAttempted.countDown();
+            ContentSession contentSession = super.findCancelTargetForUpdate(sessionId);
+            pauseIfNeeded(pauseCancellation);
+            return contentSession;
+        }
+
+        void pauseAfterWithdrawalSessionLock() {
+            initializePause(true, false);
+        }
+
+        void pauseAfterCancellationSessionLock() {
+            initializePause(false, true);
+        }
+
+        boolean awaitSessionLock() throws InterruptedException {
+            return sessionLocked.await(3, TimeUnit.SECONDS);
+        }
+
+        boolean awaitWithdrawalLockAttempt() throws InterruptedException {
+            return withdrawalLockAttempted.await(3, TimeUnit.SECONDS);
+        }
+
+        boolean awaitCancellationLockAttempt() throws InterruptedException {
+            return cancellationLockAttempted.await(3, TimeUnit.SECONDS);
+        }
+
+        void releaseSessionLock() {
+            releaseSessionLock.countDown();
+        }
+
+        void reset() {
+            pauseWithdrawal = false;
+            pauseCancellation = false;
+            if (releaseSessionLock != null) {
+                releaseSessionLock.countDown();
+            }
+            sessionLocked = new CountDownLatch(0);
+            releaseSessionLock = new CountDownLatch(0);
+            withdrawalLockAttempted = new CountDownLatch(1);
+            cancellationLockAttempted = new CountDownLatch(1);
+        }
+
+        private void initializePause(boolean pauseWithdrawal, boolean pauseCancellation) {
+            this.pauseWithdrawal = pauseWithdrawal;
+            this.pauseCancellation = pauseCancellation;
+            sessionLocked = new CountDownLatch(1);
+            releaseSessionLock = new CountDownLatch(1);
+        }
+
+        private void pauseIfNeeded(boolean shouldPause) {
+            if (!shouldPause) {
+                return;
+            }
+            sessionLocked.countDown();
+            try {
+                if (!releaseSessionLock.await(3, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("session lock synchronization timed out");
+                }
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("session lock synchronization interrupted", exception);
+            }
         }
     }
 }

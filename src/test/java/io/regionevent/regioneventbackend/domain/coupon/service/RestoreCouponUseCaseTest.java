@@ -123,6 +123,42 @@ class RestoreCouponUseCaseTest {
         )).isInstanceOf(IllegalStateException.class);
     }
 
+    @Test
+    void 무료예약취소복구_취소시각이회차시작시각과같으면복구하지않는다() {
+        Fixture fixture = new Fixture();
+        Instant startsAt = Instant.parse("2026-08-15T02:00:00Z");
+        when(fixture.reservation.getCancelledAt()).thenReturn(startsAt);
+        when(fixture.contentSession.getStartsAt()).thenReturn(startsAt);
+
+        boolean changed = fixture.useCase.restoreForReservationCancellation(
+            fixture.reservation,
+            REQUEST_ID,
+            null
+        );
+
+        assertThat(changed).isFalse();
+        verify(fixture.reservationPriceSnapshotService, never()).findByHoldIdForUpdate(any());
+        verify(fixture.couponService, never()).restoreUsedCoupon(any(), any());
+    }
+
+    @Test
+    void 무료예약취소복구_취소시각이회차시작시각이후면복구하지않는다() {
+        Fixture fixture = new Fixture();
+        Instant startsAt = Instant.parse("2026-08-15T02:00:00Z");
+        when(fixture.reservation.getCancelledAt()).thenReturn(startsAt.plusSeconds(1));
+        when(fixture.contentSession.getStartsAt()).thenReturn(startsAt);
+
+        boolean changed = fixture.useCase.restoreForReservationCancellation(
+            fixture.reservation,
+            REQUEST_ID,
+            null
+        );
+
+        assertThat(changed).isFalse();
+        verify(fixture.reservationPriceSnapshotService, never()).findByHoldIdForUpdate(any());
+        verify(fixture.couponService, never()).restoreUsedCoupon(any(), any());
+    }
+
     private static class Fixture {
 
         private final ReservationPriceSnapshotService reservationPriceSnapshotService = mock(

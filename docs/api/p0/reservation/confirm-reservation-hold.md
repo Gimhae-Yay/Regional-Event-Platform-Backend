@@ -142,6 +142,7 @@ Accept: application/json
 15. 검증·인증·인가·대상 부재 오류와 트랜잭션 롤백이 필요한 일시적 서버 오류는 성공 멱등 결과로 기록하지 않는다.
 16. 서로 다른 멱등 키로 같은 홀드를 동시에 확정하면 `ACTIVE → CONSUMED` 조건부 전이와 `reservation.hold_id` 유일 제약으로 한 요청만 성공한다. 나머지 요청은 `409 RESERVATION_CONFIRM_CONFLICT`로 응답한다.
 17. `SUCCEEDED`와 저장 대상 `FAILED` 멱등 결과는 완료 시각부터 24시간 보관한다. 보관 기간이 지난 키는 이전 결과 재반환을 보장하지 않으며, 클라이언트는 새 확정 요청에 항상 새 키를 사용한다.
+18. [전체 콘텐츠 철회 승인](../region-content/approve-content-withdrawal.md)과 경합하면 두 경로가 `content`를 먼저 잠근다. 예약 확정이 먼저 `ACTIVE → CONSUMED`와 `CONFIRMED` 예약 생성을 커밋하면 철회 승인은 해당 예약과 소비 홀드를 유지한다. 철회 승인이 먼저 `WITHDRAWN`과 홀드 `INVALIDATED`를 커밋하면 이 API는 `409 RESERVATION_CONFIRM_CONFLICT`로 거부하고 예약을 만들지 않는다. 철회 요청 생성과 반려는 예약 확정 조건을 바꾸지 않는다.
 
 ### 감사 및 정합성
 
