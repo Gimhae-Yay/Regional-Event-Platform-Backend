@@ -33,6 +33,8 @@
 이력 행은 수정·개별 삭제하지 않는다. 소프트 삭제된 콘텐츠도 담당 지역 관리자에게 이력 조회를 허용하며 `DELETED` 로그를
 반환한다. `REJECTED`, `SUSPENDED`, `WITHDRAWN`, `DELETED`의 `reason`은 필수이고, 생성·승인·자동 공개·종료 로그의
 `reason`은 `null`일 수 있다. 자동 공개와 종료는 시스템 처리이므로 `actor`를 `null`로 반환한다.
+`WITHDRAWN` 이력은 [전체 콘텐츠 철회 승인](../region-content/approve-content-withdrawal.md)이 저장한 요청 사유,
+승인 관리자와 승인 시각을 반환하며, 수정본 `EDIT_WITHDRAWN` 이력과 혼합하지 않는다.
 
 ### Request
 
