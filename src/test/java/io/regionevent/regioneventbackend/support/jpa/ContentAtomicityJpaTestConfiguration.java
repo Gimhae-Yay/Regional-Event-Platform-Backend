@@ -43,6 +43,7 @@ import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHold
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationIdentifierGenerator;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationPriceSnapshotService;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationService;
+import io.regionevent.regioneventbackend.domain.region.service.RegionService;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService;
 import io.regionevent.regioneventbackend.domain.user.service.RegionAdminAuthorizationService;
 import io.regionevent.regioneventbackend.global.security.qr.QrTokenService;
@@ -69,6 +70,7 @@ import io.regionevent.regioneventbackend.global.security.qr.QrTokenService;
     ImageObjectService.class,
     CapacityHoldService.class,
     ReservationService.class,
+    RegionService.class,
     RegionAdminAuthorizationService.class,
     OperatorAuthorizationService.class,
     RecordAuditEventUseCase.class,

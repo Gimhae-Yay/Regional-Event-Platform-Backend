@@ -84,7 +84,7 @@ public class SuspendContentUseCase {
         String normalizedReason = normalizeReason(reason);
         RegionAdminAuthorizationService.AuthorizedRegionAdmin regionAdmin =
             regionAdminAuthorizationService.requireAuthorizedRegionAdminForUpdate(userId);
-        Long regionId = contentService.findSuspendTargetRegionId(contentId);
+        Long regionId = contentService.findContentRegionId(contentId);
         Region region = regionService.findRegionForUpdate(regionId);
         Content content = contentService.findSuspendTargetForUpdate(contentId);
         UserRoleAssignment regionAdminAssignment = regionAdmin.authorize(
