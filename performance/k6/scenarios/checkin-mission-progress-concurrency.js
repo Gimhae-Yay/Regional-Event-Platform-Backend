@@ -34,7 +34,7 @@ const businessCodes = [
   'IDEMPOTENCY_KEY_CONFLICT',
   'IDEMPOTENCY_REQUEST_IN_PROGRESS',
 ];
-const concurrencyVus = scenarioVus(scenarioName, 2);
+const concurrencyVus = scenarioVus(scenarioName, 50);
 const maxDuration = scenarioDuration(scenarioName);
 const p95Threshold = scenarioP95Threshold(scenarioName);
 

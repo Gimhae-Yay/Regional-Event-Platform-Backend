@@ -17,7 +17,7 @@ import { markdownSummary } from '../lib/summary.js';
 const scenarioName = 'PAYMENT_IDEMPOTENCY_CONCURRENCY';
 const testTag = 'payment_idempotency_concurrency';
 const endpoint = 'paymentCreate';
-const vus = scenarioVus(scenarioName, 2);
+const vus = scenarioVus(scenarioName, 50);
 const duration = scenarioDuration(scenarioName);
 const p95Threshold = scenarioP95Threshold(scenarioName);
 const successCount = new Counter('payment_create_success_count');

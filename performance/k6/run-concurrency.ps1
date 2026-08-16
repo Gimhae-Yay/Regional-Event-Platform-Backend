@@ -98,7 +98,11 @@ function Restore-RunEnvironment {
 }
 
 if ($Vus -eq 0) {
-    $Vus = if ($Scenario -eq 'reservation-hold') { 10 } else { 2 }
+    $Vus = switch ($Scenario) {
+        'reservation-hold' { 10 }
+        'qr-checkin' { 50 }
+        default { 2 }
+    }
 }
 if ($Vus -lt 2) {
     throw 'Vus must be greater than or equal to 2.'

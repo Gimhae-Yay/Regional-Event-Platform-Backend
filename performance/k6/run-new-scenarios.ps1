@@ -199,6 +199,7 @@ foreach ($scenarioName in $scenarioNames) {
     switch ($scenarioName) {
         'payment' {
             $scenarioFile = 'scenarios/payment-idempotency-concurrency.js'
+            $environment.PERF_PAYMENT_IDEMPOTENCY_CONCURRENCY_VUS = '50'
             $environment.PERF_PAYMENT_HOLD_ID = '900010'
             $environment.PERF_PAYMENT_IDEMPOTENCY_KEY = [Guid]::NewGuid().ToString()
         }
@@ -224,11 +225,12 @@ foreach ($scenarioName in $scenarioNames) {
             $environment.PERF_PORTONE_WEBHOOK_ID = $webhook.Id
             $environment.PERF_PORTONE_WEBHOOK_TIMESTAMP = $webhook.Timestamp
             $environment.PERF_PORTONE_WEBHOOK_SIGNATURE = $webhook.Signature
-            $environment.PERF_PORTONE_WEBHOOK_SPIKE_VUS = '5'
-            $environment.PERF_PORTONE_WEBHOOK_SPIKE_ITERATIONS = '10'
+            $environment.PERF_PORTONE_WEBHOOK_SPIKE_VUS = '20'
+            $environment.PERF_PORTONE_WEBHOOK_SPIKE_ITERATIONS = '60'
         }
         'mission-progress' {
             $scenarioFile = 'scenarios/checkin-mission-progress-concurrency.js'
+            $environment.PERF_CHECKIN_MISSION_PROGRESS_CONCURRENCY_VUS = '50'
             $environment.PERF_RESERVATION_ID = '900001'
             $environment.PERF_MISSION_PARTICIPATION_ID = '900011'
             $environment.PERF_VISITOR_ACCESS_TOKENS = Get-AccessToken -Email 'k6-qr-visitor@example.com'

@@ -208,12 +208,12 @@ foreach ($scenarioName in $scenarioNames) {
         }
         'qr-checkin' {
             $scenarioFile = 'scenarios/qr-checkin-concurrency.js'
-            $environment.PERF_QR_CHECKIN_CONCURRENCY_VUS = '2'
+            $environment.PERF_QR_CHECKIN_CONCURRENCY_VUS = '50'
             $environment.PERF_QR_CHECKIN_CONCURRENCY_DURATION = '5s'
             $environment.PERF_RESERVATION_ID = '900001'
             $environment.PERF_VISITOR_ACCESS_TOKENS = Get-AccessToken -Email 'k6-qr-visitor@example.com'
             $environment.PERF_OPERATOR_ACCESS_TOKENS = Get-AccessToken -Email 'k6-operator@example.com'
-            $expectedRequests = 2
+            $expectedRequests = 50
         }
         'manual-checkin' {
             $scenarioFile = 'scenarios/manual-checkin-concurrency.js'
