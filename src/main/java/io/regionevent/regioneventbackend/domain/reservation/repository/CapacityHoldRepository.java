@@ -184,6 +184,29 @@ public interface CapacityHoldRepository extends JpaRepository<CapacityHold, Long
         """)
     List<Long> findActiveHoldIdsByUserId(@Param("userId") Long userId);
 
+    @Query("""
+        SELECT DISTINCT capacityHold.contentSession.sessionId
+        FROM CapacityHold capacityHold
+        WHERE capacityHold.user.userId = :userId
+            AND capacityHold.status = io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus.ACTIVE
+        ORDER BY capacityHold.contentSession.sessionId ASC
+        """)
+    List<Long> findActiveSessionIdsByUserId(@Param("userId") Long userId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT capacityHold
+        FROM CapacityHold capacityHold
+        WHERE capacityHold.user.userId = :userId
+            AND capacityHold.contentSession.sessionId = :sessionId
+            AND capacityHold.status = io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus.ACTIVE
+        ORDER BY capacityHold.holdId ASC
+        """)
+    List<CapacityHold> findActiveByUserIdAndSessionIdForUpdate(
+        @Param("userId") Long userId,
+        @Param("sessionId") Long sessionId
+    );
+
     @Query(value = """
         SELECT hold_id
         FROM capacity_hold
@@ -210,15 +233,6 @@ public interface CapacityHoldRepository extends JpaRepository<CapacityHold, Long
         FOR UPDATE
         """, nativeQuery = true)
     Optional<CapacityHold> findActiveByHoldIdForUpdate(@Param("holdId") Long holdId);
-
-    @Query(value = """
-        SELECT *
-        FROM capacity_hold
-        WHERE hold_id = :holdId
-            AND status = 'ACTIVE'
-        FOR UPDATE
-        """, nativeQuery = true)
-    Optional<CapacityHold> findActiveForWithdrawalByHoldIdForUpdate(@Param("holdId") Long holdId);
 
     @Query(value = """
         SELECT hold_id
