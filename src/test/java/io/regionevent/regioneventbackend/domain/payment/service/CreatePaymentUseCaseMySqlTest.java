@@ -220,6 +220,40 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
     }
 
     @Test
+    void 비공개_지역의_활성_홀드는_결제와_쿠폰_선점으로_진행하지_않는다() {
+        Fixture fixture = createFixture();
+        Coupon coupon = createCoupon(fixture, 1_000);
+        changeRegionVisibility(fixture.hold().getRegion().getRegionId(), false);
+
+        assertThatThrownBy(() -> createPaymentUseCase.create(
+            fixture.user().getUserId(),
+            fixture.hold().getHoldId().toString(),
+            new CreatePaymentRequest(JsonNodeFactory.instance.textNode(coupon.getCouponId().toString())),
+            "private-region-" + System.nanoTime(),
+            UUID.randomUUID()
+        )).isInstanceOfSatisfying(BusinessException.class, exception ->
+            assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.PAYMENT_HOLD_CONFLICT)
+        );
+
+        assertThat(capacityHoldRepository.findById(fixture.hold().getHoldId()))
+            .hasValueSatisfying(hold -> assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.ACTIVE));
+        assertThat(reservationPriceSnapshotRepository.findAll())
+            .noneMatch(snapshot -> snapshot.getCapacityHold().getHoldId().equals(fixture.hold().getHoldId()));
+        assertThat(paymentRepository.findAll())
+            .noneMatch(payment -> payment.getCapacityHold().getHoldId().equals(fixture.hold().getHoldId()));
+        assertThat(reservationRepository.findAll())
+            .noneMatch(reservation -> reservation.getCapacityHold().getHoldId().equals(fixture.hold().getHoldId()));
+        assertThat(paymentIdempotencyRepository.findAll())
+            .noneMatch(record -> record.getActorUserId() == fixture.user().getUserId());
+        assertThat(couponRepository.findById(coupon.getCouponId()))
+            .hasValueSatisfying(savedCoupon -> assertThat(savedCoupon.getStatus()).isEqualTo(CouponStatus.AVAILABLE));
+        assertThat(couponStatusHistoryRepository.findAll())
+            .noneMatch(history -> history.getCoupon().getCouponId().equals(coupon.getCouponId()));
+        assertThat(couponRedemptionRepository.findAll())
+            .noneMatch(redemption -> redemption.getCoupon().getCouponId().equals(coupon.getCouponId()));
+    }
+
+    @Test
     void positiveAmountPaymentRecordsPaymentAndCouponReservationAuditEvents() {
         Fixture fixture = createFixture();
         Coupon coupon = createCoupon(fixture, 1_000);
@@ -809,6 +843,12 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
 
     private Fixture createFixture() {
         return createFixture(1);
+    }
+
+    private void changeRegionVisibility(Long regionId, boolean isPublic) {
+        transactionTemplate.executeWithoutResult(status -> regionRepository.findById(regionId)
+            .orElseThrow()
+            .changeVisibility(isPublic));
     }
 
     private Fixture createFixture(int sessionCapacity) {
