@@ -99,6 +99,45 @@ class ContentWithdrawalRequestTest {
     }
 
     @Test
+    void 대기_요청을_반려하면_심사자와_시각과_정규화된_사유를_기록한다() {
+        AppUser reviewer = mock(AppUser.class);
+        ContentWithdrawalRequest request = pendingRequest();
+
+        request.reject(reviewer, REVIEWED_AT, "  운영 근거 부족  ");
+
+        assertThat(request.getStatus()).isEqualTo(ContentWithdrawalRequestStatus.REJECTED);
+        assertThat(request.getReviewedBy()).isSameAs(reviewer);
+        assertThat(request.getReviewedAt()).isEqualTo(REVIEWED_AT);
+        assertThat(request.getRejectionReason()).isEqualTo("운영 근거 부족");
+    }
+
+    @Test
+    void 반려_심사_메타데이터는_null이나_공백일_수_없다() {
+        assertThatThrownBy(() -> pendingRequest().reject(null, REVIEWED_AT, "반려 사유"))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> pendingRequest().reject(mock(AppUser.class), null, "반려 사유"))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> pendingRequest().reject(mock(AppUser.class), REVIEWED_AT, null))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> pendingRequest().reject(mock(AppUser.class), REVIEWED_AT, "   "))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void 종결된_요청은_반려로_다시_전이할_수_없다() {
+        ContentWithdrawalRequest request = pendingRequest();
+        request.approve(mock(AppUser.class), REVIEWED_AT);
+
+        assertThatThrownBy(() -> request.reject(
+            mock(AppUser.class),
+            REVIEWED_AT.plusSeconds(60),
+            "반려 사유"
+        )).isInstanceOfSatisfying(BusinessException.class, exception ->
+            assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.CONTENT_STATE_CONFLICT)
+        );
+    }
+
+    @Test
     void 대기가_아닌_요청은_승인할_수_없다() {
         ContentWithdrawalRequest request = pendingRequest();
         request.invalidateBySystem(

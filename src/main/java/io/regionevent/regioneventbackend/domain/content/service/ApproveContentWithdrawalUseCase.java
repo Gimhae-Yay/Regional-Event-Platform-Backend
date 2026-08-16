@@ -84,7 +84,7 @@ public class ApproveContentWithdrawalUseCase {
         Content content = contentService.findForUpdate(contentId);
         UserRoleAssignment regionAdminAssignment = regionAdmin.authorize(regionId);
         ContentWithdrawalRequest withdrawalRequest =
-            contentWithdrawalRequestService.findApprovalTargetForUpdate(withdrawalRequestId);
+            contentWithdrawalRequestService.findReviewTargetForUpdate(withdrawalRequestId);
 
         if (withdrawalRequest.getStatus() == ContentWithdrawalRequestStatus.APPROVED) {
             return ApproveContentWithdrawalResult.from(withdrawalRequest, content);

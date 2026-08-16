@@ -98,7 +98,7 @@ class ApproveContentWithdrawalUseCaseTest {
         when(regionService.findRegionForUpdate(REGION_ID)).thenReturn(region);
         when(contentService.findForUpdate(CONTENT_ID)).thenReturn(content);
         when(authorizedAdmin.authorize(REGION_ID)).thenReturn(assignment);
-        when(withdrawalRequestService.findApprovalTargetForUpdate(WITHDRAWAL_REQUEST_ID))
+        when(withdrawalRequestService.findReviewTargetForUpdate(WITHDRAWAL_REQUEST_ID))
             .thenReturn(withdrawalRequest);
         when(region.getRegionId()).thenReturn(REGION_ID);
         when(assignment.getRoleAssignmentId()).thenReturn(300L);
@@ -163,7 +163,7 @@ class ApproveContentWithdrawalUseCaseTest {
         order.verify(regionService).findRegionForUpdate(REGION_ID);
         order.verify(contentService).findForUpdate(CONTENT_ID);
         order.verify(authorizedAdmin).authorize(REGION_ID);
-        order.verify(withdrawalRequestService).findApprovalTargetForUpdate(WITHDRAWAL_REQUEST_ID);
+        order.verify(withdrawalRequestService).findReviewTargetForUpdate(WITHDRAWAL_REQUEST_ID);
         order.verify(contentService).findCurrentDatabaseTime();
         order.verify(withdrawalRequestService).approve(withdrawalRequest, admin, APPROVED_AT);
         order.verify(contentService).withdraw(content, APPROVED_AT);
@@ -294,7 +294,7 @@ class ApproveContentWithdrawalUseCaseTest {
                 assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN)
             );
 
-        verify(withdrawalRequestService, never()).findApprovalTargetForUpdate(any());
+        verify(withdrawalRequestService, never()).findReviewTargetForUpdate(any());
         verifyNoInteractions(recordAuditEventUseCase, cacheInvalidator);
     }
 }

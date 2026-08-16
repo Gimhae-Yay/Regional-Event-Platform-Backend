@@ -30,6 +30,7 @@ import io.regionevent.regioneventbackend.domain.content.service.OriginalContentR
 import io.regionevent.regioneventbackend.domain.content.service.PublicCatalogCacheInvalidator;
 import io.regionevent.regioneventbackend.domain.content.service.RejectContentRevisionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.RejectContentUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.RejectContentWithdrawalUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.SubmitContentUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.WithdrawContentRevisionUseCase;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponRedemptionService;
@@ -57,6 +58,7 @@ import io.regionevent.regioneventbackend.global.security.qr.QrTokenService;
     ApproveContentSessionUseCase.class,
     DeleteContentUseCase.class,
     RejectContentUseCase.class,
+    RejectContentWithdrawalUseCase.class,
     ApproveContentRevisionUseCase.class,
     RejectContentRevisionUseCase.class,
     WithdrawContentRevisionUseCase.class,
