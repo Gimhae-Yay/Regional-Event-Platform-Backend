@@ -17,8 +17,8 @@
 
 | 요구사항 | HTTP 계약 | 주요 데이터 |
 | --- | --- | --- |
-| P1-FR-02, STB-04 | `GET /api/v1/me/stampbooks` | `stampbook_progress`, `stampbook`, `stamp_earn` |
-| P1-FR-02, STB-04 | `GET /api/v1/me/stampbooks/{stampbookId}` | `stampbook_progress`, `stampbook_content`, `stamp_earn` |
+| P1-FR-02, STB-04 | `GET /api/v1/me/stampbooks` | `stampbook_progress`, `stampbook`, `stamp_earn`, `stampbook_reward_grant`, `coupon_policy` |
+| P1-FR-02, STB-04 | `GET /api/v1/me/stampbooks/{stampbookId}` | `stampbook_progress`, `stampbook_content`, `stamp_earn`, `stampbook_reward_grant`, `coupon_policy` |
 | P1-FR-02, STB-03, STB-04 | `GET /api/v1/me/stampbooks/{stampbookId}/earnings` | `stamp_earn`, `visit`, `content` |
 | P1-FR-01, STB-01, STB-02 | `POST /api/v1/operator/stampbooks` | `stampbook`, `stampbook_content`, `audit_event` |
 | P1-FR-01, STB-01, STB-02 | `PATCH /api/v1/operator/stampbooks/{stampbookId}` | `stampbook`, `stampbook_content`, `audit_event` |

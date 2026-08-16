@@ -20,6 +20,7 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
+import io.regionevent.regioneventbackend.domain.region.service.RegionService;
 import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHoldService;
 import io.regionevent.regioneventbackend.domain.payment.service.ExpirePendingPaymentForTerminatedHoldUseCase;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -36,6 +37,9 @@ class EndContentReservationsUseCaseTest {
     private static final Instant ENDED_AT = Instant.parse("2026-08-06T00:00:00Z");
 
     private final ContentService contentService = mock(ContentService.class);
+    private final RegionService regionService = mock(RegionService.class);
+    private final ContentRevisionInvalidationService contentRevisionInvalidationService =
+        mock(ContentRevisionInvalidationService.class);
     private final ContentSessionService contentSessionService = mock(ContentSessionService.class);
     private final ContentLogService contentLogService = mock(ContentLogService.class);
     private final CapacityHoldService capacityHoldService = mock(CapacityHoldService.class);
@@ -50,6 +54,8 @@ class EndContentReservationsUseCaseTest {
         mock(PublicCatalogCacheInvalidator.class);
     private final EndContentReservationsUseCase useCase = new EndContentReservationsUseCase(
         contentService,
+        regionService,
+        contentRevisionInvalidationService,
         contentSessionService,
         contentLogService,
         capacityHoldService,
@@ -64,6 +70,9 @@ class EndContentReservationsUseCaseTest {
     void setUp() {
         when(capacityHoldService.invalidateAllActiveHoldsForContent(CONTENT_ID, "CONTENT_ENDED"))
             .thenReturn(List.of());
+        when(contentService.findContentRegionId(CONTENT_ID)).thenReturn(REGION_ID);
+        Region lockedRegion = region();
+        when(regionService.findRegionForUpdate(REGION_ID)).thenReturn(lockedRegion);
     }
 
     @Test

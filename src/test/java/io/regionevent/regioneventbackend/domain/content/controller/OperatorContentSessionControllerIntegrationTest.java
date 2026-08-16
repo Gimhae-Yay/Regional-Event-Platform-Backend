@@ -100,8 +100,8 @@ class OperatorContentSessionControllerIntegrationTest extends ContentControllerW
     }
 
     @Test
-    void 회차_취소_상태_충돌은_공통_오류로_응답한다() throws Exception {
-        expectBusinessError(ErrorCode.CONTENT_STATE_CONFLICT, 409, "CONTENT_STATE_CONFLICT");
+    void 회차_취소_SCHEDULED_아닌_상태면_취소_불가_오류로_응답한다() throws Exception {
+        expectBusinessError(ErrorCode.SESSION_NOT_CANCELLABLE, 409, "SESSION_NOT_CANCELLABLE");
     }
 
     private void expectBusinessError(ErrorCode errorCode, int statusCode, String code) throws Exception {

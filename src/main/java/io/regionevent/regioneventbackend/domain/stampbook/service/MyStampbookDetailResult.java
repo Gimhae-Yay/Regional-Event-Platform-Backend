@@ -27,7 +27,8 @@ public record MyStampbookDetailResult(
         MyStampbookProgressStatus status,
         long earnedCount,
         long targetCount,
-        Instant completedAt
+        Instant completedAt,
+        StampbookCompletionReward completionReward
     ) {
     }
 }

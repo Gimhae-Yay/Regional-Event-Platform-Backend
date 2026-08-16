@@ -31,11 +31,15 @@ import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepos
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentLog;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentLogStatus;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentRevision;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentRevisionInvalidationReason;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentRevisionStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentLogRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
+import io.regionevent.regioneventbackend.domain.content.repository.ContentRevisionRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentSessionRepository;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
@@ -65,6 +69,7 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
 
     private final EndContentReservationsUseCase endContentReservationsUseCase;
     private final ContentRepository contentRepository;
+    private final ContentRevisionRepository contentRevisionRepository;
     private final ContentSessionRepository contentSessionRepository;
     private final ContentLogRepository contentLogRepository;
     private final CapacityHoldRepository capacityHoldRepository;
@@ -80,6 +85,7 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
     EndContentReservationsUseCaseMySqlTest(
         EndContentReservationsUseCase endContentReservationsUseCase,
         ContentRepository contentRepository,
+        ContentRevisionRepository contentRevisionRepository,
         ContentSessionRepository contentSessionRepository,
         ContentLogRepository contentLogRepository,
         CapacityHoldRepository capacityHoldRepository,
@@ -93,6 +99,7 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
     ) {
         this.endContentReservationsUseCase = endContentReservationsUseCase;
         this.contentRepository = contentRepository;
+        this.contentRevisionRepository = contentRevisionRepository;
         this.contentSessionRepository = contentSessionRepository;
         this.contentLogRepository = contentLogRepository;
         this.capacityHoldRepository = capacityHoldRepository;
@@ -182,6 +189,78 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
             .singleElement()
             .satisfies(auditEvent -> {
                 assertThat(auditEvent.getActorKind()).isEqualTo("SYSTEM");
+                assertThat(auditEventActorLinkRepository.findById(auditEvent.getAuditEventId())).isEmpty();
+            });
+    }
+
+    @Test
+    void 수동_종료는_활성_수정본을_처리자와_감사_이력으로_무효화한다() {
+        Fixture fixture = createFixture();
+        ContentRevision revision = saveEditRequestedRevision(fixture);
+
+        EndContentReservationsResult result = endContentReservationsUseCase.end(
+            fixture.adminId(),
+            fixture.contentId(),
+            UUID.randomUUID()
+        );
+
+        assertThat(contentRevisionRepository.findById(revision.getContentRevisionId()))
+            .hasValueSatisfying(actual -> {
+                assertThat(actual.getStatus()).isEqualTo(ContentRevisionStatus.EDIT_INVALIDATED);
+                assertThat(actual.getInvalidatedAt()).isEqualTo(result.endedAt());
+                assertThat(actual.getInvalidationReason())
+                    .isEqualTo(ContentRevisionInvalidationReason.CONTENT_ENDED);
+            });
+        assertThat(jdbcTemplate.queryForObject(
+            "SELECT invalidated_by_user_id FROM content_revision WHERE content_revision_id = ?",
+            Long.class,
+            revision.getContentRevisionId()
+        )).isEqualTo(fixture.adminId());
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent -> fixture.contentId().equals(auditEvent.getTargetId()))
+            .filteredOn(auditEvent -> "EDIT_REQUESTED".equals(auditEvent.getPreviousState()))
+            .singleElement()
+            .satisfies(auditEvent -> {
+                assertThat(auditEvent.getNextState()).isEqualTo("EDIT_INVALIDATED");
+                assertThat(auditEvent.getReasonCode()).isEqualTo("CONTENT_ENDED");
+                assertThat(auditEventActorLinkRepository.findById(auditEvent.getAuditEventId()))
+                    .hasValueSatisfying(actorLink ->
+                        assertThat(actorLink.getActor().getUserId()).isEqualTo(fixture.adminId())
+                    );
+            });
+    }
+
+    @Test
+    void 시스템_종료는_활성_수정본을_처리자_없이_무효화한다() {
+        Fixture fixture = createFixture();
+        ContentRevision revision = saveEditRequestedRevision(fixture);
+
+        EndContentReservationsSystemResult result = endContentReservationsUseCase.endBySystem(
+            fixture.contentId(),
+            UUID.randomUUID()
+        );
+
+        assertThat(result.status()).isEqualTo(EndContentReservationsSystemResult.Status.ENDED);
+        assertThat(contentRevisionRepository.findById(revision.getContentRevisionId()))
+            .hasValueSatisfying(actual -> {
+                assertThat(actual.getStatus()).isEqualTo(ContentRevisionStatus.EDIT_INVALIDATED);
+                assertThat(actual.getInvalidatedAt()).isNotNull();
+                assertThat(actual.getInvalidationReason())
+                    .isEqualTo(ContentRevisionInvalidationReason.CONTENT_ENDED);
+            });
+        assertThat(jdbcTemplate.queryForObject(
+            "SELECT invalidated_by_user_id FROM content_revision WHERE content_revision_id = ?",
+            Long.class,
+            revision.getContentRevisionId()
+        )).isNull();
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent -> fixture.contentId().equals(auditEvent.getTargetId()))
+            .filteredOn(auditEvent -> "EDIT_REQUESTED".equals(auditEvent.getPreviousState()))
+            .singleElement()
+            .satisfies(auditEvent -> {
+                assertThat(auditEvent.getActorKind()).isEqualTo("SYSTEM");
+                assertThat(auditEvent.getNextState()).isEqualTo("EDIT_INVALIDATED");
+                assertThat(auditEvent.getReasonCode()).isEqualTo("CONTENT_ENDED");
                 assertThat(auditEventActorLinkRepository.findById(auditEvent.getAuditEventId())).isEmpty();
             });
     }
@@ -560,6 +639,37 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
         ContentSession session = newSession(content, region, startsAt);
         session.reject(admin, startsAt.minusSeconds(3_600), "추가 회차 반려");
         contentSessionRepository.save(session);
+    }
+
+    private ContentRevision saveEditRequestedRevision(Fixture fixture) {
+        return transactionTemplate.execute(status -> {
+            Content content = contentRepository.findById(fixture.contentId()).orElseThrow();
+            return contentRevisionRepository.saveAndFlush(new ContentRevision(
+                content,
+                1,
+                content.getVersionNo(),
+                content.getOperator(),
+                ContentRevisionStatus.EDIT_REQUESTED,
+                "수정 제목",
+                "수정 설명",
+                "김해문화의전당",
+                "매일 10:00~18:00",
+                "055-123-4567",
+                "안전 수칙",
+                "만 7세 이상",
+                "편한 복장",
+                "시작 하루 전까지 취소",
+                0,
+                null,
+                Instant.now(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+            ));
+        });
     }
 
     private ContentSession newSession(
