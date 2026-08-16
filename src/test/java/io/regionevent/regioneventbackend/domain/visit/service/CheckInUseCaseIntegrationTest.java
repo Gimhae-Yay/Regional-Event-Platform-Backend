@@ -460,29 +460,64 @@ public class CheckInUseCaseIntegrationTest {
     }
 
     @Test
-    void qrCheckIn_succeedsAndRecordsSuccessAuditTransition() {
+    void qrCheckIn_replaysSameKeyAndRejectsNewKeyRescanWithoutDuplicateEffects() {
         Fixture fixture = createFixture();
         QrTokenService.IssuedQrToken qrToken = issueQrToken(fixture);
-        UUID requestId = UUID.randomUUID();
+        QrCheckInRequest request = new QrCheckInRequest(qrToken.token());
+        UUID successRequestId = UUID.randomUUID();
+        UUID conflictRequestId = UUID.randomUUID();
 
-        CheckInResult result = checkInUseCase.checkInByQr(
+        CheckInResult firstResult = checkInUseCase.checkInByQr(
             fixture.operator().getUserId(),
-            new QrCheckInRequest(qrToken.token()),
+            request,
             "qr-success-audit-key",
-            requestId
+            successRequestId
         );
-        CheckInResult rescanResult = checkInUseCase.checkInByQr(
+        CheckInResult successRetryResult = checkInUseCase.checkInByQr(
             fixture.operator().getUserId(),
-            new QrCheckInRequest(qrToken.token()),
+            request,
+            "qr-success-audit-key",
+            UUID.randomUUID()
+        );
+        CheckInResult conflictResult = checkInUseCase.checkInByQr(
+            fixture.operator().getUserId(),
+            request,
+            "qr-rescan-key",
+            conflictRequestId
+        );
+        CheckInResult conflictRetryResult = checkInUseCase.checkInByQr(
+            fixture.operator().getUserId(),
+            request,
             "qr-rescan-key",
             UUID.randomUUID()
         );
 
-        assertThat(result.isSuccessful()).isTrue();
-        assertThat(rescanResult.isSuccessful()).isTrue();
-        assertThat(rescanResult.response().visitId()).isEqualTo(result.response().visitId());
+        assertThat(firstResult.isSuccessful()).isTrue();
+        assertThat(successRetryResult.isSuccessful()).isTrue();
+        assertThat(successRetryResult.response().visitId()).isEqualTo(firstResult.response().visitId());
+        assertThat(conflictResult.isSuccessful()).isFalse();
+        assertThat(conflictResult.errorCode()).isEqualTo(ErrorCode.QR_ALREADY_CHECKED_IN);
+        assertThat(conflictRetryResult.isSuccessful()).isFalse();
+        assertThat(conflictRetryResult.errorCode()).isEqualTo(ErrorCode.QR_ALREADY_CHECKED_IN);
         assertThat(visitRepository.count()).isEqualTo(1);
-        assertThat(auditEventsByRequestId(requestId))
+        assertThat(idempotencyRecordRepository.findAll())
+            .filteredOn(record -> record.getStatus() == IdempotencyRecordStatus.SUCCEEDED)
+            .singleElement()
+            .satisfies(record -> {
+                assertThat(record.getResultCode()).isEqualTo("SUCCESS");
+                assertThat(record.getResultReservation()).isNull();
+                assertThat(record.getResultVisit().getVisitId().toString())
+                    .isEqualTo(firstResult.response().visitId());
+            });
+        assertThat(idempotencyRecordRepository.findAll())
+            .filteredOn(record -> record.getStatus() == IdempotencyRecordStatus.FAILED)
+            .singleElement()
+            .satisfies(record -> {
+                assertThat(record.getResultCode()).isEqualTo(ErrorCode.QR_ALREADY_CHECKED_IN.code());
+                assertThat(record.getResultReservation()).isNull();
+                assertThat(record.getResultVisit()).isNull();
+            });
+        assertThat(auditEventsByRequestId(successRequestId))
             .singleElement()
             .satisfies(auditEvent -> {
                 assertThat(auditEvent.getResult()).isEqualTo(AuditEventResult.SUCCESS);
@@ -490,12 +525,23 @@ public class CheckInUseCaseIntegrationTest {
                 assertThat(auditEvent.getPreviousState()).isEqualTo(ReservationStatus.CONFIRMED.name());
                 assertThat(auditEvent.getNextState()).isEqualTo(ReservationStatus.CHECKED_IN.name());
             });
+        assertThat(auditEventsByRequestId(conflictRequestId))
+            .singleElement()
+            .satisfies(auditEvent -> {
+                assertThat(auditEvent.getResult()).isEqualTo(AuditEventResult.FAILURE);
+                assertThat(auditEvent.getTargetType()).isEqualTo(AuditEventTargetType.RESERVATION);
+                assertThat(auditEvent.getTargetId()).isEqualTo(fixture.reservation().getReservationId());
+                assertThat(auditEvent.getPreviousState()).isEqualTo(ReservationStatus.CHECKED_IN.name());
+                assertThat(auditEvent.getNextState()).isNull();
+                assertThat(auditEvent.getReasonCode())
+                    .isEqualTo("QR_CHECK_IN_RESERVATION_ALREADY_CHECKED_IN");
+            });
         verify(missionProgressVisitCompletionAdapter).recordAfterCommit(
-            Long.valueOf(result.response().visitId()),
-            requestId
+            Long.valueOf(firstResult.response().visitId()),
+            successRequestId
         );
         verifyNoMoreInteractions(missionProgressVisitCompletionAdapter);
-        verify(recordStampbookProgressUseCase).record(Long.valueOf(result.response().visitId()));
+        verify(recordStampbookProgressUseCase).record(Long.valueOf(firstResult.response().visitId()));
         verifyNoMoreInteractions(recordStampbookProgressUseCase);
     }
 
@@ -792,6 +838,196 @@ public class CheckInUseCaseIntegrationTest {
             .singleElement()
             .satisfies(auditEvent ->
                 assertThat(auditEvent.getReasonCode()).isEqualTo("QR_CHECK_IN_SESSION_COMPLETED")
+            );
+    }
+
+    @Test
+    void qrCheckIn_whenNewScanUsesExpiredToken_returnsQrVerificationFailureFirst() {
+        Fixture fixture = createFixture(ReservationStatus.CHECKED_IN);
+        saveVisit(fixture);
+        Reservation reservation = fixture.reservation();
+        QrTokenService.IssuedQrToken qrToken = qrTokenService.issue(
+            reservation.getQrReference(),
+            reservation.getContentSession().getSessionId(),
+            Instant.now().minusSeconds(600),
+            reservation.getContentSession().getCheckinCloseAt()
+        );
+
+        assertQrFailure(
+            fixture,
+            qrToken.token(),
+            "qr-expired-token-priority-key",
+            ErrorCode.QR_VERIFICATION_FAILED,
+            "QR_CHECK_IN_EXPIRED"
+        );
+    }
+
+    @Test
+    void qrCheckIn_whenNewScanFindsCancelledReservation_returnsExistingConflict() {
+        Fixture fixture = createFixture(ReservationStatus.CANCELLED);
+        saveVisit(fixture);
+
+        assertQrFailure(
+            fixture,
+            issueQrToken(fixture).token(),
+            "qr-cancelled-reservation-priority-key",
+            ErrorCode.CHECK_IN_CONFLICT,
+            "QR_CHECK_IN_RESERVATION_CANCELLED"
+        );
+    }
+
+    @Test
+    void qrCheckIn_whenNewScanFindsExpiredReservation_returnsExistingConflict() {
+        Fixture fixture = createFixture(ReservationStatus.EXPIRED);
+        saveVisit(fixture);
+
+        assertQrFailure(
+            fixture,
+            issueQrToken(fixture).token(),
+            "qr-expired-reservation-priority-key",
+            ErrorCode.CHECK_IN_CONFLICT,
+            "QR_CHECK_IN_RESERVATION_EXPIRED"
+        );
+    }
+
+    @Test
+    void qrCheckIn_whenNewScanFindsCancelledSession_returnsExistingConflict() {
+        Fixture fixture = createFixture(ReservationStatus.CHECKED_IN);
+        saveVisit(fixture);
+        fixture.reservation().getContentSession().cancel(
+            fixture.operator(),
+            Instant.now(),
+            "operator cancelled"
+        );
+        contentSessionRepository.saveAndFlush(fixture.reservation().getContentSession());
+
+        assertQrFailure(
+            fixture,
+            issueQrToken(fixture).token(),
+            "qr-cancelled-session-priority-key",
+            ErrorCode.CHECK_IN_CONFLICT,
+            "QR_CHECK_IN_SESSION_CANCELLED"
+        );
+    }
+
+    @Test
+    void qrCheckIn_whenNewScanIsBeforeCheckInWindow_returnsExistingConflict() {
+        Instant now = Instant.now();
+        Fixture fixture = createFixture(
+            ReservationStatus.CHECKED_IN,
+            true,
+            true,
+            now.plusSeconds(900),
+            now.plusSeconds(3_600),
+            now.plusSeconds(600),
+            now.plusSeconds(1_200)
+        );
+        saveVisit(fixture);
+
+        assertQrFailure(
+            fixture,
+            issueQrToken(fixture).token(),
+            "qr-window-not-open-priority-key",
+            ErrorCode.CHECK_IN_CONFLICT,
+            "QR_CHECK_IN_WINDOW_NOT_OPEN"
+        );
+    }
+
+    @Test
+    void qrCheckIn_whenNewScanIsAfterCheckInWindow_returnsExistingConflict() {
+        Instant now = Instant.now();
+        Fixture fixture = createFixture(
+            ReservationStatus.CHECKED_IN,
+            true,
+            true,
+            now.minusSeconds(1_800),
+            now.plusSeconds(3_600),
+            now.minusSeconds(1_200),
+            now.minusSeconds(600)
+        );
+        saveVisit(fixture);
+        Reservation reservation = fixture.reservation();
+        QrTokenService.IssuedQrToken qrToken = qrTokenService.issue(
+            reservation.getQrReference(),
+            reservation.getContentSession().getSessionId(),
+            now,
+            now.plusSeconds(600)
+        );
+
+        assertQrFailure(
+            fixture,
+            qrToken.token(),
+            "qr-window-closed-priority-key",
+            ErrorCode.CHECK_IN_CONFLICT,
+            "QR_CHECK_IN_WINDOW_CLOSED"
+        );
+    }
+
+    @Test
+    void qrCheckIn_whenCheckedInReservationHasNoVisit_throwsInternalServerError() {
+        Fixture fixture = createFixture(ReservationStatus.CHECKED_IN);
+        QrTokenService.IssuedQrToken qrToken = issueQrToken(fixture);
+
+        assertThatThrownBy(() -> checkInUseCase.checkInByQr(
+            fixture.operator().getUserId(),
+            new QrCheckInRequest(qrToken.token()),
+            "qr-missing-visit-priority-key",
+            UUID.randomUUID()
+        ))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INTERNAL_SERVER_ERROR)
+            );
+    }
+
+    @Test
+    void qrCheckIn_whenExistingVisitRelationDoesNotMatch_throwsInternalServerError() {
+        Fixture fixture = createFixture(ReservationStatus.CHECKED_IN);
+        Visit visit = saveVisit(fixture);
+        ContentSession otherSession = saveSessionForContent(
+            fixture.reservation().getContentSession().getContent(),
+            fixture.reservation().getRegion(),
+            fixture.operator(),
+            Instant.now().minusSeconds(600),
+            Instant.now().plusSeconds(3_600),
+            Instant.now().minusSeconds(60),
+            Instant.now().plusSeconds(600)
+        );
+        QrTokenService.IssuedQrToken qrToken = issueQrToken(fixture);
+        FlushModeType previousFlushMode = entityManager.getFlushMode();
+        entityManager.setFlushMode(FlushModeType.COMMIT);
+        ReflectionTestUtils.setField(visit, "contentSession", otherSession);
+
+        try {
+            assertThatThrownBy(() -> checkInUseCase.checkInByQr(
+                fixture.operator().getUserId(),
+                new QrCheckInRequest(qrToken.token()),
+                "qr-visit-relation-inconsistent-priority-key",
+                UUID.randomUUID()
+            ))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                    assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INTERNAL_SERVER_ERROR)
+                );
+        } finally {
+            ReflectionTestUtils.setField(visit, "contentSession", fixture.reservation().getContentSession());
+            entityManager.setFlushMode(previousFlushMode);
+        }
+    }
+
+    @Test
+    void qrCheckIn_whenOperatorHasDifferentRegion_throwsForbiddenBeforeRescanConflict() {
+        Fixture fixture = createFixture(ReservationStatus.CHECKED_IN);
+        saveVisit(fixture);
+        Fixture unauthorizedFixture = createFixture();
+        QrTokenService.IssuedQrToken qrToken = issueQrToken(fixture);
+
+        assertThatThrownBy(() -> checkInUseCase.checkInByQr(
+            unauthorizedFixture.operator().getUserId(),
+            new QrCheckInRequest(qrToken.token()),
+            "qr-region-forbidden-priority-key",
+            UUID.randomUUID()
+        ))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN)
             );
     }
 
@@ -1095,6 +1331,30 @@ public class CheckInUseCaseIntegrationTest {
         assertThat(reservationRepository.findById(fixture.reservation().getReservationId()))
             .hasValueSatisfying(reservation -> assertThat(reservation.getStatus()).isEqualTo(previousStatus));
         assertThat(countSucceededIdempotencyRecords()).isEqualTo(succeededIdempotencyRecordCount);
+        assertThat(auditEventsByRequestId(requestId))
+            .singleElement()
+            .satisfies(auditEvent -> assertThat(auditEvent.getReasonCode()).isEqualTo(expectedReasonCode));
+    }
+
+    private void assertQrFailure(
+        Fixture fixture,
+        String qrToken,
+        String idempotencyKey,
+        ErrorCode expectedErrorCode,
+        String expectedReasonCode
+    ) {
+        UUID requestId = UUID.randomUUID();
+
+        CheckInResult result = checkInUseCase.checkInByQr(
+            fixture.operator().getUserId(),
+            new QrCheckInRequest(qrToken),
+            idempotencyKey,
+            requestId
+        );
+
+        assertThat(result.isSuccessful()).isFalse();
+        assertThat(result.errorCode()).isEqualTo(expectedErrorCode);
+        assertThat(visitsByReservationId(fixture.reservation().getReservationId())).hasSize(1);
         assertThat(auditEventsByRequestId(requestId))
             .singleElement()
             .satisfies(auditEvent -> assertThat(auditEvent.getReasonCode()).isEqualTo(expectedReasonCode));

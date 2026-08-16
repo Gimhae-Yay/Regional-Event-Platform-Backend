@@ -312,7 +312,7 @@ public class CheckInUseCase {
         CheckinMethod method,
         String reasonCodePrefix,
         String successReasonCode,
-        boolean allowQrRescan,
+        boolean isQrCheckIn,
         Instant checkedAt
     ) {
         String consistencyFailureReasonCode = findConsistencyFailureReasonCode(reservation, reasonCodePrefix);
@@ -354,7 +354,7 @@ public class CheckInUseCase {
                     reasonCodePrefix + "_VISIT_INCONSISTENT"
                 );
             }
-            if (allowQrRescan) {
+            if (isQrCheckIn) {
                 String rescanConflictReasonCode = findQrRescanConflictReasonCode(
                     reservation,
                     reasonCodePrefix,
@@ -370,7 +370,17 @@ public class CheckInUseCase {
                         rescanConflictReasonCode
                     );
                 }
-                return completeSuccess(acquired, requestId, actor, existingVisit, null, successReasonCode);
+                return completeDeterministicFailure(
+                    acquired,
+                    requestId,
+                    actor,
+                    reservation.getRegion(),
+                    AuditEventTargetType.RESERVATION,
+                    reservation.getReservationId(),
+                    "QR_CHECK_IN_RESERVATION_ALREADY_CHECKED_IN",
+                    ErrorCode.QR_ALREADY_CHECKED_IN,
+                    reservation.getStatus().name()
+                );
             }
             return completeConflict(
                 acquired,

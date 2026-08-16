@@ -142,7 +142,7 @@ class CheckInUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
 
     @Test
     @Timeout(10)
-    void qrCheckIn_withDifferentKeysConcurrently_returnsSameVisitWithoutDuplicateVisit() throws Exception {
+    void qrCheckIn_withDifferentKeysConcurrently_createsSingleVisitAndReturnsAlreadyCheckedIn() throws Exception {
         Fixture fixture = createFixture();
 
         List<CheckInResult> results = checkInByQrConcurrently(
@@ -151,16 +151,27 @@ class CheckInUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
             "qr-second-key-" + System.nanoTime()
         );
 
-        assertThat(results).allSatisfy(result -> assertThat(result.isSuccessful()).isTrue());
+        assertThat(results).filteredOn(CheckInResult::isSuccessful).hasSize(1);
         assertThat(results)
-            .extracting(result -> result.response().visitId())
-            .containsOnly(results.getFirst().response().visitId());
+            .filteredOn(result -> !result.isSuccessful())
+            .singleElement()
+            .satisfies(result -> assertThat(result.errorCode()).isEqualTo(ErrorCode.QR_ALREADY_CHECKED_IN));
         assertSingleVisitForReservation(fixture.reservationId());
         assertThat(idempotencyRecordRepository.findAll())
             .hasSize(2)
-            .allSatisfy(record -> {
-                assertThat(record.getStatus()).isEqualTo(IdempotencyRecordStatus.SUCCEEDED);
-                assertThat(record.getResultVisit().getVisitId().toString()).isEqualTo(results.getFirst().response().visitId());
+            .filteredOn(record -> record.getStatus() == IdempotencyRecordStatus.SUCCEEDED)
+            .singleElement()
+            .satisfies(record -> {
+                assertThat(record.getResultCode()).isEqualTo("SUCCESS");
+                assertThat(record.getResultVisit().getVisitId().toString()).isEqualTo(successfulVisitId(results));
+            });
+        assertThat(idempotencyRecordRepository.findAll())
+            .filteredOn(record -> record.getStatus() == IdempotencyRecordStatus.FAILED)
+            .singleElement()
+            .satisfies(record -> {
+                assertThat(record.getResultCode()).isEqualTo(ErrorCode.QR_ALREADY_CHECKED_IN.code());
+                assertThat(record.getResultReservation()).isNull();
+                assertThat(record.getResultVisit()).isNull();
             });
     }
 
