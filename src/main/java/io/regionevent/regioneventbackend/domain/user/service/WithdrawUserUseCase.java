@@ -1,12 +1,14 @@
 package io.regionevent.regioneventbackend.domain.user.service;
 
 import java.time.Clock;
+import java.util.List;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventActorLinkService;
 import io.regionevent.regioneventbackend.domain.content.service.ContentService;
+import io.regionevent.regioneventbackend.domain.content.service.ContentSessionService;
 import io.regionevent.regioneventbackend.domain.idempotency.service.IdempotencyService;
 import io.regionevent.regioneventbackend.domain.operator.service.OperatorApplicationService;
 import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHoldService;
@@ -26,6 +28,7 @@ public class WithdrawUserUseCase {
     private final AppUserService appUserService;
     private final UserRoleAssignmentService userRoleAssignmentService;
     private final ContentService contentService;
+    private final ContentSessionService contentSessionService;
     private final RefreshTokenService refreshTokenService;
     private final CapacityHoldService capacityHoldService;
     private final PaymentService paymentService;
@@ -42,6 +45,7 @@ public class WithdrawUserUseCase {
         AppUserService appUserService,
         UserRoleAssignmentService userRoleAssignmentService,
         ContentService contentService,
+        ContentSessionService contentSessionService,
         RefreshTokenService refreshTokenService,
         CapacityHoldService capacityHoldService,
         PaymentService paymentService,
@@ -57,6 +61,7 @@ public class WithdrawUserUseCase {
         this.appUserService = appUserService;
         this.userRoleAssignmentService = userRoleAssignmentService;
         this.contentService = contentService;
+        this.contentSessionService = contentSessionService;
         this.refreshTokenService = refreshTokenService;
         this.capacityHoldService = capacityHoldService;
         this.paymentService = paymentService;
@@ -78,7 +83,9 @@ public class WithdrawUserUseCase {
         appUserService.startWithdrawal(user);
 
         refreshTokenService.revokeAllFamilies(userId);
-        capacityHoldService.invalidateActiveHoldsForWithdrawal(userId);
+        List<Long> activeSessionIds = capacityHoldService.findActiveSessionIdsForWithdrawal(userId);
+        activeSessionIds.forEach(contentSessionService::lockForUpdate);
+        capacityHoldService.invalidateActiveHoldsForWithdrawal(userId, activeSessionIds);
         reservationService.cancelConfirmedReservationsForWithdrawal(userId);
         operatorApplicationService.cancelAndUnlinkByApplicantUserId(userId);
         operatorApplicationService.unlinkInspectorByUserId(userId);

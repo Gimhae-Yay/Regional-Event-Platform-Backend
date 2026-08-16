@@ -186,9 +186,18 @@ public class CapacityHoldService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public List<TerminatedCapacityHold> invalidateActiveHoldsForWithdrawal(Long userId) {
-        List<TerminatedCapacityHold> terminatedCapacityHolds = capacityHoldRepository.findActiveHoldIdsByUserId(userId)
-            .stream()
+    public List<Long> findActiveSessionIdsForWithdrawal(Long userId) {
+        return capacityHoldRepository.findActiveSessionIdsByUserId(userId);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public List<TerminatedCapacityHold> invalidateActiveHoldsForWithdrawal(
+        Long userId,
+        List<Long> sessionIds
+    ) {
+        List<TerminatedCapacityHold> terminatedCapacityHolds = sessionIds.stream()
+            .flatMap(sessionId -> capacityHoldRepository.findActiveByUserIdAndSessionIdForUpdate(userId, sessionId)
+                .stream())
             .map(this::invalidateAndReleaseCapacityForWithdrawalIfActive)
             .flatMap(Optional::stream)
             .toList();
@@ -248,22 +257,25 @@ public class CapacityHoldService {
             holdId,
             invalidationReason
         );
-        CapacityHold capacityHold = capacityHoldRepository.findByHoldId(holdId)
+        CapacityHold terminatedCapacityHold = capacityHoldRepository.findByHoldId(holdId)
             .orElseThrow(() -> new IllegalStateException("invalidated capacity hold does not exist"));
-        return Optional.of(TerminatedCapacityHold.from(capacityHold));
+        return Optional.of(TerminatedCapacityHold.from(terminatedCapacityHold));
     }
 
-    private Optional<TerminatedCapacityHold> invalidateAndReleaseCapacityForWithdrawalIfActive(Long holdId) {
-        if (capacityHoldRepository.findActiveForWithdrawalByHoldIdForUpdate(holdId).isEmpty()) {
+    private Optional<TerminatedCapacityHold> invalidateAndReleaseCapacityForWithdrawalIfActive(
+        CapacityHold capacityHold
+    ) {
+        if (capacityHold.getStatus() != CapacityHoldStatus.ACTIVE) {
             return Optional.empty();
         }
+        Long holdId = capacityHold.getHoldId();
         capacityHoldRepository.invalidateAndReleaseCapacityIfActive(
             holdId,
             "USER_WITHDRAWAL"
         );
-        CapacityHold capacityHold = capacityHoldRepository.findByHoldId(holdId)
+        CapacityHold terminatedCapacityHold = capacityHoldRepository.findByHoldId(holdId)
             .orElseThrow(() -> new IllegalStateException("invalidated capacity hold does not exist"));
-        return Optional.of(TerminatedCapacityHold.from(capacityHold));
+        return Optional.of(TerminatedCapacityHold.from(terminatedCapacityHold));
     }
 
     private void validateInvalidationReason(String invalidationReason) {
