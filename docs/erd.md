@@ -46,6 +46,8 @@ erDiagram
     app_user ||--o{ session_revision : submits
     content ||--|{ content_log : records
     app_user o|--o{ content_log : acts
+    content ||--o{ content_withdrawal_request : receives
+    app_user o|--o{ content_withdrawal_request : requests_or_reviews
     content ||--o{ content_revision : revises
     app_user ||--o{ content_revision : edits
     region ||--o{ image_object : scopes_upload
@@ -102,6 +104,7 @@ erDiagram
 | `content_session` | 콘텐츠별 회차의 시간, 체크인 창, 정원과 잔여 정원을 관리한다. `SCHEDULED` 회차만 홀드·예약·방문의 기준 단위다. |
 | `session_revision` | 기존 `SCHEDULED` 회차 변경의 후보 일정·정원과 심사 상태를 보관한다. 승인 때만 실제 `content_session`을 변경하며, 반려는 현재 회차를 바꾸지 않는다. |
 | `content_log` | 콘텐츠 생성·상태 변경과 소프트 삭제의 콘텐츠, 처리자, 결과 상태·삭제 코드, 사유와 시각을 보관하는 추가 전용 로그다. 탈퇴 때만 `actor_id`를 제거한다. |
+| `content_withdrawal_request` | 소유 운영자의 전체 콘텐츠 철회 요청과 담당 지역 관리자의 승인·반려 또는 콘텐츠 중단·종료에 따른 무효화 결과를 보관한다. 콘텐츠당 처리 대기 요청은 최대 한 건이다. |
 | `content_revision` | 공개 콘텐츠 또는 공개 전 승인 콘텐츠를 수정하기 위한 모든 후보 필드, 후보 공개 예정 시각, 후보 대표 이미지 객체와 심사 상태를 보관한다. 원본 버전을 기준으로 충돌을 판정하고 승인 시에만 `content`에 반영한다. |
 | `image_object` | S3 객체 키, 콘텐츠 타입, 크기, 체크섬, 업로드 요청자·지역, 업로드 만료와 삭제 재시도 상태를 보관한다. 공개 URL·원본 파일명은 저장하지 않으며, 업로드 요청자 FK는 대표 이미지 최초 연결 권한 검증 후 제거한다. |
 
@@ -163,6 +166,7 @@ P0 흐름을 하나의 레코드로 합치면 사용자 역할·지역, 콘텐�
 | 콘텐츠별 회차 목록 | `content_session` |
 | 기존 회차 수정 심사 후보 | `session_revision` |
 | 콘텐츠의 상태 변경·소프트 삭제 이력 | `content_log` |
+| 전체 콘텐츠 철회 요청·심사 이력 | `content_withdrawal_request` |
 | 공개 콘텐츠 수정 이력 | `content_revision` |
 | 상태 전이·실패 이력 | `audit_event` |
 | 예약 확정·체크인 재시도 | `idempotency_record` |
@@ -210,6 +214,7 @@ P0 흐름을 하나의 레코드로 합치면 사용자 역할·지역, 콘텐�
 | `visit.content_id`, `visit.session_id` | 탈퇴 후에도 개별 방문의 콘텐츠·회차 사실 보존 | 연결 예약·회차·콘텐츠와 복합 FK로 일치 |
 | `review.content_id` | 작성자 연결 제거 후에도 공개 후기의 콘텐츠 연결 유지 | 연결 방문의 `content_id`와 일치 |
 | `content.status`, `content.deleted_at` | 일반 조회·자동 공개·소프트 삭제 차단에 필요한 현재 상태 스냅샷 | 상태 변경 또는 소프트 삭제 시 `content_log` 삽입과 같은 트랜잭션에서 갱신 |
+| `content_withdrawal_request.active_request_content_id` | MySQL에서 콘텐츠당 `PENDING` 요청 최대 한 건을 유일 제약으로 강제 | `PENDING`이면 `content_id`, 터미널 상태면 `NULL`인 생성 컬럼 |
 
 이 예외는 편의를 위한 임의 복제가 아니다. 중복 컬럼을 추가할 때는 이 표에 목적과 일관성 제약을 먼저 추가한다.
 
@@ -370,6 +375,23 @@ erDiagram
         timestamp date
     }
 
+    content_withdrawal_request {
+        bigint content_withdrawal_request_id PK
+        bigint content_id FK
+        bigint requested_by_user_id FK "탈퇴 후 nullable"
+        string idempotency_key_hash "content_id와 복합 UK"
+        string status
+        text request_reason
+        timestamp requested_at
+        timestamp reviewed_at "nullable"
+        bigint reviewed_by_user_id FK "탈퇴 후 nullable"
+        text rejection_reason "nullable"
+        timestamp invalidated_at "nullable"
+        bigint invalidated_by_user_id FK "시스템 처리 또는 탈퇴 후 nullable"
+        string invalidation_reason "nullable"
+        bigint active_request_content_id UK "PENDING이면 content_id, 아니면 NULL인 생성 컬럼"
+    }
+
     content_revision {
         bigint content_revision_id PK
         bigint content_id FK
@@ -397,6 +419,9 @@ erDiagram
         timestamp withdrawn_at "nullable"
         bigint withdrawn_by_user_id FK "nullable"
         text withdrawal_reason "nullable"
+        timestamp invalidated_at "nullable"
+        bigint invalidated_by_user_id FK "시스템 처리 또는 탈퇴 후 nullable"
+        string invalidation_reason "nullable"
         timestamp created_at
     }
 
@@ -425,6 +450,8 @@ erDiagram
     app_user ||--o{ session_revision : submits
     content ||--|{ content_log : records
     app_user o|--o{ content_log : acts
+    content ||--o{ content_withdrawal_request : receives
+    app_user o|--o{ content_withdrawal_request : requests_or_reviews
     content ||--o{ content_revision : revises
     app_user ||--o{ content_revision : edits
     region ||--o{ image_object : scopes_upload
@@ -433,7 +460,9 @@ erDiagram
     image_object o|--o{ content_revision : is_snapshot_of
 ```
 
-`content_session.reviewed_by_user_id`, `content_revision.reviewed_by_user_id`, `session_revision.reviewed_by_user_id` 등 반복 처리자 FK 간선은 관계도를 읽기 어렵게 만들므로 Mermaid에서는
+`content_session.reviewed_by_user_id`, `content_withdrawal_request.requested_by_user_id`,
+`content_withdrawal_request.reviewed_by_user_id`, `content_withdrawal_request.invalidated_by_user_id`,
+`content_revision.reviewed_by_user_id`, `session_revision.reviewed_by_user_id` 등 반복 처리자 FK 간선은 관계도를 읽기 어렵게 만들므로 Mermaid에서는
 생략했다. 이 컬럼들은 `app_user.user_id`를 참조하고 아래 제약을 따른다.
 
 ### 콘텐츠·회차 정규화 규칙
@@ -459,15 +488,32 @@ erDiagram
   `actor_id`만 `NULL`로 갱신하고, 연결이 제거된 로그의 actor 표시는 `WITHDRAWN_MEMBER`로 공통 파생한다.
 - 성공한 콘텐츠 상태 변경은 `content` 현재 상태 갱신, `content_log` 추가와 성공 `audit_event` 기록을
   하나의 MySQL 트랜잭션에서 함께 커밋하거나 함께 롤백한다.
+- 전체 콘텐츠 철회 요청의 현재 상태 원천은 `content_withdrawal_request`다. 요청은 `PENDING`으로 생성되고
+  `APPROVED`, `REJECTED`, `INVALIDATED` 중 하나로만 종결한다. `content_log`와 `audit_event`에서 요청 상태를
+  추론하지 않는다.
+- 콘텐츠당 `PENDING` 철회 요청은 최대 한 건이다. `active_request_content_id`는
+  `CASE WHEN status = 'PENDING' THEN content_id ELSE NULL END`인 MySQL 생성 컬럼이며 유일 제약을 둔다.
+- 요청 생성은 필수 `Idempotency-Key` 원문을 저장·로그하지 않고 해시만 보관한다. 논리 유일 키
+  `(content_id, idempotency_key_hash)`로 같은 콘텐츠·키가 심사 종결 뒤에도 새 행을 만들지 못하게 한다. 같은 키와
+  같은 정규화 사유의 재시도는 최초 생성 결과를 반환하고, 다른 사유는 멱등 키 충돌로 거부한다.
+- `REJECTED` 요청은 심사자·심사 시각·반려 사유를 보존하며, 콘텐츠가 계속 `PUBLISHED`이면 새 키와 새 행으로
+  재요청할 수 있다. 반려는 요청 행과 요청 감사만 바꾸고 콘텐츠·수정본·로그·홀드·예약·결제·쿠폰은 변경하지 않는다.
+- `PENDING` 철회 요청이 있는 콘텐츠가 `PUBLISHED → SUSPENDED | ENDED`로 먼저 전이하면 같은 트랜잭션에서
+  요청을 `INVALIDATED`로 종결한다. 원인은 `CONTENT_SUSPENDED` 또는 `CONTENT_ENDED`이고 수동 처리에는 실제
+  지역 관리자를, 시스템 종료에는 처리자 없이 무효화 시각을 기록한다.
+- 전체 철회 승인은 요청 `PENDING → APPROVED`와 콘텐츠 `PUBLISHED → WITHDRAWN`을 같은 트랜잭션에서
+  처리한다. 요청 사유를 `WITHDRAWN` 콘텐츠 로그에 기록하고, 요청·콘텐츠·수정본·홀드·결제·쿠폰의 성공 감사를
+  같은 `requestId`로 추가한다.
 - `content_revision`의 논리 유일 키는 `(content_id, revision_no)`다.
 - 콘텐츠당 `EDIT_REQUESTED` 수정본은 최대 한 건이다. MySQL에서는 생성 컬럼을 포함한 유일 제약 또는
   동등한 조건부 쓰기 제약으로 강제한다.
-- 콘텐츠가 `PUBLISHED → SUSPENDED` 또는 `PUBLISHED → ENDED`로 전이하면, 같은 트랜잭션에서 활성
+- 콘텐츠가 `PUBLISHED → SUSPENDED`, `PUBLISHED → WITHDRAWN` 또는 `PUBLISHED → ENDED`로 전이하면, 같은 트랜잭션에서 활성
   `EDIT_REQUESTED` 수정본을 `EDIT_INVALIDATED`로 전이한다. 콘텐츠 행을 먼저 잠근 뒤 수정본 행을 잠그고,
   수정 심사·철회와 경합하면 `EDIT_REQUESTED`를 먼저 전이한 하나만 성공한다.
 - `EDIT_INVALIDATED` 수정본은 `invalidated_at`, `invalidation_reason`을 반드시 보관하고,
-  `invalidated_by_user_id`는 수동 중단·종료 처리자에게는 필수이며 시스템 종료에서는 `NULL`이다.
-  `invalidation_reason`은 `CONTENT_SUSPENDED` 또는 `CONTENT_ENDED`만 허용한다. 이 수정본은 후보 필드를
+  `invalidated_by_user_id`는 수동 중단·전체 철회·종료 처리자에게는 필수이며 시스템 종료에서는 `NULL`이다.
+  `invalidation_reason`은 `CONTENT_SUSPENDED`, `CONTENT_WITHDRAWN`, `CONTENT_ENDED`만 허용한다. 전체 철회는
+  승인한 지역 관리자와 승인 시각을 기록한다. 이 수정본은 후보 필드를
   원본에 반영하지 않는 터미널 상태이며, 상태 전이 감사 이벤트는 원본 콘텐츠를 대상으로 이전·다음 수정본 상태와
   사유 코드를 기록한다.
 - 공개 콘텐츠 수정본의 승인 조건은 원본 `PUBLISHED`, 수정본 `EDIT_REQUESTED`,
@@ -772,7 +818,7 @@ erDiagram
 ### 감사 정규화 규칙
 
 - `audit_event`는 MySQL의 상태 전이 기준 기록이다. 구조화 로그와 외부 전달 이벤트의 대체물이 아니다.
-- `target_type`은 `REGION`, `OPERATOR_APPLICATION`, `CONTENT`, `CONTENT_SESSION`,
+- `target_type`은 `REGION`, `OPERATOR_APPLICATION`, `CONTENT`, `CONTENT_WITHDRAWAL_REQUEST`, `CONTENT_SESSION`,
   `CAPACITY_HOLD`, `RESERVATION`, `VISIT`, `REVIEW`만 허용한다.
 - 이벤트 본문에는 이름·연락처·QR 원문·토큰·`user_id`·사용자별 가명을 저장하지 않는다.
 - `target_id`에 `app_user.user_id`를 저장하지 않으며 회원을 직접 식별하는 `target_type`도 허용하지 않는다.
@@ -802,6 +848,7 @@ erDiagram
 | `operator_application` | `PENDING`, `APPROVED`, `REJECTED`, `CANCELLED` | `PENDING → {APPROVED, REJECTED, CANCELLED}` |
 | `content` | `PENDING`, `REJECTED`, `APPROVED`, `PUBLISHED`, `SUSPENDED`, `WITHDRAWN`, `ENDED` | `PENDING → {APPROVED, REJECTED}`, `REJECTED → PENDING`, `APPROVED → {PENDING, PUBLISHED}`, `PUBLISHED → {SUSPENDED, WITHDRAWN, ENDED}` |
 | `content_log.status` | `content` 상태 카탈로그의 값, `DELETED` | 생성·상태 변경 뒤의 `content.status` 또는 소프트 삭제 이벤트를 추가 전용으로 기록 |
+| `content_withdrawal_request` | `PENDING`, `APPROVED`, `REJECTED`, `INVALIDATED` | `PENDING → {APPROVED, REJECTED, INVALIDATED}` |
 | `content_revision` | `EDIT_REQUESTED`, `EDIT_APPROVED`, `EDIT_REJECTED`, `EDIT_WITHDRAWN`, `EDIT_INVALIDATED` | `EDIT_REQUESTED → {EDIT_APPROVED, EDIT_REJECTED, EDIT_WITHDRAWN, EDIT_INVALIDATED}` |
 | `content_session` | `PENDING`, `SCHEDULED`, `REJECTED`, `COMPLETED`, `CANCELLED` | `PENDING → {SCHEDULED, REJECTED}`, `SCHEDULED → {COMPLETED, CANCELLED}` |
 | `session_revision.status` | `PENDING`, `APPROVED`, `REJECTED` | `PENDING → {APPROVED, REJECTED}` |
@@ -826,6 +873,8 @@ erDiagram
 | 지역 | `region(region_code)` | 배포 초기화 재실행 시 중복 방지 |
 | 사용자 역할 | `user_role_assignment(user_id, role)` | 역할별 담당 지역 최대 한 곳 |
 | 콘텐츠 수정본 | `content_revision(content_id, revision_no)` | 콘텐츠별 순차 수정본 식별 |
+| 전체 철회 요청 재시도 | `content_withdrawal_request(content_id, idempotency_key_hash)` | 같은 콘텐츠의 생성 요청 재시도를 심사 종결 뒤에도 같은 행으로 수렴 |
+| 활성 전체 철회 요청 | `content_withdrawal_request(active_request_content_id)` | 콘텐츠별 `PENDING` 요청 최대 한 건 |
 | 활성 콘텐츠 수정본 | 콘텐츠별 `EDIT_REQUESTED` 최대 한 건 | 병렬 심사 방지 |
 | 활성 회차 수정본 | 대상 회차별 `PENDING` `session_revision` 최대 한 건 | 같은 회차의 병렬 변경 심사 방지 |
 | 예약 변환 | `reservation(hold_id)` | 한 홀드당 예약 최대 한 건 |
@@ -869,10 +918,16 @@ MySQL 복합 FK를 사용하려면 상위 테이블에 대응하는 `UNIQUE` 후
 | `content_log` | `content_id`, `status`, `date` 존재; 상태는 생성·허용된 콘텐츠 상태 전이 뒤의 값 또는 `DELETED`        |
 | 시스템 처리 `content_log` | `actor_id IS NULL`                                                               |
 | `content_log`의 `REJECTED`, `SUSPENDED`, `WITHDRAWN`, `DELETED` | `reason` 존재                                                                      |
+| 모든 `content_withdrawal_request` | `content_id`, 전이 시점에 확인된 `requested_by_user_id`, `idempotency_key_hash`, 비어 있지 않은 `request_reason`, `requested_at` 존재. 회원 탈퇴 뒤 요청자 연결만 `NULL` 허용 |
+| `content_withdrawal_request.PENDING` | `reviewed_at`, `reviewed_by_user_id`, `rejection_reason`, `invalidated_at`, `invalidated_by_user_id`, `invalidation_reason`이 모두 `NULL` |
+| `content_withdrawal_request.APPROVED` | 승인 전이 시 `reviewed_at`, `reviewed_by_user_id` 존재; `rejection_reason`과 모든 무효화 필드는 `NULL`. 심사자 탈퇴 뒤 연결만 `NULL` 허용 |
+| `content_withdrawal_request.REJECTED` | 반려 전이 시 `reviewed_at`, `reviewed_by_user_id`, 비어 있지 않은 `rejection_reason` 존재; 모든 무효화 필드는 `NULL`. 심사자 탈퇴 뒤 연결만 `NULL` 허용 |
+| `content_withdrawal_request.INVALIDATED` | `invalidated_at`, `invalidation_reason` 존재; 심사 필드는 `NULL`. 사유는 `CONTENT_SUSPENDED` 또는 `CONTENT_ENDED`; 수동 처리 시 처리자 필수이고 시스템 종료와 처리자 탈퇴 뒤에는 `NULL` 허용 |
 | 소프트 삭제된 `content` | `deleted_at` 존재하고 상태는 `PENDING` 또는 `APPROVED`; 사유를 가진 `DELETED` 로그가 정확히 한 건 존재   |
 | `content_revision.EDIT_APPROVED` | `reviewed_at`, `reviewed_by_user_id` 존재, `review_reason IS NULL`                         |
 | `content_revision.EDIT_REJECTED` | `reviewed_at`, `reviewed_by_user_id`, 비어 있지 않은 `review_reason` 존재                         |
 | `content_revision.EDIT_WITHDRAWN` | `withdrawn_at`, `withdrawn_by_user_id`, `withdrawal_reason` 존재                   |
+| `content_revision.EDIT_INVALIDATED` | `invalidated_at`, `invalidation_reason` 존재. 사유는 `CONTENT_SUSPENDED`, `CONTENT_WITHDRAWN`, `CONTENT_ENDED`; 수동 처리 시 처리자 필수이고 시스템 종료와 처리자 탈퇴 뒤에는 `NULL` 허용 |
 | `content_session.REJECTED` | `reviewed_at`, `reviewed_by_user_id`, `reject_reason` 존재 |
 | 모든 `session_revision` | `target_session_id`, `base_session_version`, 후보 일정·체크인 창·정원 존재 |
 | `session_revision.APPROVED` | `reviewed_at`, `reviewed_by_user_id` 존재, `reject_reason IS NULL` |
@@ -903,6 +958,7 @@ MySQL 복합 FK를 사용하려면 상위 테이블에 대응하는 `UNIQUE` 후
 | 지역 공개 콘텐츠 목록 | `content(region_id, status, content_type, publish_at, deleted_at)` |
 | 자동 공개 대상 | `content(status, publish_at, deleted_at)` |
 | 콘텐츠 상태 변경 이력 | `content_log(content_id, date, id)` |
+| 콘텐츠별 전체 철회 요청 이력 | `content_withdrawal_request(content_id, requested_at, content_withdrawal_request_id)` |
 | 콘텐츠 수정본 조회 | `content_revision(content_id, status, created_at)` |
 | 지역 회차 수정본 심사 | `session_revision(region_id, status, submitted_at)` |
 | 회차별 활성 수정본 | `session_revision(target_session_id, status)` |
@@ -981,6 +1037,7 @@ SQL의 단순 cascade가 아래 업무 순서를 대신해서는 안 된다.
 | 감사 기록 | `audit_event_actor_link` 제거, 이벤트 본문은 공통 `WITHDRAWN_MEMBER` 의미로 조회 |
 | 콘텐츠 | `PENDING`, `APPROVED`만 `deleted_at`을 기록하는 소프트 삭제 |
 | 콘텐츠 로그 | 상태·삭제 사유를 추가 전용으로 보관하고, 탈퇴 완료 전 `actor_id`를 `NULL`로 갱신해 actor 표시는 공통 `WITHDRAWN_MEMBER`로 조회 |
+| 전체 콘텐츠 철회 요청 | 요청·심사·무효화 사실과 사유·시각은 보존하고, 탈퇴 완료 전 요청자·심사자·무효화 처리자 FK만 `NULL`로 제거 |
 | 이미지 | 미연결 업로드 후보는 계정 파기 전 `DELETE_PENDING` 전환과 S3 삭제 대상으로 처리한다. 연결된 이미지는 `created_by_user_id`가 제거돼 있으며, DB 참조 제거 후 S3 즉시 삭제, 실패 시 비공개 `DELETE_PENDING`으로 재시도한다. |
 
 - 운영 역할 또는 콘텐츠 소유 관계가 남은 계정의 셀프 탈퇴는 P0에서 거부한다.
@@ -999,7 +1056,6 @@ SQL의 단순 cascade가 아래 업무 순서를 대신해서는 안 된다.
 | --- | --- | --- |
 | 역할 중첩 | 한 사용자의 복수 역할 허용·금지 | 역할별 한 행은 허용하되 상호 배타 제약 없음 |
 | 승인된 `publish_at` 변경 요청 | 관리자 승인 시 직접 갱신할지, 요청·심사 상태를 저장할지 | 별도 엔티티 또는 후보 시각을 추정하지 않음 |
-| 전체 콘텐츠 철회 요청 | 운영자 요청의 보관, 승인·반려·재시도 모델 | 승인 후 현재 상태와 감사만 표현 |
 
 이 표의 항목을 임의 구현하지 않는다. 되돌리기 어렵거나 여러 도메인에 영향을 주는 선택은 ADR로 먼저 확정하고,
 API 요청·응답에 영향을 주는 항목은 [API 명세서](api/api-specification.md)를 함께 갱신한다.

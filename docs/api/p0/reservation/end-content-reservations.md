@@ -124,16 +124,17 @@ Accept: application/json
 8. 종료 성공 후 신규 홀드 생성과 예약 확정을 차단한다.
 9. 종료 성공 후 공개 콘텐츠 조회 경로에서 대상 콘텐츠를 노출하지 않는다.
 10. 종료 성공 시 남아 있는 `ACTIVE` 홀드는 `INVALIDATED`로 전환하고 정원을 한 번만 복구한다.
-11. 콘텐츠 행 잠금 뒤 활성 `EDIT_REQUESTED` 수정본 행을 잠가 `EDIT_INVALIDATED`로 전이한다. 무효화 시각과 종료를 처리한 지역 관리자, `CONTENT_ENDED` 사유를 보관하고 원본 콘텐츠를 대상으로 이전·다음 수정본 상태와 사유 코드를 가진 성공 `audit_event`를 추가한다. 활성 수정본이 없으면 수정본 행과 수정본 감사는 추가하지 않는다.
-12. 기존 `CONFIRMED`·`CHECKED_IN` 예약, 방문 기록과 후기는 유지한다.
-13. 이미 `ENDED`인 콘텐츠에 대한 종료 재요청은 기존 종료 결과를 반환한다.
-14. 종료 재요청은 상태 로그, 수정본 무효화·감사, 감사 로그, 정원 복구를 중복 생성하지 않는다.
-15. 자동 종료와 추가 회차 생성도 같은 `content` 행을 먼저 잠근다. 회차 생성이 잠금을 먼저 얻으면 새 `PENDING` 회차를 확인하고 `409 CONTENT_END_CONFLICT`로 응답한다. 이 종료가 먼저 `ENDED`를 커밋하면 뒤의 회차 생성은 `ENDED`를 확인하고 회차를 만들지 않는다. 다른 상태 전이와 경합해도 먼저 성공한 조건부 전이만 반영한다.
-16. 오류가 발생하면 콘텐츠 상태, 수정본 상태·이력, `content_log`, 성공 `audit_event`, 홀드 상태와 정원을 변경하지 않는다. 수동 종료의 상태 조건 거부나 처리 실패는 종료 트랜잭션이 롤백된 뒤 [ADR-0015](../../../adr/0015-store-audit-events-in-mysql-with-withdrawn-actor-anonymization.md#결정)에 따라 실패 `audit_event`만 별도 트랜잭션으로 기록한다.
+11. 콘텐츠 행 잠금 뒤 `PENDING` 전체 철회 요청 행을 잠근다. 있으면 종료 관리자·종료 시각과 `CONTENT_ENDED` 사유를 가진 `INVALIDATED`로 종결하고 요청 상태 전이 감사를 추가한다.
+12. 철회 요청 행 뒤 활성 `EDIT_REQUESTED` 수정본 행을 잠가 `EDIT_INVALIDATED`로 전이한다. 무효화 시각과 종료를 처리한 지역 관리자, `CONTENT_ENDED` 사유를 보관하고 원본 콘텐츠를 대상으로 이전·다음 수정본 상태와 사유 코드를 가진 성공 `audit_event`를 추가한다. 활성 수정본이 없으면 수정본 행과 수정본 감사는 추가하지 않는다.
+13. 기존 `CONFIRMED`·`CHECKED_IN` 예약, 방문 기록과 후기는 유지한다.
+14. 이미 `ENDED`인 콘텐츠에 대한 종료 재요청은 기존 종료 결과를 반환한다.
+15. 종료 재요청은 상태 로그, 철회 요청·수정본 무효화와 감사, 정원 복구를 중복 생성하지 않는다.
+16. 자동 종료와 추가 회차 생성도 같은 `content` 행을 먼저 잠근다. 회차 생성이 잠금을 먼저 얻으면 새 `PENDING` 회차를 확인하고 `409 CONTENT_END_CONFLICT`로 응답한다. 이 종료가 먼저 `ENDED`를 커밋하면 뒤의 회차 생성은 `ENDED`를 확인하고 회차를 만들지 않는다. 전체 철회 승인과 경합하면 콘텐츠 `PUBLISHED`를 먼저 전이한 하나만 성공한다.
+17. 오류가 발생하면 콘텐츠 상태, 철회 요청·수정본 상태와 이력, `content_log`, 성공 `audit_event`, 홀드 상태와 정원을 변경하지 않는다. 수동 종료의 상태 조건 거부나 처리 실패는 종료 트랜잭션이 롤백된 뒤 [ADR-0015](../../../adr/0015-store-audit-events-in-mysql-with-withdrawn-actor-anonymization.md#결정)에 따라 실패 `audit_event`만 별도 트랜잭션으로 기록한다.
 
 ### 감사 및 정합성
 
-- `EndContentReservationsUseCase.endByRegionAdmin`이 콘텐츠 한 건의 쓰기 트랜잭션을 소유한다. 성공한 종료는 이 트랜잭션에서 콘텐츠 상태 갱신, 활성 수정본 무효화·감사, `content_log` 추가, 성공 `audit_event` 기록을 함께 커밋한다.
+- `EndContentReservationsUseCase.endByRegionAdmin`이 콘텐츠 한 건의 쓰기 트랜잭션을 소유한다. 성공한 종료는 이 트랜잭션에서 콘텐츠 상태 갱신, 대기 전체 철회 요청·활성 수정본 무효화와 감사, `content_log` 추가, 성공 `audit_event` 기록을 함께 커밋한다.
 - `content_log.status`는 `ENDED`로 기록한다.
 - `content_log.actor_id`는 처리한 지역 관리자 식별자로 기록한다.
 - `content_log.reason`은 `null`로 기록한다.
@@ -142,5 +143,5 @@ Accept: application/json
 - 수동 종료가 `CONTENT_END_CONFLICT`로 거부되거나 처리 중 실패하면 종료 트랜잭션을 먼저 롤백한다. 그 뒤 같은
   `requestId`, 확인된 처리자·대상과 비개인 실패 코드를 가진 `result = FAILURE` 감사 이벤트를 별도 트랜잭션으로
   기록한다. 실패 감사 기록도 실패하면 구조화 로그로 관찰한다.
-- `ENDED` 전이, 활성 수정본 `EDIT_INVALIDATED` 전이와 수정본 감사, `ACTIVE` 홀드 무효화 및 정원 복구는 같은 트랜잭션에서 원자적으로 처리한다. 잠금 순서는 `content → content_revision → content_session → capacity_hold`다.
+- `ENDED` 전이, 대기 전체 철회 요청 `INVALIDATED`, 활성 수정본 `EDIT_INVALIDATED`와 각 감사, `ACTIVE` 홀드 무효화 및 정원 복구는 같은 트랜잭션에서 원자적으로 처리한다. 잠금 순서는 `content → content_withdrawal_request → content_revision → content_session → capacity_hold`다.
 - 정원 복구는 홀드별 최초 성공 전이에서만 한 번 수행한다.

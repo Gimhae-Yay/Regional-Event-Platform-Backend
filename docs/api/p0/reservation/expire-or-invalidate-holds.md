@@ -24,7 +24,7 @@
 | --- | --- | --- | --- |
 | 만료 | `status = ACTIVE`이고 `expires_at <= MySQL 현재 시각` | `ACTIVE → EXPIRED` | `remaining_capacity`에 `quantity`를 한 번 더한다. |
 | 회차 시작 | `status = ACTIVE`이고 `content_session.starts_at <= MySQL 현재 시각` | `ACTIVE → INVALIDATED` | `remaining_capacity`에 `quantity`를 한 번 더한다. |
-| 콘텐츠 비예약 가능 전이 | 콘텐츠가 `SUSPENDED`, `WITHDRAWN`, `ENDED`로 전이 | `ACTIVE → INVALIDATED` | 콘텐츠 상태 전이 트랜잭션에서 한 번 복구한다. |
+| 콘텐츠 비예약 가능 전이 | 콘텐츠가 `SUSPENDED`, `WITHDRAWN`, `ENDED`로 전이. `WITHDRAWN` 실행 계약은 [전체 콘텐츠 철회 승인](../region-content/approve-content-withdrawal.md)을 따른다. | `ACTIVE → INVALIDATED` | 콘텐츠 상태 전이 트랜잭션에서 한 번 복구한다. |
 | 회차 취소 | 회차가 `CANCELLED`로 전이 | `ACTIVE → INVALIDATED` | 회차 취소 트랜잭션에서 한 번 복구한다. |
 | 회원 탈퇴 | 회원이 `WITHDRAWING`으로 전이 | `ACTIVE → INVALIDATED` | 회원 탈퇴 트랜잭션에서 한 번 복구한다. |
 
@@ -46,6 +46,7 @@
 14. P1 가격 스냅샷이 연결된 홀드를 `EXPIRED` 또는 `INVALIDATED`로 종결할 때 연결 결제가 `PENDING`이면 같은 처리에서 `payment.status`를 `EXPIRED`로 전이하고 `finalized_at`을 기록한다. 연결된 `payment_idempotency.expires_at`은 `finalized_at + 24시간`으로 정한다. 이미 종결된 결제는 변경하지 않는다.
 15. 14번의 가격 스냅샷에 적용된 쿠폰이 `RESERVED`이면 원래 만료 시각 전에는 `AVAILABLE`, 지났으면 `EXPIRED`로 전이하고 상태 이력을 기록한다. 적용 쿠폰이 없거나 이미 `RESERVED`가 아니면 새 쿠폰 전이를 만들지 않는다.
 16. P1 연결 데이터가 있는 후보의 행 잠금과 조건부 전이는 `content → content_session → capacity_hold → reservation_price_snapshot → payment → coupon` 순서를 따른다. 홀드 종결, 정원 복구, 결제 종결, 쿠폰 선점 해제와 각 상태 이력은 후보별 하나의 MySQL 트랜잭션에서 커밋한다.
+17. 전체 콘텐츠 철회 승인은 `content_withdrawal_request → content_revision`을 `content` 뒤, 회차 앞에 추가해 `content → content_withdrawal_request → content_revision → content_session → capacity_hold → reservation_price_snapshot → payment → coupon` 순서로 처리한다. 요청 반려는 홀드·정원·결제·쿠폰을 변경하지 않는다.
 
 ### 감사 및 정합성
 
