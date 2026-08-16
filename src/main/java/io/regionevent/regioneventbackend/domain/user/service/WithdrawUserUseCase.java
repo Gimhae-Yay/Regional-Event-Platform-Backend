@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventActorLinkService;
 import io.regionevent.regioneventbackend.domain.content.service.ContentService;
 import io.regionevent.regioneventbackend.domain.content.service.ContentSessionService;
+import io.regionevent.regioneventbackend.domain.content.service.ContentWithdrawalRequestService;
 import io.regionevent.regioneventbackend.domain.coupon.entity.Coupon;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatus;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatusHistory;
@@ -39,6 +40,7 @@ public class WithdrawUserUseCase {
     private final UserRoleAssignmentService userRoleAssignmentService;
     private final ContentService contentService;
     private final ContentSessionService contentSessionService;
+    private final ContentWithdrawalRequestService contentWithdrawalRequestService;
     private final RefreshTokenService refreshTokenService;
     private final CouponService couponService;
     private final CouponIssuanceService couponIssuanceService;
@@ -59,6 +61,7 @@ public class WithdrawUserUseCase {
         UserRoleAssignmentService userRoleAssignmentService,
         ContentService contentService,
         ContentSessionService contentSessionService,
+        ContentWithdrawalRequestService contentWithdrawalRequestService,
         RefreshTokenService refreshTokenService,
         CouponService couponService,
         CouponIssuanceService couponIssuanceService,
@@ -78,6 +81,7 @@ public class WithdrawUserUseCase {
         this.userRoleAssignmentService = userRoleAssignmentService;
         this.contentService = contentService;
         this.contentSessionService = contentSessionService;
+        this.contentWithdrawalRequestService = contentWithdrawalRequestService;
         this.refreshTokenService = refreshTokenService;
         this.couponService = couponService;
         this.couponIssuanceService = couponIssuanceService;
@@ -111,6 +115,7 @@ public class WithdrawUserUseCase {
         capacityHoldService.invalidateActiveHoldsForWithdrawal(userId, activeSessionIds);
         operatorApplicationService.cancelAndUnlinkByApplicantUserId(userId);
         operatorApplicationService.unlinkInspectorByUserId(userId);
+        contentWithdrawalRequestService.unlinkUserReferencesByUserId(userId);
         capacityHoldService.unlinkUserByUserId(userId);
         reservationService.unlinkUserByUserId(userId);
         visitService.unlinkAuthorByUserId(userId);

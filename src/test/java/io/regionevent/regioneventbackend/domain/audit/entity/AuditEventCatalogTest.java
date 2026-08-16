@@ -19,6 +19,7 @@ class AuditEventCatalogTest {
             AuditEventTargetType.OPERATOR_APPLICATION,
             AuditEventTargetType.CONTENT,
             AuditEventTargetType.CONTENT_SESSION,
+            AuditEventTargetType.CONTENT_WITHDRAWAL_REQUEST,
             AuditEventTargetType.CAPACITY_HOLD,
             AuditEventTargetType.RESERVATION,
             AuditEventTargetType.VISIT,

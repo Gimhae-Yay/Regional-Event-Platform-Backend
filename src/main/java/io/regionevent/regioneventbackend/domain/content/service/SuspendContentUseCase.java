@@ -21,6 +21,9 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentLog;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentRevisionInvalidationReason;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentRevisionStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentWithdrawalRequest;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentWithdrawalRequestInvalidationReason;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentWithdrawalRequestStatus;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.service.RegionService;
 import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHoldService;
@@ -37,6 +40,7 @@ public class SuspendContentUseCase {
     private static final String CONTENT_SUSPENDED_INVALIDATION_REASON = "CONTENT_SUSPENDED";
 
     private final ContentService contentService;
+    private final ContentWithdrawalRequestService contentWithdrawalRequestService;
     private final ContentRevisionInvalidationService contentRevisionInvalidationService;
     private final ContentSessionService contentSessionService;
     private final ContentLogService contentLogService;
@@ -50,6 +54,7 @@ public class SuspendContentUseCase {
 
     public SuspendContentUseCase(
         ContentService contentService,
+        ContentWithdrawalRequestService contentWithdrawalRequestService,
         ContentRevisionInvalidationService contentRevisionInvalidationService,
         ContentSessionService contentSessionService,
         ContentLogService contentLogService,
@@ -62,6 +67,7 @@ public class SuspendContentUseCase {
         Clock clock
     ) {
         this.contentService = contentService;
+        this.contentWithdrawalRequestService = contentWithdrawalRequestService;
         this.contentRevisionInvalidationService = contentRevisionInvalidationService;
         this.contentSessionService = contentSessionService;
         this.contentLogService = contentLogService;
@@ -104,6 +110,13 @@ public class SuspendContentUseCase {
         Instant suspendedAt = clock.instant().truncatedTo(ChronoUnit.MICROS);
         try {
             Content suspendedContent = contentService.suspend(content, suspendedAt);
+            invalidatePendingWithdrawalRequest(
+                requestId,
+                suspendedContent,
+                actor,
+                suspendedAt,
+                ContentWithdrawalRequestInvalidationReason.CONTENT_SUSPENDED
+            );
             invalidateActiveRevision(
                 requestId,
                 suspendedContent,
@@ -193,6 +206,50 @@ public class SuspendContentUseCase {
             actor,
             invalidatedAt
         )));
+    }
+
+    private void invalidatePendingWithdrawalRequest(
+        UUID requestId,
+        Content content,
+        AuditEventActor actor,
+        Instant invalidatedAt,
+        ContentWithdrawalRequestInvalidationReason reason
+    ) {
+        contentWithdrawalRequestService.invalidatePendingByUser(
+            content.getContentId(),
+            actor.getAppUser(),
+            invalidatedAt,
+            reason
+        ).ifPresent(request -> recordWithdrawalRequestInvalidation(
+            requestId,
+            content,
+            request,
+            actor,
+            invalidatedAt,
+            reason
+        ));
+    }
+
+    private void recordWithdrawalRequestInvalidation(
+        UUID requestId,
+        Content content,
+        ContentWithdrawalRequest request,
+        AuditEventActor actor,
+        Instant invalidatedAt,
+        ContentWithdrawalRequestInvalidationReason reason
+    ) {
+        recordAuditEventUseCase.record(new AuditEventCommand(
+            requestId,
+            content.getRegion(),
+            AuditEventTargetType.CONTENT_WITHDRAWAL_REQUEST,
+            request.getContentWithdrawalRequestId(),
+            ContentWithdrawalRequestStatus.PENDING.name(),
+            ContentWithdrawalRequestStatus.INVALIDATED.name(),
+            AuditEventResult.SUCCESS,
+            reason.name(),
+            actor,
+            invalidatedAt
+        ));
     }
 
     private void recordFailedSuspension(

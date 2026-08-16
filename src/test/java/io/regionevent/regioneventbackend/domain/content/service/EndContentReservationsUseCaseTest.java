@@ -1,17 +1,25 @@
 package io.regionevent.regioneventbackend.domain.content.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
+import org.mockito.ArgumentCaptor;
 
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
+import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
@@ -19,6 +27,8 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentLog;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentWithdrawalRequest;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentWithdrawalRequestInvalidationReason;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.service.RegionService;
 import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHoldService;
@@ -37,6 +47,8 @@ class EndContentReservationsUseCaseTest {
     private static final Instant ENDED_AT = Instant.parse("2026-08-06T00:00:00Z");
 
     private final ContentService contentService = mock(ContentService.class);
+    private final ContentWithdrawalRequestService contentWithdrawalRequestService =
+        mock(ContentWithdrawalRequestService.class);
     private final RegionService regionService = mock(RegionService.class);
     private final ContentRevisionInvalidationService contentRevisionInvalidationService =
         mock(ContentRevisionInvalidationService.class);
@@ -54,6 +66,7 @@ class EndContentReservationsUseCaseTest {
         mock(PublicCatalogCacheInvalidator.class);
     private final EndContentReservationsUseCase useCase = new EndContentReservationsUseCase(
         contentService,
+        contentWithdrawalRequestService,
         regionService,
         contentRevisionInvalidationService,
         contentSessionService,
@@ -107,6 +120,72 @@ class EndContentReservationsUseCaseTest {
         useCase.endBySystem(CONTENT_ID, UUID.randomUUID());
 
         verify(publicCatalogCacheInvalidator).invalidateContentAfterCommit(REGION_ID, CONTENT_ID, VERSION_NO);
+    }
+
+    @Test
+    void 수동_종료는_대기_철회_요청을_관리자_actor로_무효화하고_감사한다() {
+        Content content = publishedContent();
+        UserRoleAssignment regionAdmin = activeRegionAdmin();
+        ContentSession contentSession = mock(ContentSession.class);
+        ContentWithdrawalRequest request = mock(ContentWithdrawalRequest.class);
+        when(request.getContentWithdrawalRequestId()).thenReturn(7001L);
+        when(contentService.findEndTargetForUpdate(CONTENT_ID)).thenReturn(content);
+        givenAuthorizedRegionAdmin(regionAdmin);
+        when(contentSessionService.hasNonTerminalSessionForEnd(CONTENT_ID)).thenReturn(false);
+        when(contentSessionService.findCurrentSessionsByContentId(CONTENT_ID)).thenReturn(List.of(contentSession));
+        when(contentService.findCurrentDatabaseTime()).thenReturn(ENDED_AT);
+        when(contentService.end(content, ENDED_AT)).thenReturn(content);
+        AppUser admin = regionAdmin.getAppUser();
+        when(contentWithdrawalRequestService.invalidatePendingByUser(
+            eq(CONTENT_ID),
+            eq(admin),
+            eq(ENDED_AT),
+            eq(ContentWithdrawalRequestInvalidationReason.CONTENT_ENDED)
+        )).thenReturn(Optional.of(request));
+
+        useCase.endByRegionAdmin(ADMIN_ID, CONTENT_ID, UUID.randomUUID());
+
+        ArgumentCaptor<AuditEventCommand> commandCaptor = ArgumentCaptor.forClass(AuditEventCommand.class);
+        verify(recordAuditEventUseCase, times(2)).record(commandCaptor.capture());
+        AuditEventCommand requestAudit = commandCaptor.getAllValues().stream()
+            .filter(command -> command.targetType() == AuditEventTargetType.CONTENT_WITHDRAWAL_REQUEST)
+            .findFirst()
+            .orElseThrow();
+        assertThat(requestAudit.targetId()).isEqualTo(7001L);
+        assertThat(requestAudit.reasonCode()).isEqualTo("CONTENT_ENDED");
+        assertThat(requestAudit.actor().getAppUser()).isSameAs(admin);
+    }
+
+    @Test
+    void 자동_종료는_대기_철회_요청을_시스템_actor로_무효화하고_감사한다() {
+        Content content = publishedContent();
+        ContentSession completedSession = mock(ContentSession.class);
+        ContentWithdrawalRequest request = mock(ContentWithdrawalRequest.class);
+        when(request.getContentWithdrawalRequestId()).thenReturn(7001L);
+        when(completedSession.getStatus()).thenReturn(ContentSessionStatus.COMPLETED);
+        when(completedSession.getCompletedAt()).thenReturn(ENDED_AT);
+        when(contentService.findEndTargetForUpdate(CONTENT_ID)).thenReturn(content);
+        when(contentSessionService.findCurrentSessionsByContentId(CONTENT_ID)).thenReturn(List.of(completedSession));
+        when(contentSessionService.getEndTerminalStatuses()).thenReturn(List.of(ContentSessionStatus.COMPLETED));
+        when(contentService.findCurrentDatabaseTime()).thenReturn(ENDED_AT);
+        when(contentService.end(content, ENDED_AT)).thenReturn(content);
+        when(contentWithdrawalRequestService.invalidatePendingBySystem(
+            CONTENT_ID,
+            ENDED_AT,
+            ContentWithdrawalRequestInvalidationReason.CONTENT_ENDED
+        )).thenReturn(Optional.of(request));
+
+        useCase.endBySystem(CONTENT_ID, UUID.randomUUID());
+
+        ArgumentCaptor<AuditEventCommand> commandCaptor = ArgumentCaptor.forClass(AuditEventCommand.class);
+        verify(recordAuditEventUseCase, times(2)).record(commandCaptor.capture());
+        AuditEventCommand requestAudit = commandCaptor.getAllValues().stream()
+            .filter(command -> command.targetType() == AuditEventTargetType.CONTENT_WITHDRAWAL_REQUEST)
+            .findFirst()
+            .orElseThrow();
+        assertThat(requestAudit.targetId()).isEqualTo(7001L);
+        assertThat(requestAudit.reasonCode()).isEqualTo("CONTENT_ENDED");
+        assertThat(requestAudit.actor()).isNull();
     }
 
     @Test

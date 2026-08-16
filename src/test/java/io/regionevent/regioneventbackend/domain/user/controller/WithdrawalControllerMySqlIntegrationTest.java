@@ -786,6 +786,163 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
     }
 
     @Test
+    void withdraw_withContentWithdrawalRequestUserLinks_unlinksUsersAndPreservesLifecycle() throws Exception {
+        String suffix = Long.toUnsignedString(System.nanoTime());
+        Instant occurredAt = Instant.now();
+        Region region = regionRepository.saveAndFlush(new Region("R" + suffix, "김해시", true));
+        AppUser withdrawingUser = saveUser("withdrawal-request-user-" + suffix + "@example.com");
+        UserRoleAssignment revokedRegionAdmin = new UserRoleAssignment(
+            withdrawingUser,
+            UserRole.REGION_ADMIN,
+            region
+        );
+        revokedRegionAdmin.revoke(occurredAt, "ROLE_REVOKED");
+        userRoleAssignmentRepository.saveAndFlush(revokedRegionAdmin);
+        AppUser owner = saveUser("withdrawal-request-owner-" + suffix + "@example.com");
+        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(
+            owner,
+            UserRole.OPERATOR,
+            region
+        ));
+        Content content = contentRepository.saveAndFlush(new Content(
+            region,
+            owner,
+            ContentType.EVENT_EXPERIENCE,
+            ContentStatus.PUBLISHED,
+            "김해 행사",
+            "행사 설명",
+            "김해시",
+            "10:00-18:00",
+            "01012345678",
+            "주의사항",
+            "전체 이용가",
+            "준비물 없음",
+            "취소 정책",
+            occurredAt
+        ));
+        jdbcTemplate.update("""
+            INSERT INTO content_withdrawal_request (
+                content_id,
+                requested_by_user_id,
+                idempotency_key_hash,
+                status,
+                request_reason,
+                requested_at
+            ) VALUES (?, ?, ?, 'PENDING', ?, ?)
+            """,
+            content.getContentId(),
+            withdrawingUser.getUserId(),
+            "a".repeat(64),
+            "대기 요청",
+            Timestamp.from(occurredAt)
+        );
+        jdbcTemplate.update("""
+            INSERT INTO content_withdrawal_request (
+                content_id,
+                requested_by_user_id,
+                idempotency_key_hash,
+                status,
+                request_reason,
+                requested_at,
+                reviewed_at,
+                reviewed_by_user_id
+            ) VALUES (?, ?, ?, 'APPROVED', ?, ?, ?, ?)
+            """,
+            content.getContentId(),
+            owner.getUserId(),
+            "b".repeat(64),
+            "승인 요청",
+            Timestamp.from(occurredAt.minusSeconds(2)),
+            Timestamp.from(occurredAt.minusSeconds(1)),
+            withdrawingUser.getUserId()
+        );
+        jdbcTemplate.update("""
+            INSERT INTO content_withdrawal_request (
+                content_id,
+                requested_by_user_id,
+                idempotency_key_hash,
+                status,
+                request_reason,
+                requested_at,
+                invalidated_at,
+                invalidated_by_user_id,
+                invalidation_reason
+            ) VALUES (?, ?, ?, 'INVALIDATED', ?, ?, ?, ?, 'CONTENT_SUSPENDED')
+            """,
+            content.getContentId(),
+            owner.getUserId(),
+            "c".repeat(64),
+            "무효화 요청",
+            Timestamp.from(occurredAt.minusSeconds(2)),
+            Timestamp.from(occurredAt.minusSeconds(1)),
+            withdrawingUser.getUserId()
+        );
+
+        mockMvc.perform(delete(WITHDRAWAL_PATH)
+                .header(
+                    HttpHeaders.AUTHORIZATION,
+                    "Bearer " + jwtAccessTokenService.issue(withdrawingUser.getUserId())
+                ))
+            .andExpect(status().isOk());
+
+        assertThat(appUserRepository.findById(withdrawingUser.getUserId())).isEmpty();
+        assertThat(jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM content_withdrawal_request WHERE content_id = ?",
+            Integer.class,
+            content.getContentId()
+        )).isEqualTo(3);
+        assertThat(jdbcTemplate.queryForObject("""
+            SELECT COUNT(*)
+            FROM content_withdrawal_request
+            WHERE requested_by_user_id = ?
+                OR reviewed_by_user_id = ?
+                OR invalidated_by_user_id = ?
+            """,
+            Integer.class,
+            withdrawingUser.getUserId(),
+            withdrawingUser.getUserId(),
+            withdrawingUser.getUserId()
+        )).isZero();
+        assertThat(jdbcTemplate.queryForObject("""
+            SELECT COUNT(*)
+            FROM content_withdrawal_request
+            WHERE content_id = ?
+                AND status = 'PENDING'
+                AND requested_by_user_id IS NULL
+            """,
+            Integer.class,
+            content.getContentId()
+        )).isOne();
+        assertThat(jdbcTemplate.queryForObject("""
+            SELECT COUNT(*)
+            FROM content_withdrawal_request
+            WHERE content_id = ?
+                AND status = 'APPROVED'
+                AND requested_by_user_id = ?
+                AND reviewed_at IS NOT NULL
+                AND reviewed_by_user_id IS NULL
+            """,
+            Integer.class,
+            content.getContentId(),
+            owner.getUserId()
+        )).isOne();
+        assertThat(jdbcTemplate.queryForObject("""
+            SELECT COUNT(*)
+            FROM content_withdrawal_request
+            WHERE content_id = ?
+                AND status = 'INVALIDATED'
+                AND requested_by_user_id = ?
+                AND invalidated_at IS NOT NULL
+                AND invalidated_by_user_id IS NULL
+                AND invalidation_reason = 'CONTENT_SUSPENDED'
+            """,
+            Integer.class,
+            content.getContentId(),
+            owner.getUserId()
+        )).isOne();
+    }
+
+    @Test
     @Timeout(10)
     void withdraw_whenConcurrentRequestWaits_returnsUnauthenticatedAfterFirstRequestDeletesAccount() throws Exception {
         AppUser user = saveUser("visitor-" + Long.toUnsignedString(System.nanoTime()) + "@example.com");

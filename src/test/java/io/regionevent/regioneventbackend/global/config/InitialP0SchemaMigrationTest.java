@@ -108,6 +108,15 @@ class InitialP0SchemaMigrationTest {
                 """,
             String.class
         );
+        List<String> contentWithdrawalRequestIndexNames = jdbcTemplate.queryForList(
+            """
+                SELECT index_name
+                FROM information_schema.indexes
+                WHERE table_schema = 'PUBLIC'
+                  AND table_name = 'CONTENT_WITHDRAWAL_REQUEST'
+                """,
+            String.class
+        );
         List<String> userRoleAssignmentColumnNames = jdbcTemplate.queryForList(
             """
                 SELECT column_name
@@ -168,7 +177,8 @@ class InitialP0SchemaMigrationTest {
             "38",
             "39",
             "40",
-            "41"
+            "41",
+            "42"
         );
         assertThat(tableNames).contains(
             "REGION",
@@ -179,6 +189,7 @@ class InitialP0SchemaMigrationTest {
             "CONTENT",
             "CONTENT_SESSION",
             "CONTENT_LOG",
+            "CONTENT_WITHDRAWAL_REQUEST",
             "CONTENT_REVISION",
             "SESSION_REVISION",
             "CAPACITY_HOLD",
@@ -244,6 +255,21 @@ class InitialP0SchemaMigrationTest {
             "CK_IDEMPOTENCY_RECORD_VISIT_RESULT",
             "CK_REVIEW_STATE",
             "CK_CONTENT_REVISION_REVIEWED",
+            "PK_CONTENT_WITHDRAWAL_REQUEST",
+            "UK_CONTENT_WITHDRAWAL_REQUEST_CONTENT_KEY",
+            "UK_CONTENT_WITHDRAWAL_REQUEST_ACTIVE_CONTENT",
+            "FK_CONTENT_WITHDRAWAL_REQUEST_CONTENT",
+            "FK_CONTENT_WITHDRAWAL_REQUEST_REQUESTER",
+            "FK_CONTENT_WITHDRAWAL_REQUEST_REVIEWER",
+            "FK_CONTENT_WITHDRAWAL_REQUEST_INVALIDATOR",
+            "CK_CONTENT_WITHDRAWAL_REQUEST_KEY_HASH",
+            "CK_CONTENT_WITHDRAWAL_REQUEST_REASON",
+            "CK_CONTENT_WITHDRAWAL_REQUEST_STATUS",
+            "CK_CONTENT_WITHDRAWAL_REQUEST_INVALIDATION_REASON",
+            "CK_CONTENT_WITHDRAWAL_REQUEST_PENDING_FIELDS",
+            "CK_CONTENT_WITHDRAWAL_REQUEST_APPROVED_FIELDS",
+            "CK_CONTENT_WITHDRAWAL_REQUEST_REJECTED_FIELDS",
+            "CK_CONTENT_WITHDRAWAL_REQUEST_INVALIDATED_FIELDS",
             "CK_CONTENT_RESERVATION_PRICE",
             "CK_CONTENT_REVISION_RESERVATION_PRICE",
             "FK_COUPON_POLICY_CONTENT_REGION",
@@ -411,6 +437,8 @@ class InitialP0SchemaMigrationTest {
         );
         assertThat(capacityHoldIndexNames).contains("IDX_CAPACITY_HOLD_STATUS_EXPIRES_AT");
         assertThat(auditEventIndexNames).contains("IDX_AUDIT_EVENT_TARGET_HISTORY");
+        assertThat(contentWithdrawalRequestIndexNames)
+            .contains("IDX_CONTENT_WITHDRAWAL_REQUEST_HISTORY");
         assertThat(userRoleAssignmentColumnNames).contains(
             "ROLE_ASSIGNMENT_ID",
             "STATUS",

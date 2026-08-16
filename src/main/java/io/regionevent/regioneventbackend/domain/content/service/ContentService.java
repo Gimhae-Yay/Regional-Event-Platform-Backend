@@ -319,6 +319,11 @@ public class ContentService {
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
+    public Content findWithdrawalRequestTargetForUpdate(Long contentId) {
+        return contentRepository.findWithdrawalRequestTargetForUpdate(contentId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
     public List<Long> findApprovedPublicationCandidateIds() {
         return contentRepository.findApprovedPublicationCandidateIds();
     }

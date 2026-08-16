@@ -357,6 +357,16 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
         """)
     Optional<Content> findSuspendTargetForUpdate(@Param("contentId") Long contentId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = {"operator", "region"})
+    @Query("""
+        SELECT content
+        FROM Content content
+        WHERE content.contentId = :contentId
+            AND content.deletedAt IS NULL
+        """)
+    Optional<Content> findWithdrawalRequestTargetForUpdate(@Param("contentId") Long contentId);
+
     @Query(value = """
         SELECT content_id
         FROM content

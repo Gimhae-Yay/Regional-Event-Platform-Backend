@@ -20,6 +20,9 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentRevisionIn
 import io.regionevent.regioneventbackend.domain.content.entity.ContentRevisionStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentWithdrawalRequest;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentWithdrawalRequestInvalidationReason;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentWithdrawalRequestStatus;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.service.RegionService;
 import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHoldService;
@@ -35,6 +38,7 @@ public class EndContentReservationsUseCase {
     private static final String CONTENT_ENDED_INVALIDATION_REASON = "CONTENT_ENDED";
 
     private final ContentService contentService;
+    private final ContentWithdrawalRequestService contentWithdrawalRequestService;
     private final RegionService regionService;
     private final ContentRevisionInvalidationService contentRevisionInvalidationService;
     private final ContentSessionService contentSessionService;
@@ -48,6 +52,7 @@ public class EndContentReservationsUseCase {
 
     public EndContentReservationsUseCase(
         ContentService contentService,
+        ContentWithdrawalRequestService contentWithdrawalRequestService,
         RegionService regionService,
         ContentRevisionInvalidationService contentRevisionInvalidationService,
         ContentSessionService contentSessionService,
@@ -60,6 +65,7 @@ public class EndContentReservationsUseCase {
         PublicCatalogCacheInvalidator publicCatalogCacheInvalidator
     ) {
         this.contentService = contentService;
+        this.contentWithdrawalRequestService = contentWithdrawalRequestService;
         this.regionService = regionService;
         this.contentRevisionInvalidationService = contentRevisionInvalidationService;
         this.contentSessionService = contentSessionService;
@@ -111,6 +117,12 @@ public class EndContentReservationsUseCase {
 
             Instant endedAt = contentService.findCurrentDatabaseTime();
             Content endedContent = contentService.end(content, endedAt);
+            invalidatePendingWithdrawalRequestByUser(
+                requestId,
+                endedContent,
+                actor,
+                endedAt
+            );
             invalidateActiveRevision(
                 requestId,
                 endedContent,
@@ -182,6 +194,11 @@ public class EndContentReservationsUseCase {
         try {
             Instant endedAt = contentService.findCurrentDatabaseTime();
             Content endedContent = contentService.end(content, endedAt);
+            invalidatePendingWithdrawalRequestBySystem(
+                requestId,
+                endedContent,
+                endedAt
+            );
             invalidateActiveRevision(
                 requestId,
                 endedContent,
@@ -279,6 +296,65 @@ public class EndContentReservationsUseCase {
             case REJECTED -> contentSession.getReviewedAt();
             default -> throw new IllegalStateException("content session must be terminal before ending content");
         };
+    }
+
+    private void invalidatePendingWithdrawalRequestByUser(
+        UUID requestId,
+        Content content,
+        AuditEventActor actor,
+        Instant invalidatedAt
+    ) {
+        contentWithdrawalRequestService.invalidatePendingByUser(
+            content.getContentId(),
+            actor.getAppUser(),
+            invalidatedAt,
+            ContentWithdrawalRequestInvalidationReason.CONTENT_ENDED
+        ).ifPresent(request -> recordWithdrawalRequestInvalidation(
+            requestId,
+            content,
+            request,
+            actor,
+            invalidatedAt
+        ));
+    }
+
+    private void invalidatePendingWithdrawalRequestBySystem(
+        UUID requestId,
+        Content content,
+        Instant invalidatedAt
+    ) {
+        contentWithdrawalRequestService.invalidatePendingBySystem(
+            content.getContentId(),
+            invalidatedAt,
+            ContentWithdrawalRequestInvalidationReason.CONTENT_ENDED
+        ).ifPresent(request -> recordWithdrawalRequestInvalidation(
+            requestId,
+            content,
+            request,
+            null,
+            invalidatedAt
+        ));
+    }
+
+    private void recordWithdrawalRequestInvalidation(
+        UUID requestId,
+        Content content,
+        ContentWithdrawalRequest request,
+        AuditEventActor actor,
+        Instant invalidatedAt
+    ) {
+        recordAuditEventUseCase.record(new AuditEventCommand(
+            requestId,
+            content.getRegion(),
+            AuditEventTargetType.CONTENT_WITHDRAWAL_REQUEST,
+            request.getContentWithdrawalRequestId(),
+            ContentWithdrawalRequestStatus.PENDING.name(),
+            ContentWithdrawalRequestStatus.INVALIDATED.name(),
+            AuditEventResult.SUCCESS,
+            ContentWithdrawalRequestInvalidationReason.CONTENT_ENDED.name(),
+            actor,
+            invalidatedAt
+        ));
     }
 
     private void recordFailure(
