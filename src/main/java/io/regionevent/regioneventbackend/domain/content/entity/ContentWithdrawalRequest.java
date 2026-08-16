@@ -229,6 +229,17 @@ public class ContentWithdrawalRequest {
         status = ContentWithdrawalRequestStatus.APPROVED;
     }
 
+    public void reject(AppUser reviewer, Instant reviewedAt, String reason) {
+        requirePending();
+        AppUser validReviewer = requireNotNull(reviewer, "reviewer");
+        Instant validReviewedAt = requireNotNull(reviewedAt, "reviewedAt");
+        String normalizedReason = requireNotBlank(reason, "reason").strip();
+        this.reviewedBy = validReviewer;
+        this.reviewedAt = validReviewedAt;
+        rejectionReason = normalizedReason;
+        status = ContentWithdrawalRequestStatus.REJECTED;
+    }
+
     public Long getContentWithdrawalRequestId() {
         return contentWithdrawalRequestId;
     }

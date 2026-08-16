@@ -31,7 +31,7 @@ public interface ContentWithdrawalRequestRepository
         FROM ContentWithdrawalRequest request
         WHERE request.contentWithdrawalRequestId = :withdrawalRequestId
         """)
-    Optional<ContentWithdrawalRequest> findApprovalTargetForUpdate(
+    Optional<ContentWithdrawalRequest> findReviewTargetForUpdate(
         @Param("withdrawalRequestId") Long withdrawalRequestId
     );
 

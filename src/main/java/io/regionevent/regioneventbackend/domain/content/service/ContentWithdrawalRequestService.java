@@ -43,8 +43,8 @@ public class ContentWithdrawalRequestService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public ContentWithdrawalRequest findApprovalTargetForUpdate(Long withdrawalRequestId) {
-        return contentWithdrawalRequestRepository.findApprovalTargetForUpdate(
+    public ContentWithdrawalRequest findReviewTargetForUpdate(Long withdrawalRequestId) {
+        return contentWithdrawalRequestRepository.findReviewTargetForUpdate(
             withdrawalRequestId
         ).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
@@ -56,6 +56,17 @@ public class ContentWithdrawalRequestService {
         Instant reviewedAt
     ) {
         request.approve(reviewer, reviewedAt);
+        return contentWithdrawalRequestRepository.saveAndFlush(request);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ContentWithdrawalRequest reject(
+        ContentWithdrawalRequest request,
+        AppUser reviewer,
+        Instant reviewedAt,
+        String reason
+    ) {
+        request.reject(reviewer, reviewedAt, reason);
         return contentWithdrawalRequestRepository.saveAndFlush(request);
     }
 

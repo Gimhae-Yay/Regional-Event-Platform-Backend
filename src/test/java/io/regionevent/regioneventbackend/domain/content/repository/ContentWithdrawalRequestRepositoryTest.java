@@ -87,7 +87,7 @@ class ContentWithdrawalRequestRepositoryTest {
     }
 
     @Test
-    void 요청_ID로_콘텐츠_ID를_조회하고_승인_대상을_잠근다() {
+    void 요청_ID로_콘텐츠_ID를_조회하고_심사_대상을_잠근다() {
         Fixtures fixtures = createFixtures();
         ContentWithdrawalRequest saved = requestRepository.saveAndFlush(pendingRequest(
             fixtures,
@@ -99,12 +99,12 @@ class ContentWithdrawalRequestRepositoryTest {
         Long contentId = requestRepository.findContentIdByWithdrawalRequestId(
             saved.getContentWithdrawalRequestId()
         ).orElseThrow();
-        ContentWithdrawalRequest approvalTarget = requestRepository.findApprovalTargetForUpdate(
+        ContentWithdrawalRequest reviewTarget = requestRepository.findReviewTargetForUpdate(
             saved.getContentWithdrawalRequestId()
         ).orElseThrow();
 
         assertThat(contentId).isEqualTo(fixtures.content().getContentId());
-        assertThat(approvalTarget.getContentWithdrawalRequestId())
+        assertThat(reviewTarget.getContentWithdrawalRequestId())
             .isEqualTo(saved.getContentWithdrawalRequestId());
     }
 
