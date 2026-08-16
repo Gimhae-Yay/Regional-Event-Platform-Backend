@@ -98,6 +98,7 @@ import io.regionevent.regioneventbackend.domain.reservation.service.GetMyReserva
 import io.regionevent.regioneventbackend.domain.reservation.service.HoldTerminationResult;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationCancellationUseCase;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationConfirmationUseCase;
+import io.regionevent.regioneventbackend.domain.reservation.service.ReservationService;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
@@ -159,6 +160,9 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
 
     @MockitoSpyBean
     private CouponService couponService;
+
+    @MockitoSpyBean
+    private ReservationService reservationService;
 
     @Autowired
     WithdrawalControllerMySqlIntegrationTest(
@@ -238,7 +242,11 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
 
     @BeforeEach
     void setUp() {
-        reset(refreshTokenStore, AopTestUtils.<CouponService>getTargetObject(couponService));
+        reset(
+            refreshTokenStore,
+            AopTestUtils.<CouponService>getTargetObject(couponService),
+            AopTestUtils.<ReservationService>getTargetObject(reservationService)
+        );
         failingWithdrawalCapacityHoldService.reset();
         lockOrderContentSessionService.reset();
     }
@@ -385,13 +393,14 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
 
     @Test
     @Timeout(15)
-    void withdraw_whenSessionCancellationRestoresUsedCoupon_invalidatesRestoredCoupon() throws Exception {
+    void withdraw_whenSessionCancellationLocksReservationBeforeCoupon_invalidatesRestoredCoupon() throws Exception {
         Fixture fixture = createFixture();
         Long couponId = createUsedCouponForReservationCancellation(fixture);
         CountDownLatch couponLockedForRestoration = new CountDownLatch(1);
         CountDownLatch releaseCouponRestoration = new CountDownLatch(1);
-        CountDownLatch withdrawalCouponLockAttempted = new CountDownLatch(1);
+        CountDownLatch withdrawalReservationLockAttempted = new CountDownLatch(1);
         CouponService couponServiceTarget = AopTestUtils.getTargetObject(couponService);
+        ReservationService reservationServiceTarget = AopTestUtils.getTargetObject(reservationService);
         doAnswer(invocation -> {
             Object result = invocation.callRealMethod();
             couponLockedForRestoration.countDown();
@@ -399,9 +408,9 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
             return result;
         }).when(couponServiceTarget).findByCouponIdForUpdate(couponId);
         doAnswer(invocation -> {
-            withdrawalCouponLockAttempted.countDown();
+            withdrawalReservationLockAttempted.countDown();
             return invocation.callRealMethod();
-        }).when(couponServiceTarget).findAllCouponsForWithdrawal(fixture.user().getUserId());
+        }).when(reservationServiceTarget).cancelConfirmedReservationsForWithdrawal(fixture.user().getUserId());
 
         try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
             Future<?> cancellation = executorService.submit(() -> cancelContentSessionUseCase.cancel(
@@ -413,7 +422,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
             assertThat(couponLockedForRestoration.await(3, TimeUnit.SECONDS)).isTrue();
 
             Future<?> withdrawal = executorService.submit(() -> withdrawUserUseCase.withdraw(fixture.user().getUserId()));
-            assertThat(withdrawalCouponLockAttempted.await(3, TimeUnit.SECONDS)).isTrue();
+            assertThat(withdrawalReservationLockAttempted.await(3, TimeUnit.SECONDS)).isTrue();
             assertThat(withdrawal.isDone()).isFalse();
             releaseCouponRestoration.countDown();
 

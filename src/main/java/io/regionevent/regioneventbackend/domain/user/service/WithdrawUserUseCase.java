@@ -104,11 +104,11 @@ public class WithdrawUserUseCase {
         refreshTokenService.revokeAllFamilies(userId);
         List<Long> activeSessionIds = capacityHoldService.findActiveSessionIdsForWithdrawal(userId);
         activeSessionIds.forEach(contentSessionService::lockForUpdate);
+        reservationService.cancelConfirmedReservationsForWithdrawal(userId);
         invalidateActiveCoupons(userId);
         couponIssuanceService.unlinkRecipientUserByUserId(userId);
         couponService.unlinkUserByUserId(userId);
         capacityHoldService.invalidateActiveHoldsForWithdrawal(userId, activeSessionIds);
-        reservationService.cancelConfirmedReservationsForWithdrawal(userId);
         operatorApplicationService.cancelAndUnlinkByApplicantUserId(userId);
         operatorApplicationService.unlinkInspectorByUserId(userId);
         capacityHoldService.unlinkUserByUserId(userId);
