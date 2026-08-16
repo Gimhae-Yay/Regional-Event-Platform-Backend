@@ -42,4 +42,9 @@ public class CouponIssuanceService {
     public CouponIssuance create(CouponIssuance couponIssuance) {
         return couponIssuanceRepository.saveAndFlush(couponIssuance);
     }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void unlinkRecipientUserByUserId(Long userId) {
+        couponIssuanceRepository.unlinkRecipientUserByUserId(userId);
+    }
 }

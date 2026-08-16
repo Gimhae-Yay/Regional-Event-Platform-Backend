@@ -33,6 +33,16 @@ public class CouponService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
+    public List<Coupon> findAllCouponsForWithdrawal(Long userId) {
+        return couponRepository.findAllByUserIdOrderByCouponIdForUpdate(userId);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void unlinkUserByUserId(Long userId) {
+        couponRepository.unlinkUserByUserId(userId);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
     public boolean reserveIfAvailableAndNotExpired(Coupon coupon) {
         if (couponRepository.reserveIfAvailableAndNotExpired(coupon.getCouponId()) == 0) {
             return false;
