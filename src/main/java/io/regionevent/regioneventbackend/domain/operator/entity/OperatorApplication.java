@@ -35,14 +35,14 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
             name = "ck_operator_application_approved_review_result",
             constraint = """
                 status <> 'APPROVED'
-                OR (inspected_user_id IS NOT NULL AND rejected_reason IS NULL)
+                OR rejected_reason IS NULL
                 """
         ),
         @CheckConstraint(
             name = "ck_operator_application_rejected_review_result",
             constraint = """
                 status <> 'REJECTED'
-                OR (inspected_user_id IS NOT NULL AND rejected_reason IS NOT NULL)
+                OR rejected_reason IS NOT NULL
                 """
         )
     }
