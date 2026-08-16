@@ -133,6 +133,15 @@ public class Coupon {
         return status;
     }
 
+    public CouponStatus invalidate() {
+        if (status != CouponStatus.AVAILABLE && status != CouponStatus.RESERVED) {
+            throw new IllegalStateException("only available or reserved coupon can be invalidated");
+        }
+        CouponStatus previousStatus = status;
+        status = CouponStatus.INVALIDATED;
+        return previousStatus;
+    }
+
     private static void validateExpiry(
         Instant issuedAt,
         Instant expiresAt

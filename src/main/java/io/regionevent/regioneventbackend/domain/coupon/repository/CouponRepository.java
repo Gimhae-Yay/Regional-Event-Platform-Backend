@@ -42,6 +42,27 @@ public interface CouponRepository extends JpaRepository<Coupon, Long> {
         """)
     Optional<Coupon> findByCouponIdForUpdate(@Param("couponId") Long couponId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT coupon
+        FROM Coupon coupon
+        WHERE coupon.user.userId = :userId
+            AND coupon.status IN :statuses
+        ORDER BY coupon.couponId ASC
+        """)
+    List<Coupon> findAllByUserIdAndStatusInOrderByCouponIdForUpdate(
+        @Param("userId") Long userId,
+        @Param("statuses") List<CouponStatus> statuses
+    );
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+        UPDATE Coupon coupon
+        SET coupon.user = NULL
+        WHERE coupon.user.userId = :userId
+        """)
+    int unlinkUserByUserId(@Param("userId") Long userId);
+
     @Query(value = """
         SELECT coupon_id
         FROM coupon
