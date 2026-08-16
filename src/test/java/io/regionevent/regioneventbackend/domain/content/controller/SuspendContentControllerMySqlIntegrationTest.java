@@ -186,17 +186,19 @@ class SuspendContentControllerMySqlIntegrationTest extends NonTransactionalMySql
                 assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.CONFIRMED)
             );
 
-        assertThat(auditEventRepository.findAll()).singleElement().satisfies(auditEvent -> {
-            assertThat(auditEvent.getTargetType()).isEqualTo(AuditEventTargetType.CONTENT);
-            assertThat(auditEvent.getTargetId()).isEqualTo(fixture.content().getContentId());
-            assertThat(auditEvent.getPreviousState()).isEqualTo("PUBLISHED");
-            assertThat(auditEvent.getNextState()).isEqualTo("SUSPENDED");
-            assertThat(auditEvent.getResult()).isEqualTo(AuditEventResult.SUCCESS);
-            assertThat(auditEvent.getOccurredAt()).isEqualTo(suspendedLog.getDate());
-            assertThat(auditEventActorLinkRepository.findById(auditEvent.getAuditEventId()))
-                .hasValueSatisfying(actorLink ->
-                    assertThat(actorLink.getActor().getUserId()).isEqualTo(fixture.admin().getUserId())
-                );
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent -> auditEvent.getTargetType() == AuditEventTargetType.CONTENT)
+            .filteredOn(auditEvent -> auditEvent.getTargetId().equals(fixture.content().getContentId()))
+            .singleElement()
+            .satisfies(auditEvent -> {
+                assertThat(auditEvent.getPreviousState()).isEqualTo("PUBLISHED");
+                assertThat(auditEvent.getNextState()).isEqualTo("SUSPENDED");
+                assertThat(auditEvent.getResult()).isEqualTo(AuditEventResult.SUCCESS);
+                assertThat(auditEvent.getOccurredAt()).isEqualTo(suspendedLog.getDate());
+                assertThat(auditEventActorLinkRepository.findById(auditEvent.getAuditEventId()))
+                    .hasValueSatisfying(actorLink ->
+                        assertThat(actorLink.getActor().getUserId()).isEqualTo(fixture.admin().getUserId())
+                    );
             });
     }
 

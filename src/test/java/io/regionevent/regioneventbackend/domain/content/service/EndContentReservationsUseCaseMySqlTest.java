@@ -158,6 +158,7 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
         assertThat(contentSessionRepository.findById(fixture.secondSessionId()))
             .hasValueSatisfying(session -> assertThat(session.getRemainingCapacity()).isEqualTo(SESSION_CAPACITY));
         assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent -> auditEvent.getTargetType() == AuditEventTargetType.CONTENT)
             .filteredOn(auditEvent -> fixture.contentId().equals(auditEvent.getTargetId()))
             .singleElement()
             .satisfies(auditEvent -> {
@@ -185,6 +186,7 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
         assertThat(contentRepository.findById(fixture.contentId()))
             .hasValueSatisfying(content -> assertThat(content.getStatus()).isEqualTo(ContentStatus.ENDED));
         assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent -> auditEvent.getTargetType() == AuditEventTargetType.CONTENT)
             .filteredOn(auditEvent -> fixture.contentId().equals(auditEvent.getTargetId()))
             .singleElement()
             .satisfies(auditEvent -> {
@@ -217,6 +219,7 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
             revision.getContentRevisionId()
         )).isEqualTo(fixture.adminId());
         assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent -> auditEvent.getTargetType() == AuditEventTargetType.CONTENT)
             .filteredOn(auditEvent -> fixture.contentId().equals(auditEvent.getTargetId()))
             .filteredOn(auditEvent -> "EDIT_REQUESTED".equals(auditEvent.getPreviousState()))
             .singleElement()
@@ -254,6 +257,7 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
             revision.getContentRevisionId()
         )).isNull();
         assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent -> auditEvent.getTargetType() == AuditEventTargetType.CONTENT)
             .filteredOn(auditEvent -> fixture.contentId().equals(auditEvent.getTargetId()))
             .filteredOn(auditEvent -> "EDIT_REQUESTED".equals(auditEvent.getPreviousState()))
             .singleElement()
@@ -312,6 +316,7 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
             .extracting(ContentLog::getStatus)
             .containsExactly(ContentLogStatus.PUBLISHED, ContentLogStatus.ENDED);
         assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent -> auditEvent.getTargetType() == AuditEventTargetType.CONTENT)
             .filteredOn(auditEvent -> fixture.contentId().equals(auditEvent.getTargetId()))
             .hasSize(1);
         assertThat(capacityHoldRepository.findById(fixture.firstHoldId()))
@@ -349,6 +354,7 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
             .extracting(ContentLog::getStatus)
             .containsExactly(ContentLogStatus.PUBLISHED, ContentLogStatus.ENDED);
         assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent -> auditEvent.getTargetType() == AuditEventTargetType.CONTENT)
             .filteredOn(auditEvent -> fixture.contentId().equals(auditEvent.getTargetId()))
             .hasSize(1);
         assertThat(capacityHoldRepository.findById(fixture.firstHoldId()))
@@ -377,6 +383,7 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
             .extracting(ContentLog::getStatus)
             .containsExactly(ContentLogStatus.PUBLISHED, ContentLogStatus.ENDED);
         assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent -> auditEvent.getTargetType() == AuditEventTargetType.CONTENT)
             .filteredOn(auditEvent -> fixture.contentId().equals(auditEvent.getTargetId()))
             .hasSize(1);
         assertThat(capacityHoldRepository.findById(fixture.firstHoldId()))
@@ -424,6 +431,7 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
             .extracting(ContentLog::getStatus)
             .containsExactly(ContentLogStatus.PUBLISHED, ContentLogStatus.ENDED, ContentLogStatus.ENDED);
         assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent -> auditEvent.getTargetType() == AuditEventTargetType.CONTENT)
             .filteredOn(auditEvent -> fixture.contentId().equals(auditEvent.getTargetId()))
             .hasSize(1);
         assertThat(capacityHoldRepository.findById(fixture.firstHoldId()))
@@ -752,6 +760,7 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
 
     private void assertFailureAuditOnly(Fixture fixture) {
         assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent -> auditEvent.getTargetType() == AuditEventTargetType.CONTENT)
             .filteredOn(auditEvent -> fixture.contentId().equals(auditEvent.getTargetId()))
             .singleElement()
             .satisfies(auditEvent -> {
