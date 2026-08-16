@@ -17,7 +17,8 @@ public record MyStampbookListResult(
         long earnedCount,
         long targetCount,
         Instant completedAt,
-        Instant lastEarnedAt
+        Instant lastEarnedAt,
+        StampbookCompletionReward completionReward
     ) {
     }
 }
