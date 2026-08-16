@@ -25,7 +25,7 @@ public class GetPublicContentSessionsUseCase {
 
     @Transactional(readOnly = true)
     public List<ContentSession> get(Long contentId) {
-        if (!contentService.existsPublishedAndNotDeletedById(contentId)) {
+        if (!contentService.existsPublicPublishedAndNotDeletedById(contentId)) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         return contentSessionService.findScheduledByContentId(contentId);

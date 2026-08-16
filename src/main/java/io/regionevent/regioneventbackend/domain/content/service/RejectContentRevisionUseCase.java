@@ -15,6 +15,8 @@ import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUs
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentRevision;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentRevisionStatus;
+import io.regionevent.regioneventbackend.domain.region.entity.Region;
+import io.regionevent.regioneventbackend.domain.region.service.RegionService;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.service.RegionAdminAuthorizationService;
 
@@ -22,17 +24,23 @@ import io.regionevent.regioneventbackend.domain.user.service.RegionAdminAuthoriz
 public class RejectContentRevisionUseCase {
 
     private final ContentRevisionService contentRevisionService;
+    private final ContentService contentService;
+    private final RegionService regionService;
     private final RegionAdminAuthorizationService regionAdminAuthorizationService;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final Clock clock;
 
     public RejectContentRevisionUseCase(
         ContentRevisionService contentRevisionService,
+        ContentService contentService,
+        RegionService regionService,
         RegionAdminAuthorizationService regionAdminAuthorizationService,
         RecordAuditEventUseCase recordAuditEventUseCase,
         Clock clock
     ) {
         this.contentRevisionService = contentRevisionService;
+        this.contentService = contentService;
+        this.regionService = regionService;
         this.regionAdminAuthorizationService = regionAdminAuthorizationService;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
         this.clock = clock;
@@ -45,11 +53,15 @@ public class RejectContentRevisionUseCase {
         String reason,
         UUID requestId
     ) {
+        RegionAdminAuthorizationService.AuthorizedRegionAdmin regionAdmin =
+            regionAdminAuthorizationService.requireAuthorizedRegionAdminForUpdate(userId);
+        Long contentId = contentRevisionService.findContentIdByRevisionId(revisionId);
+        Long regionId = contentService.findContentRegionId(contentId);
+        Region region = regionService.findRegionForUpdate(regionId);
+        Content content = contentService.findApprovalTargetForUpdate(contentId);
         ContentRevision revision = contentRevisionService.findReviewTargetForUpdate(revisionId);
-        Content content = revision.getContent();
-        UserRoleAssignment reviewerAssignment = regionAdminAuthorizationService.authorize(
-            userId,
-            content.getRegion().getRegionId()
+        UserRoleAssignment reviewerAssignment = regionAdmin.authorize(
+            region.getRegionId()
         );
         Instant reviewedAt = clock.instant();
 
@@ -61,7 +73,7 @@ public class RejectContentRevisionUseCase {
         );
         recordAuditEventUseCase.record(new AuditEventCommand(
             requestId,
-            content.getRegion(),
+            region,
             AuditEventTargetType.CONTENT,
             content.getContentId(),
             ContentRevisionStatus.EDIT_REQUESTED.name(),

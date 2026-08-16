@@ -60,6 +60,20 @@ public class VisitService {
         return findValidMissionProgressSource(visitId);
     }
 
+    @Transactional(readOnly = true)
+    public Optional<Visit> findStampbookProgressSource(Long visitId) {
+        return findValidStampbookProgressSource(visitId);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<Visit> findStampbookProgressSourceInCurrentTransaction(Long visitId) {
+        if (visitId == null || visitId <= 0) {
+            return Optional.empty();
+        }
+        return visitRepository.findStampbookProgressSourceByVisitIdForUpdate(visitId)
+            .filter(this::isValidStampbookProgressSource);
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
     public Visit create(Visit visit) {
         return visitRepository.saveAndFlush(visit);
@@ -76,5 +90,17 @@ public class VisitService {
         }
         return visitRepository.findMissionProgressSourceByVisitId(visitId)
             .filter(visit -> visit.getUser() != null && visit.getAuthorUnlinkedAt() == null);
+    }
+
+    private Optional<Visit> findValidStampbookProgressSource(Long visitId) {
+        if (visitId == null || visitId <= 0) {
+            return Optional.empty();
+        }
+        return visitRepository.findStampbookProgressSourceByVisitId(visitId)
+            .filter(this::isValidStampbookProgressSource);
+    }
+
+    private boolean isValidStampbookProgressSource(Visit visit) {
+        return visit.getUser() != null && visit.getAuthorUnlinkedAt() == null;
     }
 }

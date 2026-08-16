@@ -11,25 +11,25 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentStatus;
-import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 @Service
 public class OperatorAuthorizationService {
 
-    private final UserRoleAssignmentRepository userRoleAssignmentRepository;
+    private final AppUserRepository appUserRepository;
 
     public OperatorAuthorizationService(
-        UserRoleAssignmentRepository userRoleAssignmentRepository
+        AppUserRepository appUserRepository
     ) {
-        this.userRoleAssignmentRepository = userRoleAssignmentRepository;
+        this.appUserRepository = appUserRepository;
     }
 
     @Transactional(readOnly = true)
     public AuthorizedOperator requireAuthorizedOperator(Long userId) {
-        return toAuthorizedOperator(userRoleAssignmentRepository
-            .findByAppUserUserIdAndRoleAndStatusAndAppUserStatus(
+        validateUserId(userId);
+        return toAuthorizedOperator(appUserRepository.findActiveRoleAssignment(
                 userId,
                 UserRole.OPERATOR,
                 UserRoleAssignmentStatus.ACTIVE,
@@ -39,13 +39,26 @@ public class OperatorAuthorizationService {
 
     @Transactional
     public AuthorizedOperator requireAuthorizedOperatorForUpdate(Long userId) {
-        return toAuthorizedOperator(userRoleAssignmentRepository
-            .findByAppUserUserIdAndRoleAndStatusAndAppUserStatusForUpdate(
+        validateUserId(userId);
+        lockActiveUser(userId);
+        return toAuthorizedOperator(appUserRepository.findActiveRoleAssignmentForUpdate(
                 userId,
                 UserRole.OPERATOR,
                 UserRoleAssignmentStatus.ACTIVE,
                 AppUserStatus.ACTIVE
             ));
+    }
+
+    private void lockActiveUser(Long userId) {
+        appUserRepository.findByIdForUpdate(userId)
+            .filter(user -> user.getStatus() == AppUserStatus.ACTIVE)
+            .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+    }
+
+    private void validateUserId(Long userId) {
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
     }
 
     private AuthorizedOperator toAuthorizedOperator(Optional<UserRoleAssignment> assignment) {

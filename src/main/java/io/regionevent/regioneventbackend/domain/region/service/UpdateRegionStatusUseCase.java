@@ -65,7 +65,7 @@ public class UpdateRegionStatusUseCase {
     ) {
         validateCommand(command);
         PlatformAdminAssignment actor = platformAdminAuthorizationService
-            .requireAuthorizedPlatformAdmin(actorUserId);
+            .requireAuthorizedPlatformAdminForUpdate(actorUserId);
         Region region = regionService.findRegionForUpdate(regionId);
         if (region.isPublic() == command.isPublic()) {
             return UpdateRegionStatusResult.from(region);

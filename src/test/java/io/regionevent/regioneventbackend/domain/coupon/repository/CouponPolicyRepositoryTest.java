@@ -103,6 +103,27 @@ class CouponPolicyRepositoryTest {
     }
 
     @Test
+    void 콘텐츠_소유자와_지역에_속한_정책만_식별자_내림차순으로_조회한다() {
+        Region region = saveRegion("GIMHAE");
+        Region anotherRegion = saveRegion("BUSAN");
+        Content ownedContent = saveContent(region, "owner");
+        Content anotherOperatorContent = saveContent(region, "another-operator");
+        Content anotherRegionContent = saveContent(anotherRegion, "another-region");
+        Long ownerUserId = ownedContent.getOperator().getUserId();
+        CouponPolicy olderPolicy = couponPolicyRepository.saveAndFlush(newCouponPolicy(ownedContent, region));
+        CouponPolicy newerPolicy = couponPolicyRepository.saveAndFlush(newCouponPolicy(ownedContent, region));
+        couponPolicyRepository.saveAndFlush(newCouponPolicy(anotherOperatorContent, region));
+        couponPolicyRepository.saveAndFlush(newCouponPolicy(anotherRegionContent, anotherRegion));
+        entityManager.clear();
+
+        assertThat(couponPolicyRepository.findAllByContentOperatorUserIdAndContentRegionId(
+            ownerUserId,
+            region.getRegionId()
+        )).extracting(CouponPolicy::getCouponPolicyId)
+            .containsExactly(newerPolicy.getCouponPolicyId(), olderPolicy.getCouponPolicyId());
+    }
+
+    @Test
     void 쿠폰_정책은_정의된_발급_경로만_저장한다() {
         Region region = saveRegion("GIMHAE");
         Content content = saveContent(region);
@@ -298,8 +319,15 @@ class CouponPolicyRepositoryTest {
     }
 
     private Content saveContent(Region region) {
+        return saveContent(region, region.getRegionCode());
+    }
+
+    private Content saveContent(
+        Region region,
+        String operatorSuffix
+    ) {
         AppUser operator = appUserRepository.saveAndFlush(new AppUser(
-            "operator-" + region.getRegionCode() + "@example.com",
+            "operator-" + operatorSuffix + "@example.com",
             "hashed-password",
             "콘텐츠 운영자",
             "010-1234-5678",

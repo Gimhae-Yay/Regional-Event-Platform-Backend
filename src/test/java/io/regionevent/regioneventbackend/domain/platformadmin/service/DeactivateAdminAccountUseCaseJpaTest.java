@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
@@ -34,6 +35,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminAssignm
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminGrade;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.PlatformAdminAssignmentRepository;
+import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
 import io.regionevent.regioneventbackend.domain.user.service.PlatformAdminAssignmentService;
 import io.regionevent.regioneventbackend.domain.user.service.PlatformAdminAuthorizationService;
 import io.regionevent.regioneventbackend.support.jpa.CleanH2Database;
@@ -41,6 +43,7 @@ import io.regionevent.regioneventbackend.support.jpa.CleanH2Database;
 @DataJpaTest
 @Import({
     DeactivateAdminAccountUseCase.class,
+    AppUserService.class,
     PlatformAdminAssignmentService.class,
     PlatformAdminAuthorizationService.class
 })
@@ -62,6 +65,9 @@ class DeactivateAdminAccountUseCaseJpaTest {
 
     @MockitoBean
     private Clock clock;
+
+    @MockitoBean
+    private PasswordEncoder passwordEncoder;
 
     @Autowired
     DeactivateAdminAccountUseCaseJpaTest(

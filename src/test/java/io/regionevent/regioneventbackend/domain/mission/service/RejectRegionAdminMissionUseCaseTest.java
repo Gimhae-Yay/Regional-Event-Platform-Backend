@@ -17,8 +17,10 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
+import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.mission.entity.Mission;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
@@ -44,10 +46,13 @@ class RejectRegionAdminMissionUseCaseTest {
         mock(RegionAdminAuthorizationService.class);
     private final MissionService missionService = mock(MissionService.class);
     private final RecordAuditEventUseCase recordAuditEventUseCase = mock(RecordAuditEventUseCase.class);
+    private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase =
+        mock(RecordFailedAuditEventUseCase.class);
     private final RejectRegionAdminMissionUseCase useCase = new RejectRegionAdminMissionUseCase(
         authorizationService,
         missionService,
         recordAuditEventUseCase,
+        recordFailedAuditEventUseCase,
         Clock.fixed(REJECTED_AT, ZoneOffset.UTC)
     );
 
@@ -68,7 +73,7 @@ class RejectRegionAdminMissionUseCaseTest {
         when(assignment.getAppUser()).thenReturn(user);
         when(assignment.getRole()).thenReturn(UserRole.REGION_ADMIN);
         AuthorizedRegionAdmin regionAdmin = new AuthorizedRegionAdmin(user, region, assignment);
-        when(authorizationService.requireAuthorizedRegionAdmin(USER_ID))
+        when(authorizationService.requireAuthorizedRegionAdminForUpdate(USER_ID))
             .thenReturn(regionAdmin);
 
         initialMission = mission();
@@ -102,6 +107,7 @@ class RejectRegionAdminMissionUseCaseTest {
         org.mockito.Mockito.verify(recordAuditEventUseCase).record(captor.capture());
         assertThat(captor.getValue().result()).isEqualTo(AuditEventResult.SUCCESS);
         assertThat(captor.getValue().reasonCode()).isEqualTo(REASON_CODE);
+        verifyNoInteractions(recordFailedAuditEventUseCase);
     }
 
     @Test
@@ -111,7 +117,84 @@ class RejectRegionAdminMissionUseCaseTest {
                 assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT)
             );
 
-        verifyNoInteractions(authorizationService, missionService, recordAuditEventUseCase);
+        verifyNoInteractions(
+            authorizationService,
+            missionService,
+            recordAuditEventUseCase,
+            recordFailedAuditEventUseCase
+        );
+    }
+
+    @Test
+    void reject_withoutRegionAdminRole_doesNotRecordFailureAudit() {
+        when(authorizationService.requireAuthorizedRegionAdminForUpdate(USER_ID))
+            .thenThrow(new BusinessException(ErrorCode.FORBIDDEN));
+
+        assertThatThrownBy(() -> useCase.reject(USER_ID, MISSION_ID, REASON_CODE, REQUEST_ID))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN)
+            );
+
+        verifyNoInteractions(missionService, recordAuditEventUseCase, recordFailedAuditEventUseCase);
+    }
+
+    @Test
+    void reject_whenMissionDoesNotExist_doesNotRecordFailureAudit() {
+        when(missionService.findMission(MISSION_ID)).thenThrow(new BusinessException(ErrorCode.NOT_FOUND));
+
+        assertThatThrownBy(() -> useCase.reject(USER_ID, MISSION_ID, REASON_CODE, REQUEST_ID))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.NOT_FOUND)
+            );
+
+        verifyNoInteractions(recordAuditEventUseCase, recordFailedAuditEventUseCase);
+    }
+
+    @Test
+    void reject_withOtherRegionMission_recordsForbiddenFailureAudit() {
+        Region otherRegion = mock(Region.class);
+        when(otherRegion.getRegionId()).thenReturn(12L);
+        when(initialMission.getRegion()).thenReturn(otherRegion);
+
+        assertThatThrownBy(() -> useCase.reject(USER_ID, MISSION_ID, REASON_CODE, REQUEST_ID))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN)
+            );
+
+        assertFailureAudit(ErrorCode.FORBIDDEN, otherRegion, MissionStatus.PENDING_REVIEW);
+    }
+
+    @Test
+    void reject_whenProcessingExceptionOccurs_recordsInternalServerErrorFailureAudit() {
+        when(missionService.reject(lockedMission)).thenThrow(new IllegalStateException("storage failure"));
+
+        assertThatThrownBy(() -> useCase.reject(USER_ID, MISSION_ID, REASON_CODE, REQUEST_ID))
+            .isInstanceOf(IllegalStateException.class);
+
+        verifyNoInteractions(recordAuditEventUseCase);
+        assertFailureAudit(ErrorCode.INTERNAL_SERVER_ERROR, region, MissionStatus.PENDING_REVIEW);
+    }
+
+    private void assertFailureAudit(
+        ErrorCode errorCode,
+        Region auditRegion,
+        MissionStatus previousState
+    ) {
+        org.mockito.ArgumentCaptor<AuditEventCommand> captor =
+            org.mockito.ArgumentCaptor.forClass(AuditEventCommand.class);
+        org.mockito.Mockito.verify(recordFailedAuditEventUseCase).record(captor.capture());
+        assertThat(captor.getValue()).satisfies(audit -> {
+            assertThat(audit.requestId()).isEqualTo(REQUEST_ID);
+            assertThat(audit.region()).isSameAs(auditRegion);
+            assertThat(audit.targetType()).isEqualTo(AuditEventTargetType.MISSION);
+            assertThat(audit.targetId()).isEqualTo(MISSION_ID);
+            assertThat(audit.previousState()).isEqualTo(previousState.name());
+            assertThat(audit.nextState()).isNull();
+            assertThat(audit.result()).isEqualTo(AuditEventResult.FAILURE);
+            assertThat(audit.reasonCode()).isEqualTo(errorCode.code());
+            assertThat(audit.actor().getRole()).isEqualTo(UserRole.REGION_ADMIN);
+            assertThat(audit.occurredAt()).isEqualTo(REJECTED_AT);
+        });
     }
 
     private Mission mission() {

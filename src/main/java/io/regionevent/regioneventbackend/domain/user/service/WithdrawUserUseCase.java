@@ -81,6 +81,7 @@ public class WithdrawUserUseCase {
         capacityHoldService.invalidateActiveHoldsForWithdrawal(userId);
         reservationService.cancelConfirmedReservationsForWithdrawal(userId);
         operatorApplicationService.cancelAndUnlinkByApplicantUserId(userId);
+        operatorApplicationService.unlinkInspectorByUserId(userId);
         capacityHoldService.unlinkUserByUserId(userId);
         reservationService.unlinkUserByUserId(userId);
         visitService.unlinkAuthorByUserId(userId);
@@ -95,7 +96,9 @@ public class WithdrawUserUseCase {
         if (userRoleAssignmentService.hasPrivilegedRole(userId) || contentService.hasOwnedContent(userId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        if (paymentService.hasPendingPayment(userId) || refundService.hasInProgressRefund(userId)) {
+        if (paymentService.hasPendingPayment(userId)
+            || paymentService.hasApprovedPaymentWithConfirmedReservationWithoutSucceededRefund(userId)
+            || refundService.hasInProgressRefund(userId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
     }

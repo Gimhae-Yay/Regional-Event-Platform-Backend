@@ -8,6 +8,8 @@ import static org.mockito.Mockito.doThrow;
 import java.time.Instant;
 import java.util.UUID;
 
+import jakarta.persistence.EntityManager;
+
 import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,6 +20,10 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEvent;
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
+import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventActorLinkRepository;
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
@@ -40,6 +46,8 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.support.jpa.CleanH2Database;
 
 @SpringBootTest
@@ -57,7 +65,9 @@ class SubmitOperatorMissionAuditAtomicityTest {
     private final CouponPolicyRepository couponPolicyRepository;
     private final MissionRepository missionRepository;
     private final AuditEventRepository auditEventRepository;
+    private final AuditEventActorLinkRepository auditEventActorLinkRepository;
     private final TransactionTemplate transactionTemplate;
+    private final EntityManager entityManager;
 
     @MockitoBean
     private RecordAuditEventUseCase recordAuditEventUseCase;
@@ -72,7 +82,9 @@ class SubmitOperatorMissionAuditAtomicityTest {
         CouponPolicyRepository couponPolicyRepository,
         MissionRepository missionRepository,
         AuditEventRepository auditEventRepository,
-        PlatformTransactionManager transactionManager
+        AuditEventActorLinkRepository auditEventActorLinkRepository,
+        PlatformTransactionManager transactionManager,
+        EntityManager entityManager
     ) {
         this.submitOperatorMissionUseCase = submitOperatorMissionUseCase;
         this.regionRepository = regionRepository;
@@ -82,7 +94,9 @@ class SubmitOperatorMissionAuditAtomicityTest {
         this.couponPolicyRepository = couponPolicyRepository;
         this.missionRepository = missionRepository;
         this.auditEventRepository = auditEventRepository;
+        this.auditEventActorLinkRepository = auditEventActorLinkRepository;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.entityManager = entityManager;
     }
 
     @Test
@@ -100,7 +114,116 @@ class SubmitOperatorMissionAuditAtomicityTest {
 
         assertThat(missionRepository.findById(fixture.missionId()))
             .hasValueSatisfying(mission -> assertThat(mission.getStatus()).isEqualTo(MissionStatus.DRAFT));
-        assertThat(auditEventRepository.count()).isZero();
+        assertFailureAudit(fixture, fixture.operatorId(), MissionStatus.DRAFT, "INTERNAL_SERVER_ERROR");
+    }
+
+    @Test
+    void submit_whenMissionIsNotDraft_preservesStateAndCommitsFailureAudit() {
+        Fixture fixture = createFixture();
+        transactionTemplate.executeWithoutResult(status -> {
+            Mission mission = missionRepository.findById(fixture.missionId()).orElseThrow();
+            mission.submitForReview();
+            missionRepository.saveAndFlush(mission);
+        });
+
+        assertThatThrownBy(() -> submitOperatorMissionUseCase.submit(
+            fixture.operatorId(),
+            fixture.missionId(),
+            UUID.randomUUID()
+        )).isInstanceOfSatisfying(BusinessException.class, exception ->
+            assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.MISSION_STATE_CONFLICT)
+        );
+
+        assertThat(missionRepository.findById(fixture.missionId()))
+            .hasValueSatisfying(mission ->
+                assertThat(mission.getStatus()).isEqualTo(MissionStatus.PENDING_REVIEW)
+            );
+        assertFailureAudit(
+            fixture,
+            fixture.operatorId(),
+            MissionStatus.PENDING_REVIEW,
+            "MISSION_STATE_CONFLICT"
+        );
+    }
+
+    @Test
+    void submit_withOtherRegionOperator_preservesStateAndCommitsFailureAudit() {
+        Fixture fixture = createFixture();
+        Long otherOperatorId = transactionTemplate.execute(status -> {
+            String suffix = Long.toUnsignedString(System.nanoTime());
+            Region otherRegion = regionRepository.save(new Region("MSN-OTHER-" + suffix, "Busan", true));
+            AppUser otherOperator = appUserRepository.save(new AppUser(
+                "other-operator-" + suffix + "@example.com",
+                "password-hash",
+                "other operator",
+                "010-9876-5432",
+                AppUserStatus.ACTIVE
+            ));
+            userRoleAssignmentRepository.save(new UserRoleAssignment(
+                otherOperator,
+                UserRole.OPERATOR,
+                otherRegion
+            ));
+            return otherOperator.getUserId();
+        });
+
+        assertThatThrownBy(() -> submitOperatorMissionUseCase.submit(
+            otherOperatorId,
+            fixture.missionId(),
+            UUID.randomUUID()
+        )).isInstanceOfSatisfying(BusinessException.class, exception ->
+            assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN)
+        );
+
+        assertThat(missionRepository.findById(fixture.missionId()))
+            .hasValueSatisfying(mission -> assertThat(mission.getStatus()).isEqualTo(MissionStatus.DRAFT));
+        assertFailureAudit(fixture, otherOperatorId, MissionStatus.DRAFT, "FORBIDDEN");
+    }
+
+    @Test
+    void submit_withInvalidRewardPolicy_preservesStateAndCommitsFailureAudit() {
+        Fixture fixture = createFixture();
+        transactionTemplate.executeWithoutResult(status -> entityManager.createNativeQuery("""
+            UPDATE coupon_policy
+            SET issuance_type = 'VISIT'
+            WHERE coupon_policy_id = :couponPolicyId
+            """)
+            .setParameter("couponPolicyId", fixture.couponPolicyId())
+            .executeUpdate());
+
+        assertThatThrownBy(() -> submitOperatorMissionUseCase.submit(
+            fixture.operatorId(),
+            fixture.missionId(),
+            UUID.randomUUID()
+        )).isInstanceOfSatisfying(BusinessException.class, exception ->
+            assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.MISSION_STATE_CONFLICT)
+        );
+
+        assertThat(missionRepository.findById(fixture.missionId()))
+            .hasValueSatisfying(mission -> assertThat(mission.getStatus()).isEqualTo(MissionStatus.DRAFT));
+        assertFailureAudit(fixture, fixture.operatorId(), MissionStatus.DRAFT, "MISSION_STATE_CONFLICT");
+    }
+
+    private void assertFailureAudit(
+        Fixture fixture,
+        Long actorUserId,
+        MissionStatus previousState,
+        String reasonCode
+    ) {
+        assertThat(auditEventRepository.findAll()).singleElement().satisfies(auditEvent -> {
+            assertThat(auditEvent.getRegion().getRegionId()).isEqualTo(fixture.regionId());
+            assertThat(auditEvent.getTargetType()).isEqualTo(AuditEventTargetType.MISSION);
+            assertThat(auditEvent.getTargetId()).isEqualTo(fixture.missionId());
+            assertThat(auditEvent.getPreviousState()).isEqualTo(previousState.name());
+            assertThat(auditEvent.getNextState()).isNull();
+            assertThat(auditEvent.getResult()).isEqualTo(AuditEventResult.FAILURE);
+            assertThat(auditEvent.getReasonCode()).isEqualTo(reasonCode);
+        });
+        AuditEvent auditEvent = auditEventRepository.findAll().getFirst();
+        assertThat(auditEventActorLinkRepository.findById(auditEvent.getAuditEventId()))
+            .hasValueSatisfying(actorLink ->
+                assertThat(actorLink.getActor().getUserId()).isEqualTo(actorUserId)
+            );
     }
 
     private Fixture createFixture() {
@@ -151,12 +274,19 @@ class SubmitOperatorMissionAuditAtomicityTest {
                 couponPolicy,
                 NOW.plusSeconds(86_400)
             ));
-            return new Fixture(operator.getUserId(), mission.getMissionId());
+            return new Fixture(
+                operator.getUserId(),
+                region.getRegionId(),
+                couponPolicy.getCouponPolicyId(),
+                mission.getMissionId()
+            );
         });
     }
 
     private record Fixture(
         Long operatorId,
+        Long regionId,
+        Long couponPolicyId,
         Long missionId
     ) {
     }

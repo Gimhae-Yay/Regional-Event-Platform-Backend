@@ -57,7 +57,7 @@ class RejectSessionRevisionUseCaseTest {
         UserRoleAssignment assignment = reviewerAssignment();
         UUID requestId = UUID.randomUUID();
         when(sessionRevisionService.findReviewTargetForUpdate(REVISION_ID)).thenReturn(revision);
-        when(regionAdminAuthorizationService.authorize(USER_ID, REGION_ID)).thenReturn(assignment);
+        givenAuthorizedRegionAdmin(assignment);
 
         RejectSessionRevisionResult result = useCase.reject(
             USER_ID,
@@ -107,7 +107,7 @@ class RejectSessionRevisionUseCaseTest {
         SessionRevision revision = revision();
         UserRoleAssignment assignment = reviewerAssignment();
         when(sessionRevisionService.findReviewTargetForUpdate(REVISION_ID)).thenReturn(revision);
-        when(regionAdminAuthorizationService.authorize(USER_ID, REGION_ID)).thenReturn(assignment);
+        givenAuthorizedRegionAdmin(assignment);
         org.mockito.Mockito.doThrow(new BusinessException(ErrorCode.SESSION_STATE_CONFLICT))
             .when(sessionRevisionService)
             .rejectPending(any(), any(), any(), any());
@@ -142,5 +142,14 @@ class RejectSessionRevisionUseCaseTest {
         when(assignment.getAppUser()).thenReturn(reviewer);
         when(reviewer.getStatus()).thenReturn(AppUserStatus.ACTIVE);
         return assignment;
+    }
+
+    private void givenAuthorizedRegionAdmin(UserRoleAssignment assignment) {
+        RegionAdminAuthorizationService.AuthorizedRegionAdmin regionAdmin = mock(
+            RegionAdminAuthorizationService.AuthorizedRegionAdmin.class
+        );
+        when(regionAdminAuthorizationService.requireAuthorizedRegionAdminForUpdate(USER_ID))
+            .thenReturn(regionAdmin);
+        when(regionAdmin.authorize(REGION_ID)).thenReturn(assignment);
     }
 }

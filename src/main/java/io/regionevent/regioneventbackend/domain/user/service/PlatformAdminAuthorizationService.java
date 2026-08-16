@@ -8,19 +8,19 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminAssignment;
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminAssignmentStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminGrade;
-import io.regionevent.regioneventbackend.domain.user.repository.PlatformAdminAssignmentRepository;
+import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 @Service
 public class PlatformAdminAuthorizationService {
 
-    private final PlatformAdminAssignmentRepository platformAdminAssignmentRepository;
+    private final AppUserRepository appUserRepository;
 
     public PlatformAdminAuthorizationService(
-        PlatformAdminAssignmentRepository platformAdminAssignmentRepository
+        AppUserRepository appUserRepository
     ) {
-        this.platformAdminAssignmentRepository = platformAdminAssignmentRepository;
+        this.appUserRepository = appUserRepository;
     }
 
     @Transactional(readOnly = true)
@@ -37,7 +37,12 @@ public class PlatformAdminAuthorizationService {
         return assignment;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
+    public PlatformAdminAssignment requireAuthorizedPlatformAdminForUpdate(Long userId) {
+        return requireActivePrivilegedAssignmentForUpdate(userId);
+    }
+
+    @Transactional
     public PlatformAdminAssignment requireAuthorizedSuperAdminForUpdate(Long userId) {
         PlatformAdminAssignment assignment = requireActivePrivilegedAssignmentForUpdate(userId);
         if (assignment.getGrade() != PlatformAdminGrade.SUPER_ADMIN) {
@@ -48,8 +53,7 @@ public class PlatformAdminAuthorizationService {
 
     private PlatformAdminAssignment requireActivePrivilegedAssignment(Long userId) {
         validateUserId(userId);
-        return platformAdminAssignmentRepository
-            .findByAppUserUserIdAndStatusAndAppUserStatusAndAppUserAccountKind(
+        return appUserRepository.findActivePrivilegedAssignment(
                 userId,
                 PlatformAdminAssignmentStatus.ACTIVE,
                 AppUserStatus.ACTIVE,
@@ -60,13 +64,20 @@ public class PlatformAdminAuthorizationService {
 
     private PlatformAdminAssignment requireActivePrivilegedAssignmentForUpdate(Long userId) {
         validateUserId(userId);
-        return platformAdminAssignmentRepository
-            .findActivePrivilegedAssignmentForUpdate(
+        lockActivePrivilegedUser(userId);
+        return appUserRepository.findActivePrivilegedAssignmentForUpdate(
                 userId,
                 PlatformAdminAssignmentStatus.ACTIVE,
                 AppUserStatus.ACTIVE,
                 AppUserAccountKind.PRIVILEGED
             )
+            .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+    }
+
+    private void lockActivePrivilegedUser(Long userId) {
+        appUserRepository.findByIdForUpdate(userId)
+            .filter(user -> user.getStatus() == AppUserStatus.ACTIVE)
+            .filter(user -> user.getAccountKind() == AppUserAccountKind.PRIVILEGED)
             .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
     }
 

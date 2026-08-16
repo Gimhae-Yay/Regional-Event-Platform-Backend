@@ -57,7 +57,9 @@ public class ApproveOperatorApplicationUseCase {
         Long operatorApplicationId,
         UUID requestId
     ) {
-        Long regionId = regionAdminAuthorizationService.requireAuthorizedRegionId(reviewerUserId);
+        RegionAdminAuthorizationService.AuthorizedRegionAdmin reviewer =
+            regionAdminAuthorizationService.requireAuthorizedRegionAdminForUpdate(reviewerUserId);
+        Long regionId = reviewer.region().getRegionId();
         OperatorApplicationStatus status = operatorApplicationService.findReviewStatus(
             operatorApplicationId,
             regionId
@@ -86,7 +88,7 @@ public class ApproveOperatorApplicationUseCase {
             throw new BusinessException(ErrorCode.OPERATOR_APPLICATION_STATE_CONFLICT);
         }
 
-        UserRoleAssignment reviewerAssignment = regionAdminAuthorizationService.authorize(reviewerUserId, regionId);
+        UserRoleAssignment reviewerAssignment = reviewer.roleAssignment();
         Instant approvedAt = clock.instant();
         application.approve(reviewerAssignment.getAppUser(), approvedAt);
         userRoleAssignmentService.assignOperator(applicant, application.getRequestedRegion());

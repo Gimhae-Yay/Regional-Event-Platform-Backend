@@ -10,10 +10,15 @@ public record MyStampbookListProjection(
     Long regionId,
     StampbookStatus stampbookStatus,
     Instant publishedAt,
+    Long stampbookProgressId,
+    Long progressUserId,
     StampbookProgressStatus progressStatus,
     Instant completedAt,
     Long earnedCount,
     Long targetCount,
-    Instant lastEarnedAt
+    Instant lastEarnedAt,
+    Long stampbookRewardGrantId,
+    Long completionRewardCouponPolicyId,
+    Long stampbookRewardCouponPolicyId
 ) {
 }

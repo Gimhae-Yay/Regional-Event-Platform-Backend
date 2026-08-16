@@ -17,14 +17,7 @@ import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.ContentSessionService;
-import io.regionevent.regioneventbackend.domain.coupon.entity.Coupon;
-import io.regionevent.regioneventbackend.domain.coupon.entity.CouponRedemption;
-import io.regionevent.regioneventbackend.domain.coupon.entity.CouponRedemptionStatus;
-import io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatus;
-import io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatusHistory;
-import io.regionevent.regioneventbackend.domain.coupon.service.CouponRedemptionService;
-import io.regionevent.regioneventbackend.domain.coupon.service.CouponService;
-import io.regionevent.regioneventbackend.domain.coupon.service.CouponStatusHistoryService;
+import io.regionevent.regioneventbackend.domain.coupon.service.RestoreCouponUseCase;
 import io.regionevent.regioneventbackend.domain.payment.dto.CreateRefundResponse;
 import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentStatus;
@@ -32,7 +25,6 @@ import io.regionevent.regioneventbackend.domain.payment.service.CreateRefundUseC
 import io.regionevent.regioneventbackend.domain.payment.service.PaymentService;
 import io.regionevent.regioneventbackend.domain.reservation.dto.CancelReservationResponse;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
-import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationPriceSnapshot;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
@@ -45,7 +37,6 @@ public class ReservationCancellationUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(ReservationCancellationUseCase.class);
     private static final String USER_REQUEST_REASON = "USER_REQUEST";
-    private static final String COUPON_RESTORE_REASON = "RESERVATION_CANCELLED";
 
     private final AppUserService appUserService;
     private final UserRoleAssignmentService userRoleAssignmentService;
@@ -53,10 +44,7 @@ public class ReservationCancellationUseCase {
     private final ContentSessionService contentSessionService;
     private final PaymentService paymentService;
     private final CreateRefundUseCase createRefundUseCase;
-    private final ReservationPriceSnapshotService reservationPriceSnapshotService;
-    private final CouponService couponService;
-    private final CouponRedemptionService couponRedemptionService;
-    private final CouponStatusHistoryService couponStatusHistoryService;
+    private final RestoreCouponUseCase restoreCouponUseCase;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase;
     private final TransactionTemplate transactionTemplate;
@@ -68,10 +56,7 @@ public class ReservationCancellationUseCase {
         ContentSessionService contentSessionService,
         PaymentService paymentService,
         CreateRefundUseCase createRefundUseCase,
-        ReservationPriceSnapshotService reservationPriceSnapshotService,
-        CouponService couponService,
-        CouponRedemptionService couponRedemptionService,
-        CouponStatusHistoryService couponStatusHistoryService,
+        RestoreCouponUseCase restoreCouponUseCase,
         RecordAuditEventUseCase recordAuditEventUseCase,
         RecordFailedAuditEventUseCase recordFailedAuditEventUseCase,
         PlatformTransactionManager transactionManager
@@ -82,10 +67,7 @@ public class ReservationCancellationUseCase {
         this.contentSessionService = contentSessionService;
         this.paymentService = paymentService;
         this.createRefundUseCase = createRefundUseCase;
-        this.reservationPriceSnapshotService = reservationPriceSnapshotService;
-        this.couponService = couponService;
-        this.couponRedemptionService = couponRedemptionService;
-        this.couponStatusHistoryService = couponStatusHistoryService;
+        this.restoreCouponUseCase = restoreCouponUseCase;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
         this.recordFailedAuditEventUseCase = recordFailedAuditEventUseCase;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
@@ -162,7 +144,7 @@ public class ReservationCancellationUseCase {
         Payment payment = paymentService.findByReservationId(reservation.getReservationId())
             .orElse(null);
         if (payment == null) {
-            restoreFreeReservationCoupon(reservation, actor, requestId);
+            restoreCouponUseCase.restoreForReservationCancellation(reservation, requestId, actor);
             return null;
         }
         if (payment.getStatus() != PaymentStatus.APPROVED
@@ -183,56 +165,6 @@ public class ReservationCancellationUseCase {
             return null;
         }
         return createRefundUseCase.findForReservationCancellation(payment.getPaymentId());
-    }
-
-    private void restoreFreeReservationCoupon(
-        Reservation reservation,
-        AuditEventActor actor,
-        UUID requestId
-    ) {
-        ReservationPriceSnapshot snapshot = reservationPriceSnapshotService
-            .findByHoldIdForUpdate(reservation.getCapacityHold().getHoldId())
-            .orElse(null);
-        if (snapshot == null || snapshot.getFinalAmount() != 0 || snapshot.getCoupon() == null) {
-            return;
-        }
-        CouponRedemption redemption = couponRedemptionService
-            .findByReservationPriceSnapshotIdForUpdate(snapshot.getReservationPriceSnapshotId())
-            .orElseThrow(() -> new IllegalStateException("coupon redemption does not exist"));
-        Coupon coupon = couponService.findByCouponIdForUpdate(snapshot.getCoupon().getCouponId())
-            .orElseThrow(() -> new IllegalStateException("snapshot coupon does not exist"));
-        if (redemption.getStatus() != CouponRedemptionStatus.CONFIRMED
-            || !redemption.getReservation().getReservationId().equals(reservation.getReservationId())
-            || !redemption.getReservationPriceSnapshot().getReservationPriceSnapshotId().equals(
-                snapshot.getReservationPriceSnapshotId()
-            )
-            || !redemption.getCoupon().getCouponId().equals(coupon.getCouponId())
-            || coupon.getStatus() != CouponStatus.USED) {
-            throw new IllegalStateException("coupon redemption does not match cancelled reservation");
-        }
-        Instant restoredAt = couponService.findCurrentDatabaseTime();
-        redemption.reverse(restoredAt);
-        CouponStatus restoredStatus = couponService.restoreUsedCoupon(coupon, restoredAt);
-        couponStatusHistoryService.create(new CouponStatusHistory(
-            coupon,
-            CouponStatus.USED,
-            restoredStatus,
-            COUPON_RESTORE_REASON,
-            actor.getRoleName(),
-            restoredAt
-        ));
-        recordAuditEventUseCase.record(new AuditEventCommand(
-            requestId,
-            reservation.getRegion(),
-            AuditEventTargetType.COUPON,
-            coupon.getCouponId(),
-            CouponStatus.USED.name(),
-            restoredStatus.name(),
-            AuditEventResult.SUCCESS,
-            COUPON_RESTORE_REASON,
-            actor,
-            restoredAt
-        ));
     }
 
     private void validatePositiveReservationId(Long reservationId) {
@@ -258,13 +190,11 @@ public class ReservationCancellationUseCase {
             actor,
             Instant.now()
         ));
-        log.warn(
-            "Reservation cancellation rejected. requestId={}, userId={}, reservationId={}, errorCode={}",
-            requestId,
-            actor.getAppUser().getUserId(),
-            reservation.getReservationId(),
-            ErrorCode.RESERVATION_CANCEL_CONFLICT.code()
-        );
+        log.atWarn()
+            .addKeyValue("requestId", requestId)
+            .addKeyValue("reservationId", reservation.getReservationId())
+            .addKeyValue("errorCode", ErrorCode.RESERVATION_CANCEL_CONFLICT.code())
+            .log("Reservation cancellation rejected");
         throw new BusinessException(ErrorCode.RESERVATION_CANCEL_CONFLICT);
     }
 

@@ -30,6 +30,7 @@ import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.service.RegionService;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
+import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
 import io.regionevent.regioneventbackend.domain.user.service.UserRoleAssignmentService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
@@ -44,6 +45,7 @@ class CreateMissionParticipationUseCaseTest {
     private final MissionParticipationDuplicateReadService duplicateReadService = mock(
         MissionParticipationDuplicateReadService.class
     );
+    private final AppUserService appUserService = mock(AppUserService.class);
     private final UserRoleAssignmentService userRoleAssignmentService = mock(UserRoleAssignmentService.class);
     private final MissionService missionService = mock(MissionService.class);
     private final RegionService regionService = mock(RegionService.class);
@@ -54,6 +56,7 @@ class CreateMissionParticipationUseCaseTest {
     private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
     private final CreateMissionParticipationUseCase useCase = new CreateMissionParticipationUseCase(
         duplicateReadService,
+        appUserService,
         userRoleAssignmentService,
         missionService,
         regionService,
@@ -71,6 +74,7 @@ class CreateMissionParticipationUseCaseTest {
     void setUp() {
         when(transactionManager.getTransaction(any(TransactionDefinition.class)))
             .thenReturn(mock(TransactionStatus.class));
+        when(appUserService.findActiveUserForUpdate(USER_ID)).thenReturn(Optional.of(user));
         when(userRoleAssignmentService.findActiveVisitor(USER_ID)).thenReturn(visitor);
         when(visitor.getAppUser()).thenReturn(user);
         when(missionService.findMission(MISSION_ID)).thenReturn(initialMission);
@@ -95,6 +99,7 @@ class CreateMissionParticipationUseCaseTest {
         assertThat(result.participationId()).isEqualTo(9001L);
         assertThat(result.status()).isEqualTo(MissionParticipationStatus.COMPLETED);
         assertThat(result.joinedAt()).isEqualTo(OPERATION_AT.minusSeconds(60));
+        verifyNoInteractions(appUserService);
         verify(missionService, never()).findMissionForParticipationUpdate(any());
         verifyNoInteractions(regionService, participationService, duplicateReadService);
     }
@@ -112,7 +117,7 @@ class CreateMissionParticipationUseCaseTest {
     }
 
     @Test
-    void create_신규참여이면미션과지역을순서대로잠그고단일DB시각으로검증하고생성한다() {
+    void create_신규참여이면사용자와미션과지역을순서대로잠그고단일DB시각으로검증하고생성한다() {
         Mission lockedMission = publishedMission(OPERATION_AT.plusSeconds(1));
         Region lockedRegion = mock(Region.class);
         MissionParticipation createdParticipation = participation(
@@ -130,12 +135,26 @@ class CreateMissionParticipationUseCaseTest {
 
         assertThat(result.participationId()).isEqualTo(9001L);
         assertThat(result.joinedAt()).isEqualTo(OPERATION_AT);
-        InOrder inOrder = inOrder(missionService, regionService, participationService);
+        InOrder inOrder = inOrder(appUserService, missionService, regionService, participationService);
+        inOrder.verify(appUserService).findActiveUserForUpdate(USER_ID);
         inOrder.verify(missionService).findMissionForParticipationUpdate(MISSION_ID);
         inOrder.verify(regionService).findRegionForUpdate(REGION_ID);
         inOrder.verify(missionService).findCurrentDatabaseTime();
         inOrder.verify(participationService).create(lockedMission, user, OPERATION_AT);
         verify(missionService).findCurrentDatabaseTime();
+    }
+
+    @Test
+    void create_비활성또는삭제사용자이면도메인잠금과변경없이금지한다() {
+        when(appUserService.findActiveUserForUpdate(USER_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> useCase.create(USER_ID, MISSION_ID))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN)
+            );
+
+        verify(missionService, never()).findMissionForParticipationUpdate(any());
+        verifyNoInteractions(regionService, participationService, duplicateReadService);
     }
 
     @Test

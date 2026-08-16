@@ -3,12 +3,12 @@ package io.regionevent.regioneventbackend.domain.user.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -16,7 +16,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentStatus;
-import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
@@ -27,10 +27,9 @@ class OperatorAuthorizationServiceTest {
     private static final Long GIMHAE_REGION_ID = 10L;
     private static final Long DONGHAE_REGION_ID = 20L;
 
-    private final UserRoleAssignmentRepository userRoleAssignmentRepository =
-        mock(UserRoleAssignmentRepository.class);
+    private final AppUserRepository appUserRepository = mock(AppUserRepository.class);
     private final OperatorAuthorizationService operatorAuthorizationService =
-        new OperatorAuthorizationService(userRoleAssignmentRepository);
+        new OperatorAuthorizationService(appUserRepository);
 
     @Test
     void 소유_콘텐츠_인가_회원이_없으면_FORBIDDEN을_반환한다() {
@@ -121,7 +120,10 @@ class OperatorAuthorizationServiceTest {
     @Test
     void 수정용_운영자_인가는_역할배정을_잠가_조회한다() {
         UserRoleAssignment assignment = assignment(OPERATOR_USER_ID, GIMHAE_REGION_ID);
-        when(userRoleAssignmentRepository.findByAppUserUserIdAndRoleAndStatusAndAppUserStatusForUpdate(
+        AppUser user = user(OPERATOR_USER_ID);
+        when(user.getStatus()).thenReturn(AppUserStatus.ACTIVE);
+        when(appUserRepository.findByIdForUpdate(OPERATOR_USER_ID)).thenReturn(Optional.of(user));
+        when(appUserRepository.findActiveRoleAssignmentForUpdate(
                 OPERATOR_USER_ID,
                 UserRole.OPERATOR,
                 UserRoleAssignmentStatus.ACTIVE,
@@ -132,7 +134,9 @@ class OperatorAuthorizationServiceTest {
             operatorAuthorizationService.requireAuthorizedOperatorForUpdate(OPERATOR_USER_ID);
 
         assertThat(authorizedOperator.roleAssignment()).isSameAs(assignment);
-        verify(userRoleAssignmentRepository).findByAppUserUserIdAndRoleAndStatusAndAppUserStatusForUpdate(
+        InOrder inOrder = org.mockito.Mockito.inOrder(appUserRepository);
+        inOrder.verify(appUserRepository).findByIdForUpdate(OPERATOR_USER_ID);
+        inOrder.verify(appUserRepository).findActiveRoleAssignmentForUpdate(
             OPERATOR_USER_ID,
             UserRole.OPERATOR,
             UserRoleAssignmentStatus.ACTIVE,
@@ -141,7 +145,7 @@ class OperatorAuthorizationServiceTest {
     }
 
     private void givenAuthorizationAssignment(Optional<UserRoleAssignment> assignment) {
-        when(userRoleAssignmentRepository.findByAppUserUserIdAndRoleAndStatusAndAppUserStatus(
+        when(appUserRepository.findActiveRoleAssignment(
                 OPERATOR_USER_ID,
                 UserRole.OPERATOR,
                 UserRoleAssignmentStatus.ACTIVE,

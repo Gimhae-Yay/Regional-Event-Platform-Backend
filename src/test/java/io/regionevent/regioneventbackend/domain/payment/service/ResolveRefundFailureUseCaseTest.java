@@ -3,6 +3,7 @@ package io.regionevent.regioneventbackend.domain.payment.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -20,11 +21,10 @@ import org.mockito.ArgumentCaptor;
 
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
+import io.regionevent.regioneventbackend.domain.audit.service.AuditEventActor;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
-import io.regionevent.regioneventbackend.domain.coupon.service.CouponRedemptionService;
-import io.regionevent.regioneventbackend.domain.coupon.service.CouponService;
-import io.regionevent.regioneventbackend.domain.coupon.service.CouponStatusHistoryService;
+import io.regionevent.regioneventbackend.domain.coupon.service.RestoreCouponUseCase;
 import io.regionevent.regioneventbackend.domain.payment.dto.ResolveRefundFailureRequest;
 import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
 import io.regionevent.regioneventbackend.domain.payment.entity.Refund;
@@ -50,7 +50,7 @@ class ResolveRefundFailureUseCaseTest {
         Fixture fixture = new Fixture();
         Refund refund = fixture.discrepantRefund();
         when(refund.getStatus()).thenReturn(RefundStatus.DISCREPANT, RefundStatus.SUCCEEDED);
-        when(fixture.authorizationService.requireAuthorizedPlatformAdmin(1L)).thenReturn(fixture.assignment);
+        when(fixture.authorizationService.requireAuthorizedPlatformAdminForUpdate(1L)).thenReturn(fixture.assignment);
         when(fixture.refundService.findByRefundIdForUpdate(552L)).thenReturn(Optional.of(refund));
 
         ResolveRefundFailureResult result = fixture.useCase.resolve(
@@ -62,7 +62,11 @@ class ResolveRefundFailureUseCaseTest {
 
         assertThat(result).isEqualTo(new ResolveRefundFailureResult(552L, "SUCCEEDED", RESOLVED_AT));
         verify(refund).resolveAsSucceeded(RESOLVED_AT);
-        verify(fixture.couponRedemptionService).findByReservationPriceSnapshotIdForUpdate(901L);
+        verify(fixture.restoreCouponUseCase).restoreForRefund(
+            eq(refund),
+            eq(REQUEST_ID),
+            any(AuditEventActor.class)
+        );
         ArgumentCaptor<AuditEventCommand> auditCaptor = ArgumentCaptor.forClass(AuditEventCommand.class);
         verify(fixture.auditEventUseCase).record(auditCaptor.capture());
         AuditEventCommand audit = auditCaptor.getValue();
@@ -83,7 +87,7 @@ class ResolveRefundFailureUseCaseTest {
         Fixture fixture = new Fixture();
         Refund refund = fixture.discrepantRefund();
         when(refund.getStatus()).thenReturn(RefundStatus.DISCREPANT, RefundStatus.FAILED);
-        when(fixture.authorizationService.requireAuthorizedPlatformAdmin(1L)).thenReturn(fixture.assignment);
+        when(fixture.authorizationService.requireAuthorizedPlatformAdminForUpdate(1L)).thenReturn(fixture.assignment);
         when(fixture.refundService.findByRefundIdForUpdate(552L)).thenReturn(Optional.of(refund));
 
         ResolveRefundFailureResult result = fixture.useCase.resolve(
@@ -95,47 +99,16 @@ class ResolveRefundFailureUseCaseTest {
 
         assertThat(result).isEqualTo(new ResolveRefundFailureResult(552L, "FAILED", RESOLVED_AT));
         verify(refund).resolveAsFailed(RESOLVED_AT);
-        verifyNoInteractions(
-            fixture.couponService,
-            fixture.couponRedemptionService,
-            fixture.couponStatusHistoryService
-        );
+        verifyNoInteractions(fixture.restoreCouponUseCase);
     }
 
     @Test
     void resolve_성공확정은일치하는사용쿠폰을같은요청식별자로복구하고감사한다() {
         Fixture fixture = new Fixture();
         Refund refund = fixture.discrepantRefund();
-        Payment payment = refund.getPayment();
-        io.regionevent.regioneventbackend.domain.reservation.entity.Reservation reservation = payment
-            .getReservation();
-        io.regionevent.regioneventbackend.domain.reservation.entity.ReservationPriceSnapshot snapshot = payment
-            .getReservationPriceSnapshot();
-        io.regionevent.regioneventbackend.domain.coupon.entity.Coupon coupon = snapshot.getCoupon();
-        io.regionevent.regioneventbackend.domain.coupon.entity.CouponRedemption redemption = mock(
-            io.regionevent.regioneventbackend.domain.coupon.entity.CouponRedemption.class
-        );
-        Instant restoredAt = Instant.parse("2026-08-12T01:02:04Z");
         when(refund.getStatus()).thenReturn(RefundStatus.DISCREPANT, RefundStatus.SUCCEEDED);
-        when(fixture.authorizationService.requireAuthorizedPlatformAdmin(1L)).thenReturn(fixture.assignment);
+        when(fixture.authorizationService.requireAuthorizedPlatformAdminForUpdate(1L)).thenReturn(fixture.assignment);
         when(fixture.refundService.findByRefundIdForUpdate(552L)).thenReturn(Optional.of(refund));
-        when(coupon.getCouponId()).thenReturn(701L);
-        when(coupon.getStatus()).thenReturn(
-            io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatus.USED
-        );
-        when(fixture.couponRedemptionService.findByReservationPriceSnapshotIdForUpdate(901L))
-            .thenReturn(Optional.of(redemption));
-        when(redemption.getStatus()).thenReturn(
-            io.regionevent.regioneventbackend.domain.coupon.entity.CouponRedemptionStatus.CONFIRMED
-        );
-        when(redemption.getCoupon()).thenReturn(coupon);
-        when(redemption.getReservation()).thenReturn(reservation);
-        when(redemption.getReservationPriceSnapshot()).thenReturn(snapshot);
-        when(fixture.couponService.findByCouponIdForUpdate(701L)).thenReturn(Optional.of(coupon));
-        when(fixture.couponService.findCurrentDatabaseTime()).thenReturn(restoredAt);
-        when(fixture.couponService.restoreUsedCoupon(coupon, restoredAt)).thenReturn(
-            io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatus.AVAILABLE
-        );
 
         fixture.useCase.resolve(
             1L,
@@ -144,10 +117,11 @@ class ResolveRefundFailureUseCaseTest {
             REQUEST_ID
         );
 
-        verify(redemption).reverse(restoredAt);
-        verify(fixture.couponService).restoreUsedCoupon(coupon, restoredAt);
-        verify(fixture.couponStatusHistoryService).create(any());
-        verify(fixture.auditEventUseCase, org.mockito.Mockito.times(2)).record(any());
+        verify(fixture.restoreCouponUseCase).restoreForRefund(
+            eq(refund),
+            eq(REQUEST_ID),
+            any(AuditEventActor.class)
+        );
     }
 
     @Test
@@ -155,7 +129,7 @@ class ResolveRefundFailureUseCaseTest {
         Fixture fixture = new Fixture();
         Refund refund = mock(Refund.class);
         when(refund.getStatus()).thenReturn(RefundStatus.SUCCEEDED);
-        when(fixture.authorizationService.requireAuthorizedPlatformAdmin(1L)).thenReturn(fixture.assignment);
+        when(fixture.authorizationService.requireAuthorizedPlatformAdminForUpdate(1L)).thenReturn(fixture.assignment);
         when(fixture.refundService.findByRefundIdForUpdate(552L)).thenReturn(Optional.of(refund));
 
         assertThatThrownBy(() -> fixture.useCase.resolve(
@@ -169,12 +143,7 @@ class ResolveRefundFailureUseCaseTest {
 
         verify(refund, never()).resolveAsSucceeded(RESOLVED_AT);
         verify(refund, never()).resolveAsFailed(RESOLVED_AT);
-        verifyNoInteractions(
-            fixture.couponService,
-            fixture.couponRedemptionService,
-            fixture.couponStatusHistoryService,
-            fixture.auditEventUseCase
-        );
+        verifyNoInteractions(fixture.restoreCouponUseCase, fixture.auditEventUseCase);
     }
 
     @Test
@@ -193,9 +162,7 @@ class ResolveRefundFailureUseCaseTest {
         verifyNoInteractions(
             fixture.authorizationService,
             fixture.refundService,
-            fixture.couponService,
-            fixture.couponRedemptionService,
-            fixture.couponStatusHistoryService,
+            fixture.restoreCouponUseCase,
             fixture.auditEventUseCase
         );
     }
@@ -206,17 +173,13 @@ class ResolveRefundFailureUseCaseTest {
             PlatformAdminAuthorizationService.class
         );
         private final RefundService refundService = mock(RefundService.class);
-        private final CouponService couponService = mock(CouponService.class);
-        private final CouponRedemptionService couponRedemptionService = mock(CouponRedemptionService.class);
-        private final CouponStatusHistoryService couponStatusHistoryService = mock(CouponStatusHistoryService.class);
+        private final RestoreCouponUseCase restoreCouponUseCase = mock(RestoreCouponUseCase.class);
         private final RecordAuditEventUseCase auditEventUseCase = mock(RecordAuditEventUseCase.class);
         private final PlatformAdminAssignment assignment = mock(PlatformAdminAssignment.class);
         private final ResolveRefundFailureUseCase useCase = new ResolveRefundFailureUseCase(
             authorizationService,
             refundService,
-            couponService,
-            couponRedemptionService,
-            couponStatusHistoryService,
+            restoreCouponUseCase,
             auditEventUseCase,
             Clock.fixed(RESOLVED_AT, ZoneOffset.UTC)
         );
@@ -251,7 +214,6 @@ class ResolveRefundFailureUseCaseTest {
             when(reservation.getCancelledAt()).thenReturn(RESOLVED_AT.minusSeconds(60));
             when(reservation.getContentSession()).thenReturn(contentSession);
             when(contentSession.getStartsAt()).thenReturn(RESOLVED_AT.plusSeconds(60));
-            when(couponRedemptionService.findByReservationPriceSnapshotIdForUpdate(901L)).thenReturn(Optional.empty());
             AppUser appUser = mock(AppUser.class);
             when(assignment.getPlatformAdminAssignmentId()).thenReturn(101L);
             when(assignment.getAppUser()).thenReturn(appUser);

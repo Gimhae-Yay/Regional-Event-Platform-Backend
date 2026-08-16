@@ -25,6 +25,7 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentRevision;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentRevisionStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
+import io.regionevent.regioneventbackend.domain.region.service.RegionService;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
@@ -45,6 +46,7 @@ class ApproveContentRevisionUseCaseTest {
 
     private final ContentRevisionService contentRevisionService = mock(ContentRevisionService.class);
     private final ContentService contentService = mock(ContentService.class);
+    private final RegionService regionService = mock(RegionService.class);
     private final OriginalContentReviewTargetService originalContentReviewTargetService =
         mock(OriginalContentReviewTargetService.class);
     private final ContentLogService contentLogService = mock(ContentLogService.class);
@@ -54,6 +56,7 @@ class ApproveContentRevisionUseCaseTest {
     private final ApproveContentRevisionUseCase useCase = new ApproveContentRevisionUseCase(
         contentRevisionService,
         contentService,
+        regionService,
         originalContentReviewTargetService,
         contentLogService,
         regionAdminAuthorizationService,
@@ -72,8 +75,10 @@ class ApproveContentRevisionUseCaseTest {
         assertThat(result.contentStatus()).isEqualTo(ContentStatus.PUBLISHED);
         assertThat(result.reservationPrice()).isEqualTo(RESERVATION_PRICE);
         assertThat(result.reviewedAt()).isEqualTo(REVIEWED_AT);
-        InOrder lockOrder = inOrder(contentRevisionService, contentService);
+        InOrder lockOrder = inOrder(contentRevisionService, contentService, regionService);
         lockOrder.verify(contentRevisionService).findContentIdByRevisionId(REVISION_ID);
+        lockOrder.verify(contentService).findContentRegionId(CONTENT_ID);
+        lockOrder.verify(regionService).findRegionForUpdate(REGION_ID);
         lockOrder.verify(contentService).findApprovalTargetForUpdate(CONTENT_ID);
         lockOrder.verify(contentRevisionService).findReviewTargetForUpdate(REVISION_ID);
         verifyNoInteractions(originalContentReviewTargetService);
@@ -131,12 +136,14 @@ class ApproveContentRevisionUseCaseTest {
     private void stubCommon(Fixture fixture, boolean isPrePublicationRevisionByHistory) {
         when(contentRevisionService.findContentIdByRevisionId(REVISION_ID))
             .thenReturn(CONTENT_ID);
+        when(contentService.findContentRegionId(CONTENT_ID)).thenReturn(REGION_ID);
+        Region region = fixture.content().getRegion();
+        when(regionService.findRegionForUpdate(REGION_ID)).thenReturn(region);
         when(contentService.findApprovalTargetForUpdate(CONTENT_ID))
             .thenReturn(fixture.content());
         when(contentRevisionService.findReviewTargetForUpdate(REVISION_ID))
             .thenReturn(fixture.revision());
-        when(regionAdminAuthorizationService.authorize(USER_ID, REGION_ID))
-            .thenReturn(fixture.reviewerAssignment());
+        givenAuthorizedRegionAdmin(fixture.reviewerAssignment());
         when(contentRevisionService.approve(
             fixture.revision(),
             fixture.reviewer(),
@@ -169,5 +176,14 @@ class ApproveContentRevisionUseCaseTest {
         AppUser reviewer,
         UserRoleAssignment reviewerAssignment
     ) {
+    }
+
+    private void givenAuthorizedRegionAdmin(UserRoleAssignment assignment) {
+        RegionAdminAuthorizationService.AuthorizedRegionAdmin regionAdmin = mock(
+            RegionAdminAuthorizationService.AuthorizedRegionAdmin.class
+        );
+        when(regionAdminAuthorizationService.requireAuthorizedRegionAdminForUpdate(USER_ID))
+            .thenReturn(regionAdmin);
+        when(regionAdmin.authorize(REGION_ID)).thenReturn(assignment);
     }
 }

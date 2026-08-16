@@ -1,14 +1,18 @@
 package io.regionevent.regioneventbackend.domain.user.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -19,6 +23,8 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -31,6 +37,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
@@ -39,8 +47,12 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentSessionRepository;
+import io.regionevent.regioneventbackend.domain.operator.entity.OperatorApplication;
+import io.regionevent.regioneventbackend.domain.operator.entity.OperatorApplicationStatus;
+import io.regionevent.regioneventbackend.domain.operator.repository.OperatorApplicationRepository;
 import io.regionevent.regioneventbackend.domain.payment.dto.CreatePaymentRequest;
 import io.regionevent.regioneventbackend.domain.payment.dto.CreatePaymentResponse;
+import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentStatus;
 import io.regionevent.regioneventbackend.domain.payment.entity.Refund;
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundStatus;
@@ -53,11 +65,16 @@ import io.regionevent.regioneventbackend.domain.reservation.dto.CreateReservatio
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus;
 import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
+import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationPriceSnapshot;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.reservation.repository.CapacityHoldRepository;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationRepository;
+import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationPriceSnapshotRepository;
+import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHoldService;
 import io.regionevent.regioneventbackend.domain.reservation.service.CreateReservationHoldUseCase;
+import io.regionevent.regioneventbackend.domain.reservation.service.ExpireOrInvalidateCapacityHoldsUseCase;
 import io.regionevent.regioneventbackend.domain.reservation.service.GetMyReservationQrUseCase;
+import io.regionevent.regioneventbackend.domain.reservation.service.HoldTerminationResult;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationCancellationUseCase;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationConfirmationUseCase;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -87,19 +104,25 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
     private final RegionRepository regionRepository;
     private final ContentRepository contentRepository;
     private final ContentSessionRepository contentSessionRepository;
-    private final CapacityHoldRepository capacityHoldRepository;
     private final ReservationRepository reservationRepository;
+    private final ReservationPriceSnapshotRepository reservationPriceSnapshotRepository;
     private final PaymentRepository paymentRepository;
     private final RefundRepository refundRepository;
+    private final OperatorApplicationRepository operatorApplicationRepository;
     private final JwtAccessTokenService jwtAccessTokenService;
     private final JdbcTemplate jdbcTemplate;
     private final WithdrawUserUseCase withdrawUserUseCase;
+    private final ExpireOrInvalidateCapacityHoldsUseCase expireOrInvalidateCapacityHoldsUseCase;
+    private final FailingWithdrawalCapacityHoldService failingWithdrawalCapacityHoldService;
     private final RefreshTokenStore refreshTokenStore;
     private final CreateReservationHoldUseCase createReservationHoldUseCase;
     private final ReservationConfirmationUseCase reservationConfirmationUseCase;
     private final ReservationCancellationUseCase reservationCancellationUseCase;
     private final GetMyReservationQrUseCase getMyReservationQrUseCase;
     private final CreatePaymentUseCase createPaymentUseCase;
+
+    private final CapacityHoldRepository capacityHoldRepository;
+    private final TransactionTemplate transactionTemplate;
 
     @Autowired
     WithdrawalControllerMySqlIntegrationTest(
@@ -111,17 +134,22 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         ContentSessionRepository contentSessionRepository,
         CapacityHoldRepository capacityHoldRepository,
         ReservationRepository reservationRepository,
+        ReservationPriceSnapshotRepository reservationPriceSnapshotRepository,
         PaymentRepository paymentRepository,
         RefundRepository refundRepository,
+        OperatorApplicationRepository operatorApplicationRepository,
         JwtAccessTokenService jwtAccessTokenService,
         JdbcTemplate jdbcTemplate,
         WithdrawUserUseCase withdrawUserUseCase,
+        ExpireOrInvalidateCapacityHoldsUseCase expireOrInvalidateCapacityHoldsUseCase,
+        FailingWithdrawalCapacityHoldService failingWithdrawalCapacityHoldService,
         RefreshTokenStore refreshTokenStore,
         CreateReservationHoldUseCase createReservationHoldUseCase,
         ReservationConfirmationUseCase reservationConfirmationUseCase,
         ReservationCancellationUseCase reservationCancellationUseCase,
         GetMyReservationQrUseCase getMyReservationQrUseCase,
-        CreatePaymentUseCase createPaymentUseCase
+        CreatePaymentUseCase createPaymentUseCase,
+        PlatformTransactionManager transactionManager
     ) {
         this.mockMvc = mockMvc;
         this.appUserRepository = appUserRepository;
@@ -131,17 +159,22 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         this.contentSessionRepository = contentSessionRepository;
         this.capacityHoldRepository = capacityHoldRepository;
         this.reservationRepository = reservationRepository;
+        this.reservationPriceSnapshotRepository = reservationPriceSnapshotRepository;
         this.paymentRepository = paymentRepository;
         this.refundRepository = refundRepository;
+        this.operatorApplicationRepository = operatorApplicationRepository;
         this.jwtAccessTokenService = jwtAccessTokenService;
         this.jdbcTemplate = jdbcTemplate;
         this.withdrawUserUseCase = withdrawUserUseCase;
+        this.expireOrInvalidateCapacityHoldsUseCase = expireOrInvalidateCapacityHoldsUseCase;
+        this.failingWithdrawalCapacityHoldService = failingWithdrawalCapacityHoldService;
         this.refreshTokenStore = refreshTokenStore;
         this.createReservationHoldUseCase = createReservationHoldUseCase;
         this.reservationConfirmationUseCase = reservationConfirmationUseCase;
         this.reservationCancellationUseCase = reservationCancellationUseCase;
         this.getMyReservationQrUseCase = getMyReservationQrUseCase;
         this.createPaymentUseCase = createPaymentUseCase;
+        transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     @DynamicPropertySource
@@ -152,6 +185,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
     @BeforeEach
     void setUp() {
         reset(refreshTokenStore);
+        failingWithdrawalCapacityHoldService.reset();
     }
 
     @Test
@@ -181,6 +215,117 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
     }
 
     @Test
+    void withdraw_withExpiredActiveHold_invalidatesHoldAndRestoresCapacity() throws Exception {
+        Fixture fixture = createFixture();
+        expireActiveHold(fixture);
+
+        mockMvc.perform(delete(WITHDRAWAL_PATH)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(fixture.user().getUserId())))
+            .andExpect(status().isOk());
+
+        assertThat(appUserRepository.findById(fixture.user().getUserId())).isEmpty();
+        assertThat(capacityHoldRepository.findById(fixture.activeHold().getHoldId()))
+            .hasValueSatisfying(hold -> {
+                assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.INVALIDATED);
+                assertThat(hold.getUser()).isNull();
+                assertThat(hold.getInvalidationReason()).isEqualTo("USER_WITHDRAWAL");
+                assertThat(hold.getTerminalAt()).isNotNull();
+                assertThat(hold.getCapacityReleasedAt()).isNotNull();
+            });
+        assertThat(contentSessionRepository.findById(fixture.session().getSessionId()))
+            .hasValueSatisfying(session -> assertThat(session.getRemainingCapacity()).isEqualTo(10));
+    }
+
+    @Test
+    void withdraw_whenSchedulerAlreadyExpiredHold_doesNotReleaseCapacityTwice() throws Exception {
+        Fixture fixture = createFixture();
+        expireActiveHold(fixture);
+        expireOrInvalidateCapacityHoldsUseCase.execute();
+
+        mockMvc.perform(delete(WITHDRAWAL_PATH)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(fixture.user().getUserId())))
+            .andExpect(status().isOk());
+
+        assertThat(capacityHoldRepository.findById(fixture.activeHold().getHoldId()))
+            .hasValueSatisfying(hold -> {
+                assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.EXPIRED);
+                assertThat(hold.getUser()).isNull();
+                assertThat(hold.getCapacityReleasedAt()).isNotNull();
+            });
+        assertThat(contentSessionRepository.findById(fixture.session().getSessionId()))
+            .hasValueSatisfying(session -> assertThat(session.getRemainingCapacity()).isEqualTo(10));
+    }
+
+    @Test
+    @Timeout(10)
+    void withdraw_whenSchedulerTerminatesExpiredHoldAfterSnapshot_completesWithoutSchedulerFailure() throws Exception {
+        Fixture fixture = createFixture();
+        expireActiveHold(fixture);
+        CountDownLatch withdrawalSnapshotRead = new CountDownLatch(1);
+        CountDownLatch releaseWithdrawal = new CountDownLatch(1);
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<Void> withdrawal = executorService.submit(() -> {
+                transactionTemplate.executeWithoutResult(status -> {
+                    capacityHoldRepository.findActiveHoldIdsByUserId(fixture.user().getUserId());
+                    withdrawalSnapshotRead.countDown();
+                    await(releaseWithdrawal);
+                    withdrawUserUseCase.withdraw(fixture.user().getUserId());
+                });
+                return null;
+            });
+            assertThat(withdrawalSnapshotRead.await(3, TimeUnit.SECONDS)).isTrue();
+
+            Future<HoldTerminationResult> scheduler = executorService.submit(
+                expireOrInvalidateCapacityHoldsUseCase::execute
+            );
+            try {
+                HoldTerminationResult schedulerResult = scheduler.get(5, TimeUnit.SECONDS);
+                assertThat(schedulerResult.expiredHoldCount()).isOne();
+                assertThat(schedulerResult.invalidatedHoldCount()).isZero();
+                assertThat(schedulerResult.failedHoldCount()).isZero();
+            } finally {
+                releaseWithdrawal.countDown();
+            }
+            withdrawal.get(5, TimeUnit.SECONDS);
+        }
+
+        assertThat(appUserRepository.findById(fixture.user().getUserId())).isEmpty();
+        assertThat(capacityHoldRepository.findById(fixture.activeHold().getHoldId()))
+            .hasValueSatisfying(hold -> {
+                assertThat(hold.getStatus()).isIn(CapacityHoldStatus.EXPIRED, CapacityHoldStatus.INVALIDATED);
+                assertThat(hold.getUser()).isNull();
+                assertThat(hold.getTerminalAt()).isNotNull();
+                assertThat(hold.getCapacityReleasedAt()).isNotNull();
+            });
+        assertThat(contentSessionRepository.findById(fixture.session().getSessionId()))
+            .hasValueSatisfying(session -> assertThat(session.getRemainingCapacity()).isEqualTo(10));
+    }
+
+    @Test
+    void withdraw_whenHoldTerminationFails_rollsBackExpiredActiveHoldAndCapacity() {
+        Fixture fixture = createFixture();
+        expireActiveHold(fixture);
+        failingWithdrawalCapacityHoldService.failAfterNextWithdrawalTermination();
+
+        assertThatThrownBy(() -> withdrawUserUseCase.withdraw(fixture.user().getUserId()))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("simulated withdrawal capacity hold termination failure");
+
+        assertThat(appUserRepository.findById(fixture.user().getUserId()))
+            .hasValueSatisfying(user -> assertThat(user.getStatus()).isEqualTo(AppUserStatus.ACTIVE));
+        assertThat(capacityHoldRepository.findById(fixture.activeHold().getHoldId()))
+            .hasValueSatisfying(hold -> {
+                assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.ACTIVE);
+                assertThat(hold.getUser()).isNotNull();
+                assertThat(hold.getTerminalAt()).isNull();
+                assertThat(hold.getCapacityReleasedAt()).isNull();
+            });
+        assertThat(contentSessionRepository.findById(fixture.session().getSessionId()))
+            .hasValueSatisfying(session -> assertThat(session.getRemainingCapacity()).isEqualTo(8));
+    }
+
+    @Test
     void withdraw_withPendingPayment_rejectsWithoutChangingThePaymentOrHold() {
         Fixture fixture = createFixture();
         jdbcTemplate.update(
@@ -203,6 +348,94 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         assertThat(paymentRepository.findAll()).singleElement()
             .extracting(payment -> payment.getStatus())
             .isEqualTo(PaymentStatus.PENDING);
+    }
+
+    @Test
+    void withdraw_withApprovedPaymentAndConfirmedReservation_rejectsWithoutChangingPaymentReservationOrHold() {
+        Fixture fixture = createFixture();
+        Payment payment = createApprovedPayment(fixture);
+        CapacityHold consumedHold = fixture.reservation().getCapacityHold();
+
+        assertThat(withdraw(fixture.user().getUserId())).isEqualTo(ErrorCode.FORBIDDEN);
+
+        assertThat(appUserRepository.findById(fixture.user().getUserId()))
+            .hasValueSatisfying(user -> assertThat(user.getStatus()).isEqualTo(AppUserStatus.ACTIVE));
+        assertThat(capacityHoldRepository.findById(consumedHold.getHoldId()))
+            .hasValueSatisfying(hold -> {
+                assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.CONSUMED);
+                assertThat(hold.getUser()).isNotNull();
+            });
+        assertThat(reservationRepository.findById(fixture.reservation().getReservationId()))
+            .hasValueSatisfying(reservation -> {
+                assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.CONFIRMED);
+                assertThat(reservation.getUser()).isNotNull();
+            });
+        Long paymentId = payment.getPaymentId();
+        assertThat(paymentRepository.findByPaymentId(paymentId))
+            .hasValueSatisfying(savedPayment -> {
+                assertThat(savedPayment.getStatus()).isEqualTo(PaymentStatus.APPROVED);
+                assertThat(savedPayment.getReservation().getReservationId())
+                    .isEqualTo(fixture.reservation().getReservationId());
+            });
+        assertThat(refundRepository.findAll()).isEmpty();
+        verifyNoInteractions(refreshTokenStore);
+    }
+
+    @Test
+    void withdraw_withSucceededRefundAndConfirmedReservation_cancelsReservationAndDeletesAccount() {
+        Fixture fixture = createFixture();
+        Payment payment = createApprovedPayment(fixture);
+        Refund refund = createTerminalRefund(payment, RefundStatus.SUCCEEDED);
+
+        assertThat(withdraw(fixture.user().getUserId())).isNull();
+
+        assertThat(appUserRepository.findById(fixture.user().getUserId())).isEmpty();
+        assertThat(capacityHoldRepository.findById(fixture.reservation().getCapacityHold().getHoldId()))
+            .hasValueSatisfying(hold -> {
+                assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.CONSUMED);
+                assertThat(hold.getUser()).isNull();
+            });
+        assertThat(reservationRepository.findById(fixture.reservation().getReservationId()))
+            .hasValueSatisfying(reservation -> {
+                assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.CANCELLED);
+                assertThat(reservation.getUser()).isNull();
+                assertThat(reservation.getCancellationReason()).isEqualTo("USER_WITHDRAWAL");
+            });
+        assertThat(paymentRepository.findByPaymentId(payment.getPaymentId()))
+            .hasValueSatisfying(savedPayment -> assertThat(savedPayment.getStatus()).isEqualTo(PaymentStatus.APPROVED));
+        assertThat(refundRepository.findById(refund.getRefundId()))
+            .hasValueSatisfying(savedRefund -> assertThat(savedRefund.getStatus()).isEqualTo(RefundStatus.SUCCEEDED));
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = RefundStatus.class, names = {"FAILED", "DISCREPANT"})
+    void withdraw_withUnresolvedRefundAndConfirmedReservation_rejectsWithoutChangingPaymentReservationOrHold(
+        RefundStatus refundStatus
+    ) {
+        Fixture fixture = createFixture();
+        Payment payment = createApprovedPayment(fixture);
+        Refund refund = createTerminalRefund(payment, refundStatus);
+        CapacityHold consumedHold = fixture.reservation().getCapacityHold();
+
+        assertThat(withdraw(fixture.user().getUserId())).isEqualTo(ErrorCode.FORBIDDEN);
+
+        assertThat(appUserRepository.findById(fixture.user().getUserId()))
+            .hasValueSatisfying(user -> assertThat(user.getStatus()).isEqualTo(AppUserStatus.ACTIVE));
+        assertThat(capacityHoldRepository.findById(consumedHold.getHoldId()))
+            .hasValueSatisfying(hold -> {
+                assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.CONSUMED);
+                assertThat(hold.getUser()).isNotNull();
+            });
+        assertThat(reservationRepository.findById(fixture.reservation().getReservationId()))
+            .hasValueSatisfying(reservation -> {
+                assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.CONFIRMED);
+                assertThat(reservation.getUser()).isNotNull();
+            });
+        assertThat(paymentRepository.findByPaymentId(payment.getPaymentId()))
+            .hasValueSatisfying(savedPayment -> assertThat(savedPayment.getStatus()).isEqualTo(PaymentStatus.APPROVED));
+        assertThat(refundRepository.findById(refund.getRefundId()))
+            .hasValueSatisfying(savedRefund -> assertThat(savedRefund.getStatus()).isEqualTo(refundStatus));
+        verifyNoInteractions(refreshTokenStore);
     }
 
     @Test
@@ -237,6 +470,47 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         assertThat(refundRepository.findAll()).singleElement()
             .extracting(refund -> refund.getStatus())
             .isEqualTo(RefundStatus.REQUESTED);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = OperatorApplicationStatus.class, names = {"APPROVED", "REJECTED"})
+    void withdraw_afterReviewerRoleRevocation_unlinksInspectorAndPreservesReviewResult(
+        OperatorApplicationStatus applicationStatus
+    ) throws Exception {
+        String suffix = Long.toUnsignedString(System.nanoTime());
+        Region region = regionRepository.saveAndFlush(new Region("R" + suffix, "김해시", true));
+        AppUser reviewer = saveUser("reviewer-" + suffix + "@example.com");
+        UserRoleAssignment reviewerRole = userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(
+            reviewer,
+            UserRole.REGION_ADMIN,
+            region
+        ));
+        AppUser applicant = saveUser("applicant-" + suffix + "@example.com");
+        String rejectedReason = applicationStatus == OperatorApplicationStatus.REJECTED ? "사업자 정보 미비" : null;
+        OperatorApplication application = operatorApplicationRepository.saveAndFlush(new OperatorApplication(
+            applicant,
+            region,
+            "사업자 정보",
+            applicationStatus,
+            reviewer,
+            rejectedReason
+        ));
+        Instant reviewedAt = findReviewTime(application.getOperatorApplicationId());
+        reviewerRole.revoke(Instant.now(), "ROLE_REVOKED");
+        userRoleAssignmentRepository.saveAndFlush(reviewerRole);
+
+        mockMvc.perform(delete(WITHDRAWAL_PATH)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(reviewer.getUserId())))
+            .andExpect(status().isOk());
+
+        assertThat(appUserRepository.findById(reviewer.getUserId())).isEmpty();
+        assertThat(operatorApplicationRepository.findById(application.getOperatorApplicationId()))
+            .hasValueSatisfying(savedApplication -> {
+                assertThat(savedApplication.getStatus()).isEqualTo(applicationStatus);
+                assertThat(savedApplication.getInspectedUser()).isNull();
+                assertThat(savedApplication.getRejectedReason()).isEqualTo(rejectedReason);
+            });
+        assertThat(findReviewTime(application.getOperatorApplicationId())).isEqualTo(reviewedAt);
     }
 
     @Test
@@ -403,6 +677,37 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         return new Fixture(user, session, activeHold, reservation);
     }
 
+    private Payment createApprovedPayment(Fixture fixture) {
+        CapacityHold consumedHold = fixture.reservation().getCapacityHold();
+        ReservationPriceSnapshot snapshot = reservationPriceSnapshotRepository.saveAndFlush(
+            new ReservationPriceSnapshot(consumedHold, null, 20_000, 0, 20_000, "KRW", Instant.now())
+        );
+        Payment payment = new Payment(
+            consumedHold,
+            snapshot,
+            "withdrawal-approved-payment-" + System.nanoTime(),
+            Instant.now()
+        );
+        payment.approve(fixture.reservation(), "portone-" + System.nanoTime(), Instant.now());
+        return paymentRepository.saveAndFlush(payment);
+    }
+
+    private Refund createTerminalRefund(
+        Payment payment,
+        RefundStatus refundStatus
+    ) {
+        Instant now = Instant.now();
+        Refund refund = new Refund(payment, 20_000, now);
+        refund.startProcessing();
+        switch (refundStatus) {
+            case SUCCEEDED -> refund.succeed(now);
+            case FAILED -> refund.fail(now);
+            case DISCREPANT -> refund.markDiscrepant(now);
+            default -> throw new IllegalArgumentException("terminal refund status is required");
+        }
+        return refundRepository.saveAndFlush(refund);
+    }
+
     private AppUser saveUser(String loginIdentifier) {
         return appUserRepository.saveAndFlush(new AppUser(
             loginIdentifier,
@@ -413,6 +718,13 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         ));
     }
 
+    private void expireActiveHold(Fixture fixture) {
+        jdbcTemplate.update(
+            "UPDATE capacity_hold SET expires_at = CURRENT_TIMESTAMP(6) - INTERVAL 1 SECOND WHERE hold_id = ?",
+            fixture.activeHold().getHoldId()
+        );
+    }
+
     private ErrorCode withdraw(Long userId) {
         try {
             withdrawUserUseCase.withdraw(userId);
@@ -420,6 +732,14 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         } catch (BusinessException exception) {
             return exception.getErrorCode();
         }
+    }
+
+    private Instant findReviewTime(Long operatorApplicationId) {
+        return jdbcTemplate.queryForObject(
+            "SELECT updated_at FROM operator_application WHERE operator_application_id = ?",
+            Timestamp.class,
+            operatorApplicationId
+        ).toInstant();
     }
 
     private void assertUserCommandWaitsForWithdrawalAndIsRejected(
@@ -480,13 +800,47 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
     ) {
     }
 
-    @TestConfiguration
+    @TestConfiguration(proxyBeanMethods = false)
     static class WithdrawalMySqlTestConfiguration {
 
         @Bean
         @Primary
         RefreshTokenStore refreshTokenStore() {
             return mock(RefreshTokenStore.class);
+        }
+
+        @Bean
+        @Primary
+        FailingWithdrawalCapacityHoldService failingWithdrawalCapacityHoldService(
+            CapacityHoldRepository capacityHoldRepository
+        ) {
+            return new FailingWithdrawalCapacityHoldService(capacityHoldRepository);
+        }
+    }
+
+    static class FailingWithdrawalCapacityHoldService extends CapacityHoldService {
+
+        private boolean failAfterWithdrawalTermination;
+
+        FailingWithdrawalCapacityHoldService(CapacityHoldRepository capacityHoldRepository) {
+            super(capacityHoldRepository);
+        }
+
+        @Override
+        public List<TerminatedCapacityHold> invalidateActiveHoldsForWithdrawal(Long userId) {
+            List<TerminatedCapacityHold> terminatedCapacityHolds = super.invalidateActiveHoldsForWithdrawal(userId);
+            if (failAfterWithdrawalTermination) {
+                throw new IllegalStateException("simulated withdrawal capacity hold termination failure");
+            }
+            return terminatedCapacityHolds;
+        }
+
+        void failAfterNextWithdrawalTermination() {
+            failAfterWithdrawalTermination = true;
+        }
+
+        void reset() {
+            failAfterWithdrawalTermination = false;
         }
     }
 }

@@ -10,7 +10,8 @@
 ## 1. 개요
 
 담당 지역 관리자가 자신의 지역에서 `EDIT_REQUESTED` 상태인 콘텐츠 수정본을 조회한다. 공개 콘텐츠 수정본과
-공개 전 수정 심사로 원본이 `PENDING`인 수정본을 함께 반환한다. 이 API는 심사 결과·원본 콘텐츠·수정본을 변경하지 않는다.
+공개 전 수정 심사로 원본이 `PENDING`인 수정본을 함께 반환한다. 콘텐츠 중단·종료로 `EDIT_INVALIDATED`가 된
+수정본은 터미널 상태이므로 결과에서 제외한다. 이 API는 심사 결과·원본 콘텐츠·수정본을 변경하지 않는다.
 
 ## 2. 심사 대기 수정본 목록
 
@@ -84,7 +85,8 @@ GET /api/v1/region-admin/content-revisions?status=EDIT_REQUESTED
 ### 처리 규칙
 
 1. 인증 지역 관리자의 담당 `region_id`와 원본 콘텐츠의 `region_id`가 같은 수정본만 반환한다.
-2. 수정본은 `EDIT_REQUESTED`, 원본은 소프트 삭제되지 않은 상태여야 한다.
+2. 수정본은 `EDIT_REQUESTED`, 원본은 소프트 삭제되지 않은 상태여야 한다. 콘텐츠가 `SUSPENDED` 또는 `ENDED`로
+   전이하며 `EDIT_INVALIDATED`가 된 수정본은 결과에 포함하지 않고 상태 조합 오류로 `500`을 반환하지 않는다.
 3. `content_revision.publish_at IS NULL`이면 원본은 `PUBLISHED`여야 하며 `PUBLISHED_REVISION`으로 반환한다.
 4. `content_revision.publish_at IS NOT NULL`이면 원본은 `PENDING`이고 최신 `PENDING` 상태 로그의 직전 상태 로그는 `APPROVED`여야 하며, `PRE_PUBLIC_REVISION`으로 반환한다.
 5. 수정본 제출 시각 오름차순, 같은 시각이면 `revisionId` 오름차순으로 정렬한다.
@@ -93,4 +95,6 @@ GET /api/v1/region-admin/content-revisions?status=EDIT_REQUESTED
 ## 3. 감사 및 정합성
 
 - 조회는 `content`, `content_revision`, `content_log`, 이미지 연결과 감사 기록을 변경하지 않는다.
+- 콘텐츠 중단·종료와 경합해 수정본이 `EDIT_INVALIDATED`로 커밋되면 해당 수정본은 목록에서 제외한다. 이미 종결된
+  수정본의 상태 조합을 심사 유형으로 분류하지 않는다.
 - 성공·실패 로그에는 `requestId`, 담당 지역, 결과 건수와 결과 코드만 남기며 이미지 객체 키·개인정보는 남기지 않는다.

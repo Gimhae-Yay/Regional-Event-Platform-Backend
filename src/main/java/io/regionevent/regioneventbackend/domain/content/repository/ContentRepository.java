@@ -264,6 +264,17 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
         """)
     List<Content> findMissionTargetsForUpdate(@Param("contentIds") List<Long> contentIds);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = {"operator", "region"})
+    @Query("""
+        SELECT content
+        FROM Content content
+        WHERE content.contentId IN :contentIds
+          AND content.deletedAt IS NULL
+        ORDER BY content.contentId ASC
+        """)
+    List<Content> findStampbookTargetsForUpdate(@Param("contentIds") List<Long> contentIds);
+
     @EntityGraph(attributePaths = {"operator", "region", "representativeImageObject"})
     @Query("""
         SELECT content
@@ -306,8 +317,12 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
         ContentStatus status
     );
 
+    boolean existsByContentIdAndStatusAndDeletedAtIsNullAndRegionIsPublicTrue(
+        Long contentId,
+        ContentStatus status
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @EntityGraph(attributePaths = "region")
     @Query("""
         SELECT content
         FROM Content content
@@ -317,7 +332,6 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
     Optional<Content> findApprovalTargetForUpdate(@Param("contentId") Long contentId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @EntityGraph(attributePaths = "region")
     @Query("""
         SELECT content
         FROM Content content
@@ -335,7 +349,6 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
     Optional<Long> findRegionIdByContentIdAndDeletedAtIsNull(@Param("contentId") Long contentId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @EntityGraph(attributePaths = "region")
     @Query("""
         SELECT content
         FROM Content content
@@ -372,20 +385,36 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
     @Query(value = """
         SELECT content_id
         FROM content
+        JOIN region ON region.region_id = content.region_id
         WHERE content_id = :contentId
             AND status = 'PUBLISHED'
             AND deleted_at IS NULL
             AND reservation_price = 0
+            AND region.is_public = true
         FOR UPDATE
         """, nativeQuery = true)
     Optional<Long> findPublishedReservationTargetIdForUpdate(@Param("contentId") Long contentId);
 
     @Query(value = """
-        SELECT reservation_price
+        SELECT content_id
         FROM content
+        JOIN region ON region.region_id = content.region_id
         WHERE content_id = :contentId
             AND status = 'PUBLISHED'
             AND deleted_at IS NULL
+            AND region.is_public = true
+        FOR UPDATE
+        """, nativeQuery = true)
+    Optional<Long> findPublishedCapacityHoldTargetIdForUpdate(@Param("contentId") Long contentId);
+
+    @Query(value = """
+        SELECT reservation_price
+        FROM content
+        JOIN region ON region.region_id = content.region_id
+        WHERE content_id = :contentId
+            AND status = 'PUBLISHED'
+            AND deleted_at IS NULL
+            AND region.is_public = true
         FOR UPDATE
         """, nativeQuery = true)
     Optional<Long> findPublishedPaymentReservationPriceForUpdate(@Param("contentId") Long contentId);

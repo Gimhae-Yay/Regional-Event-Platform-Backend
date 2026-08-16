@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -18,12 +19,15 @@ import org.springframework.web.bind.annotation.RestController;
 
 import io.regionevent.regioneventbackend.domain.coupon.dto.CreateCouponPolicyRequest;
 import io.regionevent.regioneventbackend.domain.coupon.dto.CreateCouponPolicyResponse;
+import io.regionevent.regioneventbackend.domain.coupon.dto.GetOperatorCouponPoliciesResponse;
+import io.regionevent.regioneventbackend.domain.coupon.dto.GetOperatorCouponPolicyResponse;
 import io.regionevent.regioneventbackend.domain.coupon.dto.PublishCouponPolicyRequest;
 import io.regionevent.regioneventbackend.domain.coupon.dto.PublishCouponPolicyResponse;
 import io.regionevent.regioneventbackend.domain.coupon.dto.UpdateCouponPolicyRequest;
 import io.regionevent.regioneventbackend.domain.coupon.dto.UpdateCouponPolicyResponse;
 import io.regionevent.regioneventbackend.domain.coupon.service.CreateCouponPolicyResult;
 import io.regionevent.regioneventbackend.domain.coupon.service.CreateCouponPolicyUseCase;
+import io.regionevent.regioneventbackend.domain.coupon.service.GetOperatorCouponPoliciesUseCase;
 import io.regionevent.regioneventbackend.domain.coupon.service.PublishCouponPolicyResult;
 import io.regionevent.regioneventbackend.domain.coupon.service.PublishCouponPolicyUseCase;
 import io.regionevent.regioneventbackend.domain.coupon.service.UpdateCouponPolicyResult;
@@ -37,19 +41,24 @@ import io.regionevent.regioneventbackend.global.response.ApiResponse;
 @RequestMapping("/api/v1/operator/coupon-policies")
 public class CouponPolicyController {
 
-    private static final String SUCCESS_MESSAGE = "쿠폰 정책 생성에 성공했습니다.";
+    private static final String CREATE_SUCCESS_MESSAGE = "쿠폰 정책 생성에 성공했습니다.";
+    private static final String LIST_SUCCESS_MESSAGE = "내 쿠폰 정책 목록 조회에 성공했습니다.";
+    private static final String DETAIL_SUCCESS_MESSAGE = "내 쿠폰 정책 상세 조회에 성공했습니다.";
     private static final Pattern POSITIVE_DECIMAL_PATTERN = Pattern.compile("^[1-9][0-9]*$");
 
     private final CreateCouponPolicyUseCase createCouponPolicyUseCase;
+    private final GetOperatorCouponPoliciesUseCase getOperatorCouponPoliciesUseCase;
     private final PublishCouponPolicyUseCase publishCouponPolicyUseCase;
     private final UpdateCouponPolicyUseCase updateCouponPolicyUseCase;
 
     public CouponPolicyController(
         CreateCouponPolicyUseCase createCouponPolicyUseCase,
+        GetOperatorCouponPoliciesUseCase getOperatorCouponPoliciesUseCase,
         PublishCouponPolicyUseCase publishCouponPolicyUseCase,
         UpdateCouponPolicyUseCase updateCouponPolicyUseCase
     ) {
         this.createCouponPolicyUseCase = createCouponPolicyUseCase;
+        this.getOperatorCouponPoliciesUseCase = getOperatorCouponPoliciesUseCase;
         this.publishCouponPolicyUseCase = publishCouponPolicyUseCase;
         this.updateCouponPolicyUseCase = updateCouponPolicyUseCase;
     }
@@ -66,8 +75,34 @@ public class CouponPolicyController {
         );
         return ApiResponse.success(
             HttpStatus.CREATED,
-            SUCCESS_MESSAGE,
+            CREATE_SUCCESS_MESSAGE,
             CreateCouponPolicyResponse.from(result)
+        ).toResponseEntity();
+    }
+
+    @GetMapping
+    public ResponseEntity<ApiResponse<GetOperatorCouponPoliciesResponse>> getCouponPolicies(
+        @AuthenticationPrincipal Long userId
+    ) {
+        return ApiResponse.success(
+            HttpStatus.OK,
+            LIST_SUCCESS_MESSAGE,
+            GetOperatorCouponPoliciesResponse.from(getOperatorCouponPoliciesUseCase.findAll(userId))
+        ).toResponseEntity();
+    }
+
+    @GetMapping("/{couponPolicyId}")
+    public ResponseEntity<ApiResponse<GetOperatorCouponPolicyResponse>> getCouponPolicy(
+        @AuthenticationPrincipal Long userId,
+        @PathVariable String couponPolicyId
+    ) {
+        return ApiResponse.success(
+            HttpStatus.OK,
+            DETAIL_SUCCESS_MESSAGE,
+            GetOperatorCouponPolicyResponse.from(getOperatorCouponPoliciesUseCase.find(
+                userId,
+                toPositiveId(couponPolicyId, ErrorCode.INVALID_INPUT)
+            ))
         ).toResponseEntity();
     }
 

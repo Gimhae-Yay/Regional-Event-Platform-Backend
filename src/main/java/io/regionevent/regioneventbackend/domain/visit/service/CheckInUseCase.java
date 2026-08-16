@@ -27,6 +27,7 @@ import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationService;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationService.ManualCheckInLookup;
+import io.regionevent.regioneventbackend.domain.stampbook.service.RecordStampbookProgressUseCase;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService;
@@ -58,6 +59,7 @@ public class CheckInUseCase {
     private final RecordFailureAuditEventUseCase recordFailureAuditEventUseCase;
     private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase;
     private final MissionProgressVisitCompletionAdapter missionProgressVisitCompletionAdapter;
+    private final RecordStampbookProgressUseCase recordStampbookProgressUseCase;
 
     public CheckInUseCase(
         OperatorAuthorizationService operatorAuthorizationService,
@@ -70,7 +72,8 @@ public class CheckInUseCase {
         RecordAuditEventUseCase recordAuditEventUseCase,
         RecordFailureAuditEventUseCase recordFailureAuditEventUseCase,
         RecordFailedAuditEventUseCase recordFailedAuditEventUseCase,
-        MissionProgressVisitCompletionAdapter missionProgressVisitCompletionAdapter
+        MissionProgressVisitCompletionAdapter missionProgressVisitCompletionAdapter,
+        RecordStampbookProgressUseCase recordStampbookProgressUseCase
     ) {
         this.operatorAuthorizationService = operatorAuthorizationService;
         this.userRoleAssignmentService = userRoleAssignmentService;
@@ -83,6 +86,7 @@ public class CheckInUseCase {
         this.recordFailureAuditEventUseCase = recordFailureAuditEventUseCase;
         this.recordFailedAuditEventUseCase = recordFailedAuditEventUseCase;
         this.missionProgressVisitCompletionAdapter = missionProgressVisitCompletionAdapter;
+        this.recordStampbookProgressUseCase = recordStampbookProgressUseCase;
     }
 
     @Transactional
@@ -424,6 +428,7 @@ public class CheckInUseCase {
             checkedAt
         ));
         missionProgressVisitCompletionAdapter.recordAfterCommit(visit.getVisitId(), requestId);
+        recordStampbookProgressUseCase.record(visit.getVisitId());
         return completeSuccess(
             acquired,
             requestId,

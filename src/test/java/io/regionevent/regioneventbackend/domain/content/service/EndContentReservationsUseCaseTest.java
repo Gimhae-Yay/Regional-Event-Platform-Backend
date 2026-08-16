@@ -20,6 +20,7 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
+import io.regionevent.regioneventbackend.domain.region.service.RegionService;
 import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHoldService;
 import io.regionevent.regioneventbackend.domain.payment.service.ExpirePendingPaymentForTerminatedHoldUseCase;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -36,6 +37,9 @@ class EndContentReservationsUseCaseTest {
     private static final Instant ENDED_AT = Instant.parse("2026-08-06T00:00:00Z");
 
     private final ContentService contentService = mock(ContentService.class);
+    private final RegionService regionService = mock(RegionService.class);
+    private final ContentRevisionInvalidationService contentRevisionInvalidationService =
+        mock(ContentRevisionInvalidationService.class);
     private final ContentSessionService contentSessionService = mock(ContentSessionService.class);
     private final ContentLogService contentLogService = mock(ContentLogService.class);
     private final CapacityHoldService capacityHoldService = mock(CapacityHoldService.class);
@@ -50,6 +54,8 @@ class EndContentReservationsUseCaseTest {
         mock(PublicCatalogCacheInvalidator.class);
     private final EndContentReservationsUseCase useCase = new EndContentReservationsUseCase(
         contentService,
+        regionService,
+        contentRevisionInvalidationService,
         contentSessionService,
         contentLogService,
         capacityHoldService,
@@ -64,6 +70,9 @@ class EndContentReservationsUseCaseTest {
     void setUp() {
         when(capacityHoldService.invalidateAllActiveHoldsForContent(CONTENT_ID, "CONTENT_ENDED"))
             .thenReturn(List.of());
+        when(contentService.findContentRegionId(CONTENT_ID)).thenReturn(REGION_ID);
+        Region lockedRegion = region();
+        when(regionService.findRegionForUpdate(REGION_ID)).thenReturn(lockedRegion);
     }
 
     @Test
@@ -72,7 +81,7 @@ class EndContentReservationsUseCaseTest {
         UserRoleAssignment regionAdmin = activeRegionAdmin();
         ContentSession contentSession = mock(ContentSession.class);
         when(contentService.findEndTargetForUpdate(CONTENT_ID)).thenReturn(content);
-        when(regionAdminAuthorizationService.authorize(ADMIN_ID, REGION_ID)).thenReturn(regionAdmin);
+        givenAuthorizedRegionAdmin(regionAdmin);
         when(contentSessionService.hasNonTerminalSessionForEnd(CONTENT_ID)).thenReturn(false);
         when(contentSessionService.findCurrentSessionsByContentId(CONTENT_ID)).thenReturn(List.of(contentSession));
         when(contentService.findCurrentDatabaseTime()).thenReturn(ENDED_AT);
@@ -121,7 +130,7 @@ class EndContentReservationsUseCaseTest {
         when(endedContent.getStatus()).thenReturn(ContentStatus.ENDED);
         when(endedContent.getRegion()).thenReturn(region);
         when(contentService.findEndTargetForUpdate(CONTENT_ID)).thenReturn(endedContent);
-        when(regionAdminAuthorizationService.authorize(ADMIN_ID, REGION_ID)).thenReturn(regionAdmin);
+        givenAuthorizedRegionAdmin(regionAdmin);
         when(contentLogService.findLatestEnded(CONTENT_ID)).thenReturn(endedLog);
         when(endedLog.getDate()).thenReturn(ENDED_AT);
 
@@ -155,5 +164,14 @@ class EndContentReservationsUseCaseTest {
         when(assignment.getAppUser()).thenReturn(appUser);
         when(appUser.getUserId()).thenReturn(ADMIN_ID);
         return assignment;
+    }
+
+    private void givenAuthorizedRegionAdmin(UserRoleAssignment assignment) {
+        RegionAdminAuthorizationService.AuthorizedRegionAdmin regionAdmin = mock(
+            RegionAdminAuthorizationService.AuthorizedRegionAdmin.class
+        );
+        when(regionAdminAuthorizationService.requireAuthorizedRegionAdminForUpdate(ADMIN_ID))
+            .thenReturn(regionAdmin);
+        when(regionAdmin.authorize(REGION_ID)).thenReturn(assignment);
     }
 }

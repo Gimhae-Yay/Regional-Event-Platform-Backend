@@ -92,7 +92,7 @@ erDiagram
 | `region` | 서비스 지역의 코드·이름·공개 여부를 관리하는 기준 테이블이다. 콘텐츠, 회차, 예약 운영과 지역 권한의 범위를 정한다. |
 | `app_user` | 로그인 식별자, 비밀번호 해시, 프로필과 회원 처리 상태를 보관하는 계정의 기준 테이블이다. 탈퇴가 완료되면 행을 남기지 않는다. |
 | `user_role_assignment` | 회원에게 부여된 `VISITOR`, `OPERATOR`, `REGION_ADMIN` 역할과 담당 지역을 분리해 관리한다. 한 역할당 담당 지역은 최대 한 곳이다. |
-| `operator_application` | 회원가입에서 `OPERATOR`를 선택한 활성 회원이 요청 지역과 사업자 정보를 제출한 사실, 심사 결과와 사유를 보관한다. 승인 전에는 운영자 역할을 부여하지 않으며, 탈퇴 후에는 신청자 연결과 사업자 개인정보를 제거한다. |
+| `operator_application` | 회원가입에서 `OPERATOR`를 선택한 활성 회원이 요청 지역과 사업자 정보를 제출한 사실, 심사 결과와 사유를 보관한다. 승인 전에는 운영자 역할을 부여하지 않으며, 신청자 탈퇴 뒤에는 신청자 연결과 사업자 개인정보를, 과거 심사자 탈퇴 뒤에는 심사자 연결을 제거한다. 심사 상태·심사 시각·반려 사유는 보존한다. |
 
 #### 콘텐츠·회차·이미지
 
@@ -250,7 +250,7 @@ erDiagram
         bigint requested_region_id FK
         text business_information "평문 텍스트, 탈퇴 후 nullable; 암호화 전환은 ADR-0055 후속 작업"
         string status
-        bigint inspected_user_id FK "심사 전 nullable"
+        bigint inspected_user_id FK "심사 전 또는 심사자 탈퇴 뒤 nullable"
         text rejected_reason "거절 전 nullable"
         timestamp created_at
         timestamp updated_at "심사 종결 시각으로 사용"
@@ -274,9 +274,12 @@ erDiagram
   `REGION_ADMIN` 배정을 생성·변경하지 않는다.
 - 운영자 신청은 반려 뒤 재신청할 때 새 행을 생성한다.
 - `operator_application`이 `PENDING → APPROVED` 또는 `PENDING → REJECTED`로 종결될 때의
-  `updated_at`을 심사 시각으로 사용하며, 별도 `inspected_at` 컬럼은 두지 않는다.
+  `updated_at`을 심사 시각으로 사용하며, 별도 `inspected_at` 컬럼은 두지 않는다. 심사자 탈퇴로
+  `inspected_user_id`를 제거할 때는 이 심사 시각을 변경하지 않는다.
 - 신청자 탈퇴 시 `PENDING` 신청은 먼저 `CANCELLED`로 전환하고 모든 신청 상태에서
   `applicant_user_id`와 `business_information`을 제거한다.
+- 과거 심사자 탈퇴 시 승인·반려된 신청의 `inspected_user_id`만 계정 파기 전에 `NULL`로 갱신한다.
+  심사 상태·`updated_at`·`rejected_reason`은 보존하며, 대체용 가짜 사용자 행이나 `탈퇴한 사용자` FK는 만들지 않는다.
 
 ## 4. 콘텐츠·회차 ERD
 
@@ -459,6 +462,14 @@ erDiagram
 - `content_revision`의 논리 유일 키는 `(content_id, revision_no)`다.
 - 콘텐츠당 `EDIT_REQUESTED` 수정본은 최대 한 건이다. MySQL에서는 생성 컬럼을 포함한 유일 제약 또는
   동등한 조건부 쓰기 제약으로 강제한다.
+- 콘텐츠가 `PUBLISHED → SUSPENDED` 또는 `PUBLISHED → ENDED`로 전이하면, 같은 트랜잭션에서 활성
+  `EDIT_REQUESTED` 수정본을 `EDIT_INVALIDATED`로 전이한다. 콘텐츠 행을 먼저 잠근 뒤 수정본 행을 잠그고,
+  수정 심사·철회와 경합하면 `EDIT_REQUESTED`를 먼저 전이한 하나만 성공한다.
+- `EDIT_INVALIDATED` 수정본은 `invalidated_at`, `invalidation_reason`을 반드시 보관하고,
+  `invalidated_by_user_id`는 수동 중단·종료 처리자에게는 필수이며 시스템 종료에서는 `NULL`이다.
+  `invalidation_reason`은 `CONTENT_SUSPENDED` 또는 `CONTENT_ENDED`만 허용한다. 이 수정본은 후보 필드를
+  원본에 반영하지 않는 터미널 상태이며, 상태 전이 감사 이벤트는 원본 콘텐츠를 대상으로 이전·다음 수정본 상태와
+  사유 코드를 기록한다.
 - 공개 콘텐츠 수정본의 승인 조건은 원본 `PUBLISHED`, 수정본 `EDIT_REQUESTED`,
   `content.version_no = content_revision.base_content_version`, `content_revision.publish_at IS NULL`이다.
   승인 시 후보 필드를 원본에 반영하지만 원본 상태와 `content.publish_at`은 유지한다.
@@ -470,7 +481,7 @@ erDiagram
   `content.version_no = content_revision.base_content_version`, `content_revision.publish_at IS NOT NULL`이다.
   승인 시 모든 후보 필드와 후보 `publish_at`을 원본에 반영하고 `PENDING → APPROVED` 상태 로그, 원본 버전 증가,
   수정본 종결과 성공 감사 이벤트를 한 트랜잭션에서 처리한다.
-- `EDIT_REJECTED`와 `EDIT_WITHDRAWN` 수정본은 원본 후보 필드를 반영하지 않고 보존한다. 원본이 공개 전 수정 심사로
+- `EDIT_REJECTED`, `EDIT_WITHDRAWN`, `EDIT_INVALIDATED` 수정본은 원본 후보 필드를 반영하지 않고 보존한다. 원본이 공개 전 수정 심사로
   `PENDING`이 된 경우에는 이 종결 뒤에도 `PENDING`을 유지한다.
 - 추가 회차는 `content_session`을 `PENDING`, `remaining_capacity = capacity`로 생성한다. 지역 관리자 승인 시에만
   `SCHEDULED`로 전이하며, `PENDING`·`REJECTED` 회차는 홀드·예약·공개 조회의 대상이 아니다.
@@ -791,7 +802,7 @@ erDiagram
 | `operator_application` | `PENDING`, `APPROVED`, `REJECTED`, `CANCELLED` | `PENDING → {APPROVED, REJECTED, CANCELLED}` |
 | `content` | `PENDING`, `REJECTED`, `APPROVED`, `PUBLISHED`, `SUSPENDED`, `WITHDRAWN`, `ENDED` | `PENDING → {APPROVED, REJECTED}`, `REJECTED → PENDING`, `APPROVED → {PENDING, PUBLISHED}`, `PUBLISHED → {SUSPENDED, WITHDRAWN, ENDED}` |
 | `content_log.status` | `content` 상태 카탈로그의 값, `DELETED` | 생성·상태 변경 뒤의 `content.status` 또는 소프트 삭제 이벤트를 추가 전용으로 기록 |
-| `content_revision` | `EDIT_REQUESTED`, `EDIT_APPROVED`, `EDIT_REJECTED`, `EDIT_WITHDRAWN` | `EDIT_REQUESTED → {EDIT_APPROVED, EDIT_REJECTED, EDIT_WITHDRAWN}` |
+| `content_revision` | `EDIT_REQUESTED`, `EDIT_APPROVED`, `EDIT_REJECTED`, `EDIT_WITHDRAWN`, `EDIT_INVALIDATED` | `EDIT_REQUESTED → {EDIT_APPROVED, EDIT_REJECTED, EDIT_WITHDRAWN, EDIT_INVALIDATED}` |
 | `content_session` | `PENDING`, `SCHEDULED`, `REJECTED`, `COMPLETED`, `CANCELLED` | `PENDING → {SCHEDULED, REJECTED}`, `SCHEDULED → {COMPLETED, CANCELLED}` |
 | `session_revision.status` | `PENDING`, `APPROVED`, `REJECTED` | `PENDING → {APPROVED, REJECTED}` |
 | `image_object` | `ACTIVE`, `DELETE_PENDING` | 참조 제거 또는 만료된 미연결 업로드 후보 정리 후 `ACTIVE → DELETE_PENDING`; S3 삭제 성공 후 행 파기 |
@@ -853,8 +864,8 @@ MySQL 복합 FK를 사용하려면 상위 테이블에 대응하는 `UNIQUE` 후
 
 | 대상 상태 | 필수값·null 조건                                                                      |
 | --- |----------------------------------------------------------------------------------|
-| `operator_application.APPROVED` | `inspected_user_id` 존재, `rejected_reason IS NULL`                          |
-| `operator_application.REJECTED` | `inspected_user_id`, `rejected_reason` 존재                          |
+| `operator_application.APPROVED` | 승인 전이 시 `inspected_user_id` 존재, `rejected_reason IS NULL`; 심사자 탈퇴 뒤에는 `inspected_user_id IS NULL`을 허용하고 심사 시각을 보존 |
+| `operator_application.REJECTED` | 반려 전이 시 `inspected_user_id`, `rejected_reason` 존재; 심사자 탈퇴 뒤에는 `inspected_user_id IS NULL`을 허용하고 반려 사유·심사 시각을 보존 |
 | `content_log` | `content_id`, `status`, `date` 존재; 상태는 생성·허용된 콘텐츠 상태 전이 뒤의 값 또는 `DELETED`        |
 | 시스템 처리 `content_log` | `actor_id IS NULL`                                                               |
 | `content_log`의 `REJECTED`, `SUSPENDED`, `WITHDRAWN`, `DELETED` | `reason` 존재                                                                      |
@@ -961,7 +972,7 @@ SQL의 단순 cascade가 아래 업무 순서를 대신해서는 안 된다.
 | 방문자 계정 | `ACTIVE → WITHDRAWING` 후 새 명령을 차단하고 모든 연결 제거가 성공하면 계정 행 파기 |
 | 역할·자격 증명 | 탈퇴 시작 시 역할을 해제하고 완료 전 자격 증명을 파기 |
 | Refresh Token 폐기 상태 | MySQL 커밋 전 Redis에서 활성 계열 전체를 폐기하고 사용자→활성 계열 인덱스를 제거한다. Redis 실패 시 MySQL 탈퇴를 롤백하며, Redis 성공 뒤 MySQL 실패 시 기존 계열은 복구하지 않는다. |
-| 운영자 신청 | `PENDING`은 `CANCELLED`; 모든 상태에서 신청자 연결과 사업자 개인정보 제거 |
+| 운영자 신청 | 신청자 탈퇴 시 `PENDING`은 `CANCELLED`; 모든 상태에서 신청자 연결과 사업자 개인정보 제거. 과거 심사자 탈퇴 시 승인·반려 신청의 `inspected_user_id`만 제거하고 심사 상태·심사 시각·반려 사유 보존 |
 | 활성 홀드 | `INVALIDATED` 최초 전이와 정원 복구 후 `user_id` 제거 |
 | 미체크인 예약 | `CANCELLED`; 회차 시작 전만 정원 복구한 뒤 `user_id` 제거 |
 | 방문 | `user_id` 제거, 콘텐츠·회차·체크인 사실과 예약 중복 방지 연결 보존 |

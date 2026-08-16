@@ -55,7 +55,7 @@ description: 현재 브랜치의 커밋과 `dev` 기준 diff를 검증하고, PR
 6. `git log --format=fuller origin/<base>..HEAD`, `git diff --stat origin/<base>...HEAD`, `git diff origin/<base>...HEAD`를 읽는다.
 7. 일반 커밋 제목을 검사하고 라벨을 산정한다. 커밋 형식이나 라벨 검증에 실패하면 중단한다.
 8. 확인된 이슈의 완료 조건, TODO, 연결 방식을 diff와 대조한다. 번호나 완료 여부를 추측하지 않는다.
-9. `git diff --check origin/<base>...HEAD`를 실행한다. Java, Gradle, 설정, 리소스 변경이면 Windows에서 `.\gradlew.bat build`, 그 밖에서는 `./gradlew build`를 실행한다. 변경된 동작에 맞는 관련 테스트가 있으면 함께 실행한다.
+9. `git diff --check origin/<base>...HEAD`를 실행한다. Java, Gradle, 설정, 리소스 변경이면 Windows에서 `.\gradlew.bat ciFastCheck`, 그 밖에서는 `./gradlew ciFastCheck`를 실행한다. `ciFastCheck`는 애플리케이션 패키징과 Testcontainers 기반이 아닌 `fastTest`를 검증한다. 변경된 동작에 맞는 관련 테스트가 있으면 함께 실행한다.
 10. 필수 검증이 실패하면 기본적으로 중단한다. 사용자가 실패 상태로도 생성을 명시하면 결과와 위험을 적고 체크박스를 완료 처리하지 않는다.
 11. `gh pr list --head <branch> --state all`로 중복을 확인한다. 열린 PR이 있으면 새로 만들지 않고 기존 PR을 검증해 보고한다. 닫힌 PR만 있으면 새 PR 필요 여부를 확인한다.
 12. 제목과 본문을 자체 점검한 뒤 `git push -u origin <branch>`를 실행한다. 실패하면 재시도 전에 원격 브랜치와 PR을 다시 조회한다.

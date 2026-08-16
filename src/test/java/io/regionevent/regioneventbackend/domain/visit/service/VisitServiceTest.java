@@ -48,4 +48,16 @@ class VisitServiceTest {
 
         assertThat(visitService.findMissionProgressSource(VISIT_ID)).containsSame(visit);
     }
+
+    @Test
+    void findStampbookProgressSourceInCurrentTransaction_영속사용자가연결된방문을잠금조회한다() {
+        Visit visit = mock(Visit.class);
+        when(visit.getUser()).thenReturn(mock(AppUser.class));
+        when(visitRepository.findStampbookProgressSourceByVisitIdForUpdate(VISIT_ID))
+            .thenReturn(Optional.of(visit));
+
+        assertThat(visitService.findStampbookProgressSourceInCurrentTransaction(VISIT_ID)).containsSame(visit);
+
+        verify(visitRepository).findStampbookProgressSourceByVisitIdForUpdate(VISIT_ID);
+    }
 }

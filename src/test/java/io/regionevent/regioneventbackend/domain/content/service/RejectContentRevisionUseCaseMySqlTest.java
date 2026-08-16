@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.domain.content.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
 import java.util.List;
@@ -46,6 +47,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
+import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -202,6 +204,51 @@ class RejectContentRevisionUseCaseMySqlTest {
         assertSingleSuccessAudit(fixture);
     }
 
+    @Test
+    @Timeout(15)
+    void 지역관리자역할회수가먼저커밋되면_이미시작한수정본반려는_FORBIDDEN으로종료하고_상태와성공감사를남기지않는다()
+        throws Exception {
+        Fixture fixture = createFixture(ContentStatus.PUBLISHED, null, false);
+        CountDownLatch authorizationLocked = new CountDownLatch(1);
+        CountDownLatch releaseRevocation = new CountDownLatch(1);
+        CountDownLatch rejectionStarted = new CountDownLatch(1);
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<Void> revocation = executorService.submit(() -> {
+                revokeAfterRelease(fixture, authorizationLocked, releaseRevocation);
+                return null;
+            });
+            assertThat(authorizationLocked.await(3, TimeUnit.SECONDS)).isTrue();
+
+            Future<ErrorCode> rejection = executorService.submit(() -> {
+                rejectionStarted.countDown();
+                try {
+                    reject(fixture, "권한 회수 경합 검증");
+                    return null;
+                } catch (BusinessException exception) {
+                    return exception.getErrorCode();
+                }
+            });
+            assertThat(rejectionStarted.await(3, TimeUnit.SECONDS)).isTrue();
+            assertThatThrownBy(() -> rejection.get(300, TimeUnit.MILLISECONDS))
+                .isInstanceOf(java.util.concurrent.TimeoutException.class);
+
+            releaseRevocation.countDown();
+            revocation.get(5, TimeUnit.SECONDS);
+            assertThat(rejection.get(5, TimeUnit.SECONDS)).isEqualTo(ErrorCode.FORBIDDEN);
+        } finally {
+            releaseRevocation.countDown();
+        }
+
+        ContentRevision revision = contentRevisionRepository.findById(fixture.revisionId()).orElseThrow();
+        assertThat(revision.getStatus()).isEqualTo(ContentRevisionStatus.EDIT_REQUESTED);
+        assertThat(revision.getReviewedAt()).isNull();
+        assertThat(revision.getReviewedBy()).isNull();
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent -> fixture.contentId().equals(auditEvent.getTargetId()))
+            .isEmpty();
+    }
+
     private List<Attempt> race(
         ConcurrentAction firstAction,
         ConcurrentAction secondAction
@@ -241,6 +288,27 @@ class RejectContentRevisionUseCaseMySqlTest {
             reason,
             UUID.randomUUID()
         ).revisionStatus();
+    }
+
+    private void revokeAfterRelease(
+        Fixture fixture,
+        CountDownLatch authorizationLocked,
+        CountDownLatch releaseRevocation
+    ) {
+        transactionTemplate.executeWithoutResult(status -> {
+            appUserRepository.findByIdForUpdate(fixture.adminId()).orElseThrow();
+            UserRoleAssignment assignment = userRoleAssignmentRepository
+                .findByAppUserUserIdAndRoleAndStatusAndAppUserStatusForUpdate(
+                    fixture.adminId(),
+                    UserRole.REGION_ADMIN,
+                    UserRoleAssignmentStatus.ACTIVE,
+                    AppUserStatus.ACTIVE
+                )
+                .orElseThrow();
+            authorizationLocked.countDown();
+            await(releaseRevocation);
+            assignment.revoke(Instant.now(), "REGION_ADMIN_REVOCATION");
+        });
     }
 
     private ContentRevisionStatus approve(Fixture fixture) {

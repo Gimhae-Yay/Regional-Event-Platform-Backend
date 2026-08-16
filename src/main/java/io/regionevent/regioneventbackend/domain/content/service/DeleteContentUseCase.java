@@ -75,9 +75,10 @@ public class DeleteContentUseCase {
         Content content = null;
         try {
             String normalizedReason = normalizeReason(reason);
+            RegionAdminAuthorizationService.AuthorizedRegionAdmin regionAdmin =
+                regionAdminAuthorizationService.requireAuthorizedRegionAdminForUpdate(userId);
             content = contentService.findDeletionTargetForUpdate(contentId);
-            UserRoleAssignment assignment = regionAdminAuthorizationService.authorize(
-                userId,
+            UserRoleAssignment assignment = regionAdmin.authorize(
                 content.getRegion().getRegionId()
             );
             validateDeletable(content);

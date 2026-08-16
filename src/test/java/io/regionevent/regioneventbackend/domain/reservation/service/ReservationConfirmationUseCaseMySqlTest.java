@@ -1,6 +1,9 @@
 package io.regionevent.regioneventbackend.domain.reservation.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
 import java.util.List;
@@ -18,11 +21,14 @@ import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
+import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,6 +54,7 @@ import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus;
+import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationPriceSnapshot;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.reservation.dto.CreateReservationHoldRequest;
@@ -63,16 +70,20 @@ import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepositor
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
+import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
 import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 
 @SpringBootTest
+@AutoConfigureMockMvc
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 @Import(ReservationConfirmationUseCaseMySqlTest.ReservationLockOrderConfig.class)
 class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
 
     private final ReservationConfirmationUseCase reservationConfirmationUseCase;
+    private final MockMvc mockMvc;
+    private final JwtAccessTokenService jwtAccessTokenService;
     private final CreateReservationHoldUseCase createReservationHoldUseCase;
     private final CancelContentSessionUseCase cancelContentSessionUseCase;
     private final RegionRepository regionRepository;
@@ -91,6 +102,8 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
     @Autowired
     ReservationConfirmationUseCaseMySqlTest(
         ReservationConfirmationUseCase reservationConfirmationUseCase,
+        MockMvc mockMvc,
+        JwtAccessTokenService jwtAccessTokenService,
         CreateReservationHoldUseCase createReservationHoldUseCase,
         CancelContentSessionUseCase cancelContentSessionUseCase,
         RegionRepository regionRepository,
@@ -107,6 +120,8 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
         PlatformTransactionManager transactionManager
     ) {
         this.reservationConfirmationUseCase = reservationConfirmationUseCase;
+        this.mockMvc = mockMvc;
+        this.jwtAccessTokenService = jwtAccessTokenService;
         this.createReservationHoldUseCase = createReservationHoldUseCase;
         this.cancelContentSessionUseCase = cancelContentSessionUseCase;
         this.regionRepository = regionRepository;
@@ -218,6 +233,35 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
             .findFirst()
             .orElseThrow();
         assertSuccessfulAuditEvents(fixture.capacityHold(), successfulResult.response().reservationId());
+    }
+
+    @Test
+    void 이미_예약이_연결된_활성_홀드는_실패_멱등_결과로_409를_반환한다() throws Exception {
+        Fixture fixture = createFixture();
+        createExistingReservation(fixture);
+        String idempotencyKey = "already-reserved-hold-" + System.nanoTime();
+
+        performConfirmRequest(fixture, idempotencyKey)
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code").value("RESERVATION_CONFIRM_CONFLICT"));
+        performConfirmRequest(fixture, idempotencyKey)
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code").value("RESERVATION_CONFIRM_CONFLICT"));
+
+        assertThat(capacityHoldRepository.findById(fixture.capacityHold().getHoldId()))
+            .hasValueSatisfying(hold -> assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.ACTIVE));
+        assertThat(reservationRepository.findAll())
+            .filteredOn(reservation -> reservation.getCapacityHold().getHoldId().equals(fixture.capacityHold().getHoldId()))
+            .hasSize(1);
+        assertThat(idempotencyRecordRepository.findAll())
+            .filteredOn(record -> record.getActor().getUserId().equals(fixture.user().getUserId()))
+            .singleElement()
+            .satisfies(record -> {
+                assertThat(record.getStatus()).isEqualTo(IdempotencyRecordStatus.FAILED);
+                assertThat(record.getResultCode()).isEqualTo("RESERVATION_CONFIRM_CONFLICT");
+            });
+        assertThat(auditEventRepository.findAll())
+            .noneMatch(event -> event.getResult() == AuditEventResult.SUCCESS);
     }
 
     @Test
@@ -377,6 +421,29 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
     }
 
     @Test
+    void 비공개_지역의_활성_홀드는_무료_예약으로_확정하지_않는다() {
+        Fixture fixture = createFixture();
+        changeRegionVisibility(fixture.capacityHold().getRegion().getRegionId(), false);
+
+        ReservationConfirmationResult result = confirm(
+            fixture,
+            fixture.capacityHold().getHoldId(),
+            "private-region-" + System.nanoTime()
+        );
+
+        assertThat(result.isSuccessful()).isFalse();
+        assertThat(result.errorCode()).isEqualTo(ErrorCode.RESERVATION_CONFIRM_CONFLICT);
+        assertThat(capacityHoldRepository.findById(fixture.capacityHold().getHoldId()))
+            .hasValueSatisfying(hold -> assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.ACTIVE));
+        assertThat(reservationRepository.findAll())
+            .noneMatch(reservation -> reservation.getCapacityHold().getHoldId()
+                .equals(fixture.capacityHold().getHoldId()));
+        assertThat(reservationPriceSnapshotRepository.findAll())
+            .noneMatch(snapshot -> snapshot.getCapacityHold().getHoldId()
+                .equals(fixture.capacityHold().getHoldId()));
+    }
+
+    @Test
     void p1PriceSnapshotLinkedHold_isRejectedByP0FreeReservationConfirmation() {
         Fixture fixture = createFixture();
         reservationPriceSnapshotRepository.saveAndFlush(new ReservationPriceSnapshot(
@@ -521,6 +588,43 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
             idempotencyKey,
             UUID.randomUUID()
         );
+    }
+
+    private void changeRegionVisibility(Long regionId, boolean isPublic) {
+        transactionTemplate.executeWithoutResult(status -> regionRepository.findById(regionId)
+            .orElseThrow()
+            .changeVisibility(isPublic));
+    }
+
+    private org.springframework.test.web.servlet.ResultActions performConfirmRequest(
+        Fixture fixture,
+        String idempotencyKey
+    ) throws Exception {
+        return mockMvc.perform(post("/api/v1/reservation-holds/{holdId}/confirm", fixture.capacityHold().getHoldId())
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(fixture.user().getUserId()))
+            .header("Idempotency-Key", idempotencyKey));
+    }
+
+    private void createExistingReservation(Fixture fixture) {
+        transactionTemplate.executeWithoutResult(status -> {
+            CapacityHold capacityHold = capacityHoldRepository.findById(fixture.capacityHold().getHoldId())
+                .orElseThrow();
+            Instant confirmedAt = Instant.now();
+            reservationRepository.saveAndFlush(new Reservation(
+                "R" + Long.toUnsignedString(System.nanoTime()),
+                UUID.randomUUID().toString(),
+                capacityHold.getRegion(),
+                capacityHold,
+                capacityHold.getContentSession(),
+                capacityHold.getUser(),
+                ReservationStatus.CONFIRMED,
+                confirmedAt,
+                null,
+                null,
+                null,
+                null
+            ));
+        });
     }
 
     private CapacityHold createActiveHold(Fixture fixture) {
@@ -833,6 +937,13 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
         public boolean lockPublishedReservationTarget(Long contentId) {
             reservationLockOrderTracker.recordReservationConfirmContentLockAttempt(contentId);
             boolean locked = super.lockPublishedReservationTarget(contentId);
+            reservationLockOrderTracker.recordContentLock(contentId);
+            return locked;
+        }
+
+        @Override
+        public boolean lockPublishedCapacityHoldTarget(Long contentId) {
+            boolean locked = super.lockPublishedCapacityHoldTarget(contentId);
             reservationLockOrderTracker.recordContentLock(contentId);
             return locked;
         }

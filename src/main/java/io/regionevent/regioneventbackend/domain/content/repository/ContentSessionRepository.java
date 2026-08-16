@@ -48,6 +48,7 @@ public interface ContentSessionRepository extends JpaRepository<ContentSession, 
         FROM ContentSession contentSession
         WHERE contentSession.sessionId = :sessionId
             AND contentSession.content.status = :contentStatus
+            AND contentSession.content.region.isPublic = true
         """)
     Optional<Long> findPublicContentIdBySessionId(
         @Param("sessionId") Long sessionId,
@@ -166,9 +167,11 @@ public interface ContentSessionRepository extends JpaRepository<ContentSession, 
         SELECT content_session.session_id
         FROM content_session
         JOIN content ON content.content_id = content_session.content_id
+        JOIN region ON region.region_id = content.region_id
         WHERE content_session.session_id = :sessionId
             AND content.status = 'PUBLISHED'
             AND content.deleted_at IS NULL
+            AND region.is_public = true
             AND content_session.status = 'SCHEDULED'
             AND content_session.starts_at > CURRENT_TIMESTAMP
         FOR UPDATE
@@ -203,6 +206,7 @@ public interface ContentSessionRepository extends JpaRepository<ContentSession, 
         WHERE contentSession.sessionId = :sessionId
             AND contentSession.content.status = :contentStatus
             AND contentSession.content.deletedAt IS NULL
+            AND contentSession.content.region.isPublic = true
             AND contentSession.status = :sessionStatus
         """)
     Optional<PublicSessionReservationInfoProjection> findPublicScheduledReservationInfo(
@@ -217,6 +221,7 @@ public interface ContentSessionRepository extends JpaRepository<ContentSession, 
         SET contentSession.remainingCapacity = contentSession.remainingCapacity - :quantity
         WHERE contentSession.sessionId = :sessionId
             AND contentSession.content.status = :contentStatus
+            AND contentSession.content.region.isPublic = true
             AND contentSession.status = :sessionStatus
             AND contentSession.startsAt > CURRENT_TIMESTAMP
             AND contentSession.remainingCapacity >= :quantity

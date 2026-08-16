@@ -49,7 +49,9 @@ public class CreateAdminAccountUseCase {
         UUID requestId
     ) {
         validateCommand(command);
-        PlatformAdminAssignment actor = platformAdminAuthorizationService.requireAuthorizedSuperAdmin(actorUserId);
+        PlatformAdminAssignment actor = platformAdminAuthorizationService.requireAuthorizedSuperAdminForUpdate(
+            actorUserId
+        );
         PlatformAdminGrade grade = PlatformAdminGrade.valueOf(command.grade());
         AppUser user = appUserService.createActivePrivilegedUser(
             command.email(),

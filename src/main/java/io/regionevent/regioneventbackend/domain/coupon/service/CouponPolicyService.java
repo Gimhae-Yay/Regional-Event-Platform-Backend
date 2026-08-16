@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.domain.coupon.service;
 
 import java.time.Instant;
+import java.util.List;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,6 +45,24 @@ public class CouponPolicyService {
         validateRequiredId(couponPolicyId);
         return couponPolicyRepository.findByCouponPolicyIdForUpdate(couponPolicyId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public CouponPolicy find(Long couponPolicyId) {
+        validateRequiredId(couponPolicyId);
+        return couponPolicyRepository.findByCouponPolicyId(couponPolicyId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public List<CouponPolicy> findAllByContentOperatorUserIdAndContentRegionId(
+        Long operatorUserId,
+        Long regionId
+    ) {
+        validateRequiredId(operatorUserId);
+        validateRequiredId(regionId);
+        return couponPolicyRepository.findAllByContentOperatorUserIdAndContentRegionId(
+            operatorUserId,
+            regionId
+        );
     }
 
     public CouponPolicy publish(

@@ -45,7 +45,7 @@ class CreateAdminAccountUseCaseTest {
         when(assignment.getGrade()).thenReturn(PlatformAdminGrade.PLATFORM_ADMIN);
         when(assignment.getStatus()).thenReturn(PlatformAdminAssignmentStatus.ACTIVE);
         when(assignment.getGrantedAt()).thenReturn(now);
-        when(authorizationService.requireAuthorizedSuperAdmin(100L)).thenReturn(actor);
+        when(authorizationService.requireAuthorizedSuperAdminForUpdate(100L)).thenReturn(actor);
         when(appUserService.createActivePrivilegedUser(any(), any(), any(), any())).thenReturn(user);
         when(assignmentService.createActiveAssignment(user, PlatformAdminGrade.PLATFORM_ADMIN)).thenReturn(assignment);
 

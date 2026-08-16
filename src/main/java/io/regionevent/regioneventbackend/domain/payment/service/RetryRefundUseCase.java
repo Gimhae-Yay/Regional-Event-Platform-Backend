@@ -17,14 +17,7 @@ import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetTyp
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventActor;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
-import io.regionevent.regioneventbackend.domain.coupon.entity.Coupon;
-import io.regionevent.regioneventbackend.domain.coupon.entity.CouponRedemption;
-import io.regionevent.regioneventbackend.domain.coupon.entity.CouponRedemptionStatus;
-import io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatus;
-import io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatusHistory;
-import io.regionevent.regioneventbackend.domain.coupon.service.CouponRedemptionService;
-import io.regionevent.regioneventbackend.domain.coupon.service.CouponService;
-import io.regionevent.regioneventbackend.domain.coupon.service.CouponStatusHistoryService;
+import io.regionevent.regioneventbackend.domain.coupon.service.RestoreCouponUseCase;
 import io.regionevent.regioneventbackend.domain.payment.dto.RetryRefundResponse;
 import io.regionevent.regioneventbackend.domain.payment.entity.Refund;
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundAttempt;
@@ -34,8 +27,6 @@ import io.regionevent.regioneventbackend.domain.payment.entity.RefundStatus;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneNoResponseException;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOnePaymentGateway;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneResponseException;
-import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
-import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminAssignment;
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminGrade;
 import io.regionevent.regioneventbackend.domain.user.service.PlatformAdminAuthorizationService;
@@ -47,14 +38,11 @@ public class RetryRefundUseCase {
 
     private static final int MAX_ATTEMPT_COUNT = 3;
     private static final String RETRY_REASON = "MANUAL_REFUND_RETRY";
-    private static final String COUPON_RESTORE_REASON = "REFUND_SUCCEEDED";
 
     private final PlatformAdminAuthorizationService platformAdminAuthorizationService;
     private final RefundService refundService;
     private final RefundAttemptService refundAttemptService;
-    private final CouponService couponService;
-    private final CouponRedemptionService couponRedemptionService;
-    private final CouponStatusHistoryService couponStatusHistoryService;
+    private final RestoreCouponUseCase restoreCouponUseCase;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final PortOnePaymentGateway portOnePaymentGateway;
     private final Clock clock;
@@ -64,9 +52,7 @@ public class RetryRefundUseCase {
         PlatformAdminAuthorizationService platformAdminAuthorizationService,
         RefundService refundService,
         RefundAttemptService refundAttemptService,
-        CouponService couponService,
-        CouponRedemptionService couponRedemptionService,
-        CouponStatusHistoryService couponStatusHistoryService,
+        RestoreCouponUseCase restoreCouponUseCase,
         RecordAuditEventUseCase recordAuditEventUseCase,
         PortOnePaymentGateway portOnePaymentGateway,
         Clock clock,
@@ -75,9 +61,7 @@ public class RetryRefundUseCase {
         this.platformAdminAuthorizationService = platformAdminAuthorizationService;
         this.refundService = refundService;
         this.refundAttemptService = refundAttemptService;
-        this.couponService = couponService;
-        this.couponRedemptionService = couponRedemptionService;
-        this.couponStatusHistoryService = couponStatusHistoryService;
+        this.restoreCouponUseCase = restoreCouponUseCase;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
         this.portOnePaymentGateway = portOnePaymentGateway;
         this.clock = clock;
@@ -119,7 +103,7 @@ public class RetryRefundUseCase {
         long refundId
     ) {
         PlatformAdminAssignment assignment = platformAdminAuthorizationService
-            .requireAuthorizedPlatformAdmin(actorUserId);
+            .requireAuthorizedPlatformAdminForUpdate(actorUserId);
         Refund refund = refundService.findByRefundIdForUpdate(refundId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
         if (refund.getStatus() != RefundStatus.FAILED) {
@@ -162,14 +146,14 @@ public class RetryRefundUseCase {
         UUID requestId
     ) {
         PlatformAdminAssignment assignment = platformAdminAuthorizationService
-            .requireAuthorizedPlatformAdmin(actorUserId);
+            .requireAuthorizedPlatformAdminForUpdate(actorUserId);
         Refund refund = findPreparedRefund(preparedRetry.refundId());
         RefundAttempt attempt = findPreparedAttempt(preparedRetry.refundAttemptId());
         attempt.respond(cancellation.cancellationId(), cancellation.status(), cancellation.resultHash());
         Instant completedAt = Instant.now(clock);
         if (cancellation.isSucceeded()) {
             refund.succeed(completedAt);
-            restoreCouponIfEligible(refund, requestId, assignment);
+            restoreCouponUseCase.restoreForRefund(refund, requestId, new AuditEventActor(assignment));
         } else if (cancellation.isExplicitlyFailed()) {
             refund.fail(completedAt);
         } else {
@@ -186,7 +170,7 @@ public class RetryRefundUseCase {
         UUID requestId
     ) {
         PlatformAdminAssignment assignment = platformAdminAuthorizationService
-            .requireAuthorizedPlatformAdmin(actorUserId);
+            .requireAuthorizedPlatformAdminForUpdate(actorUserId);
         Refund refund = findPreparedRefund(preparedRetry.refundId());
         RefundAttempt attempt = findPreparedAttempt(preparedRetry.refundAttemptId());
         attempt.noResponse(failureReasonCode);
@@ -203,7 +187,7 @@ public class RetryRefundUseCase {
         UUID requestId
     ) {
         PlatformAdminAssignment assignment = platformAdminAuthorizationService
-            .requireAuthorizedPlatformAdmin(actorUserId);
+            .requireAuthorizedPlatformAdminForUpdate(actorUserId);
         Refund refund = findPreparedRefund(preparedRetry.refundId());
         RefundAttempt attempt = findPreparedAttempt(preparedRetry.refundAttemptId());
         attempt.respond(null, exception.getExternalStatus(), exception.getResultHash());
@@ -227,61 +211,6 @@ public class RetryRefundUseCase {
         return assignment.getGrade() == PlatformAdminGrade.SUPER_ADMIN
             ? RefundAttemptInitiatorKind.SUPER_ADMIN
             : RefundAttemptInitiatorKind.PLATFORM_ADMIN;
-    }
-
-    private void restoreCouponIfEligible(
-        Refund refund,
-        UUID requestId,
-        PlatformAdminAssignment assignment
-    ) {
-        Reservation reservation = refund.getPayment().getReservation();
-        if (reservation == null
-            || reservation.getStatus() != ReservationStatus.CANCELLED
-            || !reservation.getCancelledAt().isBefore(reservation.getContentSession().getStartsAt())
-            || refund.getPayment().getReservationPriceSnapshot().getCoupon() == null) {
-            return;
-        }
-        CouponRedemption redemption = couponRedemptionService.findByReservationPriceSnapshotIdForUpdate(
-            refund.getPayment().getReservationPriceSnapshot().getReservationPriceSnapshotId()
-        ).orElse(null);
-        if (redemption == null || redemption.getStatus() == CouponRedemptionStatus.REVERSED) {
-            return;
-        }
-        Coupon snapshotCoupon = refund.getPayment().getReservationPriceSnapshot().getCoupon();
-        Coupon coupon = couponService.findByCouponIdForUpdate(snapshotCoupon.getCouponId())
-            .orElseThrow(() -> new IllegalStateException("snapshot coupon does not exist"));
-        if (redemption.getCoupon().getCouponId().equals(coupon.getCouponId())
-            && redemption.getReservation().getReservationId().equals(reservation.getReservationId())
-            && redemption.getReservationPriceSnapshot().getReservationPriceSnapshotId().equals(
-                refund.getPayment().getReservationPriceSnapshot().getReservationPriceSnapshotId()
-            )
-            && coupon.getStatus() == CouponStatus.USED) {
-            Instant restoredAt = couponService.findCurrentDatabaseTime();
-            redemption.reverse(restoredAt);
-            CouponStatus restoredStatus = couponService.restoreUsedCoupon(coupon, restoredAt);
-            couponStatusHistoryService.create(new CouponStatusHistory(
-                coupon,
-                CouponStatus.USED,
-                restoredStatus,
-                COUPON_RESTORE_REASON,
-                assignment.getGrade().name(),
-                restoredAt
-            ));
-            recordAuditEventUseCase.record(new AuditEventCommand(
-                requestId,
-                reservation.getRegion(),
-                AuditEventTargetType.COUPON,
-                coupon.getCouponId(),
-                CouponStatus.USED.name(),
-                restoredStatus.name(),
-                AuditEventResult.SUCCESS,
-                COUPON_RESTORE_REASON,
-                null,
-                null,
-                new AuditEventActor(assignment),
-                restoredAt
-            ));
-        }
     }
 
     private void recordRefundAudit(

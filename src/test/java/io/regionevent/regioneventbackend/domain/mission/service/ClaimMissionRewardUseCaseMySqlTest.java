@@ -1,6 +1,8 @@
 package io.regionevent.regioneventbackend.domain.mission.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doAnswer;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -9,6 +11,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import jakarta.persistence.EntityManager;
 
@@ -19,8 +22,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -62,7 +69,10 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
 import io.regionevent.regioneventbackend.domain.user.service.UserRoleAssignmentService;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
 import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 
@@ -71,6 +81,7 @@ import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 @Import({
     ClaimMissionRewardUseCase.class,
     FindMissionRewardClaimResultUseCase.class,
+    AppUserService.class,
     UserRoleAssignmentService.class,
     MissionParticipationReadService.class,
     MissionParticipationService.class,
@@ -104,6 +115,13 @@ class ClaimMissionRewardUseCaseMySqlTest extends NonTransactionalMySqlTestSuppor
     private final MissionParticipationRepository participationRepository;
     private final TransactionTemplate transactionTemplate;
     private final EntityManager entityManager;
+    private final JdbcTemplate jdbcTemplate;
+
+    @MockitoSpyBean
+    private AppUserService appUserService;
+
+    @MockitoBean
+    private PasswordEncoder passwordEncoder;
 
     @Autowired
     ClaimMissionRewardUseCaseMySqlTest(
@@ -121,7 +139,8 @@ class ClaimMissionRewardUseCaseMySqlTest extends NonTransactionalMySqlTestSuppor
         MissionRepository missionRepository,
         MissionParticipationRepository participationRepository,
         PlatformTransactionManager transactionManager,
-        EntityManager entityManager
+        EntityManager entityManager,
+        JdbcTemplate jdbcTemplate
     ) {
         this.useCase = useCase;
         this.claimRepository = claimRepository;
@@ -138,6 +157,7 @@ class ClaimMissionRewardUseCaseMySqlTest extends NonTransactionalMySqlTestSuppor
         this.participationRepository = participationRepository;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.entityManager = entityManager;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @DynamicPropertySource
@@ -204,6 +224,103 @@ class ClaimMissionRewardUseCaseMySqlTest extends NonTransactionalMySqlTestSuppor
         });
     }
 
+    @Test
+    @Timeout(15)
+    void 사용자행잠금선행이면수령효과커밋후탈퇴상태전환이완료된다() throws Exception {
+        Fixture fixture = createFixture(10L);
+        CountDownLatch userLocked = new CountDownLatch(1);
+        CountDownLatch releaseClaim = new CountDownLatch(1);
+
+        doAnswer(invocation -> {
+            Object lockedUser = invocation.callRealMethod();
+            userLocked.countDown();
+            await(releaseClaim);
+            return lockedUser;
+        }).when(appUserService).findActiveUserForUpdate(fixture.userId());
+
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<ClaimMissionRewardResult> claim = executor.submit(() -> claim(fixture));
+            assertThat(userLocked.await(3, TimeUnit.SECONDS)).isTrue();
+
+            Future<Integer> withdrawal = executor.submit(() -> transactionTemplate.execute(status -> jdbcTemplate.update(
+                "UPDATE app_user SET status = 'WITHDRAWING' WHERE user_id = ? AND status = 'ACTIVE'",
+                fixture.userId()
+            )));
+            try {
+                assertThatThrownBy(() -> withdrawal.get(300, TimeUnit.MILLISECONDS))
+                    .isInstanceOf(TimeoutException.class);
+            } finally {
+                releaseClaim.countDown();
+            }
+
+            assertThat(claim.get(5, TimeUnit.SECONDS).participationId()).isEqualTo(fixture.participationId());
+            assertThat(withdrawal.get(5, TimeUnit.SECONDS)).isOne();
+        } finally {
+            releaseClaim.countDown();
+        }
+
+        assertSinglePersistence(fixture.policyId());
+        assertThat(userRepository.findById(fixture.userId())).hasValueSatisfying(user ->
+            assertThat(user.getStatus()).isEqualTo(AppUserStatus.WITHDRAWING)
+        );
+    }
+
+    @Test
+    @Timeout(15)
+    void 탈퇴잠금선행이면탈퇴커밋후새수령효과없이금지한다() throws Exception {
+        Fixture fixture = createFixture(10L);
+        CountDownLatch withdrawalStarted = new CountDownLatch(1);
+        CountDownLatch releaseWithdrawal = new CountDownLatch(1);
+
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<Integer> withdrawal = executor.submit(() -> transactionTemplate.execute(status -> {
+                userRepository.findByIdForUpdate(fixture.userId()).orElseThrow();
+                int updatedCount = jdbcTemplate.update(
+                    "UPDATE app_user SET status = 'WITHDRAWING' WHERE user_id = ? AND status = 'ACTIVE'",
+                    fixture.userId()
+                );
+                withdrawalStarted.countDown();
+                await(releaseWithdrawal);
+                return updatedCount;
+            }));
+            assertThat(withdrawalStarted.await(3, TimeUnit.SECONDS)).isTrue();
+
+            Future<ErrorCode> claim = executor.submit(() -> claimError(fixture));
+            try {
+                assertThatThrownBy(() -> claim.get(300, TimeUnit.MILLISECONDS))
+                    .isInstanceOf(TimeoutException.class);
+            } finally {
+                releaseWithdrawal.countDown();
+            }
+
+            assertThat(withdrawal.get(5, TimeUnit.SECONDS)).isOne();
+            assertThat(claim.get(5, TimeUnit.SECONDS)).isEqualTo(ErrorCode.FORBIDDEN);
+        } finally {
+            releaseWithdrawal.countDown();
+        }
+
+        assertNoRewardPersistence(fixture.policyId());
+        assertThat(userRepository.findById(fixture.userId())).hasValueSatisfying(user ->
+            assertThat(user.getStatus()).isEqualTo(AppUserStatus.WITHDRAWING)
+        );
+    }
+
+    @Test
+    void 탈퇴로참여사용자연결이없으면null역참조와새수령효과없이금지한다() {
+        Fixture fixture = createFixture(10L);
+        transactionTemplate.executeWithoutResult(status -> jdbcTemplate.update(
+            "UPDATE mission_participation SET user_id = NULL WHERE mission_participation_id = ?",
+            fixture.participationId()
+        ));
+
+        assertThat(claimError(fixture)).isEqualTo(ErrorCode.FORBIDDEN);
+
+        assertNoRewardPersistence(fixture.policyId());
+        assertThat(participationRepository.findById(fixture.participationId())).hasValueSatisfying(participation ->
+            assertThat(participation.getUser()).isNull()
+        );
+    }
+
     private ClaimMissionRewardResult claim(Fixture fixture) {
         return useCase.claim(fixture.userId(), fixture.participationId(), UUID.randomUUID());
     }
@@ -211,6 +328,15 @@ class ClaimMissionRewardUseCaseMySqlTest extends NonTransactionalMySqlTestSuppor
     private ClaimMissionRewardResult claimAfterStart(Fixture fixture, CountDownLatch start) {
         await(start);
         return claim(fixture);
+    }
+
+    private ErrorCode claimError(Fixture fixture) {
+        try {
+            claim(fixture);
+            return null;
+        } catch (BusinessException exception) {
+            return exception.getErrorCode();
+        }
     }
 
     private void assertSinglePersistence(Long policyId) {
@@ -221,6 +347,16 @@ class ClaimMissionRewardUseCaseMySqlTest extends NonTransactionalMySqlTestSuppor
         assertThat(auditRepository.count()).isOne();
         assertThat(policyRepository.findById(policyId))
             .hasValueSatisfying(policy -> assertThat(policy.getIssuedCount()).isOne());
+    }
+
+    private void assertNoRewardPersistence(Long policyId) {
+        assertThat(claimRepository.count()).isZero();
+        assertThat(couponRepository.count()).isZero();
+        assertThat(issuanceRepository.count()).isZero();
+        assertThat(historyRepository.count()).isZero();
+        assertThat(auditRepository.count()).isZero();
+        assertThat(policyRepository.findById(policyId))
+            .hasValueSatisfying(policy -> assertThat(policy.getIssuedCount()).isZero());
     }
 
     private void endMission(Long missionId) {

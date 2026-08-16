@@ -79,7 +79,7 @@ class ChangeRegionAdminRoleUseCaseTest {
         when(assigned.getGrantedAt()).thenReturn(CHANGED_AT);
         givenAuthorizedActor();
         when(appUserService.findActiveUserForUpdate(TARGET_USER_ID)).thenReturn(Optional.of(targetUser));
-        when(userRoleAssignmentService.findActiveRegionAdminForUpdate(TARGET_USER_ID))
+        when(userRoleAssignmentService.findActiveRegionAdmin(TARGET_USER_ID))
             .thenReturn(Optional.empty());
         when(regionService.findRegionForUpdate(REQUESTED_REGION_ID)).thenReturn(requestedRegion);
         when(userRoleAssignmentService.assignRegionAdmin(targetUser, requestedRegion, CHANGED_AT))
@@ -133,7 +133,7 @@ class ChangeRegionAdminRoleUseCaseTest {
         );
         givenAuthorizedActor();
         when(appUserService.findActiveUserForUpdate(TARGET_USER_ID)).thenReturn(Optional.of(targetUser));
-        when(userRoleAssignmentService.findActiveRegionAdminForUpdate(TARGET_USER_ID))
+        when(userRoleAssignmentService.findActiveRegionAdmin(TARGET_USER_ID))
             .thenReturn(Optional.of(activeAssignment));
         when(regionService.findRegionForUpdate(PREVIOUS_REGION_ID)).thenReturn(previousRegion);
         when(regionService.findRegionForUpdate(REQUESTED_REGION_ID)).thenReturn(requestedRegion);
@@ -177,7 +177,7 @@ class ChangeRegionAdminRoleUseCaseTest {
         );
         givenAuthorizedActor();
         when(appUserService.findActiveUserForUpdate(TARGET_USER_ID)).thenReturn(Optional.of(targetUser));
-        when(userRoleAssignmentService.findActiveRegionAdminForUpdate(TARGET_USER_ID))
+        when(userRoleAssignmentService.findActiveRegionAdmin(TARGET_USER_ID))
             .thenReturn(Optional.of(activeAssignment));
 
         RegionAdminRoleChangeResult result = change(RegionAdminRoleChange.REGION_ADMIN, PREVIOUS_REGION_ID);
@@ -193,7 +193,7 @@ class ChangeRegionAdminRoleUseCaseTest {
         AppUser targetUser = ordinaryUser();
         givenAuthorizedActor();
         when(appUserService.findActiveUserForUpdate(TARGET_USER_ID)).thenReturn(Optional.of(targetUser));
-        when(userRoleAssignmentService.findActiveRegionAdminForUpdate(TARGET_USER_ID))
+        when(userRoleAssignmentService.findActiveRegionAdmin(TARGET_USER_ID))
             .thenReturn(Optional.empty());
 
         assertRoleAssignmentConflict(() -> change(RegionAdminRoleChange.NONE, null));
@@ -215,15 +215,43 @@ class ChangeRegionAdminRoleUseCaseTest {
         );
         givenAuthorizedActor();
         when(appUserService.findActiveUserForUpdate(TARGET_USER_ID)).thenReturn(Optional.of(targetUser));
-        when(userRoleAssignmentService.findActiveRegionAdminForUpdate(TARGET_USER_ID))
+        when(userRoleAssignmentService.findActiveRegionAdmin(TARGET_USER_ID))
             .thenReturn(Optional.of(activeAssignment));
         when(regionService.findRegionForUpdate(PREVIOUS_REGION_ID)).thenReturn(previousRegion);
         when(contentService.hasUndeletedContentInRegion(PREVIOUS_REGION_ID)).thenReturn(true);
-        when(userRoleAssignmentService.countActiveRegionAdmins(PREVIOUS_REGION_ID)).thenReturn(1L);
+        when(userRoleAssignmentService.countActiveRegionAdminsForUpdate(PREVIOUS_REGION_ID)).thenReturn(1L);
 
         assertRoleAssignmentConflict(() -> change(RegionAdminRoleChange.NONE, null));
 
         verify(userRoleAssignmentService, never()).revoke(any(), any(), any());
+        verify(recordAuditEventUseCase, never()).record(any());
+    }
+
+    @Test
+    void 콘텐츠가_있는_지역의_마지막_지역관리자_재배정을_거부한다() {
+        AppUser targetUser = ordinaryUser();
+        Region previousRegion = region(PREVIOUS_REGION_ID);
+        Region requestedRegion = region(REQUESTED_REGION_ID);
+        UserRoleAssignment activeAssignment = assignment(
+            targetUser,
+            previousRegion,
+            300L,
+            UserRoleAssignmentStatus.ACTIVE,
+            null
+        );
+        givenAuthorizedActor();
+        when(appUserService.findActiveUserForUpdate(TARGET_USER_ID)).thenReturn(Optional.of(targetUser));
+        when(userRoleAssignmentService.findActiveRegionAdmin(TARGET_USER_ID))
+            .thenReturn(Optional.of(activeAssignment));
+        when(regionService.findRegionForUpdate(PREVIOUS_REGION_ID)).thenReturn(previousRegion);
+        when(regionService.findRegionForUpdate(REQUESTED_REGION_ID)).thenReturn(requestedRegion);
+        when(contentService.hasUndeletedContentInRegion(PREVIOUS_REGION_ID)).thenReturn(true);
+        when(userRoleAssignmentService.countActiveRegionAdminsForUpdate(PREVIOUS_REGION_ID)).thenReturn(1L);
+
+        assertRoleAssignmentConflict(() -> change(RegionAdminRoleChange.REGION_ADMIN, REQUESTED_REGION_ID));
+
+        verify(userRoleAssignmentService, never()).revoke(any(), any(), any());
+        verify(userRoleAssignmentService, never()).assignRegionAdmin(any(), any(), any());
         verify(recordAuditEventUseCase, never()).record(any());
     }
 
@@ -236,7 +264,7 @@ class ChangeRegionAdminRoleUseCaseTest {
 
         assertRoleAssignmentConflict(() -> change(RegionAdminRoleChange.NONE, null));
 
-        verify(userRoleAssignmentService, never()).findActiveRegionAdminForUpdate(any());
+        verify(userRoleAssignmentService, never()).findActiveRegionAdmin(any());
     }
 
     private RegionAdminRoleChangeResult change(
@@ -256,7 +284,7 @@ class ChangeRegionAdminRoleUseCaseTest {
 
     private void givenAuthorizedActor() {
         PlatformAdminAssignment actor = platformAdminActor();
-        when(platformAdminAuthorizationService.requireAuthorizedPlatformAdmin(ACTOR_USER_ID))
+        when(platformAdminAuthorizationService.requireAuthorizedPlatformAdminForUpdate(ACTOR_USER_ID))
             .thenReturn(actor);
     }
 

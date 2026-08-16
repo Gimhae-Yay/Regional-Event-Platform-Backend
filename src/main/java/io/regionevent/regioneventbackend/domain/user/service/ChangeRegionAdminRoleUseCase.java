@@ -65,13 +65,13 @@ public class ChangeRegionAdminRoleUseCase {
         UUID requestId
     ) {
         PlatformAdminAssignment actor = platformAdminAuthorizationService
-            .requireAuthorizedPlatformAdmin(actorUserId);
+            .requireAuthorizedPlatformAdminForUpdate(actorUserId);
         AppUser targetUser = appUserService.findActiveUserForUpdate(targetUserId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
         validateOrdinaryTarget(targetUser);
 
         UserRoleAssignment activeAssignment = userRoleAssignmentService
-            .findActiveRegionAdminForUpdate(targetUserId)
+            .findActiveRegionAdmin(targetUserId)
             .orElse(null);
         Instant changedAt = clock.instant();
 
@@ -209,7 +209,7 @@ public class ChangeRegionAdminRoleUseCase {
 
     private void validateRevocationAllowed(Region region) {
         if (contentService.hasUndeletedContentInRegion(region.getRegionId())
-            && userRoleAssignmentService.countActiveRegionAdmins(region.getRegionId()) <= 1) {
+            && userRoleAssignmentService.countActiveRegionAdminsForUpdate(region.getRegionId()) <= 1) {
             throw new BusinessException(ErrorCode.ROLE_ASSIGNMENT_CONFLICT);
         }
     }

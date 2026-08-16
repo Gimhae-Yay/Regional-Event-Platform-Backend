@@ -13,6 +13,7 @@ import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.service.RegionService;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
+import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
 import io.regionevent.regioneventbackend.domain.user.service.UserRoleAssignmentService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
@@ -21,6 +22,7 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
 public class CreateMissionParticipationUseCase {
 
     private final MissionParticipationDuplicateReadService missionParticipationDuplicateReadService;
+    private final AppUserService appUserService;
     private final UserRoleAssignmentService userRoleAssignmentService;
     private final MissionService missionService;
     private final RegionService regionService;
@@ -30,6 +32,7 @@ public class CreateMissionParticipationUseCase {
 
     public CreateMissionParticipationUseCase(
         MissionParticipationDuplicateReadService missionParticipationDuplicateReadService,
+        AppUserService appUserService,
         UserRoleAssignmentService userRoleAssignmentService,
         MissionService missionService,
         RegionService regionService,
@@ -38,6 +41,7 @@ public class CreateMissionParticipationUseCase {
         PlatformTransactionManager transactionManager
     ) {
         this.missionParticipationDuplicateReadService = missionParticipationDuplicateReadService;
+        this.appUserService = appUserService;
         this.userRoleAssignmentService = userRoleAssignmentService;
         this.missionService = missionService;
         this.regionService = regionService;
@@ -50,7 +54,7 @@ public class CreateMissionParticipationUseCase {
         Long userId,
         Long missionId
     ) {
-        AppUser user = userRoleAssignmentService.findActiveVisitor(userId).getAppUser();
+        userRoleAssignmentService.findActiveVisitor(userId);
         Mission mission = missionService.findMission(missionId);
         validatePublicRegion(mission.getRegion());
 
@@ -62,16 +66,18 @@ public class CreateMissionParticipationUseCase {
         }
 
         try {
-            return transactionTemplate.execute(status -> createNewParticipation(missionId, user));
+            return transactionTemplate.execute(status -> createNewParticipation(userId, missionId));
         } catch (DataIntegrityViolationException exception) {
             return findDuplicateParticipation(missionId, userId, exception);
         }
     }
 
     private CreateMissionParticipationResult createNewParticipation(
-        Long missionId,
-        AppUser user
+        Long userId,
+        Long missionId
     ) {
+        AppUser user = appUserService.findActiveUserForUpdate(userId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
         Mission mission = missionService.findMissionForParticipationUpdate(missionId);
         Region region = regionService.findRegionForUpdate(mission.getRegion().getRegionId());
         Instant operationAt = missionService.findCurrentDatabaseTime();

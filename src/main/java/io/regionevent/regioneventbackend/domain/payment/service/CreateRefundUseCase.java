@@ -15,14 +15,7 @@ import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetTyp
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventActor;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
-import io.regionevent.regioneventbackend.domain.coupon.entity.Coupon;
-import io.regionevent.regioneventbackend.domain.coupon.entity.CouponRedemption;
-import io.regionevent.regioneventbackend.domain.coupon.entity.CouponRedemptionStatus;
-import io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatus;
-import io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatusHistory;
-import io.regionevent.regioneventbackend.domain.coupon.service.CouponRedemptionService;
-import io.regionevent.regioneventbackend.domain.coupon.service.CouponService;
-import io.regionevent.regioneventbackend.domain.coupon.service.CouponStatusHistoryService;
+import io.regionevent.regioneventbackend.domain.coupon.service.RestoreCouponUseCase;
 import io.regionevent.regioneventbackend.domain.payment.dto.CreateRefundRequest;
 import io.regionevent.regioneventbackend.domain.payment.dto.CreateRefundResponse;
 import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
@@ -34,8 +27,7 @@ import io.regionevent.regioneventbackend.domain.payment.entity.RefundAttemptInit
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundFailureReasonCode;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneNoResponseException;
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOnePaymentGateway;
-import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
-import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
+import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneResponseException;
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminAssignment;
 import io.regionevent.regioneventbackend.domain.user.service.PlatformAdminAuthorizationService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -47,7 +39,6 @@ public class CreateRefundUseCase {
     private static final String DISCREPANCY_ACTION_TYPE = "FULL_REFUND_REQUEST";
     private static final String DISCREPANCY_ACTION_REASON_CODE = "MANUAL_FULL_REFUND";
     private static final String DISCREPANCY_ACTION_RESULT_CODE = "REFUND_REQUESTED";
-    private static final String COUPON_RESTORE_REASON = "REFUND_SUCCEEDED";
     private static final String USER_REQUEST_REASON = "USER_REQUEST";
 
     private final PlatformAdminAuthorizationService platformAdminAuthorizationService;
@@ -56,9 +47,7 @@ public class CreateRefundUseCase {
     private final RefundAttemptService refundAttemptService;
     private final PaymentDiscrepancyService paymentDiscrepancyService;
     private final PaymentDiscrepancyActionService paymentDiscrepancyActionService;
-    private final CouponService couponService;
-    private final CouponRedemptionService couponRedemptionService;
-    private final CouponStatusHistoryService couponStatusHistoryService;
+    private final RestoreCouponUseCase restoreCouponUseCase;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final PortOnePaymentGateway portOnePaymentGateway;
     private final Clock clock;
@@ -71,9 +60,7 @@ public class CreateRefundUseCase {
         RefundAttemptService refundAttemptService,
         PaymentDiscrepancyService paymentDiscrepancyService,
         PaymentDiscrepancyActionService paymentDiscrepancyActionService,
-        CouponService couponService,
-        CouponRedemptionService couponRedemptionService,
-        CouponStatusHistoryService couponStatusHistoryService,
+        RestoreCouponUseCase restoreCouponUseCase,
         RecordAuditEventUseCase recordAuditEventUseCase,
         PortOnePaymentGateway portOnePaymentGateway,
         Clock clock,
@@ -85,9 +72,7 @@ public class CreateRefundUseCase {
         this.refundAttemptService = refundAttemptService;
         this.paymentDiscrepancyService = paymentDiscrepancyService;
         this.paymentDiscrepancyActionService = paymentDiscrepancyActionService;
-        this.couponService = couponService;
-        this.couponRedemptionService = couponRedemptionService;
-        this.couponStatusHistoryService = couponStatusHistoryService;
+        this.restoreCouponUseCase = restoreCouponUseCase;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
         this.portOnePaymentGateway = portOnePaymentGateway;
         this.clock = clock;
@@ -141,6 +126,16 @@ public class CreateRefundUseCase {
                 reason,
                 requestId
             ));
+        } catch (PortOneResponseException exception) {
+            executeInTransaction(() -> confirmReceivedError(
+                actorUserId,
+                preparedRefund,
+                exception,
+                evidenceReference,
+                reason,
+                requestId
+            ));
+            throw exception;
         }
     }
 
@@ -198,6 +193,14 @@ public class CreateRefundUseCase {
                 actor,
                 requestId
             ));
+        } catch (PortOneResponseException exception) {
+            executeInTransaction(() -> confirmReservationCancellationReceivedError(
+                preparedRefund,
+                exception,
+                actor,
+                requestId
+            ));
+            throw exception;
         }
     }
 
@@ -260,9 +263,11 @@ public class CreateRefundUseCase {
         attempt.respond(cancellation.cancellationId(), cancellation.status(), cancellation.resultHash());
         if (cancellation.isSucceeded()) {
             refund.succeed(Instant.now(clock));
-            restoreCouponIfEligible(refund, requestId, actor);
+            restoreCouponUseCase.restoreForRefund(refund, requestId, actor);
         } else if (cancellation.isExplicitlyFailed()) {
             refund.fail(Instant.now(clock));
+        } else {
+            refund.markDiscrepant(Instant.now(clock));
         }
         recordReservationCancellationRefundAudit(refund, actor, requestId, Instant.now(clock));
         return CreateRefundResponse.from(refund);
@@ -285,6 +290,23 @@ public class CreateRefundUseCase {
         return CreateRefundResponse.from(refund);
     }
 
+    private CreateRefundResponse confirmReservationCancellationReceivedError(
+        PreparedRefund preparedRefund,
+        PortOneResponseException exception,
+        AuditEventActor actor,
+        UUID requestId
+    ) {
+        Refund refund = refundService.findByRefundIdForUpdate(preparedRefund.refundId())
+            .orElseThrow(() -> new IllegalStateException("prepared refund does not exist"));
+        RefundAttempt attempt = refundAttemptService
+            .findByRefundAttemptIdForUpdate(preparedRefund.refundAttemptId())
+            .orElseThrow(() -> new IllegalStateException("prepared refund attempt does not exist"));
+        attempt.respond(null, exception.getExternalStatus(), exception.getResultHash());
+        refund.markDiscrepant(Instant.now(clock));
+        recordReservationCancellationRefundAudit(refund, actor, requestId, Instant.now(clock));
+        return CreateRefundResponse.from(refund);
+    }
+
     private PreparedRefund prepareRefund(
         Long actorUserId,
         long paymentId,
@@ -293,7 +315,7 @@ public class CreateRefundUseCase {
         UUID requestId
     ) {
         PlatformAdminAssignment assignment = platformAdminAuthorizationService
-            .requireAuthorizedPlatformAdmin(actorUserId);
+            .requireAuthorizedPlatformAdminForUpdate(actorUserId);
         Payment payment = paymentService.findByPaymentIdForUpdate(paymentId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
         Refund existing = refundService.findByPaymentIdForUpdate(paymentId).orElse(null);
@@ -345,7 +367,7 @@ public class CreateRefundUseCase {
         UUID requestId
     ) {
         PlatformAdminAssignment assignment = platformAdminAuthorizationService
-            .requireAuthorizedPlatformAdmin(actorUserId);
+            .requireAuthorizedPlatformAdminForUpdate(actorUserId);
         Refund refund = refundService.findByRefundIdForUpdate(preparedRefund.refundId())
             .orElseThrow(() -> new IllegalStateException("prepared refund does not exist"));
         RefundAttempt attempt = refundAttemptService
@@ -355,9 +377,11 @@ public class CreateRefundUseCase {
         if (cancellation.isSucceeded()) {
             Instant completedAt = Instant.now(clock);
             refund.succeed(completedAt);
-            restoreCouponIfEligible(refund, requestId, assignment);
+            restoreCouponUseCase.restoreForRefund(refund, requestId, new AuditEventActor(assignment));
         } else if (cancellation.isExplicitlyFailed()) {
             refund.fail(Instant.now(clock));
+        } else {
+            refund.markDiscrepant(Instant.now(clock));
         }
         recordRefundAudit(refund, assignment, evidenceReference, reason, requestId);
         return CreateRefundResponse.from(refund);
@@ -372,13 +396,34 @@ public class CreateRefundUseCase {
         UUID requestId
     ) {
         PlatformAdminAssignment assignment = platformAdminAuthorizationService
-            .requireAuthorizedPlatformAdmin(actorUserId);
+            .requireAuthorizedPlatformAdminForUpdate(actorUserId);
         Refund refund = refundService.findByRefundIdForUpdate(preparedRefund.refundId())
             .orElseThrow(() -> new IllegalStateException("prepared refund does not exist"));
         RefundAttempt attempt = refundAttemptService
             .findByRefundAttemptIdForUpdate(preparedRefund.refundAttemptId())
             .orElseThrow(() -> new IllegalStateException("prepared refund attempt does not exist"));
         attempt.noResponse(failureReasonCode);
+        refund.markDiscrepant(Instant.now(clock));
+        recordRefundAudit(refund, assignment, evidenceReference, reason, requestId);
+        return CreateRefundResponse.from(refund);
+    }
+
+    private CreateRefundResponse confirmReceivedError(
+        Long actorUserId,
+        PreparedRefund preparedRefund,
+        PortOneResponseException exception,
+        String evidenceReference,
+        String reason,
+        UUID requestId
+    ) {
+        PlatformAdminAssignment assignment = platformAdminAuthorizationService
+            .requireAuthorizedPlatformAdminForUpdate(actorUserId);
+        Refund refund = refundService.findByRefundIdForUpdate(preparedRefund.refundId())
+            .orElseThrow(() -> new IllegalStateException("prepared refund does not exist"));
+        RefundAttempt attempt = refundAttemptService
+            .findByRefundAttemptIdForUpdate(preparedRefund.refundAttemptId())
+            .orElseThrow(() -> new IllegalStateException("prepared refund attempt does not exist"));
+        attempt.respond(null, exception.getExternalStatus(), exception.getResultHash());
         refund.markDiscrepant(Instant.now(clock));
         recordRefundAudit(refund, assignment, evidenceReference, reason, requestId);
         return CreateRefundResponse.from(refund);
@@ -421,120 +466,6 @@ public class CreateRefundUseCase {
             new AuditEventActor(assignment),
             actedAt
         ));
-    }
-
-    private void restoreCouponIfEligible(
-        Refund refund,
-        UUID requestId,
-        PlatformAdminAssignment assignment
-    ) {
-        Payment payment = refund.getPayment();
-        Reservation reservation = payment.getReservation();
-        if (reservation == null
-            || reservation.getStatus() != ReservationStatus.CANCELLED
-            || !reservation.getCancelledAt().isBefore(reservation.getContentSession().getStartsAt())
-            || payment.getReservationPriceSnapshot().getCoupon() == null) {
-            return;
-        }
-        CouponRedemption redemption = couponRedemptionService
-            .findByReservationPriceSnapshotIdForUpdate(
-                payment.getReservationPriceSnapshot().getReservationPriceSnapshotId()
-            )
-            .orElse(null);
-        if (redemption == null || redemption.getStatus() == CouponRedemptionStatus.REVERSED) {
-            return;
-        }
-        Coupon snapshotCoupon = payment.getReservationPriceSnapshot().getCoupon();
-        Coupon coupon = couponService.findByCouponIdForUpdate(snapshotCoupon.getCouponId())
-            .orElseThrow(() -> new IllegalStateException("snapshot coupon does not exist"));
-        if (redemption.getCoupon().getCouponId().equals(coupon.getCouponId())
-            && redemption.getReservation().getReservationId().equals(reservation.getReservationId())
-            && redemption.getReservationPriceSnapshot().getReservationPriceSnapshotId().equals(
-                payment.getReservationPriceSnapshot().getReservationPriceSnapshotId()
-            )
-            && coupon.getStatus() == CouponStatus.USED) {
-            Instant restoredAt = couponService.findCurrentDatabaseTime();
-            redemption.reverse(restoredAt);
-            CouponStatus restoredStatus = couponService.restoreUsedCoupon(coupon, restoredAt);
-            couponStatusHistoryService.create(new CouponStatusHistory(
-                coupon,
-                CouponStatus.USED,
-                restoredStatus,
-                COUPON_RESTORE_REASON,
-                assignment.getGrade().name(),
-                restoredAt
-            ));
-            recordAuditEventUseCase.record(new AuditEventCommand(
-                requestId,
-                payment.getCapacityHold().getRegion(),
-                AuditEventTargetType.COUPON,
-                coupon.getCouponId(),
-                CouponStatus.USED.name(),
-                restoredStatus.name(),
-                AuditEventResult.SUCCESS,
-                COUPON_RESTORE_REASON,
-                null,
-                null,
-                new AuditEventActor(assignment),
-                restoredAt
-            ));
-        }
-    }
-
-    private void restoreCouponIfEligible(
-        Refund refund,
-        UUID requestId,
-        AuditEventActor actor
-    ) {
-        Payment payment = refund.getPayment();
-        Reservation reservation = payment.getReservation();
-        if (reservation == null
-            || payment.getReservationPriceSnapshot().getCoupon() == null) {
-            return;
-        }
-        CouponRedemption redemption = couponRedemptionService
-            .findByReservationPriceSnapshotIdForUpdate(
-                payment.getReservationPriceSnapshot().getReservationPriceSnapshotId()
-            )
-            .orElse(null);
-        if (redemption == null || redemption.getStatus() == CouponRedemptionStatus.REVERSED) {
-            return;
-        }
-        Coupon snapshotCoupon = payment.getReservationPriceSnapshot().getCoupon();
-        Coupon coupon = couponService.findByCouponIdForUpdate(snapshotCoupon.getCouponId())
-            .orElseThrow(() -> new IllegalStateException("snapshot coupon does not exist"));
-        if (redemption.getCoupon().getCouponId().equals(coupon.getCouponId())
-            && redemption.getReservation().getReservationId().equals(reservation.getReservationId())
-            && redemption.getReservationPriceSnapshot().getReservationPriceSnapshotId().equals(
-                payment.getReservationPriceSnapshot().getReservationPriceSnapshotId()
-            )
-            && coupon.getStatus() == CouponStatus.USED) {
-            Instant restoredAt = couponService.findCurrentDatabaseTime();
-            redemption.reverse(restoredAt);
-            CouponStatus restoredStatus = couponService.restoreUsedCoupon(coupon, restoredAt);
-            couponStatusHistoryService.create(new CouponStatusHistory(
-                coupon,
-                CouponStatus.USED,
-                restoredStatus,
-                COUPON_RESTORE_REASON,
-                actor.getRoleName(),
-                restoredAt
-            ));
-            recordAuditEventUseCase.record(new AuditEventCommand(
-                requestId,
-                payment.getCapacityHold().getRegion(),
-                AuditEventTargetType.COUPON,
-                coupon.getCouponId(),
-                CouponStatus.USED.name(),
-                restoredStatus.name(),
-                AuditEventResult.SUCCESS,
-                COUPON_RESTORE_REASON,
-                null,
-                null,
-                actor,
-                restoredAt
-            ));
-        }
     }
 
     private void recordReservationCancellationRefundAudit(

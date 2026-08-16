@@ -18,6 +18,8 @@ import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUs
 import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentLog;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentRevisionInvalidationReason;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentRevisionStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.service.RegionService;
@@ -35,6 +37,7 @@ public class SuspendContentUseCase {
     private static final String CONTENT_SUSPENDED_INVALIDATION_REASON = "CONTENT_SUSPENDED";
 
     private final ContentService contentService;
+    private final ContentRevisionInvalidationService contentRevisionInvalidationService;
     private final ContentSessionService contentSessionService;
     private final ContentLogService contentLogService;
     private final CapacityHoldService capacityHoldService;
@@ -47,6 +50,7 @@ public class SuspendContentUseCase {
 
     public SuspendContentUseCase(
         ContentService contentService,
+        ContentRevisionInvalidationService contentRevisionInvalidationService,
         ContentSessionService contentSessionService,
         ContentLogService contentLogService,
         CapacityHoldService capacityHoldService,
@@ -58,6 +62,7 @@ public class SuspendContentUseCase {
         Clock clock
     ) {
         this.contentService = contentService;
+        this.contentRevisionInvalidationService = contentRevisionInvalidationService;
         this.contentSessionService = contentSessionService;
         this.contentLogService = contentLogService;
         this.capacityHoldService = capacityHoldService;
@@ -77,11 +82,12 @@ public class SuspendContentUseCase {
         UUID requestId
     ) {
         String normalizedReason = normalizeReason(reason);
-        Long regionId = contentService.findSuspendTargetRegionId(contentId);
+        RegionAdminAuthorizationService.AuthorizedRegionAdmin regionAdmin =
+            regionAdminAuthorizationService.requireAuthorizedRegionAdminForUpdate(userId);
+        Long regionId = contentService.findContentRegionId(contentId);
         Region region = regionService.findRegionForUpdate(regionId);
         Content content = contentService.findSuspendTargetForUpdate(contentId);
-        UserRoleAssignment regionAdminAssignment = regionAdminAuthorizationService.authorize(
-            userId,
+        UserRoleAssignment regionAdminAssignment = regionAdmin.authorize(
             regionId
         );
         if (content.getStatus() != ContentStatus.PUBLISHED) {
@@ -97,8 +103,15 @@ public class SuspendContentUseCase {
         AuditEventActor actor = new AuditEventActor(regionAdminAssignment);
         Instant suspendedAt = clock.instant().truncatedTo(ChronoUnit.MICROS);
         try {
-            contentSessionService.lockSuspendTargetsForUpdate(contentId);
             Content suspendedContent = contentService.suspend(content, suspendedAt);
+            invalidateActiveRevision(
+                requestId,
+                suspendedContent,
+                actor,
+                suspendedAt,
+                ContentRevisionInvalidationReason.CONTENT_SUSPENDED
+            );
+            contentSessionService.lockSuspendTargetsForUpdate(contentId);
             ContentLog suspendedLog = contentLogService.recordSuspended(
                 suspendedContent,
                 actor.getAppUser(),
@@ -154,6 +167,32 @@ public class SuspendContentUseCase {
             actor,
             suspendedAt
         ));
+    }
+
+    private void invalidateActiveRevision(
+        UUID requestId,
+        Content content,
+        AuditEventActor actor,
+        Instant invalidatedAt,
+        ContentRevisionInvalidationReason reason
+    ) {
+        contentRevisionInvalidationService.invalidateActiveRevisionForContent(
+            content.getContentId(),
+            actor.getAppUser(),
+            invalidatedAt,
+            reason
+        ).ifPresent(revision -> recordAuditEventUseCase.record(new AuditEventCommand(
+            requestId,
+            content.getRegion(),
+            AuditEventTargetType.CONTENT,
+            content.getContentId(),
+            ContentRevisionStatus.EDIT_REQUESTED.name(),
+            ContentRevisionStatus.EDIT_INVALIDATED.name(),
+            AuditEventResult.SUCCESS,
+            reason.name(),
+            actor,
+            invalidatedAt
+        )));
     }
 
     private void recordFailedSuspension(

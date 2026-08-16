@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.reservation.repository;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -15,6 +16,9 @@ import org.springframework.data.repository.query.Param;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 
 public interface CapacityHoldRepository extends JpaRepository<CapacityHold, Long> {
+
+    @Query(value = "SELECT UNIX_TIMESTAMP(CURRENT_TIMESTAMP(6))", nativeQuery = true)
+    BigDecimal findCurrentEpochSeconds();
 
     @EntityGraph(attributePaths = {"region", "contentSession", "contentSession.content", "user"})
     Optional<CapacityHold> findByHoldId(Long holdId);
@@ -180,6 +184,16 @@ public interface CapacityHoldRepository extends JpaRepository<CapacityHold, Long
         """)
     List<Long> findActiveHoldIdsByUserId(@Param("userId") Long userId);
 
+    @Query(value = """
+        SELECT hold_id
+        FROM capacity_hold
+        WHERE user_id = :userId
+            AND status = 'ACTIVE'
+        ORDER BY hold_id ASC
+        FOR UPDATE
+        """, nativeQuery = true)
+    List<Long> findActiveHoldIdsByUserIdForUpdate(@Param("userId") Long userId);
+
     @Query("""
         SELECT capacityHold.contentSession.sessionId
         FROM CapacityHold capacityHold
@@ -196,6 +210,15 @@ public interface CapacityHoldRepository extends JpaRepository<CapacityHold, Long
         FOR UPDATE
         """, nativeQuery = true)
     Optional<CapacityHold> findActiveByHoldIdForUpdate(@Param("holdId") Long holdId);
+
+    @Query(value = """
+        SELECT *
+        FROM capacity_hold
+        WHERE hold_id = :holdId
+            AND status = 'ACTIVE'
+        FOR UPDATE
+        """, nativeQuery = true)
+    Optional<CapacityHold> findActiveForWithdrawalByHoldIdForUpdate(@Param("holdId") Long holdId);
 
     @Query(value = """
         SELECT hold_id

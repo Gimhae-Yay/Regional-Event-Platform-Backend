@@ -14,6 +14,7 @@ import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetTyp
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventActor;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
+import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.mission.entity.Mission;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
 import io.regionevent.regioneventbackend.domain.user.service.RegionAdminAuthorizationService;
@@ -35,17 +36,20 @@ public class RejectRegionAdminMissionUseCase {
     private final RegionAdminAuthorizationService regionAdminAuthorizationService;
     private final MissionService missionService;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
+    private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase;
     private final Clock clock;
 
     public RejectRegionAdminMissionUseCase(
         RegionAdminAuthorizationService regionAdminAuthorizationService,
         MissionService missionService,
         RecordAuditEventUseCase recordAuditEventUseCase,
+        RecordFailedAuditEventUseCase recordFailedAuditEventUseCase,
         Clock clock
     ) {
         this.regionAdminAuthorizationService = regionAdminAuthorizationService;
         this.missionService = missionService;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
+        this.recordFailedAuditEventUseCase = recordFailedAuditEventUseCase;
         this.clock = clock;
     }
 
@@ -58,31 +62,41 @@ public class RejectRegionAdminMissionUseCase {
     ) {
         validateReasonCode(reasonCode);
         AuthorizedRegionAdmin regionAdmin = regionAdminAuthorizationService
-            .requireAuthorizedRegionAdmin(userId);
+            .requireAuthorizedRegionAdminForUpdate(userId);
         Mission mission = missionService.findMission(missionId);
-        validateRegionScope(regionAdmin, mission);
+        MissionStatus previousState = mission.getStatus();
 
-        mission = missionService.findForUpdate(missionId);
-        validateRegionScope(regionAdmin, mission);
-        Mission rejectedMission = missionService.reject(mission);
-        Instant rejectedAt = clock.instant().truncatedTo(ChronoUnit.MICROS);
-        recordAuditEventUseCase.record(new AuditEventCommand(
-            requestId,
-            rejectedMission.getRegion(),
-            AuditEventTargetType.MISSION,
-            rejectedMission.getMissionId(),
-            MissionStatus.PENDING_REVIEW.name(),
-            MissionStatus.DRAFT.name(),
-            AuditEventResult.SUCCESS,
-            reasonCode,
-            new AuditEventActor(regionAdmin.roleAssignment()),
-            rejectedAt
-        ));
-        return new RejectRegionAdminMissionResult(
-            rejectedMission.getMissionId(),
-            rejectedMission.getStatus(),
-            rejectedAt
-        );
+        try {
+            validateRegionScope(regionAdmin, mission);
+            mission = missionService.findForUpdate(missionId);
+            previousState = mission.getStatus();
+            validateRegionScope(regionAdmin, mission);
+            Mission rejectedMission = missionService.reject(mission);
+            Instant rejectedAt = clock.instant().truncatedTo(ChronoUnit.MICROS);
+            recordAuditEventUseCase.record(new AuditEventCommand(
+                requestId,
+                rejectedMission.getRegion(),
+                AuditEventTargetType.MISSION,
+                rejectedMission.getMissionId(),
+                MissionStatus.PENDING_REVIEW.name(),
+                MissionStatus.DRAFT.name(),
+                AuditEventResult.SUCCESS,
+                reasonCode,
+                new AuditEventActor(regionAdmin.roleAssignment()),
+                rejectedAt
+            ));
+            return new RejectRegionAdminMissionResult(
+                rejectedMission.getMissionId(),
+                rejectedMission.getStatus(),
+                rejectedAt
+            );
+        } catch (BusinessException exception) {
+            recordFailure(requestId, mission, previousState, regionAdmin, exception.getErrorCode());
+            throw exception;
+        } catch (RuntimeException exception) {
+            recordFailure(requestId, mission, previousState, regionAdmin, ErrorCode.INTERNAL_SERVER_ERROR);
+            throw exception;
+        }
     }
 
     private void validateReasonCode(String reasonCode) {
@@ -98,5 +112,26 @@ public class RejectRegionAdminMissionUseCase {
         if (!regionAdmin.region().getRegionId().equals(mission.getRegion().getRegionId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
+    }
+
+    private void recordFailure(
+        UUID requestId,
+        Mission mission,
+        MissionStatus previousState,
+        AuthorizedRegionAdmin regionAdmin,
+        ErrorCode errorCode
+    ) {
+        recordFailedAuditEventUseCase.record(new AuditEventCommand(
+            requestId,
+            mission.getRegion(),
+            AuditEventTargetType.MISSION,
+            mission.getMissionId(),
+            previousState.name(),
+            null,
+            AuditEventResult.FAILURE,
+            errorCode.code(),
+            new AuditEventActor(regionAdmin.roleAssignment()),
+            clock.instant().truncatedTo(ChronoUnit.MICROS)
+        ));
     }
 }

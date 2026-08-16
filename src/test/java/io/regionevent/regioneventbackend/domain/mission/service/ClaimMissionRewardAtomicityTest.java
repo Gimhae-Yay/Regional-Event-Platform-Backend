@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -54,6 +55,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
 import io.regionevent.regioneventbackend.domain.user.service.UserRoleAssignmentService;
 import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
 import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
@@ -63,6 +65,7 @@ import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 @Import({
     ClaimMissionRewardUseCase.class,
     FindMissionRewardClaimResultUseCase.class,
+    AppUserService.class,
     UserRoleAssignmentService.class,
     MissionParticipationReadService.class,
     MissionParticipationService.class,
@@ -103,6 +106,9 @@ class ClaimMissionRewardAtomicityTest extends NonTransactionalMySqlTestSupport {
 
     @MockitoBean
     private CouponStatusHistoryService couponStatusHistoryService;
+
+    @MockitoBean
+    private PasswordEncoder passwordEncoder;
 
     @Autowired
     ClaimMissionRewardAtomicityTest(
