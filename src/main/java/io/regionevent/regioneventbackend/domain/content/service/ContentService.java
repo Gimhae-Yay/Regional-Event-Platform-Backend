@@ -291,7 +291,7 @@ public class ContentService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
-    public Long findSuspendTargetRegionId(Long contentId) {
+    public Long findContentRegionId(Long contentId) {
         validateRequiredId(contentId);
         return contentRepository.findRegionIdByContentIdAndDeletedAtIsNull(contentId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));

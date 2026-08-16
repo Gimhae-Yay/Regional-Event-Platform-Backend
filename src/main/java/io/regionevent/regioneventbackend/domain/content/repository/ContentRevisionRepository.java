@@ -70,4 +70,16 @@ public interface ContentRevisionRepository extends JpaRepository<ContentRevision
         "candidateImageObject"
     })
     Optional<ContentRevision> findByContentRevisionId(Long contentRevisionId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT revision
+        FROM ContentRevision revision
+        WHERE revision.content.contentId = :contentId
+            AND revision.status = :status
+        """)
+    Optional<ContentRevision> findByContentContentIdAndStatusForUpdate(
+        @Param("contentId") Long contentId,
+        @Param("status") ContentRevisionStatus status
+    );
 }

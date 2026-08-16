@@ -35,7 +35,7 @@ public class StampbookReadService {
                 StampbookStatus.ENDED
             )
             .stream()
-            .map(this::toResult)
+            .map(projection -> toResult(projection, userId))
             .toList();
     }
 
@@ -71,7 +71,7 @@ public class StampbookReadService {
         if (projections.isEmpty()) {
             throwDetailAccessException(stampbookId);
         }
-        return toDetailResult(projections);
+        return toDetailResult(projections, userId);
     }
 
     public MyStampEarningsResult findMyStampEarnings(
@@ -106,7 +106,10 @@ public class StampbookReadService {
         return new MyStampEarningsResult(firstProjection.stampbookId(), earnings);
     }
 
-    private MyStampbookListResult toResult(MyStampbookListProjection projection) {
+    private MyStampbookListResult toResult(
+        MyStampbookListProjection projection,
+        Long userId
+    ) {
         validateStampbook(projection);
 
         return new MyStampbookListResult(
@@ -114,7 +117,7 @@ public class StampbookReadService {
             projection.regionId(),
             projection.stampbookStatus(),
             projection.publishedAt(),
-            toProgress(projection)
+            toProgress(projection, userId)
         );
     }
 
@@ -233,7 +236,10 @@ public class StampbookReadService {
         }
     }
 
-    private MyStampbookDetailResult toDetailResult(List<MyStampbookDetailProjection> projections) {
+    private MyStampbookDetailResult toDetailResult(
+        List<MyStampbookDetailProjection> projections,
+        Long userId
+    ) {
         MyStampbookDetailProjection firstProjection = projections.getFirst();
         validateDetailStampbook(firstProjection);
 
@@ -254,7 +260,7 @@ public class StampbookReadService {
             firstProjection.publishedAt(),
             firstProjection.endedAt(),
             targetContents,
-            toDetailProgress(firstProjection, earnedCount, targetCount)
+            toDetailProgress(firstProjection, earnedCount, targetCount, userId)
         );
     }
 
@@ -273,24 +279,39 @@ public class StampbookReadService {
     private MyStampbookDetailResult.Progress toDetailProgress(
         MyStampbookDetailProjection projection,
         long earnedCount,
-        long targetCount
+        long targetCount,
+        Long userId
     ) {
         StampbookProgressStatus progressStatus = projection.progressStatus();
 
         if (progressStatus == null) {
             if (projection.stampbookStatus() != StampbookStatus.PUBLISHED
                 || earnedCount != 0
-                || projection.completedAt() != null) {
+                || projection.completedAt() != null
+                || projection.stampbookProgressId() != null
+                || projection.progressUserId() != null) {
                 throw new IllegalStateException("stampbook progress read data is inconsistent");
             }
+            toCompletionReward(
+                null,
+                projection.stampbookRewardGrantId(),
+                projection.completionRewardCouponPolicyId(),
+                projection.stampbookRewardCouponPolicyId()
+            );
             return new MyStampbookDetailResult.Progress(
                 MyStampbookProgressStatus.NOT_STARTED,
                 earnedCount,
                 targetCount,
+                null,
                 null
             );
         }
 
+        validateProgressOwner(
+            projection.stampbookProgressId(),
+            projection.progressUserId(),
+            userId
+        );
         validateProgress(
             projection.stampbookStatus(),
             progressStatus,
@@ -302,11 +323,20 @@ public class StampbookReadService {
             MyStampbookProgressStatus.valueOf(progressStatus.name()),
             earnedCount,
             targetCount,
-            projection.completedAt()
+            projection.completedAt(),
+            toCompletionReward(
+                progressStatus,
+                projection.stampbookRewardGrantId(),
+                projection.completionRewardCouponPolicyId(),
+                projection.stampbookRewardCouponPolicyId()
+            )
         );
     }
 
-    private MyStampbookListResult.Progress toProgress(MyStampbookListProjection projection) {
+    private MyStampbookListResult.Progress toProgress(
+        MyStampbookListProjection projection,
+        Long userId
+    ) {
         long earnedCount = requireNonNegative(projection.earnedCount(), "earnedCount");
         long targetCount = requirePositive(projection.targetCount(), "targetCount");
         StampbookProgressStatus progressStatus = projection.progressStatus();
@@ -318,17 +348,29 @@ public class StampbookReadService {
                 earnedCount,
                 targetCount,
                 null,
+                null,
                 null
             );
         }
 
+        validateProgressOwner(
+            projection.stampbookProgressId(),
+            projection.progressUserId(),
+            userId
+        );
         validateProgress(projection, earnedCount, targetCount);
         return new MyStampbookListResult.Progress(
             MyStampbookProgressStatus.valueOf(progressStatus.name()),
             earnedCount,
             targetCount,
             projection.completedAt(),
-            projection.lastEarnedAt()
+            projection.lastEarnedAt(),
+            toCompletionReward(
+                progressStatus,
+                projection.stampbookRewardGrantId(),
+                projection.completionRewardCouponPolicyId(),
+                projection.stampbookRewardCouponPolicyId()
+            )
         );
     }
 
@@ -351,7 +393,13 @@ public class StampbookReadService {
     ) {
         if (earnedCount != 0
             || projection.completedAt() != null
-            || projection.lastEarnedAt() != null) {
+            || projection.lastEarnedAt() != null
+            || projection.stampbookProgressId() != null
+            || projection.progressUserId() != null
+            || projection.stampbookRewardGrantId() != null
+            || projection.completionRewardCouponPolicyId() != null
+            || projection.stampbookRewardCouponPolicyId() == null
+            || projection.stampbookRewardCouponPolicyId() <= 0) {
             throw new IllegalStateException("stampbook progress read data is inconsistent");
         }
     }
@@ -410,8 +458,19 @@ public class StampbookReadService {
                 || firstProjection.stampbookStatus() != projection.stampbookStatus()
                 || !isSame(firstProjection.publishedAt(), projection.publishedAt())
                 || !isSame(firstProjection.endedAt(), projection.endedAt())
+                || !isSame(firstProjection.stampbookProgressId(), projection.stampbookProgressId())
+                || !isSame(firstProjection.progressUserId(), projection.progressUserId())
                 || firstProjection.progressStatus() != projection.progressStatus()
                 || !isSame(firstProjection.completedAt(), projection.completedAt())
+                || !isSame(firstProjection.stampbookRewardGrantId(), projection.stampbookRewardGrantId())
+                || !isSame(
+                    firstProjection.completionRewardCouponPolicyId(),
+                    projection.completionRewardCouponPolicyId()
+                )
+                || !isSame(
+                    firstProjection.stampbookRewardCouponPolicyId(),
+                    projection.stampbookRewardCouponPolicyId()
+                )
                 || previousContentId != null && previousContentId >= projection.contentId()) {
                 throw new IllegalStateException("stampbook read data is inconsistent");
             }
@@ -434,6 +493,51 @@ public class StampbookReadService {
                 && (stampbookStatus != StampbookStatus.ENDED || earnedCount >= targetCount)
             || progressStatus == StampbookProgressStatus.COMPLETED && completedAt == null
             || progressStatus != StampbookProgressStatus.COMPLETED && completedAt != null) {
+            throw new IllegalStateException("stampbook progress read data is inconsistent");
+        }
+    }
+
+    private StampbookCompletionReward toCompletionReward(
+        StampbookProgressStatus progressStatus,
+        Long stampbookRewardGrantId,
+        Long completionRewardCouponPolicyId,
+        Long stampbookRewardCouponPolicyId
+    ) {
+        if (progressStatus != StampbookProgressStatus.COMPLETED) {
+            if (stampbookRewardGrantId != null
+                || completionRewardCouponPolicyId != null
+                || stampbookRewardCouponPolicyId == null
+                || stampbookRewardCouponPolicyId <= 0) {
+                throw new IllegalStateException("stampbook completion reward read data is inconsistent");
+            }
+            return null;
+        }
+
+        if (stampbookRewardGrantId == null
+            || stampbookRewardGrantId <= 0
+            || completionRewardCouponPolicyId == null
+            || completionRewardCouponPolicyId <= 0
+            || stampbookRewardCouponPolicyId == null
+            || stampbookRewardCouponPolicyId <= 0
+            || !isSame(completionRewardCouponPolicyId, stampbookRewardCouponPolicyId)) {
+            throw new IllegalStateException("stampbook completion reward read data is inconsistent");
+        }
+        return new StampbookCompletionReward(
+            completionRewardCouponPolicyId,
+            stampbookRewardGrantId
+        );
+    }
+
+    private void validateProgressOwner(
+        Long stampbookProgressId,
+        Long progressUserId,
+        Long userId
+    ) {
+        if (stampbookProgressId == null
+            || stampbookProgressId <= 0
+            || progressUserId == null
+            || progressUserId <= 0
+            || !isSame(progressUserId, userId)) {
             throw new IllegalStateException("stampbook progress read data is inconsistent");
         }
     }

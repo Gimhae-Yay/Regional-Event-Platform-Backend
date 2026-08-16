@@ -6,6 +6,7 @@ import java.util.List;
 import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookStatus;
 import io.regionevent.regioneventbackend.domain.stampbook.service.MyStampbookDetailResult;
 import io.regionevent.regioneventbackend.domain.stampbook.service.MyStampbookProgressStatus;
+import io.regionevent.regioneventbackend.domain.stampbook.service.StampbookCompletionReward;
 
 public record GetMyStampbookDetailResponse(
     StampbookResponse stampbook,
@@ -28,7 +29,8 @@ public record GetMyStampbookDetailResponse(
                 result.progress().status(),
                 result.progress().earnedCount(),
                 result.progress().targetCount(),
-                result.progress().completedAt()
+                result.progress().completedAt(),
+                CompletionRewardResponse.from(result.progress().completionReward())
             )
         );
     }
@@ -64,7 +66,24 @@ public record GetMyStampbookDetailResponse(
         MyStampbookProgressStatus status,
         long earnedCount,
         long targetCount,
-        Instant completedAt
+        Instant completedAt,
+        CompletionRewardResponse completionReward
     ) {
+    }
+
+    public record CompletionRewardResponse(
+        String couponPolicyId,
+        String stampbookRewardGrantId
+    ) {
+
+        private static CompletionRewardResponse from(StampbookCompletionReward reward) {
+            if (reward == null) {
+                return null;
+            }
+            return new CompletionRewardResponse(
+                reward.couponPolicyId().toString(),
+                reward.stampbookRewardGrantId().toString()
+            );
+        }
     }
 }

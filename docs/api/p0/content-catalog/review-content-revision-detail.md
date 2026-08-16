@@ -93,13 +93,13 @@ GET /api/v1/region-admin/content-revisions/{revisionId}
 | `400` | `INVALID_TYPE` | `revisionId`를 signed 64비트 `Long`으로 변환할 수 없다. 수정본·원본 콘텐츠·이미지 객체와 감사 기록은 변경하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 수정본·원본 콘텐츠·이미지 객체와 감사 기록은 변경하지 않는다. |
 | `403` | `FORBIDDEN` | 인증 주체가 활성 `REGION_ADMIN`이 아니거나 원본 콘텐츠가 담당 지역에 속하지 않는다. 수정본·원본 콘텐츠·이미지 객체와 감사 기록은 변경하지 않는다. |
-| `404` | `NOT_FOUND` | 수정본이 없거나 `EDIT_REQUESTED`가 아니거나 원본이 소프트 삭제됐다. 심사 대상이 아닌 수정본의 존재·상태는 노출하지 않으며 수정본·원본 콘텐츠·이미지 객체와 감사 기록은 변경하지 않는다. |
+| `404` | `NOT_FOUND` | 수정본이 없거나 `EDIT_REQUESTED`가 아니거나 원본이 소프트 삭제됐다. 콘텐츠 중단·종료로 `EDIT_INVALIDATED`가 된 수정본도 심사 대상이 아니므로 포함한다. 심사 대상이 아닌 수정본의 존재·상태는 노출하지 않으며 수정본·원본 콘텐츠·이미지 객체와 감사 기록은 변경하지 않는다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 수정본과 원본 상태·후보 `publish_at` 조합 또는 후보 이미지 연결이 정책과 일치하지 않거나 예상하지 못한 서버 오류가 발생했다. 수정본·원본 콘텐츠·이미지 객체와 감사 기록은 변경하지 않는다. |
 
 ### 처리 규칙
 
 1. 인증 주체는 활성 상태이며 담당 `region_id`가 연결된 `REGION_ADMIN`이어야 한다. 서버는 수정본의 원본 콘텐츠 `region_id`와 인증 주체의 담당 `region_id`가 일치하는지 검증한다.
-2. 원본 콘텐츠가 소프트 삭제되지 않았고 수정본이 `EDIT_REQUESTED`인 경우만 반환한다. `EDIT_APPROVED`, `EDIT_REJECTED`, `EDIT_WITHDRAWN` 수정본과 소프트 삭제된 원본의 수정본은 반환하지 않는다.
+2. 원본 콘텐츠가 소프트 삭제되지 않았고 수정본이 `EDIT_REQUESTED`인 경우만 반환한다. `EDIT_APPROVED`, `EDIT_REJECTED`, `EDIT_WITHDRAWN`, `EDIT_INVALIDATED` 수정본과 소프트 삭제된 원본의 수정본은 반환하지 않는다. 이미 무효화된 수정본의 상태 조합을 심사 유형으로 분류하지 않아 `500`을 반환하지 않는다.
 3. 공개 콘텐츠 수정본은 `candidatePublishAt = null`, 원본 `PUBLISHED`여야 한다.
 4. 공개 전 수정본은 `candidatePublishAt`이 있고 원본 `PENDING`이며 최신 `PENDING` 상태 로그의 직전 상태 로그가 `APPROVED`여야 한다.
 5. 후보 이미지의 `ACTIVE` 상태와 수정본의 유효한 직접 연결을 검증한 뒤에만 단기 presigned GET URL과 정확한 UTC 만료 시각을 발급한다. 권한 검증을 통과하기 전에는 URL을 발급하지 않는다.

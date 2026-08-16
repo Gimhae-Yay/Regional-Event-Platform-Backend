@@ -27,6 +27,7 @@ import io.regionevent.regioneventbackend.domain.stampbook.service.GetMyStampbook
 import io.regionevent.regioneventbackend.domain.stampbook.service.GetMyStampbooksUseCase;
 import io.regionevent.regioneventbackend.domain.stampbook.service.MyStampbookDetailResult;
 import io.regionevent.regioneventbackend.domain.stampbook.service.MyStampbookProgressStatus;
+import io.regionevent.regioneventbackend.domain.stampbook.service.StampbookCompletionReward;
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -78,7 +79,8 @@ class MyStampbookDetailControllerIntegrationTest {
             .andExpect(jsonPath("$.data.progress.status").value("IN_PROGRESS"))
             .andExpect(jsonPath("$.data.progress.earnedCount").value(1))
             .andExpect(jsonPath("$.data.progress.targetCount").value(2))
-            .andExpect(jsonPath("$.data.progress.completedAt").value(nullValue()));
+            .andExpect(jsonPath("$.data.progress.completedAt").value(nullValue()))
+            .andExpect(jsonPath("$.data.progress.completionReward").value(nullValue()));
 
         verify(getMyStampbookDetailUseCase).find(USER_ID, STAMPBOOK_ID);
     }
@@ -91,7 +93,8 @@ class MyStampbookDetailControllerIntegrationTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.progress.status").value("NOT_STARTED"))
             .andExpect(jsonPath("$.data.progress.earnedCount").value(0))
-            .andExpect(jsonPath("$.data.progress.completedAt").value(nullValue()));
+            .andExpect(jsonPath("$.data.progress.completedAt").value(nullValue()))
+            .andExpect(jsonPath("$.data.progress.completionReward").value(nullValue()));
     }
 
     @Test
@@ -129,6 +132,17 @@ class MyStampbookDetailControllerIntegrationTest {
         verify(getMyStampbookDetailUseCase, never()).find(eq(USER_ID), any());
     }
 
+    @Test
+    void 내_스탬프북_상세_조회는_완료_보상_쿠폰_발급_식별자를_반환한다() throws Exception {
+        when(getMyStampbookDetailUseCase.find(USER_ID, STAMPBOOK_ID)).thenReturn(completedResult());
+
+        mockMvc.perform(authenticated(get("/api/v1/me/stampbooks/101")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.progress.status").value("COMPLETED"))
+            .andExpect(jsonPath("$.data.progress.completionReward.couponPolicyId").value("301"))
+            .andExpect(jsonPath("$.data.progress.completionReward.stampbookRewardGrantId").value("901"));
+    }
+
     private MyStampbookDetailResult inProgressResult() {
         return new MyStampbookDetailResult(
             STAMPBOOK_ID,
@@ -154,6 +168,7 @@ class MyStampbookDetailControllerIntegrationTest {
                 MyStampbookProgressStatus.IN_PROGRESS,
                 1L,
                 2L,
+                null,
                 null
             )
         );
@@ -176,7 +191,31 @@ class MyStampbookDetailControllerIntegrationTest {
                 MyStampbookProgressStatus.NOT_STARTED,
                 0L,
                 1L,
+                null,
                 null
+            )
+        );
+    }
+
+    private MyStampbookDetailResult completedResult() {
+        return new MyStampbookDetailResult(
+            STAMPBOOK_ID,
+            10L,
+            StampbookStatus.ENDED,
+            Instant.parse("2026-08-01T00:00:00Z"),
+            Instant.parse("2026-08-04T00:00:00Z"),
+            List.of(new MyStampbookDetailResult.TargetContent(
+                201L,
+                "김해 가야문화 체험",
+                true,
+                Instant.parse("2026-08-04T00:00:00Z")
+            )),
+            new MyStampbookDetailResult.Progress(
+                MyStampbookProgressStatus.COMPLETED,
+                1L,
+                1L,
+                Instant.parse("2026-08-04T00:00:00Z"),
+                new StampbookCompletionReward(301L, 901L)
             )
         );
     }
