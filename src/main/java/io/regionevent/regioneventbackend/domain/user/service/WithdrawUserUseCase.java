@@ -123,7 +123,10 @@ public class WithdrawUserUseCase {
 
     private void invalidateActiveCoupons(Long userId) {
         Instant occurredAt = clock.instant();
-        for (Coupon coupon : couponService.findActiveCouponsForWithdrawal(userId)) {
+        for (Coupon coupon : couponService.findAllCouponsForWithdrawal(userId)) {
+            if (coupon.getStatus() != CouponStatus.AVAILABLE && coupon.getStatus() != CouponStatus.RESERVED) {
+                continue;
+            }
             couponStatusHistoryService.create(new CouponStatusHistory(
                 coupon,
                 coupon.invalidate(),

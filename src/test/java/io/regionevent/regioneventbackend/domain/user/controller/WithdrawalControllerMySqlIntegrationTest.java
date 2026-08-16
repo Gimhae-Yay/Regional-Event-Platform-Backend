@@ -57,10 +57,12 @@ import io.regionevent.regioneventbackend.domain.coupon.entity.Coupon;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponIssuance;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponIssuanceType;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicy;
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponRedemption;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatus;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponStatusHistory;
 import io.regionevent.regioneventbackend.domain.coupon.repository.CouponIssuanceRepository;
 import io.regionevent.regioneventbackend.domain.coupon.repository.CouponPolicyRepository;
+import io.regionevent.regioneventbackend.domain.coupon.repository.CouponRedemptionRepository;
 import io.regionevent.regioneventbackend.domain.coupon.repository.CouponRepository;
 import io.regionevent.regioneventbackend.domain.coupon.repository.CouponStatusHistoryRepository;
 import io.regionevent.regioneventbackend.domain.coupon.service.CouponExpirationResult;
@@ -133,6 +135,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
     private final OperatorApplicationRepository operatorApplicationRepository;
     private final CouponPolicyRepository couponPolicyRepository;
     private final CouponRepository couponRepository;
+    private final CouponRedemptionRepository couponRedemptionRepository;
     private final CouponIssuanceRepository couponIssuanceRepository;
     private final CouponStatusHistoryRepository couponStatusHistoryRepository;
     private final VisitRepository visitRepository;
@@ -173,6 +176,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         OperatorApplicationRepository operatorApplicationRepository,
         CouponPolicyRepository couponPolicyRepository,
         CouponRepository couponRepository,
+        CouponRedemptionRepository couponRedemptionRepository,
         CouponIssuanceRepository couponIssuanceRepository,
         CouponStatusHistoryRepository couponStatusHistoryRepository,
         VisitRepository visitRepository,
@@ -206,6 +210,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         this.operatorApplicationRepository = operatorApplicationRepository;
         this.couponPolicyRepository = couponPolicyRepository;
         this.couponRepository = couponRepository;
+        this.couponRedemptionRepository = couponRedemptionRepository;
         this.couponIssuanceRepository = couponIssuanceRepository;
         this.couponStatusHistoryRepository = couponStatusHistoryRepository;
         this.visitRepository = visitRepository;
@@ -376,6 +381,64 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
             assertThat(history.getReasonCode()).isEqualTo("USER_WITHDRAWAL");
             assertThat(history.getActorKind()).isEqualTo("USER");
         });
+    }
+
+    @Test
+    @Timeout(15)
+    void withdraw_whenSessionCancellationRestoresUsedCoupon_invalidatesRestoredCoupon() throws Exception {
+        Fixture fixture = createFixture();
+        Long couponId = createUsedCouponForReservationCancellation(fixture);
+        CountDownLatch couponLockedForRestoration = new CountDownLatch(1);
+        CountDownLatch releaseCouponRestoration = new CountDownLatch(1);
+        CountDownLatch withdrawalCouponLockAttempted = new CountDownLatch(1);
+        CouponService couponServiceTarget = AopTestUtils.getTargetObject(couponService);
+        doAnswer(invocation -> {
+            Object result = invocation.callRealMethod();
+            couponLockedForRestoration.countDown();
+            await(releaseCouponRestoration);
+            return result;
+        }).when(couponServiceTarget).findByCouponIdForUpdate(couponId);
+        doAnswer(invocation -> {
+            withdrawalCouponLockAttempted.countDown();
+            return invocation.callRealMethod();
+        }).when(couponServiceTarget).findAllCouponsForWithdrawal(fixture.user().getUserId());
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<?> cancellation = executorService.submit(() -> cancelContentSessionUseCase.cancel(
+                fixture.owner().getUserId(),
+                fixture.session().getSessionId(),
+                "운영상 취소",
+                UUID.randomUUID()
+            ));
+            assertThat(couponLockedForRestoration.await(3, TimeUnit.SECONDS)).isTrue();
+
+            Future<?> withdrawal = executorService.submit(() -> withdrawUserUseCase.withdraw(fixture.user().getUserId()));
+            assertThat(withdrawalCouponLockAttempted.await(3, TimeUnit.SECONDS)).isTrue();
+            assertThat(withdrawal.isDone()).isFalse();
+            releaseCouponRestoration.countDown();
+
+            cancellation.get(5, TimeUnit.SECONDS);
+            withdrawal.get(5, TimeUnit.SECONDS);
+        } finally {
+            releaseCouponRestoration.countDown();
+        }
+
+        assertCouponStatusAndUnlinkedUser(couponId, CouponStatus.INVALIDATED);
+        assertThat(couponStatusHistoryRepository.findAllByCouponCouponIdOrderByOccurredAtAsc(couponId))
+            .anySatisfy(history -> assertCouponStatusHistory(
+                history,
+                CouponStatus.USED,
+                CouponStatus.AVAILABLE,
+                "RESERVATION_CANCELLED",
+                "OPERATOR"
+            ))
+            .anySatisfy(history -> assertCouponStatusHistory(
+                history,
+                CouponStatus.AVAILABLE,
+                CouponStatus.INVALIDATED,
+                "USER_WITHDRAWAL",
+                "USER"
+            ));
     }
 
     @Test
@@ -925,6 +988,48 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
                 fixture.user(),
                 now.minusSeconds(120),
                 now.minusSeconds(60)
+            ));
+            return coupon.getCouponId();
+        });
+    }
+
+    private Long createUsedCouponForReservationCancellation(Fixture fixture) {
+        return transactionTemplate.execute(status -> {
+            Instant now = Instant.now();
+            CapacityHold activeHold = capacityHoldRepository.findById(fixture.activeHold().getHoldId()).orElseThrow();
+            activeHold.invalidate("TEST_SETUP", now);
+            capacityHoldRepository.saveAndFlush(activeHold);
+            ContentSession contentSession = contentSessionRepository.findById(fixture.session().getSessionId())
+                .orElseThrow();
+            contentSession.releaseCapacity(activeHold.getQuantity());
+            contentSessionRepository.saveAndFlush(contentSession);
+
+            CouponPolicy couponPolicy = createPublishedCouponPolicy(fixture, now);
+            Coupon coupon = new Coupon(
+                couponPolicy,
+                fixture.user(),
+                now.minusSeconds(60),
+                now.plusSeconds(86_400)
+            );
+            coupon.reserve();
+            coupon.use();
+            coupon = couponRepository.saveAndFlush(coupon);
+            ReservationPriceSnapshot snapshot = reservationPriceSnapshotRepository.saveAndFlush(
+                new ReservationPriceSnapshot(
+                    fixture.reservation().getCapacityHold(),
+                    coupon,
+                    1_000,
+                    1_000,
+                    0,
+                    "KRW",
+                    now
+                )
+            );
+            couponRedemptionRepository.saveAndFlush(new CouponRedemption(
+                coupon,
+                snapshot,
+                fixture.reservation(),
+                now
             ));
             return coupon.getCouponId();
         });

@@ -47,13 +47,9 @@ public interface CouponRepository extends JpaRepository<Coupon, Long> {
         SELECT coupon
         FROM Coupon coupon
         WHERE coupon.user.userId = :userId
-            AND coupon.status IN :statuses
         ORDER BY coupon.couponId ASC
         """)
-    List<Coupon> findAllByUserIdAndStatusInOrderByCouponIdForUpdate(
-        @Param("userId") Long userId,
-        @Param("statuses") List<CouponStatus> statuses
-    );
+    List<Coupon> findAllByUserIdOrderByCouponIdForUpdate(@Param("userId") Long userId);
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("""

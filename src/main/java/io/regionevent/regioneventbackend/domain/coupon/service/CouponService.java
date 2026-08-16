@@ -33,11 +33,8 @@ public class CouponService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public List<Coupon> findActiveCouponsForWithdrawal(Long userId) {
-        return couponRepository.findAllByUserIdAndStatusInOrderByCouponIdForUpdate(
-            userId,
-            List.of(CouponStatus.AVAILABLE, CouponStatus.RESERVED)
-        );
+    public List<Coupon> findAllCouponsForWithdrawal(Long userId) {
+        return couponRepository.findAllByUserIdOrderByCouponIdForUpdate(userId);
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
