@@ -239,6 +239,9 @@ function requestBody(testCase, body) {
 function assertSuccess(response, expectedStatus, label) {
   if (expectedStatus === 204) {
     const success = response.status === expectedStatus;
+    if (!success) {
+      console.error(`${label}: expected ${expectedStatus}, received ${response.status}`);
+    }
     successfulResponseRate.add(success, { endpoint: label, expected_status: String(expectedStatus) });
     check(response, {
       [`${label}: expected successful API response`]: () => success,
@@ -251,6 +254,9 @@ function assertSuccess(response, expectedStatus, label) {
     && body.statusCode === expectedStatus
     && body.code === 'SUCCESS'
     && Object.prototype.hasOwnProperty.call(body, 'data');
+  if (!success) {
+    console.error(`${label}: expected ${expectedStatus}, received ${response.status}`);
+  }
   successfulResponseRate.add(success, { endpoint: label, expected_status: String(expectedStatus) });
   check(response, {
     [`${label}: expected successful API response`]: () => success,

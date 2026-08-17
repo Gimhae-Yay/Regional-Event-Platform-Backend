@@ -19,7 +19,7 @@
     "id": "public-contents",
     "method": "GET",
     "route": "/api/v1/contents",
-    "path": "/contents?regionId={{ids.regionId}}",
+    "path": "/contents?regionId={{ids.regionId}}&reservationAvailable=true",
     "role": "PUBLIC",
     "expectedStatus": 200
   },
@@ -179,7 +179,7 @@
     "id": "region-admin-pending-contents",
     "method": "GET",
     "route": "/api/v1/region-admin/contents",
-    "path": "/region-admin/contents",
+    "path": "/region-admin/contents?status=PENDING",
     "role": "REGION_ADMIN",
     "expectedStatus": 200
   },
@@ -421,7 +421,7 @@
     "id": "visitor-coupons",
     "method": "GET",
     "route": "/api/v1/me/coupons",
-    "path": "/me/coupons?status=ISSUED",
+    "path": "/me/coupons?status=AVAILABLE",
     "role": "VISITOR",
     "expectedStatus": 200
   },
@@ -520,7 +520,7 @@
   },
   {
     "id": "operator-manual-check-in", "method": "POST", "route": "/api/v1/operator/check-ins/manual", "path": "/operator/check-ins/manual", "role": "OPERATOR", "expectedStatus": 200,
-    "headers": { "Idempotency-Key": "a644d395-8faf-4e67-a2b2-7351ae1a8248" }, "body": { "reservationNo": "{{reservation.manualReservationNo}}", "reason": "K6 정상 응답 검증" }
+    "headers": { "Idempotency-Key": "a644d395-8faf-4e67-a2b2-7351ae1a8248" }, "body": { "reservationNo": "{{reservation.manualReservationNo}}", "reason": "QR_SCAN_FAILED" }
   },
   {
     "id": "visitor-reservation-qr", "method": "GET", "route": "/api/v1/me/reservations/{reservationId}/qr", "path": "/me/reservations/{{ids.qrReservationId}}/qr", "role": "QR_VISITOR", "sequence": 10, "expectedStatus": 200,
@@ -536,7 +536,7 @@
     "id": "region-admin-reservation-search", "method": "GET", "route": "/api/v1/region-admin/reservations/search", "path": "/region-admin/reservations/search?reservationNo={{reservation.manualReservationNo}}", "role": "REGION_ADMIN", "expectedStatus": 200
   },
   {
-    "id": "region-admin-qr-exceptions", "method": "GET", "route": "/api/v1/region-admin/qr-exceptions", "path": "/region-admin/qr-exceptions?size=20", "role": "REGION_ADMIN", "expectedStatus": 200
+    "id": "region-admin-qr-exceptions", "method": "GET", "route": "/api/v1/region-admin/qr-exceptions", "path": "/region-admin/qr-exceptions?size=1", "role": "REGION_ADMIN", "expectedStatus": 200
   },
   {
     "id": "region-admin-qr-exception-detail", "method": "GET", "route": "/api/v1/region-admin/qr-exceptions/{exceptionId}", "path": "/region-admin/qr-exceptions/{{ids.qrExceptionId}}", "role": "REGION_ADMIN", "expectedStatus": 200
@@ -554,7 +554,7 @@
   },
   {
     "id": "visitor-join-mission", "method": "POST", "route": "/api/v1/missions/{missionId}/participations", "path": "/missions/{{ids.joinableMissionId}}/participations", "role": "VISITOR", "expectedStatus": 201,
-    "capture": { "missionParticipationId": "ids.createdMissionParticipationId" }
+    "capture": { "participationId": "ids.createdMissionParticipationId" }
   },
   {
     "id": "visitor-claim-mission-reward", "method": "POST", "route": "/api/v1/me/mission-participations/{participationId}/rewards/claim", "path": "/me/mission-participations/{{ids.completedMissionParticipationId}}/rewards/claim", "role": "VISITOR", "expectedStatus": 201
@@ -564,7 +564,7 @@
     "headers": { "Idempotency-Key": "419d23fc-d9b2-4bd4-bfd1-3a72509170c2" }
   },
   {
-    "id": "visitor-cancel-reservation", "method": "POST", "route": "/api/v1/me/reservations/{reservationId}/cancel", "path": "/me/reservations/{{ids.cancellableReservationId}}/cancel", "role": "VISITOR", "expectedStatus": 201
+    "id": "visitor-cancel-reservation", "method": "POST", "route": "/api/v1/me/reservations/{reservationId}/cancel", "path": "/me/reservations/{{ids.cancellableReservationId}}/cancel", "role": "VISITOR", "expectedStatus": 200
   },
   {
     "id": "operator-create-coupon-policy", "method": "POST", "route": "/api/v1/operator/coupon-policies", "path": "/operator/coupon-policies", "role": "OPERATOR", "expectedStatus": 201,
@@ -663,17 +663,17 @@
   },
   {
     "id": "operator-create-content-revision", "method": "POST", "route": "/api/v1/operator/contents/{contentId}/revisions", "path": "/operator/contents/{{ids.revisableContentId}}/revisions", "role": "OPERATOR", "expectedStatus": 201,
-    "body": { "title": "K6 수정본", "description": "K6 정상 응답 검증", "locationText": "K6 장소", "operatingHoursText": "10:00-18:00", "contactText": "01090000001", "precautions": "K6", "ageRequirement": "전체", "materials": "없음", "cancellationPolicyText": "K6", "reservationPrice": 10000, "representativeImageObjectId": "{{ids.imageObjectId}}" }, "capture": { "revisionId": "ids.createdContentRevisionId" }
+    "body": { "title": "K6 수정본", "description": "K6 정상 응답 검증", "locationText": "K6 장소", "operatingHoursText": "10:00-18:00", "contactText": "01090000001", "precautions": "K6", "ageRequirement": "전체", "materials": "없음", "cancellationPolicyText": "K6", "reservationPrice": 10000 }, "capture": { "revisionId": "ids.createdContentRevisionId" }
   },
   {
-    "id": "operator-update-content-revision", "method": "PUT", "route": "/api/v1/operator/content-revisions/{revisionId}", "path": "/operator/content-revisions/{{ids.createdContentRevisionId}}", "role": "OPERATOR", "expectedStatus": 200,
-    "body": { "title": "K6 수정본 재수정", "description": "K6 정상 응답 검증", "locationText": "K6 장소", "operatingHoursText": "10:00-18:00", "contactText": "01090000001", "precautions": "K6", "ageRequirement": "전체", "materials": "없음", "cancellationPolicyText": "K6", "reservationPrice": 10000, "representativeImageObjectId": "{{ids.imageObjectId}}" }
+    "id": "operator-update-content-revision", "method": "PUT", "route": "/api/v1/operator/content-revisions/{revisionId}", "path": "/operator/content-revisions/{{ids.updatableContentRevisionId}}", "role": "OPERATOR", "expectedStatus": 200,
+    "body": { "title": "K6 수정본 재수정", "description": "K6 정상 응답 검증", "locationText": "K6 장소", "operatingHoursText": "10:00-18:00", "contactText": "01090000001", "precautions": "K6", "ageRequirement": "전체", "materials": "없음", "cancellationPolicyText": "K6", "reservationPrice": 10000 }
   },
   {
     "id": "operator-withdraw-content-revision", "method": "POST", "route": "/api/v1/operator/content-revisions/{revisionId}/withdraw", "path": "/operator/content-revisions/{{ids.withdrawableContentRevisionId}}/withdraw", "role": "OPERATOR", "expectedStatus": 200, "body": { "reason": "K6 정상 응답 검증" }
   },
   {
-    "id": "region-admin-content-revisions", "method": "GET", "route": "/api/v1/region-admin/content-revisions", "path": "/region-admin/content-revisions?status=PENDING", "role": "REGION_ADMIN", "expectedStatus": 200
+    "id": "region-admin-content-revisions", "method": "GET", "route": "/api/v1/region-admin/content-revisions", "path": "/region-admin/content-revisions?status=EDIT_REQUESTED", "role": "REGION_ADMIN", "expectedStatus": 200
   },
   {
     "id": "region-admin-content-revision-detail", "method": "GET", "route": "/api/v1/region-admin/content-revisions/{revisionId}", "path": "/region-admin/content-revisions/{{ids.pendingContentRevisionId}}", "role": "REGION_ADMIN", "expectedStatus": 200

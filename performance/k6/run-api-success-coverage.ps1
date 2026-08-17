@@ -142,17 +142,29 @@ Invoke-DatabaseSql -Sql (Get-Content -Raw -Encoding UTF8 -LiteralPath $BaseFixtu
 Invoke-DatabaseSql -Sql (Get-Content -Raw -Encoding UTF8 -LiteralPath $BootstrapFixturePath)
 
 New-Item -ItemType Directory -Force -Path $resultDirectory | Out-Null
-& $K6Command run `
-    '-e' "PERF_BASE_URL=$($BaseUrl.TrimEnd('/'))" `
-    '-e' "PERF_SUMMARY_DIRECTORY=$resultDirectory" `
-    '-e' 'PERF_SUMMARY_BASENAME=api-success-coverage' `
-    '-e' "PERF_API_TEST_ACCOUNTS_JSON=$accounts" `
-    '-e' "PERF_API_SUCCESS_CASES_JSON=$cases" `
-    '-e' "PERF_API_FIXTURE_CONTEXT_JSON=$fixtureContext" `
-    $scenarioPath
+$k6Environment = @{
+    PERF_BASE_URL = $BaseUrl.TrimEnd('/')
+    PERF_SUMMARY_DIRECTORY = $resultDirectory
+    PERF_SUMMARY_BASENAME = 'api-success-coverage'
+    PERF_API_TEST_ACCOUNTS_JSON = $accounts
+    PERF_API_SUCCESS_CASES_JSON = $cases
+    PERF_API_FIXTURE_CONTEXT_JSON = $fixtureContext
+}
+$previousEnvironment = @{}
+foreach ($name in $k6Environment.Keys) {
+    $previousEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
+    [Environment]::SetEnvironmentVariable($name, $k6Environment[$name], 'Process')
+}
 
-if ($LASTEXITCODE -ne 0) {
-    throw "API success coverage scenario failed with exit code $LASTEXITCODE."
+try {
+    & $K6Command run $scenarioPath
+    if ($LASTEXITCODE -ne 0) {
+        throw "API success coverage scenario failed with exit code $LASTEXITCODE."
+    }
+} finally {
+    foreach ($name in $k6Environment.Keys) {
+        [Environment]::SetEnvironmentVariable($name, $previousEnvironment[$name], 'Process')
+    }
 }
 
 Write-Host "API success coverage completed. Results: $resultDirectory"
