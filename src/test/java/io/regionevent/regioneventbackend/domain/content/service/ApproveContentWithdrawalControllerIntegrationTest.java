@@ -45,7 +45,9 @@ import io.regionevent.regioneventbackend.domain.coupon.repository.CouponPolicyRe
 import io.regionevent.regioneventbackend.domain.coupon.repository.CouponRepository;
 import io.regionevent.regioneventbackend.domain.coupon.repository.CouponStatusHistoryRepository;
 import io.regionevent.regioneventbackend.domain.payment.entity.Payment;
+import io.regionevent.regioneventbackend.domain.payment.entity.PaymentIdempotency;
 import io.regionevent.regioneventbackend.domain.payment.entity.PaymentStatus;
+import io.regionevent.regioneventbackend.domain.payment.repository.PaymentIdempotencyRepository;
 import io.regionevent.regioneventbackend.domain.payment.repository.PaymentRepository;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
@@ -92,6 +94,7 @@ class ApproveContentWithdrawalControllerIntegrationTest extends NonTransactional
     private final ReservationPriceSnapshotRepository reservationPriceSnapshotRepository;
     private final ReservationRepository reservationRepository;
     private final PaymentRepository paymentRepository;
+    private final PaymentIdempotencyRepository paymentIdempotencyRepository;
     private final CouponPolicyRepository couponPolicyRepository;
     private final CouponRepository couponRepository;
     private final CouponStatusHistoryRepository couponStatusHistoryRepository;
@@ -119,6 +122,7 @@ class ApproveContentWithdrawalControllerIntegrationTest extends NonTransactional
         ReservationPriceSnapshotRepository reservationPriceSnapshotRepository,
         ReservationRepository reservationRepository,
         PaymentRepository paymentRepository,
+        PaymentIdempotencyRepository paymentIdempotencyRepository,
         CouponPolicyRepository couponPolicyRepository,
         CouponRepository couponRepository,
         CouponStatusHistoryRepository couponStatusHistoryRepository,
@@ -141,6 +145,7 @@ class ApproveContentWithdrawalControllerIntegrationTest extends NonTransactional
         this.reservationPriceSnapshotRepository = reservationPriceSnapshotRepository;
         this.reservationRepository = reservationRepository;
         this.paymentRepository = paymentRepository;
+        this.paymentIdempotencyRepository = paymentIdempotencyRepository;
         this.couponPolicyRepository = couponPolicyRepository;
         this.couponRepository = couponRepository;
         this.couponStatusHistoryRepository = couponStatusHistoryRepository;
@@ -218,18 +223,32 @@ class ApproveContentWithdrawalControllerIntegrationTest extends NonTransactional
                 assertThat(hold.getInvalidationReason()).isEqualTo("CONTENT_WITHDRAWN");
                 assertThat(hold.getCapacityReleasedAt()).isNotNull();
             });
+        assertThat(capacityHoldRepository.findById(fixture.secondActiveHoldId()))
+            .hasValueSatisfying(hold -> {
+                assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.INVALIDATED);
+                assertThat(hold.getInvalidationReason()).isEqualTo("CONTENT_WITHDRAWN");
+                assertThat(hold.getCapacityReleasedAt()).isNotNull();
+            });
         assertThat(capacityHoldRepository.findById(fixture.confirmedHoldId()))
             .hasValueSatisfying(hold -> assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.CONSUMED));
         assertThat(capacityHoldRepository.findById(fixture.checkedInHoldId()))
             .hasValueSatisfying(hold -> assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.CONSUMED));
         assertThat(paymentRepository.findById(fixture.pendingPaymentId()))
             .hasValueSatisfying(payment -> assertThat(payment.getStatus()).isEqualTo(PaymentStatus.EXPIRED));
+        assertThat(paymentRepository.findById(fixture.secondPendingPaymentId()))
+            .hasValueSatisfying(payment -> assertThat(payment.getStatus()).isEqualTo(PaymentStatus.EXPIRED));
+        assertThat(paymentIdempotencyRepository.findById(fixture.paymentIdempotencyId()))
+            .hasValueSatisfying(idempotency -> assertThat(idempotency.getExpiresAt()).isNotNull());
+        assertThat(paymentIdempotencyRepository.findById(fixture.secondPaymentIdempotencyId()))
+            .hasValueSatisfying(idempotency -> assertThat(idempotency.getExpiresAt()).isNotNull());
         assertThat(paymentRepository.findById(fixture.approvedPaymentId()))
             .hasValueSatisfying(payment -> {
                 assertThat(payment.getStatus()).isEqualTo(PaymentStatus.APPROVED);
                 assertThat(payment.getPortonePaymentId()).isEqualTo("payment-approved");
             });
         assertThat(couponRepository.findById(fixture.reservedCouponId()))
+            .hasValueSatisfying(coupon -> assertThat(coupon.getStatus()).isEqualTo(CouponStatus.AVAILABLE));
+        assertThat(couponRepository.findById(fixture.secondReservedCouponId()))
             .hasValueSatisfying(coupon -> assertThat(coupon.getStatus()).isEqualTo(CouponStatus.AVAILABLE));
         assertThat(reservationPriceSnapshotRepository.findById(fixture.pendingSnapshotId()))
             .hasValueSatisfying(snapshot -> {
@@ -238,7 +257,7 @@ class ApproveContentWithdrawalControllerIntegrationTest extends NonTransactional
                 assertThat(snapshot.getFinalAmount()).isEqualTo(9_000);
                 assertThat(snapshot.getCoupon().getCouponId()).isEqualTo(fixture.reservedCouponId());
             });
-        assertThat(reservationPriceSnapshotRepository.count()).isEqualTo(3);
+        assertThat(reservationPriceSnapshotRepository.count()).isEqualTo(4);
         assertThat(reservationRepository.findById(fixture.confirmedReservationId()))
             .hasValueSatisfying(reservation ->
                 assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.CONFIRMED)
@@ -257,8 +276,10 @@ class ApproveContentWithdrawalControllerIntegrationTest extends NonTransactional
                 assertThat(review.getStatus()).isEqualTo(ReviewStatus.PUBLISHED);
                 assertThat(review.getReviewText()).isEqualTo("좋은 행사였습니다.");
             });
-        assertThat(couponStatusHistoryRepository.count()).isOne();
-        assertThat(auditEventRepository.findAll()).hasSize(6)
+        assertThat(couponStatusHistoryRepository.findAll())
+            .extracting(history -> history.getCoupon().getCouponId())
+            .containsExactlyInAnyOrder(fixture.reservedCouponId(), fixture.secondReservedCouponId());
+        assertThat(auditEventRepository.findAll()).hasSize(9)
             .allSatisfy(auditEvent -> assertThat(auditEvent.getRequestId())
                 .isEqualTo(firstRequestId.toString()));
         assertThat(auditEventRepository.findAll())
@@ -271,7 +292,10 @@ class ApproveContentWithdrawalControllerIntegrationTest extends NonTransactional
             .containsExactlyInAnyOrder(
                 tuple(AuditEventTargetType.CONTENT, "EDIT_REQUESTED", "EDIT_INVALIDATED", "CONTENT_WITHDRAWN"),
                 tuple(AuditEventTargetType.CAPACITY_HOLD, "ACTIVE", "INVALIDATED", "CONTENT_WITHDRAWN"),
+                tuple(AuditEventTargetType.CAPACITY_HOLD, "ACTIVE", "INVALIDATED", "CONTENT_WITHDRAWN"),
                 tuple(AuditEventTargetType.PAYMENT, "PENDING", "EXPIRED", "CONTENT_WITHDRAWN"),
+                tuple(AuditEventTargetType.PAYMENT, "PENDING", "EXPIRED", "CONTENT_WITHDRAWN"),
+                tuple(AuditEventTargetType.COUPON, "RESERVED", "AVAILABLE", "CAPACITY_HOLD_INVALIDATED"),
                 tuple(AuditEventTargetType.COUPON, "RESERVED", "AVAILABLE", "CAPACITY_HOLD_INVALIDATED"),
                 tuple(
                     AuditEventTargetType.CONTENT_WITHDRAWAL_REQUEST,
@@ -281,7 +305,7 @@ class ApproveContentWithdrawalControllerIntegrationTest extends NonTransactional
                 ),
                 tuple(AuditEventTargetType.CONTENT, "PUBLISHED", "WITHDRAWN", "CONTENT_WITHDRAWN")
             );
-        assertThat(auditEventActorLinkRepository.count()).isEqualTo(6);
+        assertThat(auditEventActorLinkRepository.count()).isEqualTo(9);
         verify(cacheInvalidator, times(1)).invalidateContentAfterCommit(
             fixture.regionId(),
             fixture.contentId(),
@@ -388,6 +412,14 @@ class ApproveContentWithdrawalControllerIntegrationTest extends NonTransactional
         );
         reservedCoupon.reserve();
         reservedCoupon = couponRepository.saveAndFlush(reservedCoupon);
+        Coupon secondReservedCoupon = new Coupon(
+            couponPolicy,
+            visitor,
+            now.minusSeconds(1_900),
+            now.plusSeconds(86_400)
+        );
+        secondReservedCoupon.reserve();
+        secondReservedCoupon = couponRepository.saveAndFlush(secondReservedCoupon);
         CapacityHold activeHold = capacityHoldRepository.saveAndFlush(new CapacityHold(
             region,
             session,
@@ -416,6 +448,48 @@ class ApproveContentWithdrawalControllerIntegrationTest extends NonTransactional
             "order-pending",
             now.minusSeconds(1_000)
         ));
+        PaymentIdempotency paymentIdempotency = new PaymentIdempotency(
+            visitor.getUserId(),
+            "payment-key-" + suffix,
+            "payment-request-" + suffix
+        );
+        paymentIdempotency.succeedWithPayment(pendingPayment, now.minusSeconds(1_000));
+        paymentIdempotency = paymentIdempotencyRepository.saveAndFlush(paymentIdempotency);
+        CapacityHold secondActiveHold = capacityHoldRepository.saveAndFlush(new CapacityHold(
+            region,
+            session,
+            visitor,
+            1,
+            CapacityHoldStatus.ACTIVE,
+            now.plusSeconds(600),
+            null,
+            null,
+            null
+        ));
+        ReservationPriceSnapshot secondPendingSnapshot = reservationPriceSnapshotRepository.saveAndFlush(
+            new ReservationPriceSnapshot(
+                secondActiveHold,
+                secondReservedCoupon,
+                7_000,
+                1_000,
+                6_000,
+                "KRW",
+                now.minusSeconds(900)
+            )
+        );
+        Payment secondPendingPayment = paymentRepository.saveAndFlush(new Payment(
+            secondActiveHold,
+            secondPendingSnapshot,
+            "order-pending-second-" + suffix,
+            now.minusSeconds(900)
+        ));
+        PaymentIdempotency secondPaymentIdempotency = new PaymentIdempotency(
+            visitor.getUserId(),
+            "payment-key-second-" + suffix,
+            "payment-request-second-" + suffix
+        );
+        secondPaymentIdempotency.succeedWithPayment(secondPendingPayment, now.minusSeconds(900));
+        secondPaymentIdempotency = paymentIdempotencyRepository.saveAndFlush(secondPaymentIdempotency);
         CapacityHold confirmedHold = capacityHoldRepository.saveAndFlush(new CapacityHold(
             region,
             session,
@@ -521,7 +595,7 @@ class ApproveContentWithdrawalControllerIntegrationTest extends NonTransactional
             null
         ));
         jdbcTemplate.update(
-            "UPDATE content_session SET remaining_capacity = remaining_capacity - 4 WHERE session_id = ?",
+            "UPDATE content_session SET remaining_capacity = remaining_capacity - 5 WHERE session_id = ?",
             session.getSessionId()
         );
         return new Fixture(
@@ -532,12 +606,17 @@ class ApproveContentWithdrawalControllerIntegrationTest extends NonTransactional
             request.getContentWithdrawalRequestId(),
             session.getSessionId(),
             activeHold.getHoldId(),
+            secondActiveHold.getHoldId(),
             confirmedHold.getHoldId(),
             checkedInHold.getHoldId(),
             pendingSnapshot.getReservationPriceSnapshotId(),
             pendingPayment.getPaymentId(),
+            secondPendingPayment.getPaymentId(),
+            paymentIdempotency.getPaymentIdempotencyId(),
+            secondPaymentIdempotency.getPaymentIdempotencyId(),
             approvedPayment.getPaymentId(),
             reservedCoupon.getCouponId(),
+            secondReservedCoupon.getCouponId(),
             confirmedReservation.getReservationId(),
             checkedInReservation.getReservationId(),
             visit.getVisitId(),
@@ -563,12 +642,17 @@ class ApproveContentWithdrawalControllerIntegrationTest extends NonTransactional
         Long withdrawalRequestId,
         Long sessionId,
         Long activeHoldId,
+        Long secondActiveHoldId,
         Long confirmedHoldId,
         Long checkedInHoldId,
         Long pendingSnapshotId,
         Long pendingPaymentId,
+        Long secondPendingPaymentId,
+        Long paymentIdempotencyId,
+        Long secondPaymentIdempotencyId,
         Long approvedPaymentId,
         Long reservedCouponId,
+        Long secondReservedCouponId,
         Long confirmedReservationId,
         Long checkedInReservationId,
         Long visitId,
