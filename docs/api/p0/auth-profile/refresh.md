@@ -5,12 +5,12 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | [FR-01 인증·역할·지역 권한](../../../p0/auth-profile.md#fr-01-인증역할지역-권한) |
 | 소유 도메인 | 인증·프로필 |
-| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ADR-0005](../../../adr/0005-use-jwt-access-and-rotating-refresh-tokens.md), [ADR-0023](../../../adr/0023-manage-refresh-token-revocation-in-redis.md), [ADR-0027](../../../adr/0027-deliver-refresh-token-in-http-only-cookie.md), [ADR-0052](../../../adr/0052-define-refresh-token-security-profile-and-fail-closed-redis-state.md), [ADR-0053](../../../adr/0053-serialize-logout-and-refresh-by-active-jti.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ADR-0005](../../../adr/0005-use-jwt-access-and-rotating-refresh-tokens.md), [ADR-0023](../../../adr/0023-manage-refresh-token-revocation-in-redis.md), [ADR-0105](../../../adr/0105-deliver-access-token-in-json-response-body.md), [ADR-0052](../../../adr/0052-define-refresh-token-security-profile-and-fail-closed-redis-state.md), [ADR-0053](../../../adr/0053-serialize-logout-and-refresh-by-active-jti.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
 이 문서는 `refreshToken` 쿠키를 검증해 새 Access Token과 회전된 Refresh Token을 발급하는 HTTP API 계약을
-정의한다. 이전 Refresh Token은 성공한 최초 갱신에서 소비되며, 새 Refresh Token은 `HttpOnly` 쿠키로만 전달한다.
+정의한다. 새 Access Token은 JSON 응답 본문의 `data.accessToken`으로, 이전 Refresh Token은 성공한 최초 갱신에서 소비되며, 새 Refresh Token은 `HttpOnly` 쿠키로만 전달한다.
 
 Refresh Token은 이 API와 다른 인증 API에서만 수신한다. 보호 업무 API는 Refresh Token을 인증 수단으로 허용하지
 않고, 새 Access Token을 `Authorization` 요청 헤더로 사용한다.
@@ -26,7 +26,7 @@ Refresh Token은 이 API와 다른 인증 API에서만 수신한다. 보호 업�
 | 대상 | 기준 문서 | 이 도메인에서 명시할 내용 |
 | --- | --- | --- |
 | Base URL·미디어 타입·시간 형식 | [API 공통 규칙](../../common/api-conventions.md) | Base URL `/api/v1`을 사용한다. 요청 본문은 없다. |
-| 인증·인가 | [인증·인가](../../common/authentication.md) | 공개 API이며 `refreshToken` 쿠키로만 갱신 자격을 확인한다. 성공 시 Access Token 헤더와 회전된 Refresh Token 쿠키를 발급한다. |
+| 인증·인가 | [인증·인가](../../common/authentication.md) | 공개 API이며 `refreshToken` 쿠키로만 갱신 자격을 확인한다. 성공 시 JSON 본문의 Access Token과 회전된 Refresh Token 쿠키를 발급한다. |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | `statusCode`, `code`, `message`, `data`를 같은 순서로 포함한다. 성공 상태는 `200 OK`다. |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | 목록 API가 아니므로 적용하지 않는다. |
 
@@ -93,8 +93,9 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Authorization` | Y | `Bearer <accessToken>`. 새로 발급한 Access Token이며 일반 보호 API 호출에 사용한다. |
 | `Set-Cookie` | Y | `refreshToken=<refreshToken>; Max-Age=<remaining-family-ttl-seconds>; Path=/api/v1/auth; HttpOnly; Secure; SameSite=Strict`. 회전된 새 Refresh Token이며 `Max-Age`는 최초 로그인부터 14일인 계열 만료까지 남은 전체 초다. `Domain`은 생략해 호스트 전용으로 한다. |
+
+성공 응답에는 Access Token을 담은 `Authorization` 응답 헤더를 포함하지 않는다.
 
 Refresh Token은 JSON 본문, `Authorization` 헤더 또는 다른 일반 응답 헤더에 포함하지 않는다.
 
@@ -105,7 +106,9 @@ Refresh Token은 JSON 본문, `Authorization` 헤더 또는 다른 일반 응답
   "statusCode": 200,
   "code": "SUCCESS",
   "message": "Access Token 재발급에 성공했습니다.",
-  "data": null
+  "data": {
+    "accessToken": "eyJhbGciOiJIUzI1NiJ9..."
+  }
 }
 ```
 
@@ -116,7 +119,7 @@ Refresh Token은 JSON 본문, `Authorization` 헤더 또는 다른 일반 응답
 | `statusCode` | Integer | HTTP 상태와 같은 `200`이다. |
 | `code` | String | 성공 코드 `SUCCESS`다. |
 | `message` | String | 성공 메시지 `Access Token 재발급에 성공했습니다.`다. |
-| `data` | null | 토큰은 응답 헤더와 쿠키로 전달하므로 응답 본문 데이터는 없다. |
+| `data.accessToken` | String | 일반 보호 API의 `Authorization: Bearer <accessToken>` 요청 헤더에 사용하는 새 Access Token이다. |
 
 ### Error Code
 
