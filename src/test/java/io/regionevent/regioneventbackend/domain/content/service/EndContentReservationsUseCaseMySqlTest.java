@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -450,6 +451,60 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
     }
 
     @Test
+    void 종료_로그_잠금_인덱스는_조회_조건과_정렬_순서를_지원한다() {
+        List<String> indexedColumns = jdbcTemplate.query(
+            """
+                SELECT column_name
+                FROM information_schema.statistics
+                WHERE table_schema = DATABASE()
+                    AND table_name = 'content_log'
+                    AND index_name = 'idx_content_log_content_status_date_id'
+                ORDER BY seq_in_index
+                """,
+            (resultSet, rowNumber) -> resultSet.getString("column_name")
+        );
+
+        assertThat(indexedColumns).containsExactly("content_id", "status", "date", "id");
+    }
+
+    @Test
+    @Timeout(10)
+    void 종료_로그_잠금_조회는_다른_콘텐츠의_로그_쓰기를_차단하지_않는다() throws Exception {
+        Fixture lockedFixture = createFixture();
+        Fixture otherFixture = createFixture();
+        endContentReservationsUseCase.end(
+            lockedFixture.adminId(),
+            lockedFixture.contentId(),
+            UUID.randomUUID()
+        );
+        CountDownLatch endedLogLocked = new CountDownLatch(1);
+        CountDownLatch releaseEndedLogLock = new CountDownLatch(1);
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+            Future<?> lockHolder = executorService.submit(() -> holdLatestEndedLogLock(
+                lockedFixture.contentId(),
+                endedLogLocked,
+                releaseEndedLogLock
+            ));
+            assertThat(endedLogLocked.await(3, TimeUnit.SECONDS)).isTrue();
+
+            Future<Integer> otherContentLogWrite = executorService.submit(
+                () -> insertPublishedContentLog(otherFixture.contentId())
+            );
+            try {
+                assertThat(otherContentLogWrite.get(3, TimeUnit.SECONDS)).isEqualTo(1);
+            } finally {
+                releaseEndedLogLock.countDown();
+            }
+            lockHolder.get(5, TimeUnit.SECONDS);
+        }
+
+        assertThat(contentLogRepository.findByContentContentIdOrderByDateAscIdAsc(otherFixture.contentId()))
+            .extracting(ContentLog::getStatus)
+            .containsExactly(ContentLogStatus.PUBLISHED, ContentLogStatus.PUBLISHED);
+    }
+
+    @Test
     void 종료된_콘텐츠를_순차_재시도하면_기존_종료_결과만_반환하고_종료_부수_효과를_중복_생성하지_않는다() {
         Fixture fixture = createFixture();
 
@@ -633,6 +688,32 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
             contentLocked.countDown();
             await(releaseContentLock);
         });
+    }
+
+    private void holdLatestEndedLogLock(
+        Long contentId,
+        CountDownLatch endedLogLocked,
+        CountDownLatch releaseEndedLogLock
+    ) {
+        transactionTemplate.executeWithoutResult(status -> {
+            contentLogRepository.findLatestEndedForUpdate(
+                contentId,
+                ContentLogStatus.ENDED,
+                Pageable.ofSize(1)
+            ).getFirst();
+            endedLogLocked.countDown();
+            await(releaseEndedLogLock);
+        });
+    }
+
+    private int insertPublishedContentLog(Long contentId) {
+        return transactionTemplate.execute(status -> jdbcTemplate.update(
+            """
+                INSERT INTO content_log (content_id, actor_id, status, reason, date)
+                VALUES (?, NULL, 'PUBLISHED', NULL, CURRENT_TIMESTAMP(6))
+                """,
+            contentId
+        ));
     }
 
     private boolean awaitContentLockWaitCount(int expectedCount) {

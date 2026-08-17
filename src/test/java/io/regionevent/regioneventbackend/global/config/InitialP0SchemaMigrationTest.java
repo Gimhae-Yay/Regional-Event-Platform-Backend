@@ -108,6 +108,15 @@ class InitialP0SchemaMigrationTest {
                 """,
             String.class
         );
+        List<String> contentLogIndexNames = jdbcTemplate.queryForList(
+            """
+                SELECT index_name
+                FROM information_schema.indexes
+                WHERE table_schema = 'PUBLIC'
+                  AND table_name = 'CONTENT_LOG'
+                """,
+            String.class
+        );
         List<String> contentWithdrawalRequestIndexNames = jdbcTemplate.queryForList(
             """
                 SELECT index_name
@@ -179,7 +188,8 @@ class InitialP0SchemaMigrationTest {
             "40",
             "41",
             "42",
-            "43"
+            "43",
+            "44"
         );
         assertThat(tableNames).contains(
             "REGION",
@@ -438,6 +448,7 @@ class InitialP0SchemaMigrationTest {
         );
         assertThat(capacityHoldIndexNames).contains("IDX_CAPACITY_HOLD_STATUS_EXPIRES_AT");
         assertThat(auditEventIndexNames).contains("IDX_AUDIT_EVENT_TARGET_HISTORY");
+        assertThat(contentLogIndexNames).contains("IDX_CONTENT_LOG_CONTENT_STATUS_DATE_ID");
         assertThat(contentWithdrawalRequestIndexNames)
             .contains("IDX_CONTENT_WITHDRAWAL_REQUEST_HISTORY");
         assertThat(userRoleAssignmentColumnNames).contains(
