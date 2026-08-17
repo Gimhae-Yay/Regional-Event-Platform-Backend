@@ -17,6 +17,9 @@ import org.springframework.test.context.jdbc.Sql;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult;
+import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
+import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventActorLinkRepository;
 import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepository;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
 import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUseCase;
@@ -62,6 +65,7 @@ class ApproveContentWithdrawalAuditAtomicityTest {
     private final ContentRevisionRepository contentRevisionRepository;
     private final ContentWithdrawalRequestRepository withdrawalRequestRepository;
     private final AuditEventRepository auditEventRepository;
+    private final AuditEventActorLinkRepository auditEventActorLinkRepository;
 
     @MockitoBean
     private RecordAuditEventUseCase recordAuditEventUseCase;
@@ -76,7 +80,8 @@ class ApproveContentWithdrawalAuditAtomicityTest {
         ContentLogRepository contentLogRepository,
         ContentRevisionRepository contentRevisionRepository,
         ContentWithdrawalRequestRepository withdrawalRequestRepository,
-        AuditEventRepository auditEventRepository
+        AuditEventRepository auditEventRepository,
+        AuditEventActorLinkRepository auditEventActorLinkRepository
     ) {
         this.useCase = useCase;
         this.regionRepository = regionRepository;
@@ -87,11 +92,13 @@ class ApproveContentWithdrawalAuditAtomicityTest {
         this.contentRevisionRepository = contentRevisionRepository;
         this.withdrawalRequestRepository = withdrawalRequestRepository;
         this.auditEventRepository = auditEventRepository;
+        this.auditEventActorLinkRepository = auditEventActorLinkRepository;
     }
 
     @Test
-    void 성공_감사_기록에_실패하면_승인과_연계_상태를_함께_롤백한다() {
+    void 성공_감사_기록에_실패하면_업무변경은_롤백하고_실패감사와_actor_link만_독립커밋한다() {
         Fixture fixture = createFixture();
+        UUID requestId = UUID.randomUUID();
         when(recordAuditEventUseCase.record(any(AuditEventCommand.class)))
             .thenReturn(null)
             .thenReturn(null)
@@ -100,7 +107,7 @@ class ApproveContentWithdrawalAuditAtomicityTest {
         assertThatThrownBy(() -> useCase.approve(
             fixture.adminId(),
             fixture.withdrawalRequestId(),
-            UUID.randomUUID()
+            requestId
         )).isInstanceOf(IllegalStateException.class);
 
         assertThat(withdrawalRequestRepository.findById(fixture.withdrawalRequestId()))
@@ -120,7 +127,23 @@ class ApproveContentWithdrawalAuditAtomicityTest {
         assertThat(contentLogRepository.findByContentContentIdOrderByDateAscIdAsc(fixture.contentId()))
             .extracting(ContentLog::getStatus)
             .containsExactly(ContentLogStatus.PUBLISHED);
-        assertThat(auditEventRepository.count()).isZero();
+        assertThat(auditEventRepository.findAll()).singleElement().satisfies(auditEvent -> {
+            assertThat(auditEvent.getRequestId()).isEqualTo(requestId.toString());
+            assertThat(auditEvent.getRegion().getRegionId()).isEqualTo(fixture.regionId());
+            assertThat(auditEvent.getTargetType())
+                .isEqualTo(AuditEventTargetType.CONTENT_WITHDRAWAL_REQUEST);
+            assertThat(auditEvent.getTargetId()).isEqualTo(fixture.withdrawalRequestId());
+            assertThat(auditEvent.getPreviousState())
+                .isEqualTo(ContentWithdrawalRequestStatus.PENDING.name());
+            assertThat(auditEvent.getNextState()).isNull();
+            assertThat(auditEvent.getResult()).isEqualTo(AuditEventResult.FAILURE);
+            assertThat(auditEvent.getReasonCode()).isEqualTo("INTERNAL_SERVER_ERROR");
+            assertThat(auditEvent.getReason()).isNull();
+            assertThat(auditEvent.getEvidenceReference()).isNull();
+            assertThat(auditEventActorLinkRepository.findById(auditEvent.getAuditEventId()))
+                .hasValueSatisfying(actorLink -> assertThat(actorLink.getActor().getUserId())
+                    .isEqualTo(fixture.adminId()));
+        });
     }
 
     private Fixture createFixture() {
@@ -189,6 +212,7 @@ class ApproveContentWithdrawalAuditAtomicityTest {
         );
         return new Fixture(
             admin.getUserId(),
+            region.getRegionId(),
             content.getContentId(),
             revision.getContentRevisionId(),
             request.getContentWithdrawalRequestId()
@@ -207,6 +231,7 @@ class ApproveContentWithdrawalAuditAtomicityTest {
 
     private record Fixture(
         Long adminId,
+        Long regionId,
         Long contentId,
         Long revisionId,
         Long withdrawalRequestId
