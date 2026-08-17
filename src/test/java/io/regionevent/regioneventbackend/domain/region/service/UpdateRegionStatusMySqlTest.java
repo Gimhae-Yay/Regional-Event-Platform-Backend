@@ -2,6 +2,7 @@ package io.regionevent.regioneventbackend.domain.region.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.groups.Tuple.tuple;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -166,13 +167,19 @@ class UpdateRegionStatusMySqlTest extends NonTransactionalMySqlTestSupport {
             .toList();
         assertThat(failureLogs).singleElement().satisfies(event -> {
             assertThat(event.getFormattedMessage())
-                .contains("requestId=" + requestId)
-                .contains("targetType=REGION")
-                .contains("targetId=" + fixture.region().getRegionId())
-                .contains("originalErrorCode=REGION_AVAILABILITY_CONFLICT")
-                .contains("auditWriteResult=FAILURE")
+                .isEqualTo("Failed audit event write failed")
                 .doesNotContain("REGION_PREPARATION")
                 .doesNotContain(EVIDENCE_REFERENCE);
+            assertThat(event.getKeyValuePairs())
+                .extracting(pair -> pair.key, pair -> pair.value)
+                .containsExactly(
+                    tuple("requestId", requestId),
+                    tuple("targetType", AuditEventTargetType.REGION),
+                    tuple("targetId", fixture.region().getRegionId()),
+                    tuple("originalErrorCode", "REGION_AVAILABILITY_CONFLICT"),
+                    tuple("auditWriteResult", "FAILURE")
+                );
+            assertThat(event.getThrowableProxy()).isNull();
         });
     }
 
