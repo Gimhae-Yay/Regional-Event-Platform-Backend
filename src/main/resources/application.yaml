@@ -32,6 +32,13 @@ idempotency:
 portone:
   api-secret: ${PORTONE_API_SECRET:}
   webhook-secret: ${PORTONE_WEBHOOK_SECRET:}
+  fake:
+    enabled: ${PORTONE_FAKE_ENABLED:false}
+    payment-amount: ${PORTONE_FAKE_PAYMENT_AMOUNT:10000}
+    currency: ${PORTONE_FAKE_CURRENCY:KRW}
+    store-id: ${PORTONE_FAKE_STORE_ID:perf-store}
+    transaction-id-prefix: ${PORTONE_FAKE_TRANSACTION_ID_PREFIX:perf-transaction-}
+    cancellation-id-prefix: ${PORTONE_FAKE_CANCELLATION_ID_PREFIX:perf-cancellation-}
 
 public-catalog-cache:
   ttl: ${PUBLIC_CATALOG_CACHE_TTL:PT10M}
