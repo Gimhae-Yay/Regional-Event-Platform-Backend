@@ -53,6 +53,38 @@ DELETE FROM reservation_price_snapshot
 WHERE reservation_price_snapshot_id = @paid_snapshot_id
     OR hold_id IN (@payment_create_hold_id, @paid_hold_id);
 
+DELETE mission_reward_claim
+FROM mission_reward_claim
+JOIN mission_participation
+    ON mission_participation.mission_participation_id = mission_reward_claim.mission_participation_id
+JOIN mission
+    ON mission.mission_id = mission_participation.mission_id
+WHERE mission.mission_id IN (@mission_id, @mission_progress_id)
+    OR mission.reward_coupon_policy_id IN (@mission_reward_policy_id, @mission_progress_policy_id);
+DELETE mission_progress
+FROM mission_progress
+JOIN mission_participation
+    ON mission_participation.mission_participation_id = mission_progress.mission_participation_id
+JOIN mission
+    ON mission.mission_id = mission_participation.mission_id
+WHERE mission.mission_id IN (@mission_id, @mission_progress_id)
+    OR mission.reward_coupon_policy_id IN (@mission_reward_policy_id, @mission_progress_policy_id);
+DELETE mission_participation
+FROM mission_participation
+JOIN mission
+    ON mission.mission_id = mission_participation.mission_id
+WHERE mission.mission_id IN (@mission_id, @mission_progress_id)
+    OR mission.reward_coupon_policy_id IN (@mission_reward_policy_id, @mission_progress_policy_id);
+DELETE FROM mission_target_content
+WHERE mission_id IN (
+    SELECT mission_id
+    FROM mission AS mission_reference
+    WHERE mission_reference.mission_id IN (@mission_id, @mission_progress_id)
+        OR mission_reference.reward_coupon_policy_id IN (@mission_reward_policy_id, @mission_progress_policy_id)
+);
+DELETE FROM mission
+WHERE mission_id IN (@mission_id, @mission_progress_id)
+    OR reward_coupon_policy_id IN (@mission_reward_policy_id, @mission_progress_policy_id);
 DELETE FROM coupon_issuance
 WHERE coupon_policy_id IN (@coupon_policy_id, @mission_reward_policy_id, @mission_progress_policy_id);
 DELETE FROM coupon_status_history
@@ -62,13 +94,6 @@ WHERE coupon_id IN (
 );
 DELETE FROM coupon
 WHERE coupon_policy_id IN (@coupon_policy_id, @mission_reward_policy_id, @mission_progress_policy_id);
-DELETE FROM mission_reward_claim
-WHERE mission_participation_id IN (@mission_participation_id, @mission_progress_participation_id);
-DELETE FROM mission_progress
-WHERE mission_participation_id IN (@mission_participation_id, @mission_progress_participation_id);
-DELETE FROM mission_participation
-WHERE mission_participation_id IN (@mission_participation_id, @mission_progress_participation_id);
-DELETE FROM mission WHERE mission_id IN (@mission_id, @mission_progress_id);
 DELETE FROM coupon_policy
 WHERE coupon_policy_id IN (@coupon_policy_id, @mission_reward_policy_id, @mission_progress_policy_id);
 

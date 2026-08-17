@@ -82,16 +82,32 @@ function Get-ControllerEndpoints {
     Get-ChildItem -LiteralPath $controllerRoot -Recurse -File -Filter '*Controller.java' |
         ForEach-Object {
             $source = Get-Content -Raw -Encoding UTF8 -LiteralPath $_.FullName
-            $classMatch = [regex]::Match($source, '@RequestMapping\("(?<path>[^"]*)"\)')
-            if (-not $classMatch.Success) {
-                return
+            $classMatch = [regex]::Match(
+                $source,
+                '@RequestMapping\((?<mapping>[\s\S]*?)\)\s*public class'
+            )
+            $basePaths = if ($classMatch.Success) {
+                @([regex]::Matches($classMatch.Groups['mapping'].Value, '"(?<path>/[^"]*)"') |
+                    ForEach-Object { $_.Groups['path'].Value })
+            } else {
+                @('')
             }
-            $basePath = $classMatch.Groups['path'].Value
-            [regex]::Matches($source, '@(?<method>Get|Post|Put|Patch|Delete)Mapping(?:\("(?<path>[^"]*)"\))?') |
+            [regex]::Matches($source, '@(?<method>Get|Post|Put|Patch|Delete)Mapping(?:\((?<mapping>[^)]*)\))?') |
                 ForEach-Object {
                     $method = $_.Groups['method'].Value.ToUpperInvariant()
-                    $path = $_.Groups['path'].Value
-                    [void] $endpoints.Add("$method $basePath$path")
+                    $methodPaths = @([regex]::Matches($_.Groups['mapping'].Value, '"(?<path>/[^"]*)"') |
+                        ForEach-Object { $_.Groups['path'].Value })
+                    if ($methodPaths.Count -eq 0) {
+                        $methodPaths = @('')
+                    }
+                    foreach ($basePath in $basePaths) {
+                        foreach ($methodPath in $methodPaths) {
+                            $path = "$basePath$methodPath"
+                            if ($path.StartsWith('/api/v1/')) {
+                                [void] $endpoints.Add("$method $path")
+                            }
+                        }
+                    }
                 }
         }
 

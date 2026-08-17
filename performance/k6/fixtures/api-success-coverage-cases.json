@@ -503,5 +503,267 @@
     "role": "PUBLIC",
     "expectedStatus": 200,
     "body": {}
+  },
+  {
+    "id": "auth-refresh", "method": "POST", "route": "/api/v1/auth/refresh", "path": "/auth/refresh", "role": "VISITOR", "useRefreshToken": true, "expectedStatus": 200, "body": {}
+  },
+  {
+    "id": "auth-signup", "method": "POST", "route": "/api/v1/auth/signup", "path": "/auth/signup", "role": "PUBLIC", "expectedStatus": 201,
+    "body": { "email": "k6-signup@example.com", "password": "Password1!", "name": "K6 Signup", "phone": "01090000016", "requestedRole": "VISITOR" }
+  },
+  {
+    "id": "auth-withdraw", "method": "DELETE", "route": "/api/v1/auth/delete", "path": "/auth/delete", "role": "WITHDRAWAL_VISITOR", "expectedStatus": 200
+  },
+  {
+    "id": "operator-qr-check-in", "method": "POST", "route": "/api/v1/operator/check-ins", "path": "/operator/check-ins", "role": "OPERATOR", "sequence": 20, "expectedStatus": 200,
+    "headers": { "Idempotency-Key": "10743e82-c1dd-4bc6-86db-5b5b9890fbe8" }, "body": { "qrToken": "{{checkIn.qrToken}}" }
+  },
+  {
+    "id": "operator-manual-check-in", "method": "POST", "route": "/api/v1/operator/check-ins/manual", "path": "/operator/check-ins/manual", "role": "OPERATOR", "expectedStatus": 200,
+    "headers": { "Idempotency-Key": "a644d395-8faf-4e67-a2b2-7351ae1a8248" }, "body": { "reservationNo": "{{reservation.manualReservationNo}}", "reason": "K6 정상 응답 검증" }
+  },
+  {
+    "id": "visitor-reservation-qr", "method": "GET", "route": "/api/v1/me/reservations/{reservationId}/qr", "path": "/me/reservations/{{ids.qrReservationId}}/qr", "role": "QR_VISITOR", "sequence": 10, "expectedStatus": 200,
+    "capture": { "qrToken": "checkIn.qrToken" }
+  },
+  {
+    "id": "operator-content-reservations", "method": "GET", "route": "/api/v1/operator/contents/{contentId}/reservations", "path": "/operator/contents/{{ids.contentId}}/reservations?sessionId={{ids.checkInSessionId}}", "role": "OPERATOR", "expectedStatus": 200
+  },
+  {
+    "id": "operator-reservation-search", "method": "GET", "route": "/api/v1/operator/reservations/search", "path": "/operator/reservations/search?reservationNo={{reservation.manualReservationNo}}", "role": "OPERATOR", "expectedStatus": 200
+  },
+  {
+    "id": "region-admin-reservation-search", "method": "GET", "route": "/api/v1/region-admin/reservations/search", "path": "/region-admin/reservations/search?reservationNo={{reservation.manualReservationNo}}", "role": "REGION_ADMIN", "expectedStatus": 200
+  },
+  {
+    "id": "region-admin-qr-exceptions", "method": "GET", "route": "/api/v1/region-admin/qr-exceptions", "path": "/region-admin/qr-exceptions?size=20", "role": "REGION_ADMIN", "expectedStatus": 200
+  },
+  {
+    "id": "region-admin-qr-exception-detail", "method": "GET", "route": "/api/v1/region-admin/qr-exceptions/{exceptionId}", "path": "/region-admin/qr-exceptions/{{ids.qrExceptionId}}", "role": "REGION_ADMIN", "expectedStatus": 200
+  },
+  {
+    "id": "visitor-create-review", "method": "POST", "route": "/api/v1/visits/{visitId}/reviews", "path": "/visits/{{ids.reviewVisitId}}/reviews", "role": "VISITOR", "expectedStatus": 201,
+    "body": { "rating": 5, "reviewText": "K6 정상 응답 검증 후기" }, "capture": { "reviewId": "ids.createdReviewId" }
+  },
+  {
+    "id": "visitor-update-review", "method": "PATCH", "route": "/api/v1/reviews/{reviewId}", "path": "/reviews/{{ids.createdReviewId}}", "role": "VISITOR", "expectedStatus": 200,
+    "body": { "rating": 4, "reviewText": "K6 수정 정상 응답 검증 후기" }
+  },
+  {
+    "id": "visitor-delete-review", "method": "DELETE", "route": "/api/v1/reviews/{reviewId}", "path": "/reviews/{{ids.createdReviewId}}", "role": "VISITOR", "expectedStatus": 204
+  },
+  {
+    "id": "visitor-join-mission", "method": "POST", "route": "/api/v1/missions/{missionId}/participations", "path": "/missions/{{ids.joinableMissionId}}/participations", "role": "VISITOR", "expectedStatus": 201,
+    "capture": { "missionParticipationId": "ids.createdMissionParticipationId" }
+  },
+  {
+    "id": "visitor-claim-mission-reward", "method": "POST", "route": "/api/v1/me/mission-participations/{participationId}/rewards/claim", "path": "/me/mission-participations/{{ids.completedMissionParticipationId}}/rewards/claim", "role": "VISITOR", "expectedStatus": 201
+  },
+  {
+    "id": "visitor-confirm-reservation", "method": "POST", "route": "/api/v1/reservation-holds/{holdId}/confirm", "path": "/reservation-holds/{{ids.confirmableHoldId}}/confirm", "role": "VISITOR", "expectedStatus": 201,
+    "headers": { "Idempotency-Key": "419d23fc-d9b2-4bd4-bfd1-3a72509170c2" }
+  },
+  {
+    "id": "visitor-cancel-reservation", "method": "POST", "route": "/api/v1/me/reservations/{reservationId}/cancel", "path": "/me/reservations/{{ids.cancellableReservationId}}/cancel", "role": "VISITOR", "expectedStatus": 201
+  },
+  {
+    "id": "operator-create-coupon-policy", "method": "POST", "route": "/api/v1/operator/coupon-policies", "path": "/operator/coupon-policies", "role": "OPERATOR", "expectedStatus": 201,
+    "body": { "contentId": "{{ids.contentId}}", "name": "K6 정책 생성", "description": "K6 정상 응답 검증", "issueSourceType": "VISIT", "discountAmount": 1000, "minimumPaymentAmount": 10000, "validDaysAfterIssue": 30, "issueStartsAt": "2030-01-01T00:00:00Z", "issueEndsAt": "2030-12-31T00:00:00Z", "totalIssueLimit": 100 }, "capture": { "couponPolicyId": "ids.createdCouponPolicyId" }
+  },
+  {
+    "id": "operator-update-coupon-policy", "method": "PATCH", "route": "/api/v1/operator/coupon-policies/{couponPolicyId}", "path": "/operator/coupon-policies/{{ids.createdCouponPolicyId}}", "role": "OPERATOR", "expectedStatus": 200,
+    "body": { "name": "K6 정책 수정", "reason": "K6 정상 응답 검증" }
+  },
+  {
+    "id": "operator-publish-coupon-policy", "method": "POST", "route": "/api/v1/operator/coupon-policies/{couponPolicyId}/publish", "path": "/operator/coupon-policies/{{ids.createdCouponPolicyId}}/publish", "role": "OPERATOR", "expectedStatus": 200,
+    "body": { "reason": "K6 정상 응답 검증" }
+  },
+  {
+    "id": "operator-end-coupon-policy", "method": "POST", "route": "/api/v1/operator/coupon-policies/{couponPolicyId}/end", "path": "/operator/coupon-policies/{{ids.endableCouponPolicyId}}/end", "role": "OPERATOR", "expectedStatus": 200,
+    "body": { "reason": "K6 정상 응답 검증" }
+  },
+  {
+    "id": "operator-create-mission", "method": "POST", "route": "/api/v1/operator/missions", "path": "/operator/missions", "role": "OPERATOR", "expectedStatus": 201,
+    "body": { "conditionType": "VISIT_COUNT", "requiredVisitCount": 1, "targetContentIds": null, "rewardCouponPolicyId": "{{ids.missionRewardCouponPolicyId}}", "endsAt": "2030-12-31T23:59:59+09:00" }, "capture": { "missionId": "ids.createdMissionId" }
+  },
+  {
+    "id": "operator-update-mission", "method": "PATCH", "route": "/api/v1/operator/missions/{missionId}", "path": "/operator/missions/{{ids.createdMissionId}}", "role": "OPERATOR", "expectedStatus": 200,
+    "body": { "conditionType": "VISIT_COUNT", "requiredVisitCount": 2, "targetContentIds": null, "rewardCouponPolicyId": "{{ids.missionRewardCouponPolicyId}}", "endsAt": "2030-12-31T23:59:59+09:00" }
+  },
+  {
+    "id": "operator-submit-mission", "method": "POST", "route": "/api/v1/operator/missions/{missionId}/submit", "path": "/operator/missions/{{ids.createdMissionId}}/submit", "role": "OPERATOR", "expectedStatus": 200
+  },
+  {
+    "id": "region-admin-approve-mission", "method": "POST", "route": "/api/v1/region-admin/missions/{missionId}/approve", "path": "/region-admin/missions/{{ids.createdMissionId}}/approve", "role": "REGION_ADMIN", "expectedStatus": 200
+  },
+  {
+    "id": "region-admin-reject-mission", "method": "POST", "route": "/api/v1/region-admin/missions/{missionId}/reject", "path": "/region-admin/missions/{{ids.rejectedMissionId}}/reject", "role": "REGION_ADMIN", "expectedStatus": 200,
+    "body": { "reasonCode": "MISSION_INFORMATION_INCOMPLETE" }
+  },
+  {
+    "id": "operator-end-mission", "method": "POST", "route": "/api/v1/operator/missions/{missionId}/end", "path": "/operator/missions/{{ids.endableMissionId}}/end", "role": "OPERATOR", "expectedStatus": 200,
+    "body": { "reasonCode": "MISSION_OPERATION_SCHEDULE_CHANGED" }
+  },
+  {
+    "id": "operator-create-stampbook", "method": "POST", "route": "/api/v1/operator/stampbooks", "path": "/operator/stampbooks", "role": "OPERATOR", "expectedStatus": 201,
+    "body": { "regionId": "{{ids.regionId}}", "contentIds": ["{{ids.contentId}}"], "rewardCouponPolicyId": "{{ids.stampbookRewardCouponPolicyId}}", "reason": "K6 정상 응답 검증" }, "capture": { "stampbookId": "ids.createdStampbookId" }
+  },
+  {
+    "id": "operator-update-stampbook", "method": "PATCH", "route": "/api/v1/operator/stampbooks/{stampbookId}", "path": "/operator/stampbooks/{{ids.createdStampbookId}}", "role": "OPERATOR", "expectedStatus": 200,
+    "body": { "contentIds": ["{{ids.contentId}}"], "reason": "K6 정상 응답 검증" }
+  },
+  {
+    "id": "operator-publish-stampbook", "method": "POST", "route": "/api/v1/operator/stampbooks/{stampbookId}/publish", "path": "/operator/stampbooks/{{ids.createdStampbookId}}/publish", "role": "OPERATOR", "expectedStatus": 200,
+    "body": { "reason": "K6 정상 응답 검증" }
+  },
+  {
+    "id": "region-admin-approve-stampbook", "method": "POST", "route": "/api/v1/region-admin/stampbooks/{stampbookId}/approve", "path": "/region-admin/stampbooks/{{ids.createdStampbookId}}/approve", "role": "REGION_ADMIN", "expectedStatus": 200,
+    "body": { "reason": "K6 정상 응답 검증" }
+  },
+  {
+    "id": "region-admin-reject-stampbook", "method": "POST", "route": "/api/v1/region-admin/stampbooks/{stampbookId}/reject", "path": "/region-admin/stampbooks/{{ids.rejectedStampbookId}}/reject", "role": "REGION_ADMIN", "expectedStatus": 200,
+    "body": { "reason": "K6 정상 응답 검증" }
+  },
+  {
+    "id": "operator-end-stampbook", "method": "POST", "route": "/api/v1/operator/stampbooks/{stampbookId}/end", "path": "/operator/stampbooks/{{ids.endableStampbookId}}/end", "role": "OPERATOR", "expectedStatus": 200,
+    "body": { "reason": "K6 정상 응답 검증" }
+  },
+  {
+    "id": "visitor-stampbook-detail", "method": "GET", "route": "/api/v1/me/stampbooks/{stampbookId}", "path": "/me/stampbooks/{{ids.visitorStampbookId}}", "role": "VISITOR", "expectedStatus": 200
+  },
+  {
+    "id": "visitor-stampbook-earnings", "method": "GET", "route": "/api/v1/me/stampbooks/{stampbookId}/earnings", "path": "/me/stampbooks/{{ids.visitorStampbookId}}/earnings", "role": "VISITOR", "expectedStatus": 200
+  },
+  {
+    "id": "region-admin-stampbooks", "method": "GET", "route": "/api/v1/region-admin/stampbooks", "path": "/region-admin/stampbooks?status=PENDING_REVIEW", "role": "REGION_ADMIN", "expectedStatus": 200
+  },
+  {
+    "id": "region-admin-stampbook-detail", "method": "GET", "route": "/api/v1/region-admin/stampbooks/{stampbookId}", "path": "/region-admin/stampbooks/{{ids.pendingStampbookId}}", "role": "REGION_ADMIN", "expectedStatus": 200
+  },
+  {
+    "id": "operator-create-application", "method": "POST", "route": "/api/v1/operator/operator-requests", "path": "/operator/operator-requests", "role": "APPLICANT", "expectedStatus": 201,
+    "body": { "requestedRegionId": "{{ids.regionId}}", "businessInformation": "K6 사업자 정보" }, "capture": { "operatorApplicationId": "ids.createdOperatorApplicationId" }
+  },
+  {
+    "id": "region-admin-operator-requests", "method": "GET", "route": "/api/v1/region-admin/operator-requests", "path": "/region-admin/operator-requests?status=PENDING", "role": "REGION_ADMIN", "expectedStatus": 200
+  },
+  {
+    "id": "region-admin-operator-request-detail", "method": "GET", "route": "/api/v1/region-admin/operator-requests/{requestId}", "path": "/region-admin/operator-requests/{{ids.createdOperatorApplicationId}}", "role": "REGION_ADMIN", "expectedStatus": 200
+  },
+  {
+    "id": "region-admin-approve-operator-request", "method": "POST", "route": "/api/v1/region-admin/operator-requests/{operatorApplicationId}/approve", "path": "/region-admin/operator-requests/{{ids.createdOperatorApplicationId}}/approve", "role": "REGION_ADMIN", "expectedStatus": 200
+  },
+  {
+    "id": "region-admin-reject-operator-request", "method": "POST", "route": "/api/v1/region-admin/operator-requests/{operatorApplicationId}/reject", "path": "/region-admin/operator-requests/{{ids.rejectedOperatorApplicationId}}/reject", "role": "REGION_ADMIN", "expectedStatus": 200,
+    "body": { "rejectedReason": "K6 정상 응답 검증" }
+  },
+  {
+    "id": "operator-update-content", "method": "PUT", "route": "/api/v1/operator/contents/{contentId}", "path": "/operator/contents/{{ids.editableContentId}}", "role": "OPERATOR", "expectedStatus": 200,
+    "body": { "title": "K6 수정 콘텐츠", "description": "K6 정상 응답 검증", "locationText": "K6 장소", "operatingHoursText": "10:00-18:00", "contactText": "01090000001", "precautions": "K6", "ageRequirement": "전체", "materials": "없음", "cancellationPolicyText": "K6", "reservationPrice": 10000, "publishAt": "2030-01-01T09:00:00+09:00", "representativeImageObjectId": "{{ids.imageObjectId}}" }
+  },
+  {
+    "id": "operator-create-content-revision", "method": "POST", "route": "/api/v1/operator/contents/{contentId}/revisions", "path": "/operator/contents/{{ids.revisableContentId}}/revisions", "role": "OPERATOR", "expectedStatus": 201,
+    "body": { "title": "K6 수정본", "description": "K6 정상 응답 검증", "locationText": "K6 장소", "operatingHoursText": "10:00-18:00", "contactText": "01090000001", "precautions": "K6", "ageRequirement": "전체", "materials": "없음", "cancellationPolicyText": "K6", "reservationPrice": 10000, "representativeImageObjectId": "{{ids.imageObjectId}}" }, "capture": { "revisionId": "ids.createdContentRevisionId" }
+  },
+  {
+    "id": "operator-update-content-revision", "method": "PUT", "route": "/api/v1/operator/content-revisions/{revisionId}", "path": "/operator/content-revisions/{{ids.createdContentRevisionId}}", "role": "OPERATOR", "expectedStatus": 200,
+    "body": { "title": "K6 수정본 재수정", "description": "K6 정상 응답 검증", "locationText": "K6 장소", "operatingHoursText": "10:00-18:00", "contactText": "01090000001", "precautions": "K6", "ageRequirement": "전체", "materials": "없음", "cancellationPolicyText": "K6", "reservationPrice": 10000, "representativeImageObjectId": "{{ids.imageObjectId}}" }
+  },
+  {
+    "id": "operator-withdraw-content-revision", "method": "POST", "route": "/api/v1/operator/content-revisions/{revisionId}/withdraw", "path": "/operator/content-revisions/{{ids.withdrawableContentRevisionId}}/withdraw", "role": "OPERATOR", "expectedStatus": 200, "body": { "reason": "K6 정상 응답 검증" }
+  },
+  {
+    "id": "region-admin-content-revisions", "method": "GET", "route": "/api/v1/region-admin/content-revisions", "path": "/region-admin/content-revisions?status=PENDING", "role": "REGION_ADMIN", "expectedStatus": 200
+  },
+  {
+    "id": "region-admin-content-revision-detail", "method": "GET", "route": "/api/v1/region-admin/content-revisions/{revisionId}", "path": "/region-admin/content-revisions/{{ids.pendingContentRevisionId}}", "role": "REGION_ADMIN", "expectedStatus": 200
+  },
+  {
+    "id": "region-admin-approve-content-revision", "method": "POST", "route": "/api/v1/region-admin/content-revisions/{revisionId}/approve", "path": "/region-admin/content-revisions/{{ids.approvableContentRevisionId}}/approve", "role": "REGION_ADMIN", "expectedStatus": 200
+  },
+  {
+    "id": "region-admin-reject-content-revision", "method": "POST", "route": "/api/v1/region-admin/content-revisions/{revisionId}/reject", "path": "/region-admin/content-revisions/{{ids.rejectableContentRevisionId}}/reject", "role": "REGION_ADMIN", "expectedStatus": 200, "body": { "reason": "K6 정상 응답 검증" }
+  },
+  {
+    "id": "operator-submit-content", "method": "POST", "route": "/api/v1/operator/contents/{contentId}/submit", "path": "/operator/contents/{{ids.submittableContentId}}/submit", "role": "OPERATOR", "expectedStatus": 200
+  },
+  {
+    "id": "region-admin-content-detail", "method": "GET", "route": "/api/v1/region-admin/contents/{contentId}", "path": "/region-admin/contents/{{ids.pendingContentId}}", "role": "REGION_ADMIN", "expectedStatus": 200
+  },
+  {
+    "id": "region-admin-content-history", "method": "GET", "route": "/api/v1/region-admin/contents/{contentId}/history", "path": "/region-admin/contents/{{ids.pendingContentId}}/history", "role": "REGION_ADMIN", "expectedStatus": 200
+  },
+  {
+    "id": "region-admin-reject-content", "method": "POST", "route": "/api/v1/region-admin/contents/{contentId}/reject", "path": "/region-admin/contents/{{ids.rejectableContentId}}/reject", "role": "REGION_ADMIN", "expectedStatus": 200, "body": { "reason": "K6 정상 응답 검증" }
+  },
+  {
+    "id": "region-admin-delete-content", "method": "DELETE", "route": "/api/v1/region-admin/contents/{contentId}", "path": "/region-admin/contents/{{ids.deletableContentId}}", "role": "REGION_ADMIN", "expectedStatus": 200, "body": { "reason": "K6 정상 응답 검증" }
+  },
+  {
+    "id": "region-admin-suspend-content", "method": "POST", "route": "/api/v1/region-admin/contents/{contentId}/suspend", "path": "/region-admin/contents/{{ids.suspendableContentId}}/suspend", "role": "REGION_ADMIN", "expectedStatus": 200, "body": { "reason": "K6 정상 응답 검증" }
+  },
+  {
+    "id": "region-admin-end-content", "method": "POST", "route": "/api/v1/region-admin/contents/{contentId}/end", "path": "/region-admin/contents/{{ids.endableContentId}}/end", "role": "REGION_ADMIN", "expectedStatus": 200
+  },
+  {
+    "id": "operator-cancel-session", "method": "POST", "route": "/api/v1/operator/sessions/{sessionId}/cancel", "path": "/operator/sessions/{{ids.cancellableSessionId}}/cancel", "role": "OPERATOR", "expectedStatus": 200, "body": { "cancellationReason": "K6 정상 응답 검증" }
+  },
+  {
+    "id": "operator-create-session-revision", "method": "POST", "route": "/api/v1/operator/sessions/{sessionId}/change-requests", "path": "/operator/sessions/{{ids.revisableSessionId}}/change-requests", "role": "OPERATOR", "expectedStatus": 201,
+    "body": { "startsAt": "2030-01-10T10:00:00+09:00", "endsAt": "2030-01-10T12:00:00+09:00", "checkinOpenAt": "2030-01-10T09:30:00+09:00", "checkinCloseAt": "2030-01-10T11:30:00+09:00", "capacity": 20 }, "capture": { "revisionId": "ids.createdSessionRevisionId" }
+  },
+  {
+    "id": "region-admin-session-revisions", "method": "GET", "route": "/api/v1/region-admin/session-revisions", "path": "/region-admin/session-revisions?status=PENDING", "role": "REGION_ADMIN", "expectedStatus": 200
+  },
+  {
+    "id": "region-admin-session-revision-detail", "method": "GET", "route": "/api/v1/region-admin/session-revisions/{revisionId}", "path": "/region-admin/session-revisions/{{ids.pendingSessionRevisionId}}", "role": "REGION_ADMIN", "expectedStatus": 200
+  },
+  {
+    "id": "region-admin-approve-session-revision", "method": "POST", "route": "/api/v1/region-admin/session-revisions/{revisionId}/approve", "path": "/region-admin/session-revisions/{{ids.approvableSessionRevisionId}}/approve", "role": "REGION_ADMIN", "expectedStatus": 200
+  },
+  {
+    "id": "region-admin-reject-session-revision", "method": "POST", "route": "/api/v1/region-admin/session-revisions/{revisionId}/reject", "path": "/region-admin/session-revisions/{{ids.rejectableSessionRevisionId}}/reject", "role": "REGION_ADMIN", "expectedStatus": 200, "body": { "reason": "K6 정상 응답 검증" }
+  },
+  {
+    "id": "region-admin-reject-session", "method": "POST", "route": "/api/v1/region-admin/sessions/{sessionId}/reject", "path": "/region-admin/sessions/{{ids.rejectableSessionId}}/reject", "role": "REGION_ADMIN", "expectedStatus": 200, "body": { "reason": "K6 정상 응답 검증" }
+  },
+  {
+    "id": "operator-request-withdrawal", "method": "POST", "route": "/api/v1/operator/contents/{contentId}/withdrawal-requests", "path": "/operator/contents/{{ids.withdrawalContentId}}/withdrawal-requests", "role": "OPERATOR", "expectedStatus": 201, "headers": { "Idempotency-Key": "cf3c9136-f1ee-4a39-9a9b-e6f080ee033f" }, "body": { "reason": "K6 정상 응답 검증" }, "capture": { "withdrawalRequestId": "ids.createdWithdrawalRequestId" }
+  },
+  {
+    "id": "region-admin-approve-withdrawal", "method": "POST", "route": "/api/v1/region-admin/content-withdrawal-requests/{withdrawalRequestId}/approve", "path": "/region-admin/content-withdrawal-requests/{{ids.createdWithdrawalRequestId}}/approve", "role": "REGION_ADMIN", "expectedStatus": 200
+  },
+  {
+    "id": "region-admin-reject-withdrawal", "method": "POST", "route": "/api/v1/region-admin/content-withdrawal-requests/{withdrawalRequestId}/reject", "path": "/region-admin/content-withdrawal-requests/{{ids.rejectableWithdrawalRequestId}}/reject", "role": "REGION_ADMIN", "expectedStatus": 200, "body": { "reason": "K6 정상 응답 검증" }
+  },
+  {
+    "id": "platform-admin-create-region", "method": "POST", "route": "/api/v1/platform-admin/regions", "path": "/platform-admin/regions", "role": "PLATFORM_ADMIN", "expectedStatus": 201, "body": { "regionCode": "k6-api-success-region", "name": "K6 API 성공 지역", "reasonCode": "PILOT_REGION_ADDITION", "evidenceReference": "K6 정상 응답 검증" }, "capture": { "regionId": "ids.createdRegionId" }
+  },
+  {
+    "id": "platform-admin-update-region-status", "method": "PATCH", "route": "/api/v1/platform-admin/regions/{regionId}/status", "path": "/platform-admin/regions/{{ids.createdRegionId}}/status", "role": "PLATFORM_ADMIN", "expectedStatus": 200, "body": { "isPublic": true, "reasonCode": "REGION_LAUNCH", "evidenceReference": "K6 정상 응답 검증" }
+  },
+  {
+    "id": "platform-admin-create-account", "method": "POST", "route": "/api/v1/platform-admin/admin-accounts", "path": "/platform-admin/admin-accounts", "role": "PLATFORM_ADMIN", "expectedStatus": 201, "body": { "email": "k6-deactivate@example.com", "password": "Password1!", "name": "K6 Deactivate", "phone": "01090000015", "grade": "PLATFORM_ADMIN", "reasonCode": "K6_CREATE", "evidenceReference": "K6 정상 응답 검증" }, "capture": { "userId": "ids.createdPlatformAdminId" }
+  },
+  {
+    "id": "platform-admin-deactivate-account", "method": "POST", "route": "/api/v1/platform-admin/admin-accounts/{userId}/deactivate", "path": "/platform-admin/admin-accounts/{{ids.createdPlatformAdminId}}/deactivate", "role": "PLATFORM_ADMIN", "expectedStatus": 200, "body": { "reasonCode": "K6_DEACTIVATE", "evidenceReference": "K6 정상 응답 검증" }
+  },
+  {
+    "id": "platform-admin-change-user-role", "method": "PATCH", "route": "/api/v1/platform-admin/users/{userId}/role", "path": "/platform-admin/users/{{ids.roleChangeUserId}}/role", "role": "PLATFORM_ADMIN", "expectedStatus": 200, "body": { "role": "REGION_ADMIN", "regionId": "{{ids.regionId}}", "reasonCode": "K6_ROLE_CHANGE", "evidenceReference": "K6 정상 응답 검증" }
+  },
+  {
+    "id": "platform-admin-payment-discrepancy-detail", "method": "GET", "route": "/api/v1/platform-admin/payment-discrepancies/{discrepancyId}", "path": "/platform-admin/payment-discrepancies/{{ids.paymentDiscrepancyId}}", "role": "PLATFORM_ADMIN", "expectedStatus": 200
+  },
+  {
+    "id": "platform-admin-resolve-payment-discrepancy", "method": "POST", "route": "/api/v1/platform-admin/payment-discrepancies/{discrepancyId}/manual-actions", "path": "/platform-admin/payment-discrepancies/{{ids.resolvablePaymentDiscrepancyId}}/manual-actions", "role": "PLATFORM_ADMIN", "expectedStatus": 200, "body": { "evidenceReference": "K6 정상 응답 검증", "reason": "K6 정상 응답 검증" }
+  },
+  {
+    "id": "platform-admin-refund-failure-detail", "method": "GET", "route": "/api/v1/platform-admin/refund-failures/{refundId}", "path": "/platform-admin/refund-failures/{{ids.refundFailureId}}", "role": "PLATFORM_ADMIN", "expectedStatus": 200
+  },
+  {
+    "id": "platform-admin-resolve-refund-failure", "method": "POST", "route": "/api/v1/platform-admin/refund-failures/{refundId}/manual-actions", "path": "/platform-admin/refund-failures/{{ids.resolvableRefundFailureId}}/manual-actions", "role": "PLATFORM_ADMIN", "expectedStatus": 200, "body": { "confirmedStatus": "SUCCEEDED", "evidenceReference": "K6 정상 응답 검증", "reason": "K6 정상 응답 검증" }
+  },
+  {
+    "id": "platform-admin-retry-refund", "method": "POST", "route": "/api/v1/platform-admin/refunds/{refundId}/retry", "path": "/platform-admin/refunds/{{ids.retryableRefundId}}/retry", "role": "PLATFORM_ADMIN", "expectedStatus": 200
   }
 ]

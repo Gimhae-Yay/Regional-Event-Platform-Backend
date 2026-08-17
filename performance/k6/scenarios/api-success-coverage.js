@@ -41,7 +41,12 @@ export function setup() {
     if (!authorization || !authorization.startsWith('Bearer ')) {
       fail(`Login for ${account.role} did not return an access token.`);
     }
-    authenticatedAccounts[account.role] = authorization;
+    authenticatedAccounts[account.role] = {
+      authorization,
+      refreshToken: response.cookies.refreshToken && response.cookies.refreshToken[0]
+        ? response.cookies.refreshToken[0].value
+        : null,
+    };
   });
   return { authenticatedAccounts };
 }
@@ -161,7 +166,7 @@ function parseCases(values) {
     }
     ids[testCase.id] = true;
     return { ...testCase, method };
-  });
+  }).sort((first, second) => (first.sequence || 100) - (second.sequence || 100));
 }
 
 function parseContext(raw) {
@@ -209,23 +214,37 @@ function requestHeaders(testCase, authenticatedAccounts) {
     headers['Content-Type'] = 'application/json';
   }
   if (testCase.role !== 'PUBLIC') {
-    const authorization = authenticatedAccounts[testCase.role];
-    if (!authorization) {
+    const session = authenticatedAccounts[testCase.role];
+    if (!session) {
       fail(`${testCase.id} requires authenticated role ${testCase.role}, but no matching test account exists`);
     }
-    headers.Authorization = authorization;
+    headers.Authorization = session.authorization;
+    if (testCase.useRefreshToken) {
+      if (!session.refreshToken) {
+        fail(`${testCase.id} requires a refresh token from login:${testCase.role}`);
+      }
+      headers.Cookie = `refreshToken=${session.refreshToken}`;
+    }
   }
   return headers;
 }
 
 function requestBody(testCase, body) {
-  if (body === undefined || body === null || testCase.method === 'GET' || testCase.method === 'DELETE') {
+  if (body === undefined || body === null || testCase.method === 'GET') {
     return null;
   }
   return JSON.stringify(body);
 }
 
 function assertSuccess(response, expectedStatus, label) {
+  if (expectedStatus === 204) {
+    const success = response.status === expectedStatus;
+    successfulResponseRate.add(success, { endpoint: label, expected_status: String(expectedStatus) });
+    check(response, {
+      [`${label}: expected successful API response`]: () => success,
+    });
+    return;
+  }
   const body = safeJson(response);
   const success = response.status === expectedStatus
     && body
