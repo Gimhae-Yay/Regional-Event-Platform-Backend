@@ -106,7 +106,7 @@ public class EndContentReservationsUseCase {
         String previousState = content.getStatus().name();
         try {
             if (content.getStatus() == ContentStatus.ENDED) {
-                ContentLog endedLog = contentLogService.findLatestEnded(contentId);
+                ContentLog endedLog = contentLogService.findLatestEndedForUpdate(contentId);
                 return EndContentReservationsResult.from(content, endedLog.getDate());
             }
             if (content.getStatus() != ContentStatus.PUBLISHED
