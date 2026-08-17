@@ -1,0 +1,25 @@
+{
+  "ids": {
+    "regionId": "900001",
+    "contentId": "900001",
+    "reservationSessionId": "900001",
+    "checkInSessionId": "900002",
+    "qrReservationId": "900001",
+    "manualReservationId": "900002",
+    "paymentHoldId": "900010",
+    "paidReservationId": "900010",
+    "paidPaymentId": "900010",
+    "couponPolicyId": "900010",
+    "couponSourceVisitId": "900010",
+    "missionId": "900010",
+    "missionParticipationId": "900010"
+  },
+  "reservation": {
+    "manualReservationNo": "K6MN20260806000001"
+  },
+  "payment": {
+    "amount": 10000,
+    "currency": "KRW",
+    "storeId": "perf-store"
+  }
+}

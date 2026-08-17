@@ -1,0 +1,22 @@
+[
+  {
+    "role": "VISITOR",
+    "email": "k6-visitor@example.com",
+    "password": "Password1!"
+  },
+  {
+    "role": "OPERATOR",
+    "email": "k6-operator@example.com",
+    "password": "Password1!"
+  },
+  {
+    "role": "REGION_ADMIN",
+    "email": "k6-admin@example.com",
+    "password": "Password1!"
+  },
+  {
+    "role": "PLATFORM_ADMIN",
+    "email": "k6-platform-admin@example.com",
+    "password": "Password1!"
+  }
+]
