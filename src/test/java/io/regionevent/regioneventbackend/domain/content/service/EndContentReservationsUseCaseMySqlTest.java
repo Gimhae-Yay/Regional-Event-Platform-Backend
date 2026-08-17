@@ -366,37 +366,30 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
 
     @Test
     @Timeout(15)
-    void 시스템_종료가_콘텐츠_잠금을_먼저_대기하면_수동_종료는_기존_종료_결과를_반환한다() throws Exception {
+    void 시스템_종료_커밋_전_스냅샷을_가진_수동_종료는_기존_종료_결과를_반환한다() throws Exception {
         Fixture fixture = createFixture();
-        CountDownLatch contentLocked = new CountDownLatch(1);
-        CountDownLatch releaseContentLock = new CountDownLatch(1);
+        CountDownLatch regionAdminSnapshotRead = new CountDownLatch(1);
+        CountDownLatch systemEndCommitted = new CountDownLatch(1);
 
         EndContentReservationsSystemResult systemResult;
         EndContentReservationsResult regionAdminResult;
-        try (ExecutorService executorService = Executors.newFixedThreadPool(3)) {
-            Future<?> lockHolder = executorService.submit(
-                () -> holdContentLock(fixture.contentId(), contentLocked, releaseContentLock)
+        try (ExecutorService executorService = Executors.newSingleThreadExecutor()) {
+            Future<EndContentReservationsResult> regionAdminEnd = executorService.submit(
+                () -> endByRegionAdminAfterSnapshot(
+                    fixture,
+                    regionAdminSnapshotRead,
+                    systemEndCommitted
+                )
             );
-            assertThat(contentLocked.await(3, TimeUnit.SECONDS)).isTrue();
-
-            Future<EndContentReservationsSystemResult> systemEnd = executorService.submit(
-                () -> endContentReservationsUseCase.endBySystem(fixture.contentId(), UUID.randomUUID())
-            );
-            Future<EndContentReservationsResult> regionAdminEnd;
+            assertThat(regionAdminSnapshotRead.await(3, TimeUnit.SECONDS)).isTrue();
             try {
-                assertThat(awaitContentLockWaitCount(1)).isTrue();
-                regionAdminEnd = executorService.submit(() -> endContentReservationsUseCase.endByRegionAdmin(
-                    fixture.adminId(),
+                systemResult = endContentReservationsUseCase.endBySystem(
                     fixture.contentId(),
                     UUID.randomUUID()
-                ));
-                assertThat(awaitContentLockWaitCount(2)).isTrue();
+                );
             } finally {
-                releaseContentLock.countDown();
+                systemEndCommitted.countDown();
             }
-
-            lockHolder.get(5, TimeUnit.SECONDS);
-            systemResult = systemEnd.get(5, TimeUnit.SECONDS);
             regionAdminResult = regionAdminEnd.get(5, TimeUnit.SECONDS);
         }
 
@@ -645,6 +638,33 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
         ready.countDown();
         await(start);
         return endContentReservationsUseCase.endBySystem(fixture.contentId(), UUID.randomUUID());
+    }
+
+    private EndContentReservationsResult endByRegionAdminAfterSnapshot(
+        Fixture fixture,
+        CountDownLatch snapshotRead,
+        CountDownLatch systemEndCommitted
+    ) {
+        return transactionTemplate.execute(status -> {
+            Integer contentLogCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM content_log WHERE content_id = ?",
+                Integer.class,
+                fixture.contentId()
+            );
+            assertThat(contentLogCount).isEqualTo(1);
+            snapshotRead.countDown();
+            await(systemEndCommitted);
+            assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM content_log WHERE content_id = ?",
+                Integer.class,
+                fixture.contentId()
+            )).isEqualTo(1);
+            return endContentReservationsUseCase.endByRegionAdmin(
+                fixture.adminId(),
+                fixture.contentId(),
+                UUID.randomUUID()
+            );
+        });
     }
 
     private Attempt endExpectingConflict(Fixture fixture) {
