@@ -78,7 +78,7 @@ class LoginControllerIntegrationTest {
                     }
                     """))
             .andExpect(status().isOk())
-            .andExpect(header().string(HttpHeaders.AUTHORIZATION, org.hamcrest.Matchers.startsWith("Bearer ")))
+            .andExpect(header().doesNotExist(HttpHeaders.AUTHORIZATION))
             .andExpect(header().string(HttpHeaders.SET_COOKIE, org.hamcrest.Matchers.containsString("refreshToken=")))
             .andExpect(header().string(HttpHeaders.SET_COOKIE, org.hamcrest.Matchers.containsString("Max-Age=1209600")))
             .andExpect(header().string(HttpHeaders.SET_COOKIE, org.hamcrest.Matchers.containsString("Path=/api/v1/auth")))
@@ -90,7 +90,7 @@ class LoginControllerIntegrationTest {
             .andExpect(jsonPath("$.message").value("로그인에 성공했습니다."))
             .andExpect(jsonPath("$.data.userId").value(user.getUserId().toString()))
             .andExpect(jsonPath("$.data.roles[0]").value("VISITOR"))
-            .andExpect(jsonPath("$.data.accessToken").doesNotExist())
+            .andExpect(jsonPath("$.data.accessToken").isNotEmpty())
             .andExpect(jsonPath("$.data.refreshToken").doesNotExist());
 
         verify(refreshTokenStore).createFamily(any());
@@ -120,6 +120,7 @@ class LoginControllerIntegrationTest {
                     """))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+            .andExpect(jsonPath("$.data").isEmpty())
             .andExpect(header().doesNotExist(HttpHeaders.AUTHORIZATION))
             .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE));
 
@@ -134,6 +135,7 @@ class LoginControllerIntegrationTest {
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"))
             .andExpect(jsonPath("$.message").value("이메일 또는 비밀번호가 올바르지 않습니다."))
+            .andExpect(jsonPath("$.data").isEmpty())
             .andExpect(header().doesNotExist(HttpHeaders.AUTHORIZATION))
             .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE));
 
@@ -150,6 +152,7 @@ class LoginControllerIntegrationTest {
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"))
             .andExpect(jsonPath("$.message").value("이메일 또는 비밀번호가 올바르지 않습니다."))
+            .andExpect(jsonPath("$.data").isEmpty())
             .andExpect(header().doesNotExist(HttpHeaders.AUTHORIZATION))
             .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE));
 
@@ -166,6 +169,7 @@ class LoginControllerIntegrationTest {
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"))
             .andExpect(jsonPath("$.message").value("이메일 또는 비밀번호가 올바르지 않습니다."))
+            .andExpect(jsonPath("$.data").isEmpty())
             .andExpect(header().doesNotExist(HttpHeaders.AUTHORIZATION))
             .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE));
 
@@ -185,6 +189,7 @@ class LoginControllerIntegrationTest {
             .andExpect(status().isServiceUnavailable())
             .andExpect(jsonPath("$.code").value("AUTH_SERVICE_UNAVAILABLE"))
             .andExpect(jsonPath("$.message").value("인증 서비스를 일시적으로 사용할 수 없습니다."))
+            .andExpect(jsonPath("$.data").isEmpty())
             .andExpect(header().doesNotExist(HttpHeaders.AUTHORIZATION))
             .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE));
     }
