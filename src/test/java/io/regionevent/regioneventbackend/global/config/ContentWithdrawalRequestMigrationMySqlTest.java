@@ -8,6 +8,7 @@ import java.util.List;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
@@ -23,6 +24,10 @@ class ContentWithdrawalRequestMigrationMySqlTest {
     private static final String FIRST_KEY_HASH = "a".repeat(64);
     private static final String SECOND_KEY_HASH = "b".repeat(64);
     private static final String THIRD_KEY_HASH = "c".repeat(64);
+    private static final String FOURTH_KEY_HASH = "d".repeat(64);
+    private static final String FIFTH_KEY_HASH = "e".repeat(64);
+    private static final String SIXTH_KEY_HASH = "f".repeat(64);
+    private static final String SEVENTH_KEY_HASH = "0".repeat(64);
 
     @Container
     static final MySQLContainer<?> MYSQL = new MySQLContainer<>(
@@ -61,6 +66,8 @@ class ContentWithdrawalRequestMigrationMySqlTest {
                     assertThat(exception.getMessage())
                         .contains("uk_content_withdrawal_request_content_key")
                 );
+
+            assertStatusFieldChecks(jdbcTemplate);
 
             int auditCount = jdbcTemplate.update(
                 """
@@ -143,6 +150,92 @@ class ContentWithdrawalRequestMigrationMySqlTest {
             keyHash,
             reason
         );
+    }
+
+    private void assertStatusFieldChecks(JdbcTemplate jdbcTemplate) {
+        assertCheckViolation(
+            () -> insertWithReviewFields(
+                jdbcTemplate,
+                FOURTH_KEY_HASH,
+                "PENDING",
+                "CURRENT_TIMESTAMP(6)",
+                "NULL",
+                "NULL",
+                "NULL"
+            ),
+            "ck_content_withdrawal_request_pending_fields"
+        );
+        assertCheckViolation(
+            () -> insertWithReviewFields(
+                jdbcTemplate,
+                FIFTH_KEY_HASH,
+                "APPROVED",
+                "NULL",
+                "NULL",
+                "NULL",
+                "NULL"
+            ),
+            "ck_content_withdrawal_request_approved_fields"
+        );
+        assertCheckViolation(
+            () -> insertWithReviewFields(
+                jdbcTemplate,
+                SIXTH_KEY_HASH,
+                "REJECTED",
+                "CURRENT_TIMESTAMP(6)",
+                "'   '",
+                "NULL",
+                "NULL"
+            ),
+            "ck_content_withdrawal_request_rejected_fields"
+        );
+        assertCheckViolation(
+            () -> insertWithReviewFields(
+                jdbcTemplate,
+                SEVENTH_KEY_HASH,
+                "INVALIDATED",
+                "NULL",
+                "NULL",
+                "CURRENT_TIMESTAMP(6)",
+                "NULL"
+            ),
+            "ck_content_withdrawal_request_invalidated_fields"
+        );
+    }
+
+    private void insertWithReviewFields(
+        JdbcTemplate jdbcTemplate,
+        String keyHash,
+        String status,
+        String reviewedAt,
+        String rejectionReason,
+        String invalidatedAt,
+        String invalidationReason
+    ) {
+        jdbcTemplate.update(
+            """
+            INSERT INTO content_withdrawal_request (
+                content_id,
+                idempotency_key_hash,
+                status,
+                request_reason,
+                requested_at,
+                reviewed_at,
+                rejection_reason,
+                invalidated_at,
+                invalidation_reason
+            ) VALUES (1, ?, ?, '상태 제약 검증', CURRENT_TIMESTAMP(6), %s, %s, %s, %s)
+            """.formatted(reviewedAt, rejectionReason, invalidatedAt, invalidationReason),
+            keyHash,
+            status
+        );
+    }
+
+    private void assertCheckViolation(Runnable insertion, String constraintName) {
+        assertThatThrownBy(insertion::run)
+            .isInstanceOfSatisfying(DataAccessException.class, exception ->
+                assertThat(exception.getMessage()).contains(constraintName)
+            );
     }
 
     private void assertForeignKeys(JdbcTemplate jdbcTemplate) {
