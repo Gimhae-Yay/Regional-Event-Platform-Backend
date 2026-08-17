@@ -23,7 +23,8 @@ param(
 
     [string] $K6Command = 'k6',
     [string] $BaseUrl = 'http://127.0.0.1:18080',
-    [string] $ResultDate = (Get-Date).ToString('yyyy-MM-dd')
+    [string] $ResultDate = (Get-Date).ToString('yyyy-MM-dd'),
+    [switch] $KeepRawMetrics
 )
 
 $ErrorActionPreference = 'Stop'
@@ -327,6 +328,27 @@ function To-CanonicalEndpoint {
     return $Endpoint
 }
 
+function New-TemporaryRawResultDirectory {
+    $directory = Join-Path ([System.IO.Path]::GetTempPath()) "regional-event-k6-$([Guid]::NewGuid())"
+    New-Item -ItemType Directory -Force -Path $directory | Out-Null
+    return $directory
+}
+
+function Remove-TemporaryRawResultDirectory {
+    param([string] $Path)
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return
+    }
+    $temporaryRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
+    $fullPath = [System.IO.Path]::GetFullPath($Path)
+    if (-not $fullPath.StartsWith($temporaryRoot, [System.StringComparison]::OrdinalIgnoreCase) `
+        -or [System.IO.Path]::GetFileName($fullPath) -notmatch '^regional-event-k6-[0-9a-f-]+$') {
+        throw "Refusing to remove a non-k6 temporary result directory: $fullPath"
+    }
+    Remove-Item -LiteralPath $fullPath -Recurse -Force
+}
+
 $accounts = Get-JsonArrayFile -Path $AccountsPath -Name 'AccountsPath'
 $allCases = Get-JsonArrayFile -Path $CasesPath -Name 'CasesPath'
 $writeCases = Get-WriteCases -CasesJson $allCases
@@ -334,6 +356,7 @@ $fixtureContext = Get-JsonObjectFile -Path $FixtureContextPath -Name 'FixtureCon
 Assert-CompleteWriteCoverage -WriteCasesJson $writeCases
 $database = Get-FixtureDatabaseConfiguration
 New-Item -ItemType Directory -Force -Path $resultDirectory | Out-Null
+$rawResultDirectory = if ($KeepRawMetrics) { $resultDirectory } else { New-TemporaryRawResultDirectory }
 
 $expectedRequestCounts = @{}
 $excludedCaseIds = @()
@@ -350,37 +373,45 @@ $excludedCaseIds = @()
 }
 
 $metricPaths = [System.Collections.Generic.List[string]]::new()
-for ($round = 1; $round -le $RequestsPerCase; $round += 1) {
-    $roundDirectory = Join-Path $resultDirectory ("round-{0:D3}" -f $round)
-    $metricPath = Join-Path $roundDirectory 'metrics.json'
-    New-Item -ItemType Directory -Force -Path $roundDirectory | Out-Null
-    Invoke-DatabaseSql -Sql (Get-Content -Raw -Encoding UTF8 -LiteralPath $BaseFixturePath)
-    Invoke-DatabaseSql -Sql (Get-Content -Raw -Encoding UTF8 -LiteralPath $BootstrapFixturePath)
+$completed = $false
+try {
+    for ($round = 1; $round -le $RequestsPerCase; $round += 1) {
+        $roundDirectory = Join-Path $rawResultDirectory ("round-{0:D3}" -f $round)
+        $metricPath = Join-Path $roundDirectory 'metrics.json'
+        New-Item -ItemType Directory -Force -Path $roundDirectory | Out-Null
+        Invoke-DatabaseSql -Sql (Get-Content -Raw -Encoding UTF8 -LiteralPath $BaseFixturePath)
+        Invoke-DatabaseSql -Sql (Get-Content -Raw -Encoding UTF8 -LiteralPath $BootstrapFixturePath)
 
-    $environment = @{
-        PERF_BASE_URL = $BaseUrl.TrimEnd('/')
-        PERF_SUMMARY_DIRECTORY = $roundDirectory
-        PERF_SUMMARY_BASENAME = 'write-api-response-time'
-        PERF_API_TEST_ACCOUNTS_JSON = $accounts
-        PERF_API_SUCCESS_CASES_JSON = $writeCases
-        PERF_API_FIXTURE_CONTEXT_JSON = $fixtureContext
-    }
-    $previousEnvironment = Set-ProcessEnvironment -Values $environment
-    try {
-        & $K6Command run '--out' "json=$metricPath" $scenarioPath
-        if ($LASTEXITCODE -ne 0) {
-            throw "Write API response time scenario failed in round $round with exit code $LASTEXITCODE."
+        $environment = @{
+            PERF_BASE_URL = $BaseUrl.TrimEnd('/')
+            PERF_SUMMARY_DIRECTORY = $roundDirectory
+            PERF_SUMMARY_BASENAME = 'write-api-response-time'
+            PERF_API_TEST_ACCOUNTS_JSON = $accounts
+            PERF_API_SUCCESS_CASES_JSON = $writeCases
+            PERF_API_FIXTURE_CONTEXT_JSON = $fixtureContext
         }
-    } finally {
-        Restore-ProcessEnvironment -Previous $previousEnvironment
+        $previousEnvironment = Set-ProcessEnvironment -Values $environment
+        try {
+            & $K6Command run '--out' "json=$metricPath" $scenarioPath
+            if ($LASTEXITCODE -ne 0) {
+                throw "Write API response time scenario failed in round $round with exit code $LASTEXITCODE."
+            }
+        } finally {
+            Restore-ProcessEnvironment -Previous $previousEnvironment
+        }
+        $metricPaths.Add($metricPath)
     }
-    $metricPaths.Add($metricPath)
-}
 
-$summaryPath = Join-Path $resultDirectory 'write-api-response-time-summary.md'
-Write-AggregatedSummary `
-    -MetricPaths $metricPaths.ToArray() `
-    -ExpectedRequestCounts $expectedRequestCounts `
-    -ExcludedCaseIds $excludedCaseIds `
-    -OutputPath $summaryPath
+    $summaryPath = Join-Path $resultDirectory 'write-api-response-time-summary.md'
+    Write-AggregatedSummary `
+        -MetricPaths $metricPaths.ToArray() `
+        -ExpectedRequestCounts $expectedRequestCounts `
+        -ExcludedCaseIds $excludedCaseIds `
+        -OutputPath $summaryPath
+    $completed = $true
+} finally {
+    if ($completed -and -not $KeepRawMetrics) {
+        Remove-TemporaryRawResultDirectory -Path $rawResultDirectory
+    }
+}
 Write-Host "Write API response time scenario completed for $RequestsPerCase independent fixture rounds. Results: $resultDirectory"
