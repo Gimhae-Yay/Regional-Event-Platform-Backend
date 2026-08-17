@@ -10,6 +10,7 @@ const testTag = 'authenticated_read_response_time';
 const apiBaseUrl = `${requiredEnv('PERF_BASE_URL').replace(/\/+$/, '')}/api/v1`;
 const accounts = parseAccounts(jsonArrayEnv('PERF_API_TEST_ACCOUNTS_JSON'));
 const cases = parseReadCases(jsonArrayEnv('PERF_AUTHENTICATED_READ_CASES_JSON'));
+const fixtureSetupCases = parseFixtureSetupCases(jsonArrayEnv('PERF_AUTHENTICATED_READ_SETUP_CASES_JSON'));
 const fixtureContext = parseFixtureContext(env('PERF_API_FIXTURE_CONTEXT_JSON', '{}'));
 const requestsPerApi = positiveIntegerEnv('PERF_REQUESTS_PER_API', 1);
 const p95Threshold = scenarioP95Threshold(scenarioName);
@@ -33,7 +34,11 @@ export const options = {
 
 export function setup() {
   const sessionsByRole = {};
-  const requiredRoles = new Set(cases.map((testCase) => testCase.role).filter((role) => role !== 'PUBLIC'));
+  const requiredRoles = new Set(
+    [...cases, ...fixtureSetupCases]
+      .map((testCase) => testCase.role)
+      .filter((role) => role !== 'PUBLIC'),
+  );
 
   requiredRoles.forEach((role) => {
     const account = accounts.find((candidate) => candidate.role === role);
@@ -43,12 +48,15 @@ export function setup() {
     sessionsByRole[role] = login(account);
   });
 
-  return { sessionsByRole };
+  const runtimeContext = JSON.parse(JSON.stringify(fixtureContext));
+  fixtureSetupCases.forEach((testCase) => executeFixtureSetup(testCase, sessionsByRole, runtimeContext));
+
+  return { sessionsByRole, runtimeContext };
 }
 
 export default function (data) {
   cases.forEach((testCase) => {
-    const path = interpolate(testCase.path, fixtureContext, testCase.id);
+    const path = interpolate(testCase.path, data.runtimeContext, testCase.id);
     const headers = requestHeaders(testCase, data.sessionsByRole);
 
     for (let requestNumber = 1; requestNumber <= requestsPerApi; requestNumber += 1) {
@@ -121,6 +129,30 @@ function parseReadCases(values) {
   });
 }
 
+function parseFixtureSetupCases(values) {
+  return values.map((testCase, index) => {
+    if (!testCase || typeof testCase !== 'object') {
+      fail(`PERF_AUTHENTICATED_READ_SETUP_CASES_JSON[${index}] must be an object`);
+    }
+    if (String(testCase.method || '').toUpperCase() !== 'POST') {
+      fail(`PERF_AUTHENTICATED_READ_SETUP_CASES_JSON[${index}].method must be POST`);
+    }
+    if (typeof testCase.id !== 'string' || testCase.id.trim() === '') {
+      fail(`PERF_AUTHENTICATED_READ_SETUP_CASES_JSON[${index}].id is required`);
+    }
+    if (typeof testCase.path !== 'string' || !testCase.path.startsWith('/')) {
+      fail(`PERF_AUTHENTICATED_READ_SETUP_CASES_JSON[${index}].path must start with /`);
+    }
+    if (typeof testCase.role !== 'string' || testCase.role.trim() === '') {
+      fail(`PERF_AUTHENTICATED_READ_SETUP_CASES_JSON[${index}].role is required`);
+    }
+    if (!Number.isInteger(testCase.expectedStatus) || testCase.expectedStatus < 200 || testCase.expectedStatus >= 300) {
+      fail(`PERF_AUTHENTICATED_READ_SETUP_CASES_JSON[${index}].expectedStatus must be a 2xx status`);
+    }
+    return testCase;
+  });
+}
+
 function parseFixtureContext(raw) {
   try {
     const parsed = JSON.parse(raw);
@@ -177,6 +209,32 @@ function requestHeaders(testCase, sessionsByRole) {
   return headers;
 }
 
+function executeFixtureSetup(testCase, sessionsByRole, runtimeContext) {
+  const path = interpolate(testCase.path, runtimeContext, testCase.id);
+  const response = http.post(
+    `${apiBaseUrl}${path}`,
+    JSON.stringify(interpolateValue(testCase.body || {}, runtimeContext, testCase.id)),
+    {
+      headers: { ...requestHeaders(testCase, sessionsByRole), 'Content-Type': 'application/json' },
+      tags: {
+        endpoint: `POST ${testCase.route}`,
+        role: testCase.role,
+        test: 'authenticated_read_fixture',
+      },
+    },
+  );
+  const body = safeJson(response);
+  const success = response.status === testCase.expectedStatus
+    && body
+    && body.statusCode === testCase.expectedStatus
+    && body.code === 'SUCCESS'
+    && Object.prototype.hasOwnProperty.call(body, 'data');
+  if (!success) {
+    fail(`${testCase.id} fixture setup failed with HTTP ${response.status}.`);
+  }
+  captureResponseData(testCase, body.data, runtimeContext);
+}
+
 function interpolate(value, context, caseId) {
   return value.replace(/{{([A-Za-z0-9_.-]+)}}/g, (match, key) => {
     const resolved = key.split('.').reduce((current, part) => current && current[part], context);
@@ -185,6 +243,52 @@ function interpolate(value, context, caseId) {
     }
     return String(resolved);
   });
+}
+
+function interpolateValue(value, context, caseId) {
+  if (typeof value === 'string') {
+    return interpolate(value, context, caseId);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => interpolateValue(item, context, caseId));
+  }
+  if (value && typeof value === 'object') {
+    return Object.entries(value).reduce((result, [key, item]) => {
+      result[key] = interpolateValue(item, context, caseId);
+      return result;
+    }, {});
+  }
+  return value;
+}
+
+function captureResponseData(testCase, responseData, context) {
+  if (!testCase.capture) {
+    return;
+  }
+  Object.entries(testCase.capture).forEach(([sourceKey, targetKey]) => {
+    if (!Object.prototype.hasOwnProperty.call(responseData, sourceKey)) {
+      fail(`${testCase.id} response is missing captured field: ${sourceKey}`);
+    }
+    setContextValue(context, targetKey, responseData[sourceKey], testCase.id);
+  });
+}
+
+function setContextValue(context, targetKey, value, caseId) {
+  const parts = targetKey.split('.');
+  if (parts.length < 2 || parts.some((part) => part === '')) {
+    fail(`${caseId} has invalid capture target: ${targetKey}`);
+  }
+  const finalKey = parts.pop();
+  const target = parts.reduce((current, part) => {
+    if (!Object.prototype.hasOwnProperty.call(current, part)) {
+      current[part] = {};
+    }
+    if (!current[part] || typeof current[part] !== 'object' || Array.isArray(current[part])) {
+      fail(`${caseId} cannot capture into non-object context: ${targetKey}`);
+    }
+    return current[part];
+  }, context);
+  target[finalKey] = value;
 }
 
 function assertSuccess(response, testCase, requestNumber) {

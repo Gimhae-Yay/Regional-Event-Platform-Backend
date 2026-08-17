@@ -11,6 +11,16 @@ param(
     [string] $BaseFixturePath = (Join-Path $PSScriptRoot 'seed/k6-local.seed.sql'),
     [string] $BootstrapFixturePath = (Join-Path $PSScriptRoot 'fixtures/api-success-coverage-bootstrap.sql'),
 
+    [ValidateSet('Container', 'Rds')]
+    [string] $FixtureDatabaseMode = 'Container',
+    [string] $FixtureDatabaseHost,
+    [ValidateRange(1, 65535)]
+    [int] $FixtureDatabasePort = 3306,
+    [string] $FixtureDatabaseName,
+    [string] $FixtureDatabaseUser,
+    [string] $FixtureDatabasePasswordEnvironmentVariable = 'PERF_FIXTURE_DB_PASSWORD',
+    [switch] $AllowRdsFixtureReset,
+
     [string] $K6Command = 'k6',
     [string] $BaseUrl = 'http://127.0.0.1:18080',
     [string] $ResultDate = (Get-Date).ToString('yyyy-MM-dd')
@@ -23,21 +33,59 @@ $resultDirectory = Join-Path $k6Root "results/$ResultDate"
 
 Write-Host 'The target application must be running with PORTONE_FAKE_ENABLED=true and IMAGE_STORAGE_FAKE_ENABLED=true.'
 
-function Get-ContainerDatabaseConfiguration {
-    $values = @{}
-    docker inspect $DatabaseContainer --format '{{range .Config.Env}}{{println .}}{{end}}' |
-        ForEach-Object {
-            $parts = $_ -split '=', 2
-            if ($parts.Count -eq 2) {
-                $values[$parts[0]] = $parts[1]
+function Get-FixtureDatabaseConfiguration {
+    if ($FixtureDatabaseMode -eq 'Container') {
+        $values = @{}
+        docker inspect $DatabaseContainer --format '{{range .Config.Env}}{{println .}}{{end}}' |
+            ForEach-Object {
+                $parts = $_ -split '=', 2
+                if ($parts.Count -eq 2) {
+                    $values[$parts[0]] = $parts[1]
+                }
+            }
+        foreach ($requiredName in @('MYSQL_DATABASE', 'MYSQL_USER', 'MYSQL_PASSWORD')) {
+            if (-not $values.ContainsKey($requiredName)) {
+                throw "Database container is missing $requiredName."
             }
         }
-    foreach ($requiredName in @('MYSQL_DATABASE', 'MYSQL_USER', 'MYSQL_PASSWORD')) {
-        if (-not $values.ContainsKey($requiredName)) {
-            throw "Database container is missing $requiredName."
+        return [PSCustomObject]@{
+            Mode = 'Container'
+            Container = $DatabaseContainer
+            Database = $values.MYSQL_DATABASE
+            User = $values.MYSQL_USER
+            Password = $values.MYSQL_PASSWORD
         }
     }
-    return $values
+
+    if (-not $AllowRdsFixtureReset) {
+        throw 'Rds fixture mode requires -AllowRdsFixtureReset because it applies fixture SQL to the remote database.'
+    }
+    foreach ($parameterName in @('FixtureDatabaseHost', 'FixtureDatabaseName', 'FixtureDatabaseUser')) {
+        $value = Get-Variable -Name $parameterName -ValueOnly
+        if ([string]::IsNullOrWhiteSpace($value)) {
+            throw "Rds fixture mode requires -$parameterName."
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($FixtureDatabasePasswordEnvironmentVariable)) {
+        throw 'Rds fixture mode requires -FixtureDatabasePasswordEnvironmentVariable.'
+    }
+    $password = [Environment]::GetEnvironmentVariable($FixtureDatabasePasswordEnvironmentVariable, 'Process')
+    if ([string]::IsNullOrWhiteSpace($password)) {
+        throw "Rds fixture mode requires the $FixtureDatabasePasswordEnvironmentVariable process environment variable."
+    }
+    $mysqlCommand = Get-Command mysql -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($null -eq $mysqlCommand) {
+        throw 'Rds fixture mode requires the MySQL CLI (mysql) on the k6 runner.'
+    }
+    return [PSCustomObject]@{
+        Mode = 'Rds'
+        Host = $FixtureDatabaseHost
+        Port = $FixtureDatabasePort
+        Database = $FixtureDatabaseName
+        User = $FixtureDatabaseUser
+        Password = $password
+        MySqlPath = $mysqlCommand.Path
+    }
 }
 
 function Invoke-DatabaseSql {
@@ -46,9 +94,27 @@ function Invoke-DatabaseSql {
         [string] $Sql
     )
 
-    $output = $Sql |
-        docker exec -i -e "MYSQL_PWD=$($database.MYSQL_PASSWORD)" $DatabaseContainer `
-            mysql "-u$($database.MYSQL_USER)" $database.MYSQL_DATABASE 2>&1
+    $fixtureSql = "SET FOREIGN_KEY_CHECKS = 0;$([Environment]::NewLine)$Sql$([Environment]::NewLine)SET FOREIGN_KEY_CHECKS = 1;"
+    if ($database.Mode -eq 'Container') {
+        $output = $fixtureSql |
+            docker exec -i -e "MYSQL_PWD=$($database.Password)" $database.Container `
+                mysql "-u$($database.User)" $database.Database 2>&1
+    } else {
+        $previousMySqlPassword = [Environment]::GetEnvironmentVariable('MYSQL_PWD', 'Process')
+        [Environment]::SetEnvironmentVariable('MYSQL_PWD', $database.Password, 'Process')
+        try {
+            $mysqlArguments = @(
+                '--protocol=TCP',
+                "--host=$($database.Host)",
+                "--port=$($database.Port)",
+                "--user=$($database.User)",
+                $database.Database
+            )
+            $output = $fixtureSql | & $database.MySqlPath @mysqlArguments 2>&1
+        } finally {
+            [Environment]::SetEnvironmentVariable('MYSQL_PWD', $previousMySqlPassword, 'Process')
+        }
+    }
     if ($LASTEXITCODE -ne 0) {
         throw "Database fixture preparation failed with exit code $LASTEXITCODE.`n$($output -join [Environment]::NewLine)"
     }
@@ -124,6 +190,28 @@ function Get-ReadCases {
     return $readCases | ConvertTo-Json -Compress -Depth 20
 }
 
+function Get-ReadFixtureSetupCases {
+    param([string] $CasesJson)
+
+    $requiredCaseIds = @(
+        'operator-create-representative-image-upload',
+        'operator-create-content',
+        'region-admin-approve-content',
+        'operator-create-content-session',
+        'visitor-issue-visit-coupon',
+        'visitor-create-coupon-available-hold',
+        'platform-admin-create-refund',
+        'operator-create-application'
+    )
+    $casesById = @{}
+    $CasesJson | ConvertFrom-Json | ForEach-Object { $casesById[$_.id] = $_ }
+    $missingCaseIds = @($requiredCaseIds | Where-Object { -not $casesById.ContainsKey($_) })
+    if ($missingCaseIds.Count -gt 0) {
+        throw "CasesPath is missing read fixture setup cases: $($missingCaseIds -join ', ')"
+    }
+    return @($requiredCaseIds | ForEach-Object { $casesById[$_] }) | ConvertTo-Json -Compress -Depth 20
+}
+
 function Assert-CompleteGetCoverage {
     param([string] $ReadCasesJson)
 
@@ -144,9 +232,10 @@ function Assert-CompleteGetCoverage {
 $accounts = Get-JsonArrayFile -Path $AccountsPath -Name 'AccountsPath'
 $allCases = Get-JsonArrayFile -Path $CasesPath -Name 'CasesPath'
 $readCases = Get-ReadCases -CasesJson $allCases
+$readFixtureSetupCases = Get-ReadFixtureSetupCases -CasesJson $allCases
 $fixtureContext = Get-JsonObjectFile -Path $FixtureContextPath -Name 'FixtureContextPath'
 Assert-CompleteGetCoverage -ReadCasesJson $readCases
-$database = Get-ContainerDatabaseConfiguration
+$database = Get-FixtureDatabaseConfiguration
 Invoke-DatabaseSql -Sql (Get-Content -Raw -Encoding UTF8 -LiteralPath $BaseFixturePath)
 Invoke-DatabaseSql -Sql (Get-Content -Raw -Encoding UTF8 -LiteralPath $BootstrapFixturePath)
 
@@ -157,6 +246,7 @@ $k6Environment = @{
     PERF_SUMMARY_BASENAME = 'authenticated-read-response-time'
     PERF_API_TEST_ACCOUNTS_JSON = $accounts
     PERF_AUTHENTICATED_READ_CASES_JSON = $readCases
+    PERF_AUTHENTICATED_READ_SETUP_CASES_JSON = $readFixtureSetupCases
     PERF_API_FIXTURE_CONTEXT_JSON = $fixtureContext
     PERF_REQUESTS_PER_API = $RequestsPerApi
 }
