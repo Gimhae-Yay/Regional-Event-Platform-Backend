@@ -40,7 +40,6 @@ import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
-import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentId;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService.AuthorizedOperator;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -115,6 +114,7 @@ class CreateContentUseCaseTest {
             eq(SUBMITTED_AT)
         );
         assertThat(contentCommandCaptor.getValue().publishAt()).isEqualTo(PUBLISH_AT.toInstant());
+        assertThat(contentCommandCaptor.getValue().reservationPrice()).isZero();
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<CreateContentSessionCommand>> sessionCommandsCaptor = ArgumentCaptor.forClass(List.class);
         verify(contentSessionService).createPendingSessions(
@@ -234,7 +234,7 @@ class CreateContentUseCaseTest {
         UserRoleAssignment assignment = mock(UserRoleAssignment.class);
         when(operator.getUserId()).thenReturn(USER_ID);
         when(region.getRegionId()).thenReturn(REGION_ID);
-        when(assignment.getId()).thenReturn(new UserRoleAssignmentId(USER_ID, UserRole.OPERATOR));
+        when(assignment.getRoleAssignmentId()).thenReturn(1L);
         return new AuthorizedOperator(operator, region, assignment);
     }
 

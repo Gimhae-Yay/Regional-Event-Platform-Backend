@@ -14,6 +14,54 @@ import io.regionevent.regioneventbackend.domain.audit.entity.AuditEvent;
 public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
 
     @Query("""
+        SELECT new io.regionevent.regioneventbackend.domain.audit.repository.StampbookReviewRequestAuditProjection(
+            auditEvent.occurredAt,
+            auditEvent.reason
+        )
+        FROM AuditEvent auditEvent
+        WHERE auditEvent.targetType = io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType.STAMPBOOK
+          AND auditEvent.targetId = :stampbookId
+          AND auditEvent.region.regionId = :regionId
+          AND auditEvent.result = io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult.SUCCESS
+          AND auditEvent.previousState = :previousState
+          AND auditEvent.nextState = :nextState
+        ORDER BY auditEvent.occurredAt DESC, auditEvent.auditEventId DESC
+        """)
+    List<StampbookReviewRequestAuditProjection> findLatestStampbookReviewRequestAuditProjections(
+        @Param("stampbookId") Long stampbookId,
+        @Param("regionId") Long regionId,
+        @Param("previousState") String previousState,
+        @Param("nextState") String nextState,
+        Pageable pageable
+    );
+
+    @Query("""
+        SELECT new io.regionevent.regioneventbackend.domain.audit.repository.MissionHistoryAuditProjection(
+            auditEvent.auditEventId,
+            auditEvent.requestId,
+            auditEvent.previousState,
+            auditEvent.nextState,
+            auditEvent.result,
+            auditEvent.reasonCode,
+            auditEvent.actorKind,
+            actor.userId,
+            auditEvent.occurredAt
+        )
+        FROM AuditEvent auditEvent
+        LEFT JOIN AuditEventActorLink actorLink
+            ON actorLink.auditEvent = auditEvent
+        LEFT JOIN actorLink.actor actor
+        WHERE auditEvent.targetType = io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType.MISSION
+            AND auditEvent.targetId = :missionId
+            AND auditEvent.result = io.regionevent.regioneventbackend.domain.audit.entity.AuditEventResult.SUCCESS
+            AND auditEvent.occurredAt >= timestampadd(day, -90, CURRENT_TIMESTAMP)
+        ORDER BY auditEvent.occurredAt ASC, auditEvent.auditEventId ASC
+        """)
+    List<MissionHistoryAuditProjection> findMissionHistoryAuditProjections(
+        @Param("missionId") Long missionId
+    );
+
+    @Query("""
         SELECT new io.regionevent.regioneventbackend.domain.audit.repository.QrExceptionReadProjection(
             auditEvent.auditEventId,
             auditEvent.occurredAt,

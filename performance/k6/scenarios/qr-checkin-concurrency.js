@@ -11,28 +11,38 @@ import {
   scenarioVus,
 } from '../lib/config.js';
 import { idempotencyKey } from '../lib/data.js';
-import { authAcceptHeaders, authHeaders, get, postJson } from '../lib/http.js';
+import {
+  authAcceptHeaders,
+  authHeaders,
+  get,
+  postJson,
+  requestTags,
+} from '../lib/http.js';
 import { recordOutcome, recordUnexpected } from '../lib/responses.js';
 import { markdownSummary } from '../lib/summary.js';
 
 const scenarioName = 'QR_CHECKIN_CONCURRENCY';
 const testTag = 'qr_checkin_concurrency';
+const setupTestTag = 'qr_checkin_concurrency_setup';
+const endpoints = {
+  issueQr: 'myReservationQrIssue',
+  checkIn: 'qrCheckIn',
+};
 const businessCodes = [
   'QR_ISSUE_CONFLICT',
   'QR_VERIFICATION_FAILED',
-  'CHECK_IN_CONFLICT',
   'IDEMPOTENCY_KEY_CONFLICT',
   'IDEMPOTENCY_REQUEST_IN_PROGRESS',
 ];
-const concurrencyVus = scenarioVus(scenarioName, 2);
+const concurrencyVus = scenarioVus(scenarioName, 50);
 const maxDuration = scenarioDuration(scenarioName);
+const p95Threshold = scenarioP95Threshold(scenarioName);
 
 if (!Number.isInteger(concurrencyVus) || concurrencyVus < 2) {
   fail(`PERF_${scenarioName}_VUS must be an integer greater than or equal to 2`);
 }
 
 const qrCheckinSuccessCount = new Counter('qr_checkin_success_count');
-const qrCheckinConflictCount = new Counter('qr_checkin_conflict_count');
 
 export const options = {
   scenarios: {
@@ -45,11 +55,14 @@ export const options = {
   },
   thresholds: {
     expected_outcome_rate: ['rate==1'],
-    qr_checkin_success_count: ['count==1'],
-    qr_checkin_conflict_count: [`count==${concurrencyVus - 1}`],
+    [`expected_outcome_rate{endpoint:${endpoints.issueQr}}`]: ['rate==1'],
+    [`expected_outcome_rate{endpoint:${endpoints.checkIn}}`]: ['rate==1'],
+    qr_checkin_success_count: [`count==${concurrencyVus}`],
     system_failure_rate: ['rate==0'],
     unexpected_failure_rate: ['rate==0'],
-    [`http_req_duration{test:${testTag}}`]: [`p(95)<${scenarioP95Threshold(scenarioName)}`],
+    [`http_req_duration{test:${testTag}}`]: [`p(95)<${p95Threshold}`],
+    [`http_req_duration{endpoint:${endpoints.issueQr}}`]: [`p(95)<${p95Threshold}`],
+    [`http_req_duration{endpoint:${endpoints.checkIn}}`]: [`p(95)<${p95Threshold}`],
   },
   summaryTrendStats: ['avg', 'min', 'med', 'p(90)', 'p(95)', 'p(99)', 'max'],
 };
@@ -59,6 +72,16 @@ const visitorToken = csvEnv('PERF_VISITOR_ACCESS_TOKENS')[0];
 const operatorToken = csvEnv('PERF_OPERATOR_ACCESS_TOKENS')[0];
 const reservationId = requiredEnv('PERF_RESERVATION_ID');
 const commonTags = { test: testTag, reservation_id: reservationId };
+const setupTags = requestTags(
+  endpoints.issueQr,
+  'GET /api/v1/me/reservations/{reservationId}/qr',
+  { test: setupTestTag, reservation_id: reservationId, phase: 'setup' },
+);
+const checkInTags = requestTags(
+  endpoints.checkIn,
+  'POST /api/v1/operator/check-ins',
+  commonTags,
+);
 
 export function handleSummary(data) {
   return markdownSummary(data, {
@@ -82,9 +105,9 @@ export function setup() {
       apiBase,
       `/me/reservations/${reservationId}/qr`,
       authAcceptHeaders(visitorToken),
-      commonTags,
+      setupTags,
     ),
-    { businessCodes },
+    { businessCodes, endpoint: endpoints.issueQr },
   );
   if (!qrOutcome.success) {
     throw new Error('QR setup failed. Check PERF_RESERVATION_ID and check-in window fixture.');
@@ -92,7 +115,11 @@ export function setup() {
 
   const qrToken = qrOutcome.body && qrOutcome.body.data && qrOutcome.body.data.qrToken;
   if (!qrToken) {
-    recordUnexpected('GET /me/reservations/{reservationId}/qr', 'MISSING_QR_TOKEN');
+    recordUnexpected(
+      'GET /me/reservations/{reservationId}/qr',
+      'MISSING_QR_TOKEN',
+      { endpoint: endpoints.issueQr },
+    );
     throw new Error('QR setup response did not include qrToken.');
   }
   return { qrToken };
@@ -106,13 +133,11 @@ export default function (data) {
       '/operator/check-ins',
       { qrToken: data.qrToken },
       authHeaders(operatorToken, { 'Idempotency-Key': idempotencyKey('qr-check-in') }),
-      commonTags,
+      checkInTags,
     ),
-    { businessCodes },
+    { businessCodes, endpoint: endpoints.checkIn },
   );
   if (outcome.success) {
     qrCheckinSuccessCount.add(1, commonTags);
-  } else if (outcome.code === 'CHECK_IN_CONFLICT') {
-    qrCheckinConflictCount.add(1, commonTags);
   }
 }

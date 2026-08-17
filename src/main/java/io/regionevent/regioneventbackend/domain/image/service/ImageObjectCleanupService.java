@@ -6,6 +6,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -19,6 +22,7 @@ import io.regionevent.regioneventbackend.domain.image.repository.ImageObjectRepo
 @Service
 public class ImageObjectCleanupService {
 
+    private static final Logger log = LoggerFactory.getLogger(ImageObjectCleanupService.class);
     private static final int CLEANUP_BATCH_SIZE = 100;
 
     private final ImageObjectRepository imageObjectRepository;
@@ -50,7 +54,7 @@ public class ImageObjectCleanupService {
     ) {
         ImageObjectCleanupTarget cleanupTarget = new ImageObjectCleanupTarget(imageObjectId, objectKey);
         if (deleteStorageObject(cleanupTarget)) {
-            return deleteImageObject(cleanupTarget.imageObjectId());
+            return deleteImageObjectSafely(cleanupTarget.imageObjectId());
         }
         recordDeleteAttempt(cleanupTarget.imageObjectId());
         return 0;
@@ -133,6 +137,18 @@ public class ImageObjectCleanupService {
             return 0;
         }
         return deletedCount;
+    }
+
+    private int deleteImageObjectSafely(Long imageObjectId) {
+        try {
+            return deleteImageObject(imageObjectId);
+        } catch (RuntimeException exception) {
+            log.atError()
+                .addKeyValue("imageObjectId", imageObjectId)
+                .setCause(exception)
+                .log("Image object database cleanup failed after storage deletion");
+            return 0;
+        }
     }
 
     private void recordDeleteAttempt(Long imageObjectId) {

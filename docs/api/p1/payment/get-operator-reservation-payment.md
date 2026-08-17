@@ -9,8 +9,9 @@
 
 ## 1. 개요
 
-승인된 콘텐츠 운영자가 본인 담당 콘텐츠에 속한 특정 예약의 결제·환불 현재 상태를 조회해 고객 문의
-대응에 사용한다. 이 API는 결제·환불·불일치 상태를 변경하지 않는다.
+승인된 콘텐츠 운영자가 본인 담당 콘텐츠에 속한 특정 예약의 결제·환불 현재 상태와 결제당
+최대 한 건인 결제 불일치를 조회해 고객 문의 대응에 사용한다. 이 API는 결제·환불·불일치 상태를
+변경하지 않는다.
 
 환불 처리 자체는 이 문서의 범위가 아니다. 취소·환불 요청, 방문자의 내 환불 상태 조회와 환불 재시도는
 별도 환불 도메인 문서가 소유한다. 이 API는 운영자 문의 대응을 위해 환불 상태를 읽기 전용으로만 함께
@@ -152,7 +153,7 @@ Accept: application/json
 | `data.payment.status` | String | 결제 상태다. `PENDING`, `APPROVED`, `DECLINED`, `CANCELLED`, `EXPIRED`, `DISCREPANT` 중 하나다. |
 | `data.payment.finalAmount` | Integer | 결제 최종 금액이다. |
 | `data.payment.currency` | String | 통화 코드다. |
-| `data.payment.discrepancy` | Object 또는 null | 이 결제에 연결된 불일치가 있으면 값이 있고, 없으면 `null`이다. |
+| `data.payment.discrepancy` | Object 또는 null | 이 결제에 연결된 불일치 한 건이 있으면 값이 있고, 없으면 `null`이다. |
 | `data.payment.discrepancy.discrepancyId` | String | 불일치 식별자다. |
 | `data.payment.discrepancy.status` | String | 불일치 상태다. `OPEN`, `RESOLVED_NO_ISSUE`, `REFUND_REQUESTED` 중 하나다. |
 | `data.refund` | Object 또는 null | 이 결제에 대해 환불이 요청된 적 있으면 값이 있고, 없으면 `null`이다. |
@@ -161,7 +162,7 @@ Accept: application/json
 | `data.refund.amount` | Integer | 환불 금액이다. 결제 최종 금액과 같다. |
 | `data.refund.requestedAt` | String | 환불 요청 시각이다. UTC ISO 8601 형식이다. |
 | `data.refund.completedAt` | String 또는 null | 환불 종결 시각이다. 종결 전에는 `null`이다. UTC ISO 8601 형식이다. |
-| `data.updatedAt` | String | 결제·환불·불일치 중 가장 최근 상태 변경 시각이다. UTC ISO 8601 형식이다. |
+| `data.updatedAt` | String | 결제가 있으면 결제·환불·불일치 중 가장 최근 상태 변경 시각이고, 무료 예약이면 예약 확정 시각이다. UTC ISO 8601 형식이다. |
 
 ### Error Code
 
@@ -190,6 +191,7 @@ Accept: application/json
 2. 대상 예약이 속한 콘텐츠의 담당 운영자인지 검증하고, 아니면 `403 FORBIDDEN`으로 거부한다. 다른 운영자가 담당하는 콘텐츠의 예약은 존재 여부를 포함해 노출하지 않는다.
 3. 예약에 연결된 결제가 없으면(무료 예약) `data.payment`를 `null`로 반환한다.
 4. 결제당 환불은 최대 한 건이다(`refund.payment_id` 유일). 환불이 요청된 적 없으면 `data.refund`를 `null`로 반환한다.
-5. `data.payment.discrepancy`는 대상 결제에 연결된 `payment_discrepancy` 중 가장 최근 건을 반환한다.
-6. `updatedAt`은 결제, 환불, 불일치 중 가장 최근 상태 변경 시각을 사용한다.
+5. `payment_discrepancy.payment_id`는 유일하므로 `data.payment.discrepancy`는 대상 결제에 연결된
+   불일치 한 건을 반환하고, 없으면 `null`이다.
+6. 결제가 있으면 `updatedAt`은 결제, 환불, 불일치 중 가장 최근 상태 변경 시각을 사용한다. 무료 예약이면 예약 확정 시각을 사용한다.
 7. 조회 시 예약, 결제, 환불과 불일치, 감사 이력을 생성·수정·삭제하지 않는다.

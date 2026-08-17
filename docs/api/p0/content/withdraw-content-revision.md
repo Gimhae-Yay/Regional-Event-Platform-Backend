@@ -79,7 +79,7 @@ Accept: application/json
 #### Request Field
 
 | Name | Type | Required | Description |
-| --- | --- | --- |
+| --- | --- | --- | --- |
 | `reason` | String | Y | 앞뒤 공백을 제거한 비어 있지 않은 철회 사유다. |
 
 ### Response
@@ -129,7 +129,7 @@ Accept: application/json
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 수정본을 변경하지 않는다. |
 | `403` | `FORBIDDEN` | 운영자 역할, 담당 지역 또는 원본 콘텐츠 소유 관계가 없다. 수정본을 변경하지 않는다. |
 | `404` | `NOT_FOUND` | 수정본이 없다. 수정본을 변경하지 않는다. |
-| `409` | `CONTENT_STATE_CONFLICT` | 수정본이 `EDIT_REQUESTED`도 아니고 기존 철회 결과도 아니다. 수정본을 변경하지 않는다. |
+| `409` | `CONTENT_STATE_CONFLICT` | 수정본이 `EDIT_REQUESTED`도 기존 철회 결과도 아니며, 콘텐츠 중단·전체 철회·종료로 `EDIT_INVALIDATED`가 된 경우를 포함한다. 수정본을 변경하지 않는다. |
 
 #### Error Response Body
 
@@ -144,7 +144,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. `EDIT_REQUESTED` 상태에서만 최초 철회가 성공한다. 승인·반려·철회가 경합하면 조건부 상태 전이로 최초 하나만 성공한다.
+1. `EDIT_REQUESTED` 상태에서만 최초 철회가 성공한다. 승인·반려·철회·콘텐츠 중단·전체 철회·종료가 경합하면 조건부 상태 전이로 최초 하나만 성공한다. 콘텐츠 중단·전체 철회·종료가 먼저 `EDIT_INVALIDATED`를 커밋하면 이 요청은 `409 CONTENT_STATE_CONFLICT`로 거부한다. 전체 철회 무효화 사유는 [전체 콘텐츠 철회 승인](../region-content/approve-content-withdrawal.md)의 `CONTENT_WITHDRAWN` 계약을 따른다.
 2. 이미 `EDIT_WITHDRAWN`인 동일 수정본의 반복 요청은 새 처리 시각·사유 이력·감사 기록을 추가하지 않고 저장된 응답을 반환한다.
 3. `EDIT_APPROVED`, `EDIT_REJECTED` 또는 다른 상태의 수정본은 철회할 수 없다.
 4. 철회된 수정본은 원본 후보 필드를 반영하지 않으며 상태·처리자·시각·사유를 보존한다. 공개 전 수정 심사로

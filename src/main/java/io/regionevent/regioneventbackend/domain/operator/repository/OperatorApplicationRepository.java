@@ -83,4 +83,13 @@ public interface OperatorApplicationRepository extends JpaRepository<OperatorApp
         WHERE applicant_user_id = :userId
         """, nativeQuery = true)
     int cancelAndUnlinkByApplicantUserId(@Param("userId") Long userId);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+        UPDATE operator_application
+        SET inspected_user_id = NULL
+        WHERE inspected_user_id = :userId
+          AND status IN ('APPROVED', 'REJECTED')
+        """, nativeQuery = true)
+    int unlinkInspectorByUserId(@Param("userId") Long userId);
 }

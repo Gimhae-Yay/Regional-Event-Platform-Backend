@@ -122,6 +122,7 @@ public class UpdateMyContentUseCase {
         if (request == null) {
             throw invalidInput();
         }
+        validateReservationPrice(request.reservationPrice());
         validateSeoulOffset(request.publishAt());
     }
 
@@ -142,8 +143,15 @@ public class UpdateMyContentUseCase {
             request.ageRequirement(),
             request.materials(),
             request.cancellationPolicyText(),
+            request.reservationPrice(),
             request.publishAt().toInstant()
         );
+    }
+
+    private void validateReservationPrice(Long reservationPrice) {
+        if (reservationPrice == null || reservationPrice < 0) {
+            throw invalidInput();
+        }
     }
 
     private Long parseOptionalPositiveImageObjectId(JsonNode value) {

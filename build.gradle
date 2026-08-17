@@ -1,3 +1,20 @@
+import java.io.IOException
+import java.nio.charset.StandardCharsets
+import java.nio.channels.FileChannel
+import java.nio.channels.FileLock
+import java.nio.channels.OverlappingFileLockException
+import java.nio.file.Files
+import java.nio.file.StandardOpenOption
+import java.security.MessageDigest
+
+import org.gradle.api.GradleException
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.services.BuildService
+import org.gradle.api.services.BuildServiceParameters
+import org.gradle.api.tasks.testing.Test
+import org.gradle.testing.jacoco.tasks.JacocoCoverageVerification
+import org.gradle.testing.jacoco.tasks.JacocoReport
+
 plugins {
     id 'java'
     id 'jacoco'
@@ -33,6 +50,7 @@ dependencies {
     implementation 'io.jsonwebtoken:jjwt-api:0.13.0'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'io.portone:server-sdk:0.22.0'
     implementation 'org.flywaydb:flyway-mysql'
     implementation platform("io.awspring.cloud:spring-cloud-aws-dependencies:${springCloudAwsVersion}")
     implementation 'io.awspring.cloud:spring-cloud-aws-starter-s3'
@@ -58,10 +76,168 @@ dependencies {
     testAnnotationProcessor 'org.projectlombok:lombok'
 }
 
+def worktreeFullTestLock = gradle.sharedServices.registerIfAbsent(
+    'worktreeFullTestLock',
+    WorktreeFullTestLockService
+) { specification ->
+    specification.parameters.worktreeDirectory.set(layout.projectDirectory)
+}
+
 tasks.named('test') {
     useJUnitPlatform()
     maxHeapSize = '2g'
+    usesService(worktreeFullTestLock)
+    doFirst {
+        worktreeFullTestLock.get().acquire()
+    }
     finalizedBy tasks.named('jacocoTestReport')
+}
+
+abstract class WorktreeFullTestLockService implements BuildService<WorktreeFullTestLockService.Parameters>, AutoCloseable {
+
+    interface Parameters extends BuildServiceParameters {
+
+        DirectoryProperty getWorktreeDirectory()
+    }
+
+    private FileChannel channel
+    private FileLock lock
+
+    synchronized void acquire() {
+        if (lock != null && lock.isValid()) {
+            return
+        }
+
+        def worktreeDirectory = parameters.worktreeDirectory.get().asFile.toPath().toAbsolutePath().normalize()
+        def lockFile = worktreeDirectory.resolve('.gradle').resolve('full-test.lock')
+        Files.createDirectories(lockFile.parent)
+        channel = FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE)
+        try {
+            lock = channel.tryLock()
+        } catch (OverlappingFileLockException exception) {
+            closeChannel()
+            throw concurrentFullTestException()
+        }
+
+        if (lock == null) {
+            closeChannel()
+            throw concurrentFullTestException()
+        }
+    }
+
+    @Override
+    synchronized void close() throws IOException {
+        if (lock != null) {
+            lock.release()
+            lock = null
+        }
+        closeChannel()
+    }
+
+    private GradleException concurrentFullTestException() {
+        return new GradleException(
+            '같은 작업 트리에서 전체 테스트가 이미 실행 중입니다. 첫 번째 테스트가 끝난 뒤 다시 실행하세요.'
+        )
+    }
+
+    private void closeChannel() throws IOException {
+        if (channel != null) {
+            channel.close()
+            channel = null
+        }
+    }
+}
+
+def testSourceDirectory = file('src/test/java')
+def testSourceFiles = fileTree(testSourceDirectory) {
+    include '**/*Test.java'
+    include '**/*Tests.java'
+}.files.sort { first, second -> first.path <=> second.path }
+def toTestClassName = { File sourceFile ->
+    testSourceDirectory.toPath()
+        .relativize(sourceFile.toPath())
+        .toString()
+        .replace(File.separator, '.')
+        .replaceFirst(/\.java$/, '')
+}
+def testSources = testSourceFiles.collect { sourceFile ->
+    [
+        className: toTestClassName(sourceFile),
+        source: sourceFile.getText('UTF-8')
+    ]
+}
+def containerTestClassNames = testSources.findAll { testSource ->
+    testSource.source.contains('@Testcontainers')
+        || testSource.source =~ /extends\s+NonTransactionalMySqlTestSupport/
+        || testSource.source.contains('SharedMySqlTestContainer')
+}.collect { testSource -> testSource.className }
+def fastTestClassNames = testSources.collect { testSource -> testSource.className }
+    .findAll { className -> !containerTestClassNames.contains(className) }
+def getContainerTestShard = { String className ->
+    byte[] hash = MessageDigest.getInstance('SHA-256')
+        .digest("ci-container-shard-v42:${className}".getBytes(StandardCharsets.UTF_8))
+
+    return (Byte.toUnsignedInt(hash[0]) % 2) + 1
+}
+def containerTestShard1ClassNames = containerTestClassNames.findAll { className ->
+    getContainerTestShard(className) == 1
+}
+def containerTestShard2ClassNames = containerTestClassNames.findAll { className ->
+    getContainerTestShard(className) == 2
+}
+def allTestClassNames = testSources.collect { testSource -> testSource.className } as Set
+def ciTestClassNames = (
+    fastTestClassNames + containerTestShard1ClassNames + containerTestShard2ClassNames
+) as Set
+def overlappingContainerTestClassNames = (
+    containerTestShard1ClassNames as Set
+).intersect(containerTestShard2ClassNames as Set)
+
+if (ciTestClassNames != allTestClassNames || !overlappingContainerTestClassNames.isEmpty()) {
+    throw new GradleException('CI test shards must include every test class exactly once')
+}
+
+def configureCiTestTask = { Test testTask, List<String> testClassNames ->
+    testTask.dependsOn tasks.named('testClasses')
+    testTask.testClassesDirs = sourceSets.test.output.classesDirs
+    testTask.classpath = sourceSets.test.runtimeClasspath
+    testTask.useJUnitPlatform()
+    testTask.maxHeapSize = '2g'
+    testTask.jacoco.destinationFile = layout.buildDirectory
+        .file("jacoco/${testTask.name}.exec")
+        .get()
+        .asFile
+    testTask.filter {
+        testClassNames.each { className -> includeTestsMatching(className) }
+    }
+}
+
+tasks.register('fastTest', Test) { testTask ->
+    testTask.group = 'verification'
+    testTask.description = 'Testcontainers 기반이 아닌 테스트를 실행한다.'
+
+    configureCiTestTask(testTask, fastTestClassNames)
+}
+
+tasks.register('containerTestShard1', Test) { testTask ->
+    testTask.group = 'verification'
+    testTask.description = '결정적 shard 1에 배정된 Testcontainers 테스트를 실행한다.'
+
+    configureCiTestTask(testTask, containerTestShard1ClassNames)
+}
+
+tasks.register('containerTestShard2', Test) { testTask ->
+    testTask.group = 'verification'
+    testTask.description = '결정적 shard 2에 배정된 Testcontainers 테스트를 실행한다.'
+
+    configureCiTestTask(testTask, containerTestShard2ClassNames)
+}
+
+tasks.register('ciFastCheck') {
+    group = 'verification'
+    description = 'CI 빠른 테스트와 애플리케이션 패키징을 검증한다.'
+    dependsOn tasks.named('assemble')
+    dependsOn tasks.named('fastTest')
 }
 
 tasks.named('jacocoTestReport') {
@@ -70,4 +246,68 @@ tasks.named('jacocoTestReport') {
         csv.required = true
         html.required = true
     }
+}
+
+def ciJacocoExecutionDataDirectory = layout.buildDirectory.dir('jacoco/ci-exec')
+def ciJacocoExecutionDataFileNames = [
+    'fastTest.exec',
+    'containerTestShard1.exec',
+    'containerTestShard2.exec'
+]
+def ciJacocoExecutionData = fileTree(ciJacocoExecutionDataDirectory) {
+    include '*.exec'
+}
+
+def validateCiJacocoExecutionData = {
+    def missingFileNames = ciJacocoExecutionDataFileNames.findAll { fileName ->
+        !ciJacocoExecutionDataDirectory.get().file(fileName).asFile.isFile()
+    }
+
+    if (!missingFileNames.isEmpty()) {
+        throw new GradleException(
+            "통합 JaCoCo 실행 데이터가 없습니다: ${missingFileNames.join(', ')}"
+        )
+    }
+}
+
+tasks.register('jacocoCiCoverageReport', JacocoReport) {
+    group = 'verification'
+    description = '병렬 CI 테스트의 JaCoCo 실행 데이터를 통합해 커버리지 리포트를 생성한다.'
+    dependsOn tasks.named('classes')
+    executionData.from(ciJacocoExecutionData)
+    sourceDirectories.from(sourceSets.main.allSource.srcDirs)
+    classDirectories.from(sourceSets.main.output)
+    reports {
+        xml.required = true
+        xml.outputLocation = layout.buildDirectory.file('reports/jacoco/ci/jacoco.xml')
+        csv.required = true
+        csv.outputLocation = layout.buildDirectory.file('reports/jacoco/ci/jacoco.csv')
+        html.required = true
+        html.outputLocation = layout.buildDirectory.dir('reports/jacoco/ci/html')
+    }
+    doFirst(validateCiJacocoExecutionData)
+}
+
+tasks.register('jacocoCiCoverageVerification', JacocoCoverageVerification) {
+    group = 'verification'
+    description = '통합 CI JaCoCo 커버리지가 라인 85%, 브랜치 60% 이상인지 검증한다.'
+    dependsOn tasks.named('jacocoCiCoverageReport')
+    executionData.from(ciJacocoExecutionData)
+    sourceDirectories.from(sourceSets.main.allSource.srcDirs)
+    classDirectories.from(sourceSets.main.output)
+    violationRules {
+        rule {
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = 0.85
+            }
+            limit {
+                counter = 'BRANCH'
+                value = 'COVEREDRATIO'
+                minimum = 0.60
+            }
+        }
+    }
+    doFirst(validateCiJacocoExecutionData)
 }

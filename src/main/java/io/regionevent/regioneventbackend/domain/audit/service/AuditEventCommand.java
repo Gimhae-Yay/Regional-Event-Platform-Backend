@@ -17,6 +17,8 @@ public record AuditEventCommand(
     String nextState,
     AuditEventResult result,
     String reasonCode,
+    String reason,
+    String evidenceReference,
     AuditEventActor actor,
     Instant occurredAt
 ) {
@@ -46,9 +48,69 @@ public record AuditEventCommand(
         validateSuccessfulStateTransition(result, targetId, nextState);
         validateFailedAuditReasonCode(result, reasonCode);
         validateOptionalCode(reasonCode, MAX_REASON_CODE_LENGTH, "reasonCode");
+        reason = normalizeOptionalReason(reason);
+        evidenceReference = normalizeOptionalEvidenceReference(evidenceReference);
+        validatePrivilegedChangeEvidenceReference(targetType, evidenceReference);
         if (occurredAt == null) {
             throw new IllegalArgumentException("occurredAt must not be null");
         }
+    }
+
+    public AuditEventCommand(
+        UUID requestId,
+        Region region,
+        AuditEventTargetType targetType,
+        Long targetId,
+        String previousState,
+        String nextState,
+        AuditEventResult result,
+        String reasonCode,
+        String evidenceReference,
+        AuditEventActor actor,
+        Instant occurredAt
+    ) {
+        this(
+            requestId,
+            region,
+            targetType,
+            targetId,
+            previousState,
+            nextState,
+            result,
+            reasonCode,
+            null,
+            evidenceReference,
+            actor,
+            occurredAt
+        );
+    }
+
+    public AuditEventCommand(
+        UUID requestId,
+        Region region,
+        AuditEventTargetType targetType,
+        Long targetId,
+        String previousState,
+        String nextState,
+        AuditEventResult result,
+        String reasonCode,
+        AuditEventActor actor,
+        Instant occurredAt
+    ) {
+        this(
+            requestId,
+            region,
+            targetType,
+            targetId,
+            previousState,
+            nextState,
+            result,
+            reasonCode,
+            null,
+            null,
+            actor,
+            occurredAt
+        );
     }
 
     private static void validateSuccessfulStateTransition(
@@ -86,6 +148,44 @@ public record AuditEventCommand(
         }
         if (value.isBlank() || value.length() > maxLength || !CODE_PATTERN.matcher(value).matches()) {
             throw new IllegalArgumentException(fieldName + " must be an uppercase code");
+        }
+    }
+
+    private static String normalizeOptionalEvidenceReference(String evidenceReference) {
+        if (evidenceReference == null) {
+            return null;
+        }
+
+        String normalizedEvidenceReference = evidenceReference.strip();
+        if (normalizedEvidenceReference.isEmpty() || normalizedEvidenceReference.length() > 500) {
+            throw new IllegalArgumentException("evidenceReference must be between 1 and 500 characters");
+        }
+        return normalizedEvidenceReference;
+    }
+
+    private static String normalizeOptionalReason(String reason) {
+        if (reason == null) {
+            return null;
+        }
+
+        String normalizedReason = reason.strip();
+        if (normalizedReason.isEmpty() || normalizedReason.length() > 500) {
+            throw new IllegalArgumentException("reason must be between 1 and 500 characters");
+        }
+        return normalizedReason;
+    }
+
+    private static void validatePrivilegedChangeEvidenceReference(
+        AuditEventTargetType targetType,
+        String evidenceReference
+    ) {
+        if ((targetType == AuditEventTargetType.REGION
+            || targetType == AuditEventTargetType.PLATFORM_ADMIN_ASSIGNMENT
+            || targetType == AuditEventTargetType.USER_ROLE_ASSIGNMENT)
+            && evidenceReference == null) {
+            throw new IllegalArgumentException(
+                "privileged change audit event evidenceReference must not be null"
+            );
         }
     }
 }

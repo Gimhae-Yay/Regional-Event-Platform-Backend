@@ -29,6 +29,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
+import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 import io.regionevent.regioneventbackend.support.jpa.CleanH2Database;
@@ -86,8 +87,11 @@ class OperatorApplicationApprovalAuditAtomicityTest {
                 assertThat(application.getStatus()).isEqualTo(OperatorApplicationStatus.PENDING);
                 assertThat(application.getInspectedUser()).isNull();
             });
-        assertThat(userRoleAssignmentRepository.findByIdUserIdAndIdRoleAndAppUserStatus(
-            fixture.applicant().getUserId(), UserRole.OPERATOR, AppUserStatus.ACTIVE
+        assertThat(userRoleAssignmentRepository.findByAppUserUserIdAndRoleAndStatusAndAppUserStatus(
+            fixture.applicant().getUserId(),
+            UserRole.OPERATOR,
+            UserRoleAssignmentStatus.ACTIVE,
+            AppUserStatus.ACTIVE
         )).isEmpty();
     }
 

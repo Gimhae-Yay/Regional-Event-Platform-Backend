@@ -33,12 +33,14 @@ import io.regionevent.regioneventbackend.global.security.refresh.JwtRefreshToken
 import io.regionevent.regioneventbackend.global.security.refresh.JwtRefreshTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
+import io.regionevent.regioneventbackend.domain.payment.service.PortOneProperties;
 
 @Configuration
 @EnableConfigurationProperties({
     JwtAccessTokenProperties.class,
     JwtRefreshTokenProperties.class,
-    QrTokenProperties.class
+    QrTokenProperties.class,
+    PortOneProperties.class
 })
 public class SecurityConfig {
 
@@ -127,7 +129,8 @@ public class SecurityConfig {
                     "/api/v1/auth/signup",
                     "/api/v1/auth/login",
                     "/api/v1/auth/refresh",
-                    "/api/v1/auth/logout"
+                    "/api/v1/auth/logout",
+                    "/api/v1/webhooks/portone"
                 ).permitAll()
                 .requestMatchers(
                     HttpMethod.GET,
@@ -137,6 +140,8 @@ public class SecurityConfig {
                     HttpMethod.GET,
                     "/api/v1/regions",
                     "/api/v1/regions/*/home",
+                    "/api/v1/regions/*/missions",
+                    "/api/v1/missions/*",
                     "/api/v1/contents",
                     "/api/v1/contents/*",
                     "/api/v1/contents/*/reviews",

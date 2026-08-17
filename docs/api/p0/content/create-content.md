@@ -56,6 +56,7 @@ Accept: application/json
   "ageRequirement": "초등학생 이상",
   "materials": "필기도구",
   "cancellationPolicyText": "회차 시작 전까지 예약 전체 취소가 가능합니다.",
+  "reservationPrice": 20000,
   "publishAt": "2026-08-15T09:00:00+09:00",
   "representativeImageObjectId": "301",
   "sessions": [
@@ -103,6 +104,7 @@ Accept: application/json
 | `ageRequirement` | String | Y | 비어 있지 않은 연령 조건 |
 | `materials` | String | Y | 비어 있지 않은 준비물 |
 | `cancellationPolicyText` | String | Y | P0 무료 예약 취소 정책을 안내하는 비어 있지 않은 문구 |
+| `reservationPrice` | Integer | Y | 이 콘텐츠 모든 회차의 예약 기본 금액이다. 정수 KRW이며 0 이상이다. |
 | `publishAt` | String | Y | ISO 8601 `+09:00` 오프셋 일시인 공개 예정 시각 |
 | `representativeImageObjectId` | String | Y | 양의 10진 문자열인 이미 존재하는 `ACTIVE` 이미지 객체 식별자. 연결 전 대표 이미지 업로드 URL 발급 API의 연결 검증 조건을 모두 확인한다. |
 | `sessions` | Array | Y | 하나 이상의 생성할 회차 배열 |
@@ -173,6 +175,6 @@ Accept: application/json
 ### 처리 규칙
 
 1. 서버는 인증된 승인 운영자를 `operator_id`로, 그 운영자의 담당 지역을 `region_id`로 설정한다. 요청에서 소유자·지역·콘텐츠 유형을 지정하거나 변경할 수 없다.
-2. 모든 정적 콘텐츠 필드, 현재 `ACTIVE`인 대표 이미지 한 개와 하나 이상의 유효 회차를 검증한다. 대표 이미지는 [대표 이미지 S3 업로드 URL 발급](upload-representative-image.md)의 연결 검증 조건을 모두 만족해야 한다. 각 회차는 `startsAt < endsAt`, `checkinOpenAt < checkinCloseAt`, `endsAt > checkinCloseAt`, 양수 정원을 만족해야 한다.
+2. 모든 정적 콘텐츠 필드, 0 이상 정수 KRW `reservationPrice`, 현재 `ACTIVE`인 대표 이미지 한 개와 하나 이상의 유효 회차를 검증한다. 대표 이미지는 [대표 이미지 S3 업로드 URL 발급](upload-representative-image.md)의 연결 검증 조건을 모두 만족해야 한다. 각 회차는 `startsAt < endsAt`, `checkinOpenAt < checkinCloseAt`, `endsAt > checkinCloseAt`, 양수 정원을 만족해야 한다.
 3. 성공 시 콘텐츠와 회차를 만들고 `ACTIVE` 이미지 객체를 대표 이미지로 연결한 뒤, 콘텐츠를 `PENDING`으로 만들고 `PENDING` 로그를 같은 트랜잭션에서 기록한다.
 4. 생성된 `PENDING` 콘텐츠는 심사 결과가 나올 때까지 직접 편집하거나 재요청할 수 없다.

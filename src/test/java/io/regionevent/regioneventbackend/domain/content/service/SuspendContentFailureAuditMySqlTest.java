@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -36,9 +37,12 @@ import io.regionevent.regioneventbackend.domain.content.entity.ContentLogStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentWithdrawalRequest;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentWithdrawalRequestStatus;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentLogRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentSessionRepository;
+import io.regionevent.regioneventbackend.domain.content.repository.ContentWithdrawalRequestRepository;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
@@ -67,6 +71,7 @@ class SuspendContentFailureAuditMySqlTest extends NonTransactionalMySqlTestSuppo
     private final ContentRepository contentRepository;
     private final ContentSessionRepository contentSessionRepository;
     private final ContentLogRepository contentLogRepository;
+    private final ContentWithdrawalRequestRepository contentWithdrawalRequestRepository;
     private final CapacityHoldRepository capacityHoldRepository;
     private final AuditEventRepository auditEventRepository;
     private final AuditEventActorLinkRepository auditEventActorLinkRepository;
@@ -87,6 +92,7 @@ class SuspendContentFailureAuditMySqlTest extends NonTransactionalMySqlTestSuppo
         ContentRepository contentRepository,
         ContentSessionRepository contentSessionRepository,
         ContentLogRepository contentLogRepository,
+        ContentWithdrawalRequestRepository contentWithdrawalRequestRepository,
         CapacityHoldRepository capacityHoldRepository,
         AuditEventRepository auditEventRepository,
         AuditEventActorLinkRepository auditEventActorLinkRepository,
@@ -102,6 +108,7 @@ class SuspendContentFailureAuditMySqlTest extends NonTransactionalMySqlTestSuppo
         this.contentRepository = contentRepository;
         this.contentSessionRepository = contentSessionRepository;
         this.contentLogRepository = contentLogRepository;
+        this.contentWithdrawalRequestRepository = contentWithdrawalRequestRepository;
         this.capacityHoldRepository = capacityHoldRepository;
         this.auditEventRepository = auditEventRepository;
         this.auditEventActorLinkRepository = auditEventActorLinkRepository;
@@ -171,6 +178,13 @@ class SuspendContentFailureAuditMySqlTest extends NonTransactionalMySqlTestSuppo
         assertThat(contentLogRepository.findByContentContentIdOrderByDateAscIdAsc(fixture.contentId()))
             .extracting(ContentLog::getStatus)
             .containsExactly(ContentLogStatus.PUBLISHED);
+        assertThat(contentWithdrawalRequestRepository.findById(fixture.withdrawalRequestId()))
+            .hasValueSatisfying(request -> {
+                assertThat(request.getStatus()).isEqualTo(ContentWithdrawalRequestStatus.PENDING);
+                assertThat(request.getInvalidatedAt()).isNull();
+                assertThat(request.getInvalidatedBy()).isNull();
+                assertThat(request.getInvalidationReason()).isNull();
+            });
         assertThat(capacityHoldRepository.findById(fixture.holdId()))
             .hasValueSatisfying(hold -> {
                 assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.ACTIVE);
@@ -217,6 +231,15 @@ class SuspendContentFailureAuditMySqlTest extends NonTransactionalMySqlTestSuppo
             null,
             now.minusSeconds(86_400)
         ));
+        ContentWithdrawalRequest withdrawalRequest = contentWithdrawalRequestRepository.saveAndFlush(
+            ContentWithdrawalRequest.createPending(
+                content,
+                operator,
+                "a".repeat(64),
+                "운영 계획 변경",
+                now
+            )
+        );
         ContentSession session = new ContentSession(
             content,
             region,
@@ -244,7 +267,13 @@ class SuspendContentFailureAuditMySqlTest extends NonTransactionalMySqlTestSuppo
             null,
             now
         ));
-        return new Fixture(admin.getUserId(), content.getContentId(), session.getSessionId(), hold.getHoldId());
+        return new Fixture(
+            admin.getUserId(),
+            content.getContentId(),
+            withdrawalRequest.getContentWithdrawalRequestId(),
+            session.getSessionId(),
+            hold.getHoldId()
+        );
     }
 
     private AppUser saveUser(String identifierPrefix) {
@@ -346,14 +375,18 @@ class SuspendContentFailureAuditMySqlTest extends NonTransactionalMySqlTestSuppo
 
         @Override
         @Transactional(propagation = Propagation.MANDATORY)
-        public void invalidateAllActiveHoldsForContent(
+        public List<TerminatedCapacityHold> invalidateAllActiveHoldsForContent(
             Long contentId,
             String invalidationReason
         ) {
-            super.invalidateAllActiveHoldsForContent(contentId, invalidationReason);
+            List<TerminatedCapacityHold> terminatedCapacityHolds = super.invalidateAllActiveHoldsForContent(
+                contentId,
+                invalidationReason
+            );
             if (failNextInvalidation.compareAndSet(true, false)) {
                 throw new IllegalStateException("capacity hold invalidation failure");
             }
+            return terminatedCapacityHolds;
         }
 
         void failNextInvalidation() {
@@ -365,6 +398,12 @@ class SuspendContentFailureAuditMySqlTest extends NonTransactionalMySqlTestSuppo
         }
     }
 
-    private record Fixture(Long adminId, Long contentId, Long sessionId, Long holdId) {
+    private record Fixture(
+        Long adminId,
+        Long contentId,
+        Long withdrawalRequestId,
+        Long sessionId,
+        Long holdId
+    ) {
     }
 }

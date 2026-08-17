@@ -2,6 +2,7 @@ package io.regionevent.regioneventbackend.domain.content.entity;
 
 import java.time.Instant;
 
+import jakarta.persistence.CheckConstraint;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -23,7 +24,13 @@ import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 
 @Entity
-@Table(name = "content")
+@Table(
+    name = "content",
+    check = @CheckConstraint(
+        name = "ck_content_reservation_price",
+        constraint = "reservation_price >= 0"
+    )
+)
 public class Content {
 
     @Id
@@ -86,6 +93,9 @@ public class Content {
     @Column(name = "cancellation_policy_text", nullable = false, columnDefinition = "TEXT")
     private String cancellationPolicyText;
 
+    @Column(name = "reservation_price", nullable = false)
+    private long reservationPrice;
+
     @Column(name = "publish_at", nullable = false)
     private Instant publishAt;
 
@@ -125,6 +135,7 @@ public class Content {
         String ageRequirement,
         String materials,
         String cancellationPolicyText,
+        long reservationPrice,
         Instant publishAt
     ) {
         this.region = requireNotNull(region, "region");
@@ -140,7 +151,43 @@ public class Content {
         this.ageRequirement = requireNotBlank(ageRequirement, "ageRequirement");
         this.materials = requireNotBlank(materials, "materials");
         this.cancellationPolicyText = requireNotBlank(cancellationPolicyText, "cancellationPolicyText");
+        this.reservationPrice = requireNonNegative(reservationPrice, "reservationPrice");
         this.publishAt = requireNotNull(publishAt, "publishAt");
+    }
+
+    public Content(
+        Region region,
+        AppUser operator,
+        ContentType contentType,
+        ContentStatus status,
+        String title,
+        String description,
+        String locationText,
+        String operatingHoursText,
+        String contactText,
+        String precautions,
+        String ageRequirement,
+        String materials,
+        String cancellationPolicyText,
+        Instant publishAt
+    ) {
+        this(
+            region,
+            operator,
+            contentType,
+            status,
+            title,
+            description,
+            locationText,
+            operatingHoursText,
+            contactText,
+            precautions,
+            ageRequirement,
+            materials,
+            cancellationPolicyText,
+            0,
+            publishAt
+        );
     }
 
     @PrePersist
@@ -236,6 +283,16 @@ public class Content {
         status = ContentStatus.SUSPENDED;
     }
 
+    public void withdraw() {
+        if (deletedAt != null) {
+            throw new IllegalStateException("soft deleted content cannot be withdrawn");
+        }
+        if (status != ContentStatus.PUBLISHED) {
+            throw new IllegalStateException("content status must be PUBLISHED but was " + status);
+        }
+        status = ContentStatus.WITHDRAWN;
+    }
+
     public void assignRepresentativeImage(ImageObject imageObject, Instant assignedAt) {
         representativeImageObject = requireNotNull(imageObject, "imageObject");
         representativeImageAssignedAt = requireNotNull(assignedAt, "assignedAt");
@@ -258,6 +315,7 @@ public class Content {
         String ageRequirement,
         String materials,
         String cancellationPolicyText,
+        long reservationPrice,
         Instant publishAt
     ) {
         this.title = requireNotBlank(title, "title");
@@ -269,7 +327,35 @@ public class Content {
         this.ageRequirement = requireNotBlank(ageRequirement, "ageRequirement");
         this.materials = requireNotBlank(materials, "materials");
         this.cancellationPolicyText = requireNotBlank(cancellationPolicyText, "cancellationPolicyText");
+        this.reservationPrice = requireNonNegative(reservationPrice, "reservationPrice");
         this.publishAt = requireNotNull(publishAt, "publishAt");
+    }
+
+    public void replaceEditableFields(
+        String title,
+        String description,
+        String locationText,
+        String operatingHoursText,
+        String contactText,
+        String precautions,
+        String ageRequirement,
+        String materials,
+        String cancellationPolicyText,
+        Instant publishAt
+    ) {
+        replaceEditableFields(
+            title,
+            description,
+            locationText,
+            operatingHoursText,
+            contactText,
+            precautions,
+            ageRequirement,
+            materials,
+            cancellationPolicyText,
+            reservationPrice,
+            publishAt
+        );
     }
 
     public boolean isOwnedBy(Long userId) {
@@ -345,6 +431,10 @@ public class Content {
         return cancellationPolicyText;
     }
 
+    public long getReservationPrice() {
+        return reservationPrice;
+    }
+
     public Instant getPublishAt() {
         return publishAt;
     }
@@ -379,6 +469,13 @@ public class Content {
     private static String requireNotBlank(String value, String fieldName) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(fieldName + " must not be null or blank");
+        }
+        return value;
+    }
+
+    private static long requireNonNegative(long value, String fieldName) {
+        if (value < 0) {
+            throw new IllegalArgumentException(fieldName + " must not be negative");
         }
         return value;
     }

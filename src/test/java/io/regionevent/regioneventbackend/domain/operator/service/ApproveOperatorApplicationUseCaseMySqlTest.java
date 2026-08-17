@@ -33,6 +33,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
+import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
@@ -105,8 +106,11 @@ class ApproveOperatorApplicationUseCaseMySqlTest extends NonTransactionalMySqlTe
             .hasValueSatisfying(application ->
                 assertThat(application.getStatus()).isEqualTo(OperatorApplicationStatus.APPROVED)
             );
-        assertThat(userRoleAssignmentRepository.findByIdUserIdAndIdRoleAndAppUserStatus(
-            fixture.applicantId(), UserRole.OPERATOR, AppUserStatus.ACTIVE
+        assertThat(userRoleAssignmentRepository.findByAppUserUserIdAndRoleAndStatusAndAppUserStatus(
+            fixture.applicantId(),
+            UserRole.OPERATOR,
+            UserRoleAssignmentStatus.ACTIVE,
+            AppUserStatus.ACTIVE
         )).isPresent();
         assertThat(auditEventRepository.findAll())
             .filteredOn(event -> fixture.applicationId().equals(event.getTargetId()))

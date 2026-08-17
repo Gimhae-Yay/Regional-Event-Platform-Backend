@@ -18,9 +18,16 @@ import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUs
 import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentLog;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentRevisionInvalidationReason;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentRevisionStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentWithdrawalRequest;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentWithdrawalRequestInvalidationReason;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentWithdrawalRequestStatus;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
+import io.regionevent.regioneventbackend.domain.region.service.RegionService;
 import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHoldService;
+import io.regionevent.regioneventbackend.domain.payment.service.ExpirePendingPaymentForTerminatedHoldUseCase;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.service.RegionAdminAuthorizationService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -33,29 +40,41 @@ public class SuspendContentUseCase {
     private static final String CONTENT_SUSPENDED_INVALIDATION_REASON = "CONTENT_SUSPENDED";
 
     private final ContentService contentService;
+    private final ContentWithdrawalRequestService contentWithdrawalRequestService;
+    private final ContentRevisionInvalidationService contentRevisionInvalidationService;
     private final ContentSessionService contentSessionService;
     private final ContentLogService contentLogService;
     private final CapacityHoldService capacityHoldService;
+    private final ExpirePendingPaymentForTerminatedHoldUseCase expirePendingPaymentForTerminatedHoldUseCase;
     private final RegionAdminAuthorizationService regionAdminAuthorizationService;
+    private final RegionService regionService;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase;
     private final Clock clock;
 
     public SuspendContentUseCase(
         ContentService contentService,
+        ContentWithdrawalRequestService contentWithdrawalRequestService,
+        ContentRevisionInvalidationService contentRevisionInvalidationService,
         ContentSessionService contentSessionService,
         ContentLogService contentLogService,
         CapacityHoldService capacityHoldService,
+        ExpirePendingPaymentForTerminatedHoldUseCase expirePendingPaymentForTerminatedHoldUseCase,
         RegionAdminAuthorizationService regionAdminAuthorizationService,
+        RegionService regionService,
         RecordAuditEventUseCase recordAuditEventUseCase,
         RecordFailedAuditEventUseCase recordFailedAuditEventUseCase,
         Clock clock
     ) {
         this.contentService = contentService;
+        this.contentWithdrawalRequestService = contentWithdrawalRequestService;
+        this.contentRevisionInvalidationService = contentRevisionInvalidationService;
         this.contentSessionService = contentSessionService;
         this.contentLogService = contentLogService;
         this.capacityHoldService = capacityHoldService;
+        this.expirePendingPaymentForTerminatedHoldUseCase = expirePendingPaymentForTerminatedHoldUseCase;
         this.regionAdminAuthorizationService = regionAdminAuthorizationService;
+        this.regionService = regionService;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
         this.recordFailedAuditEventUseCase = recordFailedAuditEventUseCase;
         this.clock = clock;
@@ -69,11 +88,13 @@ public class SuspendContentUseCase {
         UUID requestId
     ) {
         String normalizedReason = normalizeReason(reason);
+        RegionAdminAuthorizationService.AuthorizedRegionAdmin regionAdmin =
+            regionAdminAuthorizationService.requireAuthorizedRegionAdminForUpdate(userId);
+        Long regionId = contentService.findContentRegionId(contentId);
+        Region region = regionService.findRegionForUpdate(regionId);
         Content content = contentService.findSuspendTargetForUpdate(contentId);
-        Region region = content.getRegion();
-        UserRoleAssignment regionAdminAssignment = regionAdminAuthorizationService.authorize(
-            userId,
-            region.getRegionId()
+        UserRoleAssignment regionAdminAssignment = regionAdmin.authorize(
+            regionId
         );
         if (content.getStatus() != ContentStatus.PUBLISHED) {
             recordFailedSuspension(
@@ -88,8 +109,22 @@ public class SuspendContentUseCase {
         AuditEventActor actor = new AuditEventActor(regionAdminAssignment);
         Instant suspendedAt = clock.instant().truncatedTo(ChronoUnit.MICROS);
         try {
-            contentSessionService.lockSuspendTargetsForUpdate(contentId);
             Content suspendedContent = contentService.suspend(content, suspendedAt);
+            invalidatePendingWithdrawalRequest(
+                requestId,
+                suspendedContent,
+                actor,
+                suspendedAt,
+                ContentWithdrawalRequestInvalidationReason.CONTENT_SUSPENDED
+            );
+            invalidateActiveRevision(
+                requestId,
+                suspendedContent,
+                actor,
+                suspendedAt,
+                ContentRevisionInvalidationReason.CONTENT_SUSPENDED
+            );
+            contentSessionService.lockSuspendTargetsForUpdate(contentId);
             ContentLog suspendedLog = contentLogService.recordSuspended(
                 suspendedContent,
                 actor.getAppUser(),
@@ -99,7 +134,11 @@ public class SuspendContentUseCase {
             capacityHoldService.invalidateAllActiveHoldsForContent(
                 contentId,
                 CONTENT_SUSPENDED_INVALIDATION_REASON
-            );
+            ).forEach(capacityHold -> expirePendingPaymentForTerminatedHoldUseCase.expire(
+                capacityHold,
+                requestId,
+                actor
+            ));
             recordSuccessfulSuspension(requestId, actor, suspendedContent, suspendedAt);
             return SuspendContentResult.from(suspendedContent, suspendedLog);
         } catch (BusinessException exception) {
@@ -140,6 +179,76 @@ public class SuspendContentUseCase {
             null,
             actor,
             suspendedAt
+        ));
+    }
+
+    private void invalidateActiveRevision(
+        UUID requestId,
+        Content content,
+        AuditEventActor actor,
+        Instant invalidatedAt,
+        ContentRevisionInvalidationReason reason
+    ) {
+        contentRevisionInvalidationService.invalidateActiveRevisionForContent(
+            content.getContentId(),
+            actor.getAppUser(),
+            invalidatedAt,
+            reason
+        ).ifPresent(revision -> recordAuditEventUseCase.record(new AuditEventCommand(
+            requestId,
+            content.getRegion(),
+            AuditEventTargetType.CONTENT,
+            content.getContentId(),
+            ContentRevisionStatus.EDIT_REQUESTED.name(),
+            ContentRevisionStatus.EDIT_INVALIDATED.name(),
+            AuditEventResult.SUCCESS,
+            reason.name(),
+            actor,
+            invalidatedAt
+        )));
+    }
+
+    private void invalidatePendingWithdrawalRequest(
+        UUID requestId,
+        Content content,
+        AuditEventActor actor,
+        Instant invalidatedAt,
+        ContentWithdrawalRequestInvalidationReason reason
+    ) {
+        contentWithdrawalRequestService.invalidatePendingByUser(
+            content.getContentId(),
+            actor.getAppUser(),
+            invalidatedAt,
+            reason
+        ).ifPresent(request -> recordWithdrawalRequestInvalidation(
+            requestId,
+            content,
+            request,
+            actor,
+            invalidatedAt,
+            reason
+        ));
+    }
+
+    private void recordWithdrawalRequestInvalidation(
+        UUID requestId,
+        Content content,
+        ContentWithdrawalRequest request,
+        AuditEventActor actor,
+        Instant invalidatedAt,
+        ContentWithdrawalRequestInvalidationReason reason
+    ) {
+        recordAuditEventUseCase.record(new AuditEventCommand(
+            requestId,
+            content.getRegion(),
+            AuditEventTargetType.CONTENT_WITHDRAWAL_REQUEST,
+            request.getContentWithdrawalRequestId(),
+            ContentWithdrawalRequestStatus.PENDING.name(),
+            ContentWithdrawalRequestStatus.INVALIDATED.name(),
+            AuditEventResult.SUCCESS,
+            reason.name(),
+            actor,
+            invalidatedAt
         ));
     }
 

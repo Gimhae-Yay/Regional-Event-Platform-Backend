@@ -40,11 +40,15 @@ import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepos
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentLog;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentLogStatus;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentRevision;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentRevisionInvalidationReason;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentRevisionStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentLogRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentRepository;
+import io.regionevent.regioneventbackend.domain.content.repository.ContentRevisionRepository;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentSessionRepository;
 import io.regionevent.regioneventbackend.domain.content.service.ContentSessionService;
 import io.regionevent.regioneventbackend.domain.content.service.SuspendContentResult;
@@ -84,6 +88,7 @@ class SuspendContentControllerMySqlIntegrationTest extends NonTransactionalMySql
     private final AppUserRepository appUserRepository;
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
     private final ContentRepository contentRepository;
+    private final ContentRevisionRepository contentRevisionRepository;
     private final ContentSessionRepository contentSessionRepository;
     private final ContentLogRepository contentLogRepository;
     private final CapacityHoldRepository capacityHoldRepository;
@@ -103,6 +108,7 @@ class SuspendContentControllerMySqlIntegrationTest extends NonTransactionalMySql
         AppUserRepository appUserRepository,
         UserRoleAssignmentRepository userRoleAssignmentRepository,
         ContentRepository contentRepository,
+        ContentRevisionRepository contentRevisionRepository,
         ContentSessionRepository contentSessionRepository,
         ContentLogRepository contentLogRepository,
         CapacityHoldRepository capacityHoldRepository,
@@ -120,6 +126,7 @@ class SuspendContentControllerMySqlIntegrationTest extends NonTransactionalMySql
         this.appUserRepository = appUserRepository;
         this.userRoleAssignmentRepository = userRoleAssignmentRepository;
         this.contentRepository = contentRepository;
+        this.contentRevisionRepository = contentRevisionRepository;
         this.contentSessionRepository = contentSessionRepository;
         this.contentLogRepository = contentLogRepository;
         this.capacityHoldRepository = capacityHoldRepository;
@@ -179,18 +186,54 @@ class SuspendContentControllerMySqlIntegrationTest extends NonTransactionalMySql
                 assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.CONFIRMED)
             );
 
-        assertThat(auditEventRepository.findAll()).singleElement().satisfies(auditEvent -> {
-            assertThat(auditEvent.getTargetType()).isEqualTo(AuditEventTargetType.CONTENT);
-            assertThat(auditEvent.getTargetId()).isEqualTo(fixture.content().getContentId());
-            assertThat(auditEvent.getPreviousState()).isEqualTo("PUBLISHED");
-            assertThat(auditEvent.getNextState()).isEqualTo("SUSPENDED");
-            assertThat(auditEvent.getResult()).isEqualTo(AuditEventResult.SUCCESS);
-            assertThat(auditEvent.getOccurredAt()).isEqualTo(suspendedLog.getDate());
-            assertThat(auditEventActorLinkRepository.findById(auditEvent.getAuditEventId()))
-                .hasValueSatisfying(actorLink ->
-                    assertThat(actorLink.getActor().getUserId()).isEqualTo(fixture.admin().getUserId())
-                );
-        });
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent -> auditEvent.getTargetType() == AuditEventTargetType.CONTENT)
+            .filteredOn(auditEvent -> auditEvent.getTargetId().equals(fixture.content().getContentId()))
+            .singleElement()
+            .satisfies(auditEvent -> {
+                assertThat(auditEvent.getPreviousState()).isEqualTo("PUBLISHED");
+                assertThat(auditEvent.getNextState()).isEqualTo("SUSPENDED");
+                assertThat(auditEvent.getResult()).isEqualTo(AuditEventResult.SUCCESS);
+                assertThat(auditEvent.getOccurredAt()).isEqualTo(suspendedLog.getDate());
+                assertThat(auditEventActorLinkRepository.findById(auditEvent.getAuditEventId()))
+                    .hasValueSatisfying(actorLink ->
+                        assertThat(actorLink.getActor().getUserId()).isEqualTo(fixture.admin().getUserId())
+                    );
+            });
+    }
+
+    @Test
+    void suspendContent_활성_수정본을_중단_처리자와_감사_이력으로_무효화한다() throws Exception {
+        Fixture fixture = createPublishedFixture(false, false);
+        ContentRevision revision = saveEditRequestedRevision(fixture);
+
+        performSuspend(fixture.admin(), fixture.content().getContentId().toString(), "기상 악화")
+            .andExpect(status().isOk());
+
+        assertThat(contentRevisionRepository.findById(revision.getContentRevisionId()))
+            .hasValueSatisfying(actual -> {
+                assertThat(actual.getStatus()).isEqualTo(ContentRevisionStatus.EDIT_INVALIDATED);
+                assertThat(actual.getInvalidatedAt()).isNotNull();
+                assertThat(actual.getInvalidationReason())
+                    .isEqualTo(ContentRevisionInvalidationReason.CONTENT_SUSPENDED);
+            });
+        assertThat(jdbcTemplate.queryForObject(
+            "SELECT invalidated_by_user_id FROM content_revision WHERE content_revision_id = ?",
+            Long.class,
+            revision.getContentRevisionId()
+        )).isEqualTo(fixture.admin().getUserId());
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent -> fixture.content().getContentId().equals(auditEvent.getTargetId()))
+            .filteredOn(auditEvent -> "EDIT_REQUESTED".equals(auditEvent.getPreviousState()))
+            .singleElement()
+            .satisfies(auditEvent -> {
+                assertThat(auditEvent.getNextState()).isEqualTo("EDIT_INVALIDATED");
+                assertThat(auditEvent.getReasonCode()).isEqualTo("CONTENT_SUSPENDED");
+                assertThat(auditEventActorLinkRepository.findById(auditEvent.getAuditEventId()))
+                    .hasValueSatisfying(actorLink ->
+                        assertThat(actorLink.getActor().getUserId()).isEqualTo(fixture.admin().getUserId())
+                    );
+            });
     }
 
     @Test
@@ -290,6 +333,7 @@ class SuspendContentControllerMySqlIntegrationTest extends NonTransactionalMySql
     @Timeout(10)
     void 중단과_홀드만료가_경합해도_교착없이_홀드를_한번만_종결한다() throws Exception {
         Fixture fixture = createPublishedFixture(true, false);
+        ContentRevision revision = saveEditRequestedRevision(fixture);
         jdbcTemplate.update(
             "UPDATE capacity_hold SET expires_at = CURRENT_TIMESTAMP - INTERVAL 1 SECOND WHERE hold_id = ?",
             fixture.activeHoldId()
@@ -315,6 +359,14 @@ class SuspendContentControllerMySqlIntegrationTest extends NonTransactionalMySql
 
             assertThat(suspension.get(5, TimeUnit.SECONDS).status()).isEqualTo(ContentStatus.SUSPENDED);
             assertThat(termination.get(5, TimeUnit.SECONDS).failedHoldCount()).isZero();
+            assertThat(contentRevisionRepository.findById(revision.getContentRevisionId()))
+                .hasValueSatisfying(actual ->
+                    assertThat(actual.getStatus()).isEqualTo(ContentRevisionStatus.EDIT_INVALIDATED)
+                );
+            assertThat(auditEventRepository.findAll())
+                .filteredOn(auditEvent -> fixture.content().getContentId().equals(auditEvent.getTargetId()))
+                .filteredOn(auditEvent -> "EDIT_REQUESTED".equals(auditEvent.getPreviousState()))
+                .hasSize(1);
         } finally {
             blockingContentSessionService.releaseSuspension();
             blockingContentSessionService.stopTerminationSessionLockTracking();
@@ -467,6 +519,35 @@ class SuspendContentControllerMySqlIntegrationTest extends NonTransactionalMySql
             null,
             null,
             now
+        ));
+    }
+
+    private ContentRevision saveEditRequestedRevision(Fixture fixture) {
+        Content content = fixture.content();
+        return contentRevisionRepository.saveAndFlush(new ContentRevision(
+            content,
+            1,
+            content.getVersionNo(),
+            content.getOperator(),
+            ContentRevisionStatus.EDIT_REQUESTED,
+            "수정 제목",
+            "수정 설명",
+            "김해문화의전당",
+            "매일 10:00~18:00",
+            "055-123-4567",
+            "안전 수칙",
+            "만 7세 이상",
+            "편한 복장",
+            "시작 하루 전까지 취소",
+            0,
+            null,
+            Instant.now(),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
         ));
     }
 

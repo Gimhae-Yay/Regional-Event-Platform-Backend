@@ -1,0 +1,234 @@
+package io.regionevent.regioneventbackend.domain.mission.service;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.List;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicy;
+import io.regionevent.regioneventbackend.domain.mission.entity.Mission;
+import io.regionevent.regioneventbackend.domain.mission.entity.MissionConditionType;
+import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
+import io.regionevent.regioneventbackend.domain.mission.repository.MissionRepository;
+import io.regionevent.regioneventbackend.domain.mission.repository.MissionUpdateSnapshot;
+import io.regionevent.regioneventbackend.domain.mission.repository.PublicRegionMissionProjection;
+import io.regionevent.regioneventbackend.domain.region.entity.Region;
+import io.regionevent.regioneventbackend.global.error.BusinessException;
+import io.regionevent.regioneventbackend.global.error.ErrorCode;
+
+@Service
+public class MissionService {
+
+    private final MissionRepository missionRepository;
+
+    public MissionService(MissionRepository missionRepository) {
+        this.missionRepository = missionRepository;
+    }
+
+    public Mission findMissionDetail(Long missionId) {
+        return missionRepository.findMissionDetailByMissionId(missionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public Mission findByMissionId(Long missionId) {
+        return missionRepository.findByMissionId(missionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public Long findRewardCouponPolicyId(Long missionId) {
+        return missionRepository.findRewardCouponPolicyIdByMissionId(missionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public MissionUpdateSnapshot findUpdateSnapshot(Long missionId) {
+        return missionRepository.findUpdateSnapshotByMissionId(missionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public Mission findByMissionIdForUpdate(Long missionId) {
+        return missionRepository.findByMissionIdForUpdate(missionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public Page<Mission> findRegionMissions(
+        Long regionId,
+        MissionStatus status,
+        Pageable pageable
+    ) {
+        if (status == null) {
+            return missionRepository.findAllByRegionRegionIdOrderByMissionIdDesc(regionId, pageable);
+        }
+        return missionRepository.findAllByRegionRegionIdAndStatusOrderByMissionIdDesc(regionId, status, pageable);
+    }
+
+    public Mission findMissionForParticipationUpdate(Long missionId) {
+        return missionRepository.findByMissionIdForParticipationUpdate(missionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public Instant findCurrentDatabaseTime() {
+        return toInstant(missionRepository.findCurrentEpochSeconds());
+    }
+
+    @Transactional(readOnly = true)
+    public List<Long> findAutoEndCandidateIds() {
+        return missionRepository.findAutoEndCandidateIds();
+    }
+
+    public Mission create(
+        Region region,
+        MissionConditionType conditionType,
+        Integer requiredVisitCount,
+        CouponPolicy rewardCouponPolicy,
+        Instant endsAt
+    ) {
+        try {
+            return new Mission(
+                region,
+                conditionType,
+                requiredVisitCount,
+                rewardCouponPolicy,
+                endsAt
+            );
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, exception);
+        }
+    }
+
+    public Mission save(Mission mission) {
+        return missionRepository.saveAndFlush(mission);
+    }
+
+    public Mission submitForReview(Mission mission) {
+        mission.submitForReview();
+        return missionRepository.saveAndFlush(mission);
+    }
+
+    public Mission replaceDraftCoreValues(
+        Mission mission,
+        MissionConditionType conditionType,
+        Integer requiredVisitCount,
+        CouponPolicy rewardCouponPolicy,
+        Instant endsAt
+    ) {
+        if (mission.getStatus() != MissionStatus.DRAFT) {
+            throw new BusinessException(ErrorCode.MISSION_STATE_CONFLICT);
+        }
+        try {
+            mission.replaceDraftCoreValues(
+                conditionType,
+                requiredVisitCount,
+                rewardCouponPolicy,
+                endsAt
+            );
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, exception);
+        } catch (IllegalStateException exception) {
+            throw new BusinessException(ErrorCode.MISSION_STATE_CONFLICT, exception);
+        }
+        return missionRepository.saveAndFlush(mission);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+    public Mission findMission(Long missionId) {
+        return missionRepository.findByMissionId(missionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public Mission findForUpdate(Long missionId) {
+        return missionRepository.findByMissionIdForUpdate(missionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public Mission approve(
+        Mission mission,
+        Instant publishedAt
+    ) {
+        if (mission.getStatus() != MissionStatus.PENDING_REVIEW) {
+            throw new BusinessException(ErrorCode.MISSION_STATE_CONFLICT);
+        }
+        if (publishedAt == null || !publishedAt.isBefore(mission.getEndsAt())) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        mission.approve(publishedAt);
+        return missionRepository.saveAndFlush(mission);
+    }
+
+    public Mission reject(Mission mission) {
+        if (mission.getStatus() != MissionStatus.PENDING_REVIEW) {
+            throw new BusinessException(ErrorCode.MISSION_STATE_CONFLICT);
+        }
+        mission.reject();
+        return missionRepository.saveAndFlush(mission);
+    }
+
+    public Mission end(
+        Mission mission,
+        Instant endedAt
+    ) {
+        if (mission.getStatus() != MissionStatus.PUBLISHED) {
+            throw new BusinessException(ErrorCode.MISSION_STATE_CONFLICT);
+        }
+        if (endedAt == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        mission.end(endedAt);
+        return missionRepository.saveAndFlush(mission);
+    }
+
+    public Mission findPublicMissionDetail(Long missionId, Instant now) {
+        return missionRepository.findPublicMissionDetailByMissionId(missionId, now)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+    public boolean existsPublishedRewardCouponPolicy(Long couponPolicyId) {
+        return missionRepository.existsByRewardCouponPolicyCouponPolicyIdAndStatus(
+            couponPolicyId,
+            MissionStatus.PUBLISHED
+        );
+    }
+
+    public PublicRegionMissionListResult findPublicRegionMissions(
+        Long regionId,
+        Long userId,
+        Instant now,
+        Pageable pageable
+    ) {
+        Page<PublicRegionMissionProjection> missions = missionRepository.findPublicRegionMissions(
+            regionId,
+            userId,
+            now,
+            pageable
+        );
+        List<PublicRegionMissionListResult.Mission> content = missions.getContent().stream()
+            .map(mission -> new PublicRegionMissionListResult.Mission(
+                mission.getMissionId(),
+                mission.getRegionId(),
+                mission.getConditionType(),
+                mission.getRequiredVisitCount(),
+                Math.toIntExact(mission.getTargetContentCount()),
+                mission.getEndsAt(),
+                mission.getParticipationStatus()
+            ))
+            .toList();
+        return new PublicRegionMissionListResult(
+            content,
+            missions.getNumber(),
+            missions.getSize(),
+            missions.getTotalElements(),
+            missions.getTotalPages()
+        );
+    }
+
+    private Instant toInstant(BigDecimal epochSeconds) {
+        long seconds = epochSeconds.longValue();
+        long nanos = epochSeconds.remainder(BigDecimal.ONE)
+            .movePointRight(9)
+            .longValue();
+        return Instant.ofEpochSecond(seconds, nanos);
+    }
+}

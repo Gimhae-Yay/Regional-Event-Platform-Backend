@@ -16,10 +16,17 @@ import io.regionevent.regioneventbackend.domain.audit.service.RecordAuditEventUs
 import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditEventUseCase;
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentLog;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentRevisionInvalidationReason;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentRevisionStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSession;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentWithdrawalRequest;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentWithdrawalRequestInvalidationReason;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentWithdrawalRequestStatus;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
+import io.regionevent.regioneventbackend.domain.region.service.RegionService;
 import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHoldService;
+import io.regionevent.regioneventbackend.domain.payment.service.ExpirePendingPaymentForTerminatedHoldUseCase;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.service.RegionAdminAuthorizationService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -31,9 +38,13 @@ public class EndContentReservationsUseCase {
     private static final String CONTENT_ENDED_INVALIDATION_REASON = "CONTENT_ENDED";
 
     private final ContentService contentService;
+    private final ContentWithdrawalRequestService contentWithdrawalRequestService;
+    private final RegionService regionService;
+    private final ContentRevisionInvalidationService contentRevisionInvalidationService;
     private final ContentSessionService contentSessionService;
     private final ContentLogService contentLogService;
     private final CapacityHoldService capacityHoldService;
+    private final ExpirePendingPaymentForTerminatedHoldUseCase expirePendingPaymentForTerminatedHoldUseCase;
     private final RegionAdminAuthorizationService regionAdminAuthorizationService;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase;
@@ -41,18 +52,26 @@ public class EndContentReservationsUseCase {
 
     public EndContentReservationsUseCase(
         ContentService contentService,
+        ContentWithdrawalRequestService contentWithdrawalRequestService,
+        RegionService regionService,
+        ContentRevisionInvalidationService contentRevisionInvalidationService,
         ContentSessionService contentSessionService,
         ContentLogService contentLogService,
         CapacityHoldService capacityHoldService,
+        ExpirePendingPaymentForTerminatedHoldUseCase expirePendingPaymentForTerminatedHoldUseCase,
         RegionAdminAuthorizationService regionAdminAuthorizationService,
         RecordAuditEventUseCase recordAuditEventUseCase,
         RecordFailedAuditEventUseCase recordFailedAuditEventUseCase,
         PublicCatalogCacheInvalidator publicCatalogCacheInvalidator
     ) {
         this.contentService = contentService;
+        this.contentWithdrawalRequestService = contentWithdrawalRequestService;
+        this.regionService = regionService;
+        this.contentRevisionInvalidationService = contentRevisionInvalidationService;
         this.contentSessionService = contentSessionService;
         this.contentLogService = contentLogService;
         this.capacityHoldService = capacityHoldService;
+        this.expirePendingPaymentForTerminatedHoldUseCase = expirePendingPaymentForTerminatedHoldUseCase;
         this.regionAdminAuthorizationService = regionAdminAuthorizationService;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
         this.recordFailedAuditEventUseCase = recordFailedAuditEventUseCase;
@@ -74,10 +93,12 @@ public class EndContentReservationsUseCase {
         Long contentId,
         UUID requestId
     ) {
+        RegionAdminAuthorizationService.AuthorizedRegionAdmin regionAdmin =
+            regionAdminAuthorizationService.requireAuthorizedRegionAdminForUpdate(userId);
+        Long regionId = contentService.findContentRegionId(contentId);
+        Region region = regionService.findRegionForUpdate(regionId);
         Content content = contentService.findEndTargetForUpdate(contentId);
-        Region region = content.getRegion();
-        UserRoleAssignment regionAdminAssignment = regionAdminAuthorizationService.authorize(
-            userId,
+        UserRoleAssignment regionAdminAssignment = regionAdmin.authorize(
             region.getRegionId()
         );
 
@@ -96,11 +117,28 @@ public class EndContentReservationsUseCase {
 
             Instant endedAt = contentService.findCurrentDatabaseTime();
             Content endedContent = contentService.end(content, endedAt);
+            invalidatePendingWithdrawalRequestByUser(
+                requestId,
+                endedContent,
+                actor,
+                endedAt
+            );
+            invalidateActiveRevision(
+                requestId,
+                endedContent,
+                actor,
+                endedAt,
+                ContentRevisionInvalidationReason.CONTENT_ENDED
+            );
             contentLogService.recordEnded(endedContent, actor.getAppUser(), endedAt);
             capacityHoldService.invalidateAllActiveHoldsForContent(
                 contentId,
                 CONTENT_ENDED_INVALIDATION_REASON
-            );
+            ).forEach(capacityHold -> expirePendingPaymentForTerminatedHoldUseCase.expire(
+                capacityHold,
+                requestId,
+                actor
+            ));
             recordAuditEventUseCase.record(new AuditEventCommand(
                 requestId,
                 region,
@@ -138,6 +176,8 @@ public class EndContentReservationsUseCase {
 
     @Transactional
     public EndContentReservationsSystemResult endBySystem(Long contentId, UUID requestId) {
+        Long regionId = contentService.findContentRegionId(contentId);
+        Region region = regionService.findRegionForUpdate(regionId);
         Content content = contentService.findEndTargetForUpdate(contentId);
         List<ContentSession> contentSessions = contentSessionService.findCurrentSessionsByContentId(contentId);
         if (content.getStatus() != ContentStatus.PUBLISHED
@@ -154,14 +194,30 @@ public class EndContentReservationsUseCase {
         try {
             Instant endedAt = contentService.findCurrentDatabaseTime();
             Content endedContent = contentService.end(content, endedAt);
+            invalidatePendingWithdrawalRequestBySystem(
+                requestId,
+                endedContent,
+                endedAt
+            );
+            invalidateActiveRevision(
+                requestId,
+                endedContent,
+                null,
+                endedAt,
+                ContentRevisionInvalidationReason.CONTENT_ENDED
+            );
             contentLogService.recordEnded(endedContent, null, endedAt);
             capacityHoldService.invalidateAllActiveHoldsForContent(
                 contentId,
                 CONTENT_ENDED_INVALIDATION_REASON
-            );
+            ).forEach(capacityHold -> expirePendingPaymentForTerminatedHoldUseCase.expire(
+                capacityHold,
+                requestId,
+                null
+            ));
             recordAuditEventUseCase.record(new AuditEventCommand(
                 requestId,
-                content.getRegion(),
+                region,
                 AuditEventTargetType.CONTENT,
                 contentId,
                 ContentStatus.PUBLISHED.name(),
@@ -178,7 +234,7 @@ public class EndContentReservationsUseCase {
         } catch (RuntimeException exception) {
             recordFailure(
                 requestId,
-                content.getRegion(),
+                region,
                 contentId,
                 previousState,
                 ErrorCode.INTERNAL_SERVER_ERROR.name(),
@@ -207,6 +263,32 @@ public class EndContentReservationsUseCase {
         );
     }
 
+    private void invalidateActiveRevision(
+        UUID requestId,
+        Content content,
+        AuditEventActor actor,
+        Instant invalidatedAt,
+        ContentRevisionInvalidationReason reason
+    ) {
+        contentRevisionInvalidationService.invalidateActiveRevisionForContent(
+            content.getContentId(),
+            actor == null ? null : actor.getAppUser(),
+            invalidatedAt,
+            reason
+        ).ifPresent(revision -> recordAuditEventUseCase.record(new AuditEventCommand(
+            requestId,
+            content.getRegion(),
+            AuditEventTargetType.CONTENT,
+            content.getContentId(),
+            ContentRevisionStatus.EDIT_REQUESTED.name(),
+            ContentRevisionStatus.EDIT_INVALIDATED.name(),
+            AuditEventResult.SUCCESS,
+            reason.name(),
+            actor,
+            invalidatedAt
+        )));
+    }
+
     private Instant findTerminalAt(ContentSession contentSession) {
         return switch (contentSession.getStatus()) {
             case COMPLETED -> contentSession.getCompletedAt();
@@ -214,6 +296,65 @@ public class EndContentReservationsUseCase {
             case REJECTED -> contentSession.getReviewedAt();
             default -> throw new IllegalStateException("content session must be terminal before ending content");
         };
+    }
+
+    private void invalidatePendingWithdrawalRequestByUser(
+        UUID requestId,
+        Content content,
+        AuditEventActor actor,
+        Instant invalidatedAt
+    ) {
+        contentWithdrawalRequestService.invalidatePendingByUser(
+            content.getContentId(),
+            actor.getAppUser(),
+            invalidatedAt,
+            ContentWithdrawalRequestInvalidationReason.CONTENT_ENDED
+        ).ifPresent(request -> recordWithdrawalRequestInvalidation(
+            requestId,
+            content,
+            request,
+            actor,
+            invalidatedAt
+        ));
+    }
+
+    private void invalidatePendingWithdrawalRequestBySystem(
+        UUID requestId,
+        Content content,
+        Instant invalidatedAt
+    ) {
+        contentWithdrawalRequestService.invalidatePendingBySystem(
+            content.getContentId(),
+            invalidatedAt,
+            ContentWithdrawalRequestInvalidationReason.CONTENT_ENDED
+        ).ifPresent(request -> recordWithdrawalRequestInvalidation(
+            requestId,
+            content,
+            request,
+            null,
+            invalidatedAt
+        ));
+    }
+
+    private void recordWithdrawalRequestInvalidation(
+        UUID requestId,
+        Content content,
+        ContentWithdrawalRequest request,
+        AuditEventActor actor,
+        Instant invalidatedAt
+    ) {
+        recordAuditEventUseCase.record(new AuditEventCommand(
+            requestId,
+            content.getRegion(),
+            AuditEventTargetType.CONTENT_WITHDRAWAL_REQUEST,
+            request.getContentWithdrawalRequestId(),
+            ContentWithdrawalRequestStatus.PENDING.name(),
+            ContentWithdrawalRequestStatus.INVALIDATED.name(),
+            AuditEventResult.SUCCESS,
+            ContentWithdrawalRequestInvalidationReason.CONTENT_ENDED.name(),
+            actor,
+            invalidatedAt
+        ));
     }
 
     private void recordFailure(

@@ -37,6 +37,7 @@ class CreateContentRevisionCreationControllerIntegrationTest extends ContentCont
           "ageRequirement": "만 7세 이상",
           "materials": "편한 복장",
           "cancellationPolicyText": "시작 하루 전까지 취소할 수 있습니다.",
+          "reservationPrice": 0,
           "publishAt": "2026-08-10T10:00:00+09:00",
           "representativeImageObjectId": "11"
         }
@@ -109,6 +110,25 @@ class CreateContentRevisionCreationControllerIntegrationTest extends ContentCont
                 .content("{}"))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+    }
+
+    @Test
+    void 수정본_생성_예약_가격이_누락되거나_음수면_입력_오류를_반환한다() throws Exception {
+        String missingPriceRequest = VALID_REQUEST.replace("\"reservationPrice\": 0,", "");
+        String negativePriceRequest = VALID_REQUEST.replace("\"reservationPrice\": 0", "\"reservationPrice\": -1");
+
+        mockMvc.perform(authenticated(post("/api/v1/operator/contents/{contentId}/revisions", CONTENT_ID))
+                .contentType(APPLICATION_JSON)
+                .content(missingPriceRequest))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        mockMvc.perform(authenticated(post("/api/v1/operator/contents/{contentId}/revisions", CONTENT_ID))
+                .contentType(APPLICATION_JSON)
+                .content(negativePriceRequest))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        verify(createContentRevisionUseCase, never()).createRevision(any(), any(), any(), any());
     }
 
     @Test

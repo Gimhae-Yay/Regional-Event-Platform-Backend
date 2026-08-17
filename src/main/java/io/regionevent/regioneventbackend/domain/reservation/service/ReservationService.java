@@ -64,10 +64,21 @@ public class ReservationService {
         throw new IllegalStateException("failed to generate unique reservation identifiers");
     }
 
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public boolean existsByCapacityHoldId(Long holdId) {
+        return reservationRepository.existsByCapacityHoldHoldId(holdId);
+    }
+
     @Transactional(readOnly = true)
     public Reservation findById(Long reservationId) {
         return reservationRepository.findByReservationIdForUpdate(reservationId)
             .orElseThrow(() -> new IllegalStateException("idempotency result reservation does not exist"));
+    }
+
+    @Transactional(readOnly = true)
+    public Reservation findByIdForOperatorPaymentRead(Long reservationId) {
+        return reservationRepository.findWithCheckInDetailsByReservationId(reservationId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
     @Transactional(readOnly = true)
@@ -203,7 +214,7 @@ public class ReservationService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public int cancelUncheckedInReservationsForSession(
+    public SessionReservationCancellationResult cancelUncheckedInReservationsForSession(
         ContentSession contentSession,
         String cancellationReason,
         Instant cancelledAt
@@ -224,7 +235,10 @@ public class ReservationService {
             reservation.cancel(cancellationReason, cancelledAt, capacityReleasedAt)
         );
         reservationRepository.saveAllAndFlush(confirmedReservations);
-        return releasedQuantity;
+        return new SessionReservationCancellationResult(
+            List.copyOf(confirmedReservations),
+            releasedQuantity
+        );
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -293,6 +307,12 @@ public class ReservationService {
     }
 
     public record ReservationCancellationLockTarget(Long sessionId) {
+    }
+
+    public record SessionReservationCancellationResult(
+        List<Reservation> cancelledReservations,
+        int releasedQuantity
+    ) {
     }
 
     public record ManualCheckInLookup(

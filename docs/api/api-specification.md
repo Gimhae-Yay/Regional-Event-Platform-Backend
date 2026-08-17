@@ -25,8 +25,8 @@
 | --- | --- | --- | --- |
 | 인증·프로필 | [인증·프로필 API](p0/auth-profile/auth-profile.md) | [인증·프로필](../p0/auth-profile.md) | 회원가입·로그인·로그아웃·회원탈퇴, 역할·지역 권한, 운영자 승인, 개인정보 |
 | 지역·콘텐츠 카탈로그 | [지역·콘텐츠 카탈로그 API 명세서](p0/content-catalog/content-catalog.md) | [지역·콘텐츠 카탈로그](../p0/content-catalog.md) | 지역 선택, 콘텐츠·회차, 공개·승인·운영 상태 |
-| 운영자 콘텐츠 | [대표 이미지 S3 업로드 URL 발급](p0/content/upload-representative-image.md) · [콘텐츠 생성](p0/content/create-content.md) · [콘텐츠 수정본 생성](p0/content/create-content-revision.md) · [내 콘텐츠 수정](p0/content/update-my-content.md) · [콘텐츠 수정본 편집](p0/content/update-content-revision.md) | [지역·콘텐츠 카탈로그](../p0/content-catalog.md) | 대표 이미지 업로드, 콘텐츠 생성·보완·수정 심사 |
-| 지역 콘텐츠 관리자 | [수정본 심사 대기 목록](p0/content-catalog/list-pending-content-revisions.md) · [수정본 심사 상세](p0/content-catalog/review-content-revision-detail.md) · [수정본 승인](p0/region-content/approve-content-revision.md) · [수정본 반려](p0/region-content/reject-content-revision.md) · [콘텐츠 삭제](p0/region-content/delete-content.md) · [운영 중단](p0/region-content/suspend-content.md) | [지역·콘텐츠 카탈로그](../p0/content-catalog.md) | 수정본 심사·공개본 반영, 공개 전 삭제, 운영 중단 |
+| 운영자 콘텐츠 | [대표 이미지 S3 업로드 URL 발급](p0/content/upload-representative-image.md) · [콘텐츠 생성](p0/content/create-content.md) · [콘텐츠 수정본 생성](p0/content/create-content-revision.md) · [내 콘텐츠 수정](p0/content/update-my-content.md) · [콘텐츠 수정본 편집](p0/content/update-content-revision.md) · [전체 콘텐츠 철회 요청](p0/content/request-content-withdrawal.md) | [지역·콘텐츠 카탈로그](../p0/content-catalog.md) | 대표 이미지 업로드, 콘텐츠 생성·보완·수정 심사, 전체 철회 요청 |
+| 지역 콘텐츠 관리자 | [수정본 심사 대기 목록](p0/content-catalog/list-pending-content-revisions.md) · [수정본 심사 상세](p0/content-catalog/review-content-revision-detail.md) · [수정본 승인](p0/region-content/approve-content-revision.md) · [수정본 반려](p0/region-content/reject-content-revision.md) · [콘텐츠 삭제](p0/region-content/delete-content.md) · [운영 중단](p0/region-content/suspend-content.md) · [전체 콘텐츠 철회 승인](p0/region-content/approve-content-withdrawal.md) · [전체 콘텐츠 철회 반려](p0/region-content/reject-content-withdrawal.md) | [지역·콘텐츠 카탈로그](../p0/content-catalog.md) | 수정본 심사·공개본 반영, 공개 전 삭제, 운영 중단, 전체 철회 심사 |
 | 정원 홀드·무료 예약 | [정원 홀드·무료 예약 API 명세서](p0/reservation/reservation.md) | [정원 홀드·무료 예약](../p0/reservation.md) | 정원 홀드, 예약 확정·취소·만료, 동시성·멱등성 |
 | 예약 QR·체크인 | [예약 QR·체크인 API 명세서](p0/check-in/check-in.md) | [예약 QR·체크인](../p0/check-in.md) | QR 발급·검증, 체크인, 방문 기록 |
 | 인증 후기 | [인증 후기 API](p0/review/review.md) | [인증 후기](../p0/review.md) | 후기 작성·조회·수정·삭제와 원문 파기 |
@@ -39,6 +39,10 @@ P1 API 명세는 `docs/p1/` 소유 문서와 `docs/p1-spec.md`를 기능·정책
 | 도메인 | 도메인 API 명세서 | 기능·정책 기준 문서 | 주요 범위 |
 | --- | --- | --- | --- |
 | 지역 | [지역 API 명세서](p1/region/region.md) | [전체관리자](../p1/platform-admin.md), [P1 명세](../p1-spec.md), [P0 ERD](../erd.md), [P1 ERD](../p1-erd.md) | 지역 생성, 지역 공개 여부 변경, 전체 지역 조회 |
+| 지역 미션 | [지역 미션 API 명세서](p1/mission/mission.md) | [지역 미션](../p1/regional-mission.md) | 미션 생성·수정·검토 요청·승인 즉시 공개·반려·종료, 공개 조회, 참여, 진행도, 보상 수령, 자동 종료 Scheduler |
+| 쿠폰 | [쿠폰 API 명세서](p1/coupon/coupon.md) | [쿠폰](../p1/coupon.md) | 콘텐츠 소유 운영자의 쿠폰 정책 목록·상세 조회·생성·수정·공개·종료, 발급, 내 쿠폰 조회, 사용 가능 판단, 결제 연계 사용 확정, 사용 이력 |
+| 결제 | [결제 API 명세서](p1/payment/payment.md) | [유료 결제·환불](../p1/payment-refund.md) | 결제 생성, 웹훅 승인 확인, 결제 상태와 불일치 운영 |
+| 환불 | [환불 API 명세서](p1/refund/refund.md) | [유료 결제·환불](../p1/payment-refund.md) | 환불 생성·조회, 실패 조회·재시도·종결 |
 
 ## 새 도메인 API 명세 추가
 

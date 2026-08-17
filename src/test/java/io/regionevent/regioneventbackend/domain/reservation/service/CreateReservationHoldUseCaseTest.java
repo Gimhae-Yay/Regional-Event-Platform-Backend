@@ -5,9 +5,7 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -42,9 +40,10 @@ class CreateReservationHoldUseCaseTest {
         CapacityHold capacityHold = mock(CapacityHold.class);
         when(appUserService.findActiveUserForUpdate(USER_ID)).thenReturn(Optional.of(user));
         when(contentSessionService.findPublicContentId(SESSION_ID)).thenReturn(CONTENT_ID);
-        when(contentService.lockPublishedReservationTarget(CONTENT_ID)).thenReturn(true);
+        when(contentService.lockPublishedCapacityHoldTarget(CONTENT_ID)).thenReturn(true);
         when(contentSessionService.findForUpdate(SESSION_ID)).thenReturn(contentSession);
         when(contentSession.getStartsAt()).thenReturn(SESSION_STARTS_AT);
+        when(capacityHoldService.findCurrentDatabaseInstant()).thenReturn(CREATED_AT);
         when(capacityHoldService.createActiveHold(
             user,
             contentSession,
@@ -61,8 +60,7 @@ class CreateReservationHoldUseCaseTest {
             appUserService,
             contentService,
             contentSessionService,
-            capacityHoldService,
-            Clock.fixed(CREATED_AT, ZoneOffset.UTC)
+            capacityHoldService
         );
 
         CreateReservationHoldResponse response = useCase.create(
@@ -73,7 +71,7 @@ class CreateReservationHoldUseCaseTest {
         assertThat(response.holdId()).isEqualTo("17");
         InOrder lockOrder = inOrder(contentService, contentSessionService);
         lockOrder.verify(contentSessionService).findPublicContentId(SESSION_ID);
-        lockOrder.verify(contentService).lockPublishedReservationTarget(CONTENT_ID);
+        lockOrder.verify(contentService).lockPublishedCapacityHoldTarget(CONTENT_ID);
         lockOrder.verify(contentSessionService).findForUpdate(SESSION_ID);
         lockOrder.verify(contentSessionService).reserveCapacity(SESSION_ID, 2);
     }

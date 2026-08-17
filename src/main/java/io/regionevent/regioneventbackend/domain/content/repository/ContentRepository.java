@@ -46,6 +46,8 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
 
     boolean existsByOperatorUserId(Long userId);
 
+    boolean existsByRegionRegionIdAndDeletedAtIsNull(Long regionId);
+
     @Query("""
         SELECT new io.regionevent.regioneventbackend.domain.content.repository.PublicContentListVerificationProjection(
             content.region.regionId,
@@ -251,6 +253,28 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
     @EntityGraph(attributePaths = {"operator", "region", "representativeImageObject"})
     Optional<Content> findByContentIdAndDeletedAtIsNull(Long contentId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = "region")
+    @Query("""
+        SELECT content
+        FROM Content content
+        WHERE content.contentId IN :contentIds
+            AND content.deletedAt IS NULL
+        ORDER BY content.contentId ASC
+        """)
+    List<Content> findMissionTargetsForUpdate(@Param("contentIds") List<Long> contentIds);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = {"operator", "region"})
+    @Query("""
+        SELECT content
+        FROM Content content
+        WHERE content.contentId IN :contentIds
+          AND content.deletedAt IS NULL
+        ORDER BY content.contentId ASC
+        """)
+    List<Content> findStampbookTargetsForUpdate(@Param("contentIds") List<Long> contentIds);
+
     @EntityGraph(attributePaths = {"operator", "region", "representativeImageObject"})
     @Query("""
         SELECT content
@@ -280,13 +304,25 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
         """)
     Optional<Content> findDeletionTargetForUpdate(@Param("contentId") Long contentId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT content
+        FROM Content content
+        WHERE content.contentId = :contentId
+        """)
+    Optional<Content> findByContentIdForUpdate(@Param("contentId") Long contentId);
+
     boolean existsByContentIdAndStatusAndDeletedAtIsNull(
         Long contentId,
         ContentStatus status
     );
 
+    boolean existsByContentIdAndStatusAndDeletedAtIsNullAndRegionIsPublicTrue(
+        Long contentId,
+        ContentStatus status
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @EntityGraph(attributePaths = "region")
     @Query("""
         SELECT content
         FROM Content content
@@ -296,7 +332,6 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
     Optional<Content> findApprovalTargetForUpdate(@Param("contentId") Long contentId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @EntityGraph(attributePaths = "region")
     @Query("""
         SELECT content
         FROM Content content
@@ -305,8 +340,15 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
         """)
     Optional<Content> findEndTargetForUpdate(@Param("contentId") Long contentId);
 
+    @Query("""
+        SELECT content.region.regionId
+        FROM Content content
+        WHERE content.contentId = :contentId
+            AND content.deletedAt IS NULL
+        """)
+    Optional<Long> findRegionIdByContentIdAndDeletedAtIsNull(@Param("contentId") Long contentId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @EntityGraph(attributePaths = "region")
     @Query("""
         SELECT content
         FROM Content content
@@ -314,6 +356,16 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
             AND content.deletedAt IS NULL
         """)
     Optional<Content> findSuspendTargetForUpdate(@Param("contentId") Long contentId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = {"operator", "region"})
+    @Query("""
+        SELECT content
+        FROM Content content
+        WHERE content.contentId = :contentId
+            AND content.deletedAt IS NULL
+        """)
+    Optional<Content> findWithdrawalRequestTargetForUpdate(@Param("contentId") Long contentId);
 
     @Query(value = """
         SELECT content_id
@@ -343,12 +395,39 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
     @Query(value = """
         SELECT content_id
         FROM content
+        JOIN region ON region.region_id = content.region_id
         WHERE content_id = :contentId
             AND status = 'PUBLISHED'
             AND deleted_at IS NULL
+            AND reservation_price = 0
+            AND region.is_public = true
         FOR UPDATE
         """, nativeQuery = true)
     Optional<Long> findPublishedReservationTargetIdForUpdate(@Param("contentId") Long contentId);
+
+    @Query(value = """
+        SELECT content_id
+        FROM content
+        JOIN region ON region.region_id = content.region_id
+        WHERE content_id = :contentId
+            AND status = 'PUBLISHED'
+            AND deleted_at IS NULL
+            AND region.is_public = true
+        FOR UPDATE
+        """, nativeQuery = true)
+    Optional<Long> findPublishedCapacityHoldTargetIdForUpdate(@Param("contentId") Long contentId);
+
+    @Query(value = """
+        SELECT reservation_price
+        FROM content
+        JOIN region ON region.region_id = content.region_id
+        WHERE content_id = :contentId
+            AND status = 'PUBLISHED'
+            AND deleted_at IS NULL
+            AND region.is_public = true
+        FOR UPDATE
+        """, nativeQuery = true)
+    Optional<Long> findPublishedPaymentReservationPriceForUpdate(@Param("contentId") Long contentId);
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("""
@@ -400,6 +479,15 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
             ContentStatus.PUBLISHED,
             ContentStatus.SUSPENDED,
             suspendedAt
+        );
+    }
+
+    default int withdrawPublishedByContentId(Long contentId, Instant withdrawnAt) {
+        return updateStatusIfExpected(
+            contentId,
+            ContentStatus.PUBLISHED,
+            ContentStatus.WITHDRAWN,
+            withdrawnAt
         );
     }
 }

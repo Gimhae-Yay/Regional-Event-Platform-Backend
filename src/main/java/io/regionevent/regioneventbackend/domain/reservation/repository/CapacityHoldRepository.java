@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.reservation.repository;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -16,8 +17,19 @@ import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 
 public interface CapacityHoldRepository extends JpaRepository<CapacityHold, Long> {
 
+    @Query(value = "SELECT UNIX_TIMESTAMP(CURRENT_TIMESTAMP(6))", nativeQuery = true)
+    BigDecimal findCurrentEpochSeconds();
+
     @EntityGraph(attributePaths = {"region", "contentSession", "contentSession.content", "user"})
     Optional<CapacityHold> findByHoldId(Long holdId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT capacityHold
+        FROM CapacityHold capacityHold
+        WHERE capacityHold.holdId = :holdId
+        """)
+    Optional<CapacityHold> findByHoldIdForUpdate(@Param("holdId") Long holdId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
@@ -37,7 +49,7 @@ public interface CapacityHoldRepository extends JpaRepository<CapacityHold, Long
         WHERE hold_id = :holdId
             AND user_id = :userId
             AND status = 'ACTIVE'
-            AND expires_at > CURRENT_TIMESTAMP
+            AND expires_at > CURRENT_TIMESTAMP(6)
             AND EXISTS (
                 SELECT 1
                 FROM content_session
@@ -45,12 +57,83 @@ public interface CapacityHoldRepository extends JpaRepository<CapacityHold, Long
                 WHERE content_session.session_id = capacity_hold.session_id
                     AND content.status = 'PUBLISHED'
                     AND content_session.status = 'SCHEDULED'
-                    AND content_session.starts_at > CURRENT_TIMESTAMP
+                    AND content_session.starts_at > CURRENT_TIMESTAMP(6)
+            )
+            AND NOT EXISTS (
+                SELECT 1
+                FROM reservation_price_snapshot
+                WHERE hold_id = capacity_hold.hold_id
+            )
+            AND NOT EXISTS (
+                SELECT 1
+                FROM payment
+                WHERE hold_id = capacity_hold.hold_id
             )
         """, nativeQuery = true)
     int consumeIfConfirmable(
         @Param("holdId") Long holdId,
         @Param("userId") Long userId
+    );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+        UPDATE capacity_hold
+        SET status = 'CONSUMED',
+            terminal_at = CURRENT_TIMESTAMP
+        WHERE hold_id = :holdId
+            AND user_id = :userId
+            AND status = 'ACTIVE'
+            AND expires_at > CURRENT_TIMESTAMP(6)
+            AND EXISTS (
+                SELECT 1
+                FROM content_session
+                JOIN content ON content.content_id = content_session.content_id
+                WHERE content_session.session_id = capacity_hold.session_id
+                    AND content.status = 'PUBLISHED'
+                    AND content_session.status = 'SCHEDULED'
+                    AND content_session.starts_at > CURRENT_TIMESTAMP(6)
+            )
+            AND NOT EXISTS (
+                SELECT 1
+                FROM payment
+                WHERE hold_id = capacity_hold.hold_id
+            )
+        """, nativeQuery = true)
+    int consumeForPaidZeroIfConfirmable(
+        @Param("holdId") Long holdId,
+        @Param("userId") Long userId
+    );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+        UPDATE capacity_hold
+        SET status = 'CONSUMED',
+            terminal_at = CURRENT_TIMESTAMP
+        WHERE hold_id = :holdId
+            AND user_id = :userId
+            AND status = 'ACTIVE'
+            AND expires_at > CURRENT_TIMESTAMP(6)
+            AND EXISTS (
+                SELECT 1
+                FROM content_session
+                JOIN content ON content.content_id = content_session.content_id
+                WHERE content_session.session_id = capacity_hold.session_id
+                    AND content.status = 'PUBLISHED'
+                    AND content_session.status = 'SCHEDULED'
+                    AND content_session.starts_at > CURRENT_TIMESTAMP(6)
+            )
+            AND EXISTS (
+                SELECT 1
+                FROM payment
+                WHERE payment_id = :paymentId
+                    AND hold_id = capacity_hold.hold_id
+                    AND status = 'PENDING'
+            )
+        """, nativeQuery = true)
+    int consumeForPaidPaymentIfConfirmable(
+        @Param("holdId") Long holdId,
+        @Param("userId") Long userId,
+        @Param("paymentId") Long paymentId
     );
 
     @Query(value = """
@@ -82,6 +165,16 @@ public interface CapacityHoldRepository extends JpaRepository<CapacityHold, Long
         """)
     List<Long> findActiveHoldIdsByContentId(@Param("contentId") Long contentId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT capacityHold
+        FROM CapacityHold capacityHold
+        WHERE capacityHold.contentSession.content.contentId = :contentId
+            AND capacityHold.status = io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus.ACTIVE
+        ORDER BY capacityHold.holdId ASC
+        """)
+    List<CapacityHold> findActiveByContentIdForUpdate(@Param("contentId") Long contentId);
+
     @Query("""
         SELECT capacityHold.holdId
         FROM CapacityHold capacityHold
@@ -92,19 +185,53 @@ public interface CapacityHoldRepository extends JpaRepository<CapacityHold, Long
     List<Long> findActiveHoldIdsByUserId(@Param("userId") Long userId);
 
     @Query("""
+        SELECT DISTINCT capacityHold.contentSession.sessionId
+        FROM CapacityHold capacityHold
+        WHERE capacityHold.user.userId = :userId
+            AND capacityHold.status = io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus.ACTIVE
+        ORDER BY capacityHold.contentSession.sessionId ASC
+        """)
+    List<Long> findActiveSessionIdsByUserId(@Param("userId") Long userId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT capacityHold
+        FROM CapacityHold capacityHold
+        WHERE capacityHold.user.userId = :userId
+            AND capacityHold.contentSession.sessionId = :sessionId
+            AND capacityHold.status = io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus.ACTIVE
+        ORDER BY capacityHold.holdId ASC
+        """)
+    List<CapacityHold> findActiveByUserIdAndSessionIdForUpdate(
+        @Param("userId") Long userId,
+        @Param("sessionId") Long sessionId
+    );
+
+    @Query(value = """
+        SELECT hold_id
+        FROM capacity_hold
+        WHERE user_id = :userId
+            AND status = 'ACTIVE'
+        ORDER BY hold_id ASC
+        FOR UPDATE
+        """, nativeQuery = true)
+    List<Long> findActiveHoldIdsByUserIdForUpdate(@Param("userId") Long userId);
+
+    @Query("""
         SELECT capacityHold.contentSession.sessionId
         FROM CapacityHold capacityHold
         WHERE capacityHold.holdId = :holdId
         """)
     Optional<Long> findContentSessionIdByHoldId(@Param("holdId") Long holdId);
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("""
-        SELECT capacityHold
-        FROM CapacityHold capacityHold
-        WHERE capacityHold.holdId = :holdId
-            AND capacityHold.status = io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus.ACTIVE
-        """)
+    @Query(value = """
+        SELECT *
+        FROM capacity_hold
+        WHERE hold_id = :holdId
+            AND status = 'ACTIVE'
+            AND expires_at > CURRENT_TIMESTAMP(6)
+        FOR UPDATE
+        """, nativeQuery = true)
     Optional<CapacityHold> findActiveByHoldIdForUpdate(@Param("holdId") Long holdId);
 
     @Query(value = """

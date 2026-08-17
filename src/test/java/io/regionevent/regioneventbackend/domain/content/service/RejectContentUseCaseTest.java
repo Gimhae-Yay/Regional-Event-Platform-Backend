@@ -27,7 +27,6 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
-import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentId;
 import io.regionevent.regioneventbackend.domain.user.service.RegionAdminAuthorizationService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
@@ -78,9 +77,9 @@ class RejectContentUseCaseTest {
         when(pendingContent.getRegion()).thenReturn(region);
         when(pendingContent.getStatus()).thenReturn(ContentStatus.PENDING);
         when(region.getRegionId()).thenReturn(REGION_ID);
-        when(regionAdminAuthorizationService.authorize(USER_ID, REGION_ID)).thenReturn(reviewerAssignment);
-        when(reviewerAssignment.getId())
-            .thenReturn(new UserRoleAssignmentId(USER_ID, UserRole.REGION_ADMIN));
+        givenAuthorizedRegionAdmin(reviewerAssignment);
+        when(reviewerAssignment.getRoleAssignmentId())
+            .thenReturn(1L);
         when(reviewerAssignment.getAppUser()).thenReturn(reviewer);
         when(reviewer.getStatus()).thenReturn(AppUserStatus.ACTIVE);
         when(originalContentReviewTargetService.findByContentId(CONTENT_ID))
@@ -131,7 +130,7 @@ class RejectContentUseCaseTest {
         when(rejectedContent.getRegion()).thenReturn(region);
         when(rejectedContent.getStatus()).thenReturn(ContentStatus.REJECTED);
         when(region.getRegionId()).thenReturn(REGION_ID);
-        when(regionAdminAuthorizationService.authorize(USER_ID, REGION_ID)).thenReturn(reviewerAssignment);
+        givenAuthorizedRegionAdmin(reviewerAssignment);
         when(contentLogService.findLatestRejected(CONTENT_ID)).thenReturn(rejectedLog);
         when(rejectedLog.getReason()).thenReturn(REJECT_REASON);
         when(rejectedLog.getDate()).thenReturn(rejectedAt);
@@ -165,7 +164,7 @@ class RejectContentUseCaseTest {
         when(rejectedContent.getRegion()).thenReturn(region);
         when(rejectedContent.getStatus()).thenReturn(ContentStatus.REJECTED);
         when(region.getRegionId()).thenReturn(REGION_ID);
-        when(regionAdminAuthorizationService.authorize(USER_ID, REGION_ID)).thenReturn(reviewerAssignment);
+        givenAuthorizedRegionAdmin(reviewerAssignment);
         when(contentLogService.findLatestRejected(CONTENT_ID)).thenReturn(rejectedLog);
         when(rejectedLog.getReason()).thenReturn(REJECT_REASON);
 
@@ -175,5 +174,14 @@ class RejectContentUseCaseTest {
             .isEqualTo(ErrorCode.CONTENT_STATE_CONFLICT);
         verify(contentService, never()).reject(rejectedContent, CLOCK_INSTANT);
         verify(recordAuditEventUseCase, never()).record(org.mockito.ArgumentMatchers.any());
+    }
+
+    private void givenAuthorizedRegionAdmin(UserRoleAssignment assignment) {
+        RegionAdminAuthorizationService.AuthorizedRegionAdmin regionAdmin = mock(
+            RegionAdminAuthorizationService.AuthorizedRegionAdmin.class
+        );
+        when(regionAdminAuthorizationService.requireAuthorizedRegionAdminForUpdate(USER_ID))
+            .thenReturn(regionAdmin);
+        when(regionAdmin.authorize(REGION_ID)).thenReturn(assignment);
     }
 }

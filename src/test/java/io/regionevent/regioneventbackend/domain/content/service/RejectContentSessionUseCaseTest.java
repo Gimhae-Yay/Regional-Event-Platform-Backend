@@ -26,7 +26,6 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
-import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentId;
 import io.regionevent.regioneventbackend.domain.user.service.RegionAdminAuthorizationService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
@@ -64,8 +63,8 @@ class RejectContentSessionUseCaseTest {
         when(contentSessionService.findRejectTargetForUpdate(SESSION_ID)).thenReturn(pendingSession);
         when(pendingSession.getRegion()).thenReturn(region);
         when(region.getRegionId()).thenReturn(REGION_ID);
-        when(regionAdminAuthorizationService.authorize(USER_ID, REGION_ID)).thenReturn(reviewer);
-        when(reviewer.getId()).thenReturn(new UserRoleAssignmentId(USER_ID, UserRole.REGION_ADMIN));
+        givenAuthorizedRegionAdmin(reviewer);
+        when(reviewer.getRoleAssignmentId()).thenReturn(1L);
         when(reviewer.getAppUser()).thenReturn(reviewerUser);
         when(reviewerUser.getStatus()).thenReturn(AppUserStatus.ACTIVE);
         when(contentSessionService.reject(pendingSession, reviewerUser, EXPECTED_REVIEWED_AT, "보완 필요"))
@@ -112,11 +111,20 @@ class RejectContentSessionUseCaseTest {
         when(contentSessionService.findRejectTargetForUpdate(SESSION_ID)).thenReturn(pendingSession);
         when(pendingSession.getRegion()).thenReturn(region);
         when(region.getRegionId()).thenReturn(REGION_ID);
-        when(regionAdminAuthorizationService.authorize(USER_ID, REGION_ID)).thenReturn(reviewer);
+        givenAuthorizedRegionAdmin(reviewer);
 
         assertThatThrownBy(() -> useCase.reject(USER_ID, SESSION_ID, " ", REQUEST_ID))
             .isInstanceOf(BusinessException.class)
             .extracting(exception -> ((BusinessException) exception).getErrorCode())
             .isEqualTo(ErrorCode.INVALID_INPUT);
+    }
+
+    private void givenAuthorizedRegionAdmin(UserRoleAssignment assignment) {
+        RegionAdminAuthorizationService.AuthorizedRegionAdmin regionAdmin = mock(
+            RegionAdminAuthorizationService.AuthorizedRegionAdmin.class
+        );
+        when(regionAdminAuthorizationService.requireAuthorizedRegionAdminForUpdate(USER_ID))
+            .thenReturn(regionAdmin);
+        when(regionAdmin.authorize(REGION_ID)).thenReturn(assignment);
     }
 }

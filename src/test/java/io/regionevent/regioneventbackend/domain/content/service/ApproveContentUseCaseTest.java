@@ -26,7 +26,6 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
-import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentId;
 import io.regionevent.regioneventbackend.domain.user.service.RegionAdminAuthorizationService;
 
 class ApproveContentUseCaseTest {
@@ -78,9 +77,9 @@ class ApproveContentUseCaseTest {
         when(pendingContent.getContentId()).thenReturn(CONTENT_ID);
         when(pendingContent.getStatus()).thenReturn(ContentStatus.PENDING);
         when(region.getRegionId()).thenReturn(REGION_ID);
-        when(regionAdminAuthorizationService.authorize(USER_ID, REGION_ID)).thenReturn(reviewerAssignment);
-        when(reviewerAssignment.getId())
-            .thenReturn(new UserRoleAssignmentId(USER_ID, UserRole.REGION_ADMIN));
+        givenAuthorizedRegionAdmin(reviewerAssignment);
+        when(reviewerAssignment.getRoleAssignmentId())
+            .thenReturn(1L);
         when(reviewerAssignment.getAppUser()).thenReturn(reviewer);
         when(reviewer.getStatus()).thenReturn(AppUserStatus.ACTIVE);
         when(originalContentReviewTargetService.findByContentId(CONTENT_ID))
@@ -98,5 +97,14 @@ class ApproveContentUseCaseTest {
         ArgumentCaptor<AuditEventCommand> auditCommandCaptor = ArgumentCaptor.forClass(AuditEventCommand.class);
         verify(recordAuditEventUseCase).record(auditCommandCaptor.capture());
         assertThat(auditCommandCaptor.getValue().occurredAt()).isEqualTo(EXPECTED_APPROVED_AT);
+    }
+
+    private void givenAuthorizedRegionAdmin(UserRoleAssignment assignment) {
+        RegionAdminAuthorizationService.AuthorizedRegionAdmin regionAdmin = mock(
+            RegionAdminAuthorizationService.AuthorizedRegionAdmin.class
+        );
+        when(regionAdminAuthorizationService.requireAuthorizedRegionAdminForUpdate(USER_ID))
+            .thenReturn(regionAdmin);
+        when(regionAdmin.authorize(REGION_ID)).thenReturn(assignment);
     }
 }

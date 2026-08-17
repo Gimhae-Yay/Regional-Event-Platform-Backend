@@ -116,7 +116,7 @@ Accept: application/json
 | `data.refunds[].status` | String | 환불 상태다. `REQUESTED`, `PROCESSING`, `SUCCEEDED`, `FAILED`, `DISCREPANT` 중 하나다. |
 | `data.refunds[].attemptCount` | Integer | 지금까지 기록된 `refund_attempt` 총 개수다. |
 | `data.refunds[].requestedAt` | String | 환불 요청 시각이다. UTC ISO 8601 형식이다. |
-| `data.refunds[].updatedAt` | String | 환불 또는 가장 최근 시도의 상태 변경 시각이다. UTC ISO 8601 형식이다. |
+| `data.refunds[].updatedAt` | String | `refund.requested_at`, `refund.completed_at`, 수동 확정 시각 `refund.resolved_at`, 가장 최근 `refund_attempt.attempted_at` 중 가장 늦은 상태 변경 시각이다. UTC ISO 8601 형식이다. |
 
 ### Error Code
 

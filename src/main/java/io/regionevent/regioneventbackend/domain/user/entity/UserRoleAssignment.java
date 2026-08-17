@@ -3,12 +3,15 @@ package io.regionevent.regioneventbackend.domain.user.entity;
 import java.time.Instant;
 
 import jakarta.persistence.Column;
-import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.MapsId;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
@@ -18,38 +21,66 @@ import io.regionevent.regioneventbackend.domain.region.entity.Region;
 @Table(name = "user_role_assignment")
 public class UserRoleAssignment {
 
-    @EmbeddedId
-    private UserRoleAssignmentId id;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "role_assignment_id")
+    private Long roleAssignmentId;
 
-    @MapsId("userId")
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
     private AppUser appUser;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "region_id")
     private Region region;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "role", nullable = false, length = 30)
+    private UserRole role;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 30)
+    private UserRoleAssignmentStatus status;
+
     @Column(name = "granted_at", nullable = false, updatable = false)
     private Instant grantedAt;
+
+    @Column(name = "revoked_at")
+    private Instant revokedAt;
+
+    @Column(name = "revoke_reason_code", length = 100)
+    private String revokeReasonCode;
 
     protected UserRoleAssignment() {
     }
 
     public UserRoleAssignment(AppUser appUser, UserRole role, Region region) {
+        this(appUser, role, region, null);
+    }
+
+    public UserRoleAssignment(
+        AppUser appUser,
+        UserRole role,
+        Region region,
+        Instant grantedAt
+    ) {
         this.appUser = validateAppUser(appUser);
         validateRoleAndRegion(role, region);
-        this.id = new UserRoleAssignmentId(null, role);
+        this.role = role;
         this.region = region;
+        this.status = UserRoleAssignmentStatus.ACTIVE;
+        this.grantedAt = grantedAt;
     }
 
     @PrePersist
     protected void onCreate() {
-        grantedAt = Instant.now();
+        if (grantedAt == null) {
+            grantedAt = Instant.now();
+        }
     }
 
-    public UserRoleAssignmentId getId() {
-        return id;
+    public Long getRoleAssignmentId() {
+        return roleAssignmentId;
     }
 
     public AppUser getAppUser() {
@@ -57,7 +88,7 @@ public class UserRoleAssignment {
     }
 
     public UserRole getRole() {
-        return id.getRole();
+        return role;
     }
 
     public Region getRegion() {
@@ -66,6 +97,40 @@ public class UserRoleAssignment {
 
     public Instant getGrantedAt() {
         return grantedAt;
+    }
+
+    public UserRoleAssignmentStatus getStatus() {
+        return status;
+    }
+
+    public Instant getRevokedAt() {
+        return revokedAt;
+    }
+
+    public String getRevokeReasonCode() {
+        return revokeReasonCode;
+    }
+
+    public void revoke(Instant revokedAt, String revokeReasonCode) {
+        if (status != UserRoleAssignmentStatus.ACTIVE) {
+            throw new IllegalStateException("only active role assignment can be revoked");
+        }
+        if (revokedAt == null) {
+            throw new IllegalArgumentException("revokedAt must not be null");
+        }
+        if (revokeReasonCode == null || revokeReasonCode.isBlank()) {
+            throw new IllegalArgumentException("revokeReasonCode must not be null or blank");
+        }
+        this.status = UserRoleAssignmentStatus.REVOKED;
+        this.revokedAt = revokedAt;
+        this.revokeReasonCode = revokeReasonCode;
+    }
+
+    public void unlinkAppUser() {
+        if (status != UserRoleAssignmentStatus.REVOKED) {
+            throw new IllegalStateException("only revoked role assignment can be unlinked");
+        }
+        appUser = null;
     }
 
     private static AppUser validateAppUser(AppUser appUser) {

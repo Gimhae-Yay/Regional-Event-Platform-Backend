@@ -15,11 +15,14 @@ import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditE
 import io.regionevent.regioneventbackend.domain.content.service.ApproveContentRevisionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.ApproveContentSessionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.ApproveContentUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.ApproveContentWithdrawalUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.CancelContentSessionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.ContentLogService;
+import io.regionevent.regioneventbackend.domain.content.service.ContentRevisionInvalidationService;
 import io.regionevent.regioneventbackend.domain.content.service.ContentRevisionService;
 import io.regionevent.regioneventbackend.domain.content.service.ContentService;
 import io.regionevent.regioneventbackend.domain.content.service.ContentSessionService;
+import io.regionevent.regioneventbackend.domain.content.service.ContentWithdrawalRequestService;
 import io.regionevent.regioneventbackend.domain.content.service.DeleteContentUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.EndContentReservationsUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.OriginalContentReviewTargetPolicy;
@@ -27,13 +30,23 @@ import io.regionevent.regioneventbackend.domain.content.service.OriginalContentR
 import io.regionevent.regioneventbackend.domain.content.service.PublicCatalogCacheInvalidator;
 import io.regionevent.regioneventbackend.domain.content.service.RejectContentRevisionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.RejectContentUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.RejectContentWithdrawalUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.SubmitContentUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.WithdrawContentRevisionUseCase;
+import io.regionevent.regioneventbackend.domain.coupon.service.CouponRedemptionService;
+import io.regionevent.regioneventbackend.domain.coupon.service.CouponService;
+import io.regionevent.regioneventbackend.domain.coupon.service.CouponStatusHistoryService;
+import io.regionevent.regioneventbackend.domain.coupon.service.RestoreCouponUseCase;
 import io.regionevent.regioneventbackend.domain.image.service.ImageObjectCleanupService;
 import io.regionevent.regioneventbackend.domain.image.service.ImageObjectService;
+import io.regionevent.regioneventbackend.domain.payment.service.CreateRefundUseCase;
+import io.regionevent.regioneventbackend.domain.payment.service.ExpirePendingPaymentForTerminatedHoldUseCase;
+import io.regionevent.regioneventbackend.domain.payment.service.PaymentService;
 import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHoldService;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationIdentifierGenerator;
+import io.regionevent.regioneventbackend.domain.reservation.service.ReservationPriceSnapshotService;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationService;
+import io.regionevent.regioneventbackend.domain.region.service.RegionService;
 import io.regionevent.regioneventbackend.domain.user.service.OperatorAuthorizationService;
 import io.regionevent.regioneventbackend.domain.user.service.RegionAdminAuthorizationService;
 import io.regionevent.regioneventbackend.global.security.qr.QrTokenService;
@@ -41,9 +54,11 @@ import io.regionevent.regioneventbackend.global.security.qr.QrTokenService;
 @TestConfiguration
 @Import({
     ApproveContentUseCase.class,
+    ApproveContentWithdrawalUseCase.class,
     ApproveContentSessionUseCase.class,
     DeleteContentUseCase.class,
     RejectContentUseCase.class,
+    RejectContentWithdrawalUseCase.class,
     ApproveContentRevisionUseCase.class,
     RejectContentRevisionUseCase.class,
     WithdrawContentRevisionUseCase.class,
@@ -51,14 +66,17 @@ import io.regionevent.regioneventbackend.global.security.qr.QrTokenService;
     SubmitContentUseCase.class,
     EndContentReservationsUseCase.class,
     ContentService.class,
+    ContentRevisionInvalidationService.class,
     ContentRevisionService.class,
     OriginalContentReviewTargetService.class,
     OriginalContentReviewTargetPolicy.class,
     ContentSessionService.class,
+    ContentWithdrawalRequestService.class,
     ContentLogService.class,
     ImageObjectService.class,
     CapacityHoldService.class,
     ReservationService.class,
+    RegionService.class,
     RegionAdminAuthorizationService.class,
     OperatorAuthorizationService.class,
     RecordAuditEventUseCase.class,
@@ -91,5 +109,45 @@ public class ContentAtomicityJpaTestConfiguration {
     @Bean
     ImageObjectCleanupService imageObjectCleanupService() {
         return mock(ImageObjectCleanupService.class);
+    }
+
+    @Bean
+    CreateRefundUseCase createRefundUseCase() {
+        return mock(CreateRefundUseCase.class);
+    }
+
+    @Bean
+    PaymentService paymentService() {
+        return mock(PaymentService.class);
+    }
+
+    @Bean
+    ReservationPriceSnapshotService reservationPriceSnapshotService() {
+        return mock(ReservationPriceSnapshotService.class);
+    }
+
+    @Bean
+    CouponService couponService() {
+        return mock(CouponService.class);
+    }
+
+    @Bean
+    CouponRedemptionService couponRedemptionService() {
+        return mock(CouponRedemptionService.class);
+    }
+
+    @Bean
+    CouponStatusHistoryService couponStatusHistoryService() {
+        return mock(CouponStatusHistoryService.class);
+    }
+
+    @Bean
+    RestoreCouponUseCase restoreCouponUseCase() {
+        return mock(RestoreCouponUseCase.class);
+    }
+
+    @Bean
+    ExpirePendingPaymentForTerminatedHoldUseCase expirePendingPaymentForTerminatedHoldUseCase() {
+        return mock(ExpirePendingPaymentForTerminatedHoldUseCase.class);
     }
 }

@@ -24,6 +24,7 @@ import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenSto
 import io.regionevent.regioneventbackend.domain.content.service.ApproveContentRevisionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.ApproveContentSessionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.ApproveContentUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.ApproveContentWithdrawalUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.CancelContentSessionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.ContentSessionService;
 import io.regionevent.regioneventbackend.domain.content.service.CreateContentRevisionUseCase;
@@ -47,7 +48,9 @@ import io.regionevent.regioneventbackend.domain.content.service.GetSessionRevisi
 import io.regionevent.regioneventbackend.domain.content.service.RejectContentRevisionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.RejectContentSessionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.RejectContentUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.RejectContentWithdrawalUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.RejectSessionRevisionUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.RequestContentWithdrawalUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.SubmitContentUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.UpdateContentRevisionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.UpdateMyContentUseCase;
@@ -82,6 +85,9 @@ abstract class ContentControllerWebMvcTestSupport {
 
     @MockitoBean
     protected ApproveContentUseCase approveContentUseCase;
+
+    @MockitoBean
+    protected ApproveContentWithdrawalUseCase approveContentWithdrawalUseCase;
 
     @MockitoBean
     protected CancelContentSessionUseCase cancelContentSessionUseCase;
@@ -153,7 +159,13 @@ abstract class ContentControllerWebMvcTestSupport {
     protected RejectContentUseCase rejectContentUseCase;
 
     @MockitoBean
+    protected RejectContentWithdrawalUseCase rejectContentWithdrawalUseCase;
+
+    @MockitoBean
     protected RejectSessionRevisionUseCase rejectSessionRevisionUseCase;
+
+    @MockitoBean
+    protected RequestContentWithdrawalUseCase requestContentWithdrawalUseCase;
 
     @MockitoBean
     protected SubmitContentUseCase submitContentUseCase;

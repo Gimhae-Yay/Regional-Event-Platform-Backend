@@ -4,6 +4,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.UnaryOperator;
 
@@ -14,7 +15,10 @@ import org.testcontainers.utility.DockerImageName;
 public final class SharedMySqlTestContainer {
 
     public static final String IMAGE_NAME = "mysql:8.0.42";
+    private static final String MYSQL_DATA_DIRECTORY = "/var/lib/mysql";
+    private static final String MYSQL_DATA_DIRECTORY_TMPFS_OPTIONS = "rw,size=512m";
     private static final int MAXIMUM_POOL_SIZE = 4;
+    private static final int CONNECTION_TIMEOUT_MILLIS = 1_000;
 
     private SharedMySqlTestContainer() {
     }
@@ -46,7 +50,10 @@ public final class SharedMySqlTestContainer {
     }
 
     public static void grantLockMonitoringPrivileges() {
-        MySQLContainer mysql = container();
+        grantLockMonitoringPrivileges(container());
+    }
+
+    private static void grantLockMonitoringPrivileges(MySQLContainer mysql) {
         try (
             Connection connection = DriverManager.getConnection(
                 mysql.getJdbcUrl(),
@@ -57,7 +64,9 @@ public final class SharedMySqlTestContainer {
         ) {
             statement.execute("GRANT SELECT ON performance_schema.data_lock_waits TO 'test'@'%'");
             statement.execute("GRANT SELECT ON performance_schema.data_locks TO 'test'@'%'");
+            statement.execute("GRANT SELECT ON performance_schema.metadata_locks TO 'test'@'%'");
             statement.execute("GRANT SELECT ON performance_schema.threads TO 'test'@'%'");
+            statement.execute("GRANT PROCESS ON *.* TO 'test'@'%'");
         } catch (SQLException exception) {
             throw new IllegalStateException("failed to grant MySQL lock monitoring privileges", exception);
         }
@@ -65,16 +74,32 @@ public final class SharedMySqlTestContainer {
 
     static Connection openConnection() throws SQLException {
         MySQLContainer mysql = container();
-        return DriverManager.getConnection(mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword());
+        return DriverManager.getConnection(
+            withConnectionTimeout(mysql.getJdbcUrl()),
+            mysql.getUsername(),
+            mysql.getPassword()
+        );
+    }
+
+    private static String withConnectionTimeout(String jdbcUrl) {
+        String delimiter = jdbcUrl.contains("?") ? "&" : "?";
+        return jdbcUrl + delimiter + "connectTimeout=" + CONNECTION_TIMEOUT_MILLIS;
     }
 
     private static MySQLContainer container() {
         return ContainerHolder.INSTANCE;
     }
 
-    private static MySQLContainer startContainer() {
+    static MySQLContainer createContainer() {
         MySQLContainer mysql = new MySQLContainer(DockerImageName.parse(IMAGE_NAME));
+        mysql.withTmpFs(Map.of(MYSQL_DATA_DIRECTORY, MYSQL_DATA_DIRECTORY_TMPFS_OPTIONS));
+        return mysql;
+    }
+
+    private static MySQLContainer startContainer() {
+        MySQLContainer mysql = createContainer();
         mysql.start();
+        grantLockMonitoringPrivileges(mysql);
         return mysql;
     }
 

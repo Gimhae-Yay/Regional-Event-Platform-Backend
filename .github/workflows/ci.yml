@@ -10,14 +10,54 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build-and-test:
-    name: 빌드 및 테스트
+  ci-eligibility:
+    name: CI 테스트 실행 판정
+    runs-on: ubuntu-latest
+    outputs:
+      skip-tests: ${{ steps.eligibility.outputs.skip-tests }}
+
+    steps:
+      - id: eligibility
+        uses: actions/github-script@v7
+        with:
+          script: |
+            if (context.eventName !== 'pull_request') {
+              core.setOutput('skip-tests', 'false');
+              core.info('Pull Request 실행이 아니므로 모든 테스트를 실행합니다.');
+              return;
+            }
+
+            try {
+              const commits = await github.paginate(
+                github.rest.pulls.listCommits,
+                {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: context.payload.pull_request.number,
+                  per_page: 100,
+                },
+              );
+              const isDocsOnly = commits.length > 0
+                && commits.every((commit) => /^docs:/.test(commit.commit.message.split('\n', 1)[0]));
+
+              core.setOutput('skip-tests', String(isDocsOnly));
+              core.info(`PR 커밋 ${commits.length}개를 판정했습니다. 테스트 생략: ${isDocsOnly}`);
+            } catch (error) {
+              core.setOutput('skip-tests', 'false');
+              core.warning('PR 커밋 목록을 조회하지 못해 모든 테스트를 실행합니다.');
+            }
+
+  fast-test:
+    name: 빠른 테스트 및 패키징
+    needs: ci-eligibility
+    if: ${{ needs.ci-eligibility.outputs.skip-tests != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -34,16 +74,118 @@ jobs:
       - name: Gradle 설정 및 캐시
         uses: gradle/actions/setup-gradle@v4
 
-      - name: 빌드 및 테스트
-        run: ./gradlew --no-daemon clean build
+      - name: 빠른 테스트 및 패키징
+        run: ./gradlew --no-daemon clean ciFastCheck
 
       - name: 테스트 결과 보관
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-reports
+          name: fast-test-reports
           path: |
-            build/test-results/test/**
-            build/reports/tests/test/**
+            build/test-results/fastTest/**
+            build/reports/tests/fastTest/**
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: JaCoCo 실행 데이터 보관
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-exec-fast-test
+          path: build/jacoco/fastTest.exec
+          if-no-files-found: error
+          retention-days: 7
+
+  container-test:
+    name: Testcontainers 테스트 (shard ${{ matrix.shard }})
+    needs: ci-eligibility
+    if: ${{ needs.ci-eligibility.outputs.skip-tests != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+
+    steps:
+      - name: 소스 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Amazon Corretto 21 설정
+        uses: actions/setup-java@v4
+        with:
+          distribution: corretto
+          java-version: "21"
+
+      - name: Gradle 설정 및 캐시
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Testcontainers 테스트
+        run: ./gradlew --no-daemon clean containerTestShard${{ matrix.shard }}
+
+      - name: 테스트 결과 보관
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-test-reports-${{ matrix.shard }}
+          path: |
+            build/test-results/containerTestShard${{ matrix.shard }}/**
+            build/reports/tests/containerTestShard${{ matrix.shard }}/**
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: JaCoCo 실행 데이터 보관
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-exec-container-test-${{ matrix.shard }}
+          path: build/jacoco/containerTestShard${{ matrix.shard }}.exec
+          if-no-files-found: error
+          retention-days: 7
+
+  coverage:
+    name: JaCoCo 통합 커버리지
+    needs:
+      - ci-eligibility
+      - fast-test
+      - container-test
+    if: >-
+      ${{ always()
+          && needs.ci-eligibility.outputs.skip-tests != 'true'
+          && needs.fast-test.result == 'success'
+          && needs.container-test.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: 소스 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Amazon Corretto 21 설정
+        uses: actions/setup-java@v4
+        with:
+          distribution: corretto
+          java-version: "21"
+
+      - name: Gradle 설정 및 캐시
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: JaCoCo 실행 데이터 다운로드
+        uses: actions/download-artifact@v4
+        with:
+          pattern: jacoco-exec-*
+          merge-multiple: true
+          path: build/jacoco/ci-exec
+
+      - name: 통합 커버리지 리포트 및 품질 게이트
+        run: ./gradlew --no-daemon jacocoCiCoverageVerification
+
+      - name: 통합 커버리지 리포트 보관
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-coverage-report
+          path: build/reports/jacoco/ci/**
           if-no-files-found: ignore
           retention-days: 7

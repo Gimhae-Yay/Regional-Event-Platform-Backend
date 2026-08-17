@@ -1,50 +1,105 @@
 package io.regionevent.regioneventbackend.domain.user.service;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
+import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
-import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentStatus;
+import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 @Service
 public class RegionAdminAuthorizationService {
 
-    private final UserRoleAssignmentRepository userRoleAssignmentRepository;
+    private final AppUserRepository appUserRepository;
 
     public RegionAdminAuthorizationService(
-        UserRoleAssignmentRepository userRoleAssignmentRepository
+        AppUserRepository appUserRepository
     ) {
-        this.userRoleAssignmentRepository = userRoleAssignmentRepository;
+        this.appUserRepository = appUserRepository;
     }
 
     public UserRoleAssignment authorize(
         Long userId,
         Long targetRegionId
     ) {
-        UserRoleAssignment assignment = requireAuthorizedAssignment(userId);
-        Region assignedRegion = requireAssignedRegion(assignment);
-        if (!assignedRegion.getRegionId().equals(targetRegionId)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
-        return assignment;
+        return requireAuthorizedRegionAdmin(userId).authorize(targetRegionId);
     }
 
     public Long requireAuthorizedRegionId(Long userId) {
-        return requireAssignedRegion(requireAuthorizedAssignment(userId)).getRegionId();
+        return requireAuthorizedRegionAdmin(userId).region().getRegionId();
+    }
+
+    @Transactional
+    public UserRoleAssignment authorizeForUpdate(
+        Long userId,
+        Long targetRegionId
+    ) {
+        return requireAuthorizedRegionAdminForUpdate(userId).authorize(targetRegionId);
+    }
+
+    @Transactional
+    public Long requireAuthorizedRegionIdForUpdate(Long userId) {
+        return requireAuthorizedRegionAdminForUpdate(userId).region().getRegionId();
+    }
+
+    public AuthorizedRegionAdmin requireAuthorizedRegionAdmin(Long userId) {
+        UserRoleAssignment assignment = requireAuthorizedAssignment(userId);
+        return new AuthorizedRegionAdmin(
+            assignment.getAppUser(),
+            requireAssignedRegion(assignment),
+            assignment
+        );
+    }
+
+    @Transactional
+    public AuthorizedRegionAdmin requireAuthorizedRegionAdminForUpdate(Long userId) {
+        UserRoleAssignment assignment = requireAuthorizedAssignmentForUpdate(userId);
+        return new AuthorizedRegionAdmin(
+            assignment.getAppUser(),
+            requireAssignedRegion(assignment),
+            assignment
+        );
     }
 
     private UserRoleAssignment requireAuthorizedAssignment(Long userId) {
-        return userRoleAssignmentRepository
-            .findByIdUserIdAndIdRoleAndAppUserStatus(
+        validateUserId(userId);
+        return appUserRepository.findActiveRoleAssignment(
                 userId,
                 UserRole.REGION_ADMIN,
+                UserRoleAssignmentStatus.ACTIVE,
                 AppUserStatus.ACTIVE
             )
             .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+    }
+
+    private UserRoleAssignment requireAuthorizedAssignmentForUpdate(Long userId) {
+        validateUserId(userId);
+        lockActiveUser(userId);
+        return appUserRepository.findActiveRoleAssignmentForUpdate(
+                userId,
+                UserRole.REGION_ADMIN,
+                UserRoleAssignmentStatus.ACTIVE,
+                AppUserStatus.ACTIVE
+            )
+            .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+    }
+
+    private void lockActiveUser(Long userId) {
+        appUserRepository.findByIdForUpdate(userId)
+            .filter(user -> user.getStatus() == AppUserStatus.ACTIVE)
+            .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+    }
+
+    private void validateUserId(Long userId) {
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
     }
 
     private Region requireAssignedRegion(UserRoleAssignment assignment) {
@@ -53,5 +108,31 @@ public class RegionAdminAuthorizationService {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         return assignedRegion;
+    }
+
+    public record AuthorizedRegionAdmin(
+        AppUser user,
+        Region region,
+        UserRoleAssignment roleAssignment
+    ) {
+
+        public AuthorizedRegionAdmin {
+            if (user == null || user.getUserId() == null) {
+                throw new BusinessException(ErrorCode.FORBIDDEN);
+            }
+            if (region == null || region.getRegionId() == null) {
+                throw new BusinessException(ErrorCode.FORBIDDEN);
+            }
+            if (roleAssignment == null || roleAssignment.getRoleAssignmentId() == null) {
+                throw new BusinessException(ErrorCode.FORBIDDEN);
+            }
+        }
+
+        public UserRoleAssignment authorize(Long targetRegionId) {
+            if (!region.getRegionId().equals(targetRegionId)) {
+                throw new BusinessException(ErrorCode.FORBIDDEN);
+            }
+            return roleAssignment;
+        }
     }
 }

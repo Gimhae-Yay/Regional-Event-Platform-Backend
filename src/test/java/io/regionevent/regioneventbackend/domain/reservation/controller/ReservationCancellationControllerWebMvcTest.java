@@ -34,7 +34,8 @@ class ReservationCancellationControllerWebMvcTest extends ReservationControllerW
     @Test
     void cancelReservation_취소가능한예약_취소응답을반환한다() throws Exception {
         when(reservationCancellationUseCase.cancel(eq(USER_ID), eq(1L), any())).thenReturn(new CancelReservationResponse(
-            "1", "10", "CANCELLED", "USER_REQUEST", Instant.parse("2026-08-05T00:00:00Z"), Instant.parse("2026-08-05T00:00:00Z")
+            "1", "CANCELLED", null, "10", "CANCELLED", "USER_REQUEST",
+            Instant.parse("2026-08-05T00:00:00Z"), Instant.parse("2026-08-05T00:00:00Z")
         ));
 
         mockMvc.perform(authenticated(post("/api/v1/me/reservations/1/cancel")))

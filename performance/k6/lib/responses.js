@@ -61,7 +61,8 @@ export function recordOutcome(label, response, options = {}) {
     classification = 'business';
   }
 
-  const tags = { endpoint: label, code, classification };
+  const endpoint = options.endpoint || label;
+  const tags = { endpoint, code, classification };
   const expected = classification === 'success' || classification === 'business';
   expectedOutcomeRate.add(expected, tags);
   successfulResponseRate.add(classification === 'success', tags);
@@ -92,8 +93,9 @@ export function recordOutcome(label, response, options = {}) {
   };
 }
 
-export function recordUnexpected(label, reason) {
-  const tags = { endpoint: label, code: reason, classification: 'unexpected' };
+export function recordUnexpected(label, reason, options = {}) {
+  const endpoint = options.endpoint || label;
+  const tags = { endpoint, code: reason, classification: 'unexpected' };
   expectedOutcomeRate.add(false, tags);
   successfulResponseRate.add(false, tags);
   businessFailureRate.add(false, tags);

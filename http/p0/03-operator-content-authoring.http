@@ -1,12 +1,7 @@
 @baseUrl = http://localhost:8080
-@operatorAccessToken =
-@otherOperatorAccessToken =
-@authoringImageObjectId =
-@authoringUpdateImageObjectId =
-@authoringRevisionImageObjectId =
-@authoringContentId =
+@operatorAccessToken = {{p0OperatorAccessToken}}
+@otherOperatorAccessToken = {{p0OtherOperatorAccessToken}}
 @publishedContentId = 900001
-@authoringRevisionId =
 @rejectedRevisionId = 920003
 @rejectedContentId = 920002
 @cancelSessionId = 920021
@@ -16,7 +11,6 @@
 @sessionEndsAt = 2026-09-16T12:00:00+09:00
 @checkinOpenAt = 2026-09-16T09:30:00+09:00
 @checkinCloseAt = 2026-09-16T10:30:00+09:00
-@authoringNewSessionId =
 @newSessionStartsAt = 2026-09-23T10:00:00+09:00
 @newSessionEndsAt = 2026-09-23T12:00:00+09:00
 @newSessionCheckinOpenAt = 2026-09-23T09:30:00+09:00
@@ -52,7 +46,7 @@ Accept: application/json
 }
 
 > {%
-client.variables.file.set("authoringImageObjectId", response.body.data.imageObjectId);
+client.global.set("authoringImageObjectId", response.body.data.imageObjectId);
 %}
 
 ### 2. 콘텐츠 생성 - 201 CREATED 기대
@@ -85,7 +79,7 @@ Accept: application/json
 }
 
 > {%
-client.variables.file.set("authoringContentId", response.body.data.contentId);
+client.global.set("authoringContentId", response.body.data.contentId);
 %}
 
 ### 3. 내 콘텐츠 목록 조회 - 200 OK 기대
@@ -225,7 +219,7 @@ Accept: application/json
 }
 
 > {%
-client.variables.file.set("authoringUpdateImageObjectId", response.body.data.imageObjectId);
+client.global.set("authoringUpdateImageObjectId", response.body.data.imageObjectId);
 %}
 
 ### 11. 반려 콘텐츠 수정 - 200 OK 기대
@@ -272,7 +266,7 @@ Accept: application/json
 }
 
 > {%
-client.variables.file.set("authoringRevisionImageObjectId", response.body.data.imageObjectId);
+client.global.set("authoringRevisionImageObjectId", response.body.data.imageObjectId);
 %}
 
 ### 15. 콘텐츠 수정본 생성 - PUBLISHED 콘텐츠에서 201 CREATED 기대
@@ -295,7 +289,7 @@ Accept: application/json
 }
 
 > {%
-client.variables.file.set("authoringRevisionId", response.body.data.revisionId);
+client.global.set("authoringRevisionId", response.body.data.revisionId);
 %}
 
 ### 16. 반려된 콘텐츠 수정본 수정 - 200 OK 기대
@@ -351,7 +345,7 @@ Accept: application/json
 }
 
 > {%
-client.variables.file.set("authoringNewSessionId", response.body.data.sessionId);
+client.global.set("authoringNewSessionId", response.body.data.sessionId);
 %}
 
 ### 20. 운영자 회차 추가 생성 - capacity 0, 400 INVALID_INPUT 기대

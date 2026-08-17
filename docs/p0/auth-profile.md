@@ -30,7 +30,7 @@
 | [ADR-0017](../adr/0017-serialize-withdrawal-with-conditional-user-state.md#결정) | 회원 행 조건부 전환, 단일 트랜잭션 직렬화와 사용자 재시도 방식 |
 | [ADR-0023](../adr/0023-manage-refresh-token-revocation-in-redis.md#결정) | Redis TTL 블랙리스트 기반 Refresh Token 회전·폐기와 탈퇴 선행 폐기 |
 | [ADR-0026](../adr/0026-select-signup-role-and-create-operator-application.md#결정) | 가입 시 역할 선택, 방문자 즉시 부여와 운영자 `PENDING` 신청 생성 |
-| [ADR-0027](../adr/0027-deliver-refresh-token-in-http-only-cookie.md#결정) | Access Token 응답 헤더와 Refresh Token HttpOnly 쿠키 전달 |
+| [ADR-0105](../adr/0105-deliver-access-token-in-json-response-body.md#결정) | Access Token JSON 응답 본문과 Refresh Token HttpOnly 쿠키 전달 |
 | [ADR-0043](../adr/0043-define-jwt-access-token-security-profile.md#결정) | JWT Access Token의 서명·claim·키 회전·유효기간 검증 |
 | [ADR-0044](../adr/0044-use-delegating-bcrypt-password-encoder.md#결정) | 교체 가능한 BCrypt 비밀번호 해싱 |
 | [ADR-0045](../adr/0045-use-stateless-bearer-security-with-same-site-refresh-cookie.md#결정) | 무상태 Bearer 보안 체인과 동일 사이트 Refresh 쿠키 경계 |
@@ -43,7 +43,7 @@
 
 - 회원 가입 시 클라이언트가 `VISITOR` 또는 `OPERATOR`를 선택하게 한다. `VISITOR`는 즉시 역할을 부여하고, `OPERATOR`는 사업자 정보와 요청 지역을 가진 `PENDING` 운영자 신청을 생성한다.
 - 회원 가입, 로그인과 로그아웃을 제공한다.
-- 로그인 성공 시 Access Token은 응답 `Authorization` 헤더로, Refresh Token은 `HttpOnly`·`Secure`·`SameSite=Strict` 쿠키로 발급한다.
+- 로그인과 Access Token 재발급 성공 시 Access Token은 JSON 본문의 `data.accessToken`으로, Refresh Token은 `HttpOnly`·`Secure`·`SameSite=Strict` 쿠키로 발급한다.
 - 로그인마다 독립된 Refresh Token 계열을 만들며, 계열은 최초 로그인부터 최대 14일만 유효하다. 갱신은 같은 계열을 회전할 뿐 만료를 연장하지 않는다.
 - 로그아웃은 제출 Refresh Token의 `jti`가 활성 `jti`와 일치할 때만 현재 계열을 폐기하고 같은 이름·경로의 Refresh Token 쿠키를 만료시킨다. 갱신 완료 뒤 소비된 이전 토큰으로 요청하면 서버 상태는 바꾸지 않고 Cookie만 만료한다. Access Token은 짧은 만료 전까지 유효할 수 있다.
 - 방문자, 운영자, 지역 관리자 역할을 구분한다.
@@ -52,7 +52,7 @@
 - 지역 관리자는 담당 지역만, 운영자는 자신에게 연결된 콘텐츠·회차·예약만 조회·처리한다.
 
 가입·로그인·로그아웃의 요청·응답, validation, status와 오류 코드는
-[API 명세서](../api-specification.md)에서 별도 계약한다.
+[API 명세서](../api/api-specification.md)에서 별도 계약한다.
 가입 시 역할 선택과 운영자 신청 생성의 경계는
 [ADR-0026](../adr/0026-select-signup-role-and-create-operator-application.md)를 따른다.
 
@@ -70,7 +70,7 @@
 | --- | --- |
 | 방문자 | 공개 지역 선택, 콘텐츠 탐색, 본인 무료 예약, 본인 QR 제시, 작성자 연결이 유지되는 본인 인증 후기 관리 |
 | 운영자 | 승인된 담당 지역 콘텐츠 생성, 소유 콘텐츠·회차 등록, 수정본 제출·철회, 전체 콘텐츠 철회 요청, 회차 취소, 마스킹된 예약자 조회와 체크인 |
-| 지역 관리자 | 담당 지역 운영자 승인·반려, 콘텐츠·수정본 승인·반려, 운영 중단·전체 콘텐츠 철회 승인, 상태별 공개 전 삭제, QR 예외 건의 마스킹된 예약자 단건 조회 |
+| 지역 관리자 | 담당 지역 운영자 승인·반려, 콘텐츠·수정본 승인·반려, 운영 중단·전체 콘텐츠 철회 승인·반려, 상태별 공개 전 삭제, QR 예외 건의 마스킹된 예약자 단건 조회 |
 
 모든 데이터와 권한은 지역과 소유 관계로 격리한다.
 현재 MVP에는 전체 관리자 역할이나 지역 범위를 우회하는 권한을 제공하지 않는다.

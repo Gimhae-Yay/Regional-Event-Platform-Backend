@@ -38,12 +38,27 @@ export function authAcceptHeaders(token, extra = {}) {
   };
 }
 
+export function requestTags(endpoint, name, extra = {}) {
+  return {
+    ...extra,
+    endpoint,
+    name,
+  };
+}
+
 export function get(apiBase, path, headers = {}, tags = {}) {
   return http.get(`${apiBase}${path}`, { headers: acceptHeaders(headers), tags });
 }
 
 export function postJson(apiBase, path, body, headers = {}, tags = {}) {
   return http.post(`${apiBase}${path}`, JSON.stringify(body), {
+    headers: jsonHeaders(headers),
+    tags,
+  });
+}
+
+export function postRawJson(apiBase, path, body, headers = {}, tags = {}) {
+  return http.post(`${apiBase}${path}`, body, {
     headers: jsonHeaders(headers),
     tags,
   });

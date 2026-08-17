@@ -24,10 +24,14 @@ import io.regionevent.regioneventbackend.domain.audit.repository.AuditEventRepos
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
+import io.regionevent.regioneventbackend.domain.user.entity.AppUserAccountKind;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
+import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminAssignment;
+import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminGrade;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
+import io.regionevent.regioneventbackend.domain.user.repository.PlatformAdminAssignmentRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 
 @DataJpaTest
@@ -45,6 +49,7 @@ class RecordAuditEventUseCaseTest {
     private final AuditEventRepository auditEventRepository;
     private final RegionRepository regionRepository;
     private final AppUserRepository appUserRepository;
+    private final PlatformAdminAssignmentRepository platformAdminAssignmentRepository;
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
     private final EntityManager entityManager;
 
@@ -56,6 +61,7 @@ class RecordAuditEventUseCaseTest {
         AuditEventRepository auditEventRepository,
         RegionRepository regionRepository,
         AppUserRepository appUserRepository,
+        PlatformAdminAssignmentRepository platformAdminAssignmentRepository,
         UserRoleAssignmentRepository userRoleAssignmentRepository,
         EntityManager entityManager
     ) {
@@ -65,6 +71,7 @@ class RecordAuditEventUseCaseTest {
         this.auditEventRepository = auditEventRepository;
         this.regionRepository = regionRepository;
         this.appUserRepository = appUserRepository;
+        this.platformAdminAssignmentRepository = platformAdminAssignmentRepository;
         this.userRoleAssignmentRepository = userRoleAssignmentRepository;
         this.entityManager = entityManager;
     }
@@ -110,6 +117,57 @@ class RecordAuditEventUseCaseTest {
     }
 
     @Test
+    void 전체관리자_처리자는_증빙_참조와_함께_감사_이벤트에_연결된다() {
+        Region region = regionRepository.saveAndFlush(new Region("GIMHAE", "김해시", true));
+        AppUser platformAdmin = appUserRepository.saveAndFlush(new AppUser(
+            "platform-admin@example.com",
+            "password-hash",
+            "전체관리자",
+            "010-1234-9999",
+            AppUserAccountKind.PRIVILEGED,
+            AppUserStatus.ACTIVE
+        ));
+        PlatformAdminAssignment platformAdminAssignment = platformAdminAssignmentRepository.saveAndFlush(
+            new PlatformAdminAssignment(platformAdmin, PlatformAdminGrade.PLATFORM_ADMIN)
+        );
+        AppUser targetUser = appUserRepository.saveAndFlush(new AppUser(
+            "region-admin@example.com",
+            "password-hash",
+            "지역관리자",
+            "010-1234-8888",
+            AppUserStatus.ACTIVE
+        ));
+        UserRoleAssignment targetAssignment = userRoleAssignmentRepository.saveAndFlush(
+            new UserRoleAssignment(targetUser, UserRole.REGION_ADMIN, region)
+        );
+
+        AuditEvent auditEvent = recordAuditEventUseCase.record(new AuditEventCommand(
+            UUID.fromString("00000000-0000-0000-0000-000000000004"),
+            region,
+            AuditEventTargetType.USER_ROLE_ASSIGNMENT,
+            targetAssignment.getRoleAssignmentId(),
+            "NONE",
+            "REGION_ADMIN",
+            AuditEventResult.SUCCESS,
+            "REGION_ADMIN_APPOINTMENT",
+            "  OPS-2026-0809-001  ",
+            new AuditEventActor(platformAdminAssignment),
+            Instant.parse("2026-08-09T00:00:00Z")
+        ));
+        entityManager.flush();
+        entityManager.clear();
+
+        AuditEvent savedAuditEvent = entityManager.find(AuditEvent.class, auditEvent.getAuditEventId());
+        AuditEventActorLink actorLink = auditEventActorLinkRepository
+            .findById(auditEvent.getAuditEventId())
+            .orElseThrow();
+
+        assertThat(savedAuditEvent.getEvidenceReference()).isEqualTo("OPS-2026-0809-001");
+        assertThat(savedAuditEvent.getActorRole()).isEqualTo(PlatformAdminGrade.PLATFORM_ADMIN.name());
+        assertThat(actorLink.getActor().getUserId()).isEqualTo(platformAdmin.getUserId());
+    }
+
+    @Test
     void 기록_처리자가_없으면_시스템_이벤트만_저장한다() {
         AuditEvent auditEvent = recordAuditEventUseCase.record(new AuditEventCommand(
             UUID.fromString("00000000-0000-0000-0000-000000000002"),
@@ -141,6 +199,10 @@ class RecordAuditEventUseCaseTest {
         TestTransaction.end();
 
         assertThat(auditEventRepository.count()).isEqualTo(1);
+        assertThat(auditEventRepository.findAll())
+            .singleElement()
+            .extracting(AuditEvent::getEvidenceReference)
+            .isEqualTo("OPS-2026-0809-002");
     }
 
     @Test
@@ -202,6 +264,7 @@ class RecordAuditEventUseCaseTest {
             null,
             AuditEventResult.FAILURE,
             reasonCode,
+            "  OPS-2026-0809-002  ",
             null,
             Instant.parse("2026-07-31T00:00:00Z")
         );

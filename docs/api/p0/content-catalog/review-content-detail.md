@@ -106,6 +106,7 @@ Accept: application/json
     "ageRequirement": "초등학생 이상",
     "materials": "필기도구",
     "cancellationPolicyText": "회차 시작 전까지 예약 전체 취소가 가능합니다.",
+    "reservationPrice": 20000,
     "publishAt": "{ISO 8601 형식과 기준 시간대}",
     "sessions": [
       {
@@ -146,6 +147,7 @@ Accept: application/json
 | `data.ageRequirement` | String | 운영자가 등록한 연령 조건이다. |
 | `data.materials` | String | 운영자가 등록한 준비물이다. |
 | `data.cancellationPolicyText` | String | P0 무료 예약 취소 정책 안내 문구다. |
+| `data.reservationPrice` | Integer | 최초 심사 대상 콘텐츠의 모든 회차에 적용할 예약 기본 금액이다. 정수 KRW이며 `0` 이상이다. |
 | `data.publishAt` | String | 운영자가 지정한 공개 예정 시각이다. 시간 형식은 API 공통 규칙의 확정 값을 따른다. |
 | `data.sessions` | Array&lt;Object&gt; | 콘텐츠에 연결된 전체 회차다. 빈 배열은 허용하지 않으며, 최초 콘텐츠 생성 시에는 유효한 회차를 하나 이상 `PENDING`으로 함께 만든다. |
 | `data.sessions[].sessionId` | Long | 회차 식별자다. |

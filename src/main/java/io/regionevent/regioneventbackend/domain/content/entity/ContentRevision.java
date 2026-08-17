@@ -39,7 +39,7 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
     check = {
         @CheckConstraint(
             name = "ck_content_revision_status",
-            constraint = "status REGEXP '^(EDIT_REQUESTED|EDIT_APPROVED|EDIT_REJECTED|EDIT_WITHDRAWN)$'"
+            constraint = "status REGEXP '^(EDIT_REQUESTED|EDIT_APPROVED|EDIT_REJECTED|EDIT_WITHDRAWN|EDIT_INVALIDATED)$'"
         ),
         @CheckConstraint(
             name = "ck_content_revision_reviewed",
@@ -62,6 +62,18 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
                 status <> 'EDIT_WITHDRAWN'
                 OR (withdrawn_at IS NOT NULL AND withdrawn_by_user_id IS NOT NULL AND withdrawal_reason IS NOT NULL)
                 """
+        ),
+        @CheckConstraint(
+            name = "ck_content_revision_invalidated",
+            constraint = """
+                status <> 'EDIT_INVALIDATED'
+                OR (invalidated_at IS NOT NULL
+                    AND invalidation_reason REGEXP '^(CONTENT_SUSPENDED|CONTENT_ENDED|CONTENT_WITHDRAWN)$')
+                """
+        ),
+        @CheckConstraint(
+            name = "ck_content_revision_reservation_price",
+            constraint = "reservation_price >= 0"
         )
     }
 )
@@ -132,6 +144,9 @@ public class ContentRevision {
     @Column(name = "cancellation_policy_text", nullable = false, columnDefinition = "TEXT")
     private String cancellationPolicyText;
 
+    @Column(name = "reservation_price", nullable = false)
+    private long reservationPrice;
+
     @Column(name = "publish_at")
     private Instant publishAt;
 
@@ -167,6 +182,20 @@ public class ContentRevision {
     @Column(name = "withdrawal_reason", columnDefinition = "TEXT")
     private String withdrawalReason;
 
+    @Column(name = "invalidated_at")
+    private Instant invalidatedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+        name = "invalidated_by_user_id",
+        foreignKey = @ForeignKey(name = "fk_content_revision_invalidator")
+    )
+    private AppUser invalidatedBy;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "invalidation_reason", length = 30)
+    private ContentRevisionInvalidationReason invalidationReason;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -174,6 +203,57 @@ public class ContentRevision {
     private Long activeRequestContentId;
 
     protected ContentRevision() {
+    }
+
+    public ContentRevision(
+        Content content,
+        int revisionNo,
+        int baseContentVersion,
+        AppUser editor,
+        ContentRevisionStatus status,
+        String title,
+        String description,
+        String locationText,
+        String operatingHoursText,
+        String contactText,
+        String precautions,
+        String ageRequirement,
+        String materials,
+        String cancellationPolicyText,
+        long reservationPrice,
+        Instant publishAt,
+        Instant submittedAt,
+        Instant reviewedAt,
+        AppUser reviewedBy,
+        String reviewReason,
+        Instant withdrawnAt,
+        AppUser withdrawnBy,
+        String withdrawalReason
+    ) {
+        this.content = requireNotNull(content, "content");
+        this.revisionNo = revisionNo;
+        this.baseContentVersion = baseContentVersion;
+        this.editor = requireNotNull(editor, "editor");
+        this.status = requireNotNull(status, "status");
+        this.title = requireNotBlank(title, "title");
+        this.description = requireNotBlank(description, "description");
+        this.locationText = requireNotBlank(locationText, "locationText");
+        this.operatingHoursText = requireNotBlank(operatingHoursText, "operatingHoursText");
+        this.contactText = requireNotBlank(contactText, "contactText");
+        this.precautions = requireNotBlank(precautions, "precautions");
+        this.ageRequirement = requireNotBlank(ageRequirement, "ageRequirement");
+        this.materials = requireNotBlank(materials, "materials");
+        this.cancellationPolicyText = requireNotBlank(cancellationPolicyText, "cancellationPolicyText");
+        this.reservationPrice = requireNonNegative(reservationPrice, "reservationPrice");
+        this.publishAt = publishAt;
+        this.submittedAt = requireNotNull(submittedAt, "submittedAt");
+        this.reviewedAt = reviewedAt;
+        this.reviewedBy = reviewedBy;
+        this.reviewReason = reviewReason;
+        this.withdrawnAt = withdrawnAt;
+        this.withdrawnBy = withdrawnBy;
+        this.withdrawalReason = withdrawalReason;
+        validateStatusDetails();
     }
 
     public ContentRevision(
@@ -200,29 +280,31 @@ public class ContentRevision {
         AppUser withdrawnBy,
         String withdrawalReason
     ) {
-        this.content = requireNotNull(content, "content");
-        this.revisionNo = revisionNo;
-        this.baseContentVersion = baseContentVersion;
-        this.editor = requireNotNull(editor, "editor");
-        this.status = requireNotNull(status, "status");
-        this.title = requireNotBlank(title, "title");
-        this.description = requireNotBlank(description, "description");
-        this.locationText = requireNotBlank(locationText, "locationText");
-        this.operatingHoursText = requireNotBlank(operatingHoursText, "operatingHoursText");
-        this.contactText = requireNotBlank(contactText, "contactText");
-        this.precautions = requireNotBlank(precautions, "precautions");
-        this.ageRequirement = requireNotBlank(ageRequirement, "ageRequirement");
-        this.materials = requireNotBlank(materials, "materials");
-        this.cancellationPolicyText = requireNotBlank(cancellationPolicyText, "cancellationPolicyText");
-        this.publishAt = publishAt;
-        this.submittedAt = requireNotNull(submittedAt, "submittedAt");
-        this.reviewedAt = reviewedAt;
-        this.reviewedBy = reviewedBy;
-        this.reviewReason = reviewReason;
-        this.withdrawnAt = withdrawnAt;
-        this.withdrawnBy = withdrawnBy;
-        this.withdrawalReason = withdrawalReason;
-        validateStatusDetails();
+        this(
+            content,
+            revisionNo,
+            baseContentVersion,
+            editor,
+            status,
+            title,
+            description,
+            locationText,
+            operatingHoursText,
+            contactText,
+            precautions,
+            ageRequirement,
+            materials,
+            cancellationPolicyText,
+            0,
+            publishAt,
+            submittedAt,
+            reviewedAt,
+            reviewedBy,
+            reviewReason,
+            withdrawnAt,
+            withdrawnBy,
+            withdrawalReason
+        );
     }
 
     @PrePersist
@@ -276,6 +358,23 @@ public class ContentRevision {
         reviewReason = null;
     }
 
+    public void invalidate(
+        AppUser invalidator,
+        Instant invalidationTime,
+        ContentRevisionInvalidationReason reason
+    ) {
+        Instant validatedInvalidationTime = requireNotNull(invalidationTime, "invalidationTime");
+        ContentRevisionInvalidationReason validatedReason = requireNotNull(reason, "reason");
+        if (status != ContentRevisionStatus.EDIT_REQUESTED) {
+            throw new BusinessException(ErrorCode.CONTENT_STATE_CONFLICT);
+        }
+
+        status = ContentRevisionStatus.EDIT_INVALIDATED;
+        invalidatedAt = validatedInvalidationTime;
+        invalidatedBy = invalidator;
+        invalidationReason = validatedReason;
+    }
+
     public void replaceRejectedCandidateFields(
         String title,
         String description,
@@ -286,6 +385,7 @@ public class ContentRevision {
         String ageRequirement,
         String materials,
         String cancellationPolicyText,
+        long reservationPrice,
         Instant publishAt
     ) {
         if (status != ContentRevisionStatus.EDIT_REJECTED) {
@@ -300,6 +400,7 @@ public class ContentRevision {
         this.ageRequirement = requireNotBlank(ageRequirement, "ageRequirement");
         this.materials = requireNotBlank(materials, "materials");
         this.cancellationPolicyText = requireNotBlank(cancellationPolicyText, "cancellationPolicyText");
+        this.reservationPrice = requireNonNegative(reservationPrice, "reservationPrice");
         this.publishAt = publishAt;
     }
 
@@ -367,6 +468,10 @@ public class ContentRevision {
         return cancellationPolicyText;
     }
 
+    public long getReservationPrice() {
+        return reservationPrice;
+    }
+
     public Instant getPublishAt() {
         return publishAt;
     }
@@ -403,6 +508,18 @@ public class ContentRevision {
         return withdrawalReason;
     }
 
+    public Instant getInvalidatedAt() {
+        return invalidatedAt;
+    }
+
+    public AppUser getInvalidatedBy() {
+        return invalidatedBy;
+    }
+
+    public ContentRevisionInvalidationReason getInvalidationReason() {
+        return invalidationReason;
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
     }
@@ -431,6 +548,10 @@ public class ContentRevision {
             requireNotNull(withdrawnBy, "withdrawnBy");
             requireNotBlank(withdrawalReason, "withdrawalReason");
         }
+
+        if (status == ContentRevisionStatus.EDIT_INVALIDATED) {
+            throw new IllegalArgumentException("invalidated revision must be created through invalidate");
+        }
     }
 
     private static <T> T requireNotNull(T value, String fieldName) {
@@ -443,6 +564,13 @@ public class ContentRevision {
     private static String requireNotBlank(String value, String fieldName) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(fieldName + " must not be null or blank");
+        }
+        return value;
+    }
+
+    private static long requireNonNegative(long value, String fieldName) {
+        if (value < 0) {
+            throw new IllegalArgumentException(fieldName + " must not be negative");
         }
         return value;
     }

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -101,6 +102,40 @@ class ContentServiceTest {
     }
 
     @Test
+    void findMissionTargetContentsForUpdate_대상_콘텐츠를_잠금_조회하고_반환한다() {
+        Content firstContent = ownedContent(false, true, ContentStatus.PUBLISHED);
+        Content secondContent = ownedContent(false, true, ContentStatus.APPROVED);
+        when(contentRepository.findMissionTargetsForUpdate(List.of(101L, 102L)))
+            .thenReturn(List.of(firstContent, secondContent));
+
+        assertThat(contentService.findMissionTargetContentsForUpdate(List.of(101L, 102L), REGION_ID))
+            .containsExactly(firstContent, secondContent);
+    }
+
+    @Test
+    void findMissionTargetContentsForUpdate_조회된_건수가_요청과_다르면_대상없음_오류를_반환한다() {
+        Content firstContent = ownedContent(false, true, ContentStatus.PUBLISHED);
+        when(contentRepository.findMissionTargetsForUpdate(List.of(101L, 102L)))
+            .thenReturn(List.of(firstContent));
+
+        assertThatThrownBy(() -> contentService.findMissionTargetContentsForUpdate(List.of(101L, 102L), REGION_ID))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.NOT_FOUND)
+            );
+    }
+
+    @Test
+    void findMissionTargetContentsForUpdate_지역이_다르면_권한_오류를_반환한다() {
+        Content content = ownedContent(false, false, ContentStatus.PUBLISHED);
+        when(contentRepository.findMissionTargetsForUpdate(List.of(101L))).thenReturn(List.of(content));
+
+        assertThatThrownBy(() -> contentService.findMissionTargetContentsForUpdate(List.of(101L), REGION_ID))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN)
+            );
+    }
+
+    @Test
     void findRejectedOwnedContentForUpdate_반려_상태가_아니면_상태_충돌을_반환한다() {
         Content content = ownedContent(true, true, ContentStatus.APPROVED);
         when(contentRepository.findByContentIdAndDeletedAtIsNull(CONTENT_ID)).thenReturn(Optional.of(content));
@@ -176,6 +211,7 @@ class ContentServiceTest {
             "전체",
             "준비물",
             "취소 정책",
+            0,
             Instant.parse("2026-08-10T01:00:00Z")
         );
         verify(content).assignRepresentativeImage(replacementImageObject, UPDATED_AT);
@@ -219,6 +255,8 @@ class ContentServiceTest {
                 .thenReturn(updatedCount);
             case "suspend" -> when(contentRepository.suspendPublishedByContentId(CONTENT_ID, UPDATED_AT))
                 .thenReturn(updatedCount);
+            case "withdraw" -> when(contentRepository.withdrawPublishedByContentId(CONTENT_ID, UPDATED_AT))
+                .thenReturn(updatedCount);
             default -> throw new IllegalArgumentException(operation);
         }
 
@@ -236,16 +274,19 @@ class ContentServiceTest {
         when(contentRepository.submitRejectedByContentId(CONTENT_ID, UPDATED_AT)).thenReturn(1);
         when(contentRepository.endPublishedByContentId(CONTENT_ID, UPDATED_AT)).thenReturn(1);
         when(contentRepository.suspendPublishedByContentId(CONTENT_ID, UPDATED_AT)).thenReturn(1);
+        when(contentRepository.withdrawPublishedByContentId(CONTENT_ID, UPDATED_AT)).thenReturn(1);
 
         contentService.reject(content, UPDATED_AT);
         contentService.submitForReview(content, UPDATED_AT);
         contentService.end(content, UPDATED_AT);
         contentService.suspend(content, UPDATED_AT);
+        contentService.withdraw(content, UPDATED_AT);
 
         verify(content).reject();
         verify(content).submitForReview();
         verify(content).end();
         verify(content).suspend();
+        verify(content).withdraw();
     }
 
     @Test
@@ -309,7 +350,8 @@ class ContentServiceTest {
             Arguments.of("reject", 0, ErrorCode.CONTENT_STATE_CONFLICT),
             Arguments.of("submit", 2, ErrorCode.CONTENT_STATE_CONFLICT),
             Arguments.of("end", 0, ErrorCode.CONTENT_END_CONFLICT),
-            Arguments.of("suspend", 2, ErrorCode.CONTENT_SUSPEND_CONFLICT)
+            Arguments.of("suspend", 2, ErrorCode.CONTENT_SUSPEND_CONFLICT),
+            Arguments.of("withdraw", 0, ErrorCode.CONTENT_STATE_CONFLICT)
         );
     }
 
@@ -319,6 +361,7 @@ class ContentServiceTest {
             case "submit" -> contentService.submitForReview(content, UPDATED_AT);
             case "end" -> contentService.end(content, UPDATED_AT);
             case "suspend" -> contentService.suspend(content, UPDATED_AT);
+            case "withdraw" -> contentService.withdraw(content, UPDATED_AT);
             default -> throw new IllegalArgumentException(operation);
         }
     }
@@ -376,6 +419,7 @@ class ContentServiceTest {
             "전체",
             "준비물",
             "취소 정책",
+            0,
             Instant.parse("2026-08-10T01:00:00Z")
         );
     }

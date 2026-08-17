@@ -5,12 +5,12 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | [FR-01 인증·역할·지역 권한](../../../p0/auth-profile.md#fr-01-인증역할지역-권한) |
 | 소유 도메인 | 인증·프로필 |
-| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ADR-0005](../../../adr/0005-use-jwt-access-and-rotating-refresh-tokens.md), [ADR-0023](../../../adr/0023-manage-refresh-token-revocation-in-redis.md), [ADR-0027](../../../adr/0027-deliver-refresh-token-in-http-only-cookie.md), [ADR-0043](../../../adr/0043-define-jwt-access-token-security-profile.md), [ADR-0044](../../../adr/0044-use-delegating-bcrypt-password-encoder.md), [ADR-0045](../../../adr/0045-use-stateless-bearer-security-with-same-site-refresh-cookie.md), [ADR-0052](../../../adr/0052-define-refresh-token-security-profile-and-fail-closed-redis-state.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ADR-0005](../../../adr/0005-use-jwt-access-and-rotating-refresh-tokens.md), [ADR-0023](../../../adr/0023-manage-refresh-token-revocation-in-redis.md), [ADR-0105](../../../adr/0105-deliver-access-token-in-json-response-body.md), [ADR-0043](../../../adr/0043-define-jwt-access-token-security-profile.md), [ADR-0044](../../../adr/0044-use-delegating-bcrypt-password-encoder.md), [ADR-0045](../../../adr/0045-use-stateless-bearer-security-with-same-site-refresh-cookie.md), [ADR-0052](../../../adr/0052-define-refresh-token-security-profile-and-fail-closed-redis-state.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
 이 문서는 이메일과 비밀번호를 검증해 짧은 수명의 Access Token과 회전형 Refresh Token을 발급하는 HTTP API
-계약을 정의한다. Access Token은 응답 `Authorization` 헤더로, Refresh Token은 `HttpOnly` 쿠키로만 전달한다.
+계약을 정의한다. Access Token은 JSON 응답 본문의 `data.accessToken`으로, Refresh Token은 `HttpOnly` 쿠키로만 전달한다.
 
 `PENDING` 운영자 신청 계정도 활성 계정이면 로그인할 수 있지만, 승인 전에는 `OPERATOR` 역할이 없어 운영자 API를
 호출할 수 없다. Access Token은 사용자 식별자만 포함하며, 로그인 응답의 역할 목록은 표시용 정보다. 역할·지역·소유권·
@@ -27,7 +27,7 @@
 | 대상 | 기준 문서 | 이 도메인에서 명시할 내용 |
 | --- | --- | --- |
 | Base URL·미디어 타입·시간 형식 | [API 공통 규칙](../../common/api-conventions.md) | Base URL `/api/v1`과 `application/json; charset=UTF-8`을 사용한다. |
-| 인증·인가 | [인증·인가](../../common/authentication.md) | 공개 API다. 성공 시 Access Token 헤더와 Refresh Token 쿠키를 발급한다. |
+| 인증·인가 | [인증·인가](../../common/authentication.md) | 공개 API다. 성공 시 JSON 본문의 Access Token과 Refresh Token 쿠키를 발급한다. |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | `statusCode`, `code`, `message`, `data`를 같은 순서로 포함한다. 성공 상태는 `200 OK`다. |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | 목록 API가 아니므로 적용하지 않는다. |
 
@@ -99,8 +99,9 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Authorization` | Y | `Bearer <accessToken>`. 일반 보호 API 호출에 사용하는 짧은 수명의 Access Token이다. |
 | `Set-Cookie` | Y | `refreshToken=<refreshToken>; Max-Age=1209600; Path=/api/v1/auth; HttpOnly; Secure; SameSite=Strict`. 새 Refresh Token 계열은 발급 시점부터 14일간 유효하며, `Domain`은 생략해 호스트 전용으로 한다. |
+
+성공 응답에는 Access Token을 담은 `Authorization` 응답 헤더를 포함하지 않는다.
 
 Refresh Token은 JSON 본문, `Authorization` 헤더 또는 다른 일반 응답 헤더에 포함하지 않는다.
 
@@ -115,7 +116,8 @@ Refresh Token은 JSON 본문, `Authorization` 헤더 또는 다른 일반 응답
     "userId": "1",
     "roles": [
       "VISITOR"
-    ]
+    ],
+    "accessToken": "eyJhbGciOiJIUzI1NiJ9..."
   }
 }
 ```
@@ -129,6 +131,7 @@ Refresh Token은 JSON 본문, `Authorization` 헤더 또는 다른 일반 응답
 | `message` | String | 성공 메시지 `로그인에 성공했습니다.`다. |
 | `data.userId` | String | 로그인한 활성 회원의 식별자다. |
 | `data.roles` | Array&lt;String&gt; | 현재 부여된 역할 목록이다. 역할이 아직 부여되지 않은 `PENDING` 운영자 신청 계정은 빈 배열을 반환한다. |
+| `data.accessToken` | String | 일반 보호 API의 `Authorization: Bearer <accessToken>` 요청 헤더에 사용하는 짧은 수명의 Access Token이다. |
 
 ### Error Code
 

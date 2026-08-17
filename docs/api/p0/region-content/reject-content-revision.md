@@ -72,7 +72,7 @@ POST /api/v1/region-admin/content-revisions/{revisionId}/reject
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. |
 | `403` | `FORBIDDEN` | 지역 관리자 역할이 없거나 원본 콘텐츠가 담당 지역에 속하지 않는다. |
 | `404` | `NOT_FOUND` | 수정본이 없거나 원본 콘텐츠가 소프트 삭제됐다. |
-| `409` | `CONTENT_STATE_CONFLICT` | 수정본이 `EDIT_REQUESTED`가 아니거나 원본 상태·후보 `publish_at` 조건이 맞지 않거나, 승인·철회·자동 공개가 먼저 종결됐다. |
+| `409` | `CONTENT_STATE_CONFLICT` | 수정본이 `EDIT_REQUESTED`가 아니거나 원본 상태·후보 `publish_at` 조건이 맞지 않거나, 승인·철회·자동 공개·콘텐츠 중단·전체 철회·종료에 따른 `EDIT_INVALIDATED` 전이가 먼저 종결됐다. |
 
 ### 처리 규칙
 
@@ -81,4 +81,4 @@ POST /api/v1/region-admin/content-revisions/{revisionId}/reject
 3. 공개 콘텐츠 수정본 반려는 수정본만 `EDIT_REJECTED`로 전이하며 원본 `PUBLISHED` 상태, 필드와 `publish_at`을 유지한다.
 4. 공개 전 수정본 반려는 수정본만 `EDIT_REJECTED`로 전이하며 원본 후보 필드를 반영하지 않고 `PENDING` 상태를 유지한다.
 5. 수정본 상태 전이, 처리자·시각·반려 사유 저장과 성공 감사 기록은 하나의 MySQL 트랜잭션에서 함께 커밋한다.
-6. 승인·반려·철회·자동 공개가 경합하면 현재 수정본·원본 상태를 조건으로 먼저 커밋한 하나만 성공한다.
+6. 승인·반려·철회·자동 공개·콘텐츠 중단·전체 철회·종료가 경합하면 현재 수정본·원본 상태를 조건으로 먼저 커밋한 하나만 성공한다. 콘텐츠 중단·전체 철회·종료가 먼저 `EDIT_INVALIDATED`를 커밋하면 이 요청은 `409 CONTENT_STATE_CONFLICT`로 거부한다. 전체 철회가 먼저 성공한 무효화 사유는 `CONTENT_WITHDRAWN`이다.

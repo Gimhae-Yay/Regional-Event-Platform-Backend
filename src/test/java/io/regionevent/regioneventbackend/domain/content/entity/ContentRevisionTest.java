@@ -34,6 +34,11 @@ class ContentRevisionTest {
                 .withdraw_whenWithdrawalDetailsAreMissing_rejectsTransitionWithoutChangingStatus(),
             () -> new ContentRevisionTest().approve_whenEditIsRequested_recordsReviewerWithoutReason(),
             () -> new ContentRevisionTest().approve_whenRevisionIsAlreadyTerminal_throwsContentStateConflict(),
+            () -> new ContentRevisionTest().invalidate_whenEditIsRequested_recordsInvalidationDetails(),
+            () -> new ContentRevisionTest().invalidate_contentWithdrawn_recordsInvalidationReason(),
+            () -> new ContentRevisionTest()
+                .invalidate_whenRevisionIsAlreadyTerminal_throwsContentStateConflictWithoutOverwritingState(),
+            () -> new ContentRevisionTest().invalidatedRevision_cannotBeReviewedOrWithdrawn(),
             () -> new ContentRevisionTest().constructor_whenApprovedRevisionHasReason_rejectsInvalidState(),
             () -> new ContentRevisionTest().constructor_whenReviewOrWithdrawalDetailsAreMissing_rejectsInvalidState()
         );
@@ -183,6 +188,79 @@ class ContentRevisionTest {
         });
 
         assertAll(contracts);
+    }
+
+    void invalidate_whenEditIsRequested_recordsInvalidationDetails() {
+        AppUser invalidator = newUser("invalidator@example.com");
+        ContentRevision revision = newRevision();
+
+        revision.invalidate(
+            invalidator,
+            REVIEWED_AT,
+            ContentRevisionInvalidationReason.CONTENT_SUSPENDED
+        );
+
+        assertThat(revision.getStatus()).isEqualTo(ContentRevisionStatus.EDIT_INVALIDATED);
+        assertThat(revision.getInvalidatedAt()).isEqualTo(REVIEWED_AT);
+        assertThat(revision.getInvalidatedBy()).isSameAs(invalidator);
+        assertThat(revision.getInvalidationReason())
+            .isEqualTo(ContentRevisionInvalidationReason.CONTENT_SUSPENDED);
+    }
+
+    void invalidate_contentWithdrawn_recordsInvalidationReason() {
+        ContentRevision revision = newRevision();
+
+        revision.invalidate(null, REVIEWED_AT, ContentRevisionInvalidationReason.CONTENT_WITHDRAWN);
+
+        assertThat(revision.getStatus()).isEqualTo(ContentRevisionStatus.EDIT_INVALIDATED);
+        assertThat(revision.getInvalidationReason())
+            .isEqualTo(ContentRevisionInvalidationReason.CONTENT_WITHDRAWN);
+    }
+
+    void invalidate_whenRevisionIsAlreadyTerminal_throwsContentStateConflictWithoutOverwritingState() {
+        ContentRevision revision = newRevision();
+        revision.invalidate(null, REVIEWED_AT, ContentRevisionInvalidationReason.CONTENT_ENDED);
+
+        assertThatThrownBy(() -> revision.invalidate(
+            newUser("invalidator@example.com"),
+            REVIEWED_AT.plusSeconds(60),
+            ContentRevisionInvalidationReason.CONTENT_SUSPENDED
+        )).isInstanceOfSatisfying(BusinessException.class, exception ->
+            assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.CONTENT_STATE_CONFLICT)
+        );
+        assertThat(revision.getStatus()).isEqualTo(ContentRevisionStatus.EDIT_INVALIDATED);
+        assertThat(revision.getInvalidatedAt()).isEqualTo(REVIEWED_AT);
+        assertThat(revision.getInvalidatedBy()).isNull();
+        assertThat(revision.getInvalidationReason())
+            .isEqualTo(ContentRevisionInvalidationReason.CONTENT_ENDED);
+    }
+
+    void invalidatedRevision_cannotBeReviewedOrWithdrawn() {
+        ContentRevision revision = newRevision();
+        revision.invalidate(null, REVIEWED_AT, ContentRevisionInvalidationReason.CONTENT_ENDED);
+
+        assertAll(
+            () -> assertThatThrownBy(() -> revision.approve(
+                newUser("reviewer@example.com"),
+                REVIEWED_AT.plusSeconds(60)
+            )).isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.CONTENT_STATE_CONFLICT)
+            ),
+            () -> assertThatThrownBy(() -> revision.reject(
+                newUser("reviewer@example.com"),
+                REVIEWED_AT.plusSeconds(60),
+                "반려 사유"
+            )).isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.CONTENT_STATE_CONFLICT)
+            ),
+            () -> assertThatThrownBy(() -> revision.withdraw(
+                newUser("withdrawer@example.com"),
+                REVIEWED_AT.plusSeconds(60),
+                "회수 사유"
+            )).isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.CONTENT_STATE_CONFLICT)
+            )
+        );
     }
 
     void constructor_whenApprovedRevisionHasReason_rejectsInvalidState() {

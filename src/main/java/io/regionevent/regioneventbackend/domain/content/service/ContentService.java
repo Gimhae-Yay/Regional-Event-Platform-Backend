@@ -2,10 +2,12 @@ package io.regionevent.regioneventbackend.domain.content.service;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
@@ -53,6 +55,7 @@ public class ContentService {
             command.ageRequirement(),
             command.materials(),
             command.cancellationPolicyText(),
+            command.reservationPrice(),
             command.publishAt()
         );
         content.assignRepresentativeImage(representativeImageObject, representativeImageAssignedAt);
@@ -74,6 +77,53 @@ public class ContentService {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         return content;
+    }
+
+    public List<Content> findOwnedContentsForStampbookCreation(
+        List<Long> contentIds,
+        Long operatorUserId,
+        Long regionId
+    ) {
+        if (contentIds == null || contentIds.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+
+        List<Content> contents = new ArrayList<>(contentIds.size());
+        for (Long contentId : contentIds) {
+            contents.add(findOwnedContentForRevisionCreation(contentId, operatorUserId, regionId));
+        }
+        return List.copyOf(contents);
+    }
+
+    public List<Content> findMissionTargetContentsForUpdate(
+        List<Long> contentIds,
+        Long regionId
+    ) {
+        if (contentIds == null || contentIds.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        validateRequiredId(regionId);
+
+        List<Content> contents = contentRepository.findMissionTargetsForUpdate(contentIds);
+        if (contents.size() != contentIds.size()) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+        if (contents.stream().anyMatch(content -> !content.isScopedTo(regionId))) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        return List.copyOf(contents);
+    }
+
+    public List<Content> findStampbookTargetContentsForUpdate(List<Long> contentIds) {
+        if (contentIds == null || contentIds.isEmpty()) {
+            throw new BusinessException(ErrorCode.STAMPBOOK_STATE_CONFLICT);
+        }
+
+        List<Content> contents = contentRepository.findStampbookTargetsForUpdate(contentIds);
+        if (contents.size() != contentIds.size()) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+        return List.copyOf(contents);
     }
 
     public Content markPrePublicationRevisionPending(Content content) {
@@ -123,6 +173,7 @@ public class ContentService {
             command.ageRequirement(),
             command.materials(),
             command.cancellationPolicyText(),
+            command.reservationPrice(),
             command.publishAt()
         );
         if (replacementImageObject != null) {
@@ -131,8 +182,8 @@ public class ContentService {
         return contentRepository.saveAndFlush(content);
     }
 
-    public boolean existsPublishedAndNotDeletedById(Long contentId) {
-        return contentRepository.existsByContentIdAndStatusAndDeletedAtIsNull(
+    public boolean existsPublicPublishedAndNotDeletedById(Long contentId) {
+        return contentRepository.existsByContentIdAndStatusAndDeletedAtIsNullAndRegionIsPublicTrue(
             contentId,
             ContentStatus.PUBLISHED
         );
@@ -140,6 +191,10 @@ public class ContentService {
 
     public boolean hasOwnedContent(Long userId) {
         return contentRepository.existsByOperatorUserId(userId);
+    }
+
+    public boolean hasUndeletedContentInRegion(Long regionId) {
+        return contentRepository.existsByRegionRegionIdAndDeletedAtIsNull(regionId);
     }
 
     public Content findPublicContent(Long contentId) {
@@ -235,6 +290,13 @@ public class ContentService {
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+    public Long findContentRegionId(Long contentId) {
+        validateRequiredId(contentId);
+        return contentRepository.findRegionIdByContentIdAndDeletedAtIsNull(contentId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
     @Transactional(readOnly = true)
     public List<Long> findAutoEndCandidateIds(List<ContentSessionStatus> terminalStatuses) {
         return contentRepository.findAutoEndCandidateIds(ContentStatus.PUBLISHED, terminalStatuses);
@@ -246,8 +308,19 @@ public class ContentService {
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
+    public Content findForUpdate(Long contentId) {
+        validateRequiredId(contentId);
+        return contentRepository.findByContentIdForUpdate(contentId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
     public Content findSuspendTargetForUpdate(Long contentId) {
         return contentRepository.findSuspendTargetForUpdate(contentId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    public Content findWithdrawalRequestTargetForUpdate(Long contentId) {
+        return contentRepository.findWithdrawalRequestTargetForUpdate(contentId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
@@ -266,6 +339,14 @@ public class ContentService {
 
     public boolean lockPublishedReservationTarget(Long contentId) {
         return contentRepository.findPublishedReservationTargetIdForUpdate(contentId).isPresent();
+    }
+
+    public boolean lockPublishedCapacityHoldTarget(Long contentId) {
+        return contentRepository.findPublishedCapacityHoldTargetIdForUpdate(contentId).isPresent();
+    }
+
+    public Optional<Long> findPublishedPaymentReservationPriceForUpdate(Long contentId) {
+        return contentRepository.findPublishedPaymentReservationPriceForUpdate(contentId);
     }
 
     public Content approve(Content content) {
@@ -301,6 +382,7 @@ public class ContentService {
             || isBlank(content.getAgeRequirement())
             || isBlank(content.getMaterials())
             || isBlank(content.getCancellationPolicyText())
+            || content.getReservationPrice() < 0
             || content.getPublishAt() == null) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
@@ -357,6 +439,18 @@ public class ContentService {
         return content;
     }
 
+    public Content withdraw(Content content, Instant withdrawnAt) {
+        int updatedCount = contentRepository.withdrawPublishedByContentId(
+            content.getContentId(),
+            withdrawnAt
+        );
+        if (updatedCount != 1) {
+            throw new BusinessException(ErrorCode.CONTENT_STATE_CONFLICT);
+        }
+        content.withdraw();
+        return content;
+    }
+
     private Instant toInstant(BigDecimal epochSeconds) {
         long seconds = epochSeconds.longValue();
         return Instant.ofEpochSecond(seconds, epochSeconds.remainder(BigDecimal.ONE).movePointRight(9).longValue());
@@ -382,8 +476,27 @@ public class ContentService {
         String ageRequirement,
         String materials,
         String cancellationPolicyText,
+        long reservationPrice,
         Instant publishAt
     ) {
+
+        public CreateContentCommand(
+            String title,
+            String description,
+            String locationText,
+            String operatingHoursText,
+            String contactText,
+            String precautions,
+            String ageRequirement,
+            String materials,
+            String cancellationPolicyText,
+            Instant publishAt
+        ) {
+            this(
+                title, description, locationText, operatingHoursText, contactText, precautions,
+                ageRequirement, materials, cancellationPolicyText, 0, publishAt
+            );
+        }
     }
 
     public record UpdateContentCommand(
@@ -396,7 +509,26 @@ public class ContentService {
         String ageRequirement,
         String materials,
         String cancellationPolicyText,
+        long reservationPrice,
         Instant publishAt
     ) {
+
+        public UpdateContentCommand(
+            String title,
+            String description,
+            String locationText,
+            String operatingHoursText,
+            String contactText,
+            String precautions,
+            String ageRequirement,
+            String materials,
+            String cancellationPolicyText,
+            Instant publishAt
+        ) {
+            this(
+                title, description, locationText, operatingHoursText, contactText, precautions,
+                ageRequirement, materials, cancellationPolicyText, 0, publishAt
+            );
+        }
     }
 }

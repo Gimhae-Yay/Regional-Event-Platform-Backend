@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.reservation.service;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -48,6 +49,14 @@ public class CapacityHoldService {
     }
 
     @Transactional(readOnly = true)
+    public Instant findCurrentDatabaseInstant() {
+        BigDecimal epochSeconds = capacityHoldRepository.findCurrentEpochSeconds();
+        long seconds = epochSeconds.longValue();
+        long nanos = epochSeconds.remainder(BigDecimal.ONE).movePointRight(9).longValue();
+        return Instant.ofEpochSecond(seconds, nanos);
+    }
+
+    @Transactional(readOnly = true)
     public CapacityHold findOwnedHold(Long holdId, AppUser user) {
         CapacityHold capacityHold = capacityHoldRepository.findByHoldId(holdId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
@@ -57,6 +66,23 @@ public class CapacityHoldService {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         return capacityHold;
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public CapacityHold findActiveOwnedHoldForUpdate(Long holdId, AppUser user) {
+        CapacityHold capacityHold = capacityHoldRepository.findActiveByHoldIdForUpdate(holdId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_HOLD_CONFLICT));
+        if (capacityHold.getUser() == null
+            || !capacityHold.getUser().getUserId().equals(user.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        return capacityHold;
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public CapacityHold findByHoldIdForUpdate(Long holdId) {
+        return capacityHoldRepository.findByHoldIdForUpdate(holdId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
     @Transactional(
@@ -75,8 +101,42 @@ public class CapacityHoldService {
             .orElseThrow(() -> new IllegalStateException("consumed capacity hold does not exist"));
     }
 
+    @Transactional(
+        propagation = Propagation.MANDATORY,
+        noRollbackFor = ReservationConfirmationConflictException.class
+    )
+    public CapacityHold consumeForPaidZeroIfConfirmable(Long holdId, Long userId) {
+        int updatedCount = capacityHoldRepository.consumeForPaidZeroIfConfirmable(holdId, userId);
+        if (updatedCount == 0) {
+            throw new ReservationConfirmationConflictException();
+        }
+        return capacityHoldRepository.findByHoldId(holdId)
+            .orElseThrow(() -> new IllegalStateException("consumed capacity hold does not exist"));
+    }
+
+    @Transactional(
+        propagation = Propagation.MANDATORY,
+        noRollbackFor = ReservationConfirmationConflictException.class
+    )
+    public CapacityHold consumeForPaidPaymentIfConfirmable(
+        Long holdId,
+        Long userId,
+        Long paymentId
+    ) {
+        int updatedCount = capacityHoldRepository.consumeForPaidPaymentIfConfirmable(
+            holdId,
+            userId,
+            paymentId
+        );
+        if (updatedCount == 0) {
+            throw new ReservationConfirmationConflictException();
+        }
+        return capacityHoldRepository.findByHoldId(holdId)
+            .orElseThrow(() -> new IllegalStateException("consumed capacity hold does not exist"));
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
-    public int invalidateActiveHoldsForSession(
+    public List<TerminatedCapacityHold> invalidateActiveHoldsForSession(
         ContentSession contentSession,
         String invalidationReason,
         Instant invalidatedAt
@@ -84,12 +144,11 @@ public class CapacityHoldService {
         List<CapacityHold> activeHolds = capacityHoldRepository.findActiveBySessionIdForUpdate(
             contentSession.getSessionId()
         );
-        int releasedQuantity = activeHolds.stream()
-            .mapToInt(CapacityHold::getQuantity)
-            .sum();
         activeHolds.forEach(capacityHold -> capacityHold.invalidate(invalidationReason, invalidatedAt));
         capacityHoldRepository.saveAllAndFlush(activeHolds);
-        return releasedQuantity;
+        return activeHolds.stream()
+            .map(TerminatedCapacityHold::from)
+            .toList();
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -108,7 +167,7 @@ public class CapacityHoldService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public void invalidateAllActiveHoldsForContent(
+    public List<TerminatedCapacityHold> invalidateAllActiveHoldsForContent(
         Long contentId,
         String invalidationReason
     ) {
@@ -116,14 +175,36 @@ public class CapacityHoldService {
             throw new IllegalArgumentException("contentId must be positive");
         }
         validateInvalidationReason(invalidationReason);
-        capacityHoldRepository.findActiveHoldIdsByContentId(contentId)
-            .forEach(holdId -> invalidateAndReleaseCapacityIfActive(holdId, invalidationReason));
+        return capacityHoldRepository.findActiveByContentIdForUpdate(contentId)
+            .stream()
+            .map(capacityHold -> invalidateAndReleaseCapacityIfActive(
+                capacityHold.getHoldId(),
+                invalidationReason
+            ))
+            .flatMap(Optional::stream)
+            .toList();
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public void invalidateActiveHoldsForWithdrawal(Long userId) {
-        capacityHoldRepository.findActiveHoldIdsByUserId(userId)
-            .forEach(holdId -> invalidateAndReleaseCapacityIfActive(holdId, "USER_WITHDRAWAL"));
+    public List<Long> findActiveSessionIdsForWithdrawal(Long userId) {
+        return capacityHoldRepository.findActiveSessionIdsByUserId(userId);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public List<TerminatedCapacityHold> invalidateActiveHoldsForWithdrawal(
+        Long userId,
+        List<Long> sessionIds
+    ) {
+        List<TerminatedCapacityHold> terminatedCapacityHolds = sessionIds.stream()
+            .flatMap(sessionId -> capacityHoldRepository.findActiveByUserIdAndSessionIdForUpdate(userId, sessionId)
+                .stream())
+            .map(this::invalidateAndReleaseCapacityForWithdrawalIfActive)
+            .flatMap(Optional::stream)
+            .toList();
+        if (!capacityHoldRepository.findActiveHoldIdsByUserIdForUpdate(userId).isEmpty()) {
+            throw new IllegalStateException("active capacity hold remains after withdrawal termination");
+        }
+        return terminatedCapacityHolds;
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -176,9 +257,25 @@ public class CapacityHoldService {
             holdId,
             invalidationReason
         );
-        CapacityHold capacityHold = capacityHoldRepository.findByHoldId(holdId)
+        CapacityHold terminatedCapacityHold = capacityHoldRepository.findByHoldId(holdId)
             .orElseThrow(() -> new IllegalStateException("invalidated capacity hold does not exist"));
-        return Optional.of(TerminatedCapacityHold.from(capacityHold));
+        return Optional.of(TerminatedCapacityHold.from(terminatedCapacityHold));
+    }
+
+    private Optional<TerminatedCapacityHold> invalidateAndReleaseCapacityForWithdrawalIfActive(
+        CapacityHold capacityHold
+    ) {
+        if (capacityHold.getStatus() != CapacityHoldStatus.ACTIVE) {
+            return Optional.empty();
+        }
+        Long holdId = capacityHold.getHoldId();
+        capacityHoldRepository.invalidateAndReleaseCapacityIfActive(
+            holdId,
+            "USER_WITHDRAWAL"
+        );
+        CapacityHold terminatedCapacityHold = capacityHoldRepository.findByHoldId(holdId)
+            .orElseThrow(() -> new IllegalStateException("invalidated capacity hold does not exist"));
+        return Optional.of(TerminatedCapacityHold.from(terminatedCapacityHold));
     }
 
     private void validateInvalidationReason(String invalidationReason) {
@@ -190,6 +287,7 @@ public class CapacityHoldService {
     public record TerminatedCapacityHold(
         Long holdId,
         Region region,
+        int quantity,
         CapacityHoldStatus nextStatus,
         String reasonCode,
         Instant occurredAt
@@ -206,6 +304,7 @@ public class CapacityHoldService {
             return new TerminatedCapacityHold(
                 capacityHold.getHoldId(),
                 capacityHold.getRegion(),
+                capacityHold.getQuantity(),
                 capacityHold.getStatus(),
                 capacityHold.getInvalidationReason(),
                 capacityHold.getTerminalAt()

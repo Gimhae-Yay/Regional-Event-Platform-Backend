@@ -63,11 +63,12 @@ public class ApproveSessionRevisionUseCase {
         Long revisionId,
         UUID requestId
     ) {
+        RegionAdminAuthorizationService.AuthorizedRegionAdmin regionAdmin =
+            regionAdminAuthorizationService.requireAuthorizedRegionAdminForUpdate(userId);
         Long contentId = sessionRevisionService.findContentIdByRevisionId(revisionId);
         Content content = contentService.findApprovalTargetForUpdate(contentId);
         SessionRevision revision = sessionRevisionService.findApprovalTargetForUpdate(revisionId);
-        UserRoleAssignment reviewerAssignment = regionAdminAuthorizationService.authorize(
-            userId,
+        UserRoleAssignment reviewerAssignment = regionAdmin.authorize(
             content.getRegion().getRegionId()
         );
         ContentSession contentSession = contentSessionService.findRevisionTargetForUpdate(
