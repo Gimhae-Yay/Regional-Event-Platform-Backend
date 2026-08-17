@@ -3,8 +3,12 @@ package io.regionevent.regioneventbackend.domain.content.repository;
 import java.util.List;
 import java.util.Optional;
 
+import jakarta.persistence.LockModeType;
+
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -46,6 +50,20 @@ public interface ContentLogRepository extends JpaRepository<ContentLog, Long> {
     Optional<ContentLog> findTopByContentContentIdAndStatusOrderByDateDescIdDesc(
         Long contentId,
         ContentLogStatus status
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT contentLog
+        FROM ContentLog contentLog
+        WHERE contentLog.content.contentId = :contentId
+            AND contentLog.status = :status
+        ORDER BY contentLog.date DESC, contentLog.id DESC
+        """)
+    List<ContentLog> findLatestEndedForUpdate(
+        @Param("contentId") Long contentId,
+        @Param("status") ContentLogStatus status,
+        Pageable pageable
     );
 
 }

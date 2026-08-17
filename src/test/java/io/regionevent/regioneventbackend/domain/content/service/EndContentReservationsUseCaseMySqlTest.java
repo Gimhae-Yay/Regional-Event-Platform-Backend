@@ -364,6 +364,92 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
     }
 
     @Test
+    @Timeout(15)
+    void 시스템_종료가_콘텐츠_잠금을_먼저_대기하면_수동_종료는_기존_종료_결과를_반환한다() throws Exception {
+        Fixture fixture = createFixture();
+        CountDownLatch contentLocked = new CountDownLatch(1);
+        CountDownLatch releaseContentLock = new CountDownLatch(1);
+
+        EndContentReservationsSystemResult systemResult;
+        EndContentReservationsResult regionAdminResult;
+        try (ExecutorService executorService = Executors.newFixedThreadPool(3)) {
+            Future<?> lockHolder = executorService.submit(
+                () -> holdContentLock(fixture.contentId(), contentLocked, releaseContentLock)
+            );
+            assertThat(contentLocked.await(3, TimeUnit.SECONDS)).isTrue();
+
+            Future<EndContentReservationsSystemResult> systemEnd = executorService.submit(
+                () -> endContentReservationsUseCase.endBySystem(fixture.contentId(), UUID.randomUUID())
+            );
+            Future<EndContentReservationsResult> regionAdminEnd;
+            try {
+                assertThat(awaitContentLockWaitCount(1)).isTrue();
+                regionAdminEnd = executorService.submit(() -> endContentReservationsUseCase.endByRegionAdmin(
+                    fixture.adminId(),
+                    fixture.contentId(),
+                    UUID.randomUUID()
+                ));
+                assertThat(awaitContentLockWaitCount(2)).isTrue();
+            } finally {
+                releaseContentLock.countDown();
+            }
+
+            lockHolder.get(5, TimeUnit.SECONDS);
+            systemResult = systemEnd.get(5, TimeUnit.SECONDS);
+            regionAdminResult = regionAdminEnd.get(5, TimeUnit.SECONDS);
+        }
+
+        ContentLog endedLog = assertSingleSuccessfulEndSideEffects(fixture);
+        assertThat(systemResult.status()).isEqualTo(EndContentReservationsSystemResult.Status.ENDED);
+        assertThat(regionAdminResult.status()).isEqualTo(ContentStatus.ENDED);
+        assertThat(regionAdminResult.endedAt()).isEqualTo(endedLog.getDate());
+    }
+
+    @Test
+    @Timeout(15)
+    void 수동_종료가_콘텐츠_잠금을_먼저_대기하면_시스템_종료는_건너뛴다() throws Exception {
+        Fixture fixture = createFixture();
+        CountDownLatch contentLocked = new CountDownLatch(1);
+        CountDownLatch releaseContentLock = new CountDownLatch(1);
+
+        EndContentReservationsResult regionAdminResult;
+        EndContentReservationsSystemResult systemResult;
+        try (ExecutorService executorService = Executors.newFixedThreadPool(3)) {
+            Future<?> lockHolder = executorService.submit(
+                () -> holdContentLock(fixture.contentId(), contentLocked, releaseContentLock)
+            );
+            assertThat(contentLocked.await(3, TimeUnit.SECONDS)).isTrue();
+
+            Future<EndContentReservationsResult> regionAdminEnd = executorService.submit(
+                () -> endContentReservationsUseCase.endByRegionAdmin(
+                    fixture.adminId(),
+                    fixture.contentId(),
+                    UUID.randomUUID()
+                )
+            );
+            Future<EndContentReservationsSystemResult> systemEnd;
+            try {
+                assertThat(awaitContentLockWaitCount(1)).isTrue();
+                systemEnd = executorService.submit(
+                    () -> endContentReservationsUseCase.endBySystem(fixture.contentId(), UUID.randomUUID())
+                );
+                assertThat(awaitContentLockWaitCount(2)).isTrue();
+            } finally {
+                releaseContentLock.countDown();
+            }
+
+            lockHolder.get(5, TimeUnit.SECONDS);
+            regionAdminResult = regionAdminEnd.get(5, TimeUnit.SECONDS);
+            systemResult = systemEnd.get(5, TimeUnit.SECONDS);
+        }
+
+        ContentLog endedLog = assertSingleSuccessfulEndSideEffects(fixture);
+        assertThat(regionAdminResult.status()).isEqualTo(ContentStatus.ENDED);
+        assertThat(regionAdminResult.endedAt()).isEqualTo(endedLog.getDate());
+        assertThat(systemResult.status()).isEqualTo(EndContentReservationsSystemResult.Status.SKIPPED);
+    }
+
+    @Test
     void 종료된_콘텐츠를_순차_재시도하면_기존_종료_결과만_반환하고_종료_부수_효과를_중복_생성하지_않는다() {
         Fixture fixture = createFixture();
 
@@ -535,6 +621,39 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
             await(allowCommit);
             return updatedCount;
         });
+    }
+
+    private void holdContentLock(
+        Long contentId,
+        CountDownLatch contentLocked,
+        CountDownLatch releaseContentLock
+    ) {
+        transactionTemplate.executeWithoutResult(status -> {
+            contentRepository.findByContentIdAndDeletedAtIsNull(contentId).orElseThrow();
+            contentLocked.countDown();
+            await(releaseContentLock);
+        });
+    }
+
+    private boolean awaitContentLockWaitCount(int expectedCount) {
+        for (int attempt = 0; attempt < 30; attempt++) {
+            Integer waitingRequestCount = jdbcTemplate.queryForObject(
+                """
+                    SELECT COUNT(*)
+                    FROM information_schema.processlist
+                    WHERE id <> CONNECTION_ID()
+                        AND db = DATABASE()
+                        AND command = 'Query'
+                        AND LOWER(info) LIKE '%for update%'
+                    """,
+                Integer.class
+            );
+            if (waitingRequestCount != null && waitingRequestCount >= expectedCount) {
+                return true;
+            }
+            awaitLockWaitInterval();
+        }
+        return false;
     }
 
     private boolean awaitEndRequestLockWait() {
@@ -743,6 +862,28 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
         assertInvalidated(actual);
         assertThat(actual.getTerminalAt()).isEqualTo(beforeRetry.getTerminalAt());
         assertThat(actual.getCapacityReleasedAt()).isEqualTo(beforeRetry.getCapacityReleasedAt());
+    }
+
+    private ContentLog assertSingleSuccessfulEndSideEffects(Fixture fixture) {
+        List<ContentLog> contentLogs = contentLogRepository
+            .findByContentContentIdOrderByDateAscIdAsc(fixture.contentId());
+        assertThat(contentLogs)
+            .extracting(ContentLog::getStatus)
+            .containsExactly(ContentLogStatus.PUBLISHED, ContentLogStatus.ENDED);
+        assertThat(auditEventRepository.findAll())
+            .filteredOn(auditEvent -> auditEvent.getTargetType() == AuditEventTargetType.CONTENT)
+            .filteredOn(auditEvent -> fixture.contentId().equals(auditEvent.getTargetId()))
+            .singleElement()
+            .satisfies(auditEvent -> assertThat(auditEvent.getResult()).isEqualTo(AuditEventResult.SUCCESS));
+        assertThat(capacityHoldRepository.findById(fixture.firstHoldId()))
+            .hasValueSatisfying(this::assertInvalidated);
+        assertThat(capacityHoldRepository.findById(fixture.secondHoldId()))
+            .hasValueSatisfying(this::assertInvalidated);
+        assertThat(contentSessionRepository.findById(fixture.firstSessionId()))
+            .hasValueSatisfying(session -> assertThat(session.getRemainingCapacity()).isEqualTo(SESSION_CAPACITY));
+        assertThat(contentSessionRepository.findById(fixture.secondSessionId()))
+            .hasValueSatisfying(session -> assertThat(session.getRemainingCapacity()).isEqualTo(SESSION_CAPACITY));
+        return contentLogs.getLast();
     }
 
     private void assertNoEndSideEffects(Fixture fixture) {

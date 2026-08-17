@@ -7,6 +7,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
@@ -210,12 +211,29 @@ class EndContentReservationsUseCaseTest {
         when(endedContent.getRegion()).thenReturn(region);
         when(contentService.findEndTargetForUpdate(CONTENT_ID)).thenReturn(endedContent);
         givenAuthorizedRegionAdmin(regionAdmin);
-        when(contentLogService.findLatestEnded(CONTENT_ID)).thenReturn(endedLog);
+        when(contentLogService.findLatestEndedForUpdate(CONTENT_ID)).thenReturn(endedLog);
         when(endedLog.getDate()).thenReturn(ENDED_AT);
 
-        useCase.endByRegionAdmin(ADMIN_ID, CONTENT_ID, UUID.randomUUID());
+        EndContentReservationsResult result = useCase.endByRegionAdmin(
+            ADMIN_ID,
+            CONTENT_ID,
+            UUID.randomUUID()
+        );
 
-        verifyNoInteractions(publicCatalogCacheInvalidator);
+        assertThat(result.status()).isEqualTo(ContentStatus.ENDED);
+        assertThat(result.endedAt()).isEqualTo(ENDED_AT);
+        verify(contentLogService).findLatestEndedForUpdate(CONTENT_ID);
+        verifyNoMoreInteractions(contentLogService);
+        verifyNoInteractions(
+            contentWithdrawalRequestService,
+            contentRevisionInvalidationService,
+            contentSessionService,
+            capacityHoldService,
+            expirePendingPaymentForTerminatedHoldUseCase,
+            recordAuditEventUseCase,
+            recordFailedAuditEventUseCase,
+            publicCatalogCacheInvalidator
+        );
     }
 
     private Content publishedContent() {

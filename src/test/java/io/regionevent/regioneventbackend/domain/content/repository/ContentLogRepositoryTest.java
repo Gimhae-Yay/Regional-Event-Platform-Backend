@@ -15,6 +15,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.context.TestPropertySource;
 
 import io.regionevent.regioneventbackend.domain.content.entity.Content;
@@ -187,12 +188,12 @@ class ContentLogRepositoryTest {
         );
         entityManager.clear();
 
-        ContentLog latestEndedLog = contentLogRepository
-            .findTopByContentContentIdAndStatusOrderByDateDescIdDesc(
+        ContentLog latestEndedLog = contentLogRepository.findLatestEndedForUpdate(
                 content.getContentId(),
-                ContentLogStatus.ENDED
+                ContentLogStatus.ENDED,
+                Pageable.ofSize(1)
             )
-            .orElseThrow();
+            .getFirst();
 
         assertThat(latestEndedLog.getId()).isGreaterThan(firstAtSameTime.getId());
         assertThat(latestEndedLog.getId()).isEqualTo(latestAtSameTime.getId());
