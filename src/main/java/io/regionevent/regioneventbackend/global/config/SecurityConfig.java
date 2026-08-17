@@ -132,7 +132,8 @@ public class SecurityConfig {
                     "/api/v1/auth/login",
                     "/api/v1/auth/refresh",
                     "/api/v1/auth/logout",
-                    "/api/v1/webhooks/portone"
+                    "/api/v1/webhooks/portone",
+                    "/internal/performance/fixtures/reset"
                 ).permitAll()
                 .requestMatchers(
                     HttpMethod.GET,

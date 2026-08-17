@@ -60,6 +60,11 @@ storage:
     enabled: ${IMAGE_STORAGE_FAKE_ENABLED:false}
     base-url: ${IMAGE_STORAGE_FAKE_BASE_URL:https://example.invalid/local-image-storage}
 
+performance:
+  fixture:
+    enabled: ${PERFORMANCE_FIXTURE_ENABLED:false}
+    reset-token: ${PERFORMANCE_FIXTURE_RESET_TOKEN:}
+
 content:
   publication:
     initial-delay: PT1M

@@ -11,7 +11,7 @@ param(
     [string] $BaseFixturePath = (Join-Path $PSScriptRoot 'seed/k6-local.seed.sql'),
     [string] $BootstrapFixturePath = (Join-Path $PSScriptRoot 'fixtures/api-success-coverage-bootstrap.sql'),
 
-    [ValidateSet('Container', 'Rds')]
+    [ValidateSet('Container', 'Rds', 'RemoteApi')]
     [string] $FixtureDatabaseMode = 'Container',
     [string] $FixtureDatabaseHost,
     [ValidateRange(1, 65535)]
@@ -20,6 +20,7 @@ param(
     [string] $FixtureDatabaseUser,
     [string] $FixtureDatabasePasswordEnvironmentVariable = 'PERF_FIXTURE_DB_PASSWORD',
     [switch] $AllowRdsFixtureReset,
+    [string] $FixtureResetTokenEnvironmentVariable = 'PERF_FIXTURE_RESET_TOKEN',
 
     [string] $K6Command = 'k6',
     [string] $BaseUrl = 'http://127.0.0.1:18080',
@@ -88,6 +89,25 @@ function Get-FixtureDatabaseConfiguration {
     }
 }
 
+function Get-RemoteFixtureResetConfiguration {
+    if ([string]::IsNullOrWhiteSpace($FixtureResetTokenEnvironmentVariable)) {
+        throw 'RemoteApi fixture mode requires -FixtureResetTokenEnvironmentVariable.'
+    }
+    $token = [Environment]::GetEnvironmentVariable($FixtureResetTokenEnvironmentVariable, 'Process')
+    if ([string]::IsNullOrWhiteSpace($token)) {
+        throw "RemoteApi fixture mode requires the $FixtureResetTokenEnvironmentVariable process environment variable."
+    }
+    $resetUrl = "$($BaseUrl.TrimEnd('/'))/internal/performance/fixtures/reset"
+    $uri = $null
+    if (-not [Uri]::TryCreate($resetUrl, [UriKind]::Absolute, [ref] $uri)) {
+        throw "RemoteApi fixture mode requires an absolute -BaseUrl: $BaseUrl"
+    }
+    return [PSCustomObject]@{
+        ResetUrl = $uri.AbsoluteUri
+        Token = $token
+    }
+}
+
 function Invoke-DatabaseSql {
     param(
         [Parameter(Mandatory = $true)]
@@ -118,6 +138,33 @@ function Invoke-DatabaseSql {
     if ($LASTEXITCODE -ne 0) {
         throw "Database fixture preparation failed with exit code $LASTEXITCODE.`n$($output -join [Environment]::NewLine)"
     }
+}
+
+function Invoke-FixtureReset {
+    if ($FixtureDatabaseMode -ne 'RemoteApi') {
+        Invoke-DatabaseSql -Sql (Get-Content -Raw -Encoding UTF8 -LiteralPath $BaseFixturePath)
+        Invoke-DatabaseSql -Sql (Get-Content -Raw -Encoding UTF8 -LiteralPath $BootstrapFixturePath)
+        return
+    }
+
+    try {
+        $response = Invoke-RestMethod `
+            -Method Post `
+            -Uri $remoteFixtureReset.ResetUrl `
+            -Headers @{
+                Accept = 'application/json'
+                'X-Performance-Fixture-Token' = $remoteFixtureReset.Token
+            }
+    } catch {
+        throw "Remote fixture reset request failed: $($_.Exception.Message)"
+    }
+    if ($response.statusCode -ne 200 `
+        -or $response.code -ne 'SUCCESS' `
+        -or $null -eq $response.data `
+        -or [string]::IsNullOrWhiteSpace($response.data.fixtureVersion)) {
+        throw 'Remote fixture reset response must contain HTTP 200, code SUCCESS, and data.fixtureVersion.'
+    }
+    Write-Host "Remote fixture reset completed: $($response.data.fixtureVersion)"
 }
 
 function Get-JsonArrayFile {
@@ -235,9 +282,14 @@ $readCases = Get-ReadCases -CasesJson $allCases
 $readFixtureSetupCases = Get-ReadFixtureSetupCases -CasesJson $allCases
 $fixtureContext = Get-JsonObjectFile -Path $FixtureContextPath -Name 'FixtureContextPath'
 Assert-CompleteGetCoverage -ReadCasesJson $readCases
-$database = Get-FixtureDatabaseConfiguration
-Invoke-DatabaseSql -Sql (Get-Content -Raw -Encoding UTF8 -LiteralPath $BaseFixturePath)
-Invoke-DatabaseSql -Sql (Get-Content -Raw -Encoding UTF8 -LiteralPath $BootstrapFixturePath)
+$database = $null
+$remoteFixtureReset = $null
+if ($FixtureDatabaseMode -eq 'RemoteApi') {
+    $remoteFixtureReset = Get-RemoteFixtureResetConfiguration
+} else {
+    $database = Get-FixtureDatabaseConfiguration
+}
+Invoke-FixtureReset
 
 New-Item -ItemType Directory -Force -Path $resultDirectory | Out-Null
 $k6Environment = @{
