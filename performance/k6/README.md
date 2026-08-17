@@ -78,7 +78,15 @@ $env:PERF_FIXTURE_DB_PASSWORD = '<Secret injection result>'
 결과는 `performance/k6/results/<yyyy-MM-dd>/` 아래에 생성된다.
 
 - 조회: `authenticated-read-response-time-summary.md`
-- 쓰기: `write-api-response-time/write-api-response-time-summary.md` 및 각 `round-*/metrics.json`
+- 쓰기: `write-api-response-time/write-api-response-time-summary.md`
+
+기본 실행은 조회·쓰기 최종 요약본만 보관한다. 쓰기 러너는 집계에 필요한 각 라운드의 `metrics.json`과 k6 요약을 임시 경로에 만들고, 최종 집계가 성공하면 삭제한다. 원시 결과를 남겨야 할 때만 `-KeepRawMetrics`를 추가한다.
+
+```powershell
+.\performance\k6\run-write-api-response-time.ps1 `
+  -RequestsPerCase 100 `
+  -KeepRawMetrics
+```
 
 쓰기 결과는 케이스별 평균·p95·최대 응답시간을 포함한다. HTTP 실패율만 보지 말고 정상 응답 check, endpoint별 상태 코드, fixture 초기화 실패 여부를 함께 확인한다.
 
