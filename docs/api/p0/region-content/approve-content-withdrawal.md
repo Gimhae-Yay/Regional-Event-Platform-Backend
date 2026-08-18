@@ -26,7 +26,7 @@
 | 대상 | 기준 문서 | 이 API에서 명시할 내용 |
 | --- | --- | --- |
 | Base URL·시간·식별자 | [API 공통 규칙](../../common/api-conventions.md) | 실제 경로는 `/api/v1/region-admin/content-withdrawal-requests/{withdrawalRequestId}/approve`; 시각은 UTC `Z`, 식별자는 양의 10진 문자열 |
-| 인증·인가 | [인증·인가](../../common/authentication.md) | 활성 `REGION_ADMIN`과 요청 콘텐츠의 담당 지역 일치가 필요 |
+| 인증·인가 | [인증·인가](../../common/authentication.md) | `ROLE_REGION_ADMIN` snapshot, 활성 `ORDINARY` 계정과 요청 콘텐츠의 현재 담당 지역 일치가 필요 |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | 성공과 저장 결과 재응답은 `200 OK`; 상태 경합은 `CONTENT_STATE_CONFLICT` |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | 명령 API이므로 적용하지 않음 |
 
@@ -50,7 +50,7 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Authorization` | Y | `Bearer {accessToken}`. 활성 `REGION_ADMIN`이어야 한다. |
+| `Authorization` | Y | `Bearer {accessToken}`. 활성 지역 관리자여야 한다. |
 | `Accept` | N | `application/json` |
 | `Idempotency-Key` | N | 사용하지 않는다. 요청 ID와 저장된 터미널 상태를 자연 멱등 기준으로 사용한다. |
 
@@ -115,7 +115,7 @@ Accept: application/json
 | `400` | `INVALID_INPUT` | `withdrawalRequestId`가 양수가 아니다. 아무 상태도 변경하지 않는다. |
 | `400` | `INVALID_TYPE` | 식별자를 signed 64비트 양의 정수로 해석할 수 없다. 아무 상태도 변경하지 않는다. |
 | `401` | `UNAUTHENTICATED` | 인증 정보가 없거나 유효하지 않다. |
-| `403` | `FORBIDDEN` | 활성 지역 관리자 역할이 없거나 요청 콘텐츠의 지역이 담당 지역과 다르다. |
+| `403` | `FORBIDDEN` | `ROLE_REGION_ADMIN` authority가 없거나 활성 `ORDINARY` 계정이 아니거나 요청 콘텐츠의 지역이 현재 담당 지역과 다르다. |
 | `404` | `NOT_FOUND` | 요청을 찾을 수 없다. |
 | `409` | `CONTENT_STATE_CONFLICT` | 요청이 `REJECTED`·`INVALIDATED`이거나 콘텐츠가 `PUBLISHED`가 아니거나 승인·반려·중단·종료 등 다른 전이가 먼저 성공했다. 이미 `APPROVED`인 같은 요청은 오류가 아니라 저장 결과를 반환한다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 승인 트랜잭션 중 예상하지 못한 오류가 발생했다. 커밋되지 않았다면 모든 MySQL 변경이 롤백된다. |

@@ -30,7 +30,7 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Authorization` | Y | `Bearer {accessToken}`. 인증 주체는 승인된 소유 운영자여야 한다. |
+| `Authorization` | Y | `Bearer {accessToken}`. 인증 주체는 `ROLE_OPERATOR` snapshot을 가지고 활성 `ORDINARY` 계정이며 현재 담당 지역의 소유 운영자여야 한다. |
 | `Accept` | N | `application/json` |
 
 #### Path Variable
@@ -128,7 +128,7 @@ Accept: application/json
 | --- | --- | --- |
 | `400` | `INVALID_INPUT` | `contentId` 또는 `sessionId`가 없거나 양수가 아니다. 조회 대상과 상태를 변경하지 않으며 요청 값을 수정한 뒤 재시도할 수 있다. |
 | `401` | `UNAUTHENTICATED` | 인증 정보가 없거나 유효하지 않다. 조회 대상과 상태를 변경하지 않으며 유효한 인증 정보로 재시도할 수 있다. |
-| `403` | `FORBIDDEN` | 승인된 운영자가 아니거나 콘텐츠의 소유 운영자 또는 담당 지역이 인증 운영자와 일치하지 않는다. 조회 대상과 상태를 변경하지 않으며 동일한 권한 상태로 재시도해도 성공하지 않는다. |
+| `403` | `FORBIDDEN` | `ROLE_OPERATOR` authority가 없거나 활성 `ORDINARY` 계정이 아니거나 콘텐츠의 소유 운영자 또는 현재 담당 지역이 인증 운영자와 일치하지 않는다. 조회 대상과 상태를 변경하지 않으며 동일한 권한 상태로 재시도해도 성공하지 않는다. |
 | `404` | `NOT_FOUND` | 콘텐츠를 찾을 수 없거나, `sessionId`가 해당 콘텐츠와 지역에 속하지 않는다. 조회 대상과 상태를 변경하지 않으며 콘텐츠와 회차 식별자를 확인한 뒤 재시도할 수 있다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 예약·홀드·방문·회차 연결 정합성 오류 또는 예상하지 못한 서버 오류가 발생했다. 조회 대상과 상태를 변경하지 않으며 일시적 장애라면 동일 요청으로 재시도할 수 있지만 정합성 오류는 해결 전까지 재시도해도 성공하지 않는다. |
 
@@ -145,7 +145,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. 인증 주체는 승인된 담당 지역의 `OPERATOR`여야 한다.
+1. Access Token의 `ROLE_OPERATOR` authority를 1차로 확인하고, DB에서 활성 `ORDINARY` 계정의 현재 담당 지역과 대상 회차·콘텐츠 소유 관계를 확인한다.
 2. 서버는 `contentId`로 콘텐츠를 찾은 뒤, 콘텐츠의 `operator_id`와 `region_id`가 인증 운영자의 소유·담당 지역과 일치하는지 검증한다.
 3. `sessionId`는 조회한 콘텐츠와 같은 `content_id`, 같은 `region_id`를 가진 회차여야 한다. 일치하지 않으면 대상 부재로 처리한다.
 4. 해당 회차의 `CONFIRMED`, `CHECKED_IN`, `CANCELLED`, `EXPIRED` 예약을 모두 반환한다. 상태 필터는 P0 범위에 포함하지 않는다.

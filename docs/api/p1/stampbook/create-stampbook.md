@@ -129,7 +129,7 @@ Accept: application/json
 | `400` | `INVALID_INPUT` | 제목 누락·공백·100자 초과, 식별자 범위 위반, 빈·중복 콘텐츠 배열 또는 사유 형식 위반이다. 스탬프북·대상 연결·감사 이력을 생성하지 않는다. |
 | `400` | `INVALID_JSON` | 요청 본문이 JSON 형식이 아니거나 역직렬화할 수 없다. 스탬프북·대상 연결·감사 이력을 생성하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 스탬프북·대상 연결·감사 이력을 생성하지 않는다. |
-| `403` | `FORBIDDEN` | 인증 주체가 승인된 `OPERATOR`가 아니거나 요청 지역·콘텐츠의 담당 범위를 벗어난다. 스탬프북·대상 연결·감사 이력을 생성하지 않는다. |
+| `403` | `FORBIDDEN` | Access Token에 `ROLE_OPERATOR` authority가 없거나 활성 `ORDINARY` 계정이 아니거나 요청 지역·콘텐츠가 현재 담당 범위를 벗어난다. 스탬프북·대상 연결·감사 이력을 생성하지 않는다. |
 | `404` | `NOT_FOUND` | 요청 지역, 대상 콘텐츠 또는 보상 쿠폰 정책이 없다. 스탬프북·대상 연결·감사 이력을 생성하지 않는다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 예상하지 못한 서버 오류가 발생했다. 트랜잭션이 커밋되지 않은 경우 스탬프북·대상 연결·감사 이력을 생성하지 않는다. |
 
@@ -146,7 +146,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. 인증 주체는 활성·승인된 `OPERATOR`이고, `regionId`의 담당 지역 및 모든 `contentIds`의 소유 운영자여야 한다.
+1. Access Token의 `ROLE_OPERATOR` authority를 1차로 확인한다. DB에서는 활성 `ORDINARY` 계정의 현재 담당 지역이 `regionId`와 같고, 모든 `contentIds`의 콘텐츠 소유자가 인증 주체인지 확인한다.
 2. 모든 대상 콘텐츠의 지역은 `regionId`와 같아야 한다. 다른 지역·회차 단위·지역 전체 자동 적용은 허용하지 않는다.
 3. 보상 쿠폰 정책은 `regionId`와 같고 발급 경로가 `STAMPBOOK_COMPLETION`이어야 한다.
 4. `title`은 앞뒤 공백을 제거한 1~100자 값을 `stampbook.title`에 저장한다. 대상 콘텐츠 제목을 조합하거나 대체하지 않는다.

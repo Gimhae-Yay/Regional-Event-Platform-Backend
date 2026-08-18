@@ -27,7 +27,7 @@
 | 대상 | 기준 문서 | 이 API에서 명시할 내용 |
 | --- | --- | --- |
 | Base URL·미디어 타입·시간·식별자 | [API 공통 규칙](../../common/api-conventions.md) | 실제 경로는 `/api/v1/region-admin/content-withdrawal-requests/{withdrawalRequestId}`이며, 사건 시각은 UTC `Z`, 식별자는 양의 10진 문자열이다. |
-| 인증·인가 | [인증·인가](../../common/authentication.md) | 활성 `REGION_ADMIN` 역할과 담당 지역 배정이 필요하고 요청 콘텐츠의 지역이 담당 지역과 일치해야 한다. |
+| 인증·인가 | [인증·인가](../../common/authentication.md) | `ROLE_REGION_ADMIN` snapshot, 활성 `ORDINARY` 계정과 현재 담당 지역 관계가 필요하고 요청 콘텐츠의 지역이 담당 지역과 일치해야 한다. |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | 공통 네 필드를 사용하며 성공 상태는 `200 OK`다. |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | 단건 조회이므로 적용하지 않는다. |
 
@@ -136,7 +136,7 @@ Accept: application/json
 | `400` | `INVALID_INPUT` | `withdrawalRequestId`가 양수가 아니다. 조회 대상과 상태를 변경하지 않는다. |
 | `400` | `INVALID_TYPE` | `withdrawalRequestId`를 signed 64비트 양의 정수로 해석할 수 없다. 조회 대상과 상태를 변경하지 않는다. |
 | `401` | `UNAUTHENTICATED` | 인증 정보가 없거나 유효하지 않다. 조회 대상과 상태를 변경하지 않는다. |
-| `403` | `FORBIDDEN` | 인증 주체가 활성 지역 관리자가 아니거나 요청 콘텐츠의 지역이 담당 지역과 다르다. 조회 대상과 상태를 변경하지 않는다. |
+| `403` | `FORBIDDEN` | 인증 주체에게 `ROLE_REGION_ADMIN` authority가 없거나 활성 `ORDINARY` 계정이 아니거나 요청 콘텐츠의 지역이 현재 담당 지역과 다르다. 조회 대상과 상태를 변경하지 않는다. |
 | `404` | `NOT_FOUND` | 요청이 없거나 `PENDING` 심사 대상이 아니다. 종결 상태와 존재하지 않는 요청을 구분해 노출하지 않는다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 요청·콘텐츠·요청자 연결 정합성 오류 또는 예상하지 못한 서버 오류가 발생했다. 조회 대상과 상태를 변경하지 않는다. |
 
@@ -153,7 +153,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. 인증 주체는 `ACTIVE` 상태이고 활성 `REGION_ADMIN` 역할과 담당 `region_id`를 가져야 한다.
+1. 인증 주체는 `ROLE_REGION_ADMIN` snapshot을 가지고 `ACTIVE` 상태의 `ORDINARY` 계정이며 현재 담당 `region_id`를 가져야 한다.
 2. 서버는 `content_withdrawal_request`에서 콘텐츠를 조회하고, 요청 콘텐츠의 `region_id`와 인증 지역 관리자의 담당 지역이
    일치하는지 검증한다. 클라이언트가 지역 식별자를 전달하거나 지역 범위를 우회할 수 없다.
 3. 요청이 `PENDING`, 콘텐츠가 미삭제 `PUBLISHED`인 경우에만 상세를 반환한다.

@@ -41,7 +41,7 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Authorization` | Y | `Bearer {accessToken}` 형식의 유효한 Access Token이다. 인증 주체는 `ACTIVE` 회원이고 현재 `OPERATOR` 역할이어야 한다. |
+| `Authorization` | Y | `Bearer {accessToken}` 형식의 유효한 Access Token이다. Access Token에 `ROLE_OPERATOR` authority가 있어야 하며, DB에서 활성 `ORDINARY` 계정과 현재 담당 지역 관계를 확인한다. |
 | `Content-Type` | N | 요청 본문이 없으므로 전송하지 않는다. |
 | `Accept` | N | `application/json` |
 
@@ -129,7 +129,7 @@ Accept: application/json
 | --- | --- |
 | `400` | `INVALID_INPUT` | `couponPolicyId`가 양의 10진 문자열이 아니거나 signed 64비트 `Long` 범위를 벗어난다. 조회 상태는 변경되지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 조회 상태는 변경되지 않으며 유효한 Token으로 다시 요청할 수 있다. |
-| `403` | `FORBIDDEN` | 인증 주체가 `ACTIVE` 회원 또는 현재 `OPERATOR` 역할이 아니거나, 대상 정책 콘텐츠의 지역이 담당 지역과 다르거나, 대상 콘텐츠를 소유하지 않는다. 쿠폰 정책을 반환하지 않는다. |
+| `403` | `FORBIDDEN` | Access Token에 `ROLE_OPERATOR` authority가 없거나, 활성 `ORDINARY` 계정이 아니거나, 대상 정책 콘텐츠의 지역이 현재 담당 지역과 다르거나, 대상 콘텐츠를 소유하지 않는다. 쿠폰 정책을 반환하지 않는다. |
 | `404` | `NOT_FOUND` | 대상 쿠폰 정책이 없다. 조회 상태는 변경되지 않는다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 쿠폰 정책 상세 조회 중 예상하지 못한 서버 오류가 발생했다. 조회 상태는 변경되지 않으며 일시적 장애라면 동일 요청으로 재시도할 수 있다. |
 
@@ -146,7 +146,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. 인증 주체는 `ACTIVE` 회원이고 현재 `OPERATOR` 역할이어야 한다.
+1. Access Token의 `ROLE_OPERATOR` authority를 1차로 확인하고, DB에서 활성 `ORDINARY` 계정과 현재 담당 지역 관계를 확인한다.
 2. 대상 쿠폰 정책이 없으면 `404 NOT_FOUND`를 반환한다.
 3. 대상 정책 콘텐츠의 소유자가 인증 운영자가 아니거나 정책 콘텐츠의 `regionId`가 인증 운영자의 담당 지역과 다르면 `403 FORBIDDEN`을 반환한다.
 4. 이 API는 조회 전용이며 쿠폰 정책, 발급 수, 정책 이력, 쿠폰, 쿠폰 상태 이력과 감사 이력을 생성·수정·삭제하지 않는다.

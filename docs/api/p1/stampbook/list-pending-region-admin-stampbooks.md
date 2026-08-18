@@ -118,7 +118,7 @@ Accept: application/json
 | --- | --- | --- |
 | `400` | `INVALID_INPUT` | `status`가 누락·공백이거나 `PENDING_REVIEW`가 아니다. 스탬프북과 감사 이력을 변경하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 목록을 반환하거나 상태·감사 이력을 변경하지 않는다. |
-| `403` | `FORBIDDEN` | 인증 주체가 활성·승인된 담당 지역의 `REGION_ADMIN`이 아니다. 목록을 반환하거나 상태·감사 이력을 변경하지 않는다. |
+| `403` | `FORBIDDEN` | Access Token에 `ROLE_REGION_ADMIN` authority가 없거나 활성 `ORDINARY` 계정이 아니거나 현재 담당 지역이 없다. 목록을 반환하거나 상태·감사 이력을 변경하지 않는다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 스탬프북·대상 콘텐츠·심사 요청 감사 이력의 연결 정합성 오류 또는 예상하지 못한 서버 오류가 발생했다. 상태와 감사 이력을 변경하지 않는다. |
 
 #### Error Response Body
@@ -134,7 +134,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. 서버는 인증 주체가 활성·승인된 `REGION_ADMIN`이고 담당 `region_id`를 보유하는지 확인한다. 클라이언트는 지역 식별자를 전달하거나 담당 지역을 바꿀 수 없다.
+1. Access Token의 `ROLE_REGION_ADMIN` authority를 1차로 확인하고, DB에서 활성 `ORDINARY` 계정의 현재 담당 `region_id`를 조회한다. 클라이언트는 지역 식별자를 전달하거나 담당 지역을 바꿀 수 없다.
 2. `stampbook.region_id = 인증 지역 관리자의 담당 region_id` 및 `stampbook.status = PENDING_REVIEW`인 행만 반환한다. 다른 지역 스탬프북의 존재 여부와 개수는 노출하지 않는다.
 3. `status`가 누락되거나 `PENDING_REVIEW` 이외의 값이면 빈 목록으로 대체하지 않고 `400 INVALID_INPUT`으로 거부한다.
 4. `requestedAt`은 해당 스탬프북의 가장 최근 성공 `STAMPBOOK` 감사 이벤트 중 이전 상태가 `DRAFT`, 이후 상태가 `PENDING_REVIEW`인 이벤트의 `occurred_at`이다. 이 이벤트가 없거나 상태·대상과 일치하지 않으면 정상 항목으로 대체하지 않고 정합성 오류로 처리한다.

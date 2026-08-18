@@ -23,7 +23,7 @@
 | 대상 | 기준 문서 | 이 API에서 명시할 내용 |
 | --- | --- | --- |
 | Base URL·미디어 타입·시각·식별자 표현 | [API 공통 규칙](../../common/api-conventions.md) | Base URL은 `/api/v1`이고, 일정 시각·사건 시각·식별자는 공통 규칙을 따른다. |
-| 인증·인가 | [인증·인가](../../common/authentication.md) | 활성 `REGION_ADMIN` 역할과 담당 지역 일치가 필요하다. |
+| 인증·인가 | [인증·인가](../../common/authentication.md) | `ROLE_REGION_ADMIN` snapshot으로 1차 인가하고, DB에서 활성 `ORDINARY` 계정과 현재 담당 지역 일치를 확인한다. |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | `200 OK`와 공통 오류 코드를 사용한다. |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | P0에서는 페이지네이션을 적용하지 않는다. |
 
@@ -131,7 +131,7 @@ Accept: application/json
 | --- | --- | --- |
 | 400 | `INVALID_INPUT` | `status`가 없거나 `PENDING`이 아니다. |
 | 401 | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. |
-| 403 | `FORBIDDEN` | 담당 지역 관리자 역할 또는 담당 지역이 없다. |
+| 403 | `FORBIDDEN` | `ROLE_REGION_ADMIN` authority가 없거나 활성 `ORDINARY` 계정 또는 담당 지역 관계가 없다. |
 | 500 | `INTERNAL_SERVER_ERROR` | 수정 요청·대상 회차·콘텐츠·지역 관계가 정책과 일치하지 않는다. |
 
 #### Error Response Body
@@ -147,7 +147,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. 인증 주체의 `REGION_ADMIN` 담당 지역과 `session_revision.region_id`가 같은 행만 반환한다.
+1. `ROLE_REGION_ADMIN` snapshot을 통과한 인증 주체의 현재 담당 지역과 `session_revision.region_id`가 같은 행만 반환한다.
 2. `session_revision.status = PENDING`이고 콘텐츠가 소프트 삭제되지 않은 행만 반환한다. 승인 가능 여부는 상세·승인 시점에 다시 판단한다.
 3. `submitted_at` 오름차순, 같은 시각이면 `session_revision_id` 오름차순으로 정렬한다.
 4. 조회는 수정 요청·실제 회차·감사 기록을 변경하지 않는다.

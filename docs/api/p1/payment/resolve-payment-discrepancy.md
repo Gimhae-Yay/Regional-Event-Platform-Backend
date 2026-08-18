@@ -9,7 +9,7 @@
 
 ## 1. 개요
 
-활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN`이 증빙과 사유를 남기고 `OPEN` 결제 불일치를 문제없음으로
+`ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` snapshot을 가진 활성 `PRIVILEGED` 계정이 증빙과 사유를 남기고 `OPEN` 결제 불일치를 문제없음으로
 종결한다. 이 API는 결제를 승인 처리하거나 취소된 예약을 강제로 확정하지 않는다. 조사 결과 전액환불이
 필요하면 이 API를 사용하지 않고 환불 도메인의 결제 불일치 전액환불 요청 API를 사용한다. 이중 승인은
 P1에서 적용하지 않으며 권한 있는 전체관리자 1명이 처리한다.
@@ -50,7 +50,7 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Authorization` | Y | `Bearer {accessToken}` 형식의 유효한 Access Token이다. 인증 주체는 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN`이어야 한다. |
+| `Authorization` | Y | `Bearer {accessToken}` 형식의 유효한 Access Token이다. 인증 주체는 `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` snapshot을 가지고 활성 `PRIVILEGED` 계정이어야 한다. |
 | `Content-Type` | Y | `application/json; charset=UTF-8` |
 | `Accept` | N | `application/json` |
 
@@ -124,7 +124,7 @@ Accept: application/json
 | `400` | `INVALID_INPUT` | `evidenceReference` 또는 `reason`이 누락·공백·500자 초과다. 불일치·조치·감사 이력을 변경하지 않는다. |
 | `400` | `INVALID_JSON` | 요청 본문이 JSON 형식이 아니거나 역직렬화할 수 없다. 불일치·조치·감사 이력을 변경하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 불일치·조치·감사 이력을 변경하지 않는다. |
-| `403` | `FORBIDDEN` | 인증 주체가 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN`이 아니다. 불일치·조치·감사 이력을 변경하지 않는다. |
+| `403` | `FORBIDDEN` | 인증 주체에게 `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` authority가 없거나 활성 `PRIVILEGED` 계정이 아니다. 불일치·조치·감사 이력을 변경하지 않는다. |
 | `404` | `NOT_FOUND` | 대상 불일치가 없다. 불일치·조치·감사 이력을 변경하지 않는다. |
 | `409` | `PAYMENT_DISCREPANCY_STATE_CONFLICT` | 대상 불일치가 `OPEN`이 아니다(이미 문제없음 종결됐거나 전액환불이 요청됨). 불일치·조치·감사 이력을 변경하지 않는다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 예상하지 못한 서버 오류가 발생했다. 트랜잭션이 커밋되지 않은 경우 불일치·조치·감사 이력을 변경하지 않는다. |
@@ -142,7 +142,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. 인증 주체는 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN` 배정을 가져야 한다. 콘텐츠 운영자와 지역 관리자는 이 API를 호출할 수 없다.
+1. 인증 주체는 `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` snapshot을 가지고 활성 `PRIVILEGED` 계정이어야 한다. 콘텐츠 운영자와 지역 관리자는 이 API를 호출할 수 없다.
 2. 대상 불일치는 `OPEN`이어야 한다. `RESOLVED_NO_ISSUE` 또는 `REFUND_REQUESTED`이면 `409 PAYMENT_DISCREPANCY_STATE_CONFLICT`로 거부해 이미 종결된 건을 중복 처리하지 않는다.
 3. 이 조치는 결제를 승인 처리하거나 취소된 예약을 강제로 확정하지 않는다. `payment.status`는 변경하지 않고 `DISCREPANT`로 유지한다.
 4. `payment_discrepancy.status`를 `RESOLVED_NO_ISSUE`로 전이하고, `action = NO_ISSUE_CLOSE`, `evidenceReference`, `reason`과 처리자·시각을 포함한 `payment_discrepancy_action`을 생성한다.

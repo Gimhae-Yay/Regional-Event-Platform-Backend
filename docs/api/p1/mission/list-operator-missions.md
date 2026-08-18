@@ -84,9 +84,9 @@ Accept: application/json
 | `400` | `INVALID_INPUT` | 쿼리 파라미터가 유효하지 않다. |
 | `400` | `INVALID_TYPE` | 쿼리 파라미터를 선언된 타입으로 변환할 수 없다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. |
-| `403` | `FORBIDDEN` | 담당 지역의 `OPERATOR` 역할이 없다. |
+| `403` | `FORBIDDEN` | Access Token에 `ROLE_OPERATOR` authority가 없거나 활성 `ORDINARY` 계정이 아니거나 현재 담당 지역이 없다. |
 
 ### 처리 규칙
 
-1. 인증 운영자의 담당 지역 미션만 반환한다.
+1. Access Token의 `ROLE_OPERATOR` authority를 1차로 확인하고, DB에서 활성 `ORDINARY` 계정의 현재 담당 지역 미션만 반환한다.
 2. 빈 결과는 `200 OK`, 빈 `content` 배열, `totalElements = 0`, `totalPages = 0`으로 반환한다.

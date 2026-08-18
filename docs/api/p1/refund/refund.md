@@ -37,7 +37,7 @@
 | 대상 | 기준 문서 | 이 도메인에서 명시할 내용 |
 | --- | --- | --- |
 | Base URL·미디어 타입·시간 형식 | [API 공통 규칙](../../common/api-conventions.md) | Base URL은 `/api/v1`이며, 환불 관련 사건 시각은 UTC ISO 8601 형식이다. |
-| 인증·인가 | [인증·인가](../../common/authentication.md) | 방문자 API(`/me/...`)는 활성 회원 본인 소유 조건, 전체관리자 API(`/platform-admin/...`)는 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN` 활성 배정을 검증한다. |
+| 인증·인가 | [인증·인가](../../common/authentication.md) | 방문자 API(`/me/...`)는 활성 회원 본인 소유 조건을 검증한다. 전체관리자 API(`/platform-admin/...`)는 `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` snapshot으로 1차 인가하고, DB에서는 활성 `PRIVILEGED` 계정과 대상·업무 상태를 검증한다. |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | API별 `data` 필드와 오류 코드를 확인한다. `REFUND_PAYMENT_CONFLICT`, `REFUND_STATE_CONFLICT`는 P1 구현 시 전역 `ErrorCode`에 추가한다. |
 | 멱등성 | [ADR-0070](../../../adr/0070-use-full-refund-with-bounded-manual-retry-and-discrepancy-closure.md) | 수동 환불은 `refund.payment_id` 유일성(결제당 최대 한 건)으로 자연 멱등하며 별도 `Idempotency-Key`를 받지 않는다. 이미 환불이 있으면 새로 만들지 않고 기존 상태를 반환한다. |
 | 감사 이력 | [P1 ERD](../../../p1-erd.md), [ADR-0071](../../../adr/0071-deidentify-p1-benefit-data-on-withdrawal-and-extend-common-audit.md) | 환불 상태 전이는 대상·처리자·이전·이후 상태·사유·증빙 참조·시각과 서버가 부여한 `requestId`를 함께 감사한다. `requestId`는 응답에 노출하지 않는다. PortOne 원문, 결제 비밀값과 전체 결제수단 정보는 저장하지 않는다. |

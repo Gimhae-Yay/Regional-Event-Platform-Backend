@@ -26,7 +26,7 @@
 | 대상 | 기준 문서 | 이 API에서 명시할 내용 |
 | --- | --- | --- |
 | Base URL·미디어 타입·시각·식별자 | [API 공통 규칙](../../common/api-conventions.md) | 실제 경로는 `/api/v1/operator/contents/{contentId}/revisions`다. |
-| 인증·인가 | [인증·인가](../../common/authentication.md) | 승인된 `OPERATOR` 역할, 담당 지역 일치와 콘텐츠 소유 관계가 필요하다. |
+| 인증·인가 | [인증·인가](../../common/authentication.md) | `ROLE_OPERATOR` snapshot으로 1차 인가하고, DB에서 활성 `ORDINARY` 계정, 현재 담당 지역 일치와 콘텐츠 소유 관계를 확인한다. |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | `201 Created`와 심사 요청 수정본 식별자를 반환한다. |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | 단건 생성이므로 적용하지 않는다. |
 
@@ -149,7 +149,7 @@ Accept: application/json
 | `400` | `INVALID_JSON` | 요청 본문을 역직렬화할 수 없다. 수정본을 생성하지 않는다. |
 | `400` | `INVALID_TYPE` | 이미지 객체 식별자가 JSON 문자열이 아니다. 수정본을 생성하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 수정본을 생성하지 않는다. |
-| `403` | `FORBIDDEN` | 운영자 역할, 담당 지역 또는 콘텐츠 소유 관계가 없다. 수정본을 생성하지 않는다. |
+| `403` | `FORBIDDEN` | `ROLE_OPERATOR` authority가 없거나 활성 `ORDINARY` 계정, 담당 지역 또는 콘텐츠 소유 관계가 맞지 않는다. 수정본을 생성하지 않는다. |
 | `404` | `NOT_FOUND` | 콘텐츠가 없거나 소프트 삭제됐다. 수정본을 생성하지 않는다. |
 | `409` | `CONTENT_STATE_CONFLICT` | 콘텐츠가 `PUBLISHED`·`APPROVED`가 아니거나 공개 전 수정 심사에 따른 재보완 대기 `PENDING`이 아니거나, 심사 중인 수정본이 이미 있거나, 원본 상태와 `publishAt` 조건이 맞지 않는다. 원본과 수정본을 변경하지 않는다. |
 

@@ -9,7 +9,7 @@
 
 ## 1. 개요
 
-활성 작성자는 자신의 `PUBLISHED` 후기를 생성 시각부터 30일 안에 수정할 수 있다. 서버는 DB 현재 시각이
+`ROLE_VISITOR` snapshot을 가진 활성 `ORDINARY` 작성자는 자신의 `PUBLISHED` 후기를 생성 시각부터 30일 안에 수정할 수 있다. 서버는 DB 현재 시각이
 `createdAt + 30일`보다 엄격히 이른 경우에만 수정하며, 작성자 연결이 제거된 후기와 삭제 후기는 수정할 수 없다.
 
 ## 2. 공통 계약 참조
@@ -42,7 +42,7 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Authorization` | Y | 후기 작성자를 확인하는 `Bearer <accessToken>`이다. |
+| `Authorization` | Y | `ROLE_VISITOR` snapshot을 가진 후기 작성자를 확인하는 `Bearer <accessToken>`이다. |
 | `Content-Type` | Y | `application/json; charset=UTF-8` |
 | `Accept` | N | `application/json` |
 
@@ -120,7 +120,7 @@ Accept: application/json
 | 400 | `INVALID_INPUT` | `rating`, `reviewText`를 모두 생략했거나, 경로 식별자 또는 포함한 별점·본문이 형식·범위를 만족하지 않는다. 상태를 변경하지 않는다. |
 | 400 | `INVALID_JSON` | 요청 본문이 JSON 형식이 아니다. 상태를 변경하지 않는다. |
 | 401 | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 상태를 변경하지 않는다. |
-| 403 | `FORBIDDEN` | 인증 주체가 작성자가 아니거나 활성 작성자 연결이 없거나, 수정 기한이 지났다. 상태를 변경하지 않는다. |
+| 403 | `FORBIDDEN` | 인증 주체에게 `ROLE_VISITOR` authority가 없거나 활성 `ORDINARY` 계정이 아니거나 작성자 연결이 없거나, 수정 기한이 지났다. 상태를 변경하지 않는다. |
 | 404 | `NOT_FOUND` | 후기가 없거나 이미 `DELETED` 상태다. 상태를 변경하지 않는다. |
 
 #### Error Response Body
@@ -136,7 +136,7 @@ Accept: application/json
 
 ### 처리·감사 규칙
 
-- 수정 가능 여부는 애플리케이션 서버가 아닌 DB 현재 시각으로 판정한다. 활성 회원·작성자 연결·소유권·`PUBLISHED` 상태와 `created_at + 30일` 미만 조건을 갱신 조건에 함께 포함한다.
+- 수정 가능 여부는 애플리케이션 서버가 아닌 DB 현재 시각으로 판정한다. `ROLE_VISITOR` snapshot, 활성 `ORDINARY` 계정·작성자 연결·소유권·`PUBLISHED` 상태와 `created_at + 30일` 미만 조건을 갱신 조건에 함께 포함한다.
 - 삭제 또는 회원 탈퇴와 경합하면 먼저 조건을 만족해 커밋한 처리만 적용한다. 조건부 갱신이 0건이면 후기·원문·시각·감사 이벤트를 변경하지 않고 기존 오류 계약에 따라 응답한다.
 - 성공한 수정은 대상 유형 `REVIEW`의 감사 이벤트와 같은 트랜잭션으로 커밋한다. 성공 감사 이벤트 저장에 실패하면 트랜잭션을 롤백해 후기 수정도 성공시키지 않는다. 감사 이벤트에는 수정 전후 후기 원문·별점·개인정보를 복사하지 않고, 활성 작성자에 대해서만 행위자 연결을 만든다.
 - 거부·실패는 후기 및 성공 감사 이벤트와 별도 트랜잭션에서 서버가 확인한 `requestId`, 행위자 역할·식별값, 대상 지역, 이전·이후 상태와 결과 코드를 남긴다. 탈퇴하거나 연결이 제거된 작성자에는 행위자 연결을 만들지 않는다.

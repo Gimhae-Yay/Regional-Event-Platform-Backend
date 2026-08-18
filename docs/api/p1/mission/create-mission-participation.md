@@ -22,7 +22,7 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Authorization` | Y | `Bearer <accessToken>`. 활성 방문자 인증에 사용한다. |
+| `Authorization` | Y | `Bearer <accessToken>`. Access Token의 `ROLE_VISITOR` authority를 1차로 확인하고, DB에서 활성 `ORDINARY` 계정과 미션 상태를 확인한다. |
 | `Content-Type` | N | 요청 본문이 없으므로 전송하지 않는다. |
 | `Accept` | N | `application/json` |
 
@@ -81,7 +81,7 @@ Accept: application/json
 | `400` | `INVALID_INPUT` | `missionId`가 유효하지 않다. 참여를 만들지 않는다. |
 | `400` | `INVALID_TYPE` | `missionId`를 식별자로 변환할 수 없다. 참여를 만들지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 참여를 만들지 않는다. |
-| `403` | `FORBIDDEN` | 활성 방문자가 아니다. 참여를 만들지 않는다. |
+| `403` | `FORBIDDEN` | Access Token에 `ROLE_VISITOR` authority가 없거나 활성 `ORDINARY` 계정이 아니다. 참여를 만들지 않는다. |
 | `404` | `NOT_FOUND` | 미션을 찾을 수 없거나 미션의 지역이 비공개다. 비공개 지역의 존재 여부를 노출하지 않고 참여를 만들지 않는다. |
 | `409` | `MISSION_STATE_CONFLICT` | 기존 참여가 없는 신규 요청에서 미션이 `PUBLISHED`가 아니거나 종료 시각이 지났다. 참여를 만들지 않는다. |
 

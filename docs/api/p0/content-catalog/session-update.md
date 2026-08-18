@@ -31,7 +31,7 @@
 | 대상 | 기준 문서 | 이 API에서 명시할 내용 |
 | --- | --- | --- |
 | Base URL·미디어 타입·시각·식별자 표현 | [API 공통 규칙](../../common/api-conventions.md) | Base URL은 `/api/v1`이며 요청·응답은 `application/json; charset=UTF-8`이다. 일정 시각, 사건 시각과 식별자는 공통 규칙을 따른다. |
-| 인증·인가 | [인증·인가](../../common/authentication.md) | 활성 `OPERATOR` 역할, 담당 지역과 회차 콘텐츠 지역의 일치, 콘텐츠 소유 관계가 필요하다. |
+| 인증·인가 | [인증·인가](../../common/authentication.md) | `ROLE_OPERATOR` snapshot으로 1차 인가하고, DB에서 활성 `ORDINARY` 계정, 현재 담당 지역과 회차 콘텐츠 지역의 일치, 콘텐츠 소유 관계를 확인한다. |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | `201 Created`와 심사 대기 수정 요청을 반환한다. 오류 코드는 공통 `ErrorCode`만 사용한다. |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | 단건 생성이므로 적용하지 않는다. |
 
@@ -107,7 +107,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. 인증 주체가 활성 `OPERATOR`인지, 회차 콘텐츠의 소유 운영자이고 담당 지역이 콘텐츠·회차 지역과 일치하는지 확인한다.
+1. 인증 주체가 `ROLE_OPERATOR` snapshot을 가지고 활성 `ORDINARY` 계정인지, 회차 콘텐츠의 소유 운영자이고 현재 담당 지역이 콘텐츠·회차 지역과 일치하는지 확인한다.
 2. 콘텐츠가 소프트 삭제되지 않은 `APPROVED` 또는 `PUBLISHED`인지, 대상 회차가 `SCHEDULED`이고 `starts_at`이 MySQL
    현재 시각보다 미래인지 확인한다.
 3. 일정이 현재 시각과 콘텐츠의 `publish_at` 이후인지, 체크인 창·정원이 유효한지 확인하고, 대상 회차에 `PENDING`
@@ -179,7 +179,7 @@ Accept: application/json
 | 400 | `INVALID_JSON` | 요청 본문이 JSON 형식이 아니거나 역직렬화할 수 없다. 요청과 감사 기록은 생성되지 않는다. |
 | 400 | `INVALID_TYPE` | 회차 식별자를 정수로 변환할 수 없다. 요청과 감사 기록은 생성되지 않는다. |
 | 401 | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 요청과 감사 기록은 생성되지 않는다. |
-| 403 | `FORBIDDEN` | `OPERATOR` 역할, 담당 지역 또는 콘텐츠 소유 관계가 없다. 요청과 감사 기록은 생성되지 않는다. |
+| 403 | `FORBIDDEN` | `ROLE_OPERATOR` authority가 없거나 활성 `ORDINARY` 계정, 담당 지역 또는 콘텐츠 소유 관계가 없다. 요청과 감사 기록은 생성되지 않는다. |
 | 404 | `NOT_FOUND` | 회차가 없거나 콘텐츠가 소프트 삭제됐다. 요청과 감사 기록은 생성되지 않는다. |
 | 409 | `SESSION_STATE_CONFLICT` | 대상 회차가 `SCHEDULED`가 아니거나 `starts_at`이 MySQL 현재 시각보다 미래가 아니거나, 콘텐츠가 수정 요청 대상 상태(`APPROVED`, `PUBLISHED`)가 아니거나, 대상 회차에 이미 `PENDING` 수정 요청이 있거나 다른 상태 전이가 먼저 처리됐다. 요청과 감사 기록은 생성되지 않으며 최신 상태를 확인해야 한다. |
 

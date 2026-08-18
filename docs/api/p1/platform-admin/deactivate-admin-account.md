@@ -9,7 +9,7 @@
 
 ## 1. 개요
 
-이 문서는 활성 `SUPER_ADMIN`이 다른 고권한 계정을 비활성화하는 HTTP API 계약을 정의한다. 자기 자신과 마지막 활성
+이 문서는 `ROLE_SUPER_ADMIN` snapshot을 가진 활성 `PRIVILEGED` 계정이 다른 고권한 계정을 비활성화하는 HTTP API 계약을 정의한다. 자기 자신과 마지막 활성
 슈퍼관리자는 비활성화할 수 없다. 재활성화 API는 현재 제공하지 않는다.
 
 ### 요구사항 추적
@@ -25,7 +25,7 @@
 
 ## 3. 전체관리자 계정 비활성화
 
-활성 `SUPER_ADMIN`이 다른 활성 고권한 배정을 `ACTIVE → INACTIVE`로 전이한다. 이때 `inactivated_at`과
+`ROLE_SUPER_ADMIN` snapshot을 가진 활성 `PRIVILEGED` 계정이 다른 활성 고권한 배정을 `ACTIVE → INACTIVE`로 전이한다. 이때 `inactivated_at`과
 `inactive_reason_code`를 기록하며 `app_user` 상태는 바꾸지 않는다. 배정 상태 전이와 성공 감사 이벤트는 함께 커밋한다.
 
 ### Request
@@ -128,7 +128,7 @@ Accept: application/json
 | `400` | `INVALID_INPUT` | `userId`가 양의 10진 문자열·signed 64비트 범위를 만족하지 않거나 `reasonCode`, `evidenceReference`가 누락·공백·형식 위반이거나 증빙 참조에 비밀값이 포함됐다. 고권한 배정·감사 이벤트를 변경하지 않는다. |
 | `400` | `INVALID_JSON` | 요청 본문이 JSON 형식이 아니거나 역직렬화할 수 없다. 고권한 배정·감사 이벤트를 변경하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 고권한 배정·감사 이벤트를 변경하지 않는다. |
-| `403` | `FORBIDDEN` | 인증 주체가 활성 `SUPER_ADMIN` 고권한 배정을 갖지 않는다. 고권한 배정·감사 이벤트를 변경하지 않는다. |
+| `403` | `FORBIDDEN` | 인증 주체에게 `ROLE_SUPER_ADMIN` authority가 없거나 활성 `PRIVILEGED` 계정이 아니다. 고권한 배정·감사 이벤트를 변경하지 않는다. |
 | `404` | `NOT_FOUND` | 대상 사용자에게 고권한 배정이 없다. 고권한 배정·감사 이벤트를 변경하지 않는다. |
 | `409` | `ADMIN_ACCOUNT_DEACTIVATION_CONFLICT` | 처리자 자신, 마지막 활성 `SUPER_ADMIN`, 비활성 배정은 비활성화할 수 없다. 고권한 배정·감사 이벤트를 변경하지 않는다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 예상하지 못한 서버 오류가 발생했다. 트랜잭션이 커밋되지 않은 경우 고권한 배정·감사 이벤트를 변경하지 않는다. |

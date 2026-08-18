@@ -24,7 +24,7 @@
 | 대상 | 기준 문서 | 이 API에서 명시할 내용 |
 | --- | --- | --- |
 | Base URL·미디어 타입·시간 형식 | [API 공통 규칙](../../common/api-conventions.md) | Base URL은 `/api/v1`이고 응답은 `application/json; charset=UTF-8`이다. |
-| 인증·인가 | [인증·인가](../../common/authentication.md) | `REGION_ADMIN` 역할과 담당 지역 배정이 필요하며, 서버가 지역 경계를 강제한다. |
+| 인증·인가 | [인증·인가](../../common/authentication.md) | Access Token의 `ROLE_REGION_ADMIN` authority를 1차로 확인하고, DB에서 활성 `ORDINARY` 계정과 현재 담당 지역 관계를 확인해 지역 경계를 강제한다. |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | `200 OK`와 빈 배열을 포함한 목록을 반환한다. |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | P0에서는 심사 대기 목록 전체를 `createdAt` 오름차순, `requestId` 오름차순으로 반환하므로 페이지네이션을 적용하지 않는다. |
 
@@ -123,7 +123,7 @@ Accept: application/json
 | --- | --- | --- |
 | 400 | `INVALID_INPUT` | `status`가 누락되었거나 `PENDING`이 아닌 값이다. 목록 상태는 변경되지 않으며 `status=PENDING`으로 다시 요청할 수 있다. |
 | 401 | `UNAUTHENTICATED` | Access Token이 없거나 만료·변조되었다. 목록 상태는 변경되지 않으며 유효한 Token으로 다시 요청할 수 있다. |
-| 403 | `FORBIDDEN` | `REGION_ADMIN` 역할 또는 담당 지역 배정이 없다. 목록 상태는 변경되지 않는다. |
+| 403 | `FORBIDDEN` | 공통 권한 행렬 또는 이 API의 활성 계정·담당 지역 조건을 충족하지 않는다. 목록 상태는 변경되지 않는다. |
 
 #### Error Response Body
 

@@ -27,7 +27,7 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Authorization` | Y | `Bearer {accessToken}`. 인증 주체는 활성 지역 관리자여야 한다. |
+| `Authorization` | Y | `Bearer {accessToken}` |
 | `Content-Type` | N | 요청 본문이 없으므로 전송하지 않는다. |
 | `Accept` | N | `application/json` |
 
@@ -136,7 +136,7 @@ Accept: application/json
 | `400` | `INVALID_INPUT` | `size`가 허용 범위를 벗어나거나 `cursor`가 비어 있거나 현재 조회 범위에 사용할 수 없다. 상태를 변경하지 않으며 값을 수정하거나 최초 요청부터 다시 조회할 수 있다. |
 | `400` | `INVALID_TYPE` | `size`의 형식이 올바르지 않다. 상태를 변경하지 않으며 값 형식을 수정한 뒤 재시도할 수 있다. |
 | `401` | `UNAUTHENTICATED` | 인증 정보가 없거나 유효하지 않다. 상태를 변경하지 않으며 유효한 인증 정보로 재시도할 수 있다. |
-| `403` | `FORBIDDEN` | 인증 주체가 활성 `REGION_ADMIN`이 아니거나 담당 지역 연결이 없다. 상태를 변경하지 않으며 동일한 권한 상태로 재시도해도 성공하지 않는다. |
+| `403` | `FORBIDDEN` | 공통 권한 행렬 또는 이 API의 활성 계정·담당 지역 조건을 충족하지 않는다. 상태를 변경하지 않으며 동일한 권한 상태로 재시도해도 성공하지 않는다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 감사 기록 조회 중 예상하지 못한 서버 오류가 발생했다. 상태를 변경하지 않으며 일시적 장애라면 동일 요청으로 재시도할 수 있다. |
 
 #### Error Response Body
@@ -152,7 +152,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. 인증 주체는 `ACTIVE` 상태이며 담당 `region_id`가 연결된 `REGION_ADMIN`이어야 한다.
+1. Access Token의 `ROLE_REGION_ADMIN` authority를 확인하고, DB에서 활성 `ORDINARY` 계정과 현재 담당 `region_id`를 확인한다.
 2. `audit_event.region_id`가 인증 지역 관리자의 담당 지역과 일치하는 이벤트만 조회한다.
 3. 조회 대상은 위 표의 QR 체크인 전용 사유, 예약번호 보조 조회 사유와 예약번호 보조 체크인 사유를 가진 감사 이벤트로 한정한다. 일반 QR 체크인 성공은 목록에서 제외한다.
 4. `exceptionType`은 `QR_CHECK_IN_`, `MANUAL_CHECK_IN_` 접두사와 `QR_VERIFICATION_FAILED` 값으로 결정한다. 세 집합은 서로 겹치지 않으며 데이터베이스 상태 값으로 추가 저장하지 않는다.

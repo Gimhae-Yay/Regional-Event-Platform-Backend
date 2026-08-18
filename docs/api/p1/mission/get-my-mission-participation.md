@@ -92,12 +92,12 @@ Accept: application/json
 | `400` | `INVALID_INPUT` | `participationId`가 유효하지 않다. |
 | `400` | `INVALID_TYPE` | `participationId`를 식별자로 변환할 수 없다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. |
-| `403` | `FORBIDDEN` | 본인 참여가 아니거나 활성 방문자가 아니다. |
+| `403` | `FORBIDDEN` | Access Token에 `ROLE_VISITOR` authority가 없거나 활성 `ORDINARY` 계정이 아니거나 본인 참여가 아니다. |
 | `404` | `NOT_FOUND` | 참여를 찾을 수 없다. |
 
 ### 처리 규칙
 
-1. 인증 사용자 본인의 참여만 조회할 수 있다.
+1. Access Token의 `ROLE_VISITOR` authority를 1차로 확인하고, DB에서 활성 `ORDINARY` 계정과 인증 사용자 본인의 참여 소유권을 확인한다.
 2. 참여가 참조하는 미션의 현재 `title`을 반환한다. 제목은 공개 뒤 수정되지 않으며 대상 콘텐츠 제목에서 파생하지 않는다.
 3. 진행도는 `mission_progress`의 방문 근거로 재현 가능한 값만 반환한다. `CONTENT_SET`은 목표 콘텐츠마다 최초 근거만,
    `VISIT_COUNT`는 서로 다른 `visitId`의 근거를 각각 반환한다.

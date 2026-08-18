@@ -27,8 +27,9 @@ Refresh Token은 `Path=/api/v1/auth` 범위의 인증 API에서만 수신하며 
 | claim 이름 | `authorities` |
 | 형식 | 중복 없는 JSON 문자열 배열. 빈 배열 `[]`은 유효하다. |
 | 허용 authority | `ROLE_VISITOR`, `ROLE_OPERATOR`, `ROLE_REGION_ADMIN`, `ROLE_PLATFORM_ADMIN`, `ROLE_SUPER_ADMIN` |
-| 발급 원천 | `ORDINARY` 계정은 활성 일반 역할(`VISITOR`·`OPERATOR`·`REGION_ADMIN`)의 합집합, `PRIVILEGED` 계정은 활성 고권한 등급(`SUPER_ADMIN` 또는 `PLATFORM_ADMIN`) 하나다. |
-| 상충 원천 | 계정 분류와 맞지 않는 활성 배정 또는 일반·고권한 활성 배정의 동시 존재는 어떤 authority도 합치지 않고 빈 배열로 fail-closed 처리한다. |
+| 발급 원천 | `ORDINARY` 계정은 활성 일반 역할(`VISITOR`·`OPERATOR`·`REGION_ADMIN`)의 합집합이고, 활성 일반 역할이 없으면 빈 배열 `[]`이다. `PRIVILEGED` 계정은 활성 고권한 등급(`SUPER_ADMIN` 또는 `PLATFORM_ADMIN`) 하나이며 활성 고권한 배정이 없으면 빈 배열 `[]`이다. |
+| 정상 빈 배열 | 회원가입에서 `OPERATOR`를 선택해 `PENDING` 운영자 신청만 가진 활성 `ORDINARY` 회원처럼 활성 일반 역할이 없는 정상 회원은 `authorities=[]` Token을 발급받는다. 인증 전용 API에는 사용할 수 있지만 역할 보호 URL은 `403 FORBIDDEN`이다. |
+| 상충 원천 | 계정 분류와 맞지 않는 활성 배정 또는 일반·고권한 활성 배정의 동시 존재는 정상 빈 배열이 아니다. authority를 합치거나 빈 배열로 대체하지 않고 Access Token과 Refresh Token 발급을 거부한다. |
 | `SUPER_ADMIN` | `ROLE_PLATFORM_ADMIN`을 중복 보유하지 않는다. 공통 전체관리자 API는 권한 행렬에서 두 authority를 함께 허용한다. |
 | 형식 오류 | 배열이 아니거나 `null`·비문자·중복·미허용 값이 있으면 유효하지 않은 Access Token으로 `401 UNAUTHENTICATED`다. |
 | claim 누락 전환 | 호환 배포에서는 빈 배열로 해석한다. 마지막 구 발급 인스턴스 종료 시각 `T_complete` 뒤 15분이 지나면 누락 claim은 `401 UNAUTHENTICATED`다. |

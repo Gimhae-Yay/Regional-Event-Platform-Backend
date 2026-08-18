@@ -9,7 +9,7 @@
 
 ## 1. 개요
 
-활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN`이 PortOne 재조회 증빙을 근거로 `DISCREPANT` 환불의 실제 외부
+`ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` snapshot을 가진 활성 `PRIVILEGED` 계정이 PortOne 재조회 증빙을 근거로 `DISCREPANT` 환불의 실제 외부
 처리 결과를 확정한다. 재조회로 실제 성공이 확인되면 `SUCCEEDED`로, 실제 미처리가 확인되면 `FAILED`로
 전이한다. `FAILED`로 확정된 뒤에만 남은 횟수 안에서 [환불 재시도](retry-refund.md)를 사용할 수 있다.
 
@@ -50,7 +50,7 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Authorization` | Y | `Bearer {accessToken}` 형식의 유효한 Access Token이다. 인증 주체는 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN`이어야 한다. |
+| `Authorization` | Y | `Bearer {accessToken}` 형식의 유효한 Access Token이다. 인증 주체는 `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` snapshot을 가지고 활성 `PRIVILEGED` 계정이어야 한다. |
 | `Content-Type` | Y | `application/json; charset=UTF-8` |
 | `Accept` | N | `application/json` |
 
@@ -126,7 +126,7 @@ Accept: application/json
 | `400` | `INVALID_INPUT` | `confirmedStatus`가 `SUCCEEDED`·`FAILED`가 아니거나 `evidenceReference`·`reason`이 누락·공백·500자 초과다. 환불·시도·감사 이력을 변경하지 않는다. |
 | `400` | `INVALID_JSON` | 요청 본문이 JSON 형식이 아니거나 역직렬화할 수 없다. 환불·시도·감사 이력을 변경하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 환불·시도·감사 이력을 변경하지 않는다. |
-| `403` | `FORBIDDEN` | 인증 주체가 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN`이 아니다. 환불·시도·감사 이력을 변경하지 않는다. |
+| `403` | `FORBIDDEN` | 인증 주체에게 `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` authority가 없거나 활성 `PRIVILEGED` 계정이 아니다. 환불·시도·감사 이력을 변경하지 않는다. |
 | `404` | `NOT_FOUND` | 대상 환불이 없다. 환불·시도·감사 이력을 변경하지 않는다. |
 | `409` | `REFUND_STATE_CONFLICT` | 대상 환불이 `DISCREPANT`가 아니다. 환불·시도·감사 이력을 변경하지 않는다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 예상하지 못한 서버 오류가 발생했다. 트랜잭션이 커밋되지 않은 경우 환불·시도·감사 이력을 변경하지 않는다. |
@@ -144,7 +144,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. 인증 주체는 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN` 배정을 가져야 한다. 콘텐츠 운영자와 지역 관리자는 이 API를 호출할 수 없다.
+1. 인증 주체는 `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` snapshot을 가지고 활성 `PRIVILEGED` 계정이어야 한다. 콘텐츠 운영자와 지역 관리자는 이 API를 호출할 수 없다.
 2. 대상 환불은 `DISCREPANT`여야 한다. `REQUESTED`, `PROCESSING`, `SUCCEEDED`, `FAILED`이면 `409 REFUND_STATE_CONFLICT`로 거부해 이미 확정된 건을 중복 처리하지 않는다.
 3. `confirmedStatus = SUCCEEDED`이면 `refund.status`를 `SUCCEEDED`로 전이하고 `completed_at`을 기록한 뒤 [환불 공통 쿠폰 복구 계약](refund.md#쿠폰-복구-계약)을 같은 상태 반영 트랜잭션에 적용한다. 이후 재시도할 수 없다.
 4. `confirmedStatus = FAILED`이면 `refund.status`를 `FAILED`로 전이한다. `completed_at`은 기록하지 않으며, 남은 시도 횟수 안에서 [환불 재시도](retry-refund.md)를 사용할 수 있다.

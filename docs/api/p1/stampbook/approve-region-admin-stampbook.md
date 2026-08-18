@@ -118,7 +118,7 @@ Accept: application/json
 | `400` | `INVALID_INPUT` | `stampbookId`가 범위를 벗어나거나 승인 사유가 누락·공백·500자 초과다. 상태와 감사 이력을 변경하지 않는다. |
 | `400` | `INVALID_JSON` | 요청 본문이 JSON 형식이 아니거나 역직렬화할 수 없다. 상태와 감사 이력을 변경하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 상태와 감사 이력을 변경하지 않는다. |
-| `403` | `FORBIDDEN` | 인증 주체가 활성·승인된 담당 지역의 `REGION_ADMIN`이 아니거나 스탬프북 지역이 다르다. 상태와 감사 이력을 변경하지 않는다. |
+| `403` | `FORBIDDEN` | Access Token에 `ROLE_REGION_ADMIN` authority가 없거나 활성 `ORDINARY` 계정이 아니거나 스탬프북 지역이 현재 담당 지역과 다르다. 상태와 감사 이력을 변경하지 않는다. |
 | `404` | `NOT_FOUND` | 대상 스탬프북, 연결된 완료 보상 정책 또는 대상 콘텐츠가 없다. 상태와 감사 이력을 변경하지 않는다. |
 | `409` | `STAMPBOOK_STATE_CONFLICT` | 잠금 뒤 스탬프북이 `PENDING_REVIEW`가 아니거나, 현재 완료 보상 정책 연결이 최초 잠근 정책과 다르거나, 보상 정책의 지역·발급 경로·상태 또는 대상 콘텐츠의 지역·소유 관계 조건이 맞지 않는다. 상태와 감사 이력을 변경하지 않는다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 예상하지 못한 서버 오류 또는 감사 기록 실패가 발생했다. 트랜잭션이 커밋되지 않은 경우 상태와 감사 이력을 변경하지 않는다. |
@@ -136,7 +136,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. 서버는 인증 주체가 활성·승인된 `REGION_ADMIN`이고 담당 `region_id`를 보유하는지 확인한다. 스탬프북의 `region_id`와 담당 지역이 다르면 `403 FORBIDDEN`으로 거부한다.
+1. Access Token의 `ROLE_REGION_ADMIN` authority를 1차로 확인한다. DB에서는 활성 `ORDINARY` 계정의 현재 담당 `region_id`를 조회하고, 스탬프북 `region_id`와 다르면 `403 FORBIDDEN`으로 거부한다.
 2. 최초 조회한 완료 보상 쿠폰 정책 행을 `PESSIMISTIC_WRITE`로 먼저 잠그고, 스탬프북 행을 잠근다. 잠금 획득 뒤 `stampbook.reward_coupon_policy_id`가 최초 잠근 정책 식별자와 같은지 다시 확인한다. 연결이 달라졌으면 다른 정책을 추가로 잠그지 않고 `409 STAMPBOOK_STATE_CONFLICT`로 종료한다.
 3. 그 뒤 모든 대상 콘텐츠 행을 `contentId` 오름차순으로 잠근다. 대상 콘텐츠가 하나 이상이고 모두 스탬프북과 같은 지역이며, 각 콘텐츠의 현재 소유 운영자가 같은 지역의 활성·승인된 `OPERATOR`인지 재검증한다. 다른 지역 콘텐츠, 소유 관계가 유효하지 않은 콘텐츠 또는 대상 콘텐츠가 없으면 `409 STAMPBOOK_STATE_CONFLICT`로 종료한다.
 4. 잠금 뒤 스탬프북이 `PENDING_REVIEW`인지, 보상 정책이 스탬프북과 같은 지역의 `STAMPBOOK_COMPLETION` 정책이고 `PUBLISHED`인지 재검증한다. 어느 하나라도 맞지 않으면 `409 STAMPBOOK_STATE_CONFLICT`로 종료한다.

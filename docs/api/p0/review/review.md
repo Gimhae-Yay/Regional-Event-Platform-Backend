@@ -26,7 +26,7 @@
 | 대상 | 기준 문서 | 이 도메인에서 명시할 내용 |
 | --- | --- | --- |
 | Base URL·미디어 타입·시간 형식 | [API 공통 규칙](../../common/api-conventions.md) | Base URL은 `/api/v1`이고 JSON 요청은 `application/json; charset=UTF-8`을 사용한다. |
-| 인증·인가 | [인증·인가](../../common/authentication.md) | 작성·수정·삭제는 활성 작성자 Access Token이 필요하며 공개 목록은 인증 없이 조회한다. |
+| 인증·인가 | [인증·인가](../../common/authentication.md) | 작성·수정·삭제는 `ROLE_VISITOR` authority snapshot으로 1차 인가하고, DB에서는 활성 `ORDINARY` 계정과 본인 방문·후기 연결·후기 상태를 확인한다. 공개 목록은 인증 없이 조회한다. |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | 공통 최상위 필드와 기존 공개 오류 코드만 사용한다. |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | 목록은 페이지 번호 기반이며 최신 작성순으로 정렬한다. |
 

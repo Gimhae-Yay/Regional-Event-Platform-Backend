@@ -24,7 +24,7 @@ POST /api/v1/region-admin/content-revisions/{revisionId}/approve
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `Authorization` | Header | Y | `Bearer <accessToken>` 형식의 지역 관리자 Access Token |
+| `Authorization` | Header | Y | `Bearer <accessToken>` 형식의 `ROLE_REGION_ADMIN` snapshot Access Token |
 | `revisionId` | Path | Y | 양의 10진 문자열인 수정본 식별자 |
 
 ### Response
@@ -66,7 +66,7 @@ POST /api/v1/region-admin/content-revisions/{revisionId}/approve
 | --- | --- | --- |
 | `400` | `INVALID_INPUT` | `revisionId`가 양의 10진 문자열이 아니다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. |
-| `403` | `FORBIDDEN` | 지역 관리자 역할이 없거나 원본 콘텐츠가 담당 지역에 속하지 않는다. |
+| `403` | `FORBIDDEN` | `ROLE_REGION_ADMIN` authority가 없거나 활성 `ORDINARY` 계정이 아니거나 원본 콘텐츠가 현재 담당 지역에 속하지 않는다. |
 | `404` | `NOT_FOUND` | 수정본이 없거나 원본 콘텐츠가 소프트 삭제됐다. |
 | `409` | `CONTENT_STATE_CONFLICT` | 수정본이 `EDIT_REQUESTED`가 아니거나 원본 상태·버전·후보 `publish_at` 조건이 맞지 않거나, 반려·철회·자동 공개·콘텐츠 중단·전체 철회·종료에 따른 `EDIT_INVALIDATED` 전이가 먼저 종결됐다. |
 

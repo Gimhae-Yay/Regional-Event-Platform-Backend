@@ -86,9 +86,9 @@ Accept: application/json
 | `400` | `INVALID_INPUT` | `missionId`가 유효하지 않다. |
 | `400` | `INVALID_TYPE` | `missionId`를 식별자로 변환할 수 없다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. |
-| `403` | `FORBIDDEN` | 담당 지역의 `OPERATOR` 역할이 없거나 미션 지역이 다르다. |
+| `403` | `FORBIDDEN` | Access Token에 `ROLE_OPERATOR` authority가 없거나 활성 `ORDINARY` 계정이 아니거나 현재 담당 지역과 미션 지역이 다르다. |
 | `404` | `NOT_FOUND` | 미션을 찾을 수 없다. |
 
 ### 처리 규칙
 
-인증 운영자의 담당 지역 미션만 조회할 수 있다.
+Access Token의 `ROLE_OPERATOR` authority를 1차로 확인하고, DB에서 활성 `ORDINARY` 계정의 현재 담당 지역에 속한 미션만 조회할 수 있다.

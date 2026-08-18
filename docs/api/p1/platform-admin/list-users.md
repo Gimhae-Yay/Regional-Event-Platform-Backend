@@ -9,7 +9,7 @@
 
 ## 1. 개요
 
-이 문서는 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN`이 일반 역할 관리 대상을 확인하기 위한 사용자 목록 조회 HTTP API 계약을 정의한다.
+이 문서는 `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` snapshot을 가진 활성 `PRIVILEGED` 계정이 일반 역할 관리 대상을 확인하기 위한 사용자 목록 조회 HTTP API 계약을 정의한다.
 
 ### 요구사항 추적
 
@@ -24,7 +24,7 @@
 
 ## 3. 전체관리자의 사용자 목록 조회
 
-활성 고권한 배정을 가진 전체관리자가 역할 관리 대상을 확인하기 위해 활성 일반 계정의 현재 역할·담당 지역을 조회한다.
+`ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` snapshot을 가진 전체관리자가 역할 관리 대상을 확인하기 위해 활성 일반 계정의 현재 역할·담당 지역을 조회한다.
 조회는 `app_user`나 역할 연결을 변경하지 않으며, 고권한 계정, 탈퇴 진행 중인 `WITHDRAWING` 계정과 파기된 계정은 반환하지 않는다.
 
 ### Request
@@ -129,7 +129,7 @@ Accept: application/json
 | HTTP Status | Code | Description |
 | --- | --- | --- |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 조회 상태는 변경되지 않으며 유효한 Token으로 다시 요청할 수 있다. |
-| `403` | `FORBIDDEN` | 인증 주체가 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN` 고권한 배정을 갖지 않는다. 조회 상태는 변경되지 않으며 사용자 목록과 개인정보를 반환하지 않는다. |
+| `403` | `FORBIDDEN` | 인증 주체에게 `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` authority가 없거나 활성 `PRIVILEGED` 계정이 아니다. 조회 상태는 변경되지 않으며 사용자 목록과 개인정보를 반환하지 않는다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 예상하지 못한 서버 오류가 발생했다. 조회 상태는 변경되지 않으며 일시적 장애라면 동일 요청으로 재시도할 수 있다. |
 
 #### Error Response Body

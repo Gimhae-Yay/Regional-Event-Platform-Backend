@@ -12,7 +12,7 @@
 승인된 운영자가 콘텐츠 생성, 콘텐츠 수정본 생성 또는 대표 이미지 교체 전에 서버가 만든 S3 객체 키로
 대표 이미지를 업로드할 수 있도록 짧은 유효기간의 presigned PUT URL을 발급한다. 서버는 요청 메타데이터를 검증한 뒤
 `image_object`를 만들고, 이후 콘텐츠·수정본 API는 반환된 `imageObjectId`만 받아 대표 이미지로 연결한다.
-콘텐츠 생성 전에는 아직 소유 콘텐츠 식별자가 없으므로 이 API는 승인된 운영자의 담당 지역과 업로드 용도만 검증한다.
+콘텐츠 생성 전에는 아직 소유 콘텐츠 식별자가 없으므로 이 API는 `ROLE_OPERATOR` snapshot을 1차 확인한 뒤 활성 `ORDINARY` 계정의 현재 담당 지역과 업로드 용도만 DB에서 검증한다.
 기존 콘텐츠 또는 수정본에 실제로 연결할 수 있는지는 콘텐츠 생성·수정본 생성·수정 API가 소유 관계와 상태를 다시 검증한다.
 S3 연동은 S3 인프라 어댑터를 통해 수행한다.
 
@@ -22,7 +22,7 @@ S3 연동은 S3 인프라 어댑터를 통해 수행한다.
 | --- | --- | --- |
 | `FR-03` | `POST /operator/uploads/presigned-url` | `image_object`, `user_role_assignment` |
 | `FR-14` | `POST /operator/uploads/presigned-url` | `image_object`, `user_role_assignment` |
-| `AUTH-01` | `POST /operator/uploads/presigned-url` | 운영자 역할, 담당 지역 |
+| `AUTH-01` | `POST /operator/uploads/presigned-url` | `ROLE_OPERATOR` snapshot, 활성 `ORDINARY` 계정, 현재 담당 지역 |
 | `CON-02`, `CON-05` | `POST /operator/uploads/presigned-url` | 대표 이미지 객체, S3 객체 키, checksum |
 
 ## 2. 공통 계약 참조
@@ -30,7 +30,7 @@ S3 연동은 S3 인프라 어댑터를 통해 수행한다.
 | 대상 | 기준 문서 | 이 API에서 명시할 내용 |
 | --- | --- | --- |
 | Base URL·미디어 타입·시각·식별자 | [API 공통 규칙](../../common/api-conventions.md) | 실제 경로는 `/api/v1/operator/uploads/presigned-url`이다. |
-| 인증·인가 | [인증·인가](../../common/authentication.md) | 승인된 `OPERATOR` 역할과 담당 지역이 필요하다. |
+| 인증·인가 | [인증·인가](../../common/authentication.md) | `ROLE_OPERATOR` snapshot으로 1차 인가하고, DB에서 활성 `ORDINARY` 계정과 현재 담당 지역을 확인한다. |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | `201 Created`와 업로드 대상 이미지 객체 식별자, presigned PUT 정보를 반환한다. |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | 단건 생성이므로 적용하지 않는다. |
 
@@ -138,7 +138,7 @@ Accept: application/json
 | `400` | `INVALID_JSON` | 요청 본문을 역직렬화할 수 없다. 이미지 객체와 업로드 URL을 생성하지 않는다. |
 | `400` | `INVALID_TYPE` | `byteSize`를 선언된 타입으로 변환할 수 없다. 이미지 객체와 업로드 URL을 생성하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 이미지 객체와 업로드 URL을 생성하지 않는다. |
-| `403` | `FORBIDDEN` | 승인된 운영자 역할 또는 담당 지역이 없다. 이미지 객체와 업로드 URL을 생성하지 않는다. |
+| `403` | `FORBIDDEN` | `ROLE_OPERATOR` authority가 없거나 활성 `ORDINARY` 계정 또는 담당 지역 관계가 없다. 이미지 객체와 업로드 URL을 생성하지 않는다. |
 | `500` | `INTERNAL_SERVER_ERROR` | S3 presigned URL 발급 실패 또는 예상하지 못한 서버 오류가 발생했다. 이미지 객체와 업로드 URL을 생성하지 않는다. |
 
 #### Error Response Body

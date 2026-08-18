@@ -24,7 +24,7 @@
 | 대상 | 기준 문서 | 이 API에서 명시할 내용 |
 | --- | --- | --- |
 | Base URL·미디어 타입·시간 형식 | [API 공통 규칙](../../common/api-conventions.md) | Base URL `/api/v1`과 `application/json; charset=UTF-8`을 사용한다. |
-| 인증·인가 | [인증·인가](../../common/authentication.md) | 담당 지역의 `REGION_ADMIN` 역할만 허용한다. 콘텐츠의 `region_id`와 인증 주체의 담당 지역이 같아야 한다. |
+| 인증·인가 | [인증·인가](../../common/authentication.md) | `ROLE_REGION_ADMIN` snapshot으로 1차 인가하고, DB에서 활성 `ORDINARY` 계정과 현재 담당 지역·콘텐츠 `region_id` 일치를 확인한다. |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | 공통 네 필드를 사용하며 성공 상태는 `200 OK`다. |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | 목록 API가 아니므로 적용하지 않는다. |
 
@@ -130,7 +130,7 @@ Accept: application/json
 | 400 | `INVALID_JSON` | 요청 본문이 JSON 형식이 아니거나 역직렬화할 수 없다. 상태와 이력은 변경하지 않는다. |
 | 400 | `INVALID_TYPE` | `contentId`를 Long으로 변환할 수 없다. 상태와 이력은 변경하지 않는다. |
 | 401 | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 상태와 이력은 변경하지 않는다. |
-| 403 | `FORBIDDEN` | 지역 관리자 역할이 없거나 콘텐츠의 담당 지역이 다르다. 상태와 이력은 변경하지 않는다. |
+| 403 | `FORBIDDEN` | `ROLE_REGION_ADMIN` authority가 없거나 활성 `ORDINARY` 계정, 담당 지역 또는 콘텐츠 지역이 맞지 않는다. 상태와 이력은 변경하지 않는다. |
 | 404 | `NOT_FOUND` | 콘텐츠가 존재하지 않거나 이미 소프트 삭제됐다. 상태와 이력은 변경하지 않는다. |
 | 409 | `CONTENT_STATE_CONFLICT` | 콘텐츠가 `PENDING`이 아니고 요청 `reason`과 같은 기존 반려 결과도 없거나, 공개 전 수정 심사 대기 콘텐츠이거나, 동시 승인 요청이 먼저 처리됐다. 상태와 이력은 변경하지 않으며 최신 상세를 조회한 뒤 판단한다. |
 

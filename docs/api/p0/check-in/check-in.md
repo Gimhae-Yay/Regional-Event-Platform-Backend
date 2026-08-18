@@ -38,7 +38,7 @@
 | 대상 | 기준 문서 | 이 도메인에서 명시할 내용 |
 | --- | --- | --- |
 | Base URL·미디어 타입·시간 형식 | [API 공통 규칙](../../common/api-conventions.md) | Base URL은 `/api/v1` |
-| 인증·인가 | [인증·인가](../../common/authentication.md) | 방문자 본인, 소유 운영자, 담당 지역 관리자 역할별 범위 |
+| 인증·인가 | [인증·인가](../../common/authentication.md) | 역할 보호 API의 권한 행렬과 API별 지역·소유권 조건을 따른다. 방문자 QR 조회의 현재 활성 방문자 조건은 개별 API 명세를 따른다. |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | 성공 상태, `data` 필드와 QR·체크인·멱등 충돌 오류 코드 |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | QR 예외 목록에 API별 커서 계약 적용 |
 

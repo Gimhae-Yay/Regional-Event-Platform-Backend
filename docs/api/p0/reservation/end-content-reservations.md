@@ -34,7 +34,7 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Authorization` | Y | `Bearer {accessToken}`. 인증 주체는 지역 관리자여야 한다. |
+| `Authorization` | Y | `Bearer {accessToken}`. 인증 주체는 `ROLE_REGION_ADMIN` snapshot을 가지고 활성 `ORDINARY` 계정이며 현재 담당 지역을 가져야 한다. |
 | `Content-Type` | N | 요청 본문이 없으므로 전송하지 않는다. |
 | `Accept` | N | `application/json` |
 
@@ -96,7 +96,7 @@ Accept: application/json
 | --- | --- | --- |
 | `400` | `INVALID_INPUT` | `contentId`가 없거나 형식·범위가 올바르지 않다. 상태 변경은 발생하지 않으며 재시도 전 요청 값을 수정해야 한다. |
 | `401` | `UNAUTHENTICATED` | 인증 정보가 없거나 유효하지 않다. 상태 변경은 발생하지 않으며 유효한 인증 정보로 재시도할 수 있다. |
-| `403` | `FORBIDDEN` | 인증 주체가 지역 관리자가 아니거나, 대상 콘텐츠의 `region_id`가 인증 주체의 담당 지역과 일치하지 않는다. 상태 변경은 발생하지 않으며 동일한 권한 상태로 재시도해도 성공하지 않는다. |
+| `403` | `FORBIDDEN` | 인증 주체에게 `ROLE_REGION_ADMIN` authority가 없거나 활성 `ORDINARY` 계정이 아니거나, 대상 콘텐츠의 `region_id`가 인증 주체의 현재 담당 지역과 일치하지 않는다. 상태 변경은 발생하지 않으며 동일한 권한 상태로 재시도해도 성공하지 않는다. |
 | `404` | `NOT_FOUND` | 대상 콘텐츠를 찾을 수 없다. 상태 변경은 발생하지 않으며 콘텐츠 식별자를 확인한 뒤 재시도할 수 있다. |
 | `409` | `CONTENT_END_CONFLICT` | 콘텐츠가 `PUBLISHED`도 `ENDED`도 아니거나 종결되지 않은 회차가 남아 있거나, 다른 상태 전이가 먼저 성공했다. 이미 `ENDED`인 콘텐츠는 재시도해도 기존 성공 결과를 반환하며, 그 외 충돌은 종료 조건을 충족한 뒤 재시도할 수 있다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 종료 처리 중 예상하지 못한 서버 오류가 발생했다. 트랜잭션이 커밋되지 않은 경우 상태 변경은 발생하지 않으며 일시적 장애라면 동일 요청으로 재시도할 수 있다. |

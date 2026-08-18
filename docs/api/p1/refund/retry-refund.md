@@ -9,7 +9,7 @@
 
 ## 1. 개요
 
-활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN`이 `FAILED` 환불에 대해 남은 횟수 안에서 PortOne 취소를 다시
+`ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` snapshot을 가진 활성 `PRIVILEGED` 계정이 `FAILED` 환불에 대해 남은 횟수 안에서 PortOne 취소를 다시
 호출한다. 자동 재시도는 없으며, 총 외부 호출 횟수는 3회를 넘길 수 없다. `DISCREPANT` 환불은 먼저
 [환불 실패 수동 조치](resolve-refund-failure.md)로 `FAILED`를 확정해야 재시도할 수 있다.
 
@@ -43,7 +43,7 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Authorization` | Y | `Bearer {accessToken}` 형식의 유효한 Access Token이다. 인증 주체는 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN`이어야 한다. |
+| `Authorization` | Y | `Bearer {accessToken}` 형식의 유효한 Access Token이다. 인증 주체는 `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` snapshot을 가지고 활성 `PRIVILEGED` 계정이어야 한다. |
 | `Content-Type` | N | 요청 본문이 없으므로 전송하지 않는다. |
 | `Accept` | N | `application/json` |
 
@@ -110,7 +110,7 @@ Accept: application/json
 | --- | --- | --- |
 | `400` | `INVALID_TYPE` | `refundId`를 양의 정수 식별자로 처리할 수 없다. 재시도하지 않으며 형식을 수정해 재시도할 수 있다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 환불·시도 상태를 변경하지 않는다. |
-| `403` | `FORBIDDEN` | 인증 주체가 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN`이 아니다. 환불·시도 상태를 변경하지 않는다. |
+| `403` | `FORBIDDEN` | 인증 주체에게 `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` authority가 없거나 활성 `PRIVILEGED` 계정이 아니다. 환불·시도 상태를 변경하지 않는다. |
 | `404` | `NOT_FOUND` | 대상 환불이 없다. 환불·시도 상태를 변경하지 않는다. |
 | `409` | `REFUND_STATE_CONFLICT` | 대상 환불이 `FAILED`가 아니거나(`DISCREPANT`는 수동 조치가 먼저 필요하다), 이미 총 3회 시도를 모두 사용했다. 새 외부 호출을 만들지 않는다. |
 | `500` | `INTERNAL_SERVER_ERROR` | PortOne 호출 실패를 포함해 예상하지 못한 서버 오류가 발생했다. 트랜잭션이 커밋되지 않은 경우 환불·시도 상태를 변경하지 않으며 일시적 장애라면 동일한 요청으로 재시도할 수 있다. |
@@ -128,7 +128,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. 인증 주체는 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN` 배정을 가져야 한다. `FAILED` 환불의 재시도는 이 두 역할만 수행할 수 있다.
+1. 인증 주체는 `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` snapshot을 가지고 활성 `PRIVILEGED` 계정이어야 한다. `FAILED` 환불의 재시도는 이 두 authority만 수행할 수 있다.
 2. 대상 환불은 `FAILED`여야 한다. `DISCREPANT`는 [환불 실패 수동 조치](resolve-refund-failure.md)로 먼저 `FAILED`를 확정해야 하며, 그 외 상태는 `409 REFUND_STATE_CONFLICT`로 거부한다.
 3. 기존 `refund_attempt`의 최대 `attempt_no`가 3이면 더 이상 재시도할 수 없고 `409 REFUND_STATE_CONFLICT`로 거부한다.
 4. 외부 호출 직전에 `refund_attempt(PENDING, attempt_no = 기존 최대값 + 1)`를 기록해 시도 번호를 점유한다. PortOne 환불 호출의 최대 응답 대기 시간은 30초다.

@@ -87,7 +87,7 @@ Accept: application/json
 | `400` | `INVALID_JSON` | 요청 본문을 역직렬화할 수 없다. 상태를 변경하지 않는다. |
 | `400` | `INVALID_TYPE` | 요청 값을 선언된 타입으로 변환할 수 없다. 상태를 변경하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 상태를 변경하지 않는다. |
-| `403` | `FORBIDDEN` | 담당 지역의 `REGION_ADMIN` 역할이 없거나 미션 지역이 다르다. 상태를 변경하지 않는다. |
+| `403` | `FORBIDDEN` | Access Token에 `ROLE_REGION_ADMIN` authority가 없거나 활성 `ORDINARY` 계정이 아니거나 현재 담당 지역과 미션 지역이 다르다. 상태를 변경하지 않는다. |
 | `404` | `NOT_FOUND` | 미션을 찾을 수 없다. 상태를 변경하지 않는다. |
 | `409` | `MISSION_STATE_CONFLICT` | 미션이 `PENDING_REVIEW`가 아니다. 상태를 변경하지 않는다. |
 

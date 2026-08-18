@@ -23,7 +23,7 @@
 | 대상 | 기준 문서 | 이 API에서 명시할 내용 |
 | --- | --- | --- |
 | Base URL·미디어 타입·시간 형식 | [API 공통 규칙](../../common/api-conventions.md) | Base URL `/api/v1`과 `application/json; charset=UTF-8`을 사용한다. |
-| 인증·인가 | [인증·인가](../../common/authentication.md) | 담당 지역의 `REGION_ADMIN` 역할만 허용하며, 콘텐츠의 `region_id`와 인증 주체의 담당 지역이 같아야 한다. |
+| 인증·인가 | [인증·인가](../../common/authentication.md) | `ROLE_REGION_ADMIN` snapshot으로 1차 인가하고, DB에서 활성 `ORDINARY` 계정과 현재 담당 지역·콘텐츠 `region_id` 일치를 확인한다. |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | 공통 네 필드를 사용하며 성공 상태는 `200 OK`다. |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | 회차는 콘텐츠 상세의 구성 정보로 전체 반환하며 페이지네이션을 적용하지 않는다. |
 
@@ -166,7 +166,7 @@ Accept: application/json
 | 400 | `INVALID_INPUT` | `contentId`가 양수가 아니다. 데이터를 반환하지 않는다. |
 | 400 | `INVALID_TYPE` | `contentId`를 Long으로 변환할 수 없다. 데이터를 반환하지 않는다. |
 | 401 | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 데이터를 반환하지 않는다. |
-| 403 | `FORBIDDEN` | 지역 관리자 역할이 없거나 콘텐츠의 담당 지역이 다르다. 데이터를 반환하지 않는다. |
+| 403 | `FORBIDDEN` | `ROLE_REGION_ADMIN` authority가 없거나 활성 `ORDINARY` 계정, 담당 지역 또는 콘텐츠 지역이 맞지 않는다. 데이터를 반환하지 않는다. |
 | 404 | `NOT_FOUND` | 콘텐츠가 존재하지 않거나, 소프트 삭제됐거나, 최초 심사·재제출 승인 검토 대상인 `PENDING` 상태가 아니다. 공개 전 수정 심사 대기는 수정본 상세 API를 사용한다. |
 
 #### Error Response Body

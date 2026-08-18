@@ -32,7 +32,7 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Authorization` | Y | `Bearer {accessToken}`. 인증 주체는 승인된 소유 운영자 또는 담당 지역 관리자여야 한다. |
+| `Authorization` | Y | `Bearer {accessToken}`. 인증 주체는 `ROLE_OPERATOR` 또는 `ROLE_REGION_ADMIN` snapshot을 가지고 활성 `ORDINARY` 계정이어야 하며, 역할별 현재 담당 지역·소유 범위를 충족해야 한다. |
 | `Accept` | N | `application/json` |
 
 #### Path Variable
@@ -125,7 +125,7 @@ Accept: application/json
 | --- | --- | --- |
 | `400` | `INVALID_INPUT` | `reservationNo`가 없거나 공백만으로 구성됐다. 예약·방문·체크인·정원과 감사 기록을 변경하지 않으며 요청 값을 수정한 뒤 재시도할 수 있다. |
 | `401` | `UNAUTHENTICATED` | 인증 정보가 없거나 유효하지 않다. 조회 대상과 상태를 변경하지 않으며 유효한 인증 정보로 재시도할 수 있다. |
-| `403` | `FORBIDDEN` | 인증 주체가 승인된 `OPERATOR` 또는 담당 `region_id`에 연결된 `REGION_ADMIN`이 아니거나, 조회한 예약이 인증 주체의 역할별 소유·지역 범위와 일치하지 않는다. 조회 대상과 상태를 변경하지 않으며 동일한 권한 상태로 재시도해도 성공하지 않는다. |
+| `403` | `FORBIDDEN` | 인증 주체에게 `ROLE_OPERATOR` 또는 `ROLE_REGION_ADMIN` authority가 없거나 활성 `ORDINARY` 계정이 아니거나, 조회한 예약이 역할별 현재 소유·담당 지역 범위와 일치하지 않는다. 조회 대상과 상태를 변경하지 않으며 동일한 권한 상태로 재시도해도 성공하지 않는다. |
 | `404` | `NOT_FOUND` | `reservationNo`와 일치하는 예약이 없다. 예약·방문·체크인·정원과 감사 기록을 변경하지 않으며 예약번호를 확인한 뒤 재시도할 수 있다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 예약·회차·콘텐츠·방문 연결 정합성 오류 또는 예상하지 못한 서버 오류가 발생했다. 트랜잭션이 롤백되며 성공 감사 이벤트를 남기지 않는다. 일시적 장애라면 동일 요청으로 재시도할 수 있지만 정합성 오류는 해결 전까지 재시도해도 성공하지 않는다. |
 
@@ -142,7 +142,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. 인증 주체는 승인된 `OPERATOR` 또는 담당 `region_id`에 연결된 `REGION_ADMIN`이어야 한다.
+1. Access Token의 `ROLE_OPERATOR` 또는 `ROLE_REGION_ADMIN` authority를 1차로 확인한다. DB에서는 활성 `ORDINARY` 계정의 현재 담당 지역과 대상 예약·콘텐츠 관계를 확인한다.
 2. 서버는 `reservation_no`로 예약을 조회한 뒤, 역할별 권한 범위를 검증한다. `OPERATOR`는 예약의 지역, 콘텐츠의 소유 운영자와 콘텐츠 지역이 인증 운영자의 소유·담당 지역과 일치해야 한다. `REGION_ADMIN`은 예약의 지역과 콘텐츠 지역이 인증 지역 관리자의 담당 지역과 일치해야 하며 콘텐츠 소유 운영자 일치는 요구하지 않는다.
 3. `reservation_no`의 전역 `UNIQUE` 제약으로 조회 결과는 최대 한 건이다. 동일 번호의 복수 예약 중 하나를 임의로 반환하지 않는다.
 4. 이 API의 확인 사유는 항상 `QR_VERIFICATION_FAILED`다. 클라이언트는 별도 사유를 입력하지 않는다.

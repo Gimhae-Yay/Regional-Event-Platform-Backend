@@ -68,26 +68,28 @@ Access Token은 활성 회원 확인 뒤에만 발급한다. 활성 회원의 au
 
 | `account_kind` | 활성 일반 역할 배정 | 활성 고권한 배정 | 발급 `authorities` |
 | --- | --- | --- | --- |
-| `ORDINARY` | 0개 이상 | 없음 | 각 `VISITOR`·`OPERATOR`·`REGION_ADMIN`의 `ROLE_VISITOR`·`ROLE_OPERATOR`·`ROLE_REGION_ADMIN` 합집합 |
+| `ORDINARY` | 없음 | 없음 | 빈 배열 `[]` |
+| `ORDINARY` | 1개 이상 | 없음 | 각 `VISITOR`·`OPERATOR`·`REGION_ADMIN`의 `ROLE_VISITOR`·`ROLE_OPERATOR`·`ROLE_REGION_ADMIN` 합집합 |
 | `PRIVILEGED` | 없음 | `SUPER_ADMIN` | `ROLE_SUPER_ADMIN` 하나 |
 | `PRIVILEGED` | 없음 | `PLATFORM_ADMIN` | `ROLE_PLATFORM_ADMIN` 하나 |
 | `PRIVILEGED` | 없음 | 없음 또는 `INACTIVE` | 빈 배열 `[]` |
-| 모든 계정 분류 | 계정 분류와 맞지 않는 활성 원천이 하나라도 있음, 또는 일반·고권한 활성 원천이 함께 있음 | 무관 | 빈 배열 `[]` |
+| 모든 계정 분류 | 계정 분류와 맞지 않는 활성 원천이 하나라도 있음, 또는 일반·고권한 활성 원천이 함께 있음 | 무관 | Access Token과 Refresh Token을 발급하지 않는다. |
 
 일반 역할은 서로 다른 역할끼리 동시에 활성일 수 있으므로 `ORDINARY` 계정은 활성 일반 역할 전체를 합친다. 반대로
 `SUPER_ADMIN`에게 `ROLE_PLATFORM_ADMIN`을 함께 발급하지 않는다. 두 authority가 모두 허용되는 전체관리자 API는
 권한 행렬에서 두 값을 명시적으로 허용하고, 고권한 계정 생성·비활성화처럼 슈퍼관리자 전용 API는
 `ROLE_SUPER_ADMIN`만 허용한다. 별도 `RoleHierarchy`는 도입하지 않는다.
 
-운영자 신청이 `PENDING`인 활성 일반 회원과 비활성 고권한 배정의 활성 계정은 정상적으로 권한이 없을 수 있으므로 빈 배열은
-유효한 claim이다. 다만 계정 분류와 반대되는 활성 배정, 또는 두 종류 활성 배정의 동시 존재는 ADR-0064에 어긋나는 데이터다.
-이 경우 어느 역할도 우선하거나 합치지 않고 빈 배열을 발급해 역할 보호 API를 fail-closed 처리하며, 운영자가 데이터
-정합성을 조사할 수 있도록 보안 이벤트로 관측한다.
+회원가입에서 `OPERATOR`를 선택해 `PENDING` 운영자 신청만 가진 활성 `ORDINARY` 회원과 비활성 고권한 배정의 활성 계정은
+정상적으로 권한이 없을 수 있으므로 빈 배열은 유효한 claim이다. 이 Token은 인증 전용 API에는 사용할 수 있지만 역할 보호
+API에서는 `403 FORBIDDEN`이다. 다만 계정 분류와 반대되는 활성 배정, 또는 두 종류 활성 배정의 동시 존재는 ADR-0064에
+어긋나는 데이터다. 이 경우 어느 역할도 우선하거나 합치지 않고 Access Token과 Refresh Token 발급을 거부한다.
 
 로그인과 Access Token 재발급은 동일한 권한 resolver를 사용한다. 재발급은 기존 Refresh Token 회전 순서와 사용자 행 잠금
 경계를 바꾸지 않는다. 권한 resolver는 회전 진행 표지를 확보한 뒤 `RefreshTokenService.rotate`의 prepare callback 안에서
-사용자 행 잠금으로 `ACTIVE` 상태를 재확인한 후 snapshot을 계산한다. 이 확인 또는 resolver가 실패하면 진행 표지를 취소하고
-Access Token이나 새 Refresh Token을 발급하지 않는다.
+사용자 행 잠금으로 `ACTIVE` 상태를 재확인한 후 snapshot을 계산한다. 권한 원천이 정합성 규칙에 어긋나거나 이 확인 또는
+resolver가 실패하면 진행 표지를 취소하고 Access Token이나 새 Refresh Token을 발급하지 않는다. 정상적인 빈 배열 결과는
+실패가 아니므로 회전을 완료하고 두 Token을 발급한다.
 
 ### 1차 RBAC와 DB 최종 인가의 경계
 
@@ -155,14 +157,13 @@ ADR-0045를 유지한다.
 - 역할 철회 뒤 최대 15분 동안 기존 Token은 SecurityConfig의 전역 역할 관문을 통과할 수 있다.
 - 역할 보호 API는 1차 RBAC 뒤에도 DB 최종 인가를 수행하므로 계정·지역 관계·소유권·업무 상태 조회가 완전히 사라지지 않는다.
 - 두 단계 전환의 `T_complete` 기록을 놓치면 누락 claim Token의 허용·거부 시점이 불명확해진다.
-- 빈 authority가 상충 데이터와 정상적인 무권한 상태를 같은 공개 결과로 보이게 하므로, 운영 관측에서 두 원인을 구분해야 한다.
+- 정상적인 무권한 상태와 역할 원천 정합성 오류를 발급 결과로 구분하므로, 로그인·재발급 실패 경계를 회귀 테스트로 유지해야 한다.
 
 ## 전환과 롤백
 
-후속 구현은 #929 권한 행렬을 먼저 적용 기준으로 삼고, #931에서 호환 배포용 공통 authority resolver와 claim
-발급·검증을, #932에서 SecurityConfig의 1차 RBAC를, 누락 claim 엄격 전환 Task에서 `T_complete + 15분` 이후 401
-전환을, #933에서 DB 최종 인가 경계를 정리한다. HTTP 경로·요청·응답·오류 코드와 DB schema는 이 ADR만으로 바꾸지
-않는다.
+후속 구현은 #929 권한 행렬을 먼저 적용 기준으로 삼고, #931에서 공통 authority resolver, claim 발급·검증과 누락
+claim의 호환·엄격 전환을, #932에서 SecurityConfig의 1차 RBAC를, #933에서 DB 최종 인가 경계를 정리한다. HTTP 경로·요청·응답·
+오류 코드와 DB schema는 이 ADR만으로 바꾸지 않는다.
 
 #933은 #932의 역할 보호 matcher가 배포된 상태에서만 전역 역할의 DB 중복 검사를 제거한다. #933 배포 뒤 #932를
 되돌릴 때는 #933도 함께 되돌리거나 DB 전역 역할 fallback을 먼저 복구한다. 두 Task를 독립적으로 롤백해
@@ -174,15 +175,15 @@ Token은 ADR-0043의 15분 수명 안에서만 존재한다. 권한을 과도하
 
 ## 검증 방법
 
-- 로그인과 Access Token 재발급이 동일 resolver로 활성 역할·등급만 `authorities`에 넣는지 검증한다.
-- `ORDINARY`의 복수 활성 일반 역할, `PRIVILEGED`의 각 등급, 정상 빈 배열, 상충 활성 원천의 빈 배열을 단위·통합 테스트로 검증한다.
+- 로그인과 Access Token 재발급이 동일 resolver로 허용된 역할·등급만 `authorities`에 넣는지 검증한다.
+- `ORDINARY`의 복수 활성 일반 역할, `PRIVILEGED`의 각 등급, `PENDING` 운영자 신청의 정상 빈 배열과 상충 활성 원천의 발급 거부를 단위·통합 테스트로 검증한다.
 - `SUPER_ADMIN`이 `ROLE_PLATFORM_ADMIN` 없이도 공통 전체관리자 URL을 통과하고, 슈퍼관리자 전용 URL은 `ROLE_SUPER_ADMIN`만 통과하는지 검증한다.
 - 배열이 아닌 claim, `null`·비문자·중복·미허용 authority, 엄격 전환 뒤 누락 claim이 모두 `401 UNAUTHENTICATED`인지 검증한다.
 - 호환 기간의 누락 claim Token은 인증 전용 URL에서 인증되고 역할 보호 URL에서 `403 FORBIDDEN`인지 검증한다.
 - 권한 없는 유효 Token은 SecurityConfig에서 403인지, 지역 배정 해제·소유권 변경·비활성 계정은 기존 authority가 있어도 DB 단계에서 즉시 거부되는지 검증한다.
-- 계정 분류와 맞지 않는 활성 일반 역할 배정은 빈 authority Token을 발급하고, 인증 전용 활성 방문자 API에서 `ORDINARY` 조건으로 403인지 검증한다.
+- 인증 전용 API가 현재 활성 방문자를 요구하면 기존 Access Token이 있어도 `ACTIVE VISITOR`와 `ORDINARY` 조건으로 403인지 검증한다.
 - #932와 #933을 함께 되돌리거나 DB fallback을 먼저 복구하는 롤백 절차를 검증한다.
-- 배포 기록의 `T_complete`, 호환 기간의 누락 claim 계수, 엄격 전환 뒤 누락 claim 401을 운영 로그·배포 기록으로 확인한다.
+- 배포 기록의 `T_complete`와 엄격 전환 뒤 누락 claim 401을 확인한다.
 
 ## 대체 조건
 

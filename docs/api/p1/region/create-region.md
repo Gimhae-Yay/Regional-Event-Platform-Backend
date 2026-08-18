@@ -13,7 +13,7 @@
 저장한다. 지역 생성과 성공 감사 이벤트는 하나의 트랜잭션으로 커밋하며, 지역 또는 감사 이벤트 저장 중 하나라도
 실패하면 모두 롤백한다.
 
-처리자는 `PRIVILEGED` 계정의 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN` 배정을 가져야 한다.
+처리자는 `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` snapshot을 가진 활성 `PRIVILEGED` 계정이어야 한다.
 
 ## 2. 공통 계약 참조
 
@@ -144,7 +144,7 @@ Accept: application/json
 | `400` | `INVALID_TYPE` | `regionCode`, `name`, `reasonCode`, `evidenceReference`가 JSON 문자열 타입이 아니다. 지역과 감사 이력은 생성되지 않으며 필드 타입을 수정한 뒤 재시도할 수 있다. |
 | `400` | `INVALID_INPUT` | 필수값이 누락됐거나 `regionCode`·`name`이 형식·길이를, `reasonCode`가 허용 목록을, `evidenceReference`가 공백 제거 후 1~500자 길이를 만족하지 않는다. 지역과 감사 이력은 생성되지 않으며 값을 수정한 뒤 재시도할 수 있다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 지역과 감사 이력은 생성되지 않으며 유효한 Access Token을 얻은 뒤 재시도할 수 있다. |
-| `403` | `FORBIDDEN` | 인증 주체가 `PRIVILEGED` 계정의 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN` 배정을 갖지 않는다. 지역과 감사 이력은 생성되지 않으며 활성 고권한 배정을 얻기 전에는 재시도해도 성공하지 않는다. |
+| `403` | `FORBIDDEN` | 인증 주체에게 `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` authority가 없거나 활성 `PRIVILEGED` 계정이 아니다. 지역과 감사 이력은 생성되지 않는다. |
 | `409` | `REGION_CODE_ALREADY_EXISTS` | 정규화한 `regionCode`가 `region(region_code)` 유일 제약과 충돌한다. 지역과 성공 감사 이력은 생성되지 않으며 같은 코드의 반복 요청은 성공하지 않는다. 기존 지역을 확인하거나 다른 코드를 사용해야 한다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 지역 생성 중 예상하지 못한 서버 오류가 발생해 트랜잭션이 롤백됐다. 일시 장애가 해소된 뒤 재시도할 수 있다. |
 
@@ -161,7 +161,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. 인증 주체는 `app_user.account_kind = PRIVILEGED`이고 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN` 배정을 가져야 한다.
+1. 인증 주체는 `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` snapshot을 가지고 `app_user.account_kind = PRIVILEGED`인 활성 계정이어야 한다.
 2. `regionCode`는 앞뒤 공백을 제거하고 ASCII 형식과 길이를 검증한 뒤 `Locale.ROOT` 기준 대문자로 변환한다. 변환된 정규형을 저장·응답·유일성 검사의 기준으로 사용한다.
 3. `name`, `reasonCode`, `evidenceReference`는 앞뒤 공백을 제거한 값으로 검증한다. `reasonCode`가 지역 생성 허용 목록에 없거나 `evidenceReference`가 1~500자가 아니면 `400 INVALID_INPUT`으로 거부한다. 서버는 `evidenceReference`의 문자 형식·출처·내용을 검사하지 않는다. `name`은 `region.name`, 사유와 증빙 참조는 `audit_event`에 저장한다.
 4. 생성 직후 `isPublic`은 `false`로 고정한다. 공개 또는 운영 상태 변경은 이 API에서 처리하지 않는다.

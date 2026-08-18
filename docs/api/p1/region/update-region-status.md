@@ -141,7 +141,7 @@ Accept: application/json
 | `400` | `INVALID_TYPE` | `regionId`를 양의 10진 정수 문자열로 처리할 수 없거나 `isPublic`, `reasonCode`, `evidenceReference`가 선언된 JSON 타입이 아니다. 지역과 감사 이력은 변경되지 않으며 타입을 수정한 뒤 재시도할 수 있다. |
 | `400` | `INVALID_INPUT` | 필수값이 누락됐거나 `reasonCode`가 목표 상태별 허용 목록을, `evidenceReference`가 공백 제거 후 1~500자 길이를 만족하지 않는다. 지역과 감사 이력은 변경되지 않으며 값을 수정한 뒤 재시도할 수 있다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 지역과 감사 이력은 변경되지 않으며 유효한 Access Token을 얻은 뒤 재시도할 수 있다. |
-| `403` | `FORBIDDEN` | 인증 주체가 `PRIVILEGED` 계정의 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN` 배정을 갖지 않는다. 지역과 감사 이력은 변경되지 않으며 활성 고권한 배정을 얻기 전에는 재시도해도 성공하지 않는다. |
+| `403` | `FORBIDDEN` | 인증 주체에게 `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` authority가 없거나 활성 `PRIVILEGED` 계정이 아니다. 지역과 감사 이력은 변경되지 않는다. |
 | `404` | `NOT_FOUND` | 대상 지역이 없다. 감사 이력은 생성하지 않으며 올바른 `regionId`로 수정하기 전에는 재시도해도 성공하지 않는다. |
 | `409` | `REGION_AVAILABILITY_CONFLICT` | 비삭제 콘텐츠가 있는 공개 지역을 비공개로 바꾸려 한다. 지역과 성공 감사 이력은 변경하지 않고 롤백 뒤 서버 실패 코드와 요청 증빙 참조를 가진 실패 감사 이벤트만 별도 트랜잭션으로 기록한다. 실패 감사 저장 자체가 실패해도 이 409와 롤백 결과를 유지하고 비개인 구조화 로그·운영 알림으로 관찰한다. 공개 이후 콘텐츠는 삭제할 수 없으므로 콘텐츠 운영 이력이 있는 지역에서는 재시도해도 성공하지 않는다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 변경 중 예상하지 못한 서버 오류가 발생해 변경 트랜잭션이 롤백됐다. 일시 장애가 해소된 뒤 재시도할 수 있다. |
@@ -159,7 +159,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. 인증 주체는 `app_user.account_kind = PRIVILEGED`이고 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN` 배정을 가져야 한다.
+1. 인증 주체는 `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` snapshot을 가지고 `app_user.account_kind = PRIVILEGED`인 활성 계정이어야 한다.
 2. `reasonCode`와 `evidenceReference`는 앞뒤 공백을 제거한 값으로 검증한다. `reasonCode`가 목표 `isPublic`의 허용 목록에 없거나 `evidenceReference`가 1~500자가 아니면 `400 INVALID_INPUT`으로 거부한다. 서버는 `evidenceReference`의 문자 형식·출처·내용을 검사하지 않는다. 인증·인가와 입력 검증은 동일 상태 판단보다 먼저 수행한다.
 3. 같은 트랜잭션에서 대상 지역 행을 쓰기 잠금으로 조회한다. 대상이 없으면 `404 NOT_FOUND`를 반환하고 감사 이벤트를 만들지 않는다.
 4. 현재 `is_public`과 요청 `isPublic`이 같으면 `200 OK`와 현재 지역 정보를 반환한다. 지역 행과 `updatedAt`을 변경하지 않고 성공·실패 감사 이벤트도 만들지 않는다.

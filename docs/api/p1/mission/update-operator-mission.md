@@ -81,13 +81,13 @@ Accept: application/json
 | `400` | `INVALID_JSON` | 요청 본문을 역직렬화할 수 없다. 미션을 변경하지 않는다. |
 | `400` | `INVALID_TYPE` | 요청 값을 선언된 타입으로 변환할 수 없다. 미션을 변경하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 미션을 변경하지 않는다. |
-| `403` | `FORBIDDEN` | 담당 지역의 `OPERATOR` 역할이 없거나 미션·대상 콘텐츠·보상 정책의 지역이 다르다. 미션을 변경하지 않는다. |
+| `403` | `FORBIDDEN` | Access Token에 `ROLE_OPERATOR` authority가 없거나 활성 `ORDINARY` 계정이 아니거나 현재 담당 지역과 미션·대상 콘텐츠·보상 정책의 지역이 다르다. 미션을 변경하지 않는다. |
 | `404` | `NOT_FOUND` | 미션·대상 콘텐츠·쿠폰 정책을 찾을 수 없거나 대상 콘텐츠가 삭제됐다. 미션을 변경하지 않는다. |
 | `409` | `MISSION_STATE_CONFLICT` | 잠금 뒤 미션이 `DRAFT`가 아니거나 보상 정책 연결이 달라졌거나, 요청한 보상 정책이 `ENDED` 또는 `MISSION_REWARD`가 아닌 발급 경로다. 미션을 변경하지 않는다. |
 
 ### 처리 규칙
 
-1. 미션의 담당 지역과 인증 주체의 담당 지역이 같아야 한다.
+1. Access Token의 `ROLE_OPERATOR` authority를 1차로 확인하고, DB에서 활성 `ORDINARY` 계정의 현재 담당 지역과 미션 지역이 같은지 확인한다.
 2. `title`은 생성 API와 동일하게 양끝 공백을 제거하고 내부 공백을 보존한다. 정규화 뒤 Unicode code point 기준 1~255자가 아니면
    미션과 감사 성공 이벤트를 변경하지 않고 `400 INVALID_INPUT`으로 거부한다. 제목 중복은 허용한다.
 3. 현재 미션에 연결된 보상 정책과 요청한 보상 정책이 다르면 두 정책 행을 식별자 오름차순으로 잠그고,
