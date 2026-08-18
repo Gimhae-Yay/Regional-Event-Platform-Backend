@@ -38,7 +38,6 @@ import io.regionevent.regioneventbackend.domain.content.service.GetContentRevisi
 import io.regionevent.regioneventbackend.domain.content.service.GetContentWithdrawalReviewDetailUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetMyContentUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetOriginalContentReviewDetailUseCase;
-import io.regionevent.regioneventbackend.domain.content.service.GetPendingContentsUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetPendingContentWithdrawalRequestsUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetPendingContentRevisionsUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetPendingSessionReviewDetailUseCase;
@@ -46,6 +45,7 @@ import io.regionevent.regioneventbackend.domain.content.service.GetPendingSessio
 import io.regionevent.regioneventbackend.domain.content.service.GetPublicContentSessionsUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetPublicContentUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetPublicContentsUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.GetRegionAdminContentsUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetSessionRevisionReviewDetailUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.RejectContentRevisionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.RejectContentSessionUseCase;
@@ -131,7 +131,7 @@ abstract class ContentControllerWebMvcTestSupport {
     protected GetOriginalContentReviewDetailUseCase getOriginalContentReviewDetailUseCase;
 
     @MockitoBean
-    protected GetPendingContentsUseCase getPendingContentsUseCase;
+    protected GetRegionAdminContentsUseCase getRegionAdminContentsUseCase;
 
     @MockitoBean
     protected GetPendingContentWithdrawalRequestsUseCase getPendingContentWithdrawalRequestsUseCase;

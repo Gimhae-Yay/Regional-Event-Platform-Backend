@@ -6,11 +6,12 @@ import java.util.List;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentType;
 
-public record PendingContentListResult(
+public record RegionAdminContentListResult(
+    ContentStatus status,
     List<Content> contents
 ) {
 
-    public PendingContentListResult {
+    public RegionAdminContentListResult {
         contents = List.copyOf(contents);
     }
 
@@ -21,6 +22,7 @@ public record PendingContentListResult(
         ContentStatus status,
         Instant publishAt,
         Instant submittedAt,
+        Instant approvedAt,
         Long operatorId,
         String operatorName,
         String representativeImageUrl,
