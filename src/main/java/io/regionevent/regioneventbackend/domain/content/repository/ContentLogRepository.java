@@ -57,7 +57,6 @@ public interface ContentLogRepository extends JpaRepository<ContentLog, Long> {
                 SELECT newerContentLog
                 FROM ContentLog newerContentLog
                 WHERE newerContentLog.content = contentLog.content
-                    AND newerContentLog.status = :status
                     AND (
                         newerContentLog.date > contentLog.date
                         OR (

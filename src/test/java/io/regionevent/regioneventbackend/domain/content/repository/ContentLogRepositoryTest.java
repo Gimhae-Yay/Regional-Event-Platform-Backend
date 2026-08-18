@@ -176,12 +176,30 @@ class ContentLogRepositoryTest {
         Content content = saveContent();
         Instant approvedAt = Instant.parse("2026-08-01T01:00:00Z");
         contentLogRepository.saveAndFlush(
-            new ContentLog(content, null, ContentLogStatus.APPROVED, null, approvedAt.minusSeconds(1))
+            new ContentLog(content, null, ContentLogStatus.PENDING, null, approvedAt.minusSeconds(1))
         );
         ContentLog firstAtSameTime = contentLogRepository.saveAndFlush(
             new ContentLog(content, null, ContentLogStatus.APPROVED, null, approvedAt)
         );
         ContentLog latestAtSameTime = contentLogRepository.saveAndFlush(
+            new ContentLog(content, null, ContentLogStatus.APPROVED, null, approvedAt)
+        );
+        entityManager.clear();
+
+        List<ContentLog> approvedLogs = contentLogRepository.findLatestByContentIdsAndStatus(
+            List.of(content.getContentId()),
+            ContentLogStatus.APPROVED
+        );
+
+        assertThat(approvedLogs).extracting(ContentLog::getId).containsExactly(latestAtSameTime.getId());
+        assertThat(approvedLogs.getFirst().getId()).isGreaterThan(firstAtSameTime.getId());
+    }
+
+    @Test
+    void 상태별_목록용_APPROVED_로그보다_새로운_다른_상태_로그가_있으면_조회하지_않는다() {
+        Content content = saveContent();
+        Instant approvedAt = Instant.parse("2026-08-01T01:00:00Z");
+        contentLogRepository.saveAndFlush(
             new ContentLog(content, null, ContentLogStatus.APPROVED, null, approvedAt)
         );
         contentLogRepository.saveAndFlush(
@@ -194,8 +212,7 @@ class ContentLogRepositoryTest {
             ContentLogStatus.APPROVED
         );
 
-        assertThat(approvedLogs).extracting(ContentLog::getId).containsExactly(latestAtSameTime.getId());
-        assertThat(approvedLogs.getFirst().getId()).isGreaterThan(firstAtSameTime.getId());
+        assertThat(approvedLogs).isEmpty();
     }
 
     @Test
