@@ -3,14 +3,14 @@
 | 항목 | 내용                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | --- |----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | 대상 릴리스 | P0                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| 관련 요구사항 | `FR-02`, `FR-03`, `FR-04`, `FR-06`, `FR-14`, `AUTH-01`, `CON-01`~`CON-09`, `SES-01`, `SES-02`, `RSV-02`, `RSV-06`                                                                                                                                                                                                                                                                                                        |
+| 관련 요구사항 | `FR-02`, `FR-03`, `FR-04`, `FR-06`, `FR-10`, `FR-14`, `AUTH-01`, `CON-01`~`CON-09`, `SES-01`, `SES-02`, `RSV-02`, `RSV-06`                                                                                                                                                                                                                                                                                               |
 | 소유 도메인 | 지역·콘텐츠 카탈로그                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [정원 홀드·무료 예약](../../../p0/reservation.md), [인증·프로필](../../../p0/auth-profile.md), [ERD](../../../erd.md), [기술 스택](../../../local-stamp-platform-tech-stack.md), [ADR-0016](../../../adr/0016-use-private-s3-presigned-urls-and-immediate-image-deletion.md), [ADR-0031](../../../adr/0031-use-version-validated-cache-aside-for-public-content.md), [ADR-0038](../../../adr/0038-create-sessions-with-lifecycle-and-review-session-changes.md), [ADR-0059](../../../adr/0059-automatically-end-content-after-all-sessions-terminate.md), [ADR-0062](../../../adr/0062-coordinate-content-ending-with-usecase.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [정원 홀드·무료 예약](../../../p0/reservation.md), [인증·프로필](../../../p0/auth-profile.md), [ERD](../../../erd.md), [기술 스택](../../../local-stamp-platform-tech-stack.md), [ADR-0016](../../../adr/0016-use-private-s3-presigned-urls-and-immediate-image-deletion.md), [ADR-0031](../../../adr/0031-use-version-validated-cache-aside-for-public-content.md), [ADR-0038](../../../adr/0038-create-sessions-with-lifecycle-and-review-session-changes.md), [ADR-0059](../../../adr/0059-automatically-end-content-after-all-sessions-terminate.md), [ADR-0062](../../../adr/0062-coordinate-content-ending-with-usecase.md), [ADR-0101](../../../adr/0101-store-content-withdrawal-requests-and-serialize-review.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
-이 문서는 지역·콘텐츠 카탈로그 도메인의 공개 지역 탐색, 지역 홈, 담당 지역 콘텐츠·수정본 심사 대기 조회와 콘텐츠 회차
-조회·취소 요구사항을 HTTP API 계약으로 구체화하고, 자동 공개·자동 종료의 내부 스케줄러 실행 계약을 연결한다.
+이 문서는 지역·콘텐츠 카탈로그 도메인의 공개 지역 탐색, 지역 홈, 담당 지역 콘텐츠·수정본·전체 철회 요청 심사 대기 조회와
+콘텐츠 회차 조회·취소 요구사항을 HTTP API 계약으로 구체화하고, 자동 공개·자동 종료의 내부 스케줄러 실행 계약을 연결한다.
 요청·응답의 공통 형식, 인증, 페이지네이션과 오류 구조는 `common/` 문서를 단일 출처로 삼으며,
 이 문서에는 해당 API에만 적용되는 값과 규칙만 작성한다.
 
@@ -44,6 +44,8 @@
 | `FR-14`, `CON-05` | `GET /region-admin/content-revisions/{revisionId}` | `content_revision`, `content`, `content_session`, `image_object` |
 | `FR-14`, `CON-05`, `CON-09` | `POST /region-admin/content-revisions/{revisionId}/approve` | `content_revision`, `content`, `content_log`, `audit_event` |
 | `FR-14`, `CON-05`, `CON-09` | `POST /region-admin/content-revisions/{revisionId}/reject` | `content_revision`, `content`, `audit_event` |
+| `FR-10`, `FR-14`, `AUTH-01`, `CON-07` | `GET /region-admin/content-withdrawal-requests?status=PENDING` | `content_withdrawal_request`, `content`, `app_user`, `user_role_assignment` |
+| `FR-10`, `FR-14`, `AUTH-01`, `CON-07` | `GET /region-admin/content-withdrawal-requests/{withdrawalRequestId}` | `content_withdrawal_request`, `content`, `app_user`, `user_role_assignment` |
 | `CON-09` | `GET /region-admin/contents/{contentId}/history` | `content`, `content_log` |
 | `CON-02`, `CON-03` | `GET /region-admin/contents/{contentId}` | `content`, `content_session`, `content_representative_image` |
 | `FR-03`, `FR-04`, `AUTH-01`, `SES-01`, `SES-02` | `POST /operator/contents/{contentId}/sessions` | `content`, `content_session`, `user_role_assignment`, `audit_event`, `audit_event_actor_link` |
@@ -80,6 +82,8 @@
 | 수정본 승인 | `POST /region-admin/content-revisions/{revisionId}/approve` | [approve-content-revision.md](../region-content/approve-content-revision.md) |
 | 사유를 포함한 수정본 반려 | `POST /region-admin/content-revisions/{revisionId}/reject` | [reject-content-revision.md](../region-content/reject-content-revision.md) |
 | 전체 콘텐츠 철회 요청 | `POST /operator/contents/{contentId}/withdrawal-requests` | [request-content-withdrawal.md](../content/request-content-withdrawal.md) |
+| 전체 콘텐츠 철회 요청 대기 목록 조회 | `GET /region-admin/content-withdrawal-requests?status=PENDING` | [list-pending-content-withdrawal-requests.md](../region-content/list-pending-content-withdrawal-requests.md) |
+| 전체 콘텐츠 철회 요청 상세 조회 | `GET /region-admin/content-withdrawal-requests/{withdrawalRequestId}` | [get-pending-content-withdrawal-request.md](../region-content/get-pending-content-withdrawal-request.md) |
 | 전체 콘텐츠 철회 승인 | `POST /region-admin/content-withdrawal-requests/{withdrawalRequestId}/approve` | [approve-content-withdrawal.md](../region-content/approve-content-withdrawal.md) |
 | 전체 콘텐츠 철회 반려 | `POST /region-admin/content-withdrawal-requests/{withdrawalRequestId}/reject` | [reject-content-withdrawal.md](../region-content/reject-content-withdrawal.md) |
 | 콘텐츠 반려·승인·종료 이력 조회 | `GET /region-admin/contents/{contentId}/history` | [content-history.md](content-history.md) |
