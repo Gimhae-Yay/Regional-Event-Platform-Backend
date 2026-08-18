@@ -5,7 +5,7 @@
 | 대상 릴리스 | P1 |
 | 관련 요구사항 | [P1-FR-02](../../../p1-spec.md#6-기능-요구사항과-소유-문서), `STB-04` |
 | 소유 도메인 | 스탬프북 |
-| 기준 문서 | [스탬프북 API](stampbook.md), [스탬프북](../../../p1/stampbook.md), [P1 ERD](../../../p1-erd.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [스탬프북 API](stampbook.md), [스탬프북](../../../p1/stampbook.md), [P1 ERD](../../../p1-erd.md), [ADR-0104](../../../adr/0104-store-stampbook-title-as-a-not-null-intrinsic-field.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
@@ -82,6 +82,7 @@ Accept: application/json
     "stampbooks": [
       {
         "stampbookId": "101",
+        "title": "김해 가야 문화 완주",
         "regionId": "1",
         "status": "PUBLISHED",
         "publishedAt": "2026-08-01T01:00:00Z",
@@ -96,6 +97,7 @@ Accept: application/json
       },
       {
         "stampbookId": "102",
+        "title": "김해 역사 산책",
         "regionId": "1",
         "status": "ENDED",
         "publishedAt": "2026-07-01T01:00:00Z",
@@ -127,6 +129,7 @@ Accept: application/json
 | `message` | String | 성공 메시지다. |
 | `data.stampbooks` | Array | 공개 중인 스탬프북과 인증 회원의 종료된 진행 이력 배열이다. 결과가 없으면 빈 배열 `[]`이다. |
 | `data.stampbooks[].stampbookId` | String | 양의 10진 문자열인 스탬프북 식별자다. |
+| `data.stampbooks[].title` | String | 스탬프북에 저장된 고유 제목이다. 앞뒤 공백 제거 뒤 1~100자이며 대상 콘텐츠 제목으로 조합하지 않는다. |
 | `data.stampbooks[].regionId` | String | 스탬프북 소속 지역 식별자다. |
 | `data.stampbooks[].status` | String | 스탬프북 상태다. 조회 대상에서는 `PUBLISHED`, `ENDED` 중 하나다. |
 | `data.stampbooks[].publishedAt` | String | 스탬프북 공개 승인 시각이다. UTC ISO 8601 형식이다. |
