@@ -74,6 +74,9 @@ class StampbookReadServiceTest {
         assertThat(results)
             .extracting(MyStampbookListResult::stampbookId)
             .containsExactly(101L, 102L);
+        assertThat(results)
+            .extracting(MyStampbookListResult::title)
+            .containsExactly("스탬프북 제목 101", "스탬프북 제목 102");
         assertThat(results.getFirst().progress())
             .isEqualTo(new MyStampbookListResult.Progress(
                 MyStampbookProgressStatus.NOT_STARTED,
@@ -107,6 +110,7 @@ class StampbookReadServiceTest {
             StampbookStatus.ENDED
         )).thenReturn(List.of(new MyStampbookListProjection(
             101L,
+            "스탬프북 제목",
             10L,
             StampbookStatus.ENDED,
             Instant.parse("2026-08-01T00:00:00Z"),
@@ -328,6 +332,7 @@ class StampbookReadServiceTest {
 
         MyStampbookDetailResult result = stampbookReadService.findMyStampbookDetail(USER_ID, 101L);
 
+        assertThat(result.title()).isEqualTo("스탬프북 제목 101");
         assertThat(result.targetContents()).containsExactly(
             new MyStampbookDetailResult.TargetContent(201L, "첫 번째 콘텐츠", true, earnedAt),
             new MyStampbookDetailResult.TargetContent(202L, "두 번째 콘텐츠", false, null)
@@ -655,6 +660,7 @@ class StampbookReadServiceTest {
     ) {
         return new MyStampbookListProjection(
             stampbookId,
+            "스탬프북 제목 " + stampbookId,
             10L,
             stampbookStatus,
             publishedAt,
@@ -684,6 +690,7 @@ class StampbookReadServiceTest {
     ) {
         return new MyStampbookDetailProjection(
             stampbookId,
+            "스탬프북 제목 " + stampbookId,
             10L,
             stampbookStatus,
             publishedAt,

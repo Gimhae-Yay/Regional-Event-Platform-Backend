@@ -17,6 +17,7 @@ public record GetMyStampbookDetailResponse(
         return new GetMyStampbookDetailResponse(
             new StampbookResponse(
                 result.stampbookId().toString(),
+                result.title(),
                 result.regionId().toString(),
                 result.status(),
                 result.publishedAt(),
@@ -37,6 +38,7 @@ public record GetMyStampbookDetailResponse(
 
     public record StampbookResponse(
         String stampbookId,
+        String title,
         String regionId,
         StampbookStatus status,
         Instant publishedAt,

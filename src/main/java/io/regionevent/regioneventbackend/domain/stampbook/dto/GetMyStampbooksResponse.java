@@ -18,6 +18,7 @@ public record GetMyStampbooksResponse(List<StampbookResponse> stampbooks) {
 
     public record StampbookResponse(
         String stampbookId,
+        String title,
         String regionId,
         StampbookStatus status,
         Instant publishedAt,
@@ -27,6 +28,7 @@ public record GetMyStampbooksResponse(List<StampbookResponse> stampbooks) {
         private static StampbookResponse from(MyStampbookListResult result) {
             return new StampbookResponse(
                 result.stampbookId().toString(),
+                result.title(),
                 result.regionId().toString(),
                 result.status(),
                 result.publishedAt(),

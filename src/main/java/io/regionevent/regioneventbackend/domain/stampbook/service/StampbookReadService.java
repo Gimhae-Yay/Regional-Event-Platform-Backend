@@ -114,6 +114,7 @@ public class StampbookReadService {
 
         return new MyStampbookListResult(
             projection.stampbookId(),
+            projection.title(),
             projection.regionId(),
             projection.stampbookStatus(),
             projection.publishedAt(),
@@ -255,6 +256,7 @@ public class StampbookReadService {
 
         return new MyStampbookDetailResult(
             firstProjection.stampbookId(),
+            firstProjection.title(),
             firstProjection.regionId(),
             firstProjection.stampbookStatus(),
             firstProjection.publishedAt(),
@@ -378,6 +380,8 @@ public class StampbookReadService {
         if (projection == null
             || projection.stampbookId() == null
             || projection.stampbookId() <= 0
+            || projection.title() == null
+            || projection.title().isBlank()
             || projection.regionId() == null
             || projection.regionId() <= 0
             || projection.publishedAt() == null
@@ -430,6 +434,8 @@ public class StampbookReadService {
         if (projection == null
             || projection.stampbookId() == null
             || projection.stampbookId() <= 0
+            || projection.title() == null
+            || projection.title().isBlank()
             || projection.regionId() == null
             || projection.regionId() <= 0
             || projection.contentId() == null
@@ -454,6 +460,7 @@ public class StampbookReadService {
         Long previousContentId = null;
         for (MyStampbookDetailProjection projection : projections) {
             if (!isSame(firstProjection.stampbookId(), projection.stampbookId())
+                || !isSame(firstProjection.title(), projection.title())
                 || !isSame(firstProjection.regionId(), projection.regionId())
                 || firstProjection.stampbookStatus() != projection.stampbookStatus()
                 || !isSame(firstProjection.publishedAt(), projection.publishedAt())

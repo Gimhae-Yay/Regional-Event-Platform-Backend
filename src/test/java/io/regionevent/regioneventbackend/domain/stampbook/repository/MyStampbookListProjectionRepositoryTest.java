@@ -201,6 +201,9 @@ class MyStampbookListProjectionRepositoryTest {
                 sameTimeFirst.getStampbookId(),
                 ownedEnded.getStampbookId()
             );
+        assertThat(projections)
+            .extracting(MyStampbookListProjection::title)
+            .containsOnly("스탬프북 제목");
         assertThat(projections.getFirst())
             .extracting(
                 MyStampbookListProjection::stampbookStatus,
@@ -416,6 +419,12 @@ class MyStampbookListProjectionRepositoryTest {
         assertThat(publishedProjections)
             .extracting(MyStampbookDetailProjection::contentId)
             .containsExactly(firstTarget.getContentId(), secondTarget.getContentId());
+        assertThat(publishedProjections)
+            .extracting(MyStampbookDetailProjection::title)
+            .containsOnly("스탬프북 제목");
+        assertThat(publishedProjections)
+            .extracting(MyStampbookDetailProjection::contentTitle)
+            .containsExactly(firstTarget.getTitle(), secondTarget.getTitle());
         assertThat(publishedProjections.getFirst())
             .extracting(
                 MyStampbookDetailProjection::progressStatus,
@@ -433,6 +442,7 @@ class MyStampbookListProjectionRepositoryTest {
             .containsExactly(secondTarget.getContentId(), FIRST_EARNED_AT);
         assertThat(ownedEndedProjections)
             .allSatisfy(projection -> {
+                assertThat(projection.title()).isEqualTo("스탬프북 제목");
                 assertThat(projection.stampbookStatus()).isEqualTo(StampbookStatus.ENDED);
                 assertThat(projection.progressStatus()).isEqualTo(StampbookProgressStatus.COMPLETED);
                 assertThat(projection.completedAt()).isEqualTo(COMPLETED_AT);
