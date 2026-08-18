@@ -480,6 +480,7 @@ class ApproveRegionAdminMissionConcurrencyMySqlTest extends NonTransactionalMySq
             alternativeRewardPolicy.publish(BASE_TIME);
             alternativeRewardPolicy = couponPolicyRepository.save(alternativeRewardPolicy);
             Mission mission = new Mission(
+                "테스트 미션",
                 region,
                 conditionType,
                 conditionType == MissionConditionType.VISIT_COUNT ? 3 : null,

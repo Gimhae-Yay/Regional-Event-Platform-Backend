@@ -145,6 +145,7 @@ class RegionAdminMissionControllerIntegrationTest {
             fixture.region()
         );
         Mission mission = new Mission(
+            "테스트 미션",
             fixture.region(),
             MissionConditionType.CONTENT_SET,
             null,
@@ -284,6 +285,7 @@ class RegionAdminMissionControllerIntegrationTest {
         Content rewardContent = saveContent(fixture.region(), fixture.admin(), "reward");
         CouponPolicy rewardCouponPolicy = saveMissionRewardCouponPolicy(rewardContent, fixture.region());
         return missionRepository.saveAndFlush(new Mission(
+            "테스트 미션",
             fixture.region(),
             MissionConditionType.VISIT_COUNT,
             3,

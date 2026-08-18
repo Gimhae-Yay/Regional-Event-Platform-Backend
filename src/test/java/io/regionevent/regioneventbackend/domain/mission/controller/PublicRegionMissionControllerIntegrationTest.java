@@ -247,6 +247,7 @@ class PublicRegionMissionControllerIntegrationTest {
         Content rewardContent = saveContent(fixture, suffix + "-reward");
         CouponPolicy rewardCouponPolicy = saveMissionRewardCouponPolicy(fixture, rewardContent, suffix);
         Mission mission = new Mission(
+            "테스트 미션",
             fixture.region(),
             MissionConditionType.CONTENT_SET,
             null,
@@ -268,6 +269,7 @@ class PublicRegionMissionControllerIntegrationTest {
         Content rewardContent = saveContent(fixture, suffix + "-reward");
         CouponPolicy rewardCouponPolicy = saveMissionRewardCouponPolicy(fixture, rewardContent, suffix);
         return missionRepository.saveAndFlush(new Mission(
+            "테스트 미션",
             fixture.region(),
             MissionConditionType.VISIT_COUNT,
             requiredVisitCount,

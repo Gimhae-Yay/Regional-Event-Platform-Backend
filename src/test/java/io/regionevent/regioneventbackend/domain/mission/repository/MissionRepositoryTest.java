@@ -79,6 +79,7 @@ class MissionRepositoryTest {
         Content secondTargetContent = saveContent(region, "second-target");
         CouponPolicy rewardCouponPolicy = saveMissionRewardCouponPolicy(rewardContent, region);
         Mission mission = new Mission(
+            "테스트 미션",
             region,
             MissionConditionType.CONTENT_SET,
             null,
@@ -127,6 +128,7 @@ class MissionRepositoryTest {
         Content rewardContent = saveContent(region, "participation-lock-reward");
         CouponPolicy rewardCouponPolicy = saveMissionRewardCouponPolicy(rewardContent, region);
         Mission mission = missionRepository.saveAndFlush(new Mission(
+            "테스트 미션",
             region,
             MissionConditionType.VISIT_COUNT,
             1,
@@ -154,6 +156,7 @@ class MissionRepositoryTest {
         Content secondReplacement = saveContent(region, "replace-second");
         CouponPolicy rewardCouponPolicy = saveMissionRewardCouponPolicy(rewardContent, region);
         Mission mission = new Mission(
+            "테스트 미션",
             region,
             MissionConditionType.CONTENT_SET,
             null,
@@ -184,6 +187,7 @@ class MissionRepositoryTest {
         Content targetContent = saveContent(region, "target");
         CouponPolicy rewardCouponPolicy = saveMissionRewardCouponPolicy(rewardContent, region);
         Mission mission = missionRepository.saveAndFlush(new Mission(
+            "테스트 미션",
             region,
             MissionConditionType.VISIT_COUNT,
             3,
@@ -206,6 +210,7 @@ class MissionRepositoryTest {
         )).isInstanceOf(IllegalStateException.class)
             .hasMessage("only CONTENT_SET can add target contents");
         assertThatThrownBy(() -> new Mission(
+            "테스트 미션",
             region,
             MissionConditionType.VISIT_COUNT,
             null,
@@ -214,6 +219,7 @@ class MissionRepositoryTest {
         )).isInstanceOf(IllegalArgumentException.class)
             .hasMessage("VISIT_COUNT requires a positive requiredVisitCount");
         assertThatThrownBy(() -> new Mission(
+            "테스트 미션",
             region,
             MissionConditionType.CONTENT_SET,
             1,
@@ -230,6 +236,7 @@ class MissionRepositoryTest {
         CouponPolicy rewardCouponPolicy = saveMissionRewardCouponPolicy(rewardContent, region);
 
         assertThatThrownBy(() -> missionRepository.saveAndFlush(new Mission(
+            "테스트 미션",
             region,
             MissionConditionType.CONTENT_SET,
             null,
@@ -257,6 +264,7 @@ class MissionRepositoryTest {
             CouponIssuanceType.VISIT
         );
         Mission mission = new Mission(
+            "테스트 미션",
             region,
             MissionConditionType.CONTENT_SET,
             null,
@@ -268,6 +276,7 @@ class MissionRepositoryTest {
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessage("content must belong to the mission region");
         assertThatThrownBy(() -> new Mission(
+            "테스트 미션",
             region,
             MissionConditionType.CONTENT_SET,
             null,
@@ -276,6 +285,7 @@ class MissionRepositoryTest {
         )).isInstanceOf(IllegalArgumentException.class)
             .hasMessage("rewardCouponPolicy must belong to the mission region");
         assertThatThrownBy(() -> new Mission(
+            "테스트 미션",
             region,
             MissionConditionType.CONTENT_SET,
             null,
@@ -295,6 +305,7 @@ class MissionRepositoryTest {
         contentRepository.saveAndFlush(deletedTargetContent);
         CouponPolicy rewardCouponPolicy = saveMissionRewardCouponPolicy(rewardContent, region);
         Mission mission = new Mission(
+            "테스트 미션",
             region,
             MissionConditionType.CONTENT_SET,
             null,
@@ -314,6 +325,36 @@ class MissionRepositoryTest {
     }
 
     @Test
+    void 미션_제목은_중복을_허용한다() {
+        Region region = saveRegion("DUPLICATE-TITLE");
+        CouponPolicy rewardCouponPolicy = saveMissionRewardCouponPolicy(
+            saveContent(region, "duplicate-title-reward"),
+            region
+        );
+
+        missionRepository.saveAndFlush(new Mission(
+            "중복 미션",
+            region,
+            MissionConditionType.VISIT_COUNT,
+            1,
+            rewardCouponPolicy,
+            MISSION_ENDS_AT
+        ));
+        missionRepository.saveAndFlush(new Mission(
+            "중복 미션",
+            region,
+            MissionConditionType.VISIT_COUNT,
+            2,
+            rewardCouponPolicy,
+            MISSION_ENDS_AT
+        ));
+
+        assertThat(missionRepository.findAll())
+            .extracting(Mission::getTitle)
+            .containsExactly("중복 미션", "중복 미션");
+    }
+
+    @Test
     void findByRegionAndStatus_returnsOnlyRegionMissionsInDescendingOrderWithPageCount() {
         Region region = saveRegion("GIMHAE");
         Region otherRegion = saveRegion("BUSAN");
@@ -326,6 +367,7 @@ class MissionRepositoryTest {
             otherRegion
         );
         Mission firstMission = missionRepository.saveAndFlush(new Mission(
+            "테스트 미션",
             region,
             MissionConditionType.VISIT_COUNT,
             1,
@@ -333,6 +375,7 @@ class MissionRepositoryTest {
             MISSION_ENDS_AT
         ));
         Mission secondMission = missionRepository.saveAndFlush(new Mission(
+            "테스트 미션",
             region,
             MissionConditionType.VISIT_COUNT,
             2,
@@ -340,6 +383,7 @@ class MissionRepositoryTest {
             MISSION_ENDS_AT
         ));
         Mission pendingReviewMission = missionRepository.saveAndFlush(new Mission(
+            "테스트 미션",
             region,
             MissionConditionType.VISIT_COUNT,
             3,
@@ -347,6 +391,7 @@ class MissionRepositoryTest {
             MISSION_ENDS_AT
         ));
         missionRepository.saveAndFlush(new Mission(
+            "테스트 미션",
             otherRegion,
             MissionConditionType.VISIT_COUNT,
             1,
