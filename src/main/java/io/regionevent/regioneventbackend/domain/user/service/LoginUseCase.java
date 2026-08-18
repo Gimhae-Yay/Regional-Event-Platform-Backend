@@ -43,8 +43,7 @@ public class LoginUseCase {
         String accessToken = jwtAccessTokenService.issue(user.getUserId());
 
         return new LoginResult(
-            new LoginResponse(user.getUserId().toString(), roles),
-            accessToken,
+            new LoginResponse(user.getUserId().toString(), roles, accessToken),
             refreshToken
         );
     }

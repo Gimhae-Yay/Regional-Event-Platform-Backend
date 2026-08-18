@@ -40,7 +40,6 @@ public class LoginController {
 
         return ResponseEntity
             .status(HttpStatus.OK)
-            .header(HttpHeaders.AUTHORIZATION, "Bearer " + result.accessToken())
             .header(HttpHeaders.SET_COOKIE, refreshTokenCookie.toString())
             .body(response);
     }
