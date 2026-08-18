@@ -53,7 +53,6 @@ class GetMyMissionParticipationsUseCaseTest {
         );
         PageRequest pageable = PageRequest.of(1, 2);
         when(appUserService.findActiveOrdinaryUser(USER_ID)).thenReturn(user);
-        when(user.getUserId()).thenReturn(USER_ID);
         when(missionParticipationReadService.findByUserIdAndStatus(
             USER_ID,
             MissionParticipationStatus.IN_PROGRESS,
@@ -95,7 +94,6 @@ class GetMyMissionParticipationsUseCaseTest {
         AppUser user = mock(AppUser.class);
         PageRequest pageable = PageRequest.of(0, 20);
         when(appUserService.findActiveOrdinaryUser(USER_ID)).thenReturn(user);
-        when(user.getUserId()).thenReturn(USER_ID);
         when(missionParticipationReadService.findByUserIdAndStatus(USER_ID, null, pageable))
             .thenReturn(new PageImpl<>(List.of(), pageable, 0));
 

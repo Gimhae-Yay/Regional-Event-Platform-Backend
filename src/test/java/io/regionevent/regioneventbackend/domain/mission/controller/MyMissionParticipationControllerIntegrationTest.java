@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
@@ -197,7 +198,8 @@ class MyMissionParticipationControllerIntegrationTest {
         mockMvc.perform(get(PATH))
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
-        performGet(inactiveFixture.visitor())
+        mockMvc.perform(get(PATH)
+                .header(AUTHORIZATION, bearerTokenWithoutAuthority(inactiveFixture.visitor())))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.code").value("FORBIDDEN"));
     }
@@ -209,6 +211,10 @@ class MyMissionParticipationControllerIntegrationTest {
             request.param(parameters[index], parameters[index + 1]);
         }
         return mockMvc.perform(request);
+    }
+
+    private String bearerTokenWithoutAuthority(AppUser user) {
+        return "Bearer " + jwtAccessTokenService.issue(user.getUserId(), List.of());
     }
 
     private Fixture createFixture(boolean activeVisitor) {

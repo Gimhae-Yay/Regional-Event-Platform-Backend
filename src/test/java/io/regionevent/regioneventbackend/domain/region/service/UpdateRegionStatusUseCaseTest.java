@@ -228,7 +228,6 @@ class UpdateRegionStatusUseCaseTest {
         when(appUser.getAccountKind()).thenReturn(AppUserAccountKind.PRIVILEGED);
         when(actor.getPlatformAdminAssignmentId()).thenReturn(1L);
         when(actor.getAppUser()).thenReturn(appUser);
-        when(actor.isActive()).thenReturn(true);
         when(actor.getGrade()).thenReturn(PlatformAdminGrade.PLATFORM_ADMIN);
         return actor;
     }
