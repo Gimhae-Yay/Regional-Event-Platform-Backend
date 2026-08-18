@@ -3,6 +3,8 @@ package io.regionevent.regioneventbackend.global.config;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.Map;
+
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 
@@ -26,6 +28,26 @@ class StampbookMigrationMySqlTest {
     static final MySQLContainer<?> MYSQL = new MySQLContainer<>(
         DockerImageName.parse("mysql:8.0.42")
     );
+
+    @Test
+    void MySQL에서_스탬프북제목은길이100의_NOT_NULL_열로생성된다() {
+        JdbcTemplate jdbcTemplate = createJdbcTemplate();
+        migrate(jdbcTemplate);
+
+        Map<String, Object> titleColumn = jdbcTemplate.queryForMap(
+            """
+            SELECT IS_NULLABLE, CHARACTER_MAXIMUM_LENGTH
+            FROM information_schema.columns
+            WHERE table_schema = DATABASE()
+                AND table_name = 'stampbook'
+                AND column_name = 'title'
+            """
+        );
+
+        assertThat(titleColumn.get("IS_NULLABLE")).isEqualTo("NO");
+        assertThat(((Number) titleColumn.get("CHARACTER_MAXIMUM_LENGTH")).intValue())
+            .isEqualTo(100);
+    }
 
     @Test
     void MySQL에서_소문자_스탬프북_상태는_두_CHECK_제약에서_거부된다() {
@@ -67,12 +89,13 @@ class StampbookMigrationMySqlTest {
         assertThatThrownBy(() -> jdbcTemplate.update(
             """
             INSERT INTO stampbook (
+                title,
                 region_id,
                 reward_coupon_policy_id,
                 status,
                 published_at,
                 ended_at
-            ) VALUES (1, 1, 'draft', NULL, NULL)
+            ) VALUES ('스탬프북 제목', 1, 1, 'draft', NULL, NULL)
             """
         )).isInstanceOfSatisfying(UncategorizedSQLException.class, exception -> {
             assertThat(exception.getSQLException().getErrorCode())

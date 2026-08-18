@@ -1,5 +1,6 @@
 CREATE TABLE stampbook (
     stampbook_id BIGINT NOT NULL AUTO_INCREMENT,
+    title VARCHAR(100) NOT NULL,
     region_id BIGINT NOT NULL,
     reward_coupon_policy_id BIGINT NOT NULL,
     status VARCHAR(30) NOT NULL,
