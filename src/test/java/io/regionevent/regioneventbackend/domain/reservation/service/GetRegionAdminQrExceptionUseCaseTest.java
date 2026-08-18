@@ -230,7 +230,7 @@ class GetRegionAdminQrExceptionUseCaseTest {
                 Instant.parse("2026-08-01T01:30:00Z"),
                 regionId
             ),
-            new ReservationReadSnapshot.ContentInfo(77L, "김해 도자기 체험", regionId),
+            new ReservationReadSnapshot.ContentInfo(77L, "김해 도자기 체험", "김해시", regionId),
             new ReservationReadSnapshot.ParticipantInfo(300L, "김민수", "01012345678")
         );
         return new ReservationReadResult(

@@ -105,6 +105,7 @@ public class SessionReservationReadService {
             new ReservationReadSnapshot.ContentInfo(
                 projection.contentId(),
                 projection.contentTitle(),
+                projection.contentLocationText(),
                 projection.contentRegionId()
             ),
             new ReservationReadSnapshot.ParticipantInfo(

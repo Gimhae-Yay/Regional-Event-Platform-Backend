@@ -129,7 +129,7 @@ class SearchRegionAdminReservationByNumberUseCaseTest {
                     Instant.parse("2026-08-04T01:30:00Z"),
                     REGION_ID
                 ),
-                new ReservationReadSnapshot.ContentInfo(30L, "김해 가야문화 체험", REGION_ID),
+                new ReservationReadSnapshot.ContentInfo(30L, "김해 가야문화 체험", "김해시", REGION_ID),
                 new ReservationReadSnapshot.ParticipantInfo(40L, "김민수", "01012345678")
             );
             ReservationReadResult readResult = new ReservationReadResult(

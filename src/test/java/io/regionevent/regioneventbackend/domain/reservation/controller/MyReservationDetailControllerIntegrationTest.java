@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 import jakarta.persistence.EntityManager;
 
@@ -141,6 +142,9 @@ class MyReservationDetailControllerIntegrationTest {
             .andExpect(jsonPath("$.data.session.endsAt").value("2030-08-10T12:00:00+09:00"))
             .andExpect(jsonPath("$.data.session.checkinOpenAt").value("2030-08-10T09:30:00+09:00"))
             .andExpect(jsonPath("$.data.session.checkinCloseAt").value("2030-08-10T10:30:00+09:00"))
+            .andExpect(jsonPath("$.data.content.contentId").value(fixture.content().getContentId().toString()))
+            .andExpect(jsonPath("$.data.content.title").value("김해 문화 체험"))
+            .andExpect(jsonPath("$.data.content.locationText").value("김해시"))
             .andExpect(jsonPath("$.data.checkIn.checkedIn").value(false))
             .andExpect(jsonPath("$.data.checkIn.checkedAt").doesNotExist())
             .andExpect(jsonPath("$.data.checkIn.visitId").value(org.hamcrest.Matchers.nullValue()));
@@ -263,6 +267,34 @@ class MyReservationDetailControllerIntegrationTest {
                 + ", sessionId=null, visitId=null, resultCode=INTERNAL_SERVER_ERROR"
         );
         assertReadDoesNotChangeState(fixture, List.of(reservation), 0);
+    }
+
+    @Test
+    void 예약_상세_조회는_콘텐츠_종료_중단_철회_뒤에도_콘텐츠_표시_정보를_반환한다() throws Exception {
+        List<Consumer<Content>> lifecycleChanges = List.of(
+            Content::end,
+            Content::suspend,
+            Content::withdraw
+        );
+
+        for (Consumer<Content> lifecycleChange : lifecycleChanges) {
+            Fixture fixture = createFixture(AppUserStatus.ACTIVE);
+            Reservation reservation = saveReservation(fixture, ReservationStatus.CONFIRMED, "content-lifecycle");
+            lifecycleChange.accept(fixture.content());
+            entityManager.flush();
+            entityManager.clear();
+
+            performGet(fixture.user(), reservation.getReservationId())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.session.contentId").value(
+                    fixture.content().getContentId().toString()
+                ))
+                .andExpect(jsonPath("$.data.content.contentId").value(
+                    fixture.content().getContentId().toString()
+                ))
+                .andExpect(jsonPath("$.data.content.title").value("김해 문화 체험"))
+                .andExpect(jsonPath("$.data.content.locationText").value("김해시"));
+        }
     }
 
     private ResultActions performGet(AppUser user, Long reservationId) throws Exception {
