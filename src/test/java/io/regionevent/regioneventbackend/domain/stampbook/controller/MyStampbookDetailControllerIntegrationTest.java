@@ -68,10 +68,12 @@ class MyStampbookDetailControllerIntegrationTest {
             .andExpect(jsonPath("$.code").value("SUCCESS"))
             .andExpect(jsonPath("$.message").value("내 스탬프북 상세 조회에 성공했습니다."))
             .andExpect(jsonPath("$.data.stampbook.stampbookId").value("101"))
+            .andExpect(jsonPath("$.data.stampbook.title").value("김해 가야 문화 완주"))
             .andExpect(jsonPath("$.data.stampbook.regionId").value("10"))
             .andExpect(jsonPath("$.data.stampbook.status").value("PUBLISHED"))
             .andExpect(jsonPath("$.data.stampbook.endedAt").value(nullValue()))
             .andExpect(jsonPath("$.data.stampbook.targetContents[0].contentId").value("201"))
+            .andExpect(jsonPath("$.data.stampbook.targetContents[0].title").value("김해 가야문화 체험"))
             .andExpect(jsonPath("$.data.stampbook.targetContents[0].earned").value(true))
             .andExpect(jsonPath("$.data.stampbook.targetContents[1].contentId").value("202"))
             .andExpect(jsonPath("$.data.stampbook.targetContents[1].earned").value(false))
@@ -146,6 +148,7 @@ class MyStampbookDetailControllerIntegrationTest {
     private MyStampbookDetailResult inProgressResult() {
         return new MyStampbookDetailResult(
             STAMPBOOK_ID,
+            "김해 가야 문화 완주",
             10L,
             StampbookStatus.PUBLISHED,
             Instant.parse("2026-08-01T00:00:00Z"),
@@ -177,6 +180,7 @@ class MyStampbookDetailControllerIntegrationTest {
     private MyStampbookDetailResult notStartedResult() {
         return new MyStampbookDetailResult(
             STAMPBOOK_ID,
+            "김해 가야 문화 완주",
             10L,
             StampbookStatus.PUBLISHED,
             Instant.parse("2026-08-01T00:00:00Z"),
@@ -200,6 +204,7 @@ class MyStampbookDetailControllerIntegrationTest {
     private MyStampbookDetailResult completedResult() {
         return new MyStampbookDetailResult(
             STAMPBOOK_ID,
+            "김해 역사 산책",
             10L,
             StampbookStatus.ENDED,
             Instant.parse("2026-08-01T00:00:00Z"),
