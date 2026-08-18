@@ -252,13 +252,15 @@ class StampbookRepositoryTest {
         jdbcTemplate.update(
             """
             INSERT INTO stampbook (
+                title,
                 region_id,
                 reward_coupon_policy_id,
                 status,
                 published_at,
                 ended_at
-            ) VALUES (?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?)
             """,
+            "스탬프북 제목",
             regionId,
             rewardCouponPolicyId,
             status,
