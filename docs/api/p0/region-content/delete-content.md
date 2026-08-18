@@ -5,12 +5,13 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | `FR-10`, `FR-14`, `AUTH-01`, `CON-08`, `CON-09` |
 | 소유 도메인 | 콘텐츠·지역 관리자 |
-| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [인증·프로필](../../../p0/auth-profile.md), [API 공통 계약](../../common/README.md), 선행 계약 결정 PR |
+| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [담당 지역 콘텐츠 목록](../content-catalog/list-region-admin-contents.md), [인증·프로필](../../../p0/auth-profile.md), [API 공통 계약](../../common/README.md), 선행 계약 결정 PR |
 
 ## 1. 개요
 
 담당 지역 관리자가 공개 전 콘텐츠를 사유와 함께 소프트 삭제한다. 삭제는 `PENDING`, `APPROVED`에만
 허용하며, `PUBLISHED` 이후 상태의 콘텐츠는 삭제하지 않고 상태와 사유 이력을 보존한다.
+최초 심사·재제출 `PENDING`과 `APPROVED` 삭제 대상은 [담당 지역 콘텐츠 목록](../content-catalog/list-region-admin-contents.md)에서 상태별로 식별한다. 공개 전 수정 심사 때문에 `PENDING`인 콘텐츠는 수정본 심사 목록에서 식별한다.
 
 ### 요구사항 추적
 
