@@ -122,6 +122,7 @@ public interface StampbookRepository extends JpaRepository<Stampbook, Long> {
     @Query("""
         SELECT new io.regionevent.regioneventbackend.domain.stampbook.repository.MyStampbookListProjection(
             stampbook.stampbookId,
+            stampbook.title,
             stampbook.region.regionId,
             stampbook.status,
             stampbook.publishedAt,
@@ -148,6 +149,7 @@ public interface StampbookRepository extends JpaRepository<Stampbook, Long> {
            OR stampbook.status = :endedStatus
             AND progress.stampbookProgressId IS NOT NULL
         GROUP BY stampbook.stampbookId,
+            stampbook.title,
             stampbook.region.regionId,
             stampbook.status,
             stampbook.publishedAt,
@@ -169,6 +171,7 @@ public interface StampbookRepository extends JpaRepository<Stampbook, Long> {
     @Query("""
         SELECT new io.regionevent.regioneventbackend.domain.stampbook.repository.MyStampbookDetailProjection(
             stampbook.stampbookId,
+            stampbook.title,
             stampbook.region.regionId,
             stampbook.status,
             stampbook.publishedAt,

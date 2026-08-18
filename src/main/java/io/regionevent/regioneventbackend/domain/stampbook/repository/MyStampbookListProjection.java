@@ -7,6 +7,7 @@ import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookStatus
 
 public record MyStampbookListProjection(
     Long stampbookId,
+    String title,
     Long regionId,
     StampbookStatus stampbookStatus,
     Instant publishedAt,
