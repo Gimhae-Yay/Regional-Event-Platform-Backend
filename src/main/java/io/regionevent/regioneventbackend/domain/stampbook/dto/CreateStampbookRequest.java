@@ -11,6 +11,10 @@ import org.hibernate.validator.constraints.UniqueElements;
 
 public record CreateStampbookRequest(
     @NotBlank
+    @Size(max = 100)
+    String title,
+
+    @NotBlank
     @Pattern(regexp = "^[1-9][0-9]*$")
     String regionId,
 
@@ -32,6 +36,7 @@ public record CreateStampbookRequest(
 ) {
 
     public CreateStampbookRequest {
+        title = title == null ? null : title.strip();
         reason = reason == null ? null : reason.strip();
     }
 }

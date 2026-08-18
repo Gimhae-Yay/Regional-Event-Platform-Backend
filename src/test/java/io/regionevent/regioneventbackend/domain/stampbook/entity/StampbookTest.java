@@ -29,7 +29,43 @@ class StampbookTest {
         when(rewardCouponPolicy.getIssuanceType()).thenReturn(CouponIssuanceType.STAMPBOOK_COMPLETION);
         when(rewardCouponPolicy.getRegion()).thenReturn(region);
 
-        stampbook = new Stampbook(region, rewardCouponPolicy);
+        stampbook = new Stampbook(region, rewardCouponPolicy, "  김해 문화 완주  ");
+    }
+
+    @Test
+    void 생성_제목의앞뒤공백을제거한다() {
+        assertThat(stampbook.getTitle()).isEqualTo("김해 문화 완주");
+    }
+
+    @Test
+    void updateTitle_초안스탬프북의제목을변경하고앞뒤공백을제거한다() {
+        stampbook.updateTitle("  가야 문화 완주  ");
+
+        assertThat(stampbook.getTitle()).isEqualTo("가야 문화 완주");
+    }
+
+    @Test
+    void updateTitle_공백제목은거부한다() {
+        assertThatThrownBy(() -> stampbook.updateTitle("   "))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void updateTitle_초안이아닌스탬프북이면거부한다() {
+        stampbook.requestPublication();
+
+        assertThatThrownBy(() -> stampbook.updateTitle("가야 문화 완주"))
+            .isInstanceOf(IllegalStateException.class);
+
+        stampbook.approve(PUBLISHED_AT);
+
+        assertThatThrownBy(() -> stampbook.updateTitle("가야 문화 완주"))
+            .isInstanceOf(IllegalStateException.class);
+
+        stampbook.end(PUBLISHED_AT.plusSeconds(60));
+
+        assertThatThrownBy(() -> stampbook.updateTitle("가야 문화 완주"))
+            .isInstanceOf(IllegalStateException.class);
     }
 
     @Test

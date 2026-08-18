@@ -57,6 +57,9 @@ public class Stampbook {
     @Column(name = "stampbook_id")
     private Long stampbookId;
 
+    @Column(name = "title", nullable = false, length = 100)
+    private String title;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(
         name = "region_id",
@@ -88,10 +91,12 @@ public class Stampbook {
 
     public Stampbook(
         Region region,
-        CouponPolicy rewardCouponPolicy
+        CouponPolicy rewardCouponPolicy,
+        String title
     ) {
         this.region = requireNotNull(region, "region");
         this.rewardCouponPolicy = requireNotNull(rewardCouponPolicy, "rewardCouponPolicy");
+        this.title = normalizeTitle(title);
         validateRewardCouponPolicy(region, rewardCouponPolicy);
         this.status = StampbookStatus.DRAFT;
     }
@@ -102,6 +107,10 @@ public class Stampbook {
 
     public Region getRegion() {
         return region;
+    }
+
+    public String getTitle() {
+        return title;
     }
 
     public CouponPolicy getRewardCouponPolicy() {
@@ -130,6 +139,13 @@ public class Stampbook {
         );
         validateRewardCouponPolicy(region, validatedRewardCouponPolicy);
         this.rewardCouponPolicy = validatedRewardCouponPolicy;
+    }
+
+    public void updateTitle(String title) {
+        if (status != StampbookStatus.DRAFT) {
+            throw new IllegalStateException("only DRAFT stampbook can update title");
+        }
+        this.title = normalizeTitle(title);
     }
 
     public void requestPublication() {
@@ -174,6 +190,17 @@ public class Stampbook {
         if (regionId != null && rewardPolicyRegionId != null && !regionId.equals(rewardPolicyRegionId)) {
             throw new IllegalArgumentException("rewardCouponPolicy must belong to stampbook region");
         }
+    }
+
+    private static String normalizeTitle(String title) {
+        if (title == null) {
+            throw new IllegalArgumentException("title must not be null");
+        }
+        String normalizedTitle = title.strip();
+        if (normalizedTitle.isEmpty() || normalizedTitle.length() > 100) {
+            throw new IllegalArgumentException("title must contain 1 to 100 characters");
+        }
+        return normalizedTitle;
     }
 
     private static <T> T requireNotNull(

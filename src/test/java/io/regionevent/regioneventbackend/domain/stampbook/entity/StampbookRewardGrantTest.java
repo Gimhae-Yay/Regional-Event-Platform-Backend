@@ -43,7 +43,7 @@ class StampbookRewardGrantTest {
     void 완료되지_않은_진행에는_지급_근거를_생성할_수_없다() {
         CouponPolicy rewardCouponPolicy = createRewardCouponPolicy();
         StampbookProgress inProgress = new StampbookProgress(
-            new Stampbook(createRegion(), rewardCouponPolicy),
+            new Stampbook(createRegion(), rewardCouponPolicy, "스탬프북 제목"),
             createUser()
         );
 
@@ -70,7 +70,7 @@ class StampbookRewardGrantTest {
 
     private StampbookProgress createCompletedProgress(CouponPolicy rewardCouponPolicy) {
         StampbookProgress stampbookProgress = new StampbookProgress(
-            new Stampbook(createRegion(), rewardCouponPolicy),
+            new Stampbook(createRegion(), rewardCouponPolicy, "스탬프북 제목"),
             createUser()
         );
         stampbookProgress.complete(COMPLETED_AT);

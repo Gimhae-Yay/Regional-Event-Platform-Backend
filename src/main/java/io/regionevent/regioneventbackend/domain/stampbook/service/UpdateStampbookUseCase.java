@@ -83,6 +83,9 @@ public class UpdateStampbookUseCase {
         if (replacementContents != null) {
             stampbookContentService.replace(stampbook, replacementContents);
         }
+        if (command.title() != null) {
+            stampbook.updateTitle(command.title());
+        }
         if (replacementRewardCouponPolicy != null) {
             stampbook.updateRewardCouponPolicy(replacementRewardCouponPolicy);
         }
@@ -142,7 +145,8 @@ public class UpdateStampbookUseCase {
             || command.reason() == null
             || command.reason().isBlank()
             || command.reason().length() > 500
-            || command.contentIds() == null && command.rewardCouponPolicyId() == null
+            || command.title() == null && command.contentIds() == null && command.rewardCouponPolicyId() == null
+            || command.title() != null && (command.title().isBlank() || command.title().length() > 100)
             || command.rewardCouponPolicyId() != null && command.rewardCouponPolicyId() <= 0) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
@@ -170,12 +174,14 @@ public class UpdateStampbookUseCase {
 
     public record UpdateStampbookCommand(
         Long stampbookId,
+        String title,
         List<Long> contentIds,
         Long rewardCouponPolicyId,
         String reason
     ) {
 
         public UpdateStampbookCommand {
+            title = title == null ? null : title.strip();
             contentIds = contentIds == null ? null : List.copyOf(contentIds);
             reason = reason == null ? null : reason.strip();
         }

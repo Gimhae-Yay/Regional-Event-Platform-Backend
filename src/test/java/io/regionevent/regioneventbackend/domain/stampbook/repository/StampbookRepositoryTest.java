@@ -85,7 +85,7 @@ class StampbookRepositoryTest {
         Region region = saveRegion("GIMHAE");
         Content content = saveContent(region);
         CouponPolicy couponPolicy = saveRewardCouponPolicy(content, region);
-        Stampbook stampbook = stampbookRepository.saveAndFlush(new Stampbook(region, couponPolicy));
+        Stampbook stampbook = stampbookRepository.saveAndFlush(new Stampbook(region, couponPolicy, "스탬프북 제목"));
         stampbookContentRepository.saveAndFlush(new StampbookContent(stampbook, content));
         entityManager.clear();
 
@@ -154,7 +154,7 @@ class StampbookRepositoryTest {
         Region region = saveRegion("GIMHAE");
         Content content = saveContent(region);
         CouponPolicy couponPolicy = saveRewardCouponPolicy(content, region);
-        Stampbook stampbook = stampbookRepository.saveAndFlush(new Stampbook(region, couponPolicy));
+        Stampbook stampbook = stampbookRepository.saveAndFlush(new Stampbook(region, couponPolicy, "스탬프북 제목"));
 
         insertStampbookContent(stampbook.getStampbookId(), content.getContentId());
 
@@ -232,7 +232,7 @@ class StampbookRepositoryTest {
         Content stampbookContent = saveContent(stampbookRegion);
         CouponPolicy couponPolicy = saveRewardCouponPolicy(stampbookContent, stampbookRegion);
         Stampbook stampbook = stampbookRepository.saveAndFlush(
-            new Stampbook(stampbookRegion, couponPolicy)
+            new Stampbook(stampbookRegion, couponPolicy, "스탬프북 제목")
         );
         Region otherRegion = saveRegion("BUSAN");
         Content otherRegionContent = saveContent(otherRegion);
@@ -302,7 +302,7 @@ class StampbookRepositoryTest {
         CouponPolicy rewardCouponPolicy,
         Content... contents
     ) {
-        Stampbook stampbook = new Stampbook(region, rewardCouponPolicy);
+        Stampbook stampbook = new Stampbook(region, rewardCouponPolicy, "스탬프북 제목");
         stampbook.requestPublication();
         stampbook = stampbookRepository.saveAndFlush(stampbook);
         for (Content content : contents) {

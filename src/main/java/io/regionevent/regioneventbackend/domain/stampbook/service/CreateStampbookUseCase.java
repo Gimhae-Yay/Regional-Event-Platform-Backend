@@ -75,7 +75,11 @@ public class CreateStampbookUseCase {
             command.regionId()
         );
         Instant createdAt = clock.instant();
-        Stampbook stampbook = stampbookService.create(operator.region(), rewardCouponPolicy);
+        Stampbook stampbook = stampbookService.create(
+            operator.region(),
+            rewardCouponPolicy,
+            command.title()
+        );
         stampbookContentService.connect(stampbook, contents);
         recordAuditEventUseCase.record(new AuditEventCommand(
             requestId,
@@ -96,6 +100,9 @@ public class CreateStampbookUseCase {
 
     private void validateCommand(CreateStampbookCommand command) {
         if (command == null
+            || command.title() == null
+            || command.title().isBlank()
+            || command.title().length() > 100
             || command.regionId() == null
             || command.regionId() <= 0
             || command.rewardCouponPolicyId() == null
@@ -126,6 +133,7 @@ public class CreateStampbookUseCase {
     }
 
     public record CreateStampbookCommand(
+        String title,
         Long regionId,
         List<Long> contentIds,
         Long rewardCouponPolicyId,
@@ -133,6 +141,7 @@ public class CreateStampbookUseCase {
     ) {
 
         public CreateStampbookCommand {
+            title = title == null ? null : title.strip();
             contentIds = contentIds == null ? null : List.copyOf(contentIds);
             reason = reason == null ? null : reason.strip();
         }

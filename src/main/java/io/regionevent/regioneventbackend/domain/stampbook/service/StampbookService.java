@@ -27,9 +27,10 @@ public class StampbookService {
 
     public Stampbook create(
         Region region,
-        CouponPolicy rewardCouponPolicy
+        CouponPolicy rewardCouponPolicy,
+        String title
     ) {
-        return stampbookRepository.saveAndFlush(new Stampbook(region, rewardCouponPolicy));
+        return stampbookRepository.saveAndFlush(new Stampbook(region, rewardCouponPolicy, title));
     }
 
     public Stampbook findForUpdate(Long stampbookId) {

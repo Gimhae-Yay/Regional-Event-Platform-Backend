@@ -114,6 +114,7 @@ class UpdateStampbookAuditAtomicityTest {
             fixture.operator().getUserId(),
             new UpdateStampbookCommand(
                 fixture.stampbook().getStampbookId(),
+                "수정 제목",
                 List.of(fixture.replacementContent().getContentId()),
                 fixture.replacementCouponPolicy().getCouponPolicyId(),
                 "대상 콘텐츠와 보상 정책을 수정합니다."
@@ -124,8 +125,11 @@ class UpdateStampbookAuditAtomicityTest {
         assertThat(stampbookContentRepository.findContentIdsByStampbookId(fixture.stampbook().getStampbookId()))
             .containsExactly(fixture.originalContent().getContentId());
         assertThat(stampbookRepository.findById(fixture.stampbook().getStampbookId()))
-            .hasValueSatisfying(stampbook -> assertThat(stampbook.getRewardCouponPolicy().getCouponPolicyId())
-                .isEqualTo(fixture.originalCouponPolicy().getCouponPolicyId()));
+            .hasValueSatisfying(stampbook -> {
+                assertThat(stampbook.getTitle()).isEqualTo("기존 제목");
+                assertThat(stampbook.getRewardCouponPolicy().getCouponPolicyId())
+                    .isEqualTo(fixture.originalCouponPolicy().getCouponPolicyId());
+            });
     }
 
     private Fixture createFixture() {
@@ -152,7 +156,11 @@ class UpdateStampbookAuditAtomicityTest {
                 region,
                 "교체 완료 보상"
             ));
-            Stampbook stampbook = stampbookRepository.save(new Stampbook(region, originalCouponPolicy));
+            Stampbook stampbook = stampbookRepository.save(new Stampbook(
+                region,
+                originalCouponPolicy,
+                "기존 제목"
+            ));
             stampbookContentRepository.save(new StampbookContent(
                 stampbook,
                 originalContent
