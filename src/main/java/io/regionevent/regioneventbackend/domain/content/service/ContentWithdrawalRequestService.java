@@ -42,6 +42,13 @@ public class ContentWithdrawalRequestService {
         ).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
+    @Transactional(readOnly = true)
+    public ContentWithdrawalRequest findReviewDetailById(Long withdrawalRequestId) {
+        return contentWithdrawalRequestRepository.findReviewDetailById(
+            withdrawalRequestId
+        ).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
     public ContentWithdrawalRequest findReviewTargetForUpdate(Long withdrawalRequestId) {
         return contentWithdrawalRequestRepository.findReviewTargetForUpdate(

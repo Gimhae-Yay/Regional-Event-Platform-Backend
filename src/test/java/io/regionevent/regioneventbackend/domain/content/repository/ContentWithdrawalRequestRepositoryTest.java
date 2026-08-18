@@ -9,6 +9,8 @@ import jakarta.persistence.EntityManager;
 
 import org.junit.jupiter.api.Test;
 
+import org.hibernate.Hibernate;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -106,6 +108,69 @@ class ContentWithdrawalRequestRepositoryTest {
         assertThat(contentId).isEqualTo(fixtures.content().getContentId());
         assertThat(reviewTarget.getContentWithdrawalRequestId())
             .isEqualTo(saved.getContentWithdrawalRequestId());
+    }
+
+    @Test
+    void 상세_조회는_콘텐츠와_지역과_nullable_요청자를_함께_로딩한다() {
+        Fixtures fixtures = createFixtures();
+        ContentWithdrawalRequest saved = requestRepository.saveAndFlush(pendingRequest(
+            fixtures,
+            FIRST_KEY_HASH,
+            "운영 계획 변경"
+        ));
+        entityManager.clear();
+
+        ContentWithdrawalRequest detail = requestRepository.findReviewDetailById(
+            saved.getContentWithdrawalRequestId()
+        ).orElseThrow();
+
+        assertThat(Hibernate.isInitialized(detail.getContent())).isTrue();
+        assertThat(Hibernate.isInitialized(detail.getContent().getRegion())).isTrue();
+        assertThat(Hibernate.isInitialized(detail.getRequestedBy())).isTrue();
+        assertThat(detail.getContent().getContentId()).isEqualTo(fixtures.content().getContentId());
+        assertThat(detail.getContent().getRegion().getRegionId())
+            .isEqualTo(fixtures.content().getRegion().getRegionId());
+        assertThat(detail.getRequestedBy().getUserId()).isEqualTo(fixtures.requester().getUserId());
+    }
+
+    @Test
+    void 상세_조회는_종결_요청도_조회한다() {
+        Fixtures fixtures = createFixtures();
+        ContentWithdrawalRequest saved = requestRepository.saveAndFlush(pendingRequest(
+            fixtures,
+            FIRST_KEY_HASH,
+            "운영 계획 변경"
+        ));
+        saved.invalidateBySystem(
+            REQUESTED_AT.plusSeconds(60),
+            ContentWithdrawalRequestInvalidationReason.CONTENT_ENDED
+        );
+        requestRepository.saveAndFlush(saved);
+        entityManager.clear();
+
+        ContentWithdrawalRequest detail = requestRepository.findReviewDetailById(
+            saved.getContentWithdrawalRequestId()
+        ).orElseThrow();
+
+        assertThat(detail.getStatus()).isEqualTo(ContentWithdrawalRequestStatus.INVALIDATED);
+    }
+
+    @Test
+    void 상세_조회는_요청자_연결이_제거되면_null로_조회한다() {
+        Fixtures fixtures = createFixtures();
+        ContentWithdrawalRequest saved = requestRepository.saveAndFlush(pendingRequest(
+            fixtures,
+            FIRST_KEY_HASH,
+            "운영 계획 변경"
+        ));
+        requestRepository.unlinkRequesterByUserId(fixtures.requester().getUserId());
+        entityManager.clear();
+
+        ContentWithdrawalRequest detail = requestRepository.findReviewDetailById(
+            saved.getContentWithdrawalRequestId()
+        ).orElseThrow();
+
+        assertThat(detail.getRequestedBy()).isNull();
     }
 
     @Test
