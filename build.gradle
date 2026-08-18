@@ -76,6 +76,14 @@ dependencies {
     testAnnotationProcessor 'org.projectlombok:lombok'
 }
 
+tasks.named('processResources') {
+    from('performance/k6') {
+        include 'seed/k6-local.seed.sql'
+        include 'fixtures/api-success-coverage-bootstrap.sql'
+        into 'performance-fixtures'
+    }
+}
+
 def worktreeFullTestLock = gradle.sharedServices.registerIfAbsent(
     'worktreeFullTestLock',
     WorktreeFullTestLockService
