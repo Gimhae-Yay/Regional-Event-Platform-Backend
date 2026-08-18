@@ -33,10 +33,12 @@ Refresh Token은 `Path=/api/v1/auth` 범위의 인증 API에서만 수신하며 
 | 형식 오류 | 배열이 아니거나 `null`·비문자·중복·미허용 값이 있으면 유효하지 않은 Access Token으로 `401 UNAUTHENTICATED`다. |
 | claim 누락 전환 | 호환 배포에서는 빈 배열로 해석한다. 마지막 구 발급 인스턴스 종료 시각 `T_complete` 뒤 15분이 지나면 누락 claim은 `401 UNAUTHENTICATED`다. |
 
-권한 행렬은 `hasAuthority`·`hasAnyAuthority`로 정확한 authority 문자열을 비교하는 1차 RBAC다. 지역 ID·담당 지역,
-리소스 소유권, 계정 활성 상태, 공개 여부와 업무 상태는 claim에 넣지 않으며 UseCase의 DB 최종 검증을 유지한다. 따라서
-역할 변경 전 Token은 만료 전까지 1차 RBAC를 통과할 수 있지만, 비활성화·지역 배정 해제·소유권 변경·업무 상태 변경은
-DB 단계에서 즉시 거부될 수 있다.
+권한 행렬은 `hasAuthority`·`hasAnyAuthority`로 정확한 authority 문자열을 비교하는 1차 RBAC다. 지역 ID·담당 지역 목록,
+리소스 소유권, 계정 활성 상태, 공개 여부와 업무 상태는 claim에 넣지 않으며 UseCase의 DB 최종 검증을 유지한다. 역할 보호
+HTTP 경로에서 전역 일반 역할·고권한 등급과 그 배정의 현재 활성 상태를 DB로 다시 판정하지 않는다. 단, 지역 관리자·운영자는
+claim에 없는 현재 담당 지역 범위를 얻기 위해 활성 배정 관계를 조회하고 대상 지역과 비교한다. 따라서 배정 철회·지역 변경은
+기존 Token이 있어도 DB 단계에서 즉시 거부될 수 있다. 인증 전용 API가 현재 활성 방문자를 요구하면 그 DB 조회는
+`app_user.status = ACTIVE`, `ACTIVE VISITOR`, `account_kind = ORDINARY`를 함께 확인한다.
 
 ## 권한 행렬
 
@@ -52,19 +54,19 @@ DB 단계에서 즉시 거부될 수 있다.
 | 4 | `GET` | `/actuator/health` | 인증 제외 | 해당 없음 | 아니오 | 배포 상태 확인 전용이며 구성 요소·예외·상세 정보를 반환하지 않는다. |
 | 5 | `GET` | `/api/v1/regions`, `/api/v1/regions/*/home`, `/api/v1/contents`, `/api/v1/contents/*`, `/api/v1/contents/*/reviews`, `/api/v1/contents/*/sessions`, `/api/v1/sessions/*` | 공개 | 해당 없음 | 아니오 | 공개 여부와 도메인별 노출 상태를 조회 조건으로 적용한다. |
 | 6 | `GET` | `/api/v1/regions/*/missions`, `/api/v1/missions/*` | 공개 | 해당 없음 | 예 | 헤더가 없으면 공개 데이터만, 유효한 Access Token이 있으면 본인 참여 요약을 더한다. 잘못된 Token은 익명으로 낮추지 않고 401이다. |
-| 7 | `POST` | `/api/v1/platform-admin/admin-accounts`, `/api/v1/platform-admin/admin-accounts/*/deactivate` | 역할 보호 | `ROLE_SUPER_ADMIN` | 아니오 | 활성 `PRIVILEGED` 계정·활성 `SUPER_ADMIN` 배정, 자기·마지막 슈퍼관리자 보호 등 업무 규칙을 확인한다. |
-| 8 | `GET`, `POST`, `PATCH` | `/api/v1/platform-admin/**` | 역할 보호 | `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` | 아니오 | 활성 `PRIVILEGED` 계정·활성 고권한 배정과 대상·상태·감사 규칙을 확인한다. 7번 행이 먼저 적용된다. |
-| 9 | `GET`, `POST`, `PUT`, `PATCH`, `DELETE` | `/api/v1/region-admin/**` | 역할 보호 | `ROLE_REGION_ADMIN` | 아니오 | 활성 `ORDINARY` 계정·활성 지역 관리자 배정과 담당 지역·대상 지역 일치를 확인한다. |
+| 7 | `POST` | `/api/v1/platform-admin/admin-accounts`, `/api/v1/platform-admin/admin-accounts/*/deactivate` | 역할 보호 | `ROLE_SUPER_ADMIN` | 아니오 | `app_user.status = ACTIVE`, `PRIVILEGED` 계정, 대상 계정·배정 상태, 자기·마지막 슈퍼관리자 보호와 감사 업무 규칙을 확인한다. 호출자의 `SUPER_ADMIN` 등급과 고권한 배정의 현재 활성 여부는 이 행의 claim authority 판정을 다시 수행하는 근거로 사용하지 않는다. |
+| 8 | `GET`, `POST`, `PATCH` | `/api/v1/platform-admin/**` | 역할 보호 | `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` | 아니오 | `app_user.status = ACTIVE`, `PRIVILEGED` 계정, 대상·상태·감사 규칙을 확인한다. 호출자의 고권한 등급과 고권한 배정의 현재 활성 여부는 이 행의 claim authority 판정을 다시 수행하는 근거로 사용하지 않는다. 7번 행이 먼저 적용된다. |
+| 9 | `GET`, `POST`, `PUT`, `PATCH`, `DELETE` | `/api/v1/region-admin/**` | 역할 보호 | `ROLE_REGION_ADMIN` | 아니오 | `app_user.status = ACTIVE`, `ORDINARY` 계정과 인증 주체의 현재 담당 지역 관계, 대상 지역의 일치를 확인한다. 현재 담당 지역 범위를 산정할 때 활성 지역 관리자 배정을 조회할 수 있으며, 배정 철회·지역 변경으로 범위가 없거나 달라지면 즉시 거부한다. |
 | 10 | `GET` | `/region-admin/qr-exceptions`, `/region-admin/qr-exceptions/*` | 역할 보호 | `ROLE_REGION_ADMIN` | 아니오 | 9번과 같은 지역 관리자 DB 최종 검증을 적용한다. 기존 별칭 경로도 같은 권한으로 보호한다. |
 | 11 | `POST` | `/api/v1/operator/operator-requests` | 인증 전용 | 해당 없음 | 아니오 | 활성 회원, 이전 `REJECTED` 신청과 현재 역할·신청 상태를 확인한다. 이 경로는 운영자 prefix 예외다. |
-| 12 | `GET`, `POST`, `PUT`, `PATCH`, `DELETE` | `/api/v1/operator/**` | 역할 보호 | `ROLE_OPERATOR` | 아니오 | 활성 `ORDINARY` 계정·활성 운영자 배정, 담당 지역·콘텐츠 소유권·업무 상태를 확인한다. 11번 행이 먼저 적용된다. |
+| 12 | `GET`, `POST`, `PUT`, `PATCH`, `DELETE` | `/api/v1/operator/**` | 역할 보호 | `ROLE_OPERATOR` | 아니오 | `app_user.status = ACTIVE`, `ORDINARY` 계정, 현재 담당 지역 관계, 콘텐츠 소유권·업무 상태를 확인한다. 현재 담당 지역 범위를 산정할 때 활성 운영자 배정을 조회할 수 있으며, 배정 철회·지역 변경으로 범위가 없거나 달라지면 즉시 거부한다. 11번 행이 먼저 적용된다. |
 | 13 | `GET`, `POST` | `/operator/check-ins`, `/operator/check-ins/manual`, `/operator/contents/*` | 역할 보호 | `ROLE_OPERATOR` | 아니오 | 12번과 같은 운영자 DB 최종 검증을 적용한다. 기존 별칭 경로도 같은 권한으로 보호한다. |
-| 14 | `POST`, `PATCH`, `DELETE` | `/api/v1/visits/*/reviews`, `/api/v1/reviews/*` | 역할 보호 | `ROLE_VISITOR` | 아니오 | 활성 방문자 역할, 본인 방문·후기 소유권과 후기 상태를 확인한다. |
-| 15 | `POST` | `/api/v1/missions/*/participations`, `/api/v1/me/mission-participations/*/rewards/claim` | 역할 보호 | `ROLE_VISITOR` | 아니오 | 활성 방문자 역할, 본인 참여·미션·보상·쿠폰 상태를 확인한다. |
-| 16 | `GET` | `/api/v1/me/mission-participations`, `/api/v1/me/mission-participations/*` | 역할 보호 | `ROLE_VISITOR` | 아니오 | 활성 방문자 역할과 본인 참여 소유권을 확인한다. |
+| 14 | `POST`, `PATCH`, `DELETE` | `/api/v1/visits/*/reviews`, `/api/v1/reviews/*` | 역할 보호 | `ROLE_VISITOR` | 아니오 | `app_user.status = ACTIVE`, `ORDINARY` 계정, 본인 방문·후기 소유권과 후기 상태를 확인한다. 호출자의 현재 `VISITOR` 배정은 이 행의 claim authority 판정을 다시 수행하는 근거로 사용하지 않는다. |
+| 15 | `POST` | `/api/v1/missions/*/participations`, `/api/v1/me/mission-participations/*/rewards/claim` | 역할 보호 | `ROLE_VISITOR` | 아니오 | `app_user.status = ACTIVE`, `ORDINARY` 계정, 본인 참여·미션·보상·쿠폰 상태를 확인한다. 호출자의 현재 `VISITOR` 배정은 이 행의 claim authority 판정을 다시 수행하는 근거로 사용하지 않는다. |
+| 16 | `GET` | `/api/v1/me/mission-participations`, `/api/v1/me/mission-participations/*` | 역할 보호 | `ROLE_VISITOR` | 아니오 | `app_user.status = ACTIVE`, `ORDINARY` 계정과 본인 참여 소유권을 확인한다. 호출자의 현재 `VISITOR` 배정은 이 행의 claim authority 판정을 다시 수행하는 근거로 사용하지 않는다. |
 | 17 | `DELETE` | `/api/v1/auth/delete` | 인증 전용 | 해당 없음 | 아니오 | 활성 회원, 탈퇴 차단 관계와 Refresh Token 계열 폐기를 확인한다. |
 | 18 | `POST` | `/api/v1/reservations`, `/api/v1/reservation-holds/*/confirm`, `/api/v1/coupon-policies/*/coupons` | 인증 전용 | 해당 없음 | 아니오 | 활성 회원, 본인 홀드·발급 근거·정원·쿠폰 상태를 확인한다. |
-| 19 | `GET`, `POST` | `/api/v1/me/**` | 인증 전용 | 해당 없음 | 아니오 | 각 API 명세에 정한 활성 회원 또는 활성 방문자 상태와 본인 예약·결제·환불·쿠폰·스탬프북·홀드 소유권을 확인한다. 15·16번 행이 먼저 적용된다. |
+| 19 | `GET`, `POST` | `/api/v1/me/**` | 인증 전용 | 해당 없음 | 아니오 | 각 API 명세에 정한 활성 회원 또는 활성 방문자 상태와 본인 예약·결제·환불·쿠폰·스탬프북·홀드 소유권을 확인한다. 활성 방문자 조건은 `app_user.status = ACTIVE`, `ACTIVE VISITOR`, `account_kind = ORDINARY`를 함께 확인한다. 15·16번 행이 먼저 적용된다. |
 | 20 | `GET`, `POST`, `PUT`, `PATCH`, `DELETE` | `/actuator/**` | 인증 전용 | 해당 없음 | 아니오 | 4번 `health` 예외 외 Actuator 엔드포인트는 Access Token 인증을 요구한다. |
 | 21 | 모든 method | 그 밖의 애플리케이션 경로 | 인증 전용 | 해당 없음 | 아니오 | 새 역할 보호 API는 구현 전에 이 행렬에 더 구체적인 method·pattern·authority 행을 추가한다. |
 
@@ -81,7 +83,7 @@ authority가 해당 행에 없으면 Spring Security가 `403 FORBIDDEN`을 반�
 | 전역 authority | 이 권한 행렬의 최소 authority 또는 인증 전용·공개 여부를 참조한다. |
 | 지역 경계 | 요청 대상과 인증 주체의 현재 담당 지역을 DB에서 비교하는 조건을 적는다. |
 | 소유권 | 운영자와 콘텐츠·회차·예약, 회원과 예약·후기·쿠폰의 현재 연결 검증 조건을 적는다. |
-| 활성·업무 상태 | 회원·배정 활성 상태와 리소스 상태 전이 조건을 DB 최종 검증으로 적는다. |
+| 활성·업무 상태 | 회원 계정 활성 상태와 리소스 상태 전이 조건을 DB 최종 검증으로 적는다. 지역 경계를 산정하는 경우에만 현재 담당 지역 배정 관계를 함께 적는다. 권한 행렬의 전역 authority·고권한 등급을 같은 배정 상태로 다시 판정하지 않는다. |
 | 실패 결과 | 무효 Token은 401, authority 또는 DB 최종 인가 부족은 403이며 대상 부재와 상태 충돌은 도메인 오류 코드로 구분한다. |
 
 새 공개·선택 인증·역할 보호 API를 추가하거나 제거할 때는 이 권한 행렬과 해당 도메인 API 명세를 같은 Docs 변경에서
