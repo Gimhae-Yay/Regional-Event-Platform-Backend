@@ -5,13 +5,17 @@
 | 대상 릴리스 | P1 |
 | 관련 요구사항 | `P1-FR-03`, `P1-FR-04`, `MSN-01`, `MSN-02`, `MSN-03`, `MSN-04`, `MSN-05`, `P1-AC-03`, `P1-AC-04` |
 | 소유 도메인 | 미션 |
-| 기준 문서 | [지역 미션](../../../p1/regional-mission.md), [P1 명세](../../../p1-spec.md), [P1 ERD](../../../p1-erd.md), [ADR-0066](../../../adr/0066-require-regional-admin-approval-for-p1-benefit-publication.md), [ADR-0067](../../../adr/0067-model-stampbook-and-mission-progress-from-immutable-visits.md), [ADR-0068](../../../adr/0068-use-immutable-coupon-lifecycle-and-evidence-sources.md), [ADR-0088](../../../adr/0088-validate-mission-target-content-availability-before-publication.md), [ADR-0089](../../../adr/0089-separate-coupon-policy-publication-lifecycle.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [지역 미션](../../../p1/regional-mission.md), [P1 명세](../../../p1-spec.md), [P1 ERD](../../../p1-erd.md), [ADR-0066](../../../adr/0066-require-regional-admin-approval-for-p1-benefit-publication.md), [ADR-0067](../../../adr/0067-model-stampbook-and-mission-progress-from-immutable-visits.md), [ADR-0068](../../../adr/0068-use-immutable-coupon-lifecycle-and-evidence-sources.md), [ADR-0088](../../../adr/0088-validate-mission-target-content-availability-before-publication.md), [ADR-0089](../../../adr/0089-separate-coupon-policy-publication-lifecycle.md), [ADR-0106](../../../adr/0106-store-mission-title-on-mission.md), [ADR-0107](../../../adr/0107-deploy-compatible-server-before-mission-title-clients.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
 이 문서는 지역 미션의 생성·수정·검토 요청·승인·반려·종료, 공개 조회, 참여, 진행도 조회와 완료 보상 수령 계약을 정의한다.
 미션은 `DRAFT → PENDING_REVIEW → PUBLISHED → ENDED` 수명주기를 사용하며 반려는 `PENDING_REVIEW → DRAFT`다.
 `PUBLISHED` 뒤에는 핵심 값 수정 없이 종료만 허용한다.
+
+미션은 Unicode code point 기준 1~255자의 필수 제목을 직접 소유한다. 생성·수정 요청은 `title`을 받고, 제목은 다른 핵심 값과 같이
+`DRAFT`에서만 수정한다. 제목 응답은 지역별 공개 목록과 내 참여 목록·상세에만 추가하며, 운영자·지역 관리자
+조회와 공개 미션 상세 응답은 변경하지 않는다.
 
 완료 조건은 `VISIT_COUNT` 또는 `CONTENT_SET`만 사용한다. 미션은 지역 관리자 승인 성공 시 즉시 공개하며 별도 자동
 공개 Scheduler를 두지 않는다. 미션 자동 종료는 HTTP API가 아니므로 Endpoint 없이 Scheduler 실행 계약으로 관리한다.
@@ -77,6 +81,10 @@
 | `endsAt` | String | 미션 예정 종료 시각. `Asia/Seoul` 기준 ISO 8601 `+09:00` 오프셋 |
 | `publishedAt` | String | 공개 승인 처리 시각. 공개 전이면 `null` |
 | `endedAt` | String | 종료 처리 시각. 종료 전이면 `null` |
+
+`title`은 모든 미션 API가 공유하는 응답 필드가 아니다. [ADR-0106](../../../adr/0106-store-mission-title-on-mission.md)에
+따라 생성·수정 요청과 지역별 공개 목록, 내 참여 목록·상세 명세만 `title`을 정의한다. 이 표를 근거로 운영자·지역
+관리자 조회 또는 공개 미션 상세 응답에 제목을 추가하지 않는다.
 
 ## 기능별 API 명세
 
