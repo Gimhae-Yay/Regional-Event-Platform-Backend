@@ -48,7 +48,11 @@ class RegionAdminMissionListControllerWebMvcTest {
     void getMissions_withDefaultParameters_returnsPagedMissionSummaries() throws Exception {
         when(getRegionAdminMissionsUseCase.get(REGION_ADMIN_ID, null, 0, 20))
             .thenReturn(new RegionAdminMissionListResult(
-                List.of(new RegionAdminMissionListResult.MissionSummary(702L, MissionStatus.PENDING_REVIEW)),
+                List.of(new RegionAdminMissionListResult.MissionSummary(
+                    702L,
+                    "김해 문화 미션",
+                    MissionStatus.PENDING_REVIEW
+                )),
                 0,
                 20,
                 1,
@@ -59,7 +63,7 @@ class RegionAdminMissionListControllerWebMvcTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.statusCode").value(200))
             .andExpect(jsonPath("$.data.content[0].missionId").value("702"))
-            .andExpect(jsonPath("$.data.content[0].title").doesNotExist())
+            .andExpect(jsonPath("$.data.content[0].title").value("김해 문화 미션"))
             .andExpect(jsonPath("$.data.content[0].status").value("PENDING_REVIEW"))
             .andExpect(jsonPath("$.data.page").value(0))
             .andExpect(jsonPath("$.data.size").value(20))

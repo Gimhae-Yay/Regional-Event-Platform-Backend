@@ -5,10 +5,15 @@ import io.regionevent.regioneventbackend.domain.mission.service.RegionAdminMissi
 
 public record RegionAdminMissionSummaryResponse(
     String missionId,
+    String title,
     MissionStatus status
 ) {
 
     public static RegionAdminMissionSummaryResponse from(MissionSummary mission) {
-        return new RegionAdminMissionSummaryResponse(mission.missionId().toString(), mission.status());
+        return new RegionAdminMissionSummaryResponse(
+            mission.missionId().toString(),
+            mission.title(),
+            mission.status()
+        );
     }
 }

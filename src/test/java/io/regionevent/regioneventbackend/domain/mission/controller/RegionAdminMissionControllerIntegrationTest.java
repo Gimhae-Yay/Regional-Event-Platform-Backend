@@ -88,10 +88,10 @@ class RegionAdminMissionControllerIntegrationTest {
     void getMissions_returnsOnlyAuthorizedRegionMissionsWithStatusFilterAndPagination() throws Exception {
         Fixture fixture = createFixture("L");
         Fixture otherFixture = createFixture("O");
-        Mission draftMission = saveVisitCountMission(fixture);
-        Mission pendingReviewMission = saveVisitCountMission(fixture);
-        Mission publishedMission = saveVisitCountMission(fixture);
-        Mission endedMission = saveVisitCountMission(fixture);
+        Mission draftMission = saveVisitCountMission(fixture, "초안 미션");
+        Mission pendingReviewMission = saveVisitCountMission(fixture, "검토 대기 미션");
+        Mission publishedMission = saveVisitCountMission(fixture, "공개 미션");
+        Mission endedMission = saveVisitCountMission(fixture, "종료 미션");
         saveVisitCountMission(otherFixture);
         updateMissionStatus(pendingReviewMission, MissionStatus.PENDING_REVIEW);
         updateMissionStatus(publishedMission, MissionStatus.PUBLISHED);
@@ -102,13 +102,16 @@ class RegionAdminMissionControllerIntegrationTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.content.length()").value(2))
             .andExpect(jsonPath("$.data.content[0].missionId").value(endedMission.getMissionId().toString()))
+            .andExpect(jsonPath("$.data.content[0].title").value(endedMission.getTitle()))
             .andExpect(jsonPath("$.data.content[1].missionId").value(publishedMission.getMissionId().toString()))
+            .andExpect(jsonPath("$.data.content[1].title").value(publishedMission.getTitle()))
             .andExpect(jsonPath("$.data.totalElements").value(4))
             .andExpect(jsonPath("$.data.totalPages").value(2));
         getMissions(fixture.admin(), MissionStatus.PENDING_REVIEW.name(), "0", "20")
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.content.length()").value(1))
             .andExpect(jsonPath("$.data.content[0].missionId").value(pendingReviewMission.getMissionId().toString()))
+            .andExpect(jsonPath("$.data.content[0].title").value(pendingReviewMission.getTitle()))
             .andExpect(jsonPath("$.data.content[0].status").value("PENDING_REVIEW"));
         getMissions(otherFixture.admin(), null, "0", "20")
             .andExpect(status().isOk())
@@ -282,10 +285,17 @@ class RegionAdminMissionControllerIntegrationTest {
     }
 
     private Mission saveVisitCountMission(Fixture fixture) {
+        return saveVisitCountMission(fixture, "테스트 미션");
+    }
+
+    private Mission saveVisitCountMission(
+        Fixture fixture,
+        String title
+    ) {
         Content rewardContent = saveContent(fixture.region(), fixture.admin(), "reward");
         CouponPolicy rewardCouponPolicy = saveMissionRewardCouponPolicy(rewardContent, fixture.region());
         return missionRepository.saveAndFlush(new Mission(
-            "테스트 미션",
+            title,
             fixture.region(),
             MissionConditionType.VISIT_COUNT,
             3,

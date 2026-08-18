@@ -30,6 +30,7 @@ class GetRegionAdminMissionsUseCaseTest {
     void get_withPendingReviewStatus_usesAuthorizedRegionAndRequestedPage() {
         Mission mission = mock(Mission.class);
         when(mission.getMissionId()).thenReturn(701L);
+        when(mission.getTitle()).thenReturn("김해 문화 미션");
         when(mission.getStatus()).thenReturn(MissionStatus.PENDING_REVIEW);
         when(regionAdminAuthorizationService.requireAuthorizedRegionId(100L)).thenReturn(11L);
         when(missionService.findRegionMissions(
@@ -41,7 +42,11 @@ class GetRegionAdminMissionsUseCaseTest {
         RegionAdminMissionListResult result = useCase.get(100L, MissionStatus.PENDING_REVIEW, 1, 10);
 
         assertThat(result.content()).containsExactly(
-            new RegionAdminMissionListResult.MissionSummary(701L, MissionStatus.PENDING_REVIEW)
+            new RegionAdminMissionListResult.MissionSummary(
+                701L,
+                "김해 문화 미션",
+                MissionStatus.PENDING_REVIEW
+            )
         );
         assertThat(result.page()).isEqualTo(1);
         assertThat(result.size()).isEqualTo(10);
