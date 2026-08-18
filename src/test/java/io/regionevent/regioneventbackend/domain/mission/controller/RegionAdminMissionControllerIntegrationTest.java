@@ -166,6 +166,7 @@ class RegionAdminMissionControllerIntegrationTest {
             .andExpect(jsonPath("$.code").value("SUCCESS"))
             .andExpect(jsonPath("$.message").value("지역 미션 상세 조회에 성공했습니다."))
             .andExpect(jsonPath("$.data.missionId").value(mission.getMissionId().toString()))
+            .andExpect(jsonPath("$.data.title").value(mission.getTitle()))
             .andExpect(jsonPath("$.data.regionId").value(fixture.region().getRegionId().toString()))
             .andExpect(jsonPath("$.data.status").value("DRAFT"))
             .andExpect(jsonPath("$.data.conditionType").value("CONTENT_SET"))
