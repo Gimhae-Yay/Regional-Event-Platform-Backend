@@ -2,7 +2,7 @@
 
 ## 1. 개요
 
-지역 관리자가 담당 지역의 미션 목록을 조회한다. 검토 대기 목록은 `status=PENDING_REVIEW` 필터로 조회한다.
+지역 관리자가 담당 지역의 미션을 제목으로 식별하며 목록을 조회한다. 검토 대기 목록은 `status=PENDING_REVIEW` 필터로 조회한다.
 
 ### Request
 
@@ -47,6 +47,7 @@ Accept: application/json
     "content": [
       {
         "missionId": "701",
+        "title": "김해 골목 세 곳 방문하기",
         "status": "PENDING_REVIEW"
       }
     ],
@@ -67,6 +68,7 @@ Accept: application/json
 | `message` | String | 지역 관리자 미션 목록 조회 성공 메시지 |
 | `data.content` | Array | 담당 지역 미션 목록. 없으면 빈 배열이며 `null`이 아님 |
 | `data.content[].missionId` | String | 미션 식별자 |
+| `data.content[].title` | String | 미션이 직접 소유하는 null이 아닌 제목. Unicode code point 기준 1~255자 |
 | `data.content[].status` | String | `DRAFT`, `PENDING_REVIEW`, `PUBLISHED`, `ENDED` 중 하나 |
 | `data.page` | Integer | 0부터 시작하는 현재 페이지 번호 |
 | `data.size` | Integer | 요청에 적용된 페이지 크기 |
@@ -85,5 +87,6 @@ Accept: application/json
 ### 처리 규칙
 
 1. 인증 지역 관리자의 담당 지역 미션만 반환한다.
-2. `status`를 생략하면 상태 필터를 적용하지 않고 담당 지역의 `DRAFT`, `PENDING_REVIEW`, `PUBLISHED`, `ENDED` 미션을 모두 조회한다.
-3. 빈 결과는 `200 OK`, 빈 `content` 배열, `totalElements = 0`, `totalPages = 0`으로 반환한다.
+2. 각 항목의 `title`은 해당 미션 행에 저장된 제목이며 null 또는 별도 파생값을 반환하지 않는다.
+3. `status`를 생략하면 상태 필터를 적용하지 않고 담당 지역의 `DRAFT`, `PENDING_REVIEW`, `PUBLISHED`, `ENDED` 미션을 모두 조회한다.
+4. 빈 결과는 `200 OK`, 빈 `content` 배열, `totalElements = 0`, `totalPages = 0`으로 반환한다.
