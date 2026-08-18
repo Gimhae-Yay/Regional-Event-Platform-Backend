@@ -47,6 +47,31 @@ public interface ContentLogRepository extends JpaRepository<ContentLog, Long> {
         """)
     List<ContentLog> findLatestTwoByContentIds(@Param("contentIds") List<Long> contentIds);
 
+    @Query("""
+        SELECT contentLog
+        FROM ContentLog contentLog
+        WHERE contentLog.content.contentId IN :contentIds
+            AND contentLog.content.deletedAt IS NULL
+            AND contentLog.status = :status
+            AND NOT EXISTS (
+                SELECT newerContentLog
+                FROM ContentLog newerContentLog
+                WHERE newerContentLog.content = contentLog.content
+                    AND (
+                        newerContentLog.date > contentLog.date
+                        OR (
+                            newerContentLog.date = contentLog.date
+                            AND newerContentLog.id > contentLog.id
+                        )
+                    )
+            )
+        ORDER BY contentLog.content.contentId ASC
+        """)
+    List<ContentLog> findLatestByContentIdsAndStatus(
+        @Param("contentIds") List<Long> contentIds,
+        @Param("status") ContentLogStatus status
+    );
+
     Optional<ContentLog> findTopByContentContentIdAndStatusOrderByDateDescIdDesc(
         Long contentId,
         ContentLogStatus status

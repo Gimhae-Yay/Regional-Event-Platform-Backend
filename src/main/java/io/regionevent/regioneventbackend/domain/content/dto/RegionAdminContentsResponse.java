@@ -5,20 +5,20 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.List;
 
-import io.regionevent.regioneventbackend.domain.content.service.PendingContentListResult;
+import io.regionevent.regioneventbackend.domain.content.service.RegionAdminContentListResult;
 
-public record PendingContentsResponse(
+public record RegionAdminContentsResponse(
     List<Content> contents
 ) {
 
     private static final ZoneId SEOUL_TIME_ZONE = ZoneId.of("Asia/Seoul");
 
-    public PendingContentsResponse {
+    public RegionAdminContentsResponse {
         contents = List.copyOf(contents);
     }
 
-    public static PendingContentsResponse from(PendingContentListResult result) {
-        return new PendingContentsResponse(
+    public static RegionAdminContentsResponse from(RegionAdminContentListResult result) {
+        return new RegionAdminContentsResponse(
             result.contents().stream()
                 .map(Content::from)
                 .toList()
@@ -32,12 +32,13 @@ public record PendingContentsResponse(
         String status,
         OffsetDateTime publishAt,
         Instant submittedAt,
+        Instant approvedAt,
         Operator operator,
         String representativeImageUrl,
         Instant representativeImageUrlExpiresAt
     ) {
 
-        private static Content from(PendingContentListResult.Content content) {
+        private static Content from(RegionAdminContentListResult.Content content) {
             return new Content(
                 content.contentId().toString(),
                 content.contentType().name(),
@@ -45,6 +46,7 @@ public record PendingContentsResponse(
                 content.status().name(),
                 toSeoulOffsetDateTime(content.publishAt()),
                 content.submittedAt(),
+                content.approvedAt(),
                 new Operator(content.operatorId().toString(), content.operatorName()),
                 content.representativeImageUrl(),
                 content.representativeImageUrlExpiresAt()
