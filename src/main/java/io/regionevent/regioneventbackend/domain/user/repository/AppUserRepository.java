@@ -15,6 +15,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUserAccountKind;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminAssignment;
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminAssignmentStatus;
+import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminGrade;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentStatus;
@@ -106,6 +107,22 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
         @Param("assignmentStatus") UserRoleAssignmentStatus assignmentStatus,
         @Param("userStatus") AppUserStatus userStatus
     );
+
+    @Query("""
+        SELECT assignment.role
+        FROM UserRoleAssignment assignment
+        WHERE assignment.appUser.userId = :userId
+          AND assignment.status = io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentStatus.ACTIVE
+        """)
+    List<UserRole> findActiveUserRolesByUserId(@Param("userId") Long userId);
+
+    @Query("""
+        SELECT assignment.grade
+        FROM PlatformAdminAssignment assignment
+        WHERE assignment.appUser.userId = :userId
+          AND assignment.status = io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminAssignmentStatus.ACTIVE
+        """)
+    List<PlatformAdminGrade> findActivePlatformAdminGradesByUserId(@Param("userId") Long userId);
 
     @Query("""
         SELECT new io.regionevent.regioneventbackend.domain.user.repository.PlatformAdminUserListProjection(

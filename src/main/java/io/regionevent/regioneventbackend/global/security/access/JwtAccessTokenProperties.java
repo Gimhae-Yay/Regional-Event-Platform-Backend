@@ -13,6 +13,7 @@ public class JwtAccessTokenProperties {
     private String audience;
     private String activeKeyId;
     private String activeKey;
+    private boolean authoritiesClaimRequired;
     private List<VerificationKey> previousKeys = new ArrayList<>();
 
     public String getIssuer() {
@@ -45,6 +46,14 @@ public class JwtAccessTokenProperties {
 
     public void setActiveKey(String activeKey) {
         this.activeKey = activeKey;
+    }
+
+    public boolean isAuthoritiesClaimRequired() {
+        return authoritiesClaimRequired;
+    }
+
+    public void setAuthoritiesClaimRequired(boolean authoritiesClaimRequired) {
+        this.authoritiesClaimRequired = authoritiesClaimRequired;
     }
 
     public List<VerificationKey> getPreviousKeys() {

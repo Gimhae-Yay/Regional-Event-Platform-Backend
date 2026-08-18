@@ -15,17 +15,20 @@ import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenSer
 public class RefreshAccessTokenUseCase {
 
     private final AppUserService appUserService;
+    private final AccessTokenAuthorityResolver accessTokenAuthorityResolver;
     private final JwtAccessTokenService jwtAccessTokenService;
     private final RefreshTokenService refreshTokenService;
     private final Clock clock;
 
     public RefreshAccessTokenUseCase(
         AppUserService appUserService,
+        AccessTokenAuthorityResolver accessTokenAuthorityResolver,
         JwtAccessTokenService jwtAccessTokenService,
         RefreshTokenService refreshTokenService,
         Clock clock
     ) {
         this.appUserService = appUserService;
+        this.accessTokenAuthorityResolver = accessTokenAuthorityResolver;
         this.jwtAccessTokenService = jwtAccessTokenService;
         this.refreshTokenService = refreshTokenService;
         this.clock = clock;
@@ -40,9 +43,16 @@ public class RefreshAccessTokenUseCase {
         RefreshTokenService.RotationResult<String> rotation = refreshTokenService.rotate(
             refreshTokenValue,
             currentToken -> {
-                appUserService.findActiveUserForUpdate(currentToken.userId())
+                var user = appUserService.findActiveUserForUpdate(currentToken.userId())
                     .orElseThrow(InvalidRefreshTokenException::new);
-                return jwtAccessTokenService.issue(currentToken.userId());
+                try {
+                    return jwtAccessTokenService.issue(
+                        currentToken.userId(),
+                        accessTokenAuthorityResolver.resolve(user)
+                    );
+                } catch (AccessTokenAuthoritySourceConflictException exception) {
+                    throw new InvalidRefreshTokenException(exception);
+                }
             }
         );
         return new RefreshAccessTokenResult(

@@ -13,6 +13,7 @@ security:
       audience: regional-event-api
       active-key-id: ${JWT_ACCESS_ACTIVE_KEY_ID}
       active-key: ${JWT_ACCESS_ACTIVE_KEY}
+      authorities-claim-required: ${JWT_ACCESS_AUTHORITIES_CLAIM_REQUIRED:false}
     refresh:
       issuer: regional-event-platform
       audience: regional-event-refresh

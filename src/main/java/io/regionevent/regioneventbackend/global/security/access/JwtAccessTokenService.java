@@ -3,9 +3,12 @@ package io.regionevent.regioneventbackend.global.security.access;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Date;
+import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -23,6 +26,7 @@ public class JwtAccessTokenService {
     private static final Duration ACCESS_TOKEN_TTL = Duration.ofMinutes(15);
     private static final String TOKEN_TYPE_CLAIM = "token_type";
     private static final String ACCESS_TOKEN_TYPE = "ACCESS";
+    private static final String AUTHORITIES_CLAIM = "authorities";
     private static final String JWT_TYPE = "JWT";
 
     private final Clock clock;
@@ -30,6 +34,7 @@ public class JwtAccessTokenService {
     private final String audience;
     private final String activeKeyId;
     private final SecretKey activeKey;
+    private final boolean authoritiesClaimRequired;
     private final Map<String, SecretKey> verificationKeys;
     private final Map<String, Instant> previousKeyVerificationEndTimes;
 
@@ -40,13 +45,19 @@ public class JwtAccessTokenService {
         audience = requireNotBlank(properties.getAudience(), "audience");
         activeKeyId = requireNotBlank(properties.getActiveKeyId(), "activeKeyId");
         activeKey = toSecretKey(properties.getActiveKey(), activeKeyId);
+        authoritiesClaimRequired = properties.isAuthoritiesClaimRequired();
         VerificationKeys configuredVerificationKeys = createVerificationKeys(properties);
         verificationKeys = configuredVerificationKeys.keys();
         previousKeyVerificationEndTimes = configuredVerificationKeys.previousKeyVerificationEndTimes();
     }
 
     public String issue(Long userId) {
+        return issue(userId, List.of());
+    }
+
+    public String issue(Long userId, List<AccessTokenAuthority> authorities) {
         validateUserId(userId);
+        List<String> authorityClaimValues = toAuthorityClaimValues(authorities);
 
         Instant issuedAt = clock.instant();
         Instant expiresAt = issuedAt.plus(ACCESS_TOKEN_TTL);
@@ -61,6 +72,7 @@ public class JwtAccessTokenService {
                 .and()
             .subject(userId.toString())
             .claim(TOKEN_TYPE_CLAIM, ACCESS_TOKEN_TYPE)
+            .claim(AUTHORITIES_CLAIM, authorityClaimValues)
             .issuedAt(Date.from(issuedAt))
             .expiration(Date.from(expiresAt))
             .signWith(activeKey, Jwts.SIG.HS256)
@@ -161,7 +173,52 @@ public class JwtAccessTokenService {
             || !expiresAtInstant.equals(issuedAtInstant.plus(ACCESS_TOKEN_TTL))) {
             throw new InvalidAccessTokenException();
         }
-        return new AuthenticatedUser(toUserId(claims.getSubject()));
+        return new AuthenticatedUser(
+            toUserId(claims.getSubject()),
+            parseAuthorities(claims.get(AUTHORITIES_CLAIM))
+        );
+    }
+
+    private List<String> toAuthorityClaimValues(List<AccessTokenAuthority> authorities) {
+        if (authorities == null) {
+            throw new IllegalArgumentException("authorities must not be null");
+        }
+
+        EnumSet<AccessTokenAuthority> uniqueAuthorities = EnumSet.noneOf(AccessTokenAuthority.class);
+        for (AccessTokenAuthority authority : authorities) {
+            if (authority == null || !uniqueAuthorities.add(authority)) {
+                throw new IllegalArgumentException("authorities must not contain null or duplicates");
+            }
+        }
+        return uniqueAuthorities.stream()
+            .map(AccessTokenAuthority::claimValue)
+            .toList();
+    }
+
+    private List<AccessTokenAuthority> parseAuthorities(Object authoritiesClaim) {
+        if (authoritiesClaim == null) {
+            if (authoritiesClaimRequired) {
+                throw new InvalidAccessTokenException();
+            }
+            return List.of();
+        }
+        if (!(authoritiesClaim instanceof List<?> claimValues)) {
+            throw new InvalidAccessTokenException();
+        }
+
+        List<AccessTokenAuthority> authorities = new ArrayList<>();
+        EnumSet<AccessTokenAuthority> uniqueAuthorities = EnumSet.noneOf(AccessTokenAuthority.class);
+        for (Object claimValue : claimValues) {
+            if (!(claimValue instanceof String authorityValue)) {
+                throw new InvalidAccessTokenException();
+            }
+            AccessTokenAuthority authority = AccessTokenAuthority.fromClaimValue(authorityValue);
+            if (!uniqueAuthorities.add(authority)) {
+                throw new InvalidAccessTokenException();
+            }
+            authorities.add(authority);
+        }
+        return List.copyOf(authorities);
     }
 
     private Date requireClaim(Date value) {
@@ -209,12 +266,13 @@ public class JwtAccessTokenService {
     ) {
     }
 
-    public record AuthenticatedUser(Long userId) {
+    public record AuthenticatedUser(Long userId, List<AccessTokenAuthority> authorities) {
 
         public AuthenticatedUser {
             if (userId == null || userId <= 0) {
                 throw new IllegalArgumentException("userId must be positive");
             }
+            authorities = List.copyOf(authorities);
         }
     }
 }

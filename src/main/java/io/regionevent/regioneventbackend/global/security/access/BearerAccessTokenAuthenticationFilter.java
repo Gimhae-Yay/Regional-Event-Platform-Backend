@@ -10,6 +10,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.InsufficientAuthenticationException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -70,7 +71,10 @@ public class BearerAccessTokenAuthenticationFilter extends OncePerRequestFilter 
             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                 authenticatedUser.userId(),
                 null,
-                java.util.List.of()
+                authenticatedUser.authorities().stream()
+                    .map(AccessTokenAuthority::claimValue)
+                    .map(SimpleGrantedAuthority::new)
+                    .toList()
             );
             SecurityContextHolder.getContext().setAuthentication(authentication);
             filterChain.doFilter(request, response);
