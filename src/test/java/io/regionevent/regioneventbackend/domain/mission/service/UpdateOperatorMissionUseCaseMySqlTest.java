@@ -215,6 +215,7 @@ class UpdateOperatorMissionUseCaseMySqlTest extends NonTransactionalMySqlTestSup
                 operatorId,
                 missionId,
                 new UpdateOperatorMissionUseCase.UpdateOperatorMissionCommand(
+                    "수정 미션",
                     "VISIT_COUNT",
                     2,
                     List.of(),
@@ -238,6 +239,7 @@ class UpdateOperatorMissionUseCaseMySqlTest extends NonTransactionalMySqlTestSup
             CouponPolicy firstPolicy = savePolicy(region, firstOperator, "first");
             CouponPolicy secondPolicy = savePolicy(region, secondOperator, "second");
             Mission firstMission = missionRepository.save(new Mission(
+                "테스트 미션",
                 region,
                 MissionConditionType.VISIT_COUNT,
                 1,
@@ -245,6 +247,7 @@ class UpdateOperatorMissionUseCaseMySqlTest extends NonTransactionalMySqlTestSup
                 NOW.plusSeconds(86_400)
             ));
             Mission secondMission = missionRepository.save(new Mission(
+                "테스트 미션",
                 region,
                 MissionConditionType.VISIT_COUNT,
                 1,

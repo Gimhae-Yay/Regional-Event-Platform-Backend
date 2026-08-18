@@ -294,6 +294,7 @@ class EndMissionsUseCaseIntegrationTest extends NonTransactionalMySqlTestSupport
         rewardPolicy.publish(PUBLISHED_AT);
         rewardPolicy = couponPolicyRepository.saveAndFlush(rewardPolicy);
         Mission mission = new Mission(
+            "테스트 미션",
             region,
             MissionConditionType.VISIT_COUNT,
             2,

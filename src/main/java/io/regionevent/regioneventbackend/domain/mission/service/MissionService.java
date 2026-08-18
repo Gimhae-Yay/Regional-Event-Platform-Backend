@@ -81,6 +81,7 @@ public class MissionService {
     }
 
     public Mission create(
+        String title,
         Region region,
         MissionConditionType conditionType,
         Integer requiredVisitCount,
@@ -89,6 +90,7 @@ public class MissionService {
     ) {
         try {
             return new Mission(
+                title,
                 region,
                 conditionType,
                 requiredVisitCount,
@@ -101,7 +103,12 @@ public class MissionService {
     }
 
     public Mission save(Mission mission) {
-        return missionRepository.saveAndFlush(mission);
+        Mission savedMission = missionRepository.saveAndFlush(mission);
+        if (savedMission.getTitle() == null) {
+            savedMission.fillMissingTitleWithFallback();
+            return missionRepository.saveAndFlush(savedMission);
+        }
+        return savedMission;
     }
 
     public Mission submitForReview(Mission mission) {
@@ -111,6 +118,7 @@ public class MissionService {
 
     public Mission replaceDraftCoreValues(
         Mission mission,
+        String title,
         MissionConditionType conditionType,
         Integer requiredVisitCount,
         CouponPolicy rewardCouponPolicy,
@@ -121,6 +129,7 @@ public class MissionService {
         }
         try {
             mission.replaceDraftCoreValues(
+                title,
                 conditionType,
                 requiredVisitCount,
                 rewardCouponPolicy,

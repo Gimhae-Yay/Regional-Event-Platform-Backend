@@ -244,6 +244,7 @@ class MissionRewardCouponRepositoryTest {
             100L
         ));
         Mission mission = missionRepository.saveAndFlush(new Mission(
+            "테스트 미션",
             region,
             MissionConditionType.VISIT_COUNT,
             1,
