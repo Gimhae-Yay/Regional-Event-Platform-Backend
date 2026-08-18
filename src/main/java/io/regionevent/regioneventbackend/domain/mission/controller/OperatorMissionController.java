@@ -109,6 +109,7 @@ public class OperatorMissionController {
 
     private CreateOperatorMissionCommand toCommand(CreateOperatorMissionRequest request) {
         return new CreateOperatorMissionCommand(
+            request.title(),
             request.conditionType(),
             request.requiredVisitCount(),
             request.targetContentIds() == null
@@ -123,6 +124,7 @@ public class OperatorMissionController {
 
     private UpdateOperatorMissionCommand toCommand(UpdateOperatorMissionRequest request) {
         return new UpdateOperatorMissionCommand(
+            request.title(),
             request.conditionType(),
             request.requiredVisitCount(),
             request.targetContentIds() == null

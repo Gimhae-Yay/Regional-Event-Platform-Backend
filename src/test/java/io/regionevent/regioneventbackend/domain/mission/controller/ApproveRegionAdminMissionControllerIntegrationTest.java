@@ -405,6 +405,7 @@ class ApproveRegionAdminMissionControllerIntegrationTest {
             rewardCouponPolicy = couponPolicyRepository.save(rewardCouponPolicy);
 
             Mission mission = new Mission(
+                "테스트 미션",
                 region,
                 conditionType,
                 conditionType == MissionConditionType.VISIT_COUNT ? 3 : null,

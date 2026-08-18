@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.mission.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -14,7 +15,11 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
@@ -27,11 +32,13 @@ import io.regionevent.regioneventbackend.domain.mission.entity.MissionConditionT
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
 import io.regionevent.regioneventbackend.domain.mission.service.CreateOperatorMissionResult;
 import io.regionevent.regioneventbackend.domain.mission.service.CreateOperatorMissionUseCase;
+import io.regionevent.regioneventbackend.domain.mission.service.CreateOperatorMissionUseCase.CreateOperatorMissionCommand;
 import io.regionevent.regioneventbackend.domain.mission.service.GetOperatorMissionDetailUseCase;
 import io.regionevent.regioneventbackend.domain.mission.service.SubmitOperatorMissionResult;
 import io.regionevent.regioneventbackend.domain.mission.service.SubmitOperatorMissionUseCase;
 import io.regionevent.regioneventbackend.domain.mission.service.UpdateOperatorMissionResult;
 import io.regionevent.regioneventbackend.domain.mission.service.UpdateOperatorMissionUseCase;
+import io.regionevent.regioneventbackend.domain.mission.service.UpdateOperatorMissionUseCase.UpdateOperatorMissionCommand;
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -42,6 +49,7 @@ import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenSto
 
 @WebMvcTest({OperatorMissionController.class, OperatorMissionDetailController.class})
 @Import({SecurityConfig.class, RequestIdFilter.class, GlobalExceptionHandler.class})
+@ExtendWith(OutputCaptureExtension.class)
 class OperatorMissionControllerWebMvcTest {
 
     private static final long OPERATOR_ID = 100L;
@@ -79,6 +87,7 @@ class OperatorMissionControllerWebMvcTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
+                      "title": "  김해   문화 미션  ",
                       "conditionType": "CONTENT_SET",
                       "requiredVisitCount": null,
                       "targetContentIds": ["101", "102"],
@@ -92,6 +101,16 @@ class OperatorMissionControllerWebMvcTest {
             .andExpect(jsonPath("$.message").value("미션 생성에 성공했습니다."))
             .andExpect(jsonPath("$.data.missionId").value("701"))
             .andExpect(jsonPath("$.data.status").value("DRAFT"));
+
+        ArgumentCaptor<CreateOperatorMissionCommand> commandCaptor = ArgumentCaptor.forClass(
+            CreateOperatorMissionCommand.class
+        );
+        verify(createOperatorMissionUseCase).create(
+            org.mockito.ArgumentMatchers.eq(OPERATOR_ID),
+            commandCaptor.capture(),
+            org.mockito.ArgumentMatchers.any()
+        );
+        assertThat(commandCaptor.getValue().title()).isEqualTo("  김해   문화 미션  ");
     }
 
     @Test
@@ -124,13 +143,84 @@ class OperatorMissionControllerWebMvcTest {
 
         mockMvc.perform(authenticated(patch("/api/v1/operator/missions/701"))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(createVisitCountRequest("501")))
+                .content(createVisitCountRequest("수정 미션", "501")))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.statusCode").value(200))
             .andExpect(jsonPath("$.code").value("SUCCESS"))
             .andExpect(jsonPath("$.message").value("미션 수정에 성공했습니다."))
             .andExpect(jsonPath("$.data.missionId").value("701"))
             .andExpect(jsonPath("$.data.status").value("DRAFT"));
+
+        ArgumentCaptor<UpdateOperatorMissionCommand> commandCaptor = ArgumentCaptor.forClass(
+            UpdateOperatorMissionCommand.class
+        );
+        verify(updateOperatorMissionUseCase).update(
+            org.mockito.ArgumentMatchers.eq(OPERATOR_ID),
+            org.mockito.ArgumentMatchers.eq(701L),
+            commandCaptor.capture(),
+            org.mockito.ArgumentMatchers.any()
+        );
+        assertThat(commandCaptor.getValue().title()).isEqualTo("수정 미션");
+    }
+
+    @Test
+    void createAndUpdate_withNonStringTitle_returnTypeErrorWithoutCallingUseCase() throws Exception {
+        mockMvc.perform(authenticated(post("/api/v1/operator/missions"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "title": 123,
+                      "conditionType": "VISIT_COUNT",
+                      "requiredVisitCount": 3,
+                      "targetContentIds": [],
+                      "rewardCouponPolicyId": "501",
+                      "endsAt": "2026-09-30T23:59:59+09:00"
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+        mockMvc.perform(authenticated(patch("/api/v1/operator/missions/701"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "title": {},
+                      "conditionType": "VISIT_COUNT",
+                      "requiredVisitCount": 3,
+                      "targetContentIds": [],
+                      "rewardCouponPolicyId": "501",
+                      "endsAt": "2026-09-30T23:59:59+09:00"
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+
+        verifyNoInteractions(createOperatorMissionUseCase, updateOperatorMissionUseCase);
+    }
+
+    @Test
+    void create_withTitle_doesNotExposeRawTitleInLogs(CapturedOutput output) throws Exception {
+        String rawTitle = "MISSION_TITLE_SECRET_924";
+        when(createOperatorMissionUseCase.create(
+            org.mockito.ArgumentMatchers.eq(OPERATOR_ID),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any()
+        )).thenReturn(new CreateOperatorMissionResult(701L, MissionStatus.DRAFT));
+
+        mockMvc.perform(authenticated(post("/api/v1/operator/missions"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "title": "%s",
+                      "conditionType": "VISIT_COUNT",
+                      "requiredVisitCount": 3,
+                      "targetContentIds": [],
+                      "rewardCouponPolicyId": "501",
+                      "endsAt": "2026-09-30T23:59:59+09:00"
+                    }
+                    """.formatted(rawTitle)))
+            .andExpect(status().isCreated());
+
+        assertThat(output.getAll()).doesNotContain(rawTitle);
     }
 
     @Test
@@ -566,5 +656,21 @@ class OperatorMissionControllerWebMvcTest {
               "endsAt": "2026-09-30T23:59:59+09:00"
             }
             """.formatted(rewardCouponPolicyId);
+    }
+
+    private String createVisitCountRequest(
+        String title,
+        String rewardCouponPolicyId
+    ) {
+        return """
+            {
+              "title": "%s",
+              "conditionType": "VISIT_COUNT",
+              "requiredVisitCount": 3,
+              "targetContentIds": [],
+              "rewardCouponPolicyId": "%s",
+              "endsAt": "2026-09-30T23:59:59+09:00"
+            }
+            """.formatted(title, rewardCouponPolicyId);
     }
 }

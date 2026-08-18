@@ -14,6 +14,8 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -53,6 +55,7 @@ class CreateOperatorMissionUseCaseTest {
     private MissionService missionService;
     private RecordAuditEventUseCase recordAuditEventUseCase;
     private RecordFailedAuditEventUseCase recordFailedAuditEventUseCase;
+    private SimpleMeterRegistry meterRegistry;
     private CreateOperatorMissionUseCase useCase;
 
     @BeforeEach
@@ -63,6 +66,7 @@ class CreateOperatorMissionUseCaseTest {
         missionService = mock(MissionService.class);
         recordAuditEventUseCase = mock(RecordAuditEventUseCase.class);
         recordFailedAuditEventUseCase = mock(RecordFailedAuditEventUseCase.class);
+        meterRegistry = new SimpleMeterRegistry();
         useCase = new CreateOperatorMissionUseCase(
             operatorAuthorizationService,
             contentService,
@@ -70,6 +74,7 @@ class CreateOperatorMissionUseCaseTest {
             missionService,
             recordAuditEventUseCase,
             recordFailedAuditEventUseCase,
+            meterRegistry,
             Clock.fixed(NOW, ZoneOffset.UTC)
         );
     }
@@ -82,6 +87,7 @@ class CreateOperatorMissionUseCaseTest {
         when(operatorAuthorizationService.requireAuthorizedOperatorForUpdate(100L)).thenReturn(operator);
         when(couponPolicyService.findForUpdate(501L)).thenReturn(rewardCouponPolicy);
         when(missionService.create(
+            "김해 미션",
             operator.region(),
             MissionConditionType.VISIT_COUNT,
             3,
@@ -112,6 +118,83 @@ class CreateOperatorMissionUseCaseTest {
             assertThat(audit.occurredAt()).isEqualTo(NOW);
         });
         verifyNoInteractions(recordFailedAuditEventUseCase);
+        assertThat(missingTitleCounter()).isZero();
+    }
+
+    @Test
+    void create_withMissingTitle_incrementsCompatibilityCounterWithoutHighCardinalityTags() {
+        AuthorizedOperator operator = operator(100L, 11L, 900L);
+        CouponPolicy rewardCouponPolicy = rewardCouponPolicy(
+            11L,
+            CouponIssuanceType.MISSION_REWARD,
+            CouponPolicyStatus.DRAFT
+        );
+        Mission mission = mission(701L, MissionStatus.DRAFT);
+        when(operatorAuthorizationService.requireAuthorizedOperatorForUpdate(100L)).thenReturn(operator);
+        when(couponPolicyService.findForUpdate(501L)).thenReturn(rewardCouponPolicy);
+        when(missionService.create(
+            null,
+            operator.region(),
+            MissionConditionType.VISIT_COUNT,
+            3,
+            rewardCouponPolicy,
+            Instant.parse("2026-09-30T14:59:59Z")
+        )).thenReturn(mission);
+        when(missionService.save(mission)).thenReturn(mission);
+
+        useCase.create(
+            100L,
+            command(null, "VISIT_COUNT", 3, List.of(), 501L, "2026-09-30T23:59:59+09:00"),
+            REQUEST_ID
+        );
+
+        assertThat(missingTitleCounter()).isEqualTo(1);
+        assertThat(meterRegistry.get("mission.title.compatibility.missing")
+            .tag("operation", "create")
+            .counter()
+            .getId()
+            .getTags())
+            .extracting(tag -> tag.getKey() + "=" + tag.getValue())
+            .containsExactly("operation=create");
+    }
+
+    @Test
+    void create_withBlankOrOverlongTitle_doesNotIncrementMissingTitleCounter() {
+        AuthorizedOperator operator = operator(100L, 11L, 900L);
+        CouponPolicy rewardCouponPolicy = rewardCouponPolicy(
+            11L,
+            CouponIssuanceType.MISSION_REWARD,
+            CouponPolicyStatus.DRAFT
+        );
+        when(operatorAuthorizationService.requireAuthorizedOperatorForUpdate(100L)).thenReturn(operator);
+        when(couponPolicyService.findForUpdate(501L)).thenReturn(rewardCouponPolicy);
+        for (String invalidTitle : List.of("   ", "가".repeat(256))) {
+            when(missionService.create(
+                invalidTitle,
+                operator.region(),
+                MissionConditionType.VISIT_COUNT,
+                3,
+                rewardCouponPolicy,
+                Instant.parse("2026-09-30T14:59:59Z")
+            )).thenThrow(new BusinessException(ErrorCode.INVALID_INPUT));
+
+            assertThatThrownBy(() -> useCase.create(
+                100L,
+                command(
+                    invalidTitle,
+                    "VISIT_COUNT",
+                    3,
+                    List.of(),
+                    501L,
+                    "2026-09-30T23:59:59+09:00"
+                ),
+                REQUEST_ID
+            )).isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_INPUT);
+        }
+
+        assertThat(missingTitleCounter()).isZero();
     }
 
     @Test
@@ -126,6 +209,7 @@ class CreateOperatorMissionUseCaseTest {
         when(contentService.findMissionTargetContentsForUpdate(List.of(101L, 102L), 11L))
             .thenReturn(List.of(firstContent, secondContent));
         when(missionService.create(
+            "김해 미션",
             operator.region(),
             MissionConditionType.CONTENT_SET,
             null,
@@ -276,6 +360,7 @@ class CreateOperatorMissionUseCaseTest {
         when(operatorAuthorizationService.requireAuthorizedOperatorForUpdate(100L)).thenReturn(operator);
         when(couponPolicyService.findForUpdate(501L)).thenReturn(rewardCouponPolicy);
         when(missionService.create(
+            "김해 미션",
             operator.region(),
             MissionConditionType.VISIT_COUNT,
             3,
@@ -329,13 +414,39 @@ class CreateOperatorMissionUseCaseTest {
         Long rewardCouponPolicyId,
         String endsAt
     ) {
+        return command(
+            "김해 미션",
+            conditionType,
+            requiredVisitCount,
+            targetContentIds,
+            rewardCouponPolicyId,
+            endsAt
+        );
+    }
+
+    private CreateOperatorMissionUseCase.CreateOperatorMissionCommand command(
+        String title,
+        String conditionType,
+        Integer requiredVisitCount,
+        List<Long> targetContentIds,
+        Long rewardCouponPolicyId,
+        String endsAt
+    ) {
         return new CreateOperatorMissionUseCase.CreateOperatorMissionCommand(
+            title,
             conditionType,
             requiredVisitCount,
             targetContentIds,
             rewardCouponPolicyId,
             OffsetDateTime.parse(endsAt)
         );
+    }
+
+    private double missingTitleCounter() {
+        return meterRegistry.get("mission.title.compatibility.missing")
+            .tag("operation", "create")
+            .counter()
+            .count();
     }
 
     private AuthorizedOperator operator(

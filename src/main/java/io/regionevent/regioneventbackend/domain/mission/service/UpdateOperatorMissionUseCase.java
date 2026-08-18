@@ -10,6 +10,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,6 +43,7 @@ public class UpdateOperatorMissionUseCase {
 
     private static final ZoneOffset REQUIRED_ENDS_AT_OFFSET = ZoneOffset.ofHours(9);
     private static final String SUCCESS_REASON_CODE = "MISSION_UPDATED";
+    private static final String MISSING_TITLE_COUNTER_NAME = "mission.title.compatibility.missing";
 
     private final OperatorAuthorizationService operatorAuthorizationService;
     private final CouponPolicyService couponPolicyService;
@@ -48,6 +52,7 @@ public class UpdateOperatorMissionUseCase {
     private final MissionTargetContentService missionTargetContentService;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase;
+    private final Counter missingTitleCounter;
     private final Clock clock;
 
     public UpdateOperatorMissionUseCase(
@@ -58,6 +63,7 @@ public class UpdateOperatorMissionUseCase {
         MissionTargetContentService missionTargetContentService,
         RecordAuditEventUseCase recordAuditEventUseCase,
         RecordFailedAuditEventUseCase recordFailedAuditEventUseCase,
+        MeterRegistry meterRegistry,
         Clock clock
     ) {
         this.operatorAuthorizationService = operatorAuthorizationService;
@@ -67,6 +73,11 @@ public class UpdateOperatorMissionUseCase {
         this.missionTargetContentService = missionTargetContentService;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
         this.recordFailedAuditEventUseCase = recordFailedAuditEventUseCase;
+        this.missingTitleCounter = meterRegistry.counter(
+            MISSING_TITLE_COUNTER_NAME,
+            "operation",
+            "update"
+        );
         this.clock = clock;
     }
 
@@ -80,6 +91,9 @@ public class UpdateOperatorMissionUseCase {
         validateRequestContext(userId, missionId, requestId);
         ValidatedCommand validatedCommand = validateCommand(command);
         AuthorizedOperator operator = operatorAuthorizationService.requireAuthorizedOperatorForUpdate(userId);
+        if (validatedCommand.title() == null) {
+            missingTitleCounter.increment();
+        }
         MissionUpdateSnapshot initialSnapshot = missionService.findUpdateSnapshot(missionId);
         Mission mission = null;
         MissionStatus previousState = initialSnapshot.getStatus();
@@ -105,6 +119,7 @@ public class UpdateOperatorMissionUseCase {
 
             Mission updatedMission = missionService.replaceDraftCoreValues(
                 mission,
+                validatedCommand.title(),
                 validatedCommand.conditionType(),
                 validatedCommand.requiredVisitCount(),
                 requestedRewardCouponPolicy,
@@ -156,6 +171,7 @@ public class UpdateOperatorMissionUseCase {
         MissionConditionType conditionType = toConditionType(command.conditionType());
         validateConditionFields(conditionType, command.requiredVisitCount(), command.targetContentIds());
         return new ValidatedCommand(
+            command.title(),
             conditionType,
             command.requiredVisitCount(),
             normalizeTargetContentIds(command.targetContentIds()),
@@ -325,6 +341,7 @@ public class UpdateOperatorMissionUseCase {
     }
 
     public record UpdateOperatorMissionCommand(
+        String title,
         String conditionType,
         Integer requiredVisitCount,
         List<Long> targetContentIds,
@@ -334,6 +351,7 @@ public class UpdateOperatorMissionUseCase {
     }
 
     private record ValidatedCommand(
+        String title,
         MissionConditionType conditionType,
         Integer requiredVisitCount,
         List<Long> targetContentIds,

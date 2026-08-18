@@ -253,6 +253,7 @@ class MyMissionParticipationControllerIntegrationTest {
 
     private Mission saveMission(Fixture fixture, int requiredVisitCount) {
         return missionRepository.saveAndFlush(new Mission(
+            "테스트 미션",
             fixture.region(),
             MissionConditionType.VISIT_COUNT,
             requiredVisitCount,

@@ -268,6 +268,7 @@ class SubmitOperatorMissionAuditAtomicityTest {
                 null
             ));
             Mission mission = missionRepository.save(new Mission(
+                "테스트 미션",
                 region,
                 MissionConditionType.VISIT_COUNT,
                 1,

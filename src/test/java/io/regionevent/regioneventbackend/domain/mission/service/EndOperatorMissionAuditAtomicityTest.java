@@ -166,6 +166,7 @@ class EndOperatorMissionAuditAtomicityTest {
             rewardPolicy.publish(BASE_TIME);
             rewardPolicy = couponPolicyRepository.save(rewardPolicy);
             Mission mission = missionRepository.saveAndFlush(new Mission(
+                "테스트 미션",
                 region,
                 MissionConditionType.VISIT_COUNT,
                 3,

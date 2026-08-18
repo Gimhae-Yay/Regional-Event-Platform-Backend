@@ -94,6 +94,7 @@ class CouponPolicyReferenceRepositoryTest {
             createPolicy(content, region, CouponIssuanceType.STAMPBOOK_COMPLETION)
         );
         Mission mission = missionRepository.saveAndFlush(new Mission(
+            "테스트 미션",
             region,
             MissionConditionType.VISIT_COUNT,
             1,
