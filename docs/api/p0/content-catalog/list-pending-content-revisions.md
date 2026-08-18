@@ -23,7 +23,7 @@ GET /api/v1/region-admin/content-revisions?status=EDIT_REQUESTED
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `Authorization` | Header | Y | `Bearer <accessToken>` 형식이며 `ROLE_REGION_ADMIN` snapshot을 가진 Access Token |
+| `Authorization` | Header | Y | `Bearer <accessToken>` 형식의 지역 관리자 Access Token |
 | `status` | Query | Y | 항상 `EDIT_REQUESTED` |
 
 ### Response
@@ -79,7 +79,7 @@ GET /api/v1/region-admin/content-revisions?status=EDIT_REQUESTED
 | --- | --- | --- |
 | `400` | `INVALID_INPUT` | `status`가 없거나 `EDIT_REQUESTED`가 아니다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. |
-| `403` | `FORBIDDEN` | `ROLE_REGION_ADMIN` authority가 없거나 활성 `ORDINARY` 계정 또는 담당 지역 관계가 없다. |
+| `403` | `FORBIDDEN` | 지역 관리자 역할 또는 담당 지역이 없다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 수정본 상태와 원본 상태·후보 `publish_at` 조합이 정책과 일치하지 않는다. |
 
 ### 처리 규칙

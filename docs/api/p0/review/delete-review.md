@@ -9,7 +9,7 @@
 
 ## 1. 개요
 
-`ROLE_VISITOR` snapshot을 가진 활성 `ORDINARY` 작성자는 자신의 `PUBLISHED` 후기를 기간 제한 없이 삭제할 수 있다. 삭제는 행·방문 연결을 보존한
+활성 작성자는 자신의 `PUBLISHED` 후기를 기간 제한 없이 삭제할 수 있다. 삭제는 행·방문 연결을 보존한
 `PUBLISHED → DELETED` 상태 전이이며, 성공 즉시 공개 목록에서 제외한다. `deletedAt + 30일` 후 별점과
 본문 원문만 영구 파기하고 삭제·복구·같은 방문의 재작성을 허용하지 않는다.
 
@@ -37,7 +37,7 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Authorization` | Y | `ROLE_VISITOR` snapshot을 가진 후기 작성자를 확인하는 `Bearer <accessToken>`이다. |
+| `Authorization` | Y | 후기 작성자를 확인하는 `Bearer <accessToken>`이다. |
 | `Content-Type` | N | 요청 본문이 없으므로 전송하지 않는다. |
 | `Accept` | N | `application/json` |
 
@@ -76,7 +76,7 @@ Accept: application/json
 | 400 | `INVALID_TYPE` | `reviewId`를 양의 10진 정수 문자열로 처리할 수 없다. 상태를 변경하지 않는다. |
 | 400 | `INVALID_INPUT` | `reviewId`가 양의 정수 형식을 만족하지 않는다. 상태를 변경하지 않는다. |
 | 401 | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 상태를 변경하지 않는다. |
-| 403 | `FORBIDDEN` | 인증 주체에게 `ROLE_VISITOR` authority가 없거나 활성 `ORDINARY` 계정이 아니거나 작성자 연결이 없다. 상태를 변경하지 않는다. |
+| 403 | `FORBIDDEN` | 인증 주체가 작성자가 아니거나 활성 작성자 연결이 없다. 상태를 변경하지 않는다. |
 | 404 | `NOT_FOUND` | 후기가 없거나 이미 `DELETED` 상태다. 삭제 시계와 원문을 변경하지 않는다. |
 
 #### Error Response Body

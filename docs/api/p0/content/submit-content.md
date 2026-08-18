@@ -25,7 +25,7 @@
 | 대상 | 기준 문서 | 이 API에서 명시할 내용 |
 | --- | --- | --- |
 | Base URL·미디어 타입·시각·식별자 | [API 공통 규칙](../../common/api-conventions.md) | 실제 경로는 `/api/v1/operator/contents/{contentId}/submit`이다. |
-| 인증·인가 | [인증·인가](../../common/authentication.md) | `ROLE_OPERATOR` snapshot으로 1차 인가하고, DB에서 활성 `ORDINARY` 계정, 현재 담당 지역 일치와 콘텐츠 소유 관계를 확인한다. |
+| 인증·인가 | [인증·인가](../../common/authentication.md) | 승인된 `OPERATOR` 역할, 담당 지역 일치와 콘텐츠 소유 관계가 필요하다. |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | `200 OK`와 제출 결과를 반환한다. |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | 상태 전이 명령이므로 적용하지 않는다. |
 
@@ -111,7 +111,7 @@ Accept: application/json
 | --- | --- | --- |
 | `400` | `INVALID_INPUT` | `contentId`가 양수가 아니거나 필수 콘텐츠 필드·현재 대표 이미지·유효 회차가 제출 조건을 만족하지 않는다. 콘텐츠를 전이하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 콘텐츠를 전이하지 않는다. |
-| `403` | `FORBIDDEN` | `ROLE_OPERATOR` authority가 없거나 활성 `ORDINARY` 계정, 담당 지역 또는 콘텐츠 소유 관계가 없다. 콘텐츠를 전이하지 않는다. |
+| `403` | `FORBIDDEN` | 운영자 역할, 담당 지역 또는 콘텐츠 소유 관계가 없다. 콘텐츠를 전이하지 않는다. |
 | `404` | `NOT_FOUND` | 콘텐츠가 없거나 소프트 삭제됐다. 콘텐츠를 전이하지 않는다. |
 | `409` | `CONTENT_STATE_CONFLICT` | 콘텐츠가 `REJECTED`가 아니다. 콘텐츠를 전이하지 않는다. |
 

@@ -24,7 +24,7 @@
 | 대상 | 기준 문서 | 이 API에서 명시할 내용 |
 | --- | --- | --- |
 | Base URL·미디어 타입·시간·식별자 | [API 공통 규칙](../../common/api-conventions.md) | 실제 경로는 `/api/v1/operator/contents/{contentId}/withdrawal-requests`; 시각은 UTC `Z`, 식별자는 양의 10진 문자열 |
-| 인증·인가 | [인증·인가](../../common/authentication.md) | `ROLE_OPERATOR` snapshot, 활성 `ORDINARY` 계정, 현재 담당 지역과 대상 콘텐츠 소유 관계가 모두 필요 |
+| 인증·인가 | [인증·인가](../../common/authentication.md) | 활성 `OPERATOR`, 담당 지역과 대상 콘텐츠 소유 관계가 모두 필요 |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | 최초 생성과 같은 의미의 재시도는 `201 Created`; 중복 대기·상태 경합은 `CONTENT_STATE_CONFLICT`, 같은 키의 다른 요청 의미는 `IDEMPOTENCY_KEY_CONFLICT` 사용 |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | 명령 API이므로 적용하지 않음 |
 
@@ -54,7 +54,7 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Authorization` | Y | `Bearer {accessToken}`. `ROLE_OPERATOR` snapshot을 가져야 하며 DB에서 활성 `ORDINARY` 계정인지 확인한다. |
+| `Authorization` | Y | `Bearer {accessToken}`. 활성 `OPERATOR`여야 한다. |
 | `Idempotency-Key` | Y | 클라이언트가 생성한 비어 있지 않은 멱등 키. 같은 요청의 재시도에는 같은 값을, 반려 후 의도적인 새 요청에는 새 값을 사용한다. 원문은 저장·로그하지 않는다. |
 | `Content-Type` | Y | `application/json; charset=UTF-8` |
 | `Accept` | N | `application/json` |
@@ -129,7 +129,7 @@ Accept: application/json
 | `400` | `INVALID_TYPE` | `contentId`를 signed 64비트 양의 정수로 해석할 수 없다. 아무 상태도 변경하지 않는다. |
 | `400` | `INVALID_JSON` | 요청 본문을 역직렬화할 수 없다. 아무 상태도 변경하지 않는다. |
 | `401` | `UNAUTHENTICATED` | 인증 정보가 없거나 유효하지 않다. |
-| `403` | `FORBIDDEN` | `ROLE_OPERATOR` authority가 없거나 활성 `ORDINARY` 계정, 담당 지역 또는 대상 콘텐츠 소유 관계가 없다. |
+| `403` | `FORBIDDEN` | 활성 운영자 역할, 담당 지역 또는 대상 콘텐츠 소유 관계가 없다. |
 | `404` | `NOT_FOUND` | 대상 콘텐츠를 찾을 수 없다. |
 | `409` | `IDEMPOTENCY_KEY_CONFLICT` | 같은 콘텐츠에서 이미 다른 정규화 사유에 사용한 `Idempotency-Key`다. 기존 요청을 변경하지 않는다. |
 | `409` | `CONTENT_STATE_CONFLICT` | 새 키의 요청인데 콘텐츠가 `PUBLISHED`가 아니거나, 같은 콘텐츠에 다른 키의 `PENDING` 요청이 있거나, 경합 중 다른 상태 전이가 먼저 성공했다. |
@@ -149,7 +149,7 @@ Accept: application/json
 ### 처리 규칙
 
 1. 서버는 필수 `Idempotency-Key`, 요청 형식과 사유를 검증하고 키 원문의 해시를 계산한다. 원문은 DB·감사·구조화 로그에 기록하지 않는다.
-2. 서버는 `ROLE_OPERATOR` snapshot을 1차 확인하고, DB에서 인증 주체의 활성 `ORDINARY` 계정, 현재 담당 `region_id`, 저장된 `content.operator_id`를 검증한다.
+2. 서버는 인증 주체의 활성 `OPERATOR` 역할, 담당 `region_id`, 저장된 `content.operator_id`를 검증한다.
 3. 쓰기 트랜잭션에서 `region → content` 순서로 잠근 뒤 같은 `(content_id, idempotency_key_hash)` 요청을 먼저 조회한다.
 4. 같은 키의 기존 요청이 있으면 현재 상태가 `APPROVED`, `REJECTED`, `INVALIDATED`여도 정규화 요청 사유가 같을 때 새 요청·감사를 만들지 않고 최초 `201 Created` 생성 결과를 반환한다. 응답의 `status`는 현재 심사 상태가 아니라 최초 생성 결과인 `PENDING`이다.
 5. 같은 키의 기존 요청에 다른 정규화 사유를 보내면 기존 사유를 덮어쓰지 않고 `409 IDEMPOTENCY_KEY_CONFLICT`를 반환한다.

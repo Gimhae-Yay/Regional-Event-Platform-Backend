@@ -13,7 +13,7 @@
 `withdrawalRequestId`와 대상 콘텐츠·요청자를 식별하는 최소 요약만 제공하며, 철회 요청 사유는
 [전체 콘텐츠 철회 요청 상세 조회](get-pending-content-withdrawal-request.md)에서 확인한다.
 
-클라이언트는 지역 식별자를 전달하지 않는다. 서버는 `ROLE_REGION_ADMIN` snapshot을 통과한 인증 주체의 현재 담당 지역 관계에서 담당 지역을 결정하고,
+클라이언트는 지역 식별자를 전달하지 않는다. 서버는 인증된 지역 관리자의 활성 역할 배정에서 담당 지역을 결정하고,
 요청에 연결된 콘텐츠의 `region_id`가 담당 지역과 일치하는 대기 요청만 반환한다.
 
 ### 요구사항 추적
@@ -28,7 +28,7 @@
 | 대상 | 기준 문서 | 이 API에서 명시할 내용 |
 | --- | --- | --- |
 | Base URL·미디어 타입·시간·식별자 | [API 공통 규칙](../../common/api-conventions.md) | 실제 경로는 `/api/v1/region-admin/content-withdrawal-requests?status=PENDING`이며, 사건 시각은 UTC `Z`, 식별자는 양의 10진 문자열이다. |
-| 인증·인가 | [인증·인가](../../common/authentication.md) | `ROLE_REGION_ADMIN` snapshot, 활성 `ORDINARY` 계정과 현재 담당 지역 관계가 필요하며 서버가 지역 경계를 강제한다. |
+| 인증·인가 | [인증·인가](../../common/authentication.md) | 활성 `REGION_ADMIN` 역할과 담당 지역 배정이 필요하며 서버가 지역 경계를 강제한다. |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | `200 OK`와 빈 배열을 포함한 목록을 반환한다. |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | P0에서는 심사 대기 목록 전체를 고정 순서로 반환하므로 페이지네이션을 적용하지 않는다. |
 
@@ -132,7 +132,7 @@ Accept: application/json
 | --- | --- | --- |
 | `400` | `INVALID_INPUT` | `status`가 누락됐거나 `PENDING`이 아니다. 조회 대상과 상태를 변경하지 않는다. |
 | `401` | `UNAUTHENTICATED` | 인증 정보가 없거나 유효하지 않다. 조회 대상과 상태를 변경하지 않는다. |
-| `403` | `FORBIDDEN` | 인증 주체에게 `ROLE_REGION_ADMIN` authority가 없거나 활성 `ORDINARY` 계정 또는 현재 담당 지역 관계가 없다. 조회 대상과 상태를 변경하지 않는다. |
+| `403` | `FORBIDDEN` | 인증 주체가 활성 지역 관리자가 아니거나 담당 지역 배정이 없다. 조회 대상과 상태를 변경하지 않는다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 요청·콘텐츠·요청자 연결 정합성 오류 또는 예상하지 못한 서버 오류가 발생했다. 조회 대상과 상태를 변경하지 않는다. |
 
 #### Error Response Body
@@ -148,8 +148,8 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. 인증 주체는 `ROLE_REGION_ADMIN` snapshot을 가지고 `ACTIVE` 상태의 `ORDINARY` 계정이며 현재 담당 `region_id`를 가져야 한다.
-2. 서버는 인증 주체의 현재 담당 지역 관계에서 담당 지역을 결정하며 클라이언트가 지역을 지정하거나 변경할 수 없다.
+1. 인증 주체는 `ACTIVE` 상태이고 활성 `REGION_ADMIN` 역할과 담당 `region_id`를 가져야 한다.
+2. 서버는 인증 주체의 역할 배정에서 담당 지역을 결정하며 클라이언트가 지역을 지정하거나 변경할 수 없다.
 3. `content_withdrawal_request.status = PENDING`, 연결 콘텐츠의 `region_id = 담당 region_id`,
    `content.status = PUBLISHED`, `content.deleted_at IS NULL`인 요청만 반환한다.
 4. 다른 지역의 요청 존재 여부와 개수는 응답이나 오류로 노출하지 않는다.

@@ -23,7 +23,7 @@
 | 대상 | 기준 문서 | 이 API에서 명시할 내용 |
 | --- | --- | --- |
 | Base URL·미디어 타입·시간 형식 | [API 공통 규칙](../../common/api-conventions.md) | Base URL은 `/api/v1`이며 요청·응답은 `application/json; charset=UTF-8`이다. |
-| 인증·인가 | [인증·인가](../../common/authentication.md) | `ROLE_OPERATOR` snapshot으로 1차 인가하고, DB에서 활성 `ORDINARY` 계정, 현재 담당 지역과 회차 지역의 일치, 회차 콘텐츠의 소유 관계를 확인한다. |
+| 인증·인가 | [인증·인가](../../common/authentication.md) | `OPERATOR` 역할, 담당 지역과 회차 지역의 일치, 회차 콘텐츠의 소유 관계가 필요하다. |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | `200 OK`와 취소 결과를 반환한다. |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | 단건 명령이므로 적용하지 않는다. |
 

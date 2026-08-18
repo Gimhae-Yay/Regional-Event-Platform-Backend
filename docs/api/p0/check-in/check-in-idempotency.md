@@ -50,7 +50,7 @@ QR 발급·조회와 지역 관리자 QR 예외 조회에는 이 멱등 계약�
 ### 네트워크 재시도와 새로운 스캔
 
 1. 동일 `Idempotency-Key`와 동일 요청은 최초 명령의 네트워크 재시도다. QR 토큰이 재시도 시점에 만료됐더라도 완료 결과를 재생한다.
-2. 다른 `Idempotency-Key`의 QR 요청은 새로운 스캔이다. 토큰 형식·서명·만료, `ROLE_OPERATOR` snapshot, 활성 `ORDINARY` 계정·현재 담당 지역·소유 관계, 체크인 창, 활성 회원 연결과 예약·회차 상태를 모두 다시 검증한다.
+2. 다른 `Idempotency-Key`의 QR 요청은 새로운 스캔이다. 토큰 형식·서명·만료, 체크인 창, 활성 회원 연결, 예약·회차 상태와 현재 운영자 권한을 모두 다시 검증한다.
 3. 검증을 모두 통과한 새로운 스캔에서 같은 예약의 기존 방문과 `CHECKED_IN` 상태가 확인되면 새 방문을 만들거나 기존 성공 결과를 반환하지 않고 `409 QR_ALREADY_CHECKED_IN`과 공개 메시지 `이미 체크인된 QR입니다.`로 거부한다.
 4. 이 실패는 `status = FAILED`, `result_code = QR_ALREADY_CHECKED_IN`, 결과 FK 없음으로 완료하며 같은 키·같은 요청의 재시도에 저장된 실패를 재생한다.
 5. 실패 감사 이벤트에는 `reason_code = QR_CHECK_IN_RESERVATION_ALREADY_CHECKED_IN`을 기록한다.

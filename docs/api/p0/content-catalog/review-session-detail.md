@@ -23,7 +23,7 @@
 | 대상 | 기준 문서 | 이 API에서 명시할 내용 |
 | --- | --- | --- |
 | Base URL·미디어 타입·시각·식별자 표현 | [API 공통 규칙](../../common/api-conventions.md) | Base URL은 `/api/v1`이고, 일정 시각·사건 시각·식별자는 공통 규칙을 따른다. |
-| 인증·인가 | [인증·인가](../../common/authentication.md) | `ROLE_REGION_ADMIN` snapshot으로 1차 인가하고, DB에서 활성 `ORDINARY` 계정과 현재 담당 지역 일치를 확인한다. |
+| 인증·인가 | [인증·인가](../../common/authentication.md) | 활성 `REGION_ADMIN` 역할과 담당 지역 일치가 필요하다. |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | `200 OK`와 공통 오류 코드를 사용한다. |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | 단건 조회이므로 적용하지 않는다. |
 
@@ -127,7 +127,7 @@ Accept: application/json
 | --- | --- | --- |
 | 400 | `INVALID_INPUT` | `sessionId`가 양의 10진 문자열이 아니다. |
 | 401 | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. |
-| 403 | `FORBIDDEN` | `ROLE_REGION_ADMIN` authority가 없거나 활성 `ORDINARY` 계정 또는 담당 지역이 다르다. |
+| 403 | `FORBIDDEN` | 담당 지역 관리자 역할이 없거나 담당 지역이 다르다. |
 | 404 | `NOT_FOUND` | 회차가 없거나 `PENDING`이 아니거나, 콘텐츠가 소프트 삭제됐거나 심사 대상 상태가 아니다. |
 | 500 | `INTERNAL_SERVER_ERROR` | 회차·콘텐츠·지역 관계가 정책과 일치하지 않는다. |
 

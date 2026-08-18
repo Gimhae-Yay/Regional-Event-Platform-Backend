@@ -27,7 +27,7 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Authorization` | Y | `Bearer {accessToken}` |
+| `Authorization` | Y | `Bearer {accessToken}`. 인증 주체는 대상 이벤트 지역의 활성 지역 관리자여야 한다. |
 | `Content-Type` | N | 요청 본문이 없으므로 전송하지 않는다. |
 | `Accept` | N | `application/json` |
 
@@ -135,7 +135,7 @@ Accept: application/json
 | `400` | `INVALID_INPUT` | `exceptionId`가 양수가 아니다. 상태와 감사 기록을 변경하지 않으며 값을 수정한 뒤 재시도할 수 있다. |
 | `400` | `INVALID_TYPE` | `exceptionId`의 형식이 올바르지 않다. 상태와 감사 기록을 변경하지 않으며 값 형식을 수정한 뒤 재시도할 수 있다. |
 | `401` | `UNAUTHENTICATED` | 인증 정보가 없거나 유효하지 않다. 상태와 감사 기록을 변경하지 않으며 유효한 인증 정보로 재시도할 수 있다. |
-| `403` | `FORBIDDEN` | 공통 권한 행렬 또는 이 API의 활성 계정·담당 지역 조건을 충족하지 않는다. 예약·방문 상태를 변경하지 않으며 동일한 권한 상태로 재시도해도 성공하지 않는다. |
+| `403` | `FORBIDDEN` | 인증 주체가 활성 `REGION_ADMIN`이 아니거나 이벤트 지역이 인증 주체의 담당 지역과 다르다. 예약·방문 상태를 변경하지 않으며 동일한 권한 상태로 재시도해도 성공하지 않는다. |
 | `404` | `NOT_FOUND` | 대상 감사 이벤트가 없거나 QR 실패·보조 처리 조회 범위에 속하지 않는다. 상태와 감사 기록을 변경하지 않으며 식별자를 확인한 뒤 재시도할 수 있다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 감사·예약·회차·콘텐츠·방문 연결 정합성 오류 또는 예상하지 못한 서버 오류가 발생했다. 상태를 변경하지 않으며 일시적 장애라면 동일 요청으로 재시도할 수 있다. |
 
@@ -152,7 +152,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. Access Token의 `ROLE_REGION_ADMIN` authority를 확인하고, DB에서 활성 `ORDINARY` 계정과 현재 담당 `region_id`를 확인한다.
+1. 인증 주체는 `ACTIVE` 상태이며 담당 `region_id`가 연결된 `REGION_ADMIN`이어야 한다.
 2. `exceptionId`로 QR 실패·보조 처리 대상 `audit_event`를 조회하고 이벤트의 `region_id`가 인증 주체의 담당 지역과 일치하는지 검증한다.
 3. QR 예외 목록에서 제외되는 일반 감사 이벤트는 이 API로 조회할 수 없다.
 4. 이벤트가 검증된 예약 또는 방문을 참조하면 대상에서 예약·회차·콘텐츠를 조회하고, 각 대상의 `region_id`, `audit_event.region_id`와 인증 지역 관리자의 담당 지역이 모두 일치하는지 검증한다. 하나라도 다르면 다른 지역 정보를 반환하지 않고 정합성 오류로 처리한다.

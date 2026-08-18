@@ -9,7 +9,7 @@
 
 ## 1. 개요
 
-이 문서는 `ROLE_SUPER_ADMIN` snapshot을 가진 활성 `PRIVILEGED` 계정이 추가 고권한 계정을 생성하는 HTTP API 계약을 정의한다. 최초 슈퍼관리자는 내부
+이 문서는 활성 `SUPER_ADMIN`이 추가 고권한 계정을 생성하는 HTTP API 계약을 정의한다. 최초 슈퍼관리자는 내부
 부트스트랩 절차로만 준비하며 이 API로 생성하지 않는다.
 
 ### 요구사항 추적
@@ -25,7 +25,7 @@
 
 ## 3. 전체관리자 계정 생성
 
-`ROLE_SUPER_ADMIN` snapshot을 가진 활성 `PRIVILEGED` 계정이 `account_kind = PRIVILEGED` 계정과 활성 `platform_admin_assignment`를 생성한다. 요청으로
+활성 `SUPER_ADMIN`이 `account_kind = PRIVILEGED` 계정과 활성 `platform_admin_assignment`를 생성한다. 요청으로
 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN` 등급을 정하며, 지역 또는 일반 역할은 받지 않는다. 계정·배정·성공 감사 이벤트 중
 하나라도 실패하면 모두 생성하지 않는다.
 
@@ -143,7 +143,7 @@ Accept: application/json
 | `400` | `INVALID_INPUT` | 필수값 누락 또는 요청 필드의 형식·길이·등급 위반, 증빙 참조의 비밀값 포함이다. 계정·고권한 배정·감사 이벤트를 생성하지 않는다. |
 | `400` | `INVALID_JSON` | 요청 본문이 JSON 형식이 아니거나 역직렬화할 수 없다. 계정·고권한 배정·감사 이벤트를 생성하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 계정·고권한 배정·감사 이벤트를 생성하지 않는다. |
-| `403` | `FORBIDDEN` | 인증 주체에게 `ROLE_SUPER_ADMIN` authority가 없거나 활성 `PRIVILEGED` 계정이 아니다. 계정·고권한 배정·감사 이벤트를 생성하지 않는다. |
+| `403` | `FORBIDDEN` | 인증 주체가 활성 `SUPER_ADMIN` 고권한 배정을 갖지 않는다. 계정·고권한 배정·감사 이벤트를 생성하지 않는다. |
 | `409` | `DUPLICATE_LOGIN_IDENTIFIER` | 정규화한 이메일과 같은 로그인 식별자가 이미 존재한다. 계정·고권한 배정·감사 이벤트를 생성하지 않는다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 예상하지 못한 서버 오류가 발생했다. 트랜잭션이 커밋되지 않은 경우 계정·고권한 배정·감사 이벤트를 생성하지 않는다. |
 

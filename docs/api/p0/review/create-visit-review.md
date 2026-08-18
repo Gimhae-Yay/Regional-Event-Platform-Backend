@@ -42,7 +42,7 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Authorization` | Y | `ROLE_VISITOR` snapshot으로 1차 인가하고 DB에서 활성 `ORDINARY` 계정과 본인 방문 기록을 확인하는 `Bearer <accessToken>`이다. |
+| `Authorization` | Y | `VISITOR` 역할과 활성 회원 상태, 본인 방문 기록을 확인하는 `Bearer <accessToken>`이다. |
 | `Content-Type` | Y | `application/json; charset=UTF-8` |
 | `Accept` | N | `application/json` |
 
@@ -120,7 +120,7 @@ Accept: application/json
 | 400 | `INVALID_INPUT` | 경로 식별자 또는 별점·본문이 형식·범위를 만족하지 않거나, 같은 방문에 이미 후기가 있다. 상태를 변경하지 않으며 기존 후기는 수정 API로만 변경할 수 있다. |
 | 400 | `INVALID_JSON` | 본문을 JSON으로 역직렬화할 수 없다. 상태를 변경하지 않는다. |
 | 401 | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 상태를 변경하지 않는다. |
-| 403 | `FORBIDDEN` | `ROLE_VISITOR` authority가 없거나 활성 `ORDINARY` 계정이 아니거나 방문 기록의 작성자 연결이 인증 주체와 다르다. 상태를 변경하지 않는다. |
+| 403 | `FORBIDDEN` | 활성 `VISITOR` 역할이 없거나 방문 기록의 작성자 연결이 인증 주체와 다르다. 상태를 변경하지 않는다. |
 | 404 | `NOT_FOUND` | 방문 기록이 없거나 체크인 완료 방문으로 사용할 수 없다. 상태를 변경하지 않는다. |
 
 #### Error Response Body
@@ -139,7 +139,7 @@ Accept: application/json
 ### 처리·감사 규칙
 
 - 서버는 `visitId`의 방문 기록에서 `content_id`·`region_id`를, 인증 주체에서 작성자 식별을 파생한다. 이 값들은 요청 본문으로 받지 않는다.
-- `ROLE_VISITOR` snapshot, 활성 `ORDINARY` 계정, 방문의 작성자 연결, 체크인 완료 상태와 `review.visit_id` 유일 제약을 함께 확인하는 조건부 생성으로 방문당 후기 한 건을 보장한다. 이미 `DELETED`이거나 원문이 파기된 후기라도 같은 방문으로 다시 작성할 수 없다.
+- 활성 `VISITOR` 역할, 방문의 작성자 연결, 체크인 완료 상태와 `review.visit_id` 유일 제약을 함께 확인하는 조건부 생성으로 방문당 후기 한 건을 보장한다. 이미 `DELETED`이거나 원문이 파기된 후기라도 같은 방문으로 다시 작성할 수 없다.
 - 생성 시 후기는 `PUBLISHED` 상태가 되며, 후기 생성과 대상 유형 `REVIEW`의 성공 감사 이벤트는 하나의 트랜잭션으로 커밋한다. 성공 감사 이벤트 저장에 실패하면 트랜잭션을 롤백해 후기 생성도 성공시키지 않는다. 감사 이벤트에는 후기 원문·별점·개인정보를 복사하지 않고, 활성 작성자에 대해서만 행위자 연결을 만든다.
 - 회원 탈퇴 또는 동시 작성과 경합하면 먼저 조건을 만족해 커밋한 처리만 적용한다. 인증과 요청 형식 검증을 통과한 뒤 도메인 처리에서 거부되거나 실패한 요청은 후기 및 성공 감사 이벤트와 별도 트랜잭션에서 서버가 확인한 `requestId`, 행위자 역할·식별값, 대상 지역, 이전·이후 상태와 결과 코드를 남긴다. 탈퇴하거나 연결이 제거된 작성자에는 행위자 연결을 만들지 않는다.
 - JSON·경로·필드 형식 검증 단계에서 거부된 요청은 실패 감사 이벤트를 저장하지 않고 결과 코드만 구조화 로그로 남긴다. 이때 같은 `INVALID_INPUT`이라도 기존 후기와의 중복처럼 도메인 처리에서 판정한 거부는 실패 감사 이벤트 대상이다.

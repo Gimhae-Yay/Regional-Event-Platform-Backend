@@ -9,7 +9,7 @@
 
 ## 1. 개요
 
-`ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` snapshot을 가진 활성 `PRIVILEGED` 계정이 승인된 결제(`APPROVED` 또는 `DISCREPANT`)에 대해 전액 환불을
+활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN`이 승인된 결제(`APPROVED` 또는 `DISCREPANT`)에 대해 전액 환불을
 시작한다. 방문자의 취소·환불 요청(예약 도메인)이나 결제 불일치 조사 결과 전액환불이 필요하다고 판단된
 경우 모두 이 API로 수렴한다. 부분 환불은 지원하지 않으며, 결제당 환불은 최대 한 건이다.
 
@@ -52,7 +52,7 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Authorization` | Y | `Bearer {accessToken}` 형식의 유효한 Access Token이다. 인증 주체는 `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` snapshot을 가지고 활성 `PRIVILEGED` 계정이어야 한다. |
+| `Authorization` | Y | `Bearer {accessToken}` 형식의 유효한 Access Token이다. 인증 주체는 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN`이어야 한다. |
 | `Content-Type` | Y | `application/json; charset=UTF-8` |
 | `Accept` | N | `application/json` |
 
@@ -133,7 +133,7 @@ Accept: application/json
 | `400` | `INVALID_INPUT` | `evidenceReference` 또는 `reason`이 누락·공백·500자 초과다. 환불·시도·감사 이력을 생성하지 않는다. |
 | `400` | `INVALID_JSON` | 요청 본문이 JSON 형식이 아니거나 역직렬화할 수 없다. 환불·시도·감사 이력을 생성하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 환불·시도·감사 이력을 생성하지 않는다. |
-| `403` | `FORBIDDEN` | 인증 주체에게 `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` authority가 없거나 활성 `PRIVILEGED` 계정이 아니다. 환불·시도·감사 이력을 생성하지 않는다. |
+| `403` | `FORBIDDEN` | 인증 주체가 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN`이 아니다. 환불·시도·감사 이력을 생성하지 않는다. |
 | `404` | `NOT_FOUND` | 대상 결제가 없다. 환불·시도·감사 이력을 생성하지 않는다. |
 | `409` | `REFUND_PAYMENT_CONFLICT` | 대상 결제가 `APPROVED` 또는 `DISCREPANT`가 아니다(`PENDING`·`DECLINED`·`CANCELLED`·`EXPIRED`는 환불 대상이 아니다). 환불을 생성하지 않으며 동일 상태에서 재시도해도 성공하지 않는다. |
 | `500` | `INTERNAL_SERVER_ERROR` | PortOne 호출 실패를 포함해 예상하지 못한 서버 오류가 발생했다. 트랜잭션이 커밋되지 않은 경우 환불·시도·감사 이력을 생성하지 않으며 일시적 장애라면 동일한 요청으로 재시도할 수 있다. |
@@ -151,7 +151,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. 인증 주체는 `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` snapshot을 가지고 활성 `PRIVILEGED` 계정이어야 한다.
+1. 인증 주체는 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN` 배정을 가져야 한다.
 2. 대상 결제는 `APPROVED` 또는 `DISCREPANT`여야 한다. 그 외 상태면 `409 REFUND_PAYMENT_CONFLICT`로 거부한다.
 3. 대상 결제에 이미 `refund`가 있으면(`UNIQUE (payment_id)`) 새로 만들지 않고 기존 환불 상태를 그대로 반환해, 같은 요청의 재시도가 새 환불 효과를 만들지 않게 한다.
 4. 환불 금액은 대상 결제의 최종 금액 전체다. 부분 환불은 지원하지 않는다.

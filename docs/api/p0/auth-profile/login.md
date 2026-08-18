@@ -5,7 +5,7 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | [FR-01 인증·역할·지역 권한](../../../p0/auth-profile.md#fr-01-인증역할지역-권한) |
 | 소유 도메인 | 인증·프로필 |
-| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ADR-0005](../../../adr/0005-use-jwt-access-and-rotating-refresh-tokens.md), [ADR-0023](../../../adr/0023-manage-refresh-token-revocation-in-redis.md), [ADR-0105](../../../adr/0105-deliver-access-token-in-json-response-body.md), [ADR-0043](../../../adr/0043-define-jwt-access-token-security-profile.md), [ADR-0044](../../../adr/0044-use-delegating-bcrypt-password-encoder.md), [ADR-0045](../../../adr/0045-use-stateless-bearer-security-with-same-site-refresh-cookie.md), [ADR-0052](../../../adr/0052-define-refresh-token-security-profile-and-fail-closed-redis-state.md), [ADR-0108](../../../adr/0108-use-global-authority-snapshot-for-first-stage-rbac.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ADR-0005](../../../adr/0005-use-jwt-access-and-rotating-refresh-tokens.md), [ADR-0023](../../../adr/0023-manage-refresh-token-revocation-in-redis.md), [ADR-0105](../../../adr/0105-deliver-access-token-in-json-response-body.md), [ADR-0043](../../../adr/0043-define-jwt-access-token-security-profile.md), [ADR-0044](../../../adr/0044-use-delegating-bcrypt-password-encoder.md), [ADR-0045](../../../adr/0045-use-stateless-bearer-security-with-same-site-refresh-cookie.md), [ADR-0052](../../../adr/0052-define-refresh-token-security-profile-and-fail-closed-redis-state.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
@@ -13,10 +13,8 @@
 계약을 정의한다. Access Token은 JSON 응답 본문의 `data.accessToken`으로, Refresh Token은 `HttpOnly` 쿠키로만 전달한다.
 
 `PENDING` 운영자 신청 계정도 활성 계정이면 로그인할 수 있지만, 승인 전에는 `OPERATOR` 역할이 없어 운영자 API를
-호출할 수 없다. 이 계정은 유효한 빈 `authorities=[]` Access Token과 빈 로그인 역할 목록을 받으며 인증 전용 API에는
-각 도메인 조건으로 접근할 수 있다. Access Token에는 사용자 식별자와 서버가 계산한 전역 authority snapshot이 포함되고,
-로그인 응답의 역할 목록은 현재 DB 역할을 표시하는 정보다. 역할 보호 URL은 authority snapshot으로 1차 인가하며, 지역·소유권·
-활성 상태와 업무 상태는 요청 시점 DB에서 최종 검증한다.
+호출할 수 없다. Access Token은 사용자 식별자만 포함하며, 로그인 응답의 역할 목록은 표시용 정보다. 역할·지역·소유권·
+승인 상태의 최종 검증은 서버의 현재 데이터를 따른다.
 
 ### 요구사항 추적
 

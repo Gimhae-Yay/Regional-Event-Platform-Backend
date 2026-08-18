@@ -117,7 +117,7 @@ Accept: application/json
 | `400` | `INVALID_INPUT` | 사유가 누락·공백·500자 초과다. 상태와 감사 이력을 변경하지 않는다. |
 | `400` | `INVALID_JSON` | 요청 본문이 JSON 형식이 아니거나 역직렬화할 수 없다. 상태와 감사 이력을 변경하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 상태와 감사 이력을 변경하지 않는다. |
-| `403` | `FORBIDDEN` | Access Token에 `ROLE_OPERATOR` authority가 없거나 활성 `ORDINARY` 계정이 아니거나 대상 스탬프북이 현재 담당 범위를 벗어난다. 상태와 감사 이력을 변경하지 않는다. |
+| `403` | `FORBIDDEN` | 인증 주체가 승인된 `OPERATOR`가 아니거나 대상 스탬프북의 담당 범위를 벗어난다. 상태와 감사 이력을 변경하지 않는다. |
 | `404` | `NOT_FOUND` | 대상 스탬프북이 없다. 상태와 감사 이력을 변경하지 않는다. |
 | `409` | `STAMPBOOK_STATE_CONFLICT` | 대상 스탬프북이 `DRAFT`가 아니다. 상태와 감사 이력을 변경하지 않는다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 예상하지 못한 서버 오류가 발생했다. 트랜잭션이 커밋되지 않은 경우 상태와 감사 이력을 변경하지 않는다. |
@@ -135,7 +135,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. Access Token의 `ROLE_OPERATOR` authority를 1차로 확인한다. DB에서는 활성 `ORDINARY` 계정의 현재 담당 지역, 대상 스탬프북 지역과 모든 대상 콘텐츠의 인증 주체 소유권을 확인한다.
+1. 서버는 인증 주체가 활성·승인된 `OPERATOR`이고 대상 스탬프북 지역 및 모든 대상 콘텐츠의 소유 운영자인지 검증한다.
 2. 상태가 `DRAFT`일 때만 `PENDING_REVIEW`로 전이한다. `PENDING_REVIEW`, `PUBLISHED`, `ENDED`에서는 `STAMPBOOK_STATE_CONFLICT`를 반환한다.
 3. 대상 콘텐츠는 하나 이상이어야 하고 모두 스탬프북 지역과 같아야 한다. 완료 보상 정책은 같은 지역의 `STAMPBOOK_COMPLETION` 정책이어야 한다.
 4. 이 요청은 보상 정책을 공개 상태로 전이하지 않는다. 담당 지역 관리자의 승인 시점에 잠근 보상 정책이 `PUBLISHED`인지 최종 검증하고 스탬프북을 `PUBLISHED`로 전이하는 별도 API가 필요하다.

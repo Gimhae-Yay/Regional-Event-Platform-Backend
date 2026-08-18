@@ -140,7 +140,7 @@ Accept: application/json
 | `400` | `INVALID_TYPE` | `stampbookId`를 양의 정수 식별자로 처리할 수 없다. 데이터를 반환하거나 상태·감사 이력을 변경하지 않는다. |
 | `400` | `INVALID_INPUT` | `stampbookId`가 양의 10진 문자열 또는 signed 64비트 `Long` 범위를 만족하지 않는다. 데이터를 반환하거나 상태·감사 이력을 변경하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 상세를 반환하거나 상태·감사 이력을 변경하지 않는다. |
-| `403` | `FORBIDDEN` | Access Token에 `ROLE_REGION_ADMIN` authority가 없거나 활성 `ORDINARY` 계정이 아니거나 현재 담당 지역이 없다. 상세를 반환하거나 상태·감사 이력을 변경하지 않는다. |
+| `403` | `FORBIDDEN` | 인증 주체가 활성·승인된 `REGION_ADMIN`이 아니거나 담당 지역 배정이 없다. 상세를 반환하거나 상태·감사 이력을 변경하지 않는다. |
 | `404` | `NOT_FOUND` | 스탬프북이 없거나 인증 지역 관리자의 담당 지역에 속하지 않거나 현재 `PENDING_REVIEW`가 아니다. 상태와 감사 이력을 변경하지 않는다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 스탬프북·대상 콘텐츠·완료 보상 정책·심사 요청 감사 이력의 연결 정합성 오류 또는 예상하지 못한 서버 오류가 발생했다. 상태와 감사 이력을 변경하지 않는다. |
 
@@ -157,7 +157,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. Access Token의 `ROLE_REGION_ADMIN` authority를 1차로 확인한다. DB에서는 활성 `ORDINARY` 계정의 현재 담당 `region_id`를 조회한다. 스탬프북 `region_id`와 다르면 존재 여부를 숨기기 위해 `404 NOT_FOUND`로 처리한다.
+1. 서버는 인증 주체가 활성·승인된 `REGION_ADMIN`이고 담당 `region_id`를 보유하는지 확인한다. 스탬프북의 `region_id`와 담당 지역이 다르면 존재 여부를 숨기기 위해 `404 NOT_FOUND`로 처리한다.
 2. 같은 지역이면서 현재 `PENDING_REVIEW`인 스탬프북만 반환한다. `DRAFT`, `PUBLISHED`, `ENDED` 상태는 심사 상세 대상이 아니며 `404 NOT_FOUND`로 처리한다.
 3. `targetContents`는 연결된 모든 `stampbook_content`와 현재 콘텐츠 정보를 `contentId` 오름차순으로 조립한다. 대상 콘텐츠가 없거나 스탬프북 지역과 다른 콘텐츠가 연결된 경우 정상 응답으로 대체하지 않고 정합성 오류로 처리한다.
 4. `rewardCouponPolicy`는 현재 연결된 완료 보상 정책 정보다. 목록·상세 조회는 정책 또는 콘텐츠 상태를 바꾸지 않으며, 승인 API가 동일 지역·`STAMPBOOK_COMPLETION` 발급 경로·`PUBLISHED` 상태를 잠금 뒤 다시 검증한다.

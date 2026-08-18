@@ -27,7 +27,7 @@
 | 대상 | 기준 문서 | 이 API에서 명시할 내용 |
 | --- | --- | --- |
 | Base URL·미디어 타입·시각·식별자 표현 | [API 공통 규칙](../../common/api-conventions.md) | Base URL은 `/api/v1`이며 요청·응답은 `application/json; charset=UTF-8`이다. 일정 시각, 사건 시각과 식별자는 공통 규칙을 따른다. |
-| 인증·인가 | [인증·인가](../../common/authentication.md) | `ROLE_OPERATOR` snapshot으로 1차 인가하고, DB에서 활성 `ORDINARY` 계정, 현재 담당 지역과 콘텐츠 지역의 일치, 콘텐츠 소유 관계를 확인한다. |
+| 인증·인가 | [인증·인가](../../common/authentication.md) | 활성 `OPERATOR` 역할, 담당 지역과 콘텐츠 지역의 일치, 콘텐츠 소유 관계가 필요하다. |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | `201 Created`와 심사 대기 회차를 반환한다. 오류 코드는 공통 `ErrorCode`만 사용한다. |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | 단건 생성이므로 적용하지 않는다. |
 
@@ -102,7 +102,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. 인증 주체가 `ROLE_OPERATOR` snapshot을 가지고 활성 `ORDINARY` 계정인지, 콘텐츠의 소유 운영자이고 현재 담당 지역이 콘텐츠 지역과 일치하는지 확인한다.
+1. 인증 주체가 활성 `OPERATOR`인지, 콘텐츠의 소유 운영자이고 담당 지역이 콘텐츠 지역과 일치하는지 확인한다.
 2. 쓰기 트랜잭션에서 대상 `content` 행을 `PESSIMISTIC_WRITE`(`SELECT ... FOR UPDATE`)로 먼저 잠근다. 잠금을 얻은 뒤 콘텐츠가 존재하고 소프트 삭제되지 않았으며 상태가 `APPROVED` 또는 `PUBLISHED`인지 다시 확인한다.
 3. 일정이 현재 시각과 콘텐츠의 `publish_at` 이후인지, 체크인 창·정원이 유효한지 검증한 뒤 `content_session`을
    `status = PENDING`으로 생성한다. `region_id`는 콘텐츠의 `region_id`와 같고 `remaining_capacity`는 `capacity`와 같다.
@@ -168,7 +168,7 @@ Accept: application/json
 | 400 | `INVALID_JSON` | 요청 본문이 JSON 형식이 아니거나 역직렬화할 수 없다. 회차와 감사 기록은 생성되지 않는다. |
 | 400 | `INVALID_TYPE` | 콘텐츠 식별자를 정수로 변환할 수 없다. 회차와 감사 기록은 생성되지 않는다. |
 | 401 | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 회차와 감사 기록은 생성되지 않는다. |
-| 403 | `FORBIDDEN` | `ROLE_OPERATOR` authority가 없거나 활성 `ORDINARY` 계정, 담당 지역 또는 콘텐츠 소유 관계가 없다. 회차와 감사 기록은 생성되지 않는다. |
+| 403 | `FORBIDDEN` | `OPERATOR` 역할, 담당 지역 또는 콘텐츠 소유 관계가 없다. 회차와 감사 기록은 생성되지 않는다. |
 | 404 | `NOT_FOUND` | 콘텐츠가 없거나 소프트 삭제됐거나 생성 대상 상태(`APPROVED`, `PUBLISHED`)가 아니다. 존재하지 않는 콘텐츠에는 감사 기록을 생성하지 않는다. 인증·권한 검증을 통과한 요청이 잠금 뒤 `ENDED`를 확인한 경우에만 회차, `content_log`, 성공 감사는 생성하지 않고 별도 트랜잭션의 실패 감사 한 건을 기록한다. |
 
 #### Error Response Body

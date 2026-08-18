@@ -33,7 +33,7 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Authorization` | Y | `Bearer <accessToken>`. Access Token의 `ROLE_OPERATOR` authority를 1차로 확인하고, DB에서 활성 `ORDINARY` 계정과 현재 담당 지역 관계를 확인한다. |
+| `Authorization` | Y | `Bearer <accessToken>`. 담당 지역의 `OPERATOR` 역할이 필요하다. |
 | `Content-Type` | Y | `application/json; charset=UTF-8` |
 | `Accept` | N | `application/json` |
 
@@ -96,13 +96,13 @@ Accept: application/json
 | `400` | `INVALID_JSON` | 요청 본문을 역직렬화할 수 없다. 미션을 생성하지 않는다. |
 | `400` | `INVALID_TYPE` | 요청 필드를 선언된 타입으로 변환할 수 없다. 미션을 생성하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 미션을 생성하지 않는다. |
-| `403` | `FORBIDDEN` | Access Token에 `ROLE_OPERATOR` authority가 없거나 활성 `ORDINARY` 계정이 아니거나 현재 담당 지역과 대상 보상·콘텐츠의 지역이 다르다. 미션을 생성하지 않는다. |
+| `403` | `FORBIDDEN` | 담당 지역의 `OPERATOR` 역할이 없거나 대상 보상·콘텐츠의 지역이 다르다. 미션을 생성하지 않는다. |
 | `404` | `NOT_FOUND` | 대상 콘텐츠·쿠폰 정책을 찾을 수 없거나 대상 콘텐츠가 삭제됐다. 미션을 생성하지 않는다. |
 | `409` | `MISSION_STATE_CONFLICT` | 쿠폰 정책이 `ENDED`이거나 발급 경로가 `MISSION_REWARD`가 아니다. 미션을 생성하지 않는다. |
 
 ### 처리 규칙
 
-1. Access Token의 `ROLE_OPERATOR` authority를 1차로 확인한 뒤, DB에서 활성 `ORDINARY` 계정의 현재 담당 지역을 조회해 미션 지역으로 고정한다.
+1. 인증 주체의 담당 지역을 미션 지역으로 고정한다.
 2. `title`은 필수다. 양끝 공백을 제거하고 내부 공백은 보존한다. 정규화 뒤 Unicode code point 기준 1~255자가 아니면
    `400 INVALID_INPUT`으로 거부한다. 별도 문자 allowlist와 중복 제한은 두지 않는다.
 3. `VISIT_COUNT`는 양의 `requiredVisitCount`와 대상 콘텐츠 없음, `CONTENT_SET`은 중복 없는 하나 이상의 대상 콘텐츠와 `requiredVisitCount = null`을 검증한다. 중복 식별자를 임의로 제거하지 않고 `400 INVALID_INPUT`으로 거부한다.

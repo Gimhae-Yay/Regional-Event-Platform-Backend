@@ -70,7 +70,7 @@ Accept: application/json
 | `400` | `INVALID_INPUT` | `missionId`가 유효하지 않거나 `endsAt`이 이미 지났다. 상태를 변경하지 않는다. |
 | `400` | `INVALID_TYPE` | `missionId`를 식별자로 변환할 수 없다. 상태를 변경하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 상태를 변경하지 않는다. |
-| `403` | `FORBIDDEN` | Access Token에 `ROLE_REGION_ADMIN` authority가 없거나 활성 `ORDINARY` 계정이 아니거나 현재 담당 지역과 미션·보상 정책의 지역이 다르다. 상태를 변경하지 않는다. |
+| `403` | `FORBIDDEN` | 담당 지역의 `REGION_ADMIN` 역할이 없거나 미션과 보상 정책의 지역이 다르다. 상태를 변경하지 않는다. |
 | `404` | `NOT_FOUND` | 미션 또는 보상 쿠폰 정책을 찾을 수 없다. 상태를 변경하지 않는다. |
 | `409` | `MISSION_STATE_CONFLICT` | 잠금 뒤 지역이 비공개이거나 미션이 `PENDING_REVIEW`가 아니거나 잠근 보상 정책과 미션의 현재 보상 정책 연결이 다르거나, 보상 쿠폰 정책 또는 `CONTENT_SET` 목표 콘텐츠가 `PUBLISHED`가 아니다. 보상 정책의 발급 경로가 `MISSION_REWARD`가 아닌 경우도 포함하며 상태를 변경하지 않는다. |
 

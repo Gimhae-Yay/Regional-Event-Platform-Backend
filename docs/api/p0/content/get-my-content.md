@@ -17,14 +17,14 @@
 | 요구사항 | HTTP 계약 | 주요 데이터 |
 | --- | --- | --- |
 | `FR-03` | `GET /operator/contents/{contentId}` | `content` |
-| `AUTH-01` | `GET /operator/contents/{contentId}` | `ROLE_OPERATOR` snapshot, 활성 `ORDINARY` 계정, 현재 담당 지역, `content.operator_id`, `content.region_id` |
+| `AUTH-01` | `GET /operator/contents/{contentId}` | 운영자 역할, `content.operator_id`, `content.region_id` |
 
 ## 2. 공통 계약 참조
 
 | 대상 | 기준 문서 | 이 API에서 명시할 내용 |
 | --- | --- | --- |
 | Base URL·미디어 타입·시각·식별자 | [API 공통 규칙](../../common/api-conventions.md) | 실제 경로는 `/api/v1/operator/contents/{contentId}`다. |
-| 인증·인가 | [인증·인가](../../common/authentication.md) | `ROLE_OPERATOR` snapshot으로 1차 인가하고, DB에서 활성 `ORDINARY` 계정, 현재 담당 지역 일치와 콘텐츠 소유 관계를 확인한다. |
+| 인증·인가 | [인증·인가](../../common/authentication.md) | 승인된 `OPERATOR` 역할, 담당 지역 일치와 콘텐츠 소유 관계가 필요하다. |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | `200 OK`와 현재 콘텐츠 정보를 반환한다. |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | 단건 조회이므로 적용하지 않는다. |
 
@@ -140,7 +140,7 @@ Accept: application/json
 | --- | --- | --- |
 | `400` | `INVALID_INPUT` | `contentId`가 양의 10진 문자열 형식이 아니다. 콘텐츠를 반환하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 콘텐츠를 반환하지 않는다. |
-| `403` | `FORBIDDEN` | `ROLE_OPERATOR` authority가 없거나 활성 `ORDINARY` 계정, 담당 지역 또는 콘텐츠 소유 관계가 맞지 않는다. 콘텐츠를 반환하지 않는다. |
+| `403` | `FORBIDDEN` | 운영자 역할, 담당 지역 또는 콘텐츠 소유 관계가 없다. 콘텐츠를 반환하지 않는다. |
 | `404` | `NOT_FOUND` | 콘텐츠가 없거나 소프트 삭제됐다. 콘텐츠를 반환하지 않는다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 예상하지 못한 서버 오류가 발생했다. 콘텐츠를 반환하지 않는다. |
 

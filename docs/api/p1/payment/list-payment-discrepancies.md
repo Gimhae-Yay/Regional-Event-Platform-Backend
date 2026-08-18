@@ -9,7 +9,7 @@
 
 ## 1. 개요
 
-`ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` snapshot을 가진 활성 `PRIVILEGED` 계정이 수동 조사가 필요한 결제 불일치 목록을 조회한다. 기본값은
+활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN`이 수동 조사가 필요한 결제 불일치 목록을 조회한다. 기본값은
 아직 처리하지 않은(`OPEN`) 불일치이며, 조회는 불일치·결제 상태를 변경하지 않는다.
 
 ### 요구사항 추적
@@ -43,7 +43,7 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Authorization` | Y | `Bearer {accessToken}` 형식의 유효한 Access Token이다. 인증 주체는 `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` snapshot을 가지고 활성 `PRIVILEGED` 계정이어야 한다. |
+| `Authorization` | Y | `Bearer {accessToken}` 형식의 유효한 Access Token이다. 인증 주체는 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN`이어야 한다. |
 | `Content-Type` | N | 요청 본문이 없으므로 전송하지 않는다. |
 | `Accept` | N | `application/json` |
 
@@ -120,7 +120,7 @@ Accept: application/json
 | --- | --- | --- |
 | `400` | `INVALID_INPUT` | `status`가 정의된 값 중 하나가 아니다. 조회 상태를 변경하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 조회 결과를 반환하지 않는다. |
-| `403` | `FORBIDDEN` | 인증 주체에게 `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` authority가 없거나 활성 `PRIVILEGED` 계정이 아니다. 조회 결과를 반환하지 않는다. |
+| `403` | `FORBIDDEN` | 인증 주체가 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN`이 아니다. 조회 결과를 반환하지 않는다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 예상하지 못한 서버 오류 또는 불일치·결제 연결 정합성 오류가 발생했다. 조회 상태를 변경하지 않는다. |
 
 #### Error Response Body
@@ -136,7 +136,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. 인증 주체는 `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` snapshot을 가지고 활성 `PRIVILEGED` 계정이어야 한다. 지역 관리자와 콘텐츠 운영자는 이 API를 호출할 수 없다.
+1. 인증 주체는 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN` 배정을 가져야 한다. 지역 관리자와 콘텐츠 운영자는 이 API를 호출할 수 없다.
 2. `status`를 생략하면 `OPEN`으로 조회한다. `OPEN`, `RESOLVED_NO_ISSUE`, `REFUND_REQUESTED` 외의 값은 빈 목록으로 대체하지 않고 `400 INVALID_INPUT`으로 거부한다.
 3. 목록은 `detectedAt` 오름차순, 같은 시각이면 `discrepancyId` 오름차순으로 정렬해 오래 대기한 건을 먼저 표시한다.
 4. `finalAmount`, `currency`는 대상 결제에 연결된 `reservation_price_snapshot`에서 조회한다.

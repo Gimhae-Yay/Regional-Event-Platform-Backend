@@ -26,7 +26,7 @@
 | 대상 | 기준 문서 | 이 API에서 명시할 내용 |
 | --- | --- | --- |
 | Base URL·미디어 타입·시간 형식 | [API 공통 규칙](../../common/api-conventions.md) | 실제 경로는 `/api/v1/region-admin/contents/{contentId}/suspend`; 생성·수정·심사·처리 이벤트 시각은 ISO 8601 UTC `Z` 문자열이며 콘텐츠 일정값만 `+09:00` 오프셋 문자열 |
-| 인증·인가 | [인증·인가](../../common/authentication.md) | `ROLE_REGION_ADMIN` snapshot, 활성 `ORDINARY` 계정과 대상 콘텐츠의 현재 담당 지역 일치가 필요 |
+| 인증·인가 | [인증·인가](../../common/authentication.md) | 활성 `REGION_ADMIN`과 대상 콘텐츠의 담당 지역 일치가 필요 |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | `200 OK`와 `CONTENT_SUSPEND_CONFLICT`를 포함한 API별 오류 코드 |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | 명령 API이므로 적용하지 않음 |
 
@@ -55,7 +55,7 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Authorization` | Y | `Bearer {accessToken}`. 인증 주체는 `ROLE_REGION_ADMIN` snapshot을 가져야 하며 DB에서 활성 `ORDINARY` 계정인지 확인한다. |
+| `Authorization` | Y | `Bearer {accessToken}`. 인증 주체는 활성 상태의 `REGION_ADMIN`이어야 한다. |
 | `Content-Type` | Y | `application/json` |
 | `Accept` | N | `application/json` |
 
@@ -127,7 +127,7 @@ Accept: application/json
 | `400` | `INVALID_TYPE` | `contentId`를 양의 10진 문자열 식별자로 해석할 수 없다. 콘텐츠·홀드·로그·감사 기록을 변경하지 않으며 값 형식을 수정한 뒤 재시도할 수 있다. |
 | `400` | `INVALID_JSON` | 요청 본문을 역직렬화할 수 없다. 콘텐츠·홀드·로그·감사 기록을 변경하지 않으며 JSON 형식을 수정한 뒤 재시도할 수 있다. |
 | `401` | `UNAUTHENTICATED` | 인증 정보가 없거나 유효하지 않다. 콘텐츠·홀드·로그·감사 기록을 변경하지 않으며 유효한 인증 정보로 재시도할 수 있다. |
-| `403` | `FORBIDDEN` | 인증 주체에게 `ROLE_REGION_ADMIN` authority가 없거나 활성 `ORDINARY` 계정이 아니거나 대상 콘텐츠의 지역이 현재 담당 지역과 일치하지 않는다. 콘텐츠·홀드·로그·감사 기록을 변경하지 않으며 동일한 권한 상태로 재시도해도 성공하지 않는다. |
+| `403` | `FORBIDDEN` | 인증 주체가 활성 `REGION_ADMIN`이 아니거나 대상 콘텐츠의 지역이 담당 지역과 일치하지 않는다. 콘텐츠·홀드·로그·감사 기록을 변경하지 않으며 동일한 권한 상태로 재시도해도 성공하지 않는다. |
 | `404` | `NOT_FOUND` | 대상 콘텐츠를 찾을 수 없다. 콘텐츠·홀드·로그·감사 기록을 변경하지 않으며 식별자를 확인한 뒤 재시도할 수 있다. |
 | `409` | `CONTENT_SUSPEND_CONFLICT` | 콘텐츠가 `PUBLISHED`가 아니거나, 다른 상태 전이가 먼저 성공했다. 콘텐츠·홀드·로그·성공 감사 기록을 부분 변경하지 않으며 현재 상태를 다시 조회해야 한다. 롤백 뒤에는 비개인 실패 `audit_event`를 별도 트랜잭션으로 기록한다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 콘텐츠·회차·홀드 연결의 정합성 오류 또는 예상하지 못한 서버 오류가 발생했다. 트랜잭션이 커밋되지 않은 경우 콘텐츠·홀드·로그·감사 기록은 변경되지 않는다. |
@@ -145,7 +145,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. 인증 주체는 `ROLE_REGION_ADMIN` snapshot을 가지고 활성 `ORDINARY` 계정이어야 하며, 현재 담당 `region_id`가 연결돼야 한다.
+1. 인증 주체는 활성 상태이며 담당 `region_id`가 연결된 `REGION_ADMIN`이어야 한다.
 2. 대상 콘텐츠 `region_id`와 인증 지역 관리자의 담당 `region_id`가 일치해야 한다.
 3. 서버는 대상 `content` 행을 잠근 뒤 `PUBLISHED`인 경우에만 `PUBLISHED → SUSPENDED` 전이를 적용한다.
 4. 신규 홀드 생성은 `content → content_session` 순서로 실제 정원 행을 잠근 뒤 콘텐츠가 `PUBLISHED`인지 다시 확인한다. 이어서 `content_session.remaining_capacity >= quantity` 조건부 갱신으로 정원을 차감한 경우에만 `ACTIVE` 홀드를 생성한다. 아직 없는 `capacity_hold` 행은 잠금 대상으로 삼지 않는다.

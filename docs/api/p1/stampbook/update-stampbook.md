@@ -130,7 +130,7 @@ Accept: application/json
 | `400` | `INVALID_INPUT` | 수정 필드 미제공, 제목 공백·100자 초과, 필드 형식·범위 위반, 빈·중복 콘텐츠 배열 또는 사유 형식 위반이다. 스탬프북·대상 연결·감사 이력을 변경하지 않는다. |
 | `400` | `INVALID_JSON` | 요청 본문이 JSON 형식이 아니거나 역직렬화할 수 없다. 스탬프북·대상 연결·감사 이력을 변경하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 스탬프북·대상 연결·감사 이력을 변경하지 않는다. |
-| `403` | `FORBIDDEN` | Access Token에 `ROLE_OPERATOR` authority가 없거나 활성 `ORDINARY` 계정이 아니거나 스탬프북 지역·대상 콘텐츠가 현재 담당 범위를 벗어난다. 스탬프북·대상 연결·감사 이력을 변경하지 않는다. |
+| `403` | `FORBIDDEN` | 인증 주체가 승인된 `OPERATOR`가 아니거나 스탬프북 지역·대상 콘텐츠의 담당 범위를 벗어난다. 스탬프북·대상 연결·감사 이력을 변경하지 않는다. |
 | `404` | `NOT_FOUND` | 대상 스탬프북, 요청 대상 콘텐츠 또는 보상 쿠폰 정책이 없다. 스탬프북·대상 연결·감사 이력을 변경하지 않는다. |
 | `409` | `STAMPBOOK_STATE_CONFLICT` | 대상 스탬프북이 `DRAFT`가 아니다. 스탬프북·대상 연결·감사 이력을 변경하지 않는다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 예상하지 못한 서버 오류가 발생했다. 트랜잭션이 커밋되지 않은 경우 스탬프북·대상 연결·감사 이력을 변경하지 않는다. |
@@ -148,7 +148,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. Access Token의 `ROLE_OPERATOR` authority를 1차로 확인한다. DB에서는 활성 `ORDINARY` 계정의 현재 담당 지역, 대상 스탬프북 지역과 기존·변경 대상 콘텐츠의 인증 주체 소유권을 확인한다.
+1. 서버는 인증 주체가 활성·승인된 `OPERATOR`이고 대상 스탬프북 지역과 기존·변경 대상 콘텐츠의 소유 운영자인지 검증한다.
 2. 스탬프북은 `DRAFT`에서만 수정할 수 있다. `PENDING_REVIEW`, `PUBLISHED`, `ENDED`에서는 `STAMPBOOK_STATE_CONFLICT`를 반환한다.
 3. `title`을 제공하면 앞뒤 공백을 제거한 1~100자 값으로 `stampbook.title`을 교체한다. 대상 콘텐츠 제목을 조합하거나 대체하지 않는다.
 4. `contentIds`를 제공하면 기존 `stampbook_content` 전체를 교체하며, 수정 후에도 대상 콘텐츠가 하나 이상이어야 한다.

@@ -37,7 +37,7 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Authorization` | Y | `Bearer {accessToken}` |
+| `Authorization` | Y | `Bearer {accessToken}`. 인증 주체는 해당 콘텐츠의 승인된 소유 운영자여야 한다. |
 | `Idempotency-Key` | Y | 한 번의 체크인 시도에 대해 클라이언트가 생성한 비어 있지 않은 `checkInRequestId`. 같은 명령의 네트워크 재시도에는 같은 값을 사용하고 새 시도에는 새 값을 사용한다. |
 | `Content-Type` | Y | `application/json` |
 | `Accept` | N | `application/json` |
@@ -116,7 +116,7 @@ Accept: application/json
 | `400` | `INVALID_INPUT` | `Idempotency-Key`가 없거나 비어 있거나, `reservationNo`가 없거나 공백이거나, `reason`이 허용 값이 아니다. 멱등 기록, 예약, 방문과 감사 기록을 변경하지 않으며 요청 값을 수정한 뒤 재시도할 수 있다. |
 | `400` | `INVALID_JSON` | 요청 본문을 역직렬화할 수 없다. 멱등 기록, 예약, 방문과 감사 기록을 변경하지 않으며 JSON 형식을 수정한 뒤 재시도할 수 있다. |
 | `401` | `UNAUTHENTICATED` | 인증 정보가 없거나 유효하지 않다. 멱등 기록, 예약, 방문과 감사 기록을 변경하지 않으며 유효한 인증 정보로 재시도할 수 있다. |
-| `403` | `FORBIDDEN` | 공통 권한 행렬 또는 이 API의 활성 계정·지역·소유권 조건을 충족하지 않는다. 멱등 기록, 예약과 방문을 변경하지 않으며 동일한 권한 상태로 재시도해도 성공하지 않는다. |
+| `403` | `FORBIDDEN` | 인증 주체가 승인된 `OPERATOR`가 아니거나 예약의 콘텐츠 소유·지역 범위와 일치하지 않는다. 멱등 기록, 예약과 방문을 변경하지 않으며 동일한 권한 상태로 재시도해도 성공하지 않는다. |
 | `404` | `NOT_FOUND` | `reservationNo`와 일치하는 예약이 없다. 멱등 기록, 예약과 방문을 변경하지 않으며 예약번호를 확인한 뒤 재시도할 수 있다. |
 | `409` | `IDEMPOTENCY_KEY_CONFLICT` | 같은 운영자의 `CHECK_IN` 명령에서 이미 다른 예약·방식·사유에 사용한 `Idempotency-Key`다. 방문을 만들지 않으며 같은 키로 재시도할 수 없고 새 명령에는 새 키를 사용해야 한다. |
 | `409` | `IDEMPOTENCY_REQUEST_IN_PROGRESS` | 같은 운영자·키·예약번호·방식·사유의 최초 요청이 아직 처리 중이다. 새 방문을 만들지 않으며 동일 키로 재시도할 수 있다. |
@@ -136,7 +136,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. Access Token의 `ROLE_OPERATOR` authority를 1차로 확인한다. DB에서는 활성 `ORDINARY` 계정, 현재 담당 `region_id`, 대상 콘텐츠 소유 관계와 회차·예약 상태를 확인한다. `REGION_ADMIN`은 이 명령을 호출할 수 없다.
+1. 인증 주체는 `ACTIVE` 상태이며 승인된 `OPERATOR` 역할과 담당 `region_id`를 가진 회원이어야 한다. `REGION_ADMIN`은 이 명령을 호출할 수 없다.
 2. `reservation_no`로 예약을 조회한 뒤 예약·회차·콘텐츠의 지역이 인증 운영자의 담당 지역과 일치하고, 콘텐츠의 `operator_id`가 인증 운영자와 일치하는지 검증한다.
 3. 보조 조회의 `canCheckIn` 값이나 이전 조회 시각을 체크인 승인 근거로 사용하지 않는다. 이 명령의 MySQL 트랜잭션에서 현재 상태를 다시 검증한다.
 4. `reason`은 `QR_NOT_AVAILABLE` 또는 `QR_SCAN_FAILED`여야 하며 감사 기록의 복합 사유 코드에 선택한 현장 사유를 포함한다.

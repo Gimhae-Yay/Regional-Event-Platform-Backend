@@ -28,7 +28,7 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Authorization` | Y | `Bearer {accessToken}`. Access Token에 `ROLE_OPERATOR` authority가 있어야 하며, DB에서 활성 `ORDINARY` 계정, 현재 담당 지역 관계, 정책 콘텐츠 소유권을 확인한다. |
+| `Authorization` | Y | `Bearer {accessToken}`. 인증 주체는 `ACTIVE` 회원이고 현재 `OPERATOR` 역할이어야 하며, 정책 콘텐츠와 `region_id`가 같고 정책 콘텐츠를 소유해야 한다. |
 | `Content-Type` | Y | `application/json` |
 | `Accept` | N | `application/json` |
 
@@ -112,7 +112,7 @@ Accept: application/json
 | `400` | `INVALID_JSON` | 요청 본문 형식이 올바르지 않다. 정책은 변경하지 않는다. |
 | `400` | `INVALID_TYPE` | `couponPolicyId`의 형식이 올바르지 않다. 정책은 변경하지 않는다. |
 | `401` | `UNAUTHENTICATED` | 인증 정보가 없거나 유효하지 않다. |
-| `403` | `FORBIDDEN` | Access Token에 `ROLE_OPERATOR` authority가 없거나, 활성 `ORDINARY` 계정이 아니거나, 정책 콘텐츠와 현재 담당 지역이 다르거나, 정책 콘텐츠를 소유하지 않는다. |
+| `403` | `FORBIDDEN` | 인증 주체가 `ACTIVE` 회원 또는 현재 `OPERATOR` 역할이 아니거나, 정책 콘텐츠와 `region_id`가 다르거나, 정책 콘텐츠를 소유하지 않는다. |
 | `404` | `NOT_FOUND` | 대상 쿠폰 정책을 찾을 수 없다. |
 | `409` | `COUPON_POLICY_CONFLICT` | 정책이 `DRAFT`가 아니거나 수정 가능한 조건이 아니다. 정책은 변경하지 않는다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 쿠폰 정책 수정 중 예상하지 못한 서버 오류가 발생했다. |
@@ -130,7 +130,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. Access Token의 `ROLE_OPERATOR` authority를 1차로 확인한다. DB에서는 활성 `ORDINARY` 계정, 인증 주체와 대상 정책 `contentId` 콘텐츠의 현재 담당 지역 일치 및 소유권을 확인한다.
+1. 인증 주체는 `ACTIVE` 회원이고 현재 `OPERATOR` 역할이어야 하며, 인증 주체와 대상 정책의 `contentId`가 가리키는 콘텐츠는 `region_id`가 같고 인증 주체가 해당 콘텐츠를 소유해야 한다.
 2. 대상 정책은 `DRAFT` 상태여야 한다.
 3. `contentId`, `regionId`, `issueSourceType`은 수정하지 않는다. 다른 콘텐츠나 발급 경로가 필요하면 새 정책을 생성한다.
 4. 요청에 포함된 필드만 변경한 뒤 `discountAmount >= 1`, `minimumPaymentAmount >= discountAmount`,

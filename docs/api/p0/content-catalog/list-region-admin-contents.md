@@ -29,7 +29,7 @@
 | 대상 | 기준 문서 | 이 API에서 명시할 내용 |
 | --- | --- | --- |
 | Base URL·미디어 타입·시각·식별자 | [API 공통 규칙](../../common/api-conventions.md) | 실제 경로는 `/api/v1/region-admin/contents?status={status}`다. 공개 예정 시각은 `+09:00`, 상태 전이 시각은 UTC `Z`, 식별자는 양의 10진 문자열로 표현한다. |
-| 인증·인가 | [인증·인가](../../common/authentication.md) | `ROLE_REGION_ADMIN` snapshot과 활성 `ORDINARY` 계정·현재 담당 지역 조건이 필요하다. |
+| 인증·인가 | [인증·인가](../../common/authentication.md) | 활성 `REGION_ADMIN`과 인증 주체의 담당 지역 조건이 필요하다. |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | `200 OK`와 요청한 상태의 콘텐츠 배열을 반환한다. |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | P0 단순 목록으로 페이지네이션을 적용하지 않는다. |
 
@@ -65,7 +65,7 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Authorization` | Y | `Bearer {accessToken}`. 인증 주체는 `ROLE_REGION_ADMIN` snapshot을 가져야 하며 DB에서 활성 `ORDINARY` 계정인지 확인한다. |
+| `Authorization` | Y | `Bearer {accessToken}`. 인증 주체는 활성 상태의 지역 관리자여야 한다. |
 | `Accept` | N | `application/json` |
 
 #### Path Variable
@@ -178,7 +178,7 @@ Accept: application/json
 | --- | --- | --- |
 | `400` | `INVALID_INPUT` | `status`가 누락됐거나 `PENDING`, `APPROVED` 중 하나가 아니다. 조회 대상과 상태를 변경하지 않으며 요청 값을 수정한 뒤 재시도할 수 있다. |
 | `401` | `UNAUTHENTICATED` | 인증 정보가 없거나 유효하지 않다. 조회 대상과 상태를 변경하지 않으며 유효한 인증 정보로 재시도할 수 있다. |
-| `403` | `FORBIDDEN` | 인증 주체에게 `ROLE_REGION_ADMIN` authority가 없거나 활성 `ORDINARY` 계정 또는 담당 지역 관계가 유효하지 않다. 조회 대상과 상태를 변경하지 않으며 동일한 권한 상태로 재시도해도 성공하지 않는다. |
+| `403` | `FORBIDDEN` | 인증 주체가 활성 상태의 지역 관리자가 아니거나 담당 지역이 유효하지 않다. 조회 대상과 상태를 변경하지 않으며 동일한 권한 상태로 재시도해도 성공하지 않는다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 콘텐츠·소유 운영자·상태 로그·대표 이미지 연결 정합성 오류 또는 예상하지 못한 서버 오류가 발생했다. 조회 대상과 상태를 변경하지 않으며 일시적 장애라면 동일 요청으로 재시도할 수 있지만 정합성 오류는 해결 전까지 재시도해도 성공하지 않는다. |
 
 #### Error Response Body
@@ -194,7 +194,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. 인증 주체는 `ROLE_REGION_ADMIN` snapshot을 가지고 `ACTIVE` 상태의 `ORDINARY` 계정이어야 하며, 현재 담당 `region_id`를 가져야 한다.
+1. 인증 주체는 `ACTIVE` 상태이고 `REGION_ADMIN` 역할과 담당 `region_id`를 가진 회원이어야 한다.
 2. 서버는 인증 주체의 역할 배정에서 담당 지역을 결정하며 클라이언트가 지역을 지정하거나 변경할 수 없다.
 3. 모든 조회는 `content.region_id = 인증 지역 관리자의 담당 region_id`, `content.status = 요청 status`, `content.deleted_at IS NULL`을 만족해야 한다.
 4. `status=PENDING`이면 최신 `PENDING` 상태 로그의 직전 상태 로그가 `APPROVED`가 아닌 최초 심사 또는 반려 후 재제출 콘텐츠만 반환한다. 공개 전 수정 심사 때문에 `APPROVED → PENDING`이 된 콘텐츠는 [심사 대기 수정본 목록](list-pending-content-revisions.md)에서 반환한다.

@@ -23,7 +23,7 @@
 | 대상 | 기준 문서 | 이 API에서 명시할 내용 |
 | --- | --- | --- |
 | Base URL·미디어 타입·시각·식별자 표현 | [API 공통 규칙](../../common/api-conventions.md) | Base URL은 `/api/v1`이고, 사건 시각과 식별자는 공통 규칙을 따른다. |
-| 인증·인가 | [인증·인가](../../common/authentication.md) | `ROLE_REGION_ADMIN` snapshot으로 1차 인가하고, DB에서 활성 `ORDINARY` 계정과 현재 담당 지역 일치를 확인한다. |
+| 인증·인가 | [인증·인가](../../common/authentication.md) | 활성 `REGION_ADMIN` 역할과 담당 지역 일치가 필요하다. |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | `200 OK`와 `SESSION_STATE_CONFLICT`를 포함한 공통 오류 코드를 사용한다. |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | 단건 명령이므로 적용하지 않는다. |
 
@@ -127,7 +127,7 @@ Accept: application/json
 | 400 | `INVALID_INPUT` | `revisionId`가 양의 10진 문자열이 아니거나 `reason`이 누락·공백이다. |
 | 400 | `INVALID_JSON` | 요청 본문이 JSON 형식이 아니거나 역직렬화할 수 없다. |
 | 401 | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. |
-| 403 | `FORBIDDEN` | `ROLE_REGION_ADMIN` authority가 없거나 활성 `ORDINARY` 계정 또는 담당 지역이 다르다. |
+| 403 | `FORBIDDEN` | 담당 지역 관리자 역할이 없거나 담당 지역이 다르다. |
 | 404 | `NOT_FOUND` | 수정 요청이 없거나 콘텐츠가 소프트 삭제됐다. |
 | 409 | `SESSION_STATE_CONFLICT` | 수정 요청이 `PENDING`이 아니거나 다른 심사가 먼저 종결됐다. 수정 요청·실제 회차·감사 기록은 변경되지 않으며 최신 상태를 확인해야 한다. |
 

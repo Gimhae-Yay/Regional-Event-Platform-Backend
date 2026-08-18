@@ -96,13 +96,13 @@ Accept: application/json
 | `400` | `INVALID_INPUT` | `missionId`가 유효하지 않다. |
 | `400` | `INVALID_TYPE` | `missionId`를 식별자로 변환할 수 없다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. |
-| `403` | `FORBIDDEN` | Access Token에 `ROLE_REGION_ADMIN` authority가 없거나 활성 `ORDINARY` 계정이 아니거나 현재 담당 지역과 미션 지역이 다르다. |
+| `403` | `FORBIDDEN` | 담당 지역의 `REGION_ADMIN` 역할이 없거나 미션 지역이 다르다. |
 | `404` | `NOT_FOUND` | 미션을 찾을 수 없다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 성공 감사 이벤트가 아래 `action` 매핑과 일치하지 않아 완전한 이력을 만들 수 없다. 일부 이력을 반환하지 않는다. |
 
 ### 처리 규칙
 
-1. Access Token의 `ROLE_REGION_ADMIN` authority를 1차로 확인하고, DB에서 활성 `ORDINARY` 계정의 현재 담당 지역 미션 이력만 조회할 수 있다.
+1. 인증 지역 관리자의 담당 지역 미션 이력만 조회할 수 있다.
 2. 이력은 `target_type = MISSION AND target_id = missionId`, `result = SUCCESS`,
    `occurred_at >= DB 현재 시각 - 90일`인 `audit_event`와 탈퇴 전 활성 처리자의
    `audit_event_actor_link`를 기준으로 조회한다. 정리 작업이 아직 삭제하지 않은 90일 초과 행도 반환하지 않는다.

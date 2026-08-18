@@ -118,7 +118,7 @@ Accept: application/json
 | `400` | `INVALID_INPUT` | `stampbookId`가 범위를 벗어나거나 반려 사유가 누락·공백·500자 초과다. 상태와 감사 이력을 변경하지 않는다. |
 | `400` | `INVALID_JSON` | 요청 본문이 JSON 형식이 아니거나 역직렬화할 수 없다. 상태와 감사 이력을 변경하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 상태와 감사 이력을 변경하지 않는다. |
-| `403` | `FORBIDDEN` | Access Token에 `ROLE_REGION_ADMIN` authority가 없거나 활성 `ORDINARY` 계정이 아니거나 스탬프북 지역이 현재 담당 지역과 다르다. 상태와 감사 이력을 변경하지 않는다. |
+| `403` | `FORBIDDEN` | 인증 주체가 활성·승인된 담당 지역의 `REGION_ADMIN`이 아니거나 스탬프북 지역이 다르다. 상태와 감사 이력을 변경하지 않는다. |
 | `404` | `NOT_FOUND` | 대상 스탬프북이 없다. 상태와 감사 이력을 변경하지 않는다. |
 | `409` | `STAMPBOOK_STATE_CONFLICT` | 잠금 뒤 스탬프북이 `PENDING_REVIEW`가 아니다. 상태와 감사 이력을 변경하지 않는다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 예상하지 못한 서버 오류 또는 감사 기록 실패가 발생했다. 트랜잭션이 커밋되지 않은 경우 상태와 감사 이력을 변경하지 않는다. |
@@ -136,7 +136,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. Access Token의 `ROLE_REGION_ADMIN` authority를 1차로 확인한다. DB에서는 활성 `ORDINARY` 계정의 현재 담당 `region_id`를 조회하고, 스탬프북 `region_id`와 다르면 `403 FORBIDDEN`으로 거부한다.
+1. 서버는 인증 주체가 활성·승인된 `REGION_ADMIN`이고 담당 `region_id`를 보유하는지 확인한다. 스탬프북의 `region_id`와 담당 지역이 다르면 `403 FORBIDDEN`으로 거부한다.
 2. 승인과 같은 잠금 순서를 사용한다. 현재 연결된 완료 보상 쿠폰 정책 행을 `PESSIMISTIC_WRITE`로 먼저 잠그고 스탬프북 행을 잠근 뒤, 모든 대상 콘텐츠 행을 `contentId` 오름차순으로 잠근다.
 3. 잠금 뒤 완료 보상 정책의 현재 연결·지역·발급 경로·상태와 대상 콘텐츠의 지역·소유 관계를 다시 조회한다. 이 검증 결과는 반려 사유를 판단하는 심사 근거이며, 보상 정책이 아직 `PUBLISHED`가 아니거나 대상 콘텐츠 조건이 맞지 않아도 반려 자체는 막지 않는다. 반려는 운영자가 그 조건을 보완할 수 있도록 `DRAFT`로 되돌리는 처리다.
 4. 잠금 뒤 스탬프북이 `PENDING_REVIEW`인 경우에만 DB 현재 시각을 한 번 읽어 `rejectedAt`으로 고정하고 `PENDING_REVIEW → DRAFT`로 전이한다. 같은 스탬프북에 대한 승인·반려 또는 보상 정책 종료 요청은 같은 잠금 순서로 직렬화되므로 최초 하나만 성공하고, 뒤 요청은 잠금 뒤 현재 상태를 다시 확인해 `409 STAMPBOOK_STATE_CONFLICT`를 반환한다.

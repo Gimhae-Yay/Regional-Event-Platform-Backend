@@ -46,7 +46,7 @@
 | 대상 | 기준 문서 | 이 도메인에서 명시할 내용 |
 | --- | --- | --- |
 | Base URL·미디어 타입·시각·식별자 | [API 공통 규칙](../../common/api-conventions.md) | Base URL은 `/api/v1`이다. 미션 종료 예정 시각은 `+09:00`, 처리 시각은 UTC `Z`를 사용한다. |
-| 인증·인가 | [인증·인가](../../common/authentication.md) | 공개 조회는 인증 선택이다. 참여·내 조회·보상 수령은 `ROLE_VISITOR`, 운영자 API는 `ROLE_OPERATOR`, 지역 관리자 API는 `ROLE_REGION_ADMIN` snapshot으로 1차 인가한다. DB에서는 활성 `ORDINARY` 계정, 운영자·지역 관리자의 현재 담당 지역 관계와 대상·소유권·업무 상태를 확인한다. |
+| 인증·인가 | [인증·인가](../../common/authentication.md) | 공개 조회는 인증 선택, 참여·내 조회·보상 수령은 방문자 인증, 운영자 API는 담당 지역 `OPERATOR`, 지역 관리자 API는 담당 지역 `REGION_ADMIN`을 요구한다. |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | API별 성공 상태, `data` 필드와 미션 도메인 오류 코드를 명시한다. |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | 목록 API는 공통 `page`, `size`, `totalElements`, `totalPages` 계약을 사용하고 `status` 필터와 고정 정렬을 API별로 정의한다. |
 

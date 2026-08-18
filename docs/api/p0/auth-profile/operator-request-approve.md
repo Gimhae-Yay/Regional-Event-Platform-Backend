@@ -23,7 +23,7 @@
 | 대상 | 기준 문서 | 이 API에서 명시할 내용 |
 | --- | --- | --- |
 | Base URL·미디어 타입·시간 형식 | [API 공통 규칙](../../common/api-conventions.md) | Base URL은 `/api/v1`이고 응답은 `application/json; charset=UTF-8`이다. |
-| 인증·인가 | [인증·인가](../../common/authentication.md) | `ROLE_REGION_ADMIN` snapshot으로 1차 인가하고, DB에서 활성 `ORDINARY` 계정과 신청 요청 지역에 대한 현재 담당 지역 일치를 확인한다. |
+| 인증·인가 | [인증·인가](../../common/authentication.md) | `REGION_ADMIN` 역할과 신청 요청 지역과 같은 담당 지역이 필요하다. |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | `200 OK`와 승인·역할·담당 지역 결과를 반환한다. |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | 단건 명령이므로 적용하지 않는다. |
 
@@ -123,7 +123,7 @@ Accept: application/json
 | 400 | `INVALID_INPUT` | `requestId`가 양의 정수가 아니다. 신청·역할·담당 지역은 변경되지 않으며 값을 수정해 다시 요청할 수 있다. |
 | 400 | `INVALID_TYPE` | `requestId`를 정수로 변환할 수 없다. 신청·역할·담당 지역은 변경되지 않는다. |
 | 401 | `UNAUTHENTICATED` | Access Token이 없거나 만료·변조되었다. 신청·역할·담당 지역은 변경되지 않으며 유효한 Token으로 다시 요청할 수 있다. |
-| 403 | `FORBIDDEN` | 공통 권한 행렬 또는 이 API의 활성 계정·담당 지역 조건을 충족하지 않는다. 신청·역할·담당 지역은 변경되지 않는다. |
+| 403 | `FORBIDDEN` | `REGION_ADMIN` 역할 또는 신청 요청 지역과 같은 담당 지역이 없다. 신청·역할·담당 지역은 변경되지 않는다. |
 | 404 | `NOT_FOUND` | 신청이 없거나 인증된 지역 관리자의 담당 지역에 속하지 않는다. 신청·역할·담당 지역은 변경되지 않는다. |
 | 409 | `OPERATOR_APPLICATION_STATE_CONFLICT` | 신청이 `REJECTED` 또는 `CANCELLED`여서 승인할 수 없다. 신청·역할·담당 지역은 변경되지 않는다. |
 

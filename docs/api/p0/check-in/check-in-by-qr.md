@@ -38,7 +38,7 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Authorization` | Y | `Bearer {accessToken}` |
+| `Authorization` | Y | `Bearer {accessToken}`. 인증 주체는 해당 콘텐츠의 승인된 소유 운영자여야 한다. |
 | `Idempotency-Key` | Y | 한 번의 체크인 시도에 대해 클라이언트가 생성한 비어 있지 않은 `checkInRequestId`. 네트워크 재시도에만 같은 값을 사용하고 새로운 스캔에는 새 값을 사용한다. |
 | `Content-Type` | Y | `application/json` |
 | `Accept` | N | `application/json` |
@@ -121,7 +121,7 @@ Accept: application/json
 | `400` | `INVALID_JSON` | 요청 본문을 역직렬화할 수 없다. 멱등 기록, 예약, 방문과 성공 감사 기록을 변경하지 않으며 JSON 형식을 수정한 뒤 재시도할 수 있다. |
 | `400` | `QR_VERIFICATION_FAILED` | QR 형식·버전·키 식별자·서명·만료 또는 서명된 예약·회차 참조를 검증할 수 없다. 예약과 방문을 변경하지 않으며 새 QR을 발급받아 새 `Idempotency-Key`로 다시 스캔해야 한다. |
 | `401` | `UNAUTHENTICATED` | 인증 정보가 없거나 유효하지 않다. 멱등 기록, 예약과 방문을 변경하지 않으며 유효한 인증 정보로 재시도할 수 있다. |
-| `403` | `FORBIDDEN` | 공통 권한 행렬 또는 이 API의 활성 계정·지역·소유권 조건을 충족하지 않는다. 예약과 방문을 변경하지 않으며 동일한 권한 상태로 재시도해도 성공하지 않는다. |
+| `403` | `FORBIDDEN` | 인증 주체가 승인된 `OPERATOR`가 아니거나 서명 검증된 예약의 콘텐츠 소유·지역 범위와 일치하지 않는다. 예약과 방문을 변경하지 않으며 동일한 권한 상태로 재시도해도 성공하지 않는다. |
 | `409` | `IDEMPOTENCY_KEY_CONFLICT` | 같은 운영자의 `CHECK_IN` 명령에서 이미 다른 QR·예약·회차·방식에 사용한 `Idempotency-Key`다. 새 방문을 만들지 않으며 새 스캔에는 새 키를 사용해야 한다. |
 | `409` | `IDEMPOTENCY_REQUEST_IN_PROGRESS` | 같은 운영자·키·QR 요청의 최초 처리가 아직 진행 중이다. 새 방문을 만들지 않으며 동일 키로 재시도할 수 있다. |
 | `409` | `QR_ALREADY_CHECKED_IN` | 새로운 `Idempotency-Key`의 QR이 기존 검증을 모두 통과했지만 예약이 이미 `CHECKED_IN`이고 일치하는 방문이 존재한다. 방문을 추가하거나 기존 방문 성공을 반환하지 않으며 공개 메시지는 `이미 체크인된 QR입니다.`다. |
@@ -141,7 +141,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. Access Token의 `ROLE_OPERATOR` authority를 1차로 확인한다. DB에서는 활성 `ORDINARY` 계정, 현재 담당 `region_id`, 대상 콘텐츠 소유 관계와 회차·예약 상태를 확인한다. `REGION_ADMIN`은 체크인할 수 없다.
+1. 인증 주체는 `ACTIVE` 상태이며 승인된 `OPERATOR` 역할과 담당 `region_id`를 가진 회원이어야 한다. `REGION_ADMIN`은 체크인할 수 없다.
 2. `Idempotency-Key`와 요청 해시는 토큰의 현재 유효성보다 먼저 확인한다. 같은 운영자·키·요청 의미의 완료 기록이 있으면 현재 토큰 만료 여부를 다시 검사하지 않고 저장 결과를 반환한다.
 3. 최초 요청이나 새로운 키의 스캔은 토큰 형식, 버전, 키 식별자, HMAC 서명과 만료 시각을 순서대로 검증한다.
 4. 서명된 `qr_reference`로 예약을 조회하고 토큰의 `session_id`가 예약 회차와 일치하는지 검증한다. 검증 실패의 공개 응답은 대상 존재 여부를 드러내지 않는 `QR_VERIFICATION_FAILED`로 통일한다.
@@ -191,6 +191,6 @@ Accept: application/json
 - 새로운 키로 이미 체크인된 예약을 재스캔한 실패 감사 이벤트는 `target_type = RESERVATION`, `target_id = reservation_id`, `previous_state = CHECKED_IN`, `next_state = null`, `result = FAILURE`, `reason_code = QR_CHECK_IN_RESERVATION_ALREADY_CHECKED_IN`으로 기록한다.
 - 인증된 사용자 이벤트는 `actor_kind = USER`, 인증 주체의 현재 역할을 `actor_role`로 기록하고 `audit_event_actor_link`로 처리자를 연결한다. 성공 이벤트의 actor 연결은 체크인 트랜잭션에서 함께 커밋하고, 실패 이벤트의 actor 연결은 롤백 완료 뒤 실패 감사 이벤트와 같은 독립 트랜잭션에서 커밋한다.
 - QR 검증·권한·상태 실패는 롤백 완료 뒤 비개인 실패 `audit_event`로 기록한다. 안전하게 예약을 확인했으면 `target_type = RESERVATION`, `target_id = reservation_id`, `region_id = reservation.region_id`로 기록한다. 회차·콘텐츠는 검증된 예약 관계에서 조회한다.
-- 예약을 식별하지 못한 실패 이벤트는 `target_type = RESERVATION`, `target_id = null`로 둔다. 인가를 통과한 인증 주체에게 DB상 현재 담당 지역이 있으면 그 지역을 `region_id`로 사용하고, 확인할 수 없으면 `region_id = null`로 기록한다. 검증되지 않은 토큰 payload의 지역은 사용하지 않는다.
+- 예약을 식별하지 못한 실패 이벤트는 `target_type = RESERVATION`, `target_id = null`로 둔다. 인증 주체에게 승인된 `OPERATOR` 담당 지역이 있으면 그 지역을 `region_id`로 사용하고, 확인할 수 없으면 `region_id = null`로 기록한다. 검증되지 않은 토큰 payload의 지역은 사용하지 않는다.
 - QR 토큰 원문, HMAC 키, `qr_reference`, 사용자 식별자와 이름·연락처는 멱등 기록, 감사 이벤트와 로그에 저장하지 않는다.
 - 체크인 명령의 상세한 재시도·재스캔 판정은 [체크인 요청 멱등성](check-in-idempotency.md)을 따른다.

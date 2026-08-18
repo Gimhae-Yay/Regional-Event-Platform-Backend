@@ -128,7 +128,7 @@ Accept: application/json
 | --- | --- | --- |
 | `400` | `INVALID_TYPE` | `isPublic`을 Boolean으로 변환할 수 없다. 조회 대상과 상태를 변경하지 않으며 값을 `true` 또는 `false`로 수정한 뒤 재시도할 수 있다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 조회 대상과 상태를 변경하지 않으며 유효한 Access Token을 얻은 뒤 재시도할 수 있다. |
-| `403` | `FORBIDDEN` | 인증 주체에게 `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` authority가 없거나 활성 `PRIVILEGED` 계정이 아니다. 조회 대상과 상태를 변경하지 않는다. |
+| `403` | `FORBIDDEN` | 인증 주체가 `PRIVILEGED` 계정의 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN` 배정을 갖지 않는다. 조회 대상과 상태를 변경하지 않으며 활성 고권한 배정을 얻기 전에는 재시도해도 성공하지 않는다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 조회 중 예상하지 못한 서버 오류가 발생했다. 조회 대상과 상태를 변경하지 않으며 일시 장애가 해소된 뒤 재시도할 수 있다. |
 
 #### Error Response Body
@@ -144,7 +144,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. 인증 주체는 `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` snapshot을 가지고 `app_user.account_kind = PRIVILEGED`인 활성 계정이어야 한다.
+1. 인증 주체는 `app_user.account_kind = PRIVILEGED`이고 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN` 배정을 가져야 한다.
 2. 공개·비공개 지역을 모두 조회 대상으로 삼는다. `isPublic` 필터가 있으면 해당 공개 여부와 일치하는 지역만 반환한다.
 3. 공개 지역이 없거나 필터 결과가 없으면 `404`가 아닌 `200 OK`와 `data.regions = []`를 반환한다.
 4. 정렬은 `region.name` 오름차순, 같은 이름이면 `region_id` 오름차순으로 고정한다.

@@ -22,7 +22,7 @@
 생성 회차는 승인 때만 `SCHEDULED`가 되며, 수정 요청의 심사 중·반려는 실제 회차·공개·예약 상태를 바꾸지 않는다.
 소유 운영자의 회차 취소는
 `SCHEDULED → CANCELLED` 전이와 활성 홀드·미체크인 확정 예약의 종결, 성공 감사 기록을 하나의 트랜잭션으로 처리한다.
-운영자 API는 `ROLE_OPERATOR` authority snapshot으로 먼저 인가하고, DB에서는 활성 `ORDINARY` 계정, 현재 담당 지역 관계와 콘텐츠 소유 관계를 함께 검증한다. 지역 관리자 API도 `ROLE_REGION_ADMIN` snapshot과 현재 담당 지역 관계를 분리해 적용한다.
+운영자 API는 `OPERATOR` 역할, 담당 지역 일치와 콘텐츠 소유 관계를 함께 검증한다.
 
 ### 요구사항 추적
 
@@ -62,7 +62,7 @@
 | 대상 | 기준 문서 | 이 도메인에서 명시할 내용 |
 | --- | --- | --- |
 | Base URL·미디어 타입·시각·식별자 표현 | [API 공통 규칙](../../common/api-conventions.md) | Base URL은 `/api/v1`이며 시각과 식별자는 공통 규칙을 따른다. |
-| 인증·인가 | [인증·인가](../../common/authentication.md) | 공개 API 여부, `ROLE_REGION_ADMIN` snapshot과 활성 `ORDINARY` 계정·현재 담당 지역 조건 |
+| 인증·인가 | [인증·인가](../../common/authentication.md) | 공개 API 여부, 지역 관리자 역할과 담당 지역 조건 |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | API별 성공 상태, `data` 필드와 오류 코드 |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | P0의 지역·콘텐츠·회차 목록에는 페이지네이션을 적용하지 않는다. 지역 홈의 진행·임박 목록은 각각 최대 10건이다. |
 

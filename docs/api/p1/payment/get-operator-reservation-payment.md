@@ -47,7 +47,7 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Authorization` | Y | `Bearer {accessToken}` 형식의 유효한 Access Token이다. Access Token의 `ROLE_OPERATOR` authority를 1차로 확인하고, DB에서 활성 `ORDINARY` 계정·현재 담당 지역·대상 콘텐츠 소유권을 확인한다. |
+| `Authorization` | Y | `Bearer {accessToken}` 형식의 유효한 Access Token이다. 인증 주체는 승인된 `OPERATOR`여야 한다. |
 | `Content-Type` | N | 요청 본문이 없으므로 전송하지 않는다. |
 | `Accept` | N | `application/json` |
 
@@ -170,7 +170,7 @@ Accept: application/json
 | --- | --- | --- |
 | `400` | `INVALID_TYPE` | `reservationId`를 양의 정수 식별자로 처리할 수 없다. 조회 상태를 변경하지 않으며 형식을 수정해 재시도할 수 있다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 조회 결과를 반환하지 않는다. |
-| `403` | `FORBIDDEN` | Access Token에 `ROLE_OPERATOR` authority가 없거나 활성 `ORDINARY` 계정이 아니거나 대상 예약이 속한 콘텐츠가 현재 담당 지역·소유 범위를 벗어난다. 조회 결과를 반환하지 않는다. |
+| `403` | `FORBIDDEN` | 인증 주체가 승인된 `OPERATOR`가 아니거나 대상 예약이 속한 콘텐츠의 담당 운영자가 아니다. 조회 결과를 반환하지 않는다. |
 | `404` | `NOT_FOUND` | 대상 예약이 없다. 조회 상태를 변경하지 않는다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 예상하지 못한 서버 오류 또는 예약·결제·환불·불일치 연결 정합성 오류가 발생했다. 조회 상태를 변경하지 않는다. |
 
@@ -187,7 +187,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. Access Token의 `ROLE_OPERATOR` authority를 1차로 확인하고, DB에서 활성 `ORDINARY` 계정과 현재 담당 지역 관계를 확인한다.
+1. 인증 주체는 활성·승인된 `OPERATOR`여야 한다.
 2. 대상 예약이 속한 콘텐츠의 담당 운영자인지 검증하고, 아니면 `403 FORBIDDEN`으로 거부한다. 다른 운영자가 담당하는 콘텐츠의 예약은 존재 여부를 포함해 노출하지 않는다.
 3. 예약에 연결된 결제가 없으면(무료 예약) `data.payment`를 `null`로 반환한다.
 4. 결제당 환불은 최대 한 건이다(`refund.payment_id` 유일). 환불이 요청된 적 없으면 `data.refund`를 `null`로 반환한다.

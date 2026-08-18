@@ -9,7 +9,7 @@
 
 ## 1. 개요
 
-`ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` snapshot을 가진 활성 `PRIVILEGED` 계정이 환불 한 건의 상세, 연결된 결제 정보와 지금까지의 외부 호출
+활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN`이 환불 한 건의 상세, 연결된 결제 정보와 지금까지의 외부 호출
 시도 이력을 조회한다. 조회는 환불·결제 상태를 변경하지 않는다.
 
 ### 요구사항 추적
@@ -42,7 +42,7 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Authorization` | Y | `Bearer {accessToken}` 형식의 유효한 Access Token이다. 인증 주체는 `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` snapshot을 가지고 활성 `PRIVILEGED` 계정이어야 한다. |
+| `Authorization` | Y | `Bearer {accessToken}` 형식의 유효한 Access Token이다. 인증 주체는 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN`이어야 한다. |
 | `Content-Type` | N | 요청 본문이 없으므로 전송하지 않는다. |
 | `Accept` | N | `application/json` |
 
@@ -149,7 +149,7 @@ Accept: application/json
 | --- | --- | --- |
 | `400` | `INVALID_TYPE` | `refundId`를 양의 정수 식별자로 처리할 수 없다. 조회 상태를 변경하지 않으며 형식을 수정해 재시도할 수 있다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 조회 결과를 반환하지 않는다. |
-| `403` | `FORBIDDEN` | 인증 주체에게 `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` authority가 없거나 활성 `PRIVILEGED` 계정이 아니다. 조회 결과를 반환하지 않는다. |
+| `403` | `FORBIDDEN` | 인증 주체가 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN`이 아니다. 조회 결과를 반환하지 않는다. |
 | `404` | `NOT_FOUND` | 대상 환불이 없다. 조회 상태를 변경하지 않는다. |
 | `500` | `INTERNAL_SERVER_ERROR` | 예상하지 못한 서버 오류 또는 환불·결제·시도 연결 정합성 오류가 발생했다. 조회 상태를 변경하지 않는다. |
 
@@ -166,7 +166,7 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. 인증 주체는 `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` snapshot을 가지고 활성 `PRIVILEGED` 계정이어야 한다.
+1. 인증 주체는 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN` 배정을 가져야 한다.
 2. `attempts`는 대상 환불에 연결된 `refund_attempt` 전체를 `attempt_no` 오름차순으로 반환한다.
 3. PortOne 원문, 응답 원문 해시와 비밀값은 응답에 포함하지 않는다.
 4. 조회 시 환불, 결제와 시도 이력을 생성·수정·삭제하지 않는다.

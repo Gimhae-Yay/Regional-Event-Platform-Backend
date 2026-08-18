@@ -42,7 +42,7 @@ P1 쿠폰은 정책이 가리키는 콘텐츠의 유료 예약에 적용하는 �
 | 대상 | 기준 문서 | 이 도메인에서 명시할 내용 |
 | --- | --- | --- |
 | Base URL·미디어 타입·시간 형식 | [API 공통 규칙](../../common/api-conventions.md) | Base URL은 `/api/v1`. 쿠폰 평가·발급·사용·상태 이력 시각은 UTC ISO 8601 일시다. |
-| 인증·인가 | [인증·인가](../../common/authentication.md) | 내 쿠폰 API는 활성 회원 본인 소유권을 검증한다. 운영 API는 `ROLE_OPERATOR` snapshot으로 1차 인가하고, DB에서 활성 `ORDINARY` 계정, 정책 콘텐츠와 같은 현재 담당 지역 관계와 정책 콘텐츠 소유권을 검증한다. |
+| 인증·인가 | [인증·인가](../../common/authentication.md) | 내 쿠폰 API는 활성 회원 본인 소유권을 검증한다. 운영 API는 활성 회원의 현재 `OPERATOR` 역할, 정책 콘텐츠와 같은 지역, 정책 콘텐츠 소유권을 모두 검증한다. |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | API별 성공 상태, `data` 필드와 오류 코드 |
 | 페이지네이션 | [페이지네이션](../../common/pagination.md) | P1 쿠폰 목록은 단순 목록으로 반환하며 페이지네이션을 적용하지 않는다. |
 
