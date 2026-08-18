@@ -607,10 +607,12 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 | 보상 수령 시한 | 신규 수령은 모든 잠금 획득 직후 고정한 `operation_at`에 대해 `mission.status = PUBLISHED AND mission.ends_at > operation_at`일 때만 허용한다. 수동·자동 종료 또는 `ends_at` 도달과 동시에 완료·미수령 참여자의 권리가 만료되며 유예 기간과 수동 지급을 두지 않는다. |
 | 진행도 | `visit.user_id = mission_participation.user_id`, `visit.region_id = mission.region_id`, `visit.checked_at >= mission_participation.joined_at`을 검증한다. `UNIQUE (mission_participation_id, visit_id)`로 같은 참여에 같은 방문을 두 번 반영하지 않는다. `VISIT_COUNT`는 서로 다른 방문이면 같은 콘텐츠 재방문도 허용한다. `CONTENT_SET`은 잠근 참여에서 같은 `content_id`의 기존 근거가 없는 경우에만 조건부 삽입한다. |
 
-기존 미션의 제목 전환은 호환 migration에서 nullable `VARCHAR(255)` 열 추가, 각 행을 `미션 {mission_id}`로
-backfill, null·빈 문자열·길이와 기존 행 수 검증, 새 writer 배포 순서로 수행한다. 모든 writer 전환과 새 null 행
-부재를 확인한 뒤 후속 migration에서 `NOT NULL`로 바꾼다. 전환 뒤 영구 기본값은 두지 않는다. 제목 이외의
-식별자·조건·상태·보상·시각은 변경하지 않는다.
+기존 미션의 제목 전환은 [ADR-0107](adr/0107-deploy-compatible-server-before-mission-title-clients.md)에 따라
+nullable `VARCHAR(255)` 열, 제목을 선택적으로 수용하는 호환 서버, 구버전 서버 종료, null 행 backfill, 제목을
+전송하는 클라이언트, 제목 필수 서버, 후속 `NOT NULL` migration 순으로 진행한다. 호환 서버는 제목 없는 생성에
+`미션 {mission_id}`를 저장하고 제목 없는 수정은 기존 제목을 유지한다. 구버전 서버가 모두 종료되기 전에는 새
+클라이언트를 배포하지 않으며, 각 전환 게이트에서 null 행과 제목 누락 요청을 검증한다. 전환 뒤 영구 기본값은
+두지 않고 제목 이외의 식별자·조건·상태·보상·시각은 변경하지 않는다.
 
 같은 유효 방문은 조건을 만족하는 여러 공개 미션에 각각 반영할 수 있다. 방문자 공개 목록·상세와 신규 참여는 `region.is_public = true`인 지역에만 허용하며 비공개 지역은 대상 부재와 동일하게 처리한다. 신규 참여는 미션 행을 먼저 잠근 뒤 해당 지역 행을 잠그고, 모든 잠금 획득 직후 DB 현재 시각을 한 번만 읽어 `operation_at`으로 고정한다. 지역 공개 여부와 `status = PUBLISHED AND ends_at > operation_at`을 재검증한 뒤 `joined_at = operation_at`으로 기록해 지역 비공개 전환과 직렬화한다. `mission_progress.content_id`를 유지하므로 `visit.content_id = mission_progress.content_id`, `visit.user_id = mission_participation.user_id`, `visit.region_id = mission.region_id`, `visit.checked_at >= mission_participation.joined_at`을 함께 검증한다. 참여·진행도 반영·수동 종료·자동 종료는 모두 `mission` 행을 `PESSIMISTIC_WRITE`로 먼저 잠근다. 그 뒤 참여 행이 필요하면 `mission_participation_id` 오름차순으로 잠근다. 진행도 반영은 모든 잠금 획득 직후 DB 현재 시각을 한 번만 읽어 `operation_at`으로 고정하고 `status = PUBLISHED AND ends_at > operation_at`과 참여 `IN_PROGRESS`를 재검증한다. 진행 근거의 `recorded_at`과 완료 전이의 `completed_at`은 같은 `operation_at`으로 기록하며, 종료는 잠금 획득 뒤 종료 조건을 재검증한다. `CONTENT_SET` 진행도는 이 참여 잠금을 보유한 상태에서 같은 콘텐츠 근거의 존재 여부를 확인하고, 이미 있으면 새 `mission_progress`를 만들지 않는 정상 무변경 처리로 종료한다. 따라서 여러 인스턴스가 같은 콘텐츠의 서로 다른 방문을 동시에 전달해도 콘텐츠 하나는 진행도 한 칸만 채운다. `VISIT_COUNT`는 같은 잠금 아래 서로 다른 `visit_id`를 각각 삽입하므로 같은 콘텐츠 재방문도 별도 유효 방문으로 센다. 종료 작업이 지연되거나 진행도 반영과 경합해도 종료 시각 뒤 신규 참여·진행도 또는 `ENDED_INCOMPLETE`의 완료 전이는 생기지 않는다.
 
