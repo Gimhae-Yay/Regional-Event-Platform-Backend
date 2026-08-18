@@ -59,6 +59,7 @@ Accept: application/json
       {
         "missionId": "701",
         "regionId": "11",
+        "title": "김해 역사 탐방 미션",
         "conditionType": "CONTENT_SET",
         "requiredVisitCount": null,
         "targetContentCount": 3,
@@ -84,6 +85,7 @@ Accept: application/json
 | `data.content` | Array | 공개 중이고 종료 전인 미션 목록. 없으면 빈 배열이며 `null`이 아님 |
 | `data.content[].missionId` | String | 미션 식별자 |
 | `data.content[].regionId` | String | 미션 운영 지역 식별자 |
+| `data.content[].title` | String | 미션에 저장된 Unicode code point 기준 1~255자 방문자 표시 제목 |
 | `data.content[].conditionType` | String | `VISIT_COUNT` 또는 `CONTENT_SET` |
 | `data.content[].requiredVisitCount` | Integer 또는 null | `VISIT_COUNT` 목표 횟수. `CONTENT_SET`이면 `null` |
 | `data.content[].targetContentCount` | Integer | `CONTENT_SET` 대상 콘텐츠 수. `VISIT_COUNT`이면 `0` |
@@ -107,6 +109,7 @@ Accept: application/json
 
 1. `region.is_public = true`인 공개·운영 지역만 조회한다. 존재하지 않거나 비공개인 지역은 동일하게 `404 NOT_FOUND`로 처리한다.
 2. 공개 지역에서 `PUBLISHED`이고 `endsAt` 전인 미션만 반환한다.
-3. 인증 사용자의 참여가 있으면 `participationStatus`를 반환하고, 없거나 비로그인이면 `null`을 반환한다.
-4. `Authorization` 헤더가 없으면 익명 조회로 처리하고, 헤더가 있으면 유효한 Access Token만 허용한다.
-5. 빈 결과는 `200 OK`, 빈 `content` 배열, `totalElements = 0`, `totalPages = 0`으로 반환한다.
+3. 각 미션이 직접 소유한 현재 `title`을 반환한다. 제목은 공개 뒤 수정되지 않으며 대상 콘텐츠 제목에서 파생하지 않는다.
+4. 인증 사용자의 참여가 있으면 `participationStatus`를 반환하고, 없거나 비로그인이면 `null`을 반환한다.
+5. `Authorization` 헤더가 없으면 익명 조회로 처리하고, 헤더가 있으면 유효한 Access Token만 허용한다.
+6. 빈 결과는 `200 OK`, 빈 `content` 배열, `totalElements = 0`, `totalPages = 0`으로 반환한다.

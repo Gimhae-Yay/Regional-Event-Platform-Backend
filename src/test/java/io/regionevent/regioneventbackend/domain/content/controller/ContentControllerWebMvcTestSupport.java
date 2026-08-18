@@ -39,6 +39,7 @@ import io.regionevent.regioneventbackend.domain.content.service.GetContentWithdr
 import io.regionevent.regioneventbackend.domain.content.service.GetMyContentUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetOriginalContentReviewDetailUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetPendingContentsUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.GetPendingContentWithdrawalRequestsUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetPendingContentRevisionsUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetPendingSessionReviewDetailUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetPendingSessionRevisionsUseCase;
@@ -131,6 +132,9 @@ abstract class ContentControllerWebMvcTestSupport {
 
     @MockitoBean
     protected GetPendingContentsUseCase getPendingContentsUseCase;
+
+    @MockitoBean
+    protected GetPendingContentWithdrawalRequestsUseCase getPendingContentWithdrawalRequestsUseCase;
 
     @MockitoBean
     protected GetPendingContentRevisionsUseCase getPendingContentRevisionsUseCase;

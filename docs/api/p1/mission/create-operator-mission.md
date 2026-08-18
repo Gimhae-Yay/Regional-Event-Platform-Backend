@@ -20,6 +20,7 @@ Content-Type: application/json; charset=UTF-8
 Accept: application/json
 
 {
+  "title": "김해 역사 탐방 미션",
   "conditionType": "CONTENT_SET",
   "requiredVisitCount": null,
   "targetContentIds": ["101", "102", "103"],
@@ -48,6 +49,7 @@ Accept: application/json
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
+| `title` | String | Y | 양끝 공백 제거 뒤 Unicode code point 기준 1~255자인 미션 제목. 내부 공백은 보존하며 문자와 중복을 제한하지 않음 |
 | `conditionType` | String | Y | `VISIT_COUNT` 또는 `CONTENT_SET` |
 | `requiredVisitCount` | Integer | 조건부 | `VISIT_COUNT`이면 양수, `CONTENT_SET`이면 `null` |
 | `targetContentIds` | Array | 조건부 | `CONTENT_SET`이면 중복 없는 하나 이상의 담당 지역 콘텐츠 식별자, `VISIT_COUNT`이면 빈 배열 또는 `null` |
@@ -90,7 +92,7 @@ Accept: application/json
 
 | HTTP Status | Code | Description |
 | --- | --- | --- |
-| `400` | `INVALID_INPUT` | 필수값, 조건별 입력, 종료 예정 시각 또는 대상 콘텐츠가 유효하지 않거나 `targetContentIds`에 중복이 있다. 미션을 생성하지 않는다. |
+| `400` | `INVALID_INPUT` | 제목, 필수값, 조건별 입력, 종료 예정 시각 또는 대상 콘텐츠가 유효하지 않거나 `targetContentIds`에 중복이 있다. 미션을 생성하지 않는다. |
 | `400` | `INVALID_JSON` | 요청 본문을 역직렬화할 수 없다. 미션을 생성하지 않는다. |
 | `400` | `INVALID_TYPE` | 요청 필드를 선언된 타입으로 변환할 수 없다. 미션을 생성하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 미션을 생성하지 않는다. |
@@ -101,11 +103,13 @@ Accept: application/json
 ### 처리 규칙
 
 1. 인증 주체의 담당 지역을 미션 지역으로 고정한다.
-2. `VISIT_COUNT`는 양의 `requiredVisitCount`와 대상 콘텐츠 없음, `CONTENT_SET`은 중복 없는 하나 이상의 대상 콘텐츠와 `requiredVisitCount = null`을 검증한다. 중복 식별자를 임의로 제거하지 않고 `400 INVALID_INPUT`으로 거부한다.
-3. 보상 쿠폰 정책 행을 잠근 뒤 지역과 발급 경로, 상태를 검증한다. 미션과 같은 지역이고
+2. `title`은 필수다. 양끝 공백을 제거하고 내부 공백은 보존한다. 정규화 뒤 Unicode code point 기준 1~255자가 아니면
+   `400 INVALID_INPUT`으로 거부한다. 별도 문자 allowlist와 중복 제한은 두지 않는다.
+3. `VISIT_COUNT`는 양의 `requiredVisitCount`와 대상 콘텐츠 없음, `CONTENT_SET`은 중복 없는 하나 이상의 대상 콘텐츠와 `requiredVisitCount = null`을 검증한다. 중복 식별자를 임의로 제거하지 않고 `400 INVALID_INPUT`으로 거부한다.
+4. 보상 쿠폰 정책 행을 잠근 뒤 지역과 발급 경로, 상태를 검증한다. 미션과 같은 지역이고
    `issuance_type = MISSION_REWARD`이며 상태가 `DRAFT`, `PUBLISHED` 중 하나인 정책만 연결한다.
-4. `CONTENT_SET`이면 중복을 검증한 대상 콘텐츠 행을 `contentId` 오름차순으로 잠근다. 모든 대상 콘텐츠가 미션과
+5. `CONTENT_SET`이면 중복을 검증한 대상 콘텐츠 행을 `contentId` 오름차순으로 잠근다. 모든 대상 콘텐츠가 미션과
    같은 지역이고 `deleted_at IS NULL`인지 확인하며, 작성 단계에서는 콘텐츠 상태를 제한하지 않는다.
-5. `ENDED` 쿠폰 정책은 종료된 시점부터 새 미션에 연결하지 않는다.
-6. 성공 시 미션, 대상 콘텐츠와 `null → DRAFT`, `reason_code = MISSION_CREATED`인 감사 이벤트를
-   같은 트랜잭션으로 기록한다.
+6. `ENDED` 쿠폰 정책은 종료된 시점부터 새 미션에 연결하지 않는다.
+7. 성공 시 제목을 포함한 미션, 대상 콘텐츠와 `null → DRAFT`, `reason_code = MISSION_CREATED`인 감사 이벤트를
+   같은 트랜잭션으로 기록한다. 감사 이벤트와 구조화 로그에는 제목 값을 기록하지 않는다.

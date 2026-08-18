@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
+import java.util.List;
 
 import jakarta.persistence.EntityManager;
 
@@ -200,6 +201,133 @@ class ContentWithdrawalRequestRepositoryTest {
         )).isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    @Test
+    void 담당지역의_대기_요청이면서_공개되고_미삭제인_콘텐츠만_조회한다() {
+        Region assignedRegion = saveRegion("WITHDRAWAL-LIST-A");
+        Region otherRegion = saveRegion("WITHDRAWAL-LIST-B");
+        AppUser requester = saveUser("filter-requester@example.com", "요청자");
+        AppUser reviewer = saveUser("filter-reviewer@example.com", "심사자");
+        Content eligibleContent = saveContent(
+            assignedRegion,
+            requester,
+            ContentStatus.PUBLISHED,
+            "조회 대상"
+        );
+        ContentWithdrawalRequest eligible = savePendingRequest(
+            eligibleContent,
+            requester,
+            "c",
+            REQUESTED_AT
+        );
+        savePendingRequest(
+            saveContent(otherRegion, requester, ContentStatus.PUBLISHED, "다른 지역"),
+            requester,
+            "d",
+            REQUESTED_AT
+        );
+        savePendingRequest(
+            saveContent(assignedRegion, requester, ContentStatus.APPROVED, "비공개"),
+            requester,
+            "e",
+            REQUESTED_AT
+        );
+        Content deletedContent = saveContent(
+            assignedRegion,
+            requester,
+            ContentStatus.APPROVED,
+            "삭제"
+        );
+        savePendingRequest(deletedContent, requester, "f", REQUESTED_AT);
+        deletedContent.softDelete(REQUESTED_AT.plusSeconds(1));
+        contentRepository.saveAndFlush(deletedContent);
+        ContentWithdrawalRequest approved = savePendingRequest(
+            saveContent(assignedRegion, requester, ContentStatus.PUBLISHED, "처리 완료"),
+            requester,
+            "0",
+            REQUESTED_AT
+        );
+        approved.approve(reviewer, REQUESTED_AT.plusSeconds(2));
+        requestRepository.saveAndFlush(approved);
+        entityManager.clear();
+
+        List<ContentWithdrawalRequest> requests = requestRepository
+            .findReviewCandidatesByRegionId(
+                assignedRegion.getRegionId(),
+                ContentWithdrawalRequestStatus.PENDING,
+                ContentStatus.PUBLISHED
+            );
+
+        assertThat(requests).extracting(ContentWithdrawalRequest::getContentWithdrawalRequestId)
+            .containsExactly(eligible.getContentWithdrawalRequestId());
+        assertThat(requests.getFirst().getContent().getContentId())
+            .isEqualTo(eligibleContent.getContentId());
+    }
+
+    @Test
+    void 요청시각과_요청_ID_오름차순으로_정렬한다() {
+        Region region = saveRegion("WITHDRAWAL-ORDER");
+        AppUser requester = saveUser("order-requester@example.com", "요청자");
+        ContentWithdrawalRequest later = savePendingRequest(
+            saveContent(region, requester, ContentStatus.PUBLISHED, "나중 요청"),
+            requester,
+            "1",
+            REQUESTED_AT.plusSeconds(1)
+        );
+        ContentWithdrawalRequest tiedFirst = savePendingRequest(
+            saveContent(region, requester, ContentStatus.PUBLISHED, "동률 첫 요청"),
+            requester,
+            "2",
+            REQUESTED_AT
+        );
+        ContentWithdrawalRequest tiedSecond = savePendingRequest(
+            saveContent(region, requester, ContentStatus.PUBLISHED, "동률 둘째 요청"),
+            requester,
+            "3",
+            REQUESTED_AT
+        );
+        entityManager.clear();
+
+        List<ContentWithdrawalRequest> requests = requestRepository
+            .findReviewCandidatesByRegionId(
+                region.getRegionId(),
+                ContentWithdrawalRequestStatus.PENDING,
+                ContentStatus.PUBLISHED
+            );
+
+        assertThat(requests).extracting(ContentWithdrawalRequest::getContentWithdrawalRequestId)
+            .containsExactly(
+                tiedFirst.getContentWithdrawalRequestId(),
+                tiedSecond.getContentWithdrawalRequestId(),
+                later.getContentWithdrawalRequestId()
+            );
+    }
+
+    @Test
+    void 요청자_연결이_없어도_대기_요청을_조회한다() {
+        Region region = saveRegion("WITHDRAWAL-NULL-REQUESTER");
+        AppUser requester = saveUser("null-requester@example.com", "탈퇴 요청자");
+        ContentWithdrawalRequest request = savePendingRequest(
+            saveContent(region, requester, ContentStatus.PUBLISHED, "요청자 탈퇴 콘텐츠"),
+            requester,
+            "4",
+            REQUESTED_AT
+        );
+        requestRepository.unlinkRequesterByUserId(requester.getUserId());
+
+        List<ContentWithdrawalRequest> requests = requestRepository
+            .findReviewCandidatesByRegionId(
+                region.getRegionId(),
+                ContentWithdrawalRequestStatus.PENDING,
+                ContentStatus.PUBLISHED
+            );
+
+        assertThat(requests).singleElement().satisfies(found -> {
+            assertThat(found.getContentWithdrawalRequestId())
+                .isEqualTo(request.getContentWithdrawalRequestId());
+            assertThat(found.getRequestedBy()).isNull();
+        });
+    }
+
     private Fixtures createFixtures() {
         Region region = regionRepository.saveAndFlush(new Region("GIMHAE", "김해시", true));
         AppUser requester = appUserRepository.saveAndFlush(new AppUser(
@@ -240,6 +368,59 @@ class ContentWithdrawalRequestRepositoryTest {
             reason,
             REQUESTED_AT
         );
+    }
+
+    private Region saveRegion(String code) {
+        return regionRepository.saveAndFlush(new Region(code, "테스트 지역", true));
+    }
+
+    private AppUser saveUser(String loginIdentifier, String name) {
+        return appUserRepository.saveAndFlush(new AppUser(
+            loginIdentifier,
+            "hashed-password",
+            name,
+            "010-1234-5678",
+            AppUserStatus.ACTIVE
+        ));
+    }
+
+    private Content saveContent(
+        Region region,
+        AppUser operator,
+        ContentStatus status,
+        String title
+    ) {
+        return contentRepository.saveAndFlush(new Content(
+            region,
+            operator,
+            ContentType.EVENT_EXPERIENCE,
+            status,
+            title,
+            "설명",
+            "위치",
+            "운영 시간",
+            "055-000-0000",
+            "유의사항",
+            "연령",
+            "준비물",
+            "취소 정책",
+            Instant.parse("2026-08-01T00:00:00Z")
+        ));
+    }
+
+    private ContentWithdrawalRequest savePendingRequest(
+        Content content,
+        AppUser requester,
+        String hashCharacter,
+        Instant requestedAt
+    ) {
+        return requestRepository.saveAndFlush(ContentWithdrawalRequest.createPending(
+            content,
+            requester,
+            hashCharacter.repeat(64),
+            "철회 요청 사유",
+            requestedAt
+        ));
     }
 
     private record Fixtures(Content content, AppUser requester) {

@@ -42,6 +42,7 @@ Accept: application/json
   "data": {
     "participationId": "9001",
     "missionId": "701",
+    "title": "김해 역사 탐방 미션",
     "status": "IN_PROGRESS",
     "conditionType": "CONTENT_SET",
     "progressCount": 1,
@@ -70,6 +71,7 @@ Accept: application/json
 | `message` | String | 내 미션 참여 상세 조회 성공 메시지 |
 | `data.participationId` | String | 참여 식별자 |
 | `data.missionId` | String | 참여한 미션 식별자 |
+| `data.title` | String | 참여한 미션에 저장된 Unicode code point 기준 1~255자 방문자 표시 제목 |
 | `data.status` | String | `IN_PROGRESS`, `COMPLETED`, `ENDED_INCOMPLETE` 중 하나 |
 | `data.conditionType` | String | `VISIT_COUNT` 또는 `CONTENT_SET` |
 | `data.progressCount` | Integer | `VISIT_COUNT`는 반영된 서로 다른 유효 방문 수, `CONTENT_SET`은 최초 방문이 반영된 서로 다른 목표 콘텐츠 수. 0 이상 |
@@ -96,5 +98,6 @@ Accept: application/json
 ### 처리 규칙
 
 1. 인증 사용자 본인의 참여만 조회할 수 있다.
-2. 진행도는 `mission_progress`의 방문 근거로 재현 가능한 값만 반환한다. `CONTENT_SET`은 목표 콘텐츠마다 최초 근거만,
+2. 참여가 참조하는 미션의 현재 `title`을 반환한다. 제목은 공개 뒤 수정되지 않으며 대상 콘텐츠 제목에서 파생하지 않는다.
+3. 진행도는 `mission_progress`의 방문 근거로 재현 가능한 값만 반환한다. `CONTENT_SET`은 목표 콘텐츠마다 최초 근거만,
    `VISIT_COUNT`는 서로 다른 `visitId`의 근거를 각각 반환한다.
