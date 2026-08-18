@@ -55,6 +55,7 @@ public class GetMyMissionParticipationUseCase {
         List<MissionProgress> visibleProgresses = resolveVisibleProgresses(mission, progresses);
         return new MissionParticipationDetailResult(
             participation,
+            mission.getTitle(),
             visibleProgresses,
             visibleProgresses.size(),
             resolveRequiredCount(mission),

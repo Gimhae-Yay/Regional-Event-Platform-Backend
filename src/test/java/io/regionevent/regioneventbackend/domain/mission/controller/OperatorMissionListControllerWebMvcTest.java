@@ -70,6 +70,7 @@ class OperatorMissionListControllerWebMvcTest {
             .andExpect(jsonPath("$.code").value("SUCCESS"))
             .andExpect(jsonPath("$.message").value("내 미션 목록 조회에 성공했습니다."))
             .andExpect(jsonPath("$.data.content[0].missionId").value("702"))
+            .andExpect(jsonPath("$.data.content[0].title").doesNotExist())
             .andExpect(jsonPath("$.data.content[0].status").value("PUBLISHED"))
             .andExpect(jsonPath("$.data.content[0].conditionType").value("CONTENT_SET"))
             .andExpect(jsonPath("$.data.content[0].endsAt").value("2026-09-30T23:59:59+09:00"))

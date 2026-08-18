@@ -85,6 +85,7 @@ class RegionAdminMissionControllerWebMvcTest {
             .andExpect(jsonPath("$.code").value("SUCCESS"))
             .andExpect(jsonPath("$.message").value("지역 미션 상세 조회에 성공했습니다."))
             .andExpect(jsonPath("$.data.missionId").value("701"))
+            .andExpect(jsonPath("$.data.title").doesNotExist())
             .andExpect(jsonPath("$.data.regionId").value("11"))
             .andExpect(jsonPath("$.data.status").value("DRAFT"))
             .andExpect(jsonPath("$.data.conditionType").value("CONTENT_SET"))

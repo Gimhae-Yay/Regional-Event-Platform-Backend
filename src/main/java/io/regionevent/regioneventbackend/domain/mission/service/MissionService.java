@@ -103,12 +103,7 @@ public class MissionService {
     }
 
     public Mission save(Mission mission) {
-        Mission savedMission = missionRepository.saveAndFlush(mission);
-        if (savedMission.getTitle() == null) {
-            savedMission.fillMissingTitleWithFallback();
-            return missionRepository.saveAndFlush(savedMission);
-        }
-        return savedMission;
+        return missionRepository.saveAndFlush(mission);
     }
 
     public Mission submitForReview(Mission mission) {
@@ -217,6 +212,7 @@ public class MissionService {
             .map(mission -> new PublicRegionMissionListResult.Mission(
                 mission.getMissionId(),
                 mission.getRegionId(),
+                mission.getTitle(),
                 mission.getConditionType(),
                 mission.getRequiredVisitCount(),
                 Math.toIntExact(mission.getTargetContentCount()),

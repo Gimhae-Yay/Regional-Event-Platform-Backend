@@ -120,6 +120,7 @@ class MyMissionParticipationControllerIntegrationTest {
                 endedParticipation.getMissionParticipationId().toString()
             ))
             .andExpect(jsonPath("$.data.content[0].missionId").value(endedMission.getMissionId().toString()))
+            .andExpect(jsonPath("$.data.content[0].title").value("테스트 미션"))
             .andExpect(jsonPath("$.data.content[0].status").value("ENDED_INCOMPLETE"))
             .andExpect(jsonPath("$.data.content[0].progressCount").value(0))
             .andExpect(jsonPath("$.data.content[0].requiredCount").value(1))

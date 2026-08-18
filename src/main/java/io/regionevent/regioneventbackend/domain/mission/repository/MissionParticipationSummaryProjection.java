@@ -10,6 +10,8 @@ public interface MissionParticipationSummaryProjection {
 
     Long getMissionId();
 
+    String getTitle();
+
     MissionParticipationStatus getStatus();
 
     Long getProgressCount();

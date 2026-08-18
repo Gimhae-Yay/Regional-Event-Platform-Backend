@@ -1,2 +1,0 @@
-ALTER TABLE mission
-    ADD COLUMN title VARCHAR(255) NULL;

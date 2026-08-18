@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.global.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -23,22 +24,14 @@ class MissionTitleMigrationTest {
     private static final Instant MISSION_ENDS_AT = Instant.parse("2026-09-01T00:00:00Z");
 
     @Test
-    void V45는_기존_미션을_보존하고_nullable_VARCHAR_255_중복_제목을_허용한다() throws SQLException {
+    void V45는_빈_미션_테이블에_NOT_NULL_VARCHAR_255_제목을_추가하고_중복을_허용한다() throws SQLException {
         SingleConnectionDataSource dataSource = createDataSource();
         migrateTo(dataSource, "44");
         JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
         insertRequiredRows(jdbcTemplate);
-        insertMission(jdbcTemplate, 1L, null);
 
         migrateToLatest(dataSource);
 
-        Map<String, Object> existingMission = jdbcTemplate.queryForMap(
-            """
-                SELECT title, condition_type, required_visit_count, status
-                FROM mission
-                WHERE mission_id = 1
-                """
-        );
         Map<String, Object> titleColumn = jdbcTemplate.queryForMap(
             """
                 SELECT is_nullable, character_maximum_length, column_default
@@ -49,16 +42,15 @@ class MissionTitleMigrationTest {
                 """
         );
 
-        assertThat(existingMission.get("TITLE")).isNull();
-        assertThat(existingMission.get("CONDITION_TYPE")).isEqualTo("VISIT_COUNT");
-        assertThat(existingMission.get("REQUIRED_VISIT_COUNT")).isEqualTo(1);
-        assertThat(existingMission.get("STATUS")).isEqualTo("DRAFT");
-        assertThat(titleColumn.get("IS_NULLABLE")).isEqualTo("YES");
+        assertThat(titleColumn.get("IS_NULLABLE")).isEqualTo("NO");
         assertThat(((Number) titleColumn.get("CHARACTER_MAXIMUM_LENGTH")).longValue()).isEqualTo(255L);
         assertThat(titleColumn.get("COLUMN_DEFAULT")).isNull();
         assertThat(countUniqueTitleIndexes(dataSource)).isZero();
 
-        jdbcTemplate.update("UPDATE mission SET title = '중복 미션' WHERE mission_id = 1");
+        assertThatThrownBy(() -> insertMissionWithoutTitle(jdbcTemplate, 1L))
+            .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+
+        insertMission(jdbcTemplate, 1L, "중복 미션");
         insertMission(jdbcTemplate, 2L, "중복 미션");
 
         assertThat(jdbcTemplate.queryForObject(
@@ -150,20 +142,6 @@ class MissionTitleMigrationTest {
         Long missionId,
         String title
     ) {
-        if (title == null) {
-            jdbcTemplate.update(
-                """
-                    INSERT INTO mission (
-                        mission_id, region_id, condition_type, required_visit_count,
-                        reward_coupon_policy_id, status, ends_at
-                    )
-                    VALUES (?, 1, 'VISIT_COUNT', 1, 1, 'DRAFT', ?)
-                    """,
-                missionId,
-                Timestamp.from(MISSION_ENDS_AT)
-            );
-            return;
-        }
         jdbcTemplate.update(
             """
                 INSERT INTO mission (
@@ -174,6 +152,23 @@ class MissionTitleMigrationTest {
                 """,
             missionId,
             title,
+            Timestamp.from(MISSION_ENDS_AT)
+        );
+    }
+
+    private void insertMissionWithoutTitle(
+        JdbcTemplate jdbcTemplate,
+        Long missionId
+    ) {
+        jdbcTemplate.update(
+            """
+                INSERT INTO mission (
+                    mission_id, region_id, condition_type, required_visit_count,
+                    reward_coupon_policy_id, status, ends_at
+                )
+                VALUES (?, 1, 'VISIT_COUNT', 1, 1, 'DRAFT', ?)
+                """,
+            missionId,
             Timestamp.from(MISSION_ENDS_AT)
         );
     }

@@ -114,6 +114,7 @@ class CreateOperatorMissionAuditAtomicityTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
+                      "title": "감사 원자성 미션",
                       "conditionType": "CONTENT_SET",
                       "requiredVisitCount": null,
                       "targetContentIds": ["%d"],
@@ -177,6 +178,7 @@ class CreateOperatorMissionAuditAtomicityTest {
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {
+                  "title": "감사 원자성 미션",
                   "conditionType": "CONTENT_SET",
                   "requiredVisitCount": null,
                   "targetContentIds": ["%d"],

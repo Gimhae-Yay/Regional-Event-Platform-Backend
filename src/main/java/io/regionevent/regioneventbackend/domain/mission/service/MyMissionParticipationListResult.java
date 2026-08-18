@@ -20,6 +20,7 @@ public record MyMissionParticipationListResult(
     public record Participation(
         Long participationId,
         Long missionId,
+        String title,
         MissionParticipationStatus status,
         int progressCount,
         int requiredCount,
@@ -32,6 +33,7 @@ public record MyMissionParticipationListResult(
             return new Participation(
                 summary.participationId(),
                 summary.missionId(),
+                summary.title(),
                 summary.status(),
                 summary.progressCount(),
                 summary.requiredCount(),

@@ -97,20 +97,16 @@ class MissionTest {
     }
 
     @Test
-    void fillMissingTitleWithFallback_afterIdAssignment_usesMissionId() {
-        Mission untitledMission = new Mission(
+    void constructor_withNullTitle_rejectsTitle() {
+        assertThatThrownBy(() -> new Mission(
             null,
             region,
             MissionConditionType.VISIT_COUNT,
             3,
             rewardCouponPolicy,
             ENDS_AT
-        );
-        ReflectionTestUtils.setField(untitledMission, "missionId", 701L);
-
-        untitledMission.fillMissingTitleWithFallback();
-
-        assertThat(untitledMission.getTitle()).isEqualTo("미션 701");
+        )).isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("title must not be null");
     }
 
     @Test
@@ -211,16 +207,18 @@ class MissionTest {
     }
 
     @Test
-    void replaceDraftCoreValues_withNullTitle_preservesExistingTitle() {
-        mission.replaceDraftCoreValues(
+    void replaceDraftCoreValues_withNullTitle_rejectsUpdateAndPreservesExistingTitle() {
+        assertThatThrownBy(() -> mission.replaceDraftCoreValues(
             null,
             MissionConditionType.VISIT_COUNT,
             4,
             rewardCouponPolicy,
             ENDS_AT.plusSeconds(3600)
-        );
+        )).isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("title must not be null");
 
         assertThat(mission.getTitle()).isEqualTo("기존 미션");
+        assertThat(mission.getRequiredVisitCount()).isEqualTo(3);
     }
 
     @Test

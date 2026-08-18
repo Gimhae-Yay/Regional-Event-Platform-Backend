@@ -113,6 +113,7 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
         value = """
             SELECT mission.missionId AS missionId,
                    region.regionId AS regionId,
+                   mission.title AS title,
                    mission.conditionType AS conditionType,
                    mission.requiredVisitCount AS requiredVisitCount,
                    SUM(CASE WHEN targetContent.content IS NULL THEN 0L ELSE 1L END) AS targetContentCount,
@@ -130,6 +131,7 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
               AND mission.endsAt > :now
             GROUP BY mission.missionId,
                      region.regionId,
+                     mission.title,
                      mission.conditionType,
                      mission.requiredVisitCount,
                      mission.endsAt,

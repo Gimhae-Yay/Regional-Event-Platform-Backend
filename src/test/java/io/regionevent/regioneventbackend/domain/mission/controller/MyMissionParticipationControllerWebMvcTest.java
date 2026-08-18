@@ -55,6 +55,7 @@ class MyMissionParticipationControllerWebMvcTest {
                 List.of(new MyMissionParticipationListResult.Participation(
                     9001L,
                     701L,
+                    "김해 문화 미션",
                     MissionParticipationStatus.IN_PROGRESS,
                     1,
                     3,
@@ -76,6 +77,7 @@ class MyMissionParticipationControllerWebMvcTest {
             .andExpect(jsonPath("$.message").value("내 미션 참여 목록 조회에 성공했습니다."))
             .andExpect(jsonPath("$.data.content[0].participationId").value("9001"))
             .andExpect(jsonPath("$.data.content[0].missionId").value("701"))
+            .andExpect(jsonPath("$.data.content[0].title").value("김해 문화 미션"))
             .andExpect(jsonPath("$.data.content[0].status").value("IN_PROGRESS"))
             .andExpect(jsonPath("$.data.content[0].progressCount").value(1))
             .andExpect(jsonPath("$.data.content[0].requiredCount").value(3))

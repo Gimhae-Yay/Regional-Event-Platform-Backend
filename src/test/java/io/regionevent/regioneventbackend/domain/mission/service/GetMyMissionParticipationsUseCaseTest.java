@@ -45,6 +45,7 @@ class GetMyMissionParticipationsUseCaseTest {
         MissionParticipationSummary summary = new MissionParticipationSummary(
             9001L,
             701L,
+            "김해 문화 미션",
             MissionParticipationStatus.IN_PROGRESS,
             1,
             3,
@@ -72,6 +73,7 @@ class GetMyMissionParticipationsUseCaseTest {
         assertThat(result.content()).containsExactly(new MyMissionParticipationListResult.Participation(
             9001L,
             701L,
+            "김해 문화 미션",
             MissionParticipationStatus.IN_PROGRESS,
             1,
             3,

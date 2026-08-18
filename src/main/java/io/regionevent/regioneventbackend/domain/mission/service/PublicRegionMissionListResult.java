@@ -21,6 +21,7 @@ public record PublicRegionMissionListResult(
     public record Mission(
         Long missionId,
         Long regionId,
+        String title,
         MissionConditionType conditionType,
         Integer requiredVisitCount,
         int targetContentCount,

@@ -149,6 +149,7 @@ class MyMissionParticipationDetailControllerIntegrationTest {
             .andExpect(jsonPath("$.message").value("내 미션 참여 상세 조회에 성공했습니다."))
             .andExpect(jsonPath("$.data.participationId").value(participation.getMissionParticipationId().toString()))
             .andExpect(jsonPath("$.data.missionId").value(fixtures.mission().getMissionId().toString()))
+            .andExpect(jsonPath("$.data.title").value("테스트 미션"))
             .andExpect(jsonPath("$.data.status").value("IN_PROGRESS"))
             .andExpect(jsonPath("$.data.conditionType").value("CONTENT_SET"))
             .andExpect(jsonPath("$.data.progressCount").value(1))

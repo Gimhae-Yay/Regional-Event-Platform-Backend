@@ -54,6 +54,7 @@ class PublicRegionMissionControllerWebMvcTest {
                 List.of(new PublicRegionMissionListResult.Mission(
                     701L,
                     11L,
+                    "김해 문화 미션",
                     MissionConditionType.CONTENT_SET,
                     null,
                     3,
@@ -73,6 +74,7 @@ class PublicRegionMissionControllerWebMvcTest {
             .andExpect(jsonPath("$.message").value("공개 미션 목록 조회에 성공했습니다."))
             .andExpect(jsonPath("$.data.content[0].missionId").value("701"))
             .andExpect(jsonPath("$.data.content[0].regionId").value("11"))
+            .andExpect(jsonPath("$.data.content[0].title").value("김해 문화 미션"))
             .andExpect(jsonPath("$.data.content[0].conditionType").value("CONTENT_SET"))
             .andExpect(jsonPath("$.data.content[0].targetContentCount").value(3))
             .andExpect(jsonPath("$.data.content[0].endsAt").value("2026-09-30T23:59:59+09:00"))
@@ -93,6 +95,7 @@ class PublicRegionMissionControllerWebMvcTest {
                 List.of(new PublicRegionMissionListResult.Mission(
                     702L,
                     11L,
+                    "김해 방문 미션",
                     MissionConditionType.VISIT_COUNT,
                     3,
                     0,

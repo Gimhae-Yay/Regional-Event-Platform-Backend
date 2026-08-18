@@ -218,12 +218,13 @@ class MissionDefinitionMigrationTest {
         jdbcTemplate.update(
             """
                 INSERT INTO mission (
-                    mission_id, region_id, condition_type, required_visit_count, reward_coupon_policy_id,
+                    mission_id, title, region_id, condition_type, required_visit_count, reward_coupon_policy_id,
                     status, ends_at, published_at, ended_at
                 )
-                VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?)
                 """,
             missionId,
+            "테스트 미션 " + missionId,
             conditionType,
             requiredVisitCount,
             rewardCouponPolicyId,

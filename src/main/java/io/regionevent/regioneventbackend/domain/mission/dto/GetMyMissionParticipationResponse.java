@@ -12,6 +12,7 @@ import io.regionevent.regioneventbackend.domain.mission.service.MissionParticipa
 public record GetMyMissionParticipationResponse(
     String participationId,
     String missionId,
+    String title,
     MissionParticipationStatus status,
     MissionConditionType conditionType,
     int progressCount,
@@ -27,6 +28,7 @@ public record GetMyMissionParticipationResponse(
         return new GetMyMissionParticipationResponse(
             participation.getMissionParticipationId().toString(),
             participation.getMission().getMissionId().toString(),
+            result.title(),
             participation.getStatus(),
             participation.getMission().getConditionType(),
             result.progressCount(),

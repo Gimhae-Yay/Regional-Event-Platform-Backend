@@ -21,6 +21,7 @@ import tools.jackson.databind.exc.MismatchedInputException;
 
 public record CreateOperatorMissionRequest(
     @JsonDeserialize(using = StringValueDeserializer.class)
+    @NotBlank
     String title,
 
     @JsonDeserialize(using = StringValueDeserializer.class)
