@@ -70,6 +70,8 @@ Accept: application/json
   "message": "예약 취소에 성공했습니다.",
   "data": {
     "reservationId": "123",
+    "reservationStatus": "CANCELLED",
+    "refund": null,
     "sessionId": "456",
     "status": "CANCELLED",
     "cancellationReason": "USER_REQUEST",
@@ -87,8 +89,10 @@ Accept: application/json
 | `code` | String | 성공 코드. 항상 `SUCCESS` |
 | `message` | String | 공개 성공 메시지 |
 | `data.reservationId` | String | 취소된 예약 식별자 |
+| `data.reservationStatus` | String | 취소 처리 뒤 예약 상태. 항상 `CANCELLED`이며 현재 `data.status`와 같은 값을 중복 표현한다. |
+| `data.refund` | null | P0 무료 예약에는 결제·환불 행이 없으므로 항상 `null`이다. |
 | `data.sessionId` | String | 예약이 속한 회차 식별자 |
-| `data.status` | String | 예약 상태. 항상 `CANCELLED` |
+| `data.status` | String | 취소 처리 뒤 예약 상태. 항상 `CANCELLED`이며 현재 `data.reservationStatus`와 같은 값을 중복 표현한다. |
 | `data.cancellationReason` | String | 최초 취소 사유. 이 API로 최초 취소한 경우 `USER_REQUEST` |
 | `data.cancelledAt` | String | 최초 취소 시각. API 공통 규칙에 따른 UTC ISO 8601 일시다. |
 | `data.capacityReleasedAt` | String or null | 최초 정원 복구 시각. 회차 시작 이후의 회차 취소 등 정원을 복구하지 않은 취소는 `null` API 공통 규칙에 따른 UTC ISO 8601 일시다. |
