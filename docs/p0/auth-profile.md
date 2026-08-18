@@ -32,6 +32,7 @@
 | [ADR-0026](../adr/0026-select-signup-role-and-create-operator-application.md#결정) | 가입 시 역할 선택, 방문자 즉시 부여와 운영자 `PENDING` 신청 생성 |
 | [ADR-0105](../adr/0105-deliver-access-token-in-json-response-body.md#결정) | Access Token JSON 응답 본문과 Refresh Token HttpOnly 쿠키 전달 |
 | [ADR-0043](../adr/0043-define-jwt-access-token-security-profile.md#결정) | JWT Access Token의 서명·claim·키 회전·유효기간 검증 |
+| [ADR-0108](../adr/0108-use-global-authority-snapshot-for-first-stage-rbac.md#결정) | 전역 authority snapshot 1차 RBAC와 DB 최종 인가 경계 |
 | [ADR-0044](../adr/0044-use-delegating-bcrypt-password-encoder.md#결정) | 교체 가능한 BCrypt 비밀번호 해싱 |
 | [ADR-0045](../adr/0045-use-stateless-bearer-security-with-same-site-refresh-cookie.md#결정) | 무상태 Bearer 보안 체인과 동일 사이트 Refresh 쿠키 경계 |
 | [ADR-0052](../adr/0052-define-refresh-token-security-profile-and-fail-closed-redis-state.md#결정) | 전용 Refresh JWT, 14일 절대 계열 수명과 Redis 상태 소실 페일 클로즈 |
@@ -46,9 +47,8 @@
 - 로그인과 Access Token 재발급 성공 시 Access Token은 JSON 본문의 `data.accessToken`으로, Refresh Token은 `HttpOnly`·`Secure`·`SameSite=Strict` 쿠키로 발급한다.
 - 로그인마다 독립된 Refresh Token 계열을 만들며, 계열은 최초 로그인부터 최대 14일만 유효하다. 갱신은 같은 계열을 회전할 뿐 만료를 연장하지 않는다.
 - 로그아웃은 제출 Refresh Token의 `jti`가 활성 `jti`와 일치할 때만 현재 계열을 폐기하고 같은 이름·경로의 Refresh Token 쿠키를 만료시킨다. 갱신 완료 뒤 소비된 이전 토큰으로 요청하면 서버 상태는 바꾸지 않고 Cookie만 만료한다. Access Token은 짧은 만료 전까지 유효할 수 있다.
-- 방문자, 운영자, 지역 관리자 역할을 구분한다.
-- 서버는 신규 콘텐츠 생성에는 승인된 운영자 역할과 담당 `region_id`를 검증하고,
-  기존 자원 접근에는 역할, 담당 `region_id`, 운영자-콘텐츠 소유 관계를 함께 검증한다.
+- 방문자, 운영자, 지역 관리자 역할을 구분한다. 역할 보호 HTTP 경로는 Access Token의 전역 `ROLE_*` authority snapshot으로 1차 인가한다.
+- 서버는 신규 콘텐츠 생성과 기존 운영자 자원 접근에서 `ROLE_OPERATOR` snapshot을 먼저 확인하고, DB에서는 활성 `ORDINARY` 계정, 현재 담당 `region_id`, 운영자-콘텐츠 소유 관계와 업무 상태를 검증한다. 지역 관리자도 `ROLE_REGION_ADMIN` snapshot과 현재 담당 지역 관계를 같은 방식으로 분리한다.
 - 지역 관리자는 담당 지역만, 운영자는 자신에게 연결된 콘텐츠·회차·예약만 조회·처리한다.
 
 가입·로그인·로그아웃의 요청·응답, validation, status와 오류 코드는
@@ -60,7 +60,7 @@
 
 - 가입 요청은 `VISITOR` 또는 `OPERATOR`만 선택할 수 있다. `REGION_ADMIN`은 일반 API에서 신청·생성·변경할 수 없다.
 - `VISITOR` 선택 시 서버는 새 활성 회원과 `VISITOR` 역할을 하나의 트랜잭션에서 생성한다.
-- `OPERATOR` 선택 시 서버는 새 활성 회원과 요청 지역·사업자 정보를 가진 `operator_application(PENDING)`을 하나의 트랜잭션에서 생성한다. 승인 전에는 `VISITOR`, `OPERATOR` 역할과 담당 지역을 부여하지 않는다.
+- `OPERATOR` 선택 시 서버는 새 활성 회원과 요청 지역·사업자 정보를 가진 `operator_application(PENDING)`을 하나의 트랜잭션에서 생성한다. 승인 전에는 `VISITOR`, `OPERATOR` 역할과 담당 지역을 부여하지 않는다. 이 회원의 로그인·재발급 Access Token은 유효한 빈 `authorities=[]`와 빈 역할 목록을 가지며, 인증 전용 API에는 각 도메인 조건으로 접근할 수 있지만 역할 보호 API는 `403 FORBIDDEN`이다.
 - 운영자 신청은 담당 지역 관리자의 수동 사업자 검증을 거쳐야 하며, 승인 시에만 `OPERATOR` 역할과 담당 지역을 함께 부여한다.
 - 계정·역할 또는 계정·운영자 신청 생성 중 하나라도 실패하면 전체를 롤백한다.
 
@@ -84,8 +84,9 @@
 
 #### `AUTH-01`
 
-서버는 신규 콘텐츠 생성에서 승인된 운영자 역할과 담당 `region_id`를 검증하고,
-기존 자원 요청에서는 역할, 담당 `region_id`, 운영자-콘텐츠 소유 관계를 검증한다.
+서버는 신규 콘텐츠 생성과 기존 운영자 자원 요청에서 `ROLE_OPERATOR` snapshot을 먼저 확인하고,
+DB에서는 활성 `ORDINARY` 계정, 현재 담당 `region_id`, 운영자-콘텐츠 소유 관계와 업무 상태를 검증한다.
+지역 관리자 요청도 `ROLE_REGION_ADMIN` snapshot을 먼저 확인하고, DB에서는 활성 `ORDINARY` 계정과 현재 담당 지역 관계·대상 지역 일치를 검증한다.
 지역 관리자는 담당 지역만 조회·변경할 수 있고, 운영자는 소유 콘텐츠·회차·예약만 조회·처리할 수 있다.
 지역과 소유 관계는 각 행위에 필요한 범위 조건이며 그 자체로 행위 권한을 부여하지 않는다.
 실제 요청은 [역할과 권한 표](#역할과-권한)와 각 소유 정책이 허용한 행위도 함께 충족해야 한다.
