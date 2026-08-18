@@ -4,6 +4,8 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationReadResult;
@@ -84,7 +86,7 @@ public record GetMyReservationResponse(
     public record CheckInResponse(
         boolean checkedIn,
         Instant checkedAt,
-        String visitId
+        @JsonInclude(JsonInclude.Include.ALWAYS) String visitId
     ) {
     }
 

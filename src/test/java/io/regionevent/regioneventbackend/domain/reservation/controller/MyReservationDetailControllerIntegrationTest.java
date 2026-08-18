@@ -143,7 +143,7 @@ class MyReservationDetailControllerIntegrationTest {
             .andExpect(jsonPath("$.data.session.checkinCloseAt").value("2030-08-10T10:30:00+09:00"))
             .andExpect(jsonPath("$.data.checkIn.checkedIn").value(false))
             .andExpect(jsonPath("$.data.checkIn.checkedAt").doesNotExist())
-            .andExpect(jsonPath("$.data.checkIn.visitId").doesNotExist());
+            .andExpect(jsonPath("$.data.checkIn.visitId").value(org.hamcrest.Matchers.nullValue()));
 
         performGet(fixture.user(), checkedIn.getReservationId())
             .andExpect(status().isOk())
@@ -159,14 +159,14 @@ class MyReservationDetailControllerIntegrationTest {
             .andExpect(jsonPath("$.data.reservation.cancelledAt").value("2030-08-02T01:00:00Z"))
             .andExpect(jsonPath("$.data.reservation.cancellationReason").value("방문자 요청"))
             .andExpect(jsonPath("$.data.checkIn.checkedIn").value(false))
-            .andExpect(jsonPath("$.data.checkIn.visitId").doesNotExist());
+            .andExpect(jsonPath("$.data.checkIn.visitId").value(org.hamcrest.Matchers.nullValue()));
         performGet(fixture.user(), expired.getReservationId())
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.reservation.status").value("EXPIRED"))
             .andExpect(jsonPath("$.data.reservation.quantity").value(1))
             .andExpect(jsonPath("$.data.reservation.expiredAt").value("2030-08-03T01:00:00Z"))
             .andExpect(jsonPath("$.data.checkIn.checkedIn").value(false))
-            .andExpect(jsonPath("$.data.checkIn.visitId").doesNotExist());
+            .andExpect(jsonPath("$.data.checkIn.visitId").value(org.hamcrest.Matchers.nullValue()));
 
         String responseBody = confirmedResult.andReturn().getResponse().getContentAsString();
         assertThat(responseBody).doesNotContain(

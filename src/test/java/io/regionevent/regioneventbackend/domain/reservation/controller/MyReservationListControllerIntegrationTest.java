@@ -165,13 +165,17 @@ class MyReservationListControllerIntegrationTest {
             ))
             .andExpect(jsonPath("$.data.reservations[0].status").value("EXPIRED"))
             .andExpect(jsonPath("$.data.reservations[0].quantity").value(1))
-            .andExpect(jsonPath("$.data.reservations[0].checkIn.visitId").doesNotExist())
+            .andExpect(jsonPath("$.data.reservations[0].checkIn.visitId").value(
+                org.hamcrest.Matchers.nullValue()
+            ))
             .andExpect(jsonPath("$.data.reservations[1].reservationId").value(
                 cancelled.getReservationId().toString()
             ))
             .andExpect(jsonPath("$.data.reservations[1].status").value("CANCELLED"))
             .andExpect(jsonPath("$.data.reservations[1].quantity").value(1))
-            .andExpect(jsonPath("$.data.reservations[1].checkIn.visitId").doesNotExist())
+            .andExpect(jsonPath("$.data.reservations[1].checkIn.visitId").value(
+                org.hamcrest.Matchers.nullValue()
+            ))
             .andExpect(jsonPath("$.data.reservations[2].reservationId").value(
                 checkedIn.getReservationId().toString()
             ))
@@ -207,7 +211,9 @@ class MyReservationListControllerIntegrationTest {
             .andExpect(jsonPath("$.data.reservations[3].quantity").value(1))
             .andExpect(jsonPath("$.data.reservations[3].checkIn.checkedIn").value(false))
             .andExpect(jsonPath("$.data.reservations[3].checkIn.checkedAt").doesNotExist())
-            .andExpect(jsonPath("$.data.reservations[3].checkIn.visitId").doesNotExist());
+            .andExpect(jsonPath("$.data.reservations[3].checkIn.visitId").value(
+                org.hamcrest.Matchers.nullValue()
+            ));
 
         String responseBody = result.andReturn().getResponse().getContentAsString();
         assertThat(responseBody).doesNotContain(
