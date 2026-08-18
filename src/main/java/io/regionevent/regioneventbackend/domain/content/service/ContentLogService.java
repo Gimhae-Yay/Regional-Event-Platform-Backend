@@ -2,6 +2,9 @@ package io.regionevent.regioneventbackend.domain.content.service;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -87,6 +90,22 @@ public class ContentLogService {
             contentId,
             ContentLogStatus.APPROVED
         ).orElseThrow(() -> new IllegalStateException("approved content log must exist"));
+    }
+
+    @Transactional(readOnly = true)
+    public Map<Long, ContentLog> findLatestByContentIdsAndStatus(
+        List<Long> contentIds,
+        ContentLogStatus status
+    ) {
+        if (contentIds.isEmpty()) {
+            return Map.of();
+        }
+        return contentLogRepository.findLatestByContentIdsAndStatus(contentIds, status)
+            .stream()
+            .collect(Collectors.toMap(
+                contentLog -> contentLog.getContent().getContentId(),
+                Function.identity()
+            ));
     }
 
     public ContentLog findLatestRejected(Long contentId) {

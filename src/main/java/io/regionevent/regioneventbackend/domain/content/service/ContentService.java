@@ -272,11 +272,14 @@ public class ContentService {
     }
 
     @Transactional(readOnly = true)
-    public List<Content> findPendingReviewContentsByRegionId(Long regionId) {
+    public List<Content> findContentsByRegionIdAndStatus(Long regionId, ContentStatus status) {
         validateRequiredId(regionId);
+        if (status == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
         return contentRepository.findByRegionRegionIdAndStatusAndDeletedAtIsNullOrderByContentIdAsc(
             regionId,
-            ContentStatus.PENDING
+            status
         );
     }
 
