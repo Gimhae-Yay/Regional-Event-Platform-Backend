@@ -33,6 +33,7 @@ public record GetPublicRegionMissionsResponse(
     public record MissionResponse(
         String missionId,
         String regionId,
+        String title,
         MissionConditionType conditionType,
         Integer requiredVisitCount,
         int targetContentCount,
@@ -46,6 +47,7 @@ public record GetPublicRegionMissionsResponse(
             return new MissionResponse(
                 mission.missionId().toString(),
                 mission.regionId().toString(),
+                mission.title(),
                 mission.conditionType(),
                 mission.requiredVisitCount(),
                 mission.targetContentCount(),

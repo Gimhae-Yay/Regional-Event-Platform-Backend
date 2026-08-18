@@ -734,13 +734,13 @@ INSERT INTO coupon_policy (
     );
 
 INSERT INTO mission (
-    mission_id, region_id, condition_type, required_visit_count,
+    mission_id, title, region_id, condition_type, required_visit_count,
     reward_coupon_policy_id, status, ends_at, published_at, ended_at
 ) VALUES (
-    @mission_id, @region_id, 'VISIT_COUNT', 1,
+    @mission_id, 'K6 완료 미션', @region_id, 'VISIT_COUNT', 1,
     @mission_reward_policy_id, 'PUBLISHED', @now + INTERVAL 30 DAY, @now - INTERVAL 1 DAY, NULL
 ), (
-    @mission_progress_id, @region_id, 'VISIT_COUNT', 1,
+    @mission_progress_id, 'K6 진행 미션', @region_id, 'VISIT_COUNT', 1,
     @mission_progress_policy_id, 'PUBLISHED', @now + INTERVAL 30 DAY, @now - INTERVAL 1 DAY, NULL
 );
 

@@ -8,6 +8,7 @@ import io.regionevent.regioneventbackend.domain.mission.repository.MissionPartic
 public record MissionParticipationSummary(
     Long participationId,
     Long missionId,
+    String title,
     MissionParticipationStatus status,
     int progressCount,
     int requiredCount,
@@ -20,6 +21,7 @@ public record MissionParticipationSummary(
         return new MissionParticipationSummary(
             projection.getParticipationId(),
             projection.getMissionId(),
+            projection.getTitle(),
             projection.getStatus(),
             Math.toIntExact(projection.getProgressCount()),
             Math.toIntExact(projection.getRequiredCount()),

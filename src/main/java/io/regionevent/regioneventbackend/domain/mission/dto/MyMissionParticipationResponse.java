@@ -8,6 +8,7 @@ import io.regionevent.regioneventbackend.domain.mission.service.MyMissionPartici
 public record MyMissionParticipationResponse(
     String participationId,
     String missionId,
+    String title,
     MissionParticipationStatus status,
     int progressCount,
     int requiredCount,
@@ -22,6 +23,7 @@ public record MyMissionParticipationResponse(
         return new MyMissionParticipationResponse(
             participation.participationId().toString(),
             participation.missionId().toString(),
+            participation.title(),
             participation.status(),
             participation.progressCount(),
             participation.requiredCount(),

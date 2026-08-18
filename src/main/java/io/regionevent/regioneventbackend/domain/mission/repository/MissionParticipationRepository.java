@@ -22,6 +22,7 @@ public interface MissionParticipationRepository extends JpaRepository<MissionPar
         value = """
             SELECT participation.missionParticipationId AS participationId,
                 mission.missionId AS missionId,
+                mission.title AS title,
                 participation.status AS status,
                 COUNT(DISTINCT CASE
                     WHEN mission.conditionType = io.regionevent.regioneventbackend.domain.mission.entity.MissionConditionType.VISIT_COUNT
@@ -47,6 +48,7 @@ public interface MissionParticipationRepository extends JpaRepository<MissionPar
               AND (:status IS NULL OR participation.status = :status)
             GROUP BY participation.missionParticipationId,
                 mission.missionId,
+                mission.title,
                 participation.status,
                 mission.conditionType,
                 mission.requiredVisitCount,
@@ -70,6 +72,7 @@ public interface MissionParticipationRepository extends JpaRepository<MissionPar
     @Query("""
         SELECT participation.missionParticipationId AS participationId,
             mission.missionId AS missionId,
+            mission.title AS title,
             participation.status AS status,
             COUNT(DISTINCT CASE
                 WHEN mission.conditionType = io.regionevent.regioneventbackend.domain.mission.entity.MissionConditionType.VISIT_COUNT
@@ -95,6 +98,7 @@ public interface MissionParticipationRepository extends JpaRepository<MissionPar
           AND participation.user.userId = :userId
         GROUP BY participation.missionParticipationId,
             mission.missionId,
+            mission.title,
             participation.status,
             mission.conditionType,
             mission.requiredVisitCount,

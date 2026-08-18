@@ -329,12 +329,12 @@ INSERT INTO coupon_policy (
 );
 
 INSERT INTO mission (
-    mission_id, region_id, condition_type, required_visit_count, reward_coupon_policy_id,
+    mission_id, title, region_id, condition_type, required_visit_count, reward_coupon_policy_id,
     status, ends_at, published_at, ended_at
 ) VALUES
-    (900020, 900001, 'VISIT_COUNT', 1, 900011, 'PUBLISHED', @perf_now + INTERVAL 30 DAY, @perf_now - INTERVAL 1 DAY, NULL),
-    (900021, 900001, 'VISIT_COUNT', 1, 900011, 'PENDING_REVIEW', @perf_now + INTERVAL 30 DAY, NULL, NULL),
-    (900022, 900001, 'VISIT_COUNT', 1, 900012, 'PUBLISHED', @perf_now + INTERVAL 30 DAY, @perf_now - INTERVAL 1 DAY, NULL);
+    (900020, 'K6 공개 미션', 900001, 'VISIT_COUNT', 1, 900011, 'PUBLISHED', @perf_now + INTERVAL 30 DAY, @perf_now - INTERVAL 1 DAY, NULL),
+    (900021, 'K6 검토 미션', 900001, 'VISIT_COUNT', 1, 900011, 'PENDING_REVIEW', @perf_now + INTERVAL 30 DAY, NULL, NULL),
+    (900022, 'K6 진행 미션', 900001, 'VISIT_COUNT', 1, 900012, 'PUBLISHED', @perf_now + INTERVAL 30 DAY, @perf_now - INTERVAL 1 DAY, NULL);
 
 INSERT INTO stampbook (
     stampbook_id, title, region_id, reward_coupon_policy_id, status, published_at, ended_at

@@ -59,6 +59,7 @@ class RegionAdminMissionListControllerWebMvcTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.statusCode").value(200))
             .andExpect(jsonPath("$.data.content[0].missionId").value("702"))
+            .andExpect(jsonPath("$.data.content[0].title").doesNotExist())
             .andExpect(jsonPath("$.data.content[0].status").value("PENDING_REVIEW"))
             .andExpect(jsonPath("$.data.page").value(0))
             .andExpect(jsonPath("$.data.size").value(20))

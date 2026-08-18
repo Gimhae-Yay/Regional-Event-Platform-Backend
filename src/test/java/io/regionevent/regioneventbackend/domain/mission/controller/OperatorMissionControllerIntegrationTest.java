@@ -157,8 +157,7 @@ class OperatorMissionControllerIntegrationTest {
             .andExpect(jsonPath("$.data.status").value("DRAFT"));
 
         Mission mission = missionRepository.findAll().stream().findFirst().orElseThrow();
-        assertThat(mission.getTitle()).isEqualTo("미션 " + mission.getMissionId());
-        assertThat(mission.getTitle()).isNotNull();
+        assertThat(mission.getTitle()).isEqualTo("테스트 미션");
         assertThat(mission.getStatus()).isEqualTo(io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus.DRAFT);
         assertThat(mission.getConditionType()).isEqualTo(MissionConditionType.VISIT_COUNT);
         assertThat(mission.getRequiredVisitCount()).isEqualTo(3);
@@ -172,12 +171,23 @@ class OperatorMissionControllerIntegrationTest {
     }
 
     @Test
-    void create_withExplicitNullTitle_persistsFallbackTitle() throws Exception {
+    void create_withMissingOrNullTitle_returnsInvalidInputWithoutPersistingMission() throws Exception {
         Region region = saveRegion("NULL-TITLE");
         AppUser operator = saveOperator(region, AppUserStatus.ACTIVE);
         Content rewardContent = saveContent(region, operator, "null-title-reward");
         CouponPolicy rewardCouponPolicy = saveMissionRewardCouponPolicy(rewardContent, region);
 
+        mockMvc.perform(post("/api/v1/operator/missions")
+                .header("Authorization", bearerToken(operator))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createMissionRequestWithoutTitle(
+                    "VISIT_COUNT",
+                    1,
+                    List.of(),
+                    rewardCouponPolicy.getCouponPolicyId()
+                )))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
         mockMvc.perform(post("/api/v1/operator/missions")
                 .header("Authorization", bearerToken(operator))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -188,11 +198,11 @@ class OperatorMissionControllerIntegrationTest {
                     List.of(),
                     rewardCouponPolicy.getCouponPolicyId()
                 )))
-            .andExpect(status().isCreated());
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
 
-        Mission mission = missionRepository.findAll().stream().findFirst().orElseThrow();
-        assertThat(mission.getTitle()).isEqualTo("미션 " + mission.getMissionId());
-        assertThat(mission.getTitle()).isNotNull();
+        assertThat(missionRepository.findAll()).isEmpty();
+        assertThat(auditEventRepository.findAll()).isEmpty();
     }
 
     @Test
@@ -319,7 +329,7 @@ class OperatorMissionControllerIntegrationTest {
     }
 
     @Test
-    void update_withMissingOrNullTitle_preservesExistingTitle() throws Exception {
+    void update_withMissingOrNullTitle_returnsInvalidInputAndPreservesMission() throws Exception {
         Region region = saveRegion("UPDATE-NULL-TITLE");
         AppUser operator = saveOperator(region, AppUserStatus.ACTIVE);
         Mission mission = saveVisitCountMission(region, operator);
@@ -328,8 +338,9 @@ class OperatorMissionControllerIntegrationTest {
         mockMvc.perform(patch("/api/v1/operator/missions/{missionId}", mission.getMissionId())
                 .header("Authorization", bearerToken(operator))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(createMissionRequest("VISIT_COUNT", 2, List.of(), rewardCouponPolicyId)))
-            .andExpect(status().isOk());
+                .content(createMissionRequestWithoutTitle("VISIT_COUNT", 2, List.of(), rewardCouponPolicyId)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
         mockMvc.perform(patch("/api/v1/operator/missions/{missionId}", mission.getMissionId())
                 .header("Authorization", bearerToken(operator))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -340,13 +351,15 @@ class OperatorMissionControllerIntegrationTest {
                     List.of(),
                     rewardCouponPolicyId
                 )))
-            .andExpect(status().isOk());
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
 
         entityManager.flush();
         entityManager.clear();
         Mission unchangedTitleMission = missionRepository.findByMissionId(mission.getMissionId()).orElseThrow();
         assertThat(unchangedTitleMission.getTitle()).isEqualTo("테스트 미션");
-        assertThat(unchangedTitleMission.getRequiredVisitCount()).isEqualTo(3);
+        assertThat(unchangedTitleMission.getRequiredVisitCount()).isEqualTo(1);
+        assertThat(auditEventRepository.findAll()).isEmpty();
     }
 
     @Test
@@ -1246,6 +1259,32 @@ class OperatorMissionControllerIntegrationTest {
     }
 
     private String createMissionRequest(
+        String conditionType,
+        Integer requiredVisitCount,
+        List<Long> targetContentIds,
+        Long rewardCouponPolicyId
+    ) {
+        String targetContentIdsJson = targetContentIds.stream()
+            .map(contentId -> "\"%d\"".formatted(contentId))
+            .collect(Collectors.joining(", "));
+        return """
+            {
+              "title": "테스트 미션",
+              "conditionType": "%s",
+              "requiredVisitCount": %s,
+              "targetContentIds": [%s],
+              "rewardCouponPolicyId": "%d",
+              "endsAt": "2027-09-30T23:59:59+09:00"
+            }
+            """.formatted(
+                conditionType,
+                requiredVisitCount,
+                targetContentIdsJson,
+                rewardCouponPolicyId
+            );
+    }
+
+    private String createMissionRequestWithoutTitle(
         String conditionType,
         Integer requiredVisitCount,
         List<Long> targetContentIds,

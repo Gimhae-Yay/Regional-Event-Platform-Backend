@@ -48,6 +48,7 @@ class GetPublicMissionUseCaseTest {
         MissionParticipationSummary participation = new MissionParticipationSummary(
             9001L,
             701L,
+            "공개 상세 비노출 제목",
             MissionParticipationStatus.IN_PROGRESS,
             1,
             3,

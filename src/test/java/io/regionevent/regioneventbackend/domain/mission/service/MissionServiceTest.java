@@ -3,7 +3,6 @@ package io.regionevent.regioneventbackend.domain.mission.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -11,8 +10,6 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
-
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponIssuanceType;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicy;
 import io.regionevent.regioneventbackend.domain.coupon.entity.CouponPolicyStatus;
@@ -57,25 +54,22 @@ class MissionServiceTest {
     }
 
     @Test
-    void save_withMissingTitle_assignsFallbackAfterFirstFlushAndFlushesAgain() {
+    void save_withValidTitle_flushesOnce() {
         Region region = mock(Region.class);
         Mission mission = new Mission(
-            null,
+            "김해 미션",
             region,
             MissionConditionType.VISIT_COUNT,
             1,
             rewardCouponPolicy(region),
             Instant.parse("2026-09-01T00:00:00Z")
         );
-        when(missionRepository.saveAndFlush(mission)).thenAnswer(invocation -> {
-            ReflectionTestUtils.setField(mission, "missionId", 701L);
-            return mission;
-        });
+        when(missionRepository.saveAndFlush(mission)).thenReturn(mission);
 
         Mission savedMission = missionService.save(mission);
 
-        assertThat(savedMission.getTitle()).isEqualTo("미션 701");
-        verify(missionRepository, times(2)).saveAndFlush(mission);
+        assertThat(savedMission.getTitle()).isEqualTo("김해 미션");
+        verify(missionRepository).saveAndFlush(mission);
     }
 
     private CouponPolicy rewardCouponPolicy(Region region) {

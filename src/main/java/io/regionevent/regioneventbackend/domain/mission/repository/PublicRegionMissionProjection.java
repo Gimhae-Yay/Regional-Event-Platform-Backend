@@ -11,6 +11,8 @@ public interface PublicRegionMissionProjection {
 
     Long getRegionId();
 
+    String getTitle();
+
     MissionConditionType getConditionType();
 
     Integer getRequiredVisitCount();

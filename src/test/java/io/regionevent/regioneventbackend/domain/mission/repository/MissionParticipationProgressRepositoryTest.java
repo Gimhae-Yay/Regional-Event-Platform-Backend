@@ -334,6 +334,7 @@ class MissionParticipationProgressRepositoryTest {
         assertThat(secondPage.getContent()).singleElement().satisfies(summary -> {
             assertThat(summary.getParticipationId()).isEqualTo(completedParticipation.getMissionParticipationId());
             assertThat(summary.getMissionId()).isEqualTo(fixtures.mission().getMissionId());
+            assertThat(summary.getTitle()).isEqualTo("테스트 미션");
             assertThat(summary.getStatus()).isEqualTo(MissionParticipationStatus.COMPLETED);
             assertThat(summary.getProgressCount()).isEqualTo(2);
             assertThat(summary.getRequiredCount()).isEqualTo(3);
@@ -403,6 +404,7 @@ class MissionParticipationProgressRepositoryTest {
 
         assertThat(summary.getProgressCount()).isEqualTo(2);
         assertThat(summary.getRequiredCount()).isEqualTo(2);
+        assertThat(summary.getTitle()).isEqualTo("테스트 미션");
         assertThat(summary.getRewardClaimed()).isFalse();
         MissionParticipationSummaryProjection singleSummary = missionParticipationRepository
             .findSummaryByMissionIdAndUserId(
@@ -411,6 +413,7 @@ class MissionParticipationProgressRepositoryTest {
             )
             .orElseThrow();
         assertThat(singleSummary.getParticipationId()).isEqualTo(participation.getMissionParticipationId());
+        assertThat(singleSummary.getTitle()).isEqualTo("테스트 미션");
         assertThat(singleSummary.getProgressCount()).isEqualTo(2);
         assertThat(singleSummary.getRequiredCount()).isEqualTo(2);
     }

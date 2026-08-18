@@ -119,6 +119,7 @@ class OperatorMissionControllerWebMvcTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
+                      "title": "중복 대상 미션",
                       "conditionType": "CONTENT_SET",
                       "requiredVisitCount": null,
                       "targetContentIds": ["101", "101"],
@@ -240,6 +241,7 @@ class OperatorMissionControllerWebMvcTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
+                      "title": "중복 대상 미션",
                       "conditionType": "CONTENT_SET",
                       "requiredVisitCount": null,
                       "targetContentIds": ["101", "101"],
@@ -251,6 +253,35 @@ class OperatorMissionControllerWebMvcTest {
             .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
 
         verifyNoInteractions(updateOperatorMissionUseCase);
+    }
+
+    @Test
+    void createAndUpdate_withMissingOrNullTitle_returnsInvalidInputWithoutCallingUseCase() throws Exception {
+        for (String titleField : java.util.List.of("", "\"title\": null,")) {
+            String request = """
+                {
+                  %s
+                  "conditionType": "VISIT_COUNT",
+                  "requiredVisitCount": 3,
+                  "targetContentIds": [],
+                  "rewardCouponPolicyId": "501",
+                  "endsAt": "2026-09-30T23:59:59+09:00"
+                }
+                """.formatted(titleField);
+
+            mockMvc.perform(authenticated(post("/api/v1/operator/missions"))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(request))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+            mockMvc.perform(authenticated(patch("/api/v1/operator/missions/701"))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(request))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        }
+
+        verifyNoInteractions(createOperatorMissionUseCase, updateOperatorMissionUseCase);
     }
 
     @Test
@@ -572,6 +603,7 @@ class OperatorMissionControllerWebMvcTest {
             .andExpect(jsonPath("$.code").value("SUCCESS"))
             .andExpect(jsonPath("$.message").value("내 미션 상세 조회에 성공했습니다."))
             .andExpect(jsonPath("$.data.missionId").value("701"))
+            .andExpect(jsonPath("$.data.title").doesNotExist())
             .andExpect(jsonPath("$.data.regionId").value("11"))
             .andExpect(jsonPath("$.data.status").value("DRAFT"))
             .andExpect(jsonPath("$.data.conditionType").value("CONTENT_SET"))
@@ -647,15 +679,7 @@ class OperatorMissionControllerWebMvcTest {
     }
 
     private String createVisitCountRequest(String rewardCouponPolicyId) {
-        return """
-            {
-              "conditionType": "VISIT_COUNT",
-              "requiredVisitCount": 3,
-              "targetContentIds": [],
-              "rewardCouponPolicyId": "%s",
-              "endsAt": "2026-09-30T23:59:59+09:00"
-            }
-            """.formatted(rewardCouponPolicyId);
+        return createVisitCountRequest("테스트 미션", rewardCouponPolicyId);
     }
 
     private String createVisitCountRequest(
