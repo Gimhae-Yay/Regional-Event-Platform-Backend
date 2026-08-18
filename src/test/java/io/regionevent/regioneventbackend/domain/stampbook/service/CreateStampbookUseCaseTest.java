@@ -132,6 +132,7 @@ class CreateStampbookUseCaseTest {
         assertThat(stampbookRepository.findById(result.stampbookId()))
             .hasValueSatisfying(stampbook -> {
                 assertThat(stampbook.getRegion().getRegionId()).isEqualTo(fixture.region().getRegionId());
+                assertThat(stampbook.getTitle()).isEqualTo("김해 문화 완주");
                 assertThat(stampbook.getRewardCouponPolicy().getCouponPolicyId())
                     .isEqualTo(fixture.couponPolicy().getCouponPolicyId());
             });
@@ -211,6 +212,55 @@ class CreateStampbookUseCaseTest {
         assertThat(stampbookRepository.count()).isZero();
     }
 
+    @Test
+    void create_제목이누락되거나공백이거나101자면_입력오류를반환한다() {
+        Fixture fixture = createFixture();
+
+        assertThatThrownBy(() -> createStampbookUseCase.create(
+            fixture.operator().getUserId(),
+            new CreateStampbookCommand(
+                null,
+                fixture.region().getRegionId(),
+                fixture.contentIds(),
+                fixture.couponPolicy().getCouponPolicyId(),
+                "스탬프북을 생성합니다."
+            ),
+            UUID.randomUUID()
+        )).isInstanceOf(BusinessException.class)
+            .extracting(exception -> ((BusinessException) exception).getErrorCode())
+            .isEqualTo(ErrorCode.INVALID_INPUT);
+
+        assertThatThrownBy(() -> createStampbookUseCase.create(
+            fixture.operator().getUserId(),
+            new CreateStampbookCommand(
+                "   ",
+                fixture.region().getRegionId(),
+                fixture.contentIds(),
+                fixture.couponPolicy().getCouponPolicyId(),
+                "스탬프북을 생성합니다."
+            ),
+            UUID.randomUUID()
+        )).isInstanceOf(BusinessException.class)
+            .extracting(exception -> ((BusinessException) exception).getErrorCode())
+            .isEqualTo(ErrorCode.INVALID_INPUT);
+
+        assertThatThrownBy(() -> createStampbookUseCase.create(
+            fixture.operator().getUserId(),
+            new CreateStampbookCommand(
+                "가".repeat(101),
+                fixture.region().getRegionId(),
+                fixture.contentIds(),
+                fixture.couponPolicy().getCouponPolicyId(),
+                "스탬프북을 생성합니다."
+            ),
+            UUID.randomUUID()
+        )).isInstanceOf(BusinessException.class)
+            .extracting(exception -> ((BusinessException) exception).getErrorCode())
+            .isEqualTo(ErrorCode.INVALID_INPUT);
+
+        assertThat(stampbookRepository.count()).isZero();
+    }
+
     private Fixture createFixture() {
         return transactionTemplate.execute(status -> {
             String suffix = Long.toUnsignedString(System.nanoTime());
@@ -271,6 +321,7 @@ class CreateStampbookUseCaseTest {
         Long rewardCouponPolicyId
     ) {
         return new CreateStampbookCommand(
+            "  김해 문화 완주  ",
             regionId,
             contentIds,
             rewardCouponPolicyId,

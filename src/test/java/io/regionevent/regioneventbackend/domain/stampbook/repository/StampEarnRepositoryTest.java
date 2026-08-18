@@ -307,7 +307,7 @@ class StampEarnRepositoryTest {
             ISSUE_ENDS_AT,
             100L
         ));
-        Stampbook stampbook = stampbookRepository.saveAndFlush(new Stampbook(region, rewardCouponPolicy));
+        Stampbook stampbook = stampbookRepository.saveAndFlush(new Stampbook(region, rewardCouponPolicy, "스탬프북 제목"));
         StampbookProgress progress = stampbookProgressRepository.saveAndFlush(
             new StampbookProgress(stampbook, user)
         );

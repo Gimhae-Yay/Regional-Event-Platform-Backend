@@ -677,7 +677,7 @@ class MyStampbookListProjectionRepositoryTest {
         Content targetContent,
         Content secondTargetContent
     ) {
-        Stampbook stampbook = stampbookRepository.saveAndFlush(new Stampbook(region, rewardCouponPolicy));
+        Stampbook stampbook = stampbookRepository.saveAndFlush(new Stampbook(region, rewardCouponPolicy, "스탬프북 제목"));
         stampbookContentRepository.saveAndFlush(new StampbookContent(stampbook, targetContent));
         stampbookContentRepository.saveAndFlush(new StampbookContent(stampbook, secondTargetContent));
         return stampbook;

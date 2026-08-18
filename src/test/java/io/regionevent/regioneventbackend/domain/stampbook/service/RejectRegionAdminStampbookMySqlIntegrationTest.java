@@ -280,7 +280,7 @@ class RejectRegionAdminStampbookMySqlIntegrationTest extends NonTransactionalMyS
             BASE_TIME.plusSeconds(3_600),
             null
         ));
-        Stampbook stampbook = stampbookRepository.save(new Stampbook(region, couponPolicy));
+        Stampbook stampbook = stampbookRepository.save(new Stampbook(region, couponPolicy, "스탬프북 제목"));
         stampbookContentRepository.saveAndFlush(new StampbookContent(stampbook, content));
         stampbook.requestPublication();
         stampbookRepository.saveAndFlush(stampbook);

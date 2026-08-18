@@ -278,7 +278,7 @@ class ApproveRegionAdminStampbookUseCaseMySqlTest extends NonTransactionalMySqlT
             );
             rewardCouponPolicy.publish(BASE_TIME);
             rewardCouponPolicy = couponPolicyRepository.saveAndFlush(rewardCouponPolicy);
-            Stampbook stampbook = new Stampbook(region, rewardCouponPolicy);
+            Stampbook stampbook = new Stampbook(region, rewardCouponPolicy, "스탬프북 제목");
             stampbook.requestPublication();
             stampbook = stampbookRepository.saveAndFlush(stampbook);
             stampbookContentRepository.saveAndFlush(new StampbookContent(stampbook, targetContent));

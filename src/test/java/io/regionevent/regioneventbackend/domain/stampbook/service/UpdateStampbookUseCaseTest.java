@@ -123,6 +123,7 @@ class UpdateStampbookUseCaseTest {
             fixture.operator().getUserId(),
             new UpdateStampbookCommand(
                 fixture.stampbook().getStampbookId(),
+                "  수정 제목  ",
                 List.of(fixture.replacementContent().getContentId()),
                 fixture.replacementCouponPolicy().getCouponPolicyId(),
                 "  대상 콘텐츠와 보상 정책을 수정합니다.  "
@@ -136,8 +137,11 @@ class UpdateStampbookUseCaseTest {
             assertThat(updated.updatedAt()).isEqualTo(UPDATED_AT);
         });
         assertThat(stampbookRepository.findById(fixture.stampbook().getStampbookId()))
-            .hasValueSatisfying(stampbook -> assertThat(stampbook.getRewardCouponPolicy().getCouponPolicyId())
-                .isEqualTo(fixture.replacementCouponPolicy().getCouponPolicyId()));
+            .hasValueSatisfying(stampbook -> {
+                assertThat(stampbook.getTitle()).isEqualTo("수정 제목");
+                assertThat(stampbook.getRewardCouponPolicy().getCouponPolicyId())
+                    .isEqualTo(fixture.replacementCouponPolicy().getCouponPolicyId());
+            });
         assertThat(stampbookContentRepository.findContentIdsByStampbookId(fixture.stampbook().getStampbookId()))
             .containsExactly(fixture.replacementContent().getContentId());
         assertThat(auditEventRepository.findAll()).singleElement().satisfies(auditEvent -> {
@@ -162,6 +166,7 @@ class UpdateStampbookUseCaseTest {
                 fixture.stampbook().getStampbookId(),
                 null,
                 null,
+                null,
                 "스탬프북을 수정합니다."
             ),
             UUID.randomUUID()
@@ -171,6 +176,68 @@ class UpdateStampbookUseCaseTest {
 
         assertThat(stampbookContentRepository.findContentIdsByStampbookId(fixture.stampbook().getStampbookId()))
             .containsExactly(fixture.originalContent().getContentId());
+        assertThat(auditEventRepository.count()).isZero();
+    }
+
+    @Test
+    void update_초안스탬프북의제목만수정하면_공백제거와감사를함께기록한다() {
+        Fixture fixture = createFixture();
+
+        UpdateStampbookResult result = updateStampbookUseCase.update(
+            fixture.operator().getUserId(),
+            new UpdateStampbookCommand(
+                fixture.stampbook().getStampbookId(),
+                "  김해 가야 문화 완주 코스  ",
+                null,
+                null,
+                "제목을 수정합니다."
+            ),
+            UUID.randomUUID()
+        );
+
+        assertThat(result.targetCount()).isOne();
+        assertThat(stampbookRepository.findById(fixture.stampbook().getStampbookId()))
+            .hasValueSatisfying(stampbook -> assertThat(stampbook.getTitle())
+                .isEqualTo("김해 가야 문화 완주 코스"));
+        assertThat(stampbookContentRepository.findContentIdsByStampbookId(fixture.stampbook().getStampbookId()))
+            .containsExactly(fixture.originalContent().getContentId());
+        assertThat(auditEventRepository.count()).isOne();
+    }
+
+    @Test
+    void update_공백이거나101자제목이면_입력오류를반환한다() {
+        Fixture fixture = createFixture();
+
+        assertThatThrownBy(() -> updateStampbookUseCase.update(
+            fixture.operator().getUserId(),
+            new UpdateStampbookCommand(
+                fixture.stampbook().getStampbookId(),
+                "   ",
+                null,
+                null,
+                "제목을 수정합니다."
+            ),
+            UUID.randomUUID()
+        )).isInstanceOf(BusinessException.class)
+            .extracting(exception -> ((BusinessException) exception).getErrorCode())
+            .isEqualTo(ErrorCode.INVALID_INPUT);
+
+        assertThatThrownBy(() -> updateStampbookUseCase.update(
+            fixture.operator().getUserId(),
+            new UpdateStampbookCommand(
+                fixture.stampbook().getStampbookId(),
+                "가".repeat(101),
+                null,
+                null,
+                "제목을 수정합니다."
+            ),
+            UUID.randomUUID()
+        )).isInstanceOf(BusinessException.class)
+            .extracting(exception -> ((BusinessException) exception).getErrorCode())
+            .isEqualTo(ErrorCode.INVALID_INPUT);
+
+        assertThat(stampbookRepository.findById(fixture.stampbook().getStampbookId()))
+            .hasValueSatisfying(stampbook -> assertThat(stampbook.getTitle()).isEqualTo("기존 제목"));
         assertThat(auditEventRepository.count()).isZero();
     }
 
@@ -189,6 +256,7 @@ class UpdateStampbookUseCaseTest {
             visitor.getUserId(),
             new UpdateStampbookCommand(
                 fixture.stampbook().getStampbookId(),
+                null,
                 List.of(fixture.replacementContent().getContentId()),
                 null,
                 "대상 콘텐츠를 수정합니다."
@@ -214,7 +282,8 @@ class UpdateStampbookUseCaseTest {
             fixture.operator().getUserId(),
             new UpdateStampbookCommand(
                 fixture.stampbook().getStampbookId(),
-                List.of(fixture.replacementContent().getContentId()),
+                "수정 제목",
+                null,
                 null,
                 "대상 콘텐츠를 수정합니다."
             ),
@@ -252,7 +321,11 @@ class UpdateStampbookUseCaseTest {
                 region,
                 "교체 완료 보상"
             ));
-            Stampbook stampbook = stampbookRepository.save(new Stampbook(region, originalCouponPolicy));
+            Stampbook stampbook = stampbookRepository.save(new Stampbook(
+                region,
+                originalCouponPolicy,
+                "기존 제목"
+            ));
             stampbookContentRepository.saveAllAndFlush(List.of(new StampbookContent(
                 stampbook,
                 originalContent

@@ -101,7 +101,7 @@ class CouponPolicyReferenceRepositoryTest {
             missionPolicy,
             NOW.plusSeconds(3_600)
         ));
-        Stampbook stampbook = stampbookRepository.saveAndFlush(new Stampbook(region, stampbookPolicy));
+        Stampbook stampbook = stampbookRepository.saveAndFlush(new Stampbook(region, stampbookPolicy, "스탬프북 제목"));
         jdbcTemplate.update(
             "UPDATE mission SET status = 'PUBLISHED', published_at = ? WHERE mission_id = ?",
             NOW,

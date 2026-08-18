@@ -261,7 +261,8 @@ class RegionAdminStampbookDetailControllerIntegrationTest {
         ));
         Stampbook stampbook = stampbookRepository.saveAndFlush(new Stampbook(
             fixture.region(),
-            rewardCouponPolicy
+            rewardCouponPolicy,
+            "스탬프북 제목"
         ));
         List<Content> effectiveTargetContents = targetContents.isEmpty()
             ? List.of(saveContent(fixture.region(), fixture.operator(), "target"))

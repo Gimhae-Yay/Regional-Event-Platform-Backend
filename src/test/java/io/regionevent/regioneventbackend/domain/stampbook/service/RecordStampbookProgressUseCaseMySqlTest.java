@@ -315,7 +315,7 @@ class RecordStampbookProgressUseCaseMySqlTest extends NonTransactionalMySqlTestS
                 ISSUE_ENDS_AT,
                 100L
             ));
-            Stampbook stampbook = stampbookRepository.saveAndFlush(new Stampbook(region, rewardCouponPolicy));
+            Stampbook stampbook = stampbookRepository.saveAndFlush(new Stampbook(region, rewardCouponPolicy, "스탬프북 제목"));
             stampbookContentRepository.saveAllAndFlush(targetContents.stream()
                 .map(content -> new StampbookContent(stampbook, content))
                 .toList());

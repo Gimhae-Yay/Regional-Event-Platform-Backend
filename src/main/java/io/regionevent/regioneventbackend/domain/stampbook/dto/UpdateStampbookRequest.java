@@ -11,6 +11,9 @@ import org.hibernate.validator.constraints.UniqueElements;
 
 public class UpdateStampbookRequest {
 
+    @Size(min = 1, max = 100)
+    private String title;
+
     @UniqueElements
     private List<
         @NotBlank
@@ -27,6 +30,11 @@ public class UpdateStampbookRequest {
 
     private boolean contentIdsProvided;
     private boolean rewardCouponPolicyIdProvided;
+    private boolean titleProvided;
+
+    public String title() {
+        return title;
+    }
 
     public List<String> contentIds() {
         return contentIds;
@@ -45,6 +53,11 @@ public class UpdateStampbookRequest {
         contentIdsProvided = true;
     }
 
+    public void setTitle(String title) {
+        this.title = title == null ? null : title.strip();
+        titleProvided = true;
+    }
+
     public void setRewardCouponPolicyId(String rewardCouponPolicyId) {
         this.rewardCouponPolicyId = rewardCouponPolicyId;
         rewardCouponPolicyIdProvided = true;
@@ -56,7 +69,8 @@ public class UpdateStampbookRequest {
 
     @AssertTrue
     public boolean hasValidUpdateFields() {
-        return (contentIdsProvided || rewardCouponPolicyIdProvided)
+        return (titleProvided || contentIdsProvided || rewardCouponPolicyIdProvided)
+            && (!titleProvided || title != null)
             && (!contentIdsProvided || contentIds != null && !contentIds.isEmpty())
             && (!rewardCouponPolicyIdProvided || rewardCouponPolicyId != null);
     }
