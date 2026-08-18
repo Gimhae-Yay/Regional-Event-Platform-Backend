@@ -221,7 +221,8 @@ class RegionAdminStampbookListControllerIntegrationTest {
         ));
         Stampbook stampbook = stampbookRepository.saveAndFlush(new Stampbook(
             fixture.region(),
-            rewardCouponPolicy
+            rewardCouponPolicy,
+            "스탬프북 제목"
         ));
         for (int index = 0; index < targetCount; index++) {
             Content targetContent = index == 0

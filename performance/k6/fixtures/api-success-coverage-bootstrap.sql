@@ -337,12 +337,12 @@ INSERT INTO mission (
     (900022, 900001, 'VISIT_COUNT', 1, 900012, 'PUBLISHED', @perf_now + INTERVAL 30 DAY, @perf_now - INTERVAL 1 DAY, NULL);
 
 INSERT INTO stampbook (
-    stampbook_id, region_id, reward_coupon_policy_id, status, published_at, ended_at
+    stampbook_id, title, region_id, reward_coupon_policy_id, status, published_at, ended_at
 ) VALUES
-    (900020, 900001, 900020, 'PUBLISHED', @perf_now - INTERVAL 1 DAY, NULL),
-    (900021, 900001, 900020, 'PENDING_REVIEW', NULL, NULL),
-    (900022, 900001, 900020, 'PENDING_REVIEW', NULL, NULL),
-    (900023, 900001, 900020, 'PUBLISHED', @perf_now - INTERVAL 1 DAY, NULL);
+    (900020, '성능 검증 스탬프북 1', 900001, 900020, 'PUBLISHED', @perf_now - INTERVAL 1 DAY, NULL),
+    (900021, '성능 검증 스탬프북 2', 900001, 900020, 'PENDING_REVIEW', NULL, NULL),
+    (900022, '성능 검증 스탬프북 3', 900001, 900020, 'PENDING_REVIEW', NULL, NULL),
+    (900023, '성능 검증 스탬프북 4', 900001, 900020, 'PUBLISHED', @perf_now - INTERVAL 1 DAY, NULL);
 
 INSERT INTO stampbook_content (stampbook_id, content_id) VALUES
     (900020, 900020),

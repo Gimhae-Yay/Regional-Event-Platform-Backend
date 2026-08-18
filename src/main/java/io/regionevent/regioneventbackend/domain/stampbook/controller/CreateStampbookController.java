@@ -57,6 +57,7 @@ public class CreateStampbookController {
 
     private CreateStampbookCommand toCommand(CreateStampbookRequest request) {
         return new CreateStampbookCommand(
+            request.title(),
             parsePositiveId(request.regionId()),
             request.contentIds().stream().map(this::parsePositiveId).toList(),
             parsePositiveId(request.rewardCouponPolicyId()),

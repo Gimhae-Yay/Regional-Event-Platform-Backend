@@ -115,6 +115,7 @@ class CreateStampbookAuditAtomicityTest {
         assertThatThrownBy(() -> createStampbookUseCase.create(
             fixture.operator().getUserId(),
             new CreateStampbookCommand(
+                "김해 문화 완주",
                 fixture.region().getRegionId(),
                 fixture.contentIds(),
                 fixture.couponPolicy().getCouponPolicyId(),

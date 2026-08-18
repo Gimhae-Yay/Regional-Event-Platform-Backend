@@ -564,7 +564,7 @@ class CouponIssueUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
             ));
             couponPolicy.publish(NOW.minusSeconds(1));
             couponPolicyRepository.saveAndFlush(couponPolicy);
-            Stampbook stampbook = stampbookRepository.saveAndFlush(new Stampbook(region, couponPolicy));
+            Stampbook stampbook = stampbookRepository.saveAndFlush(new Stampbook(region, couponPolicy, "스탬프북 제목"));
             stampbookContentRepository.saveAndFlush(new StampbookContent(stampbook, content));
             stampbook.requestPublication();
             stampbook.approve(NOW.minusSeconds(1));
