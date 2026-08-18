@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
+import io.regionevent.regioneventbackend.domain.user.entity.AppUserAccountKind;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
@@ -33,7 +34,8 @@ public class OperatorAuthorizationService {
                 userId,
                 UserRole.OPERATOR,
                 UserRoleAssignmentStatus.ACTIVE,
-                AppUserStatus.ACTIVE
+                AppUserStatus.ACTIVE,
+                AppUserAccountKind.ORDINARY
             ));
     }
 
@@ -45,13 +47,15 @@ public class OperatorAuthorizationService {
                 userId,
                 UserRole.OPERATOR,
                 UserRoleAssignmentStatus.ACTIVE,
-                AppUserStatus.ACTIVE
+                AppUserStatus.ACTIVE,
+                AppUserAccountKind.ORDINARY
             ));
     }
 
     private void lockActiveUser(Long userId) {
         appUserRepository.findByIdForUpdate(userId)
             .filter(user -> user.getStatus() == AppUserStatus.ACTIVE)
+            .filter(user -> user.getAccountKind() == AppUserAccountKind.ORDINARY)
             .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
     }
 

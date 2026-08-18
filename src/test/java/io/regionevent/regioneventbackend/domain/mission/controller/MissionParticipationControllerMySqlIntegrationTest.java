@@ -213,7 +213,7 @@ class MissionParticipationControllerMySqlIntegrationTest extends NonTransactiona
             userLocked.countDown();
             await(releaseCreate);
             return lockedUser;
-        }).when(appUserService).findActiveUserForUpdate(fixture.visitor().getUserId());
+        }).when(appUserService).findActiveOrdinaryUserForUpdate(fixture.visitor().getUserId());
 
         try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
             Future<MvcResult> creation = executorService.submit(

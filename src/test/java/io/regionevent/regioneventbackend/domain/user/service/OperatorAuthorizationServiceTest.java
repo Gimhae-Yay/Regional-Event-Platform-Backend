@@ -12,6 +12,7 @@ import org.mockito.InOrder;
 
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
+import io.regionevent.regioneventbackend.domain.user.entity.AppUserAccountKind;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
@@ -122,12 +123,14 @@ class OperatorAuthorizationServiceTest {
         UserRoleAssignment assignment = assignment(OPERATOR_USER_ID, GIMHAE_REGION_ID);
         AppUser user = user(OPERATOR_USER_ID);
         when(user.getStatus()).thenReturn(AppUserStatus.ACTIVE);
+        when(user.getAccountKind()).thenReturn(AppUserAccountKind.ORDINARY);
         when(appUserRepository.findByIdForUpdate(OPERATOR_USER_ID)).thenReturn(Optional.of(user));
         when(appUserRepository.findActiveRoleAssignmentForUpdate(
                 OPERATOR_USER_ID,
                 UserRole.OPERATOR,
                 UserRoleAssignmentStatus.ACTIVE,
-                AppUserStatus.ACTIVE
+                AppUserStatus.ACTIVE,
+                AppUserAccountKind.ORDINARY
             )).thenReturn(Optional.of(assignment));
 
         OperatorAuthorizationService.AuthorizedOperator authorizedOperator =
@@ -140,7 +143,8 @@ class OperatorAuthorizationServiceTest {
             OPERATOR_USER_ID,
             UserRole.OPERATOR,
             UserRoleAssignmentStatus.ACTIVE,
-            AppUserStatus.ACTIVE
+            AppUserStatus.ACTIVE,
+            AppUserAccountKind.ORDINARY
         );
     }
 
@@ -149,7 +153,8 @@ class OperatorAuthorizationServiceTest {
                 OPERATOR_USER_ID,
                 UserRole.OPERATOR,
                 UserRoleAssignmentStatus.ACTIVE,
-                AppUserStatus.ACTIVE
+                AppUserStatus.ACTIVE,
+                AppUserAccountKind.ORDINARY
             )).thenReturn(assignment);
     }
 

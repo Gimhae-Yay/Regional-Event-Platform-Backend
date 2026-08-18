@@ -16,6 +16,7 @@ import org.springframework.test.context.TestPropertySource;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.repository.RegionRepository;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
+import io.regionevent.regioneventbackend.domain.user.entity.AppUserAccountKind;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
@@ -239,6 +240,37 @@ class UserRoleAssignmentRepositoryTest {
             UserRole.OPERATOR,
             UserRoleAssignmentStatus.ACTIVE,
             AppUserStatus.ACTIVE
+        )).isEmpty();
+    }
+
+    @Test
+    void 활성_방문자_조회는_일반계정만_반환한다() {
+        AppUser ordinaryUser = saveUser("ordinary-visitor@example.com");
+        AppUser privilegedUser = appUserRepository.saveAndFlush(new AppUser(
+            "privileged-visitor@example.com",
+            "hashed-password",
+            "홍길동",
+            "010-1234-5678",
+            AppUserAccountKind.PRIVILEGED,
+            AppUserStatus.ACTIVE
+        ));
+        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(ordinaryUser, UserRole.VISITOR, null));
+        userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(privilegedUser, UserRole.VISITOR, null));
+        entityManager.clear();
+
+        assertThat(userRoleAssignmentRepository.findActiveOrdinaryRoleAssignment(
+            ordinaryUser.getUserId(),
+            UserRole.VISITOR,
+            UserRoleAssignmentStatus.ACTIVE,
+            AppUserStatus.ACTIVE,
+            AppUserAccountKind.ORDINARY
+        )).isPresent();
+        assertThat(userRoleAssignmentRepository.findActiveOrdinaryRoleAssignment(
+            privilegedUser.getUserId(),
+            UserRole.VISITOR,
+            UserRoleAssignmentStatus.ACTIVE,
+            AppUserStatus.ACTIVE,
+            AppUserAccountKind.ORDINARY
         )).isEmpty();
     }
 

@@ -273,7 +273,6 @@ class VisitReviewControllerIntegrationTest {
             .record(any(AuditEventCommand.class));
         UpdateReviewUseCase useCase = new UpdateReviewUseCase(
             appUserService,
-            userRoleAssignmentService,
             reviewService,
             rejectingAuditEventUseCase,
             recordFailedAuditEventUseCase
@@ -295,16 +294,13 @@ class VisitReviewControllerIntegrationTest {
     }
 
     @Test
-    void createReview_whenUserHasNoVisitorRole_returnsForbidden() throws Exception {
+    void createReview_whenVisitorAssignmentWasRevokedButAuthoritySnapshotExists_createsReview() throws Exception {
         Fixture fixture = createFixture(false);
-        long failureAuditCountBefore = countReviewFailureAudits();
 
         performCreate(fixture.user(), fixture.visit().getVisitId(), 5, "후기")
-            .andExpect(status().isForbidden())
-            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+            .andExpect(status().isCreated());
 
-        assertThat(countReviews(fixture.visit().getVisitId())).isZero();
-        assertThat(countReviewFailureAudits()).isEqualTo(failureAuditCountBefore + 1);
+        assertThat(countReviews(fixture.visit().getVisitId())).isOne();
     }
 
     @Test
@@ -398,7 +394,6 @@ class VisitReviewControllerIntegrationTest {
             .record(any(AuditEventCommand.class));
         CreateVisitReviewUseCase useCase = new CreateVisitReviewUseCase(
             appUserService,
-            userRoleAssignmentService,
             visitService,
             reviewService,
             rejectingAuditEventUseCase,
@@ -727,7 +722,6 @@ class VisitReviewControllerIntegrationTest {
             .record(any(AuditEventCommand.class));
         DeleteReviewUseCase useCase = new DeleteReviewUseCase(
             appUserService,
-            userRoleAssignmentService,
             reviewService,
             rejectingAuditEventUseCase,
             recordFailedAuditEventUseCase,

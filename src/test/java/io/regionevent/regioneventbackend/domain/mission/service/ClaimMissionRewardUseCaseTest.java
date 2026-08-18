@@ -46,9 +46,7 @@ import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
-import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
-import io.regionevent.regioneventbackend.domain.user.service.UserRoleAssignmentService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
@@ -65,7 +63,6 @@ class ClaimMissionRewardUseCaseTest {
         FindMissionRewardClaimResultUseCase.class
     );
     private final AppUserService appUserService = mock(AppUserService.class);
-    private final UserRoleAssignmentService roleAssignmentService = mock(UserRoleAssignmentService.class);
     private final MissionParticipationReadService participationReadService = mock(MissionParticipationReadService.class);
     private final MissionParticipationService participationService = mock(MissionParticipationService.class);
     private final MissionService missionService = mock(MissionService.class);
@@ -80,7 +77,6 @@ class ClaimMissionRewardUseCaseTest {
     private final ClaimMissionRewardUseCase useCase = new ClaimMissionRewardUseCase(
         findMissionRewardClaimResultUseCase,
         appUserService,
-        roleAssignmentService,
         participationReadService,
         participationService,
         missionService,
@@ -95,7 +91,6 @@ class ClaimMissionRewardUseCaseTest {
     );
 
     private final AppUser user = mock(AppUser.class);
-    private final UserRoleAssignment visitor = mock(UserRoleAssignment.class);
     private final Mission initialMission = mock(Mission.class);
     private final MissionParticipation initialParticipation = mock(MissionParticipation.class);
 
@@ -103,8 +98,8 @@ class ClaimMissionRewardUseCaseTest {
     void setUp() {
         when(transactionManager.getTransaction(any(TransactionDefinition.class)))
             .thenReturn(mock(TransactionStatus.class));
-        when(appUserService.findActiveUserForUpdate(USER_ID)).thenReturn(Optional.of(user));
-        when(roleAssignmentService.findActiveVisitor(USER_ID)).thenReturn(visitor);
+        when(appUserService.findActiveOrdinaryUser(USER_ID)).thenReturn(user);
+        when(appUserService.findActiveOrdinaryUserForUpdate(USER_ID)).thenReturn(Optional.of(user));
         when(user.getUserId()).thenReturn(USER_ID);
         when(user.getStatus()).thenReturn(AppUserStatus.ACTIVE);
         when(initialMission.getMissionId()).thenReturn(MISSION_ID);
@@ -124,8 +119,8 @@ class ClaimMissionRewardUseCaseTest {
         ClaimMissionRewardResult result = useCase.claim(USER_ID, PARTICIPATION_ID, REQUEST_ID);
 
         assertThat(result).isEqualTo(existing);
+        verify(appUserService).findActiveOrdinaryUser(USER_ID);
         verifyNoInteractions(
-            appUserService,
             couponPolicyService,
             claimService,
             couponService,
@@ -144,7 +139,8 @@ class ClaimMissionRewardUseCaseTest {
         assertThat(result.missionRewardClaimId()).isEqualTo(9001L);
         assertThat(result.couponId()).isEqualTo(8001L);
         InOrder locks = inOrder(appUserService, couponPolicyService, missionService, participationService);
-        locks.verify(appUserService).findActiveUserForUpdate(USER_ID);
+        locks.verify(appUserService).findActiveOrdinaryUser(USER_ID);
+        locks.verify(appUserService).findActiveOrdinaryUserForUpdate(USER_ID);
         locks.verify(couponPolicyService).findForUpdate(POLICY_ID);
         locks.verify(missionService).findByMissionIdForUpdate(MISSION_ID);
         locks.verify(participationService).findForUpdate(PARTICIPATION_ID);
@@ -155,7 +151,7 @@ class ClaimMissionRewardUseCaseTest {
 
     @Test
     void claim_비활성또는삭제사용자이면도메인잠금과변경없이금지한다() {
-        when(appUserService.findActiveUserForUpdate(USER_ID)).thenReturn(Optional.empty());
+        when(appUserService.findActiveOrdinaryUserForUpdate(USER_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> useCase.claim(USER_ID, PARTICIPATION_ID, REQUEST_ID))
             .isInstanceOfSatisfying(BusinessException.class, exception ->
