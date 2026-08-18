@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.infra.payment;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import io.portone.sdk.server.errors.WebhookVerificationException;
@@ -7,6 +8,7 @@ import io.portone.sdk.server.webhook.WebhookVerifier;
 import io.regionevent.regioneventbackend.domain.payment.service.PortOneProperties;
 
 @Component
+@ConditionalOnProperty(name = "portone.fake.enabled", havingValue = "false", matchIfMissing = true)
 public class PortOneWebhookSignatureVerifier {
 
     private final PortOneProperties properties;
