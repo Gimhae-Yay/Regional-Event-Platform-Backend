@@ -116,6 +116,7 @@ erDiagram
     }
     stampbook {
         BIGINT stampbook_id PK "스탬프북 식별자; NOT NULL"
+        VARCHAR title "스탬프북 고유 제목; 앞뒤 공백 제거 뒤 1~100자; NOT NULL"
         BIGINT region_id FK "소속 지역; NOT NULL"
         BIGINT reward_coupon_policy_id FK "완료 보상 쿠폰 정책; 지역·발급 경로 일치; NOT NULL"
         VARCHAR status "상태: DRAFT|PENDING_REVIEW|PUBLISHED|ENDED; NOT NULL"
@@ -558,7 +559,7 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 
 | 테이블 | 핵심 열 | 책임 |
 | --- | --- | --- |
-| `stampbook` | `stampbook_id`, `region_id`, `reward_coupon_policy_id`, 상태·공개·종료 시각 | 지역 단위 스탬프북의 현재 상태와 보상 정책 |
+| `stampbook` | `stampbook_id`, `title VARCHAR(100) NOT NULL`, `region_id`, `reward_coupon_policy_id`, 상태·공개·종료 시각 | 지역 단위 스탬프북의 제목·현재 상태와 보상 정책 |
 | `stampbook_content` | `stampbook_id`, `content_id` | 적립 대상 콘텐츠 목록 |
 | `stampbook_progress` | `stampbook_progress_id`, `stampbook_id`, `user_id`, `status`, `completed_at` | 사용자별 현재 진행·완료·종료 미완료 상태 |
 | `stamp_earn` | `stamp_earn_id`, `stampbook_progress_id`, `visit_id`, `content_id`, `earned_at` | 콘텐츠별 한 번의 스탬프 근거 |
@@ -569,6 +570,7 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 | 무결성 | 규칙 |
 | --- | --- |
 | 대상 콘텐츠 | `content.region_id = stampbook.region_id` |
+| 제목 | `title VARCHAR(100) NOT NULL`. 생성·수정 저장 전 앞뒤 공백을 제거한 값이 1~100자여야 하며, 빈 값·공백만 있는 값·100자 초과 값은 거부한다. 내부 공백은 보존한다. |
 | 보상 정책 | 작성·검토 때 `coupon_policy.region_id = stampbook.region_id`와 `issuance_type = STAMPBOOK_COMPLETION`을 검증한다. `PUBLISHED` 전이 때 잠근 정책도 `PUBLISHED`여야 한다. |
 | 적립 원본 | `visit.content_id = stamp_earn.content_id`, `visit.user_id = stampbook_progress.user_id` |
 | 사용자 진행 | `UNIQUE (stampbook_id, user_id)`로 활성 사용자의 스탬프북 진행 행을 하나만 둔다. |

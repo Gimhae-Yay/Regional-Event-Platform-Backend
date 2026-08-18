@@ -5,11 +5,11 @@
 | 대상 릴리스 | P1 |
 | 관련 요구사항 | [P1-FR-01](../../../p1-spec.md#6-기능-요구사항과-소유-문서), `STB-01`, `STB-02` |
 | 소유 도메인 | 스탬프북 |
-| 기준 문서 | [스탬프북 API](stampbook.md), [스탬프북](../../../p1/stampbook.md), [P1 ERD](../../../p1-erd.md), [ADR-0066](../../../adr/0066-require-regional-admin-approval-for-p1-benefit-publication.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [스탬프북 API](stampbook.md), [스탬프북](../../../p1/stampbook.md), [P1 ERD](../../../p1-erd.md), [ADR-0066](../../../adr/0066-require-regional-admin-approval-for-p1-benefit-publication.md), [ADR-0104](../../../adr/0104-store-stampbook-title-as-a-not-null-intrinsic-field.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
-승인된 콘텐츠 운영자가 담당 지역의 하나 이상 콘텐츠와 완료 보상 쿠폰 정책을 연결한 `DRAFT` 스탬프북을 생성한다.
+승인된 콘텐츠 운영자가 제목, 담당 지역의 하나 이상 콘텐츠와 완료 보상 쿠폰 정책을 연결한 `DRAFT` 스탬프북을 생성한다.
 대상 콘텐츠 수가 완료 목표 수이고, 콘텐츠별 적립 수는 유효 방문 한 건당 한 개로 고정된다.
 
 ### 요구사항 추적
@@ -40,6 +40,7 @@ Content-Type: application/json; charset=UTF-8
 Accept: application/json
 
 {
+  "title": "김해 가야 문화 완주",
   "regionId": "1",
   "contentIds": ["201", "202"],
   "rewardCouponPolicyId": "301",
@@ -67,6 +68,7 @@ Accept: application/json
 
 ```json
 {
+  "title": "김해 가야 문화 완주",
   "regionId": "1",
   "contentIds": ["201", "202"],
   "rewardCouponPolicyId": "301",
@@ -78,6 +80,7 @@ Accept: application/json
 
 | Name | Type | Required | Description |
 | --- | --- | --- |
+| `title` | String | Y | 앞뒤 공백 제거 뒤 1~100자인 스탬프북 고유 제목이다. 빈 문자열·공백만 있는 값·100자 초과 값은 허용하지 않으며 내부 공백은 보존한다. |
 | `regionId` | String | Y | 양의 10진 문자열이며 signed 64비트 `Long` 범위의 담당 지역 식별자다. |
 | `contentIds` | Array&lt;String&gt; | Y | 대상 콘텐츠 식별자 배열이다. 비어 있거나 중복되면 안 되며, 각 값은 양의 10진 문자열·signed 64비트 `Long` 범위를 만족해야 한다. |
 | `rewardCouponPolicyId` | String | Y | 양의 10진 문자열이며 signed 64비트 `Long` 범위의 완료 보상 쿠폰 정책 식별자다. |
@@ -123,7 +126,7 @@ Accept: application/json
 
 | HTTP Status | Code | Description |
 | --- | --- | --- |
-| `400` | `INVALID_INPUT` | 필수값 누락, 식별자 범위 위반, 빈·중복 콘텐츠 배열 또는 사유 형식 위반이다. 스탬프북·대상 연결·감사 이력을 생성하지 않는다. |
+| `400` | `INVALID_INPUT` | 제목 누락·공백·100자 초과, 식별자 범위 위반, 빈·중복 콘텐츠 배열 또는 사유 형식 위반이다. 스탬프북·대상 연결·감사 이력을 생성하지 않는다. |
 | `400` | `INVALID_JSON` | 요청 본문이 JSON 형식이 아니거나 역직렬화할 수 없다. 스탬프북·대상 연결·감사 이력을 생성하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 스탬프북·대상 연결·감사 이력을 생성하지 않는다. |
 | `403` | `FORBIDDEN` | 인증 주체가 승인된 `OPERATOR`가 아니거나 요청 지역·콘텐츠의 담당 범위를 벗어난다. 스탬프북·대상 연결·감사 이력을 생성하지 않는다. |
@@ -146,5 +149,6 @@ Accept: application/json
 1. 인증 주체는 활성·승인된 `OPERATOR`이고, `regionId`의 담당 지역 및 모든 `contentIds`의 소유 운영자여야 한다.
 2. 모든 대상 콘텐츠의 지역은 `regionId`와 같아야 한다. 다른 지역·회차 단위·지역 전체 자동 적용은 허용하지 않는다.
 3. 보상 쿠폰 정책은 `regionId`와 같고 발급 경로가 `STAMPBOOK_COMPLETION`이어야 한다.
-4. 스탬프북, 모든 `stampbook_content` 연결과 서버가 부여한 `requestId`를 포함한 `STAMPBOOK` 생성 감사 이력은 하나의 트랜잭션으로 생성한다.
-5. 생성된 스탬프북은 `DRAFT`이며 방문자에게 노출하거나 신규 적립 대상으로 사용하지 않는다.
+4. `title`은 앞뒤 공백을 제거한 1~100자 값을 `stampbook.title`에 저장한다. 대상 콘텐츠 제목을 조합하거나 대체하지 않는다.
+5. 제목을 포함한 스탬프북, 모든 `stampbook_content` 연결과 서버가 부여한 `requestId`를 포함한 `STAMPBOOK` 생성 감사 이력은 하나의 트랜잭션으로 생성한다.
+6. 생성된 스탬프북은 `DRAFT`이며 방문자에게 노출하거나 신규 적립 대상으로 사용하지 않는다.

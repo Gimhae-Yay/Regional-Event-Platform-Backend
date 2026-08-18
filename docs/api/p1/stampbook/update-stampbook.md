@@ -5,11 +5,11 @@
 | 대상 릴리스 | P1 |
 | 관련 요구사항 | [P1-FR-01](../../../p1-spec.md#6-기능-요구사항과-소유-문서), `STB-01`, `STB-02` |
 | 소유 도메인 | 스탬프북 |
-| 기준 문서 | [스탬프북 API](stampbook.md), [스탬프북](../../../p1/stampbook.md), [P1 ERD](../../../p1-erd.md), [ADR-0066](../../../adr/0066-require-regional-admin-approval-for-p1-benefit-publication.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [스탬프북 API](stampbook.md), [스탬프북](../../../p1/stampbook.md), [P1 ERD](../../../p1-erd.md), [ADR-0066](../../../adr/0066-require-regional-admin-approval-for-p1-benefit-publication.md), [ADR-0104](../../../adr/0104-store-stampbook-title-as-a-not-null-intrinsic-field.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
-승인된 콘텐츠 운영자가 본인 담당 범위의 `DRAFT` 스탬프북에서 대상 콘텐츠 전체 또는 완료 보상 쿠폰 정책을 수정한다.
+승인된 콘텐츠 운영자가 본인 담당 범위의 `DRAFT` 스탬프북에서 제목, 대상 콘텐츠 전체 또는 완료 보상 쿠폰 정책을 수정한다.
 스탬프북 지역은 생성 뒤 바꾸지 않으며, 심사 요청·공개·종료 상태에서는 핵심 값을 수정할 수 없다.
 
 ### 요구사항 추적
@@ -39,6 +39,7 @@ Content-Type: application/json; charset=UTF-8
 Accept: application/json
 
 {
+  "title": "김해 가야 문화 완주 코스",
   "contentIds": ["201", "202", "203"],
   "rewardCouponPolicyId": "301",
   "reason": "대상 콘텐츠 추가"
@@ -67,6 +68,7 @@ Accept: application/json
 
 ```json
 {
+  "title": "김해 가야 문화 완주 코스",
   "contentIds": ["201", "202", "203"],
   "rewardCouponPolicyId": "301",
   "reason": "대상 콘텐츠 추가"
@@ -77,11 +79,12 @@ Accept: application/json
 
 | Name | Type | Required | Description |
 | --- | --- | --- |
+| `title` | String | N | 제공하면 앞뒤 공백 제거 뒤 1~100자인 스탬프북 고유 제목으로 교체한다. 빈 문자열·공백만 있는 값·100자 초과 값은 허용하지 않으며 내부 공백은 보존한다. |
 | `contentIds` | Array&lt;String&gt; | N | 제공하면 기존 대상 전체를 이 배열로 교체한다. 비어 있거나 중복되면 안 되며, 각 값은 양의 10진 문자열·signed 64비트 `Long` 범위를 만족해야 한다. |
 | `rewardCouponPolicyId` | String | N | 제공하면 완료 보상 쿠폰 정책을 교체한다. 양의 10진 문자열·signed 64비트 `Long` 범위여야 한다. |
 | `reason` | String | Y | 앞뒤 공백 제거 뒤 1~500자인 수정 사유다. 빈 문자열 또는 공백만으로 된 값은 허용하지 않으며 성공 감사 이력에 기록한다. |
 
-`contentIds`, `rewardCouponPolicyId` 중 하나 이상을 제공해야 한다.
+`title`, `contentIds`, `rewardCouponPolicyId` 중 하나 이상을 제공해야 한다.
 
 ### Response
 
@@ -124,7 +127,7 @@ Accept: application/json
 | HTTP Status | Code | Description |
 | --- | --- | --- |
 | `400` | `INVALID_TYPE` | `stampbookId`를 양의 정수 식별자로 처리할 수 없다. 수정하지 않으며 형식을 수정해 재시도할 수 있다. |
-| `400` | `INVALID_INPUT` | 수정 필드 미제공, 필드 형식·범위 위반, 빈·중복 콘텐츠 배열 또는 사유 형식 위반이다. 스탬프북·대상 연결·감사 이력을 변경하지 않는다. |
+| `400` | `INVALID_INPUT` | 수정 필드 미제공, 제목 공백·100자 초과, 필드 형식·범위 위반, 빈·중복 콘텐츠 배열 또는 사유 형식 위반이다. 스탬프북·대상 연결·감사 이력을 변경하지 않는다. |
 | `400` | `INVALID_JSON` | 요청 본문이 JSON 형식이 아니거나 역직렬화할 수 없다. 스탬프북·대상 연결·감사 이력을 변경하지 않는다. |
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 스탬프북·대상 연결·감사 이력을 변경하지 않는다. |
 | `403` | `FORBIDDEN` | 인증 주체가 승인된 `OPERATOR`가 아니거나 스탬프북 지역·대상 콘텐츠의 담당 범위를 벗어난다. 스탬프북·대상 연결·감사 이력을 변경하지 않는다. |
@@ -147,7 +150,8 @@ Accept: application/json
 
 1. 서버는 인증 주체가 활성·승인된 `OPERATOR`이고 대상 스탬프북 지역과 기존·변경 대상 콘텐츠의 소유 운영자인지 검증한다.
 2. 스탬프북은 `DRAFT`에서만 수정할 수 있다. `PENDING_REVIEW`, `PUBLISHED`, `ENDED`에서는 `STAMPBOOK_STATE_CONFLICT`를 반환한다.
-3. `contentIds`를 제공하면 기존 `stampbook_content` 전체를 교체하며, 수정 후에도 대상 콘텐츠가 하나 이상이어야 한다.
-4. 변경 대상 콘텐츠와 보상 쿠폰 정책은 스탬프북의 기존 지역과 각각 일치해야 하고, 보상 쿠폰 정책의 발급 경로는 `STAMPBOOK_COMPLETION`이어야 한다.
-5. 지역 변경은 제공하지 않는다. 다른 지역의 스탬프북이 필요하면 새 스탬프북을 생성한다.
-6. 스탬프북·대상 콘텐츠 연결 변경과 서버가 부여한 `requestId`를 포함한 `STAMPBOOK` 수정 감사 이력은 하나의 트랜잭션으로 처리한다.
+3. `title`을 제공하면 앞뒤 공백을 제거한 1~100자 값으로 `stampbook.title`을 교체한다. 대상 콘텐츠 제목을 조합하거나 대체하지 않는다.
+4. `contentIds`를 제공하면 기존 `stampbook_content` 전체를 교체하며, 수정 후에도 대상 콘텐츠가 하나 이상이어야 한다.
+5. 변경 대상 콘텐츠와 보상 쿠폰 정책은 스탬프북의 기존 지역과 각각 일치해야 하고, 보상 쿠폰 정책의 발급 경로는 `STAMPBOOK_COMPLETION`이어야 한다.
+6. 지역 변경은 제공하지 않는다. 다른 지역의 스탬프북이 필요하면 새 스탬프북을 생성한다.
+7. 제목·스탬프북·대상 콘텐츠 연결 변경과 서버가 부여한 `requestId`를 포함한 `STAMPBOOK` 수정 감사 이력은 하나의 트랜잭션으로 처리한다.
