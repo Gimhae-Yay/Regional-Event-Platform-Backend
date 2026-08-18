@@ -41,6 +41,7 @@ import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
@@ -357,7 +358,7 @@ class PlatformAdminRegionControllerWebMvcTest {
     ) {
         return requestBuilder.header(
             AUTHORIZATION,
-            "Bearer " + jwtAccessTokenService.issue(AUTHENTICATED_USER_ID)
+            "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, AUTHENTICATED_USER_ID)
         );
     }
 }

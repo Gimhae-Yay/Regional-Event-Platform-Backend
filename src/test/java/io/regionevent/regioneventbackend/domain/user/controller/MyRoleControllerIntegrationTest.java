@@ -35,6 +35,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenProperties;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 
 @SpringBootTest
@@ -132,7 +133,7 @@ class MyRoleControllerIntegrationTest {
     @Test
     void getMyRoles_withDeletedAccount_returnsForbidden() throws Exception {
         mockMvc.perform(get(MY_ROLE_PATH)
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(DELETED_USER_ID)))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, DELETED_USER_ID)))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.statusCode").value(403))
             .andExpect(jsonPath("$.code").value("FORBIDDEN"))
@@ -176,7 +177,7 @@ class MyRoleControllerIntegrationTest {
     }
 
     private String bearerTokenFor(AppUser user) {
-        return "Bearer " + jwtAccessTokenService.issue(user.getUserId());
+        return "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, user.getUserId());
     }
 
     private String expiredAccessToken() {

@@ -25,6 +25,7 @@ import io.regionevent.regioneventbackend.domain.stampbook.service.PendingRegionA
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
@@ -102,7 +103,7 @@ class RegionAdminStampbookListControllerWebMvcTest {
     ) {
         return requestBuilder.header(
             AUTHORIZATION,
-            "Bearer " + jwtAccessTokenService.issue(REGION_ADMIN_USER_ID)
+            "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, REGION_ADMIN_USER_ID)
         );
     }
 }

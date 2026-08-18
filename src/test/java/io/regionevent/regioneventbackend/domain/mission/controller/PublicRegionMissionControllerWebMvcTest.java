@@ -27,6 +27,7 @@ import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
@@ -89,7 +90,7 @@ class PublicRegionMissionControllerWebMvcTest {
 
     @Test
     void getPublicRegionMissions_authenticated_returnsParticipationStatus() throws Exception {
-        String accessToken = jwtAccessTokenService.issue(100L);
+        String accessToken = AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, 100L);
         when(getPublicRegionMissionsUseCase.get(11L, 100L, 1, 1))
             .thenReturn(new PublicRegionMissionListResult(
                 List.of(new PublicRegionMissionListResult.Mission(

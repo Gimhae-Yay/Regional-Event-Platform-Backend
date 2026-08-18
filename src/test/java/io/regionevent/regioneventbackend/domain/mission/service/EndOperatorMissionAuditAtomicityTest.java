@@ -51,6 +51,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.support.jpa.CleanH2Database;
 
@@ -117,7 +118,7 @@ class EndOperatorMissionAuditAtomicityTest {
         mockMvc.perform(post("/api/v1/operator/missions/{missionId}/end", fixture.missionId())
                 .header(
                     HttpHeaders.AUTHORIZATION,
-                    "Bearer " + jwtAccessTokenService.issue(fixture.operatorUserId())
+                    "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, fixture.operatorUserId())
                 )
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"reasonCode\":\"MISSION_OPERATION_SCHEDULE_CHANGED\"}"))
