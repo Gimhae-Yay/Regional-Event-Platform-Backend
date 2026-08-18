@@ -318,6 +318,7 @@ class RegionAdminMissionHistoryControllerIntegrationTest {
             100L
         ));
         return missionRepository.saveAndFlush(new Mission(
+            "테스트 미션",
             fixture.region(),
             MissionConditionType.VISIT_COUNT,
             3,

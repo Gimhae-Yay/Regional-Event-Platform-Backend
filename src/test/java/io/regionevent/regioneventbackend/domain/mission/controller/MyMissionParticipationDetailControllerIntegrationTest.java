@@ -328,6 +328,7 @@ class MyMissionParticipationDetailControllerIntegrationTest {
             100L
         ));
         Mission mission = new Mission(
+            "테스트 미션",
             region,
             conditionType,
             requiredVisitCount,

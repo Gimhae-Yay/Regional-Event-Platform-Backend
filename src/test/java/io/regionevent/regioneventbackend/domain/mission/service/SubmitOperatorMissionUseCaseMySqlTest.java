@@ -246,6 +246,7 @@ class SubmitOperatorMissionUseCaseMySqlTest extends NonTransactionalMySqlTestSup
                 1_000, 1_000, 7, NOW.minusSeconds(3_600), NOW.plusSeconds(3_600), null
             ));
             Mission mission = missionRepository.save(new Mission(
+                "테스트 미션",
                 region, MissionConditionType.VISIT_COUNT, 1, couponPolicy, NOW.plusSeconds(86_400)
             ));
             return new Fixture(operator.getUserId(), mission.getMissionId(), changedCouponPolicy.getCouponPolicyId());

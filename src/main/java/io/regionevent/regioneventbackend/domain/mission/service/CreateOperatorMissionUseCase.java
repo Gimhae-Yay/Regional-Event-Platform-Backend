@@ -10,6 +10,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,6 +41,7 @@ public class CreateOperatorMissionUseCase {
 
     private static final ZoneOffset REQUIRED_ENDS_AT_OFFSET = ZoneOffset.ofHours(9);
     private static final String SUCCESS_REASON_CODE = "MISSION_CREATED";
+    private static final String MISSING_TITLE_COUNTER_NAME = "mission.title.compatibility.missing";
 
     private final OperatorAuthorizationService operatorAuthorizationService;
     private final ContentService contentService;
@@ -45,6 +49,7 @@ public class CreateOperatorMissionUseCase {
     private final MissionService missionService;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase;
+    private final Counter missingTitleCounter;
     private final Clock clock;
 
     public CreateOperatorMissionUseCase(
@@ -54,6 +59,7 @@ public class CreateOperatorMissionUseCase {
         MissionService missionService,
         RecordAuditEventUseCase recordAuditEventUseCase,
         RecordFailedAuditEventUseCase recordFailedAuditEventUseCase,
+        MeterRegistry meterRegistry,
         Clock clock
     ) {
         this.operatorAuthorizationService = operatorAuthorizationService;
@@ -62,6 +68,11 @@ public class CreateOperatorMissionUseCase {
         this.missionService = missionService;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
         this.recordFailedAuditEventUseCase = recordFailedAuditEventUseCase;
+        this.missingTitleCounter = meterRegistry.counter(
+            MISSING_TITLE_COUNTER_NAME,
+            "operation",
+            "create"
+        );
         this.clock = clock;
     }
 
@@ -73,6 +84,9 @@ public class CreateOperatorMissionUseCase {
     ) {
         ValidatedCommand validatedCommand = validateCommand(command);
         AuthorizedOperator operator = operatorAuthorizationService.requireAuthorizedOperatorForUpdate(userId);
+        if (validatedCommand.title() == null) {
+            missingTitleCounter.increment();
+        }
 
         try {
             CouponPolicy rewardCouponPolicy = couponPolicyService.findForUpdate(
@@ -89,6 +103,7 @@ public class CreateOperatorMissionUseCase {
             }
 
             Mission mission = missionService.create(
+                validatedCommand.title(),
                 operator.region(),
                 validatedCommand.conditionType(),
                 validatedCommand.requiredVisitCount(),
@@ -136,6 +151,7 @@ public class CreateOperatorMissionUseCase {
         MissionConditionType conditionType = toConditionType(command.conditionType());
         validateConditionFields(conditionType, command.requiredVisitCount(), command.targetContentIds());
         return new ValidatedCommand(
+            command.title(),
             conditionType,
             command.requiredVisitCount(),
             normalizeTargetContentIds(command.targetContentIds()),
@@ -219,6 +235,7 @@ public class CreateOperatorMissionUseCase {
     }
 
     public record CreateOperatorMissionCommand(
+        String title,
         String conditionType,
         Integer requiredVisitCount,
         List<Long> targetContentIds,
@@ -228,6 +245,7 @@ public class CreateOperatorMissionUseCase {
     }
 
     private record ValidatedCommand(
+        String title,
         MissionConditionType conditionType,
         Integer requiredVisitCount,
         List<Long> targetContentIds,

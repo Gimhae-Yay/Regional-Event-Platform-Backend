@@ -343,6 +343,7 @@ class RecordMissionProgressUseCaseMySqlTest extends NonTransactionalMySqlTestSup
             List<Long> participationIds = new ArrayList<>();
             for (int missionIndex = 0; missionIndex < missionCount; missionIndex++) {
                 Mission mission = new Mission(
+                    "테스트 미션",
                     region,
                     conditionType,
                     requiredVisitCount,

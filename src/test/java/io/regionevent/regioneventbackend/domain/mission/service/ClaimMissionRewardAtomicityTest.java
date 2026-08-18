@@ -218,6 +218,7 @@ class ClaimMissionRewardAtomicityTest extends NonTransactionalMySqlTestSupport {
             policy.publish(operationAt.minusSeconds(60));
             policy = policyRepository.saveAndFlush(policy);
             Mission mission = new Mission(
+                "테스트 미션",
                 region, MissionConditionType.VISIT_COUNT, 1, policy, operationAt.plusSeconds(86_400)
             );
             mission.submitForReview();

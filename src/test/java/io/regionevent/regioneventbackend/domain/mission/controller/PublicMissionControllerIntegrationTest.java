@@ -141,6 +141,7 @@ class PublicMissionControllerIntegrationTest {
     private Mission saveContentSetMission(Fixture fixture, Instant endsAt) {
         Content rewardContent = saveContent(fixture, "reward");
         Mission mission = new Mission(
+            "테스트 미션",
             fixture.region(), MissionConditionType.CONTENT_SET, null, saveRewardPolicy(fixture, rewardContent), endsAt
         );
         mission.addTargetContent(saveContent(fixture, "target"));
@@ -149,6 +150,7 @@ class PublicMissionControllerIntegrationTest {
 
     private Mission saveVisitCountMission(Fixture fixture, Instant endsAt) {
         return missionRepository.saveAndFlush(new Mission(
+            "테스트 미션",
             fixture.region(), MissionConditionType.VISIT_COUNT, 3, saveRewardPolicy(fixture, saveContent(fixture, "reward")), endsAt
         ));
     }
