@@ -31,6 +31,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
     OperatorContentSessionController.class,
     OriginalContentReviewDetailController.class,
     RegionAdminContentController.class,
+    PendingContentWithdrawalRequestController.class,
     PendingSessionReviewController.class,
     PublicContentController.class,
     PublicContentDetailController.class,
