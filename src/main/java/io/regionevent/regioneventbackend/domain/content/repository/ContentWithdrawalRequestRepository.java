@@ -19,6 +19,18 @@ public interface ContentWithdrawalRequestRepository
     extends JpaRepository<ContentWithdrawalRequest, Long> {
 
     @Query("""
+        SELECT request
+        FROM ContentWithdrawalRequest request
+        LEFT JOIN FETCH request.content content
+        LEFT JOIN FETCH content.region
+        LEFT JOIN FETCH request.requestedBy
+        WHERE request.contentWithdrawalRequestId = :withdrawalRequestId
+        """)
+    Optional<ContentWithdrawalRequest> findReviewDetailById(
+        @Param("withdrawalRequestId") Long withdrawalRequestId
+    );
+
+    @Query("""
         SELECT request.content.contentId
         FROM ContentWithdrawalRequest request
         WHERE request.contentWithdrawalRequestId = :withdrawalRequestId

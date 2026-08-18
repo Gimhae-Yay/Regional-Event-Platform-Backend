@@ -24,6 +24,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
     ContentSessionController.class,
     ContentSessionRejectionController.class,
     ContentWithdrawalRequestController.class,
+    ContentWithdrawalReviewDetailController.class,
     ContentWithdrawalApprovalController.class,
     ContentWithdrawalRejectionController.class,
     EndContentReservationsController.class,
