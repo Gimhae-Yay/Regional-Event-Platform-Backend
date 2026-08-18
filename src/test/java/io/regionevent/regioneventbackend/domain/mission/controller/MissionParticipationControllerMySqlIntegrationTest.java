@@ -343,7 +343,8 @@ class MissionParticipationControllerMySqlIntegrationTest extends NonTransactiona
         Fixture fixture = createFixture(true, true);
         AppUser nonVisitor = saveUser("non-visitor");
 
-        performCreate(nonVisitor, fixture.mission())
+        mockMvc.perform(post(PATH, fixture.mission().getMissionId())
+                .header(AUTHORIZATION, bearerTokenWithoutAuthority(nonVisitor)))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.code").value("FORBIDDEN"));
         mockMvc.perform(post(PATH, Long.MAX_VALUE)
@@ -504,6 +505,10 @@ class MissionParticipationControllerMySqlIntegrationTest extends NonTransactiona
 
     private String bearerToken(AppUser user) {
         return "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, user.getUserId());
+    }
+
+    private String bearerTokenWithoutAuthority(AppUser user) {
+        return "Bearer " + jwtAccessTokenService.issue(user.getUserId(), List.of());
     }
 
     private void withdrawVisitor(Long userId) {
