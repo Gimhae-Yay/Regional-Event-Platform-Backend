@@ -71,6 +71,7 @@ import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepositor
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
 import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
@@ -672,7 +673,7 @@ class ReservationConfirmationUseCaseMySqlTest extends NonTransactionalMySqlTestS
         String idempotencyKey
     ) throws Exception {
         return mockMvc.perform(post("/api/v1/reservation-holds/{holdId}/confirm", fixture.capacityHold().getHoldId())
-            .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(fixture.user().getUserId()))
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, fixture.user().getUserId()))
             .header("Idempotency-Key", idempotencyKey));
     }
 

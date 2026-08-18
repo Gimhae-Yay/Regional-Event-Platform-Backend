@@ -38,6 +38,7 @@ import io.regionevent.regioneventbackend.domain.region.repository.RegionReposito
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 
 @SpringBootTest
@@ -129,7 +130,7 @@ class PublicRegionMissionControllerIntegrationTest {
             fixture.visitor(),
             PUBLISHED_AT.plusSeconds(60)
         ));
-        String accessToken = jwtAccessTokenService.issue(fixture.visitor().getUserId());
+        String accessToken = AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, fixture.visitor().getUserId());
 
         mockMvc.perform(get("/api/v1/regions/{regionId}/missions", fixture.region().getRegionId())
                 .header(AUTHORIZATION, "Bearer " + accessToken))
@@ -148,7 +149,7 @@ class PublicRegionMissionControllerIntegrationTest {
             fixture.visitor(),
             PUBLISHED_AT.plusSeconds(60)
         ));
-        String accessToken = jwtAccessTokenService.issue(fixture.operator().getUserId());
+        String accessToken = AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, fixture.operator().getUserId());
 
         mockMvc.perform(get("/api/v1/regions/{regionId}/missions", fixture.region().getRegionId())
                 .header(AUTHORIZATION, "Bearer " + accessToken))

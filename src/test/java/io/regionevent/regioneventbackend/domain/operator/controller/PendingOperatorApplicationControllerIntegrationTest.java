@@ -28,6 +28,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 
 @SpringBootTest
@@ -138,7 +139,7 @@ class PendingOperatorApplicationControllerIntegrationTest {
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
         mockMvc.perform(get(PENDING_OPERATOR_REQUESTS_PATH)
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(fixture.admin().getUserId())))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, fixture.admin().getUserId())))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
         mockMvc.perform(get(PENDING_OPERATOR_REQUESTS_PATH))
@@ -149,7 +150,7 @@ class PendingOperatorApplicationControllerIntegrationTest {
     private ResultActions getPendingApplications(AppUser user, String status) throws Exception {
         return mockMvc.perform(get(PENDING_OPERATOR_REQUESTS_PATH)
             .param("status", status)
-            .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(user.getUserId())));
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, user.getUserId())));
     }
 
     private Fixture createFixture() {

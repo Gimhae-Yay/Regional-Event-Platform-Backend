@@ -13,6 +13,7 @@ import io.regionevent.regioneventbackend.domain.review.service.GetPublicContentR
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
@@ -37,6 +38,6 @@ abstract class ReviewControllerWebMvcTestSupport {
     protected RefreshTokenStore refreshTokenStore;
 
     protected MockHttpServletRequestBuilder authenticated(MockHttpServletRequestBuilder requestBuilder) {
-        return requestBuilder.header(AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(AUTHENTICATED_USER_ID));
+        return requestBuilder.header(AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, AUTHENTICATED_USER_ID));
     }
 }

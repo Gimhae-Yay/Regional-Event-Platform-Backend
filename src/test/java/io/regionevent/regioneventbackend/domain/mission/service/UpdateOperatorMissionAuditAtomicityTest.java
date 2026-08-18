@@ -45,6 +45,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.support.jpa.CleanH2Database;
 
@@ -150,7 +151,7 @@ class UpdateOperatorMissionAuditAtomicityTest {
 
     private org.springframework.test.web.servlet.ResultActions performUpdate(Fixture fixture) throws Exception {
         return mockMvc.perform(patch("/api/v1/operator/missions/{missionId}", fixture.missionId())
-            .header("Authorization", "Bearer " + jwtAccessTokenService.issue(fixture.operatorId()))
+            .header("Authorization", "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, fixture.operatorId()))
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {

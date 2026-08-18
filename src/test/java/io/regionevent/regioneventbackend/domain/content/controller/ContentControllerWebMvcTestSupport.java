@@ -19,6 +19,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 import io.regionevent.regioneventbackend.domain.content.service.ApproveContentRevisionUseCase;
@@ -195,7 +196,7 @@ abstract class ContentControllerWebMvcTestSupport {
         MockHttpServletRequestBuilder requestBuilder,
         long userId
     ) {
-        return requestBuilder.header(AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(userId));
+        return requestBuilder.header(AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, userId));
     }
 
     protected boolean hasDatabaseInfrastructure() {

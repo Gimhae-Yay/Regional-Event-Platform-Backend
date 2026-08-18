@@ -41,6 +41,7 @@ import io.regionevent.regioneventbackend.domain.reservation.repository.Reservati
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 
 @SpringBootTest
@@ -306,7 +307,7 @@ public class MyReservationQrControllerIntegrationTest {
     }
 
     private String bearerToken(AppUser user) {
-        return "Bearer " + jwtAccessTokenService.issue(user.getUserId());
+        return "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, user.getUserId());
     }
 
     private record Fixture(AppUser user, ContentSession session, Reservation reservation) {

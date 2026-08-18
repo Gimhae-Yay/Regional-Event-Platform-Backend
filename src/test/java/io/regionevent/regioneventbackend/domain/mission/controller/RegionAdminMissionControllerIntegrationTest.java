@@ -38,6 +38,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 
 @SpringBootTest
@@ -259,7 +260,7 @@ class RegionAdminMissionControllerIntegrationTest {
 
     private ResultActions getDetail(AppUser user, String missionId) throws Exception {
         return mockMvc.perform(get("/api/v1/region-admin/missions/{missionId}", missionId)
-            .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(user.getUserId())));
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, user.getUserId())));
     }
 
     private ResultActions getMissions(
@@ -271,7 +272,7 @@ class RegionAdminMissionControllerIntegrationTest {
         MockHttpServletRequestBuilder requestBuilder = get("/api/v1/region-admin/missions")
             .param("page", page)
             .param("size", size)
-            .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(user.getUserId()));
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, user.getUserId()));
         if (status != null) {
             requestBuilder.param("status", status);
         }

@@ -77,6 +77,7 @@ import io.regionevent.regioneventbackend.domain.visit.entity.CheckinMethod;
 import io.regionevent.regioneventbackend.domain.visit.entity.Visit;
 import io.regionevent.regioneventbackend.domain.visit.repository.VisitRepository;
 import io.regionevent.regioneventbackend.domain.visit.service.VisitService;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 
 @SpringBootTest
@@ -423,7 +424,7 @@ class VisitReviewControllerIntegrationTest {
         long failureAuditCountBefore = countReviewFailureAudits();
 
         mockMvc.perform(post("/api/v1/visits/not-a-number/reviews")
-                .header("Authorization", "Bearer " + jwtAccessTokenService.issue(fixture.user().getUserId()))
+                .header("Authorization", "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, fixture.user().getUserId()))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
@@ -465,7 +466,7 @@ class VisitReviewControllerIntegrationTest {
         long failureAuditCountBefore = countReviewFailureAudits();
 
         mockMvc.perform(post("/api/v1/visits/{visitId}/reviews", fixture.visit().getVisitId())
-                .header("Authorization", "Bearer " + jwtAccessTokenService.issue(fixture.user().getUserId()))
+                .header("Authorization", "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, fixture.user().getUserId()))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
@@ -476,7 +477,7 @@ class VisitReviewControllerIntegrationTest {
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
         mockMvc.perform(post("/api/v1/visits/{visitId}/reviews", fixture.visit().getVisitId())
-                .header("Authorization", "Bearer " + jwtAccessTokenService.issue(fixture.user().getUserId()))
+                .header("Authorization", "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, fixture.user().getUserId()))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
@@ -506,7 +507,7 @@ class VisitReviewControllerIntegrationTest {
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
         mockMvc.perform(post("/api/v1/visits/{visitId}/reviews", fixture.visit().getVisitId())
-                .header("Authorization", "Bearer " + jwtAccessTokenService.issue(fixture.user().getUserId()))
+                .header("Authorization", "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, fixture.user().getUserId()))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"rating\":"))
             .andExpect(status().isBadRequest())
@@ -764,7 +765,7 @@ class VisitReviewControllerIntegrationTest {
         String requestBody
     ) throws Exception {
         return mockMvc.perform(patch("/api/v1/reviews/{reviewId}", reviewId)
-            .header("Authorization", "Bearer " + jwtAccessTokenService.issue(user.getUserId()))
+            .header("Authorization", "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, user.getUserId()))
             .contentType(MediaType.APPLICATION_JSON)
             .content(requestBody));
     }
@@ -789,7 +790,7 @@ class VisitReviewControllerIntegrationTest {
         String reviewText
     ) throws Exception {
         return mockMvc.perform(post("/api/v1/visits/{visitId}/reviews", visitId)
-            .header("Authorization", "Bearer " + jwtAccessTokenService.issue(user.getUserId()))
+            .header("Authorization", "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, user.getUserId()))
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {
@@ -811,7 +812,7 @@ class VisitReviewControllerIntegrationTest {
         String reviewId
     ) throws Exception {
         return mockMvc.perform(delete("/api/v1/reviews/{reviewId}", reviewId)
-            .header("Authorization", "Bearer " + jwtAccessTokenService.issue(user.getUserId())));
+            .header("Authorization", "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, user.getUserId())));
     }
 
     private Review savePublishedReview(Fixture fixture) {

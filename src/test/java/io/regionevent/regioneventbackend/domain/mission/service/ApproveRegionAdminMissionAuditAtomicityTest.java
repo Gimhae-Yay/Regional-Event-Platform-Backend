@@ -47,6 +47,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.support.jpa.CleanH2Database;
 
@@ -113,7 +114,7 @@ class ApproveRegionAdminMissionAuditAtomicityTest {
             )
             .header(
                 HttpHeaders.AUTHORIZATION,
-                "Bearer " + jwtAccessTokenService.issue(fixture.adminUserId())
+                "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, fixture.adminUserId())
             ))
             .andExpect(status().isInternalServerError())
             .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
@@ -139,7 +140,7 @@ class ApproveRegionAdminMissionAuditAtomicityTest {
             .record(any(AuditEventCommand.class));
 
         mockMvc.perform(post("/api/v1/region-admin/missions/{missionId}/reject", fixture.missionId())
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(fixture.adminUserId()))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, fixture.adminUserId()))
                 .contentType("application/json")
                 .content("{\"reasonCode\":\"MISSION_REWARD_POLICY_INVALID\"}"))
             .andExpect(status().isInternalServerError())

@@ -35,6 +35,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentSt
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.PlatformAdminAssignmentRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 
 @SpringBootTest
@@ -281,7 +282,7 @@ class PlatformAdminUserRoleControllerIntegrationTest {
         org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request,
         AppUser user
     ) {
-        return request.header("Authorization", "Bearer " + jwtAccessTokenService.issue(user.getUserId()));
+        return request.header("Authorization", "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, user.getUserId()));
     }
 
     private record Fixture(

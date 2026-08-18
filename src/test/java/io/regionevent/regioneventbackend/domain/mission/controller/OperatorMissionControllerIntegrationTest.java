@@ -44,6 +44,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.support.jpa.CleanH2Database;
 
@@ -1223,7 +1224,7 @@ class OperatorMissionControllerIntegrationTest {
     }
 
     private String bearerToken(AppUser user) {
-        return "Bearer " + jwtAccessTokenService.issue(user.getUserId());
+        return "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, user.getUserId());
     }
 
     private void assertMissionWasNotCreated() {

@@ -32,6 +32,7 @@ import io.regionevent.regioneventbackend.domain.mission.service.GetPublicMission
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
@@ -112,7 +113,7 @@ class PublicMissionControllerWebMvcTest {
 
     @Test
     void getPublicMission_authenticated_returnsParticipation() throws Exception {
-        String accessToken = jwtAccessTokenService.issue(100L);
+        String accessToken = AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, 100L);
         io.regionevent.regioneventbackend.domain.mission.entity.Mission mission = mission();
         io.regionevent.regioneventbackend.domain.mission.service.MissionParticipationSummary participation =
             new io.regionevent.regioneventbackend.domain.mission.service.MissionParticipationSummary(
@@ -189,7 +190,7 @@ class PublicMissionControllerWebMvcTest {
     void getPublicMission_invalidIdAuthenticated_logsTemplateUriWithoutRawValue(CapturedOutput output)
         throws Exception {
         String sensitiveMissionId = "someone@example.com";
-        String accessToken = jwtAccessTokenService.issue(100L);
+        String accessToken = AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, 100L);
 
         mockMvc.perform(get("/api/v1/missions/{missionId}", sensitiveMissionId)
             .header(AUTHORIZATION, "Bearer " + accessToken))

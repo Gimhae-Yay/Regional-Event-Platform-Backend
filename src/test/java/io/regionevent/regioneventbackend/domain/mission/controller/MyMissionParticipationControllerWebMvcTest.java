@@ -25,6 +25,7 @@ import io.regionevent.regioneventbackend.domain.mission.service.MyMissionPartici
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
@@ -147,6 +148,6 @@ class MyMissionParticipationControllerWebMvcTest {
     }
 
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder authenticatedGet() {
-        return get(PATH).header(AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(USER_ID));
+        return get(PATH).header(AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, USER_ID));
     }
 }

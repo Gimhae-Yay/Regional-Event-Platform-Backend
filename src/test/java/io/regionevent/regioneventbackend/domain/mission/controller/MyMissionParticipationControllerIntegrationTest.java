@@ -36,6 +36,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 
 @SpringBootTest
@@ -203,7 +204,7 @@ class MyMissionParticipationControllerIntegrationTest {
 
     private ResultActions performGet(AppUser user, String... parameters) throws Exception {
         org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request = get(PATH)
-            .header(AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(user.getUserId()));
+            .header(AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, user.getUserId()));
         for (int index = 0; index < parameters.length; index += 2) {
             request.param(parameters[index], parameters[index + 1]);
         }
