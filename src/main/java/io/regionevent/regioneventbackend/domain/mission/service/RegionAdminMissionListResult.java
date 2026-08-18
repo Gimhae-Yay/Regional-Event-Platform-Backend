@@ -31,11 +31,12 @@ public record RegionAdminMissionListResult(
 
     public record MissionSummary(
         Long missionId,
+        String title,
         MissionStatus status
     ) {
 
         private static MissionSummary from(Mission mission) {
-            return new MissionSummary(mission.getMissionId(), mission.getStatus());
+            return new MissionSummary(mission.getMissionId(), mission.getTitle(), mission.getStatus());
         }
     }
 }
