@@ -1,6 +1,7 @@
 package io.regionevent.regioneventbackend.domain.content.service;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -15,6 +16,7 @@ import io.regionevent.regioneventbackend.domain.content.entity.Content;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentWithdrawalRequest;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentWithdrawalRequestInvalidationReason;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentWithdrawalRequestStatus;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 import io.regionevent.regioneventbackend.domain.content.repository.ContentWithdrawalRequestRepository;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -86,6 +88,15 @@ public class ContentWithdrawalRequestService {
         return contentWithdrawalRequestRepository.findByContentIdAndStatusForUpdate(
             contentId,
             ContentWithdrawalRequestStatus.PENDING
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public List<ContentWithdrawalRequest> findPendingPublishedByRegionId(Long regionId) {
+        return contentWithdrawalRequestRepository.findReviewCandidatesByRegionId(
+            regionId,
+            ContentWithdrawalRequestStatus.PENDING,
+            ContentStatus.PUBLISHED
         );
     }
 
