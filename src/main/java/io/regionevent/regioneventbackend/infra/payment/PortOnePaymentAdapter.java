@@ -19,6 +19,7 @@ import kotlinx.serialization.json.JsonObject;
 import kotlinx.serialization.json.JsonPrimitive;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import io.regionevent.regioneventbackend.domain.payment.entity.RefundFailureReasonCode;
@@ -29,6 +30,7 @@ import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneResponse
 import io.regionevent.regioneventbackend.domain.payment.service.PortOneProperties;
 
 @Component
+@ConditionalOnProperty(name = "portone.fake.enabled", havingValue = "false", matchIfMissing = true)
 public class PortOnePaymentAdapter implements PortOnePaymentGateway {
 
     private static final String API_BASE_URL = "https://api.portone.io";
