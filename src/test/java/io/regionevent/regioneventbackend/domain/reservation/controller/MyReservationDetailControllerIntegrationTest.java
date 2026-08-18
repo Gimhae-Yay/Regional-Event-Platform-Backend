@@ -129,6 +129,7 @@ class MyReservationDetailControllerIntegrationTest {
             .andExpect(jsonPath("$.message").value("예약 상세 조회에 성공했습니다."))
             .andExpect(jsonPath("$.data.reservation.reservationId").value(confirmed.getReservationId().toString()))
             .andExpect(jsonPath("$.data.reservation.status").value("CONFIRMED"))
+            .andExpect(jsonPath("$.data.reservation.quantity").value(1))
             .andExpect(jsonPath("$.data.reservation.confirmedAt").value("2030-08-01T01:00:00Z"))
             .andExpect(jsonPath("$.data.reservation.cancelledAt").doesNotExist())
             .andExpect(jsonPath("$.data.reservation.cancellationReason").doesNotExist())
@@ -141,24 +142,31 @@ class MyReservationDetailControllerIntegrationTest {
             .andExpect(jsonPath("$.data.session.checkinOpenAt").value("2030-08-10T09:30:00+09:00"))
             .andExpect(jsonPath("$.data.session.checkinCloseAt").value("2030-08-10T10:30:00+09:00"))
             .andExpect(jsonPath("$.data.checkIn.checkedIn").value(false))
-            .andExpect(jsonPath("$.data.checkIn.checkedAt").doesNotExist());
+            .andExpect(jsonPath("$.data.checkIn.checkedAt").doesNotExist())
+            .andExpect(jsonPath("$.data.checkIn.visitId").doesNotExist());
 
         performGet(fixture.user(), checkedIn.getReservationId())
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.reservation.status").value("CHECKED_IN"))
+            .andExpect(jsonPath("$.data.reservation.quantity").value(1))
             .andExpect(jsonPath("$.data.checkIn.checkedIn").value(true))
-            .andExpect(jsonPath("$.data.checkIn.checkedAt").value("2030-08-04T01:00:00Z"));
+            .andExpect(jsonPath("$.data.checkIn.checkedAt").value("2030-08-04T01:00:00Z"))
+            .andExpect(jsonPath("$.data.checkIn.visitId").value(visit.getVisitId().toString()));
         performGet(fixture.user(), cancelled.getReservationId())
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.reservation.status").value("CANCELLED"))
+            .andExpect(jsonPath("$.data.reservation.quantity").value(1))
             .andExpect(jsonPath("$.data.reservation.cancelledAt").value("2030-08-02T01:00:00Z"))
             .andExpect(jsonPath("$.data.reservation.cancellationReason").value("방문자 요청"))
-            .andExpect(jsonPath("$.data.checkIn.checkedIn").value(false));
+            .andExpect(jsonPath("$.data.checkIn.checkedIn").value(false))
+            .andExpect(jsonPath("$.data.checkIn.visitId").doesNotExist());
         performGet(fixture.user(), expired.getReservationId())
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.reservation.status").value("EXPIRED"))
+            .andExpect(jsonPath("$.data.reservation.quantity").value(1))
             .andExpect(jsonPath("$.data.reservation.expiredAt").value("2030-08-03T01:00:00Z"))
-            .andExpect(jsonPath("$.data.checkIn.checkedIn").value(false));
+            .andExpect(jsonPath("$.data.checkIn.checkedIn").value(false))
+            .andExpect(jsonPath("$.data.checkIn.visitId").doesNotExist());
 
         String responseBody = confirmedResult.andReturn().getResponse().getContentAsString();
         assertThat(responseBody).doesNotContain(

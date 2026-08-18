@@ -72,7 +72,7 @@ class OperatorReservationControllerWebMvcTest extends ReservationControllerWebMv
     private OperatorReservationSearchResult operatorSearchResult() {
         Instant now = Instant.parse("2026-08-05T00:00:00Z");
         return new OperatorReservationSearchResult(
-            new ReservationReadSnapshot.ReservationInfo(1L, "R-2026", ReservationStatus.CONFIRMED, now, null, null, null, 10L),
+            new ReservationReadSnapshot.ReservationInfo(1L, "R-2026", ReservationStatus.CONFIRMED, now, null, null, null, 1, 10L),
             new ReservationReadSnapshot.SessionInfo(2L, ContentSessionStatus.SCHEDULED, now, now.plusSeconds(3600), now, now.plusSeconds(1800), 10L),
             new ReservationReadSnapshot.ContentInfo(3L, "김해 행사", 10L),
             new MaskedParticipant("홍*동", "010-****-5678"),

@@ -218,6 +218,7 @@ class GetRegionAdminQrExceptionUseCaseTest {
                 null,
                 null,
                 null,
+                1,
                 regionId
             ),
             new ReservationReadSnapshot.SessionInfo(
