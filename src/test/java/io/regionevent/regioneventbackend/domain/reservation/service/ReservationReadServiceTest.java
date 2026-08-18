@@ -38,6 +38,7 @@ class ReservationReadServiceTest {
 
         assertThat(result.snapshot().reservation().reservationId()).isEqualTo(10L);
         assertThat(result.snapshot().content().title()).isEqualTo("김해 가야문화 체험");
+        assertThat(result.snapshot().content().locationText()).isEqualTo("김해시 대성동고분박물관");
         assertThat(result.snapshot().participant().name()).isEqualTo("김민수");
         assertThat(result.checkIn()).isEqualTo(
             new ReservationReadIntegrityValidator.CheckInInfo(17L, true, CHECKED_AT)
@@ -252,6 +253,7 @@ class ReservationReadServiceTest {
             1L,
             3L,
             "김해 가야문화 체험",
+            "김해시 대성동고분박물관",
             1L,
             participantUserId,
             "김민수",

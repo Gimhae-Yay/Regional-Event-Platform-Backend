@@ -21,6 +21,7 @@ public record SessionReservationReadProjection(
     Long sessionRegionId,
     Long contentId,
     String contentTitle,
+    String contentLocationText,
     Long contentRegionId,
     Long participantUserId,
     String participantName,

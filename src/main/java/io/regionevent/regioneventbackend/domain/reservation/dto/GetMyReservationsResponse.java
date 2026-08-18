@@ -58,11 +58,12 @@ public record GetMyReservationsResponse(
 
     public record ContentResponse(
         String contentId,
-        String title
+        String title,
+        String locationText
     ) {
 
         private static ContentResponse from(ReservationReadSnapshot.ContentInfo content) {
-            return new ContentResponse(content.contentId().toString(), content.title());
+            return new ContentResponse(content.contentId().toString(), content.title(), content.locationText());
         }
     }
 

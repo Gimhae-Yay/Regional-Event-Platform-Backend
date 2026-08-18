@@ -14,6 +14,7 @@ import io.regionevent.regioneventbackend.domain.reservation.service.ReservationR
 public record GetMyReservationResponse(
     ReservationResponse reservation,
     SessionResponse session,
+    ContentResponse content,
     CheckInResponse checkIn
 ) {
 
@@ -24,6 +25,7 @@ public record GetMyReservationResponse(
         return new GetMyReservationResponse(
             ReservationResponse.from(snapshot.reservation()),
             SessionResponse.from(snapshot.session(), snapshot.content()),
+            ContentResponse.from(snapshot.content()),
             new CheckInResponse(
                 result.checkIn().checkedIn(),
                 result.checkIn().checkedAt(),
@@ -88,6 +90,17 @@ public record GetMyReservationResponse(
         Instant checkedAt,
         @JsonInclude(JsonInclude.Include.ALWAYS) String visitId
     ) {
+    }
+
+    public record ContentResponse(
+        String contentId,
+        String title,
+        String locationText
+    ) {
+
+        private static ContentResponse from(ReservationReadSnapshot.ContentInfo content) {
+            return new ContentResponse(content.contentId().toString(), content.title(), content.locationText());
+        }
     }
 
     private static OffsetDateTime toSeoulOffsetDateTime(Instant instant) {

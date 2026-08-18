@@ -59,6 +59,8 @@ public class ReservationReadIntegrityValidator {
             || !hasValue(content.contentId())
             || content.title() == null
             || content.title().isBlank()
+            || content.locationText() == null
+            || content.locationText().isBlank()
             || !hasValue(content.regionId())
             || !sameId(reservation.regionId(), session.regionId())
             || !sameId(session.regionId(), content.regionId())) {
