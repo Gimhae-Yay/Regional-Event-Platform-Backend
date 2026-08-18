@@ -13,6 +13,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
+import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationReadProjection;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationRepository;
@@ -71,6 +72,19 @@ class ReservationReadServiceTest {
         ReservationReadService reservationReadService = service(reservationRepository);
         when(reservationRepository.findReadProjectionsByReservationNo(RESERVATION_NO)).thenReturn(List.of(
             projection(ReservationStatus.CHECKED_IN, null, null)
+        ));
+
+        assertThatThrownBy(() -> reservationReadService.findByReservationNo(RESERVATION_NO))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("reservation read data is inconsistent");
+    }
+
+    @Test
+    void findByReservationNo_whenConsumedHoldQuantityIsNotPositive_throwsConsistencyException() {
+        ReservationRepository reservationRepository = mock(ReservationRepository.class);
+        ReservationReadService reservationReadService = service(reservationRepository);
+        when(reservationRepository.findReadProjectionsByReservationNo(RESERVATION_NO)).thenReturn(List.of(
+            projection(10L, RESERVATION_NO, ReservationStatus.CONFIRMED, null, null, USER_ID, 0)
         ));
 
         assertThatThrownBy(() -> reservationReadService.findByReservationNo(RESERVATION_NO))
@@ -200,6 +214,26 @@ class ReservationReadServiceTest {
         Instant checkedAt,
         Long participantUserId
     ) {
+        return projection(
+            reservationId,
+            reservationNo,
+            reservationStatus,
+            visitId,
+            checkedAt,
+            participantUserId,
+            3
+        );
+    }
+
+    private ReservationReadProjection projection(
+        Long reservationId,
+        String reservationNo,
+        ReservationStatus reservationStatus,
+        Long visitId,
+        Instant checkedAt,
+        Long participantUserId,
+        Integer holdQuantity
+    ) {
         return new ReservationReadProjection(
             reservationId,
             reservationNo,
@@ -228,7 +262,13 @@ class ReservationReadServiceTest {
             visitId == null ? null : 2L,
             visitId == null ? null : 3L,
             visitId == null ? null : participantUserId,
-            checkedAt
+            checkedAt,
+            100L,
+            CapacityHoldStatus.CONSUMED,
+            holdQuantity,
+            2L,
+            1L,
+            reservationId
         );
     }
 }

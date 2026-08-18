@@ -22,7 +22,11 @@ public record GetMyReservationResponse(
         return new GetMyReservationResponse(
             ReservationResponse.from(snapshot.reservation()),
             SessionResponse.from(snapshot.session(), snapshot.content()),
-            new CheckInResponse(result.checkIn().checkedIn(), result.checkIn().checkedAt())
+            new CheckInResponse(
+                result.checkIn().checkedIn(),
+                result.checkIn().checkedAt(),
+                result.checkIn().visitId() == null ? null : result.checkIn().visitId().toString()
+            )
         );
     }
 
@@ -30,6 +34,7 @@ public record GetMyReservationResponse(
         String reservationId,
         String reservationNo,
         ReservationStatus status,
+        int quantity,
         Instant confirmedAt,
         Instant cancelledAt,
         String cancellationReason,
@@ -41,6 +46,7 @@ public record GetMyReservationResponse(
                 reservation.reservationId().toString(),
                 reservation.reservationNo(),
                 reservation.status(),
+                reservation.quantity(),
                 reservation.confirmedAt(),
                 reservation.cancelledAt(),
                 reservation.cancellationReason(),
@@ -77,7 +83,8 @@ public record GetMyReservationResponse(
 
     public record CheckInResponse(
         boolean checkedIn,
-        Instant checkedAt
+        Instant checkedAt,
+        String visitId
     ) {
     }
 

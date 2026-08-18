@@ -103,6 +103,7 @@ class ReservationReadIntegrityValidatorTest {
                 null,
                 null,
                 null,
+                1,
                 1L
             ),
             new ReservationReadSnapshot.SessionInfo(

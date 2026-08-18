@@ -50,6 +50,8 @@ public class ReservationReadIntegrityValidator {
             || reservation.reservationNo() == null
             || reservation.reservationNo().isBlank()
             || reservation.status() == null
+            || reservation.quantity() == null
+            || reservation.quantity() <= 0
             || !hasValue(reservation.regionId())
             || !hasValue(session.sessionId())
             || session.status() == null

@@ -117,6 +117,7 @@ class SearchRegionAdminReservationByNumberUseCaseTest {
                     null,
                     null,
                     null,
+                    1,
                     REGION_ID
                 ),
                 new ReservationReadSnapshot.SessionInfo(
