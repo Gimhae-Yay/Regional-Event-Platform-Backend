@@ -172,6 +172,20 @@ class SecurityConfigWebMvcTest {
             .andExpect(jsonPath("$.code").value("FORBIDDEN"));
     }
 
+    @ParameterizedTest
+    @MethodSource("legacyRoleProtectedRequests")
+    void legacyRoleProtectedPath_withInsufficientAuthority_returnsForbiddenBeforeController(
+        HttpMethod method,
+        String path
+    ) throws Exception {
+        String accessToken = jwtAccessTokenService.issue(1L, List.of(AccessTokenAuthority.VISITOR));
+
+        mockMvc.perform(request(method, path)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
     @Test
     void operatorRequest_withEmptyAuthorities_isAuthenticatedOnly() throws Exception {
         String accessToken = jwtAccessTokenService.issue(1L);
@@ -294,6 +308,11 @@ class SecurityConfigWebMvcTest {
                 AccessTokenAuthority.SUPER_ADMIN
             ),
             Arguments.of(
+                HttpMethod.POST,
+                "/api/v1/platform-admin/admin-accounts/1/deactivate",
+                AccessTokenAuthority.SUPER_ADMIN
+            ),
+            Arguments.of(
                 HttpMethod.GET,
                 "/api/v1/platform-admin/protected",
                 AccessTokenAuthority.SUPER_ADMIN
@@ -344,10 +363,35 @@ class SecurityConfigWebMvcTest {
                 AccessTokenAuthority.OPERATOR
             ),
             Arguments.of(
+                HttpMethod.POST,
+                "/operator/check-ins",
+                AccessTokenAuthority.OPERATOR
+            ),
+            Arguments.of(
+                HttpMethod.POST,
+                "/operator/check-ins/manual",
+                AccessTokenAuthority.OPERATOR
+            ),
+            Arguments.of(
                 HttpMethod.GET,
                 "/region-admin/qr-exceptions",
                 AccessTokenAuthority.REGION_ADMIN
+            ),
+            Arguments.of(
+                HttpMethod.GET,
+                "/region-admin/qr-exceptions/1",
+                AccessTokenAuthority.REGION_ADMIN
             )
+        );
+    }
+
+    private static Stream<Arguments> legacyRoleProtectedRequests() {
+        return Stream.of(
+            Arguments.of(HttpMethod.POST, "/operator/check-ins"),
+            Arguments.of(HttpMethod.POST, "/operator/check-ins/manual"),
+            Arguments.of(HttpMethod.GET, "/operator/contents/1"),
+            Arguments.of(HttpMethod.GET, "/region-admin/qr-exceptions"),
+            Arguments.of(HttpMethod.GET, "/region-admin/qr-exceptions/1")
         );
     }
 
@@ -448,7 +492,9 @@ class SecurityConfigWebMvcTest {
             "/api/v1/operator/operator-requests",
             "/api/v1/visits/{visitId}/reviews",
             "/api/v1/missions/{missionId}/participations",
-            "/api/v1/contents"
+            "/api/v1/contents",
+            "/operator/check-ins",
+            "/operator/check-ins/manual"
         })
         ResponseEntity<Void> postResource() {
             return ResponseEntity.noContent().build();
@@ -461,7 +507,8 @@ class SecurityConfigWebMvcTest {
             "/api/v1/me/protected",
             "/api/v1/me/mission-participations",
             "/operator/contents/{contentId}",
-            "/region-admin/qr-exceptions"
+            "/region-admin/qr-exceptions",
+            "/region-admin/qr-exceptions/{exceptionId}"
         })
         ResponseEntity<Void> roleProtectedResource() {
             return ResponseEntity.noContent().build();
