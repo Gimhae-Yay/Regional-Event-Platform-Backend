@@ -2,6 +2,9 @@ package io.regionevent.regioneventbackend.domain.user.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 
@@ -33,6 +36,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
+import io.regionevent.regioneventbackend.global.security.refresh.InvalidRefreshTokenException;
 import io.regionevent.regioneventbackend.global.security.refresh.JwtRefreshTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshToken;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenConflictException;
@@ -56,6 +60,9 @@ class RefreshAccessTokenUseCaseIntegrationTest extends NonTransactionalMySqlTest
     private final AppUserRepository appUserRepository;
     private final StringRedisTemplate stringRedisTemplate;
     private final TransactionTemplate transactionTemplate;
+
+    @MockitoSpyBean
+    private AccessTokenAuthorityResolver accessTokenAuthorityResolver;
 
     @MockitoSpyBean
     private JwtAccessTokenService jwtAccessTokenService;
@@ -172,7 +179,7 @@ class RefreshAccessTokenUseCaseIntegrationTest extends NonTransactionalMySqlTest
         RefreshToken currentToken = jwtRefreshTokenService.authenticate(refreshToken);
         doThrow(new IllegalStateException("access token issuance failed"))
             .when(jwtAccessTokenService)
-            .issue(user.getUserId());
+            .issue(eq(user.getUserId()), anyList());
 
         assertThatThrownBy(() -> refreshAccessTokenUseCase.reissue(refreshToken))
             .isInstanceOf(IllegalStateException.class)
@@ -185,11 +192,29 @@ class RefreshAccessTokenUseCaseIntegrationTest extends NonTransactionalMySqlTest
 
         doReturn("retried-access-token")
             .when(jwtAccessTokenService)
-            .issue(user.getUserId());
+            .issue(eq(user.getUserId()), anyList());
         RefreshAccessTokenResult result = refreshAccessTokenUseCase.reissue(refreshToken);
 
         assertThat(result.accessToken()).isEqualTo("retried-access-token");
         assertThat(result.refreshToken()).isNotEqualTo(refreshToken);
+    }
+
+    @Test
+    void 권한원천정합성오류는_회전완료전에_기존토큰을유지한다() {
+        AppUser user = createUser();
+        String refreshToken = refreshTokenService.issue(user.getUserId());
+        RefreshToken currentToken = jwtRefreshTokenService.authenticate(refreshToken);
+        doThrow(new AccessTokenAuthoritySourceConflictException())
+            .when(accessTokenAuthorityResolver)
+            .resolve(any(AppUser.class));
+
+        assertThatThrownBy(() -> refreshAccessTokenUseCase.reissue(refreshToken))
+            .isInstanceOf(InvalidRefreshTokenException.class);
+
+        assertThat(stringRedisTemplate.opsForValue().get(activeFamilyKey(currentToken)))
+            .isEqualTo(currentToken.tokenId().toString());
+        assertThat(stringRedisTemplate.hasKey(consumedTokenKey(currentToken))).isFalse();
+        assertThat(stringRedisTemplate.hasKey(rotationKey(currentToken))).isFalse();
     }
 
     private AppUser createUser() {

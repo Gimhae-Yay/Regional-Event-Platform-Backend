@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 import java.util.function.Function;
 
@@ -30,10 +31,12 @@ class RefreshAccessTokenUseCaseTest {
     private static final Instant NOW = Instant.parse("2026-08-01T00:00:00Z");
 
     private final AppUserService appUserService = mock(AppUserService.class);
+    private final AccessTokenAuthorityResolver accessTokenAuthorityResolver = mock(AccessTokenAuthorityResolver.class);
     private final JwtAccessTokenService jwtAccessTokenService = mock(JwtAccessTokenService.class);
     private final RefreshTokenService refreshTokenService = mock(RefreshTokenService.class);
     private final RefreshAccessTokenUseCase refreshAccessTokenUseCase = new RefreshAccessTokenUseCase(
         appUserService,
+        accessTokenAuthorityResolver,
         jwtAccessTokenService,
         refreshTokenService,
         Clock.fixed(NOW, ZoneOffset.UTC)
@@ -44,8 +47,10 @@ class RefreshAccessTokenUseCaseTest {
         RefreshToken currentToken = refreshToken(NOW.plus(Duration.ofDays(14)));
         RefreshToken rotatedToken = refreshToken(NOW.plus(Duration.ofDays(7)));
 
+        AppUser user = mock(AppUser.class);
         when(appUserService.findActiveUserForUpdate(currentToken.userId()))
-            .thenReturn(Optional.of(mock(AppUser.class)));
+            .thenReturn(Optional.of(user));
+        when(accessTokenAuthorityResolver.resolve(user)).thenReturn(List.of());
         when(refreshTokenService.rotate(
             ArgumentMatchers.eq("current-token"),
             ArgumentMatchers.<Function<RefreshToken, String>>any()
@@ -57,7 +62,10 @@ class RefreshAccessTokenUseCaseTest {
                 prepareBeforeCompletion.apply(currentToken)
             );
         });
-        when(jwtAccessTokenService.issue(rotatedToken.userId())).thenReturn("access-token");
+        when(jwtAccessTokenService.issue(
+            ArgumentMatchers.eq(rotatedToken.userId()),
+            ArgumentMatchers.anyList()
+        )).thenReturn("access-token");
 
         RefreshAccessTokenResult result = refreshAccessTokenUseCase.reissue("current-token");
 
@@ -69,6 +77,7 @@ class RefreshAccessTokenUseCaseTest {
             ArgumentMatchers.eq("current-token"),
             ArgumentMatchers.<Function<RefreshToken, String>>any()
         );
+        verify(jwtAccessTokenService).issue(rotatedToken.userId(), List.of());
     }
 
     @Test
@@ -77,6 +86,33 @@ class RefreshAccessTokenUseCaseTest {
 
         when(appUserService.findActiveUserForUpdate(currentToken.userId()))
             .thenReturn(Optional.empty());
+        when(refreshTokenService.rotate(
+            ArgumentMatchers.eq("current-token"),
+            ArgumentMatchers.<Function<RefreshToken, String>>any()
+        )).thenAnswer(invocation -> {
+            Function<RefreshToken, String> prepareBeforeCompletion = invocation.getArgument(1);
+            return new RefreshTokenService.RotationResult<>(
+                "rotated-token",
+                refreshToken(NOW.plus(Duration.ofDays(7))),
+                prepareBeforeCompletion.apply(currentToken)
+            );
+        });
+
+        assertThatThrownBy(() -> refreshAccessTokenUseCase.reissue("current-token"))
+            .isInstanceOf(InvalidRefreshTokenException.class);
+
+        verifyNoInteractions(jwtAccessTokenService);
+    }
+
+    @Test
+    void reissue_whenAuthoritySourcesConflict_doesNotIssueAccessToken() {
+        RefreshToken currentToken = refreshToken(NOW.plus(Duration.ofDays(14)));
+        AppUser user = mock(AppUser.class);
+
+        when(appUserService.findActiveUserForUpdate(currentToken.userId()))
+            .thenReturn(Optional.of(user));
+        when(accessTokenAuthorityResolver.resolve(user))
+            .thenThrow(new AccessTokenAuthoritySourceConflictException());
         when(refreshTokenService.rotate(
             ArgumentMatchers.eq("current-token"),
             ArgumentMatchers.<Function<RefreshToken, String>>any()

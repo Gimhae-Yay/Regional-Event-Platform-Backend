@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.Date;
+import java.util.List;
 
 import javax.crypto.SecretKey;
 
@@ -35,6 +36,9 @@ class JwtAccessTokenServiceTest {
             () -> new JwtAccessTokenServiceTest().authenticate_whenSignatureOrKeyIdOrAlgorithmIsInvalid_throwsInvalidAccessTokenException(),
             () -> new JwtAccessTokenServiceTest().authenticate_whenTokenUsesPreviousKey_returnsAuthenticatedUser(),
             () -> new JwtAccessTokenServiceTest().authenticate_whenPreviousKeyVerificationHasEnded_throwsInvalidAccessTokenException(),
+            () -> new JwtAccessTokenServiceTest().authenticate_whenAuthoritiesClaimIsMissingInCompatibilityMode_returnsEmptyAuthorities(),
+            () -> new JwtAccessTokenServiceTest().authenticate_whenAuthoritiesClaimIsMissingInStrictMode_throwsInvalidAccessTokenException(),
+            () -> new JwtAccessTokenServiceTest().authenticate_whenAuthoritiesClaimIsMalformed_throwsInvalidAccessTokenException(),
             () -> new JwtAccessTokenServiceTest().createService_whenMoreThanOnePreviousKeyIsConfigured_throwsIllegalStateException(),
             () -> new JwtAccessTokenServiceTest().issue_whenUserIdIsNotPositive_throwsIllegalArgumentException(),
             () -> new JwtAccessTokenServiceTest().createService_whenPreviousKeyVerificationEndExceedsAccessTokenLifetime_throwsIllegalStateException()
@@ -44,7 +48,7 @@ class JwtAccessTokenServiceTest {
     void issueAndAuthenticate_withValidAccessToken_returnsAuthenticatedUser() {
         JwtAccessTokenService jwtAccessTokenService = createService(Clock.fixed(ISSUED_AT, ZoneOffset.UTC));
 
-        String token = jwtAccessTokenService.issue(1L);
+        String token = jwtAccessTokenService.issue(1L, List.of(AccessTokenAuthority.VISITOR));
         Claims claims = Jwts.parser()
             .verifyWith(toSecretKey(key(0)))
             .clock(() -> Date.from(ISSUED_AT))
@@ -53,10 +57,13 @@ class JwtAccessTokenServiceTest {
             .getPayload();
 
         assertThat(jwtAccessTokenService.authenticate(token).userId()).isEqualTo(1L);
+        assertThat(jwtAccessTokenService.authenticate(token).authorities())
+            .containsExactly(AccessTokenAuthority.VISITOR);
         assertThat(claims.getIssuer()).isEqualTo("regional-event-platform");
         assertThat(claims.getAudience()).containsExactly("regional-event-api");
         assertThat(claims.getSubject()).isEqualTo("1");
         assertThat(claims.get("token_type", String.class)).isEqualTo("ACCESS");
+        assertThat(claims.get("authorities", List.class)).containsExactly("ROLE_VISITOR");
         assertThat(claims.getExpiration()).isEqualTo(Date.from(ISSUED_AT.plusSeconds(900)));
         assertThat(claims).doesNotContainKeys("role", "region_id", "family_id", "jti");
     }
@@ -177,6 +184,52 @@ class JwtAccessTokenServiceTest {
             .isInstanceOf(InvalidAccessTokenException.class);
     }
 
+    void authenticate_whenAuthoritiesClaimIsMissingInCompatibilityMode_returnsEmptyAuthorities() {
+        JwtAccessTokenService jwtAccessTokenService = createService(Clock.fixed(ISSUED_AT, ZoneOffset.UTC));
+        String legacyToken = createToken(
+            "regional-event-platform",
+            "regional-event-api",
+            "ACCESS",
+            ISSUED_AT.plusSeconds(900),
+            key(0)
+        );
+
+        assertThat(jwtAccessTokenService.authenticate(legacyToken).authorities()).isEmpty();
+    }
+
+    void authenticate_whenAuthoritiesClaimIsMissingInStrictMode_throwsInvalidAccessTokenException() {
+        JwtAccessTokenService jwtAccessTokenService = createStrictService(Clock.fixed(ISSUED_AT, ZoneOffset.UTC));
+        String legacyToken = createToken(
+            "regional-event-platform",
+            "regional-event-api",
+            "ACCESS",
+            ISSUED_AT.plusSeconds(900),
+            key(0)
+        );
+
+        assertThatThrownBy(() -> jwtAccessTokenService.authenticate(legacyToken))
+            .isInstanceOf(InvalidAccessTokenException.class);
+    }
+
+    void authenticate_whenAuthoritiesClaimIsMalformed_throwsInvalidAccessTokenException() {
+        JwtAccessTokenService jwtAccessTokenService = createService(Clock.fixed(ISSUED_AT, ZoneOffset.UTC));
+
+        assertThatThrownBy(() -> jwtAccessTokenService.authenticate(createTokenWithAuthorities("ROLE_VISITOR")))
+            .isInstanceOf(InvalidAccessTokenException.class);
+        assertThatThrownBy(() -> jwtAccessTokenService.authenticate(createTokenWithAuthorities(List.of(1))))
+            .isInstanceOf(InvalidAccessTokenException.class);
+        assertThatThrownBy(() -> jwtAccessTokenService.authenticate(createTokenWithAuthorities(
+            java.util.Arrays.asList("ROLE_VISITOR", null)
+        )))
+            .isInstanceOf(InvalidAccessTokenException.class);
+        assertThatThrownBy(() -> jwtAccessTokenService.authenticate(createTokenWithAuthorities(
+            List.of("ROLE_VISITOR", "ROLE_VISITOR")
+        )))
+            .isInstanceOf(InvalidAccessTokenException.class);
+        assertThatThrownBy(() -> jwtAccessTokenService.authenticate(createTokenWithAuthorities(List.of("ROLE_UNKNOWN"))))
+            .isInstanceOf(InvalidAccessTokenException.class);
+    }
+
     void createService_whenMoreThanOnePreviousKeyIsConfigured_throwsIllegalStateException() {
         JwtAccessTokenProperties properties = new JwtAccessTokenProperties();
         properties.setIssuer("regional-event-platform");
@@ -235,6 +288,16 @@ class JwtAccessTokenServiceTest {
         return new JwtAccessTokenService(properties, clock);
     }
 
+    private JwtAccessTokenService createStrictService(Clock clock) {
+        JwtAccessTokenProperties properties = new JwtAccessTokenProperties();
+        properties.setIssuer("regional-event-platform");
+        properties.setAudience("regional-event-api");
+        properties.setActiveKeyId("test-key");
+        properties.setActiveKey(key(0));
+        properties.setAuthoritiesClaimRequired(true);
+        return new JwtAccessTokenService(properties, clock);
+    }
+
     private JwtAccessTokenProperties.VerificationKey verificationKey(
         String keyId,
         String key,
@@ -279,6 +342,25 @@ class JwtAccessTokenServiceTest {
             .issuedAt(Date.from(ISSUED_AT))
             .expiration(Date.from(expiresAt))
             .signWith(toSecretKey(encodedKey), Jwts.SIG.HS256)
+            .compact();
+    }
+
+    private String createTokenWithAuthorities(Object authorities) {
+        return Jwts.builder()
+            .header()
+                .type("JWT")
+                .keyId("test-key")
+                .and()
+            .issuer("regional-event-platform")
+            .audience()
+                .add("regional-event-api")
+                .and()
+            .subject("1")
+            .claim("token_type", "ACCESS")
+            .claim("authorities", authorities)
+            .issuedAt(Date.from(ISSUED_AT))
+            .expiration(Date.from(ISSUED_AT.plusSeconds(900)))
+            .signWith(toSecretKey(key(0)), Jwts.SIG.HS256)
             .compact();
     }
 
