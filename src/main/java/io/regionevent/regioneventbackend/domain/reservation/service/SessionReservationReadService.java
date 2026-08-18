@@ -90,6 +90,7 @@ public class SessionReservationReadService {
                 null,
                 null,
                 null,
+                projection.holdQuantity(),
                 projection.reservationRegionId()
             ),
             new ReservationReadSnapshot.SessionInfo(

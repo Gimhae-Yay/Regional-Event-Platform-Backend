@@ -20,6 +20,7 @@ public record ReservationReadSnapshot(
         Instant cancelledAt,
         String cancellationReason,
         Instant expiredAt,
+        Integer quantity,
         Long regionId
     ) {
     }

@@ -126,6 +126,7 @@ class SearchOperatorReservationByNumberUseCaseTest {
                     null,
                     null,
                     null,
+                    1,
                     100L
                 ),
                 new ReservationReadSnapshot.SessionInfo(

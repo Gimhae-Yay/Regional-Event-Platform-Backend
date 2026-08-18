@@ -164,15 +164,20 @@ class MyReservationListControllerIntegrationTest {
                 expired.getReservationId().toString()
             ))
             .andExpect(jsonPath("$.data.reservations[0].status").value("EXPIRED"))
+            .andExpect(jsonPath("$.data.reservations[0].quantity").value(1))
+            .andExpect(jsonPath("$.data.reservations[0].checkIn.visitId").doesNotExist())
             .andExpect(jsonPath("$.data.reservations[1].reservationId").value(
                 cancelled.getReservationId().toString()
             ))
             .andExpect(jsonPath("$.data.reservations[1].status").value("CANCELLED"))
+            .andExpect(jsonPath("$.data.reservations[1].quantity").value(1))
+            .andExpect(jsonPath("$.data.reservations[1].checkIn.visitId").doesNotExist())
             .andExpect(jsonPath("$.data.reservations[2].reservationId").value(
                 checkedIn.getReservationId().toString()
             ))
             .andExpect(jsonPath("$.data.reservations[2].reservationNo").value(checkedIn.getReservationNo()))
             .andExpect(jsonPath("$.data.reservations[2].status").value("CHECKED_IN"))
+            .andExpect(jsonPath("$.data.reservations[2].quantity").value(1))
             .andExpect(jsonPath("$.data.reservations[2].confirmedAt").value("2030-08-02T01:00:00Z"))
             .andExpect(jsonPath("$.data.reservations[2].content.contentId").value(
                 fixture.content().getContentId().toString()
@@ -192,12 +197,17 @@ class MyReservationListControllerIntegrationTest {
             .andExpect(jsonPath("$.data.reservations[2].checkIn.checkedAt").value(
                 "2030-08-02T01:05:00Z"
             ))
+            .andExpect(jsonPath("$.data.reservations[2].checkIn.visitId").value(
+                visit.getVisitId().toString()
+            ))
             .andExpect(jsonPath("$.data.reservations[3].reservationId").value(
                 confirmed.getReservationId().toString()
             ))
             .andExpect(jsonPath("$.data.reservations[3].status").value("CONFIRMED"))
+            .andExpect(jsonPath("$.data.reservations[3].quantity").value(1))
             .andExpect(jsonPath("$.data.reservations[3].checkIn.checkedIn").value(false))
-            .andExpect(jsonPath("$.data.reservations[3].checkIn.checkedAt").doesNotExist());
+            .andExpect(jsonPath("$.data.reservations[3].checkIn.checkedAt").doesNotExist())
+            .andExpect(jsonPath("$.data.reservations[3].checkIn.visitId").doesNotExist());
 
         String responseBody = result.andReturn().getResponse().getContentAsString();
         assertThat(responseBody).doesNotContain(
