@@ -127,7 +127,7 @@ Content-Type: application/json
 Accept: application/json
 
 {
-  "confirmedStatus": "REFUNDED",
+  "confirmedStatus": "SUCCEEDED",
   "reason": "외부 환불 상태를 확인했습니다.",
   "evidenceReference": "OPS-REFUND-FAILURE-{{$timestamp}}"
 }
