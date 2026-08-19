@@ -65,46 +65,11 @@ DELETE FROM content_session
 WHERE session_id IN (911001, 911002, 911003);
 
 DELETE FROM audit_event_actor_link
-WHERE audit_event_id IN (
-    SELECT audit_event_id
-    FROM audit_event
-    WHERE region_id IN (900001, 900002)
-        OR region_id IN (
-            SELECT region_id
-            FROM region
-            WHERE region_code LIKE 'P1HTTP%'
-        )
-        OR target_type IN (
-            'PLATFORM_ADMIN_ASSIGNMENT',
-            'USER_ROLE_ASSIGNMENT',
-            'STAMPBOOK',
-            'MISSION',
-            'COUPON_POLICY',
-            'COUPON',
-            'RESERVATION_PRICE_SNAPSHOT',
-            'PAYMENT',
-            'REFUND',
-            'PAYMENT_DISCREPANCY'
-        )
-);
-DELETE FROM audit_event
-WHERE region_id IN (900001, 900002)
-    OR region_id IN (
-        SELECT region_id
-        FROM region
-        WHERE region_code LIKE 'P1HTTP%'
-    )
-    OR target_type IN (
-        'PLATFORM_ADMIN_ASSIGNMENT',
-        'USER_ROLE_ASSIGNMENT',
-        'STAMPBOOK',
-        'MISSION',
-        'COUPON_POLICY',
-        'COUPON',
-        'RESERVATION_PRICE_SNAPSHOT',
-        'PAYMENT',
-        'REFUND',
-        'PAYMENT_DISCREPANCY'
+WHERE user_id IN (10, 11, 12)
+    OR user_id IN (
+        SELECT user_id
+        FROM app_user
+        WHERE login_identifier LIKE 'p1-admin-%@example.com'
     );
 
 DELETE FROM platform_admin_assignment

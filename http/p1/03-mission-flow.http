@@ -27,17 +27,28 @@ Accept: application/json
   "endsAt": "2027-12-31T23:59:59+09:00"
 }
 
-> {% if (response.status === 201) { client.global.set("p1MissionFlowId", response.body.data.missionId); } %}
+> {%
+client.test("미션 생성은 201 SUCCESS와 식별자를 반환한다.", () => {
+  client.assert(response.status === 201, "미션 생성은 201이어야 합니다.");
+  client.assert(response.body.code === "SUCCESS", "미션 생성은 SUCCESS여야 합니다.");
+  client.assert(response.body.data?.missionId, "미션 생성 응답에 missionId가 있어야 합니다.");
+});
+client.global.set("p1MissionFlowId", response.body.data.missionId);
+%}
 
 ### 2. 운영자 미션 목록 조회
 GET {{baseUrl}}/api/v1/operator/missions?status=DRAFT&page=0&size=20
 Authorization: Bearer {{operatorAccessToken}}
 Accept: application/json
 
+> {% client.test("운영자 미션 목록 조회는 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "운영자 미션 목록 조회는 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "운영자 미션 목록 조회는 SUCCESS여야 합니다."); }); %}
+
 ### 3. 생성 미션 상세 조회
 GET {{baseUrl}}/api/v1/operator/missions/{{p1MissionFlowId}}
 Authorization: Bearer {{operatorAccessToken}}
 Accept: application/json
+
+> {% client.test("생성 미션 상세 조회는 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "미션 상세 조회는 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "미션 상세 조회는 SUCCESS여야 합니다."); }); %}
 
 ### 4. 생성 미션 수정
 PATCH {{baseUrl}}/api/v1/operator/missions/{{p1MissionFlowId}}
@@ -54,30 +65,42 @@ Accept: application/json
   "endsAt": "2027-12-31T23:59:59+09:00"
 }
 
+> {% client.test("미션 수정은 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "미션 수정은 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "미션 수정은 SUCCESS여야 합니다."); }); %}
+
 ### 5. 지역 관리자 심사 제출
 POST {{baseUrl}}/api/v1/operator/missions/{{p1MissionFlowId}}/submit
 Authorization: Bearer {{operatorAccessToken}}
 Accept: application/json
+
+> {% client.test("미션 심사 제출은 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "미션 심사 제출은 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "미션 심사 제출은 SUCCESS여야 합니다."); }); %}
 
 ### 6. 지역 관리자 미션 심사 대기 목록 조회
 GET {{baseUrl}}/api/v1/region-admin/missions?status=PENDING_REVIEW&page=0&size=20
 Authorization: Bearer {{regionAdminAccessToken}}
 Accept: application/json
 
+> {% client.test("미션 심사 대기 목록 조회는 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "미션 심사 대기 목록 조회는 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "미션 심사 대기 목록 조회는 SUCCESS여야 합니다."); }); %}
+
 ### 7. 생성 미션 심사 상세 조회
 GET {{baseUrl}}/api/v1/region-admin/missions/{{p1MissionFlowId}}
 Authorization: Bearer {{regionAdminAccessToken}}
 Accept: application/json
+
+> {% client.test("미션 심사 상세 조회는 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "미션 심사 상세 조회는 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "미션 심사 상세 조회는 SUCCESS여야 합니다."); }); %}
 
 ### 8. 생성 미션 심사 이력 조회
 GET {{baseUrl}}/api/v1/region-admin/missions/{{p1MissionFlowId}}/history
 Authorization: Bearer {{regionAdminAccessToken}}
 Accept: application/json
 
+> {% client.test("미션 심사 이력 조회는 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "미션 심사 이력 조회는 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "미션 심사 이력 조회는 SUCCESS여야 합니다."); }); %}
+
 ### 9. 생성 미션 승인 - 즉시 PUBLISHED 기대
 POST {{baseUrl}}/api/v1/region-admin/missions/{{p1MissionFlowId}}/approve
 Authorization: Bearer {{regionAdminAccessToken}}
 Accept: application/json
+
+> {% client.test("미션 승인은 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "미션 승인은 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "미션 승인은 SUCCESS여야 합니다."); }); %}
 
 ### 10. 반려 흐름 확인용 미션 반려
 POST {{baseUrl}}/api/v1/region-admin/missions/{{p1PendingMissionId}}/reject
@@ -89,41 +112,62 @@ Accept: application/json
   "reasonCode": "TARGET_CONTENT_REVIEW_REQUIRED"
 }
 
+> {% client.test("미션 반려는 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "미션 반려는 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "미션 반려는 SUCCESS여야 합니다."); }); %}
+
 ### 11. 공개 지역 미션 목록 조회
 GET {{baseUrl}}/api/v1/regions/{{regionId}}/missions?page=0&size=20
 Accept: application/json
 
+> {% client.test("공개 지역 미션 목록 조회는 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "공개 지역 미션 목록 조회는 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "공개 지역 미션 목록 조회는 SUCCESS여야 합니다."); }); %}
+
 ### 12. 공개 미션 상세 조회
 GET {{baseUrl}}/api/v1/missions/{{publishedMissionId}}
 Accept: application/json
+
+> {% client.test("공개 미션 상세 조회는 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "공개 미션 상세 조회는 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "공개 미션 상세 조회는 SUCCESS여야 합니다."); }); %}
 
 ### 13. 미션 참여 생성 - 201 CREATED 기대
 POST {{baseUrl}}/api/v1/missions/{{publishedMissionId}}/participations
 Authorization: Bearer {{visitorAccessToken}}
 Accept: application/json
 
-> {% if (response.status === 201) { client.global.set("p1MissionParticipationFlowId", response.body.data.participationId); } %}
+> {%
+client.test("미션 참여 생성은 201 SUCCESS와 식별자를 반환한다.", () => {
+  client.assert(response.status === 201, "미션 참여 생성은 201이어야 합니다.");
+  client.assert(response.body.code === "SUCCESS", "미션 참여 생성은 SUCCESS여야 합니다.");
+  client.assert(response.body.data?.participationId, "미션 참여 생성 응답에 participationId가 있어야 합니다.");
+});
+client.global.set("p1MissionParticipationFlowId", response.body.data.participationId);
+%}
 
 ### 14. 내 미션 참여 목록 조회
 GET {{baseUrl}}/api/v1/me/mission-participations?status=IN_PROGRESS&page=0&size=20
 Authorization: Bearer {{visitorAccessToken}}
 Accept: application/json
 
+> {% client.test("내 미션 참여 목록 조회는 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "내 미션 참여 목록 조회는 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "내 미션 참여 목록 조회는 SUCCESS여야 합니다."); }); %}
+
 ### 15. 내 미션 참여 상세 조회
 GET {{baseUrl}}/api/v1/me/mission-participations/{{participationId}}
 Authorization: Bearer {{visitorAccessToken}}
 Accept: application/json
+
+> {% client.test("내 미션 참여 상세 조회는 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "내 미션 참여 상세 조회는 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "내 미션 참여 상세 조회는 SUCCESS여야 합니다."); }); %}
 
 ### 16. 타인 미션 참여 상세 조회 - 403 FORBIDDEN 또는 404 NOT_FOUND 기대
 GET {{baseUrl}}/api/v1/me/mission-participations/{{participationId}}
 Authorization: Bearer {{otherVisitorAccessToken}}
 Accept: application/json
 
+> {% client.test("타인 미션 참여 상세 조회는 403 또는 404를 반환한다.", () => { client.assert([403, 404].includes(response.status), "타인 미션 참여 상세 조회는 403 또는 404여야 합니다."); }); %}
+
 ### 17. 완료 미션 보상 수령 - 201 CREATED 또는 기존 결과 기대
 # participationId는 COMPLETED 상태인 별도 참여 ID를 사용합니다.
 POST {{baseUrl}}/api/v1/me/mission-participations/{{participationId}}/rewards/claim
 Authorization: Bearer {{visitorAccessToken}}
 Accept: application/json
+
+> {% client.test("완료 미션 보상 수령은 200 또는 201 SUCCESS를 반환한다.", () => { client.assert([200, 201].includes(response.status), "미션 보상 수령은 200 또는 201이어야 합니다."); client.assert(response.body.code === "SUCCESS", "미션 보상 수령은 SUCCESS여야 합니다."); }); %}
 
 ### 18. 미션 종료
 POST {{baseUrl}}/api/v1/operator/missions/{{p1MissionFlowId}}/end
@@ -134,3 +178,5 @@ Accept: application/json
 {
   "reasonCode": "OPERATOR_REQUEST"
 }
+
+> {% client.test("미션 종료는 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "미션 종료는 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "미션 종료는 SUCCESS여야 합니다."); }); %}

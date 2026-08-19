@@ -32,23 +32,20 @@ cleanup() {
 
 get_access_token() {
     local email="$1"
-    local header_file="$temporary_directory/${email%%@*}.headers"
-    local authorization
+    local response_file="$temporary_directory/${email%%@*}.json"
     local access_token
 
     if ! curl --silent --show-error --fail \
-        --dump-header "$header_file" \
-        --output /dev/null \
+        --output "$response_file" \
         --header 'Content-Type: application/json' \
         --data "{\"email\":\"$email\",\"password\":\"$PASSWORD\"}" \
         "$base_url/api/v1/auth/login"; then
         fail "로그인 요청에 실패했습니다: $email"
     fi
 
-    authorization="$(LC_ALL=C grep -i '^Authorization: Bearer ' "$header_file" | tail -n 1 | tr -d '\r' || true)"
-    access_token="$(printf '%s' "$authorization" | sed -E 's/^[^:]+: Bearer //')"
+    access_token="$(sed -nE 's/.*"accessToken"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' "$response_file" | tail -n 1)"
 
-    [[ -n "$access_token" ]] || fail "로그인 응답에서 Bearer 토큰을 찾지 못했습니다: $email"
+    [[ -n "$access_token" ]] || fail "로그인 응답에서 accessToken을 찾지 못했습니다: $email"
     printf '%s' "$access_token"
 }
 
