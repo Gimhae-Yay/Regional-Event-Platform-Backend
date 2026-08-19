@@ -6,8 +6,14 @@ services:
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      AUTH_REDIS_HOST: auth-redis
-      AUTH_REDIS_PORT: 6379
+      AUTH_REDIS_HOST: ${AUTH_REDIS_HOST:?AUTH_REDIS_HOST must be set}
+      AUTH_REDIS_PORT: ${AUTH_REDIS_PORT:-6379}
+      # Terraform user-data가 SSM SecureString을 .env에만 기록합니다.
+      # Compose에 기본값을 두지 않아 Redis 인증 토큰 누락을 배포 시점에 즉시 실패시킵니다.
+      AUTH_REDIS_PASSWORD: ${AUTH_REDIS_PASSWORD:?AUTH_REDIS_PASSWORD must be set}
+      # 운영 결제·웹훅 검증은 fake 모드가 아니므로 두 PortOne 비밀값을 별도로 요구합니다.
+      PORTONE_API_SECRET: ${PORTONE_API_SECRET:?PORTONE_API_SECRET must be set}
+      PORTONE_WEBHOOK_SECRET: ${PORTONE_WEBHOOK_SECRET:?PORTONE_WEBHOOK_SECRET must be set}
       SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:?SPRING_DATASOURCE_URL must be set}
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:?SPRING_DATASOURCE_USERNAME must be set}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?SPRING_DATASOURCE_PASSWORD must be set}
@@ -23,22 +29,3 @@ services:
       STORAGE_S3_REGION: ${STORAGE_S3_REGION:-}
     ports:
       - "${API_PORT:-8080}:8080"
-    depends_on:
-      - auth-redis
-
-  auth-redis:
-    image: redis:7.4-alpine
-    restart: unless-stopped
-    command:
-      - redis-server
-      - --appendonly
-      - "yes"
-      - --maxmemory
-      - 256mb
-      - --maxmemory-policy
-      - noeviction
-    volumes:
-      - auth-redis-data:/data
-
-volumes:
-  auth-redis-data:

@@ -65,7 +65,7 @@ jobs:
       - name: 새 인스턴스가 사용할 런타임 구성 기록
         run: |
           set -euo pipefail
-          compose_file="compose.auth-redis.yaml"
+          compose_file="compose.api.yaml"
           compose_size="$(wc -c < "$compose_file")"
           test "$compose_size" -le 4096
           aws ssm put-parameter \
@@ -131,7 +131,7 @@ jobs:
           echo "새 EC2 인스턴스가 SSM에 온라인으로 등록되지 않았습니다." >&2
           exit 1
 
-      - name: API·Redis Compose와 Health 응답 검증
+      - name: API Compose와 Health 응답 검증
         env:
           INSTANCE_ID: ${{ steps.new-instance.outputs.instance_id }}
         run: |
@@ -149,21 +149,11 @@ jobs:
                   --format '{{.Label "com.docker.compose.service"}}' | sort
               )"
               if printf '%s\n' "$running_services" | grep -Fx api >/dev/null \
-                && printf '%s\n' "$running_services" | grep -Fx auth-redis >/dev/null \
-                && test "$(printf '%s\n' "$running_services" | sed '/^$/d' | wc -l)" -eq 2; then
-                redis_container_id="$(
-                  docker ps -q \
-                    --filter 'status=running' \
-                    --filter 'label=com.docker.compose.project=regional-event' \
-                    --filter 'label=com.docker.compose.service=auth-redis'
-                )"
-                if test -n "$redis_container_id" \
-                  && test "$(docker exec "$redis_container_id" redis-cli ping)" = 'PONG'; then
-                  health_body="$(curl --fail --silent --show-error --max-time 5 http://localhost:8080/actuator/health || true)"
-                  if printf '%s' "$health_body" \
-                    | grep -Eq '"status"[[:space:]]*:[[:space:]]*"UP"'; then
-                    exit 0
-                  fi
+                && test "$(printf '%s\n' "$running_services" | sed '/^$/d' | wc -l)" -eq 1; then
+                health_body="$(curl --fail --silent --show-error --max-time 5 http://localhost:8080/actuator/health || true)"
+                if printf '%s' "$health_body" \
+                  | grep -Eq '"status"[[:space:]]*:[[:space:]]*"UP"'; then
+                  exit 0
                 fi
               fi
             fi
