@@ -1,0 +1,136 @@
+@baseUrl = http://localhost:8080
+@operatorAccessToken = {{p1OperatorAccessToken}}
+@regionAdminAccessToken = {{p1RegionAdminAccessToken}}
+@visitorAccessToken = {{p1VisitorAccessToken}}
+@otherVisitorAccessToken = {{p1OtherVisitorAccessToken}}
+@regionId = {{p1RegionId}}
+@contentId = {{p1PublishedContentId}}
+@rewardCouponPolicyId = {{p1PublishedMissionRewardCouponPolicyId}}
+@publishedMissionId = {{p1PublishedMissionId}}
+@participationId = {{p1MissionParticipationId}}
+
+# P1 지역 미션 생성·심사·참여·보상 수령
+# 선행 조건: rewardCouponPolicyId는 미션 보상용 공개 쿠폰 정책이고, participationId는 visitorAccessToken 소유여야 합니다.
+
+### 1. 미션 생성 - 201 CREATED 기대
+POST {{baseUrl}}/api/v1/operator/missions
+Authorization: Bearer {{operatorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "P1 HTTP 방문 미션 {{$timestamp}}",
+  "conditionType": "VISIT_COUNT",
+  "requiredVisitCount": 1,
+  "targetContentIds": ["{{contentId}}"],
+  "rewardCouponPolicyId": "{{rewardCouponPolicyId}}",
+  "endsAt": "2027-12-31T23:59:59+09:00"
+}
+
+> {% if (response.status === 201) { client.global.set("p1MissionFlowId", response.body.data.missionId); } %}
+
+### 2. 운영자 미션 목록 조회
+GET {{baseUrl}}/api/v1/operator/missions?status=DRAFT&page=0&size=20
+Authorization: Bearer {{operatorAccessToken}}
+Accept: application/json
+
+### 3. 생성 미션 상세 조회
+GET {{baseUrl}}/api/v1/operator/missions/{{p1MissionFlowId}}
+Authorization: Bearer {{operatorAccessToken}}
+Accept: application/json
+
+### 4. 생성 미션 수정
+PATCH {{baseUrl}}/api/v1/operator/missions/{{p1MissionFlowId}}
+Authorization: Bearer {{operatorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "P1 HTTP 방문 미션 수정 {{$timestamp}}",
+  "conditionType": "VISIT_COUNT",
+  "requiredVisitCount": 1,
+  "targetContentIds": ["{{contentId}}"],
+  "rewardCouponPolicyId": "{{rewardCouponPolicyId}}",
+  "endsAt": "2027-12-31T23:59:59+09:00"
+}
+
+### 5. 지역 관리자 심사 제출
+POST {{baseUrl}}/api/v1/operator/missions/{{p1MissionFlowId}}/submit
+Authorization: Bearer {{operatorAccessToken}}
+Accept: application/json
+
+### 6. 지역 관리자 미션 심사 대기 목록 조회
+GET {{baseUrl}}/api/v1/region-admin/missions?status=PENDING_REVIEW&page=0&size=20
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+### 7. 생성 미션 심사 상세 조회
+GET {{baseUrl}}/api/v1/region-admin/missions/{{p1MissionFlowId}}
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+### 8. 생성 미션 심사 이력 조회
+GET {{baseUrl}}/api/v1/region-admin/missions/{{p1MissionFlowId}}/history
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+### 9. 생성 미션 승인 - 즉시 PUBLISHED 기대
+POST {{baseUrl}}/api/v1/region-admin/missions/{{p1MissionFlowId}}/approve
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+### 10. 반려 흐름 확인용 미션 반려
+POST {{baseUrl}}/api/v1/region-admin/missions/{{p1PendingMissionId}}/reject
+Authorization: Bearer {{regionAdminAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reasonCode": "TARGET_CONTENT_REVIEW_REQUIRED"
+}
+
+### 11. 공개 지역 미션 목록 조회
+GET {{baseUrl}}/api/v1/regions/{{regionId}}/missions?page=0&size=20
+Accept: application/json
+
+### 12. 공개 미션 상세 조회
+GET {{baseUrl}}/api/v1/missions/{{publishedMissionId}}
+Accept: application/json
+
+### 13. 미션 참여 생성 - 201 CREATED 기대
+POST {{baseUrl}}/api/v1/missions/{{publishedMissionId}}/participations
+Authorization: Bearer {{visitorAccessToken}}
+Accept: application/json
+
+> {% if (response.status === 201) { client.global.set("p1MissionParticipationFlowId", response.body.data.participationId); } %}
+
+### 14. 내 미션 참여 목록 조회
+GET {{baseUrl}}/api/v1/me/mission-participations?status=IN_PROGRESS&page=0&size=20
+Authorization: Bearer {{visitorAccessToken}}
+Accept: application/json
+
+### 15. 내 미션 참여 상세 조회
+GET {{baseUrl}}/api/v1/me/mission-participations/{{participationId}}
+Authorization: Bearer {{visitorAccessToken}}
+Accept: application/json
+
+### 16. 타인 미션 참여 상세 조회 - 403 FORBIDDEN 또는 404 NOT_FOUND 기대
+GET {{baseUrl}}/api/v1/me/mission-participations/{{participationId}}
+Authorization: Bearer {{otherVisitorAccessToken}}
+Accept: application/json
+
+### 17. 완료 미션 보상 수령 - 201 CREATED 또는 기존 결과 기대
+# participationId는 COMPLETED 상태인 별도 참여 ID를 사용합니다.
+POST {{baseUrl}}/api/v1/me/mission-participations/{{participationId}}/rewards/claim
+Authorization: Bearer {{visitorAccessToken}}
+Accept: application/json
+
+### 18. 미션 종료
+POST {{baseUrl}}/api/v1/operator/missions/{{p1MissionFlowId}}/end
+Authorization: Bearer {{operatorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reasonCode": "OPERATOR_REQUEST"
+}

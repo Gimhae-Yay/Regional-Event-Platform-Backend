@@ -1,0 +1,110 @@
+@baseUrl = http://localhost:8080
+@superAdminAccessToken = {{p1SuperAdminAccessToken}}
+@platformAdminAccessToken = {{p1PlatformAdminAccessToken}}
+@regionAdminCandidateUserId = {{p1RegionAdminCandidateUserId}}
+
+# P1 전체관리자 계정·지역·지역관리자 역할 관리
+# 선행 조건: superAdminAccessToken은 활성 SUPER_ADMIN, platformAdminAccessToken은 활성 PLATFORM_ADMIN 토큰이어야 합니다.
+
+### 1. 전체관리자 사용자 목록 조회
+GET {{baseUrl}}/api/v1/platform-admin/users
+Authorization: Bearer {{platformAdminAccessToken}}
+Accept: application/json
+
+### 2. 전체관리자 계정 생성 - SUPER_ADMIN 권한 필요
+POST {{baseUrl}}/api/v1/platform-admin/admin-accounts
+Authorization: Bearer {{superAdminAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "email": "p1-admin-{{$timestamp}}@example.com",
+  "password": "LocalStamp!2026",
+  "name": "P1 플랫폼 관리자",
+  "phone": "01012345678",
+  "grade": "PLATFORM_ADMIN",
+  "reasonCode": "ADMIN_ACCOUNT_CREATION",
+  "evidenceReference": "OPS-ADMIN-CREATE-{{$timestamp}}"
+}
+
+> {% if (response.status === 201) { client.global.set("p1CreatedPlatformAdminUserId", response.body.data.userId); } %}
+
+### 3. 지역 생성 - 201 CREATED 기대
+POST {{baseUrl}}/api/v1/platform-admin/regions
+Authorization: Bearer {{platformAdminAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "regionCode": "P1HTTP{{$timestamp}}",
+  "name": "P1 HTTP 테스트 지역",
+  "reasonCode": "PILOT_REGION_ADDITION",
+  "evidenceReference": "OPS-REGION-CREATE-{{$timestamp}}"
+}
+
+> {% if (response.status === 201) { client.global.set("p1CreatedRegionId", response.body.data.regionId); } %}
+
+### 4. 전체 지역 목록 조회
+GET {{baseUrl}}/api/v1/platform-admin/regions?isPublic=false
+Authorization: Bearer {{platformAdminAccessToken}}
+Accept: application/json
+
+### 5. 생성 지역 공개
+PATCH {{baseUrl}}/api/v1/platform-admin/regions/{{p1CreatedRegionId}}/status
+Authorization: Bearer {{platformAdminAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isPublic": true,
+  "reasonCode": "REGION_LAUNCH",
+  "evidenceReference": "OPS-REGION-LAUNCH-{{$timestamp}}"
+}
+
+### 6. 같은 공개 상태 재요청 - 200 무변경 성공 기대
+PATCH {{baseUrl}}/api/v1/platform-admin/regions/{{p1CreatedRegionId}}/status
+Authorization: Bearer {{platformAdminAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isPublic": true,
+  "reasonCode": "REGION_LAUNCH",
+  "evidenceReference": "OPS-REGION-LAUNCH-RETRY-{{$timestamp}}"
+}
+
+### 7. 지역관리자 역할 부여
+PATCH {{baseUrl}}/api/v1/platform-admin/users/{{regionAdminCandidateUserId}}/role
+Authorization: Bearer {{platformAdminAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "role": "REGION_ADMIN",
+  "regionId": "{{p1CreatedRegionId}}",
+  "reasonCode": "REGION_ADMIN_APPOINTMENT",
+  "evidenceReference": "OPS-ROLE-GRANT-{{$timestamp}}"
+}
+
+### 8. 지역관리자 역할 회수
+PATCH {{baseUrl}}/api/v1/platform-admin/users/{{regionAdminCandidateUserId}}/role
+Authorization: Bearer {{platformAdminAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "role": "NONE",
+  "reasonCode": "REGION_ADMIN_REVOCATION",
+  "evidenceReference": "OPS-ROLE-REVOKE-{{$timestamp}}"
+}
+
+### 9. 생성한 전체관리자 계정 비활성화 - SUPER_ADMIN 권한 필요
+POST {{baseUrl}}/api/v1/platform-admin/admin-accounts/{{p1CreatedPlatformAdminUserId}}/deactivate
+Authorization: Bearer {{superAdminAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reasonCode": "ADMIN_ACCOUNT_DEACTIVATION",
+  "evidenceReference": "OPS-ADMIN-DEACTIVATE-{{$timestamp}}"
+}

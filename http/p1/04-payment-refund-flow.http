@@ -1,0 +1,138 @@
+@baseUrl = http://localhost:8080
+@visitorAccessToken = {{p1VisitorAccessToken}}
+@operatorAccessToken = {{p1OperatorAccessToken}}
+@platformAdminAccessToken = {{p1PlatformAdminAccessToken}}
+@holdId = {{p1PaymentHoldId}}
+@couponId = {{p1VisitorCouponId}}
+@paymentId = {{p1PaymentId}}
+@reservationId = {{p1PaidReservationId}}
+@refundId = {{p1RefundId}}
+@paymentDiscrepancyId = {{p1PaymentDiscrepancyId}}
+@refundFailureId = {{p1RefundFailureId}}
+@paymentIdempotencyKey = payment-{{$uuid}}
+
+# P1 결제·웹훅·환불 및 전체관리자 예외 처리
+# 실제 PortOne 웹훅은 유효한 공급자 서명과 거래가 필요하므로, 4번은 전용 테스트 환경에서만 실행합니다.
+
+### 1. 홀드 결제 생성 - 201 CREATED 기대
+POST {{baseUrl}}/api/v1/me/reservation-holds/{{holdId}}/payments
+Authorization: Bearer {{visitorAccessToken}}
+Idempotency-Key: {{paymentIdempotencyKey}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "couponId": "{{couponId}}"
+}
+
+> {% if (response.status === 201 && response.body.data.paymentId) { client.global.set("p1PaymentFlowId", response.body.data.paymentId); } %}
+
+### 2. 같은 멱등 키 결제 생성 재시도 - 최초 결과 기대
+POST {{baseUrl}}/api/v1/me/reservation-holds/{{holdId}}/payments
+Authorization: Bearer {{visitorAccessToken}}
+Idempotency-Key: {{paymentIdempotencyKey}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "couponId": "{{couponId}}"
+}
+
+### 3. 내 결제 상태 조회
+GET {{baseUrl}}/api/v1/me/payments/{{paymentId}}
+Authorization: Bearer {{visitorAccessToken}}
+Accept: application/json
+
+### 4. PortOne 웹훅 수신 - 전용 테스트 환경의 유효 서명 필요
+POST {{baseUrl}}/api/v1/webhooks/portone
+webhook-id: {{p1PortOneWebhookId}}
+webhook-timestamp: {{p1PortOneWebhookTimestamp}}
+webhook-signature: {{p1PortOneWebhookSignature}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "type": "Transaction.Paid",
+  "timestamp": "2026-09-01T00:00:00Z",
+  "data": {
+    "storeId": "{{p1PortOneStoreId}}",
+    "paymentId": "{{p1PortOneOrderId}}",
+    "transactionId": "{{p1PortOneTransactionId}}"
+  }
+}
+
+### 5. 운영자 담당 예약의 결제·환불 상태 조회
+GET {{baseUrl}}/api/v1/operator/reservations/{{reservationId}}/payment
+Authorization: Bearer {{operatorAccessToken}}
+Accept: application/json
+
+### 6. 전체관리자 결제 불일치 목록 조회
+GET {{baseUrl}}/api/v1/platform-admin/payment-discrepancies?status=OPEN
+Authorization: Bearer {{platformAdminAccessToken}}
+Accept: application/json
+
+### 7. 전체관리자 결제 불일치 상세 조회
+GET {{baseUrl}}/api/v1/platform-admin/payment-discrepancies/{{paymentDiscrepancyId}}
+Authorization: Bearer {{platformAdminAccessToken}}
+Accept: application/json
+
+### 8. 결제 불일치 수동 처리
+POST {{baseUrl}}/api/v1/platform-admin/payment-discrepancies/{{paymentDiscrepancyId}}/manual-actions
+Authorization: Bearer {{platformAdminAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": "PortOne 조회 결과를 확인했습니다.",
+  "evidenceReference": "OPS-PAYMENT-DISCREPANCY-{{$timestamp}}"
+}
+
+### 9. 전체관리자 수동 환불 생성 - 201 CREATED 기대
+POST {{baseUrl}}/api/v1/platform-admin/payments/{{paymentId}}/refund
+Authorization: Bearer {{platformAdminAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": "방문자 취소 요청 확인",
+  "evidenceReference": "OPS-REFUND-{{$timestamp}}"
+}
+
+> {% if (response.status === 201) { client.global.set("p1RefundFlowId", response.body.data.refundId); } %}
+
+### 10. 내 환불 목록 조회
+GET {{baseUrl}}/api/v1/me/refunds
+Authorization: Bearer {{visitorAccessToken}}
+Accept: application/json
+
+### 11. 내 환불 상세 조회
+GET {{baseUrl}}/api/v1/me/refunds/{{refundId}}
+Authorization: Bearer {{visitorAccessToken}}
+Accept: application/json
+
+### 12. 전체관리자 환불 실패 목록 조회
+GET {{baseUrl}}/api/v1/platform-admin/refund-failures?status=DISCREPANT
+Authorization: Bearer {{platformAdminAccessToken}}
+Accept: application/json
+
+### 13. 전체관리자 환불 실패 상세 조회
+GET {{baseUrl}}/api/v1/platform-admin/refund-failures/{{refundFailureId}}
+Authorization: Bearer {{platformAdminAccessToken}}
+Accept: application/json
+
+### 14. 환불 실패 수동 처리
+POST {{baseUrl}}/api/v1/platform-admin/refund-failures/{{refundFailureId}}/manual-actions
+Authorization: Bearer {{platformAdminAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "confirmedStatus": "REFUNDED",
+  "reason": "외부 환불 상태를 확인했습니다.",
+  "evidenceReference": "OPS-REFUND-FAILURE-{{$timestamp}}"
+}
+
+### 15. 실패 환불 재시도
+POST {{baseUrl}}/api/v1/platform-admin/refunds/{{refundId}}/retry
+Authorization: Bearer {{platformAdminAccessToken}}
+Accept: application/json
