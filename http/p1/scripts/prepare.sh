@@ -3,16 +3,16 @@
 set -euo pipefail
 
 readonly SCRIPT_DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly PROJECT_ROOT="$(cd "$SCRIPT_DIRECTORY/../.." && pwd)"
+readonly PROJECT_ROOT="$(cd "$SCRIPT_DIRECTORY/../../.." && pwd)"
 readonly CLEANUP_FILE="$SCRIPT_DIRECTORY/cleanup.sql"
 readonly SEED_FILE="$SCRIPT_DIRECTORY/seed.sql"
-readonly P0_PREPARE_SCRIPT="$PROJECT_ROOT/scripts/p0/prepare.sh"
+readonly P0_PREPARE_SCRIPT="$PROJECT_ROOT/http/p0/scripts/prepare.sh"
 
 skip_compose=false
 
 print_usage() {
     cat <<'EOF'
-사용법: bash scripts/p1/prepare.sh [--skip-compose]
+사용법: bash http/p1/scripts/prepare.sh [--skip-compose]
 
 P1 실행 데이터를 정리한 뒤 P0 공통 시드와 P1 전용 시드를 적용합니다.
 EOF

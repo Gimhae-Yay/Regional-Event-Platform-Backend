@@ -5,9 +5,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$projectRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$projectRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
 $prepareScript = Join-Path $PSScriptRoot 'prepare.ps1'
-$httpDirectory = Join-Path $projectRoot 'http/p1'
+$httpDirectory = Split-Path -Parent $PSScriptRoot
 $password = 'Test!23456'
 Add-Type -AssemblyName System.Net.Http
 $httpClient = [System.Net.Http.HttpClient]::new()

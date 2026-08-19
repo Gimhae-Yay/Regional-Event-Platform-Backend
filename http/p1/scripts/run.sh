@@ -3,8 +3,8 @@
 set -euo pipefail
 
 readonly SCRIPT_DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly PROJECT_ROOT="$(cd "$SCRIPT_DIRECTORY/../.." && pwd)"
-readonly HTTP_DIRECTORY="$PROJECT_ROOT/http/p0"
+readonly PROJECT_ROOT="$(cd "$SCRIPT_DIRECTORY/../../.." && pwd)"
+readonly HTTP_DIRECTORY="$(cd "$SCRIPT_DIRECTORY/.." && pwd)"
 readonly PASSWORD='Test!23456'
 
 base_url='http://localhost:8080'
@@ -13,9 +13,9 @@ temporary_directory=''
 
 print_usage() {
     cat <<'EOF'
-사용법: bash scripts/p0/run.sh [--base-url URL] [--prepare-only]
+사용법: bash http/p1/scripts/run.sh [--base-url URL] [--prepare-only]
 
-P0 전용 시드를 적용한 뒤 P0 HTTP 시나리오 전체를 실행합니다.
+P0 공통 시드와 P1 전용 시드를 적용한 뒤 P1 HTTP 시나리오 전체를 실행합니다.
 EOF
 }
 
@@ -32,23 +32,19 @@ cleanup() {
 
 get_access_token() {
     local email="$1"
-    local header_file="$temporary_directory/${email%%@*}.headers"
-    local authorization
+    local response_file="$temporary_directory/${email%%@*}.json"
     local access_token
 
     if ! curl --silent --show-error --fail \
-        --dump-header "$header_file" \
-        --output /dev/null \
+        --output "$response_file" \
         --header 'Content-Type: application/json' \
         --data "{\"email\":\"$email\",\"password\":\"$PASSWORD\"}" \
         "$base_url/api/v1/auth/login"; then
         fail "로그인 요청에 실패했습니다: $email"
     fi
 
-    authorization="$(LC_ALL=C grep -i '^Authorization: Bearer ' "$header_file" | tail -n 1 | tr -d '\r' || true)"
-    access_token="$(printf '%s' "$authorization" | sed -E 's/^[^:]+: Bearer //')"
-
-    [[ -n "$access_token" ]] || fail "로그인 응답에서 Bearer 토큰을 찾지 못했습니다: $email"
+    access_token="$(sed -nE 's/.*"accessToken"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' "$response_file" | tail -n 1)"
+    [[ -n "$access_token" ]] || fail "로그인 응답에서 accessToken을 찾지 못했습니다: $email"
     printf '%s' "$access_token"
 }
 
@@ -87,7 +83,7 @@ done
 
 command -v docker >/dev/null 2>&1 || fail 'Docker CLI를 찾을 수 없습니다. Docker Desktop을 설치하고 실행하세요.'
 command -v curl >/dev/null 2>&1 || fail 'curl을 찾을 수 없습니다.'
-[[ -d "$HTTP_DIRECTORY" ]] || fail "P0 HTTP 디렉터리를 찾을 수 없습니다: $HTTP_DIRECTORY"
+[[ -d "$HTTP_DIRECTORY" ]] || fail "P1 HTTP 디렉터리를 찾을 수 없습니다: $HTTP_DIRECTORY"
 
 bash "$SCRIPT_DIRECTORY/prepare.sh"
 
@@ -101,18 +97,18 @@ temporary_directory="$(mktemp -d)"
 trap cleanup EXIT
 
 region_admin_access_token="$(get_access_token 'p0-region-admin@example.test')"
-other_region_admin_access_token="$(get_access_token 'p0-other-region-admin@example.test')"
 operator_access_token="$(get_access_token 'p0-operator@example.test')"
-other_operator_access_token="$(get_access_token 'p0-other-operator@example.test')"
 visitor_access_token="$(get_access_token 'p0-visitor@example.test')"
 other_visitor_access_token="$(get_access_token 'p0-other-visitor@example.test')"
+platform_admin_access_token="$(get_access_token 'p1-platform-admin@example.test')"
+super_admin_access_token="$(get_access_token 'p1-super-admin@example.test')"
 
 http_files=()
 while IFS= read -r http_file; do
-    http_files+=("http/p0/$http_file")
+    http_files+=("http/p1/$http_file")
 done < <(find "$HTTP_DIRECTORY" -maxdepth 1 -type f -name '*.http' -exec basename {} \; | sort)
 
-[[ ${#http_files[@]} -gt 0 ]] || fail "P0 HTTP 파일을 찾을 수 없습니다: $HTTP_DIRECTORY"
+[[ ${#http_files[@]} -gt 0 ]] || fail "P1 HTTP 파일을 찾을 수 없습니다: $HTTP_DIRECTORY"
 
 docker_arguments=(
     run --rm
@@ -122,29 +118,36 @@ docker_arguments=(
     -D
     -L BASIC
     --no-progress
-    -V "p0RegionAdminAccessToken=$region_admin_access_token"
-    -V "p0OtherRegionAdminAccessToken=$other_region_admin_access_token"
-    -V "p0OperatorAccessToken=$operator_access_token"
-    -V "p0OtherOperatorAccessToken=$other_operator_access_token"
-    -V "p0VisitorAccessToken=$visitor_access_token"
-    -V "p0OtherVisitorAccessToken=$other_visitor_access_token"
-    -V 'p0PublishedContentId=900001'
-    -V 'p0ScheduledSessionId=910001'
-    -V 'p0SoldOutContentId=900001'
-    -V 'p0SoldOutSessionId=910002'
-    -V 'p0StartedSessionId=910003'
-    -V 'p0ExpiredHoldId=940002'
-    -V 'p0ReservationId=930001'
-    -V 'p0CheckedInReservationId=930003'
-    -V 'p0QrReservationId=930006'
-    -V 'p0CancelledReservationNo=RLOCALCANCEL'
-    -V 'p0CompletedSessionReservationNo=RLOCALCOMPLETED'
-    -V 'p0ManualReservationNo=RLOCALMANUAL2'
-    -V 'p0VisitId=950001'
-    -V 'p0OtherVisitId=950002'
-    -V 'p0ReviewId=960004'
-    -V 'p0OtherReviewId=960001'
-    -V 'p0QrExceptionId=990001'
+    -V "p1RegionAdminAccessToken=$region_admin_access_token"
+    -V "p1OperatorAccessToken=$operator_access_token"
+    -V "p1VisitorAccessToken=$visitor_access_token"
+    -V "p1OtherVisitorAccessToken=$other_visitor_access_token"
+    -V "p1PlatformAdminAccessToken=$platform_admin_access_token"
+    -V "p1SuperAdminAccessToken=$super_admin_access_token"
+    -V 'p1RegionId=900001'
+    -V 'p1PublishedContentId=900001'
+    -V 'p1PublishedStampbookRewardCouponPolicyId=900101'
+    -V 'p1PublishedStampbookId=900201'
+    -V 'p1PendingStampbookId=900202'
+    -V 'p1PublishedMissionRewardCouponPolicyId=900102'
+    -V 'p1PublishedMissionId=900501'
+    -V 'p1PendingMissionId=900502'
+    -V 'p1MissionParticipationId=900601'
+    -V 'p1VisitorVisitId=950001'
+    -V 'p1VisitorCouponId=900701'
+    -V 'p1PaymentHoldId=941001'
+    -V 'p1PaymentId=961001'
+    -V 'p1PaidReservationId=931001'
+    -V 'p1RefundId=981001'
+    -V 'p1PaymentDiscrepancyId=971001'
+    -V 'p1RefundFailureId=981001'
+    -V 'p1RegionAdminCandidateUserId=12'
+    -V 'p1PortOneWebhookId=p1-local-webhook'
+    -V 'p1PortOneWebhookTimestamp=2026-09-01T00:00:00Z'
+    -V 'p1PortOneWebhookSignature=local-signature-not-for-production'
+    -V 'p1PortOneStoreId=local-store'
+    -V 'p1PortOneOrderId=p1-local-order-961001'
+    -V 'p1PortOneTransactionId=p1-local-transaction-961001'
 )
 
 docker_arguments+=("${http_files[@]}")

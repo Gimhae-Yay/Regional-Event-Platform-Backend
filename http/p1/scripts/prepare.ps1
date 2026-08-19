@@ -4,10 +4,10 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$projectRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$projectRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
 $cleanupFile = Join-Path $PSScriptRoot 'cleanup.sql'
 $seedFile = Join-Path $PSScriptRoot 'seed.sql'
-$p0PrepareScript = Join-Path $projectRoot 'scripts/p0/prepare.ps1'
+$p0PrepareScript = Join-Path $projectRoot 'http/p0/scripts/prepare.ps1'
 
 function Invoke-MySqlFile {
     param(
