@@ -251,12 +251,24 @@ function Get-ReadFixtureSetupCases {
         'operator-create-application'
     )
     $casesById = @{}
-    $CasesJson | ConvertFrom-Json | ForEach-Object { $casesById[$_.id] = $_ }
-    $missingCaseIds = @($requiredCaseIds | Where-Object { -not $casesById.ContainsKey($_) })
+    $parsedCases = @($CasesJson | ConvertFrom-Json)
+    foreach ($scenarioCase in $parsedCases) {
+        $casesById[[string] $scenarioCase.id] = $scenarioCase
+    }
+
+    $missingCaseIds = [System.Collections.Generic.List[string]]::new()
+    foreach ($requiredCaseId in $requiredCaseIds) {
+        if (-not $casesById.ContainsKey($requiredCaseId)) {
+            $missingCaseIds.Add($requiredCaseId)
+        }
+    }
     if ($missingCaseIds.Count -gt 0) {
         throw "CasesPath is missing read fixture setup cases: $($missingCaseIds -join ', ')"
     }
-    return @($requiredCaseIds | ForEach-Object { $casesById[$_] }) | ConvertTo-Json -Compress -Depth 20
+    $setupCases = foreach ($requiredCaseId in $requiredCaseIds) {
+        $casesById[$requiredCaseId]
+    }
+    return @($setupCases) | ConvertTo-Json -Compress -Depth 20
 }
 
 function Assert-CompleteGetCoverage {

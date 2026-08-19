@@ -584,11 +584,11 @@
   },
   {
     "id": "operator-create-mission", "method": "POST", "route": "/api/v1/operator/missions", "path": "/operator/missions", "role": "OPERATOR", "expectedStatus": 201,
-    "body": { "conditionType": "VISIT_COUNT", "requiredVisitCount": 1, "targetContentIds": null, "rewardCouponPolicyId": "{{ids.missionRewardCouponPolicyId}}", "endsAt": "2030-12-31T23:59:59+09:00" }, "capture": { "missionId": "ids.createdMissionId" }
+    "body": { "title": "K6 생성 미션", "conditionType": "VISIT_COUNT", "requiredVisitCount": 1, "targetContentIds": null, "rewardCouponPolicyId": "{{ids.missionRewardCouponPolicyId}}", "endsAt": "2030-12-31T23:59:59+09:00" }, "capture": { "missionId": "ids.createdMissionId" }
   },
   {
     "id": "operator-update-mission", "method": "PATCH", "route": "/api/v1/operator/missions/{missionId}", "path": "/operator/missions/{{ids.createdMissionId}}", "role": "OPERATOR", "expectedStatus": 200,
-    "body": { "conditionType": "VISIT_COUNT", "requiredVisitCount": 2, "targetContentIds": null, "rewardCouponPolicyId": "{{ids.missionRewardCouponPolicyId}}", "endsAt": "2030-12-31T23:59:59+09:00" }
+    "body": { "title": "K6 수정 미션", "conditionType": "VISIT_COUNT", "requiredVisitCount": 2, "targetContentIds": null, "rewardCouponPolicyId": "{{ids.missionRewardCouponPolicyId}}", "endsAt": "2030-12-31T23:59:59+09:00" }
   },
   {
     "id": "operator-submit-mission", "method": "POST", "route": "/api/v1/operator/missions/{missionId}/submit", "path": "/operator/missions/{{ids.createdMissionId}}/submit", "role": "OPERATOR", "expectedStatus": 200
@@ -606,7 +606,7 @@
   },
   {
     "id": "operator-create-stampbook", "method": "POST", "route": "/api/v1/operator/stampbooks", "path": "/operator/stampbooks", "role": "OPERATOR", "expectedStatus": 201,
-    "body": { "regionId": "{{ids.regionId}}", "contentIds": ["{{ids.contentId}}"], "rewardCouponPolicyId": "{{ids.stampbookRewardCouponPolicyId}}", "reason": "K6 정상 응답 검증" }, "capture": { "stampbookId": "ids.createdStampbookId" }
+    "body": { "title": "K6 생성 스탬프북", "regionId": "{{ids.regionId}}", "contentIds": ["{{ids.contentId}}"], "rewardCouponPolicyId": "{{ids.stampbookRewardCouponPolicyId}}", "reason": "K6 정상 응답 검증" }, "capture": { "stampbookId": "ids.createdStampbookId" }
   },
   {
     "id": "operator-update-stampbook", "method": "PATCH", "route": "/api/v1/operator/stampbooks/{stampbookId}", "path": "/operator/stampbooks/{{ids.createdStampbookId}}", "role": "OPERATOR", "expectedStatus": 200,
@@ -731,6 +731,12 @@
     "id": "operator-request-withdrawal", "method": "POST", "route": "/api/v1/operator/contents/{contentId}/withdrawal-requests", "path": "/operator/contents/{{ids.withdrawalContentId}}/withdrawal-requests", "role": "OPERATOR", "expectedStatus": 201, "headers": { "Idempotency-Key": "cf3c9136-f1ee-4a39-9a9b-e6f080ee033f" }, "body": { "reason": "K6 정상 응답 검증" }, "capture": { "withdrawalRequestId": "ids.createdWithdrawalRequestId" }
   },
   {
+    "id": "region-admin-pending-withdrawals", "method": "GET", "route": "/api/v1/region-admin/content-withdrawal-requests", "path": "/region-admin/content-withdrawal-requests?status=PENDING", "role": "REGION_ADMIN", "expectedStatus": 200
+  },
+  {
+    "id": "region-admin-pending-withdrawal-detail", "method": "GET", "route": "/api/v1/region-admin/content-withdrawal-requests/{withdrawalRequestId}", "path": "/region-admin/content-withdrawal-requests/{{ids.createdWithdrawalRequestId}}", "role": "REGION_ADMIN", "expectedStatus": 200
+  },
+  {
     "id": "region-admin-approve-withdrawal", "method": "POST", "route": "/api/v1/region-admin/content-withdrawal-requests/{withdrawalRequestId}/approve", "path": "/region-admin/content-withdrawal-requests/{{ids.createdWithdrawalRequestId}}/approve", "role": "REGION_ADMIN", "expectedStatus": 200
   },
   {
@@ -743,10 +749,10 @@
     "id": "platform-admin-update-region-status", "method": "PATCH", "route": "/api/v1/platform-admin/regions/{regionId}/status", "path": "/platform-admin/regions/{{ids.createdRegionId}}/status", "role": "PLATFORM_ADMIN", "expectedStatus": 200, "body": { "isPublic": true, "reasonCode": "REGION_LAUNCH", "evidenceReference": "K6 정상 응답 검증" }
   },
   {
-    "id": "platform-admin-create-account", "method": "POST", "route": "/api/v1/platform-admin/admin-accounts", "path": "/platform-admin/admin-accounts", "role": "PLATFORM_ADMIN", "expectedStatus": 201, "body": { "email": "k6-deactivate@example.com", "password": "Password1!", "name": "K6 Deactivate", "phone": "01090000015", "grade": "PLATFORM_ADMIN", "reasonCode": "K6_CREATE", "evidenceReference": "K6 정상 응답 검증" }, "capture": { "userId": "ids.createdPlatformAdminId" }
+    "id": "platform-admin-create-account", "method": "POST", "route": "/api/v1/platform-admin/admin-accounts", "path": "/platform-admin/admin-accounts", "role": "SUPER_ADMIN", "expectedStatus": 201, "body": { "email": "k6-deactivate@example.com", "password": "Password1!", "name": "K6 Deactivate", "phone": "01090000015", "grade": "PLATFORM_ADMIN", "reasonCode": "K6_CREATE", "evidenceReference": "K6 정상 응답 검증" }, "capture": { "userId": "ids.createdPlatformAdminId" }
   },
   {
-    "id": "platform-admin-deactivate-account", "method": "POST", "route": "/api/v1/platform-admin/admin-accounts/{userId}/deactivate", "path": "/platform-admin/admin-accounts/{{ids.createdPlatformAdminId}}/deactivate", "role": "PLATFORM_ADMIN", "expectedStatus": 200, "body": { "reasonCode": "K6_DEACTIVATE", "evidenceReference": "K6 정상 응답 검증" }
+    "id": "platform-admin-deactivate-account", "method": "POST", "route": "/api/v1/platform-admin/admin-accounts/{userId}/deactivate", "path": "/platform-admin/admin-accounts/{{ids.createdPlatformAdminId}}/deactivate", "role": "SUPER_ADMIN", "expectedStatus": 200, "body": { "reasonCode": "K6_DEACTIVATE", "evidenceReference": "K6 정상 응답 검증" }
   },
   {
     "id": "platform-admin-change-user-role", "method": "PATCH", "route": "/api/v1/platform-admin/users/{userId}/role", "path": "/platform-admin/users/{{ids.roleChangeUserId}}/role", "role": "PLATFORM_ADMIN", "expectedStatus": 200, "body": { "role": "REGION_ADMIN", "regionId": "{{ids.regionId}}", "reasonCode": "K6_ROLE_CHANGE", "evidenceReference": "K6 정상 응답 검증" }

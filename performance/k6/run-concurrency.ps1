@@ -65,11 +65,11 @@ function Get-AccessToken {
         -Headers @{ Accept = 'application/json' } `
         -Body $body `
         -UseBasicParsing
-    $authorization = [string] $response.Headers['Authorization']
-    if (-not $authorization.StartsWith('Bearer ')) {
-        throw "Login response for $Email did not include a Bearer Authorization header."
+    $accessToken = [string] (($response.Content | ConvertFrom-Json).data.accessToken)
+    if ([string]::IsNullOrWhiteSpace($accessToken)) {
+        throw "Login response for $Email did not include data.accessToken."
     }
-    return $authorization
+    return "Bearer $($accessToken.Trim())"
 }
 
 function Set-RunEnvironment {

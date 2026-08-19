@@ -37,8 +37,16 @@ export function setup() {
       { headers: jsonHeaders(), tags: { endpoint: 'POST /auth/login', role: account.role } },
     );
     assertSuccess(response, 200, `login:${account.role}`);
-    const authorization = response.headers.Authorization || response.headers.authorization;
-    if (!authorization || !authorization.startsWith('Bearer ')) {
+    const headerAuthorization = response.headers.Authorization || response.headers.authorization;
+    const bodyAccessToken = safeJson(response)?.data?.accessToken;
+    const authorization = headerAuthorization && headerAuthorization.startsWith('Bearer ')
+      ? headerAuthorization
+      : typeof bodyAccessToken === 'string' && bodyAccessToken.trim() !== ''
+        ? bodyAccessToken.startsWith('Bearer ')
+          ? bodyAccessToken
+          : `Bearer ${bodyAccessToken}`
+        : null;
+    if (!authorization) {
       fail(`Login for ${account.role} did not return an access token.`);
     }
     authenticatedAccounts[account.role] = {
