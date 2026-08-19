@@ -731,6 +731,12 @@
     "id": "operator-request-withdrawal", "method": "POST", "route": "/api/v1/operator/contents/{contentId}/withdrawal-requests", "path": "/operator/contents/{{ids.withdrawalContentId}}/withdrawal-requests", "role": "OPERATOR", "expectedStatus": 201, "headers": { "Idempotency-Key": "cf3c9136-f1ee-4a39-9a9b-e6f080ee033f" }, "body": { "reason": "K6 정상 응답 검증" }, "capture": { "withdrawalRequestId": "ids.createdWithdrawalRequestId" }
   },
   {
+    "id": "region-admin-pending-withdrawals", "method": "GET", "route": "/api/v1/region-admin/content-withdrawal-requests", "path": "/region-admin/content-withdrawal-requests?status=PENDING", "role": "REGION_ADMIN", "expectedStatus": 200
+  },
+  {
+    "id": "region-admin-pending-withdrawal-detail", "method": "GET", "route": "/api/v1/region-admin/content-withdrawal-requests/{withdrawalRequestId}", "path": "/region-admin/content-withdrawal-requests/{{ids.createdWithdrawalRequestId}}", "role": "REGION_ADMIN", "expectedStatus": 200
+  },
+  {
     "id": "region-admin-approve-withdrawal", "method": "POST", "route": "/api/v1/region-admin/content-withdrawal-requests/{withdrawalRequestId}/approve", "path": "/region-admin/content-withdrawal-requests/{{ids.createdWithdrawalRequestId}}/approve", "role": "REGION_ADMIN", "expectedStatus": 200
   },
   {

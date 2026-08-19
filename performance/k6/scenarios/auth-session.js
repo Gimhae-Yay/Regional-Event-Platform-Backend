@@ -92,7 +92,7 @@ export default function () {
   const accessToken = extractBearerToken(loginOutcome.response);
   const refreshToken = extractRefreshToken(loginOutcome.response);
   if (!accessToken) {
-    recordUnexpected('POST /auth/login', 'MISSING_ACCESS_TOKEN_HEADER');
+    recordUnexpected('POST /auth/login', 'MISSING_ACCESS_TOKEN');
     return;
   }
   if (!refreshToken) {

@@ -217,11 +217,17 @@ export function refreshCookie(response) {
 }
 
 export function extractBearerToken(response) {
-  const authorization = response.headers.Authorization || response.headers.authorization;
-  if (authorization && authorization.startsWith('Bearer ')) {
-    return authorization;
+  let body;
+  try {
+    body = response.json();
+  } catch (error) {
+    return null;
   }
-  return null;
+  const accessToken = body?.data?.accessToken;
+  if (typeof accessToken !== 'string' || accessToken.trim() === '') {
+    return null;
+  }
+  return `Bearer ${accessToken.trim()}`;
 }
 
 function optionalCsvEnv(name) {
