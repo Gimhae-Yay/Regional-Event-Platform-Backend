@@ -235,7 +235,7 @@ class UpdateRegionStatusMySqlTest extends NonTransactionalMySqlTestSupport {
 
     @Test
     @Timeout(15)
-    void 고권한배정비활성화가먼저커밋되면_이미시작한지역공개요청은_FORBIDDEN으로종료하고_변경과성공감사를남기지않는다()
+    void 고권한배정비활성화가먼저커밋되어도_기존전역권한스냅샷으로통과한지역공개요청은_변경과성공감사를남긴다()
         throws Exception {
         Fixture fixture = createFixture(false, false);
         CountDownLatch assignmentLocked = new CountDownLatch(1);
@@ -273,17 +273,22 @@ class UpdateRegionStatusMySqlTest extends NonTransactionalMySqlTestSupport {
 
             releaseInactivation.countDown();
             inactivation.get(5, TimeUnit.SECONDS);
-            assertThat(update.get(5, TimeUnit.SECONDS)).isEqualTo(ErrorCode.FORBIDDEN);
+            assertThat(update.get(5, TimeUnit.SECONDS)).isNull();
         } finally {
             releaseInactivation.countDown();
         }
 
         assertThat(regionRepository.findById(fixture.region().getRegionId()))
-            .hasValueSatisfying(region -> assertThat(region.isPublic()).isFalse());
+            .hasValueSatisfying(region -> assertThat(region.isPublic()).isTrue());
         assertThat(auditEventRepository.findAll())
             .filteredOn(auditEvent -> fixture.region().getRegionId().equals(auditEvent.getTargetId()))
-            .isEmpty();
-        assertThat(auditEventActorLinkRepository.findAll()).isEmpty();
+            .singleElement()
+            .satisfies(auditEvent -> {
+                assertThat(auditEvent.getResult()).isEqualTo(AuditEventResult.SUCCESS);
+                assertThat(auditEvent.getPreviousState()).isEqualTo("FALSE");
+                assertThat(auditEvent.getNextState()).isEqualTo("TRUE");
+            });
+        assertThat(auditEventActorLinkRepository.count()).isEqualTo(1);
     }
 
     private void inactivateAfterRelease(
