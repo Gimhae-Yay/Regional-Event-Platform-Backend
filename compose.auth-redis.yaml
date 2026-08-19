@@ -1,3 +1,5 @@
+name: regional-event
+
 services:
   api:
     image: ${API_IMAGE:?API_IMAGE must be set}
@@ -22,14 +24,7 @@ services:
     ports:
       - "${API_PORT:-8080}:8080"
     depends_on:
-      auth-redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8080/actuator/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
+      - auth-redis
 
   auth-redis:
     image: redis:7.4-alpine
@@ -44,12 +39,6 @@ services:
       - noeviction
     volumes:
       - auth-redis-data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 5s
 
 volumes:
   auth-redis-data:
