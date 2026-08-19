@@ -65,6 +65,7 @@ Accept: application/json
   "ageRequirement": "초등학생 이상",
   "materials": "필기구",
   "cancellationPolicyText": "회차 시작 전까지 예약 취소가 가능합니다.",
+  "reservationPrice": 0,
   "publishAt": "{{publishAt}}",
   "representativeImageObjectId": "{{authoringImageObjectId}}",
   "sessions": [
@@ -113,6 +114,7 @@ Accept: application/json
   "ageRequirement": "전체",
   "materials": "없음",
   "cancellationPolicyText": "회차 시작 전 취소",
+  "reservationPrice": 0,
   "publishAt": "{{publishAt}}",
   "representativeImageObjectId": "{{authoringImageObjectId}}",
   "sessions": []
@@ -134,6 +136,7 @@ Accept: application/json
   "ageRequirement": "전체",
   "materials": "없음",
   "cancellationPolicyText": "회차 시작 전 취소",
+  "reservationPrice": 0,
   "publishAt": "{{publishAt}}",
   "representativeImageObjectId": "{{authoringImageObjectId}}",
   "sessions": [
@@ -163,6 +166,7 @@ Accept: application/json
   "ageRequirement": "전체",
   "materials": "없음",
   "cancellationPolicyText": "회차 시작 전 취소",
+  "reservationPrice": 0,
   "publishAt": "{{publishAt}}",
   "representativeImageObjectId": "{{authoringImageObjectId}}",
   "sessions": [
@@ -192,6 +196,7 @@ Accept: application/json
   "ageRequirement": "전체",
   "materials": "없음",
   "cancellationPolicyText": "회차 시작 전 취소",
+  "reservationPrice": 0,
   "publishAt": "{{publishAt}}",
   "representativeImageObjectId": "{{authoringImageObjectId}}",
   "sessions": [
@@ -238,6 +243,7 @@ Accept: application/json
   "ageRequirement": "초등학생 이상",
   "materials": "필기구",
   "cancellationPolicyText": "회차 시작 전까지 예약 취소가 가능합니다.",
+  "reservationPrice": 0,
   "publishAt": "{{publishAt}}",
   "representativeImageObjectId": "{{authoringUpdateImageObjectId}}"
 }
@@ -285,6 +291,7 @@ Accept: application/json
   "ageRequirement": "초등학생 이상",
   "materials": "필기구",
   "cancellationPolicyText": "회차 시작 전까지 예약 취소가 가능합니다.",
+  "reservationPrice": 0,
   "representativeImageObjectId": "{{authoringRevisionImageObjectId}}"
 }
 
@@ -307,7 +314,8 @@ Accept: application/json
   "precautions": "편한 복장으로 참여해 주세요.",
   "ageRequirement": "초등학생 이상",
   "materials": "필기구",
-  "cancellationPolicyText": "회차 시작 전까지 예약 취소가 가능합니다."
+  "cancellationPolicyText": "회차 시작 전까지 예약 취소가 가능합니다.",
+  "reservationPrice": 0
 }
 
 ### 17. 콘텐츠 수정본 철회 - 200 OK 기대
