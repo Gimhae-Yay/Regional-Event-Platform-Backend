@@ -67,13 +67,13 @@ ON DUPLICATE KEY UPDATE
   phone = VALUES(phone), status = VALUES(status), updated_at = VALUES(updated_at);
 
 DELETE FROM user_role_assignment WHERE user_id IN (4, 5, 6, 7, 8, 9);
-INSERT INTO user_role_assignment (user_id, role, region_id, granted_at)
+INSERT INTO user_role_assignment (user_id, role, region_id, status, granted_at)
 VALUES
-  (4, 'VISITOR', NULL, @now), (4, 'REGION_ADMIN', 900001, @now),
-  (5, 'VISITOR', NULL, @now), (5, 'REGION_ADMIN', 900002, @now),
-  (6, 'VISITOR', NULL, @now), (6, 'OPERATOR', 900001, @now),
-  (7, 'VISITOR', NULL, @now), (7, 'OPERATOR', 900002, @now),
-  (8, 'VISITOR', NULL, @now), (9, 'VISITOR', NULL, @now);
+  (4, 'VISITOR', NULL, 'ACTIVE', @now), (4, 'REGION_ADMIN', 900001, 'ACTIVE', @now),
+  (5, 'VISITOR', NULL, 'ACTIVE', @now), (5, 'REGION_ADMIN', 900002, 'ACTIVE', @now),
+  (6, 'VISITOR', NULL, 'ACTIVE', @now), (6, 'OPERATOR', 900001, 'ACTIVE', @now),
+  (7, 'VISITOR', NULL, 'ACTIVE', @now), (7, 'OPERATOR', 900002, 'ACTIVE', @now),
+  (8, 'VISITOR', NULL, 'ACTIVE', @now), (9, 'VISITOR', NULL, 'ACTIVE', @now);
 
 INSERT INTO image_object (
   image_object_id, object_key, media_type, byte_size, checksum, lifecycle_status, delete_attempt_count,

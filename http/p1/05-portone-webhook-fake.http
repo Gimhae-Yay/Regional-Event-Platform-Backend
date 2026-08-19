@@ -1,0 +1,22 @@
+@baseUrl = http://localhost:8080
+
+# PORTONE_FAKE_ENABLED=true인 전용 로컬 환경에서만 실행합니다.
+### PortOne fake 웹훅 수신 - 200 SUCCESS 기대
+POST {{baseUrl}}/api/v1/webhooks/portone
+webhook-id: p1-fake-webhook-{{$timestamp}}
+webhook-timestamp: 0
+webhook-signature: fake-signature
+Content-Type: application/json
+Accept: application/json
+
+{
+  "type": "Transaction.Paid",
+  "timestamp": "2026-09-01T00:00:00Z",
+  "data": {
+    "storeId": "perf-store",
+    "paymentId": "p1-fake-order",
+    "transactionId": "perf-transaction-p1-fake-order"
+  }
+}
+
+> {% client.test("PortOne fake 웹훅은 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "PortOne fake 웹훅은 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "PortOne fake 웹훅은 SUCCESS여야 합니다."); }); %}

@@ -3,8 +3,8 @@
 set -euo pipefail
 
 readonly SCRIPT_DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly PROJECT_ROOT="$(cd "$SCRIPT_DIRECTORY/../.." && pwd)"
-readonly HTTP_DIRECTORY="$PROJECT_ROOT/http/p0"
+readonly PROJECT_ROOT="$(cd "$SCRIPT_DIRECTORY/../../.." && pwd)"
+readonly HTTP_DIRECTORY="$(cd "$SCRIPT_DIRECTORY/.." && pwd)"
 readonly PASSWORD='Test!23456'
 
 base_url='http://localhost:8080'
@@ -13,7 +13,7 @@ temporary_directory=''
 
 print_usage() {
     cat <<'EOF'
-사용법: bash scripts/p0/run.sh [--base-url URL] [--prepare-only]
+사용법: bash http/p0/scripts/run.sh [--base-url URL] [--prepare-only]
 
 P0 전용 시드를 적용한 뒤 P0 HTTP 시나리오 전체를 실행합니다.
 EOF
@@ -32,23 +32,20 @@ cleanup() {
 
 get_access_token() {
     local email="$1"
-    local header_file="$temporary_directory/${email%%@*}.headers"
-    local authorization
+    local response_file="$temporary_directory/${email%%@*}.json"
     local access_token
 
     if ! curl --silent --show-error --fail \
-        --dump-header "$header_file" \
-        --output /dev/null \
+        --output "$response_file" \
         --header 'Content-Type: application/json' \
         --data "{\"email\":\"$email\",\"password\":\"$PASSWORD\"}" \
         "$base_url/api/v1/auth/login"; then
         fail "로그인 요청에 실패했습니다: $email"
     fi
 
-    authorization="$(LC_ALL=C grep -i '^Authorization: Bearer ' "$header_file" | tail -n 1 | tr -d '\r' || true)"
-    access_token="$(printf '%s' "$authorization" | sed -E 's/^[^:]+: Bearer //')"
+    access_token="$(sed -nE 's/.*"accessToken"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' "$response_file" | tail -n 1)"
 
-    [[ -n "$access_token" ]] || fail "로그인 응답에서 Bearer 토큰을 찾지 못했습니다: $email"
+    [[ -n "$access_token" ]] || fail "로그인 응답에서 accessToken을 찾지 못했습니다: $email"
     printf '%s' "$access_token"
 }
 
@@ -61,6 +58,17 @@ wait_for_application() {
     done
 
     fail "로컬 애플리케이션 응답을 확인하지 못했습니다: $base_url/api/v1/regions"
+}
+
+get_http_client_base_url() {
+    local host_base_url="$1"
+
+    if [[ "$host_base_url" =~ ^(https?)://(localhost|127\.0\.0\.1|\[::1\])(:[0-9]+)?(/.*)?$ ]]; then
+        printf '%s://host.docker.internal%s%s' "${BASH_REMATCH[1]}" "${BASH_REMATCH[3]:-}" "${BASH_REMATCH[4]:-}"
+        return
+    fi
+
+    printf '%s' "$host_base_url"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -96,6 +104,7 @@ if [[ "$prepare_only" == true ]]; then
 fi
 
 wait_for_application
+http_client_base_url="$(get_http_client_base_url "$base_url")"
 
 temporary_directory="$(mktemp -d)"
 trap cleanup EXIT
@@ -122,6 +131,7 @@ docker_arguments=(
     -D
     -L BASIC
     --no-progress
+    -V "baseUrl=$http_client_base_url"
     -V "p0RegionAdminAccessToken=$region_admin_access_token"
     -V "p0OtherRegionAdminAccessToken=$other_region_admin_access_token"
     -V "p0OperatorAccessToken=$operator_access_token"

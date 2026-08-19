@@ -5,9 +5,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$projectRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$projectRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
 $prepareScript = Join-Path $PSScriptRoot 'prepare.ps1'
-$httpDirectory = Join-Path $projectRoot 'http/p0'
+$httpDirectory = Split-Path -Parent $PSScriptRoot
 $password = 'Test!23456'
 Add-Type -AssemblyName System.Net.Http
 $httpClient = [System.Net.Http.HttpClient]::new()
@@ -27,22 +27,21 @@ function Get-AccessToken {
     $response = $httpClient.PostAsync("$BaseUrl/api/v1/auth/login", $content).GetAwaiter().GetResult()
     try {
         if (-not $response.IsSuccessStatusCode) {
-            throw "로그인 요청에 실패했습니다. status=$([int]$response.StatusCode), email=$Email"
+            throw "Login request failed. status=$([int]$response.StatusCode), email=$Email"
         }
 
-        $authorizationValues = [System.Collections.Generic.IEnumerable[string]]$null
-        $response.Headers.TryGetValues('Authorization', [ref]$authorizationValues) | Out-Null
-        $authorization = @($authorizationValues)[0]
+        $loginResponse = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
+        $accessToken = $loginResponse.data.accessToken
     }
     finally {
         $response.Dispose()
         $content.Dispose()
     }
 
-    if ([string]::IsNullOrWhiteSpace($authorization) -or -not $authorization.StartsWith('Bearer ')) {
-        throw "로그인 응답에서 Bearer 토큰을 찾지 못했습니다: $Email"
+    if ([string]::IsNullOrWhiteSpace($accessToken)) {
+        throw "Access token was not found in the login response: $Email"
     }
-    return $authorization.Substring('Bearer '.Length)
+    return $accessToken
 }
 
 function Wait-ForApplication {
@@ -59,12 +58,25 @@ function Wait-ForApplication {
             Start-Sleep -Seconds 1
         }
     }
-    throw "로컬 애플리케이션 응답을 확인하지 못했습니다: $BaseUrl/api/v1/regions"
+    throw "Local application did not respond: $BaseUrl/api/v1/regions"
+}
+
+function Get-HttpClientBaseUrl {
+    param([Parameter(Mandatory)][string]$HostBaseUrl)
+
+    $baseUri = [Uri]$HostBaseUrl
+    if ($baseUri.Host -notin @('localhost', '127.0.0.1', '::1')) {
+        return $baseUri.AbsoluteUri.TrimEnd('/')
+    }
+
+    $containerBaseUri = [UriBuilder]::new($baseUri)
+    $containerBaseUri.Host = 'host.docker.internal'
+    return $containerBaseUri.Uri.AbsoluteUri.TrimEnd('/')
 }
 
 & $prepareScript
 if ($LASTEXITCODE -ne 0) {
-    throw "P0 준비 스크립트 실행에 실패했습니다. (exit code: $LASTEXITCODE)"
+    throw "P0 preparation script failed. (exit code: $LASTEXITCODE)"
 }
 
 if ($PrepareOnly) {
@@ -72,8 +84,10 @@ if ($PrepareOnly) {
 }
 
 Wait-ForApplication
+$httpClientBaseUrl = Get-HttpClientBaseUrl -HostBaseUrl $BaseUrl
 
 $variables = @{
+    baseUrl = $httpClientBaseUrl
     p0RegionAdminAccessToken = Get-AccessToken -Email 'p0-region-admin@example.test' -Password $password
     p0OtherRegionAdminAccessToken = Get-AccessToken -Email 'p0-other-region-admin@example.test' -Password $password
     p0OperatorAccessToken = Get-AccessToken -Email 'p0-operator@example.test' -Password $password
@@ -101,7 +115,7 @@ $variables = @{
 
 $httpFiles = Get-ChildItem -LiteralPath $httpDirectory -Filter '*.http' -File | Sort-Object Name
 if ($httpFiles.Count -eq 0) {
-    throw "P0 HTTP 파일을 찾을 수 없습니다: $httpDirectory"
+    throw "P0 HTTP files were not found: $httpDirectory"
 }
 
 $dockerArguments = @('run', '--rm', '-v', "${projectRoot}:/workdir", '-w', '/workdir', 'jetbrains/intellij-http-client', '-D', '-L', 'BASIC', '--no-progress')
@@ -117,7 +131,7 @@ Push-Location $projectRoot
 try {
     & docker @dockerArguments
     if ($LASTEXITCODE -ne 0) {
-        throw "P0 HTTP 시나리오 실행에 실패했습니다. (exit code: $LASTEXITCODE)"
+        throw "P0 HTTP scenario execution failed. (exit code: $LASTEXITCODE)"
     }
 }
 finally {

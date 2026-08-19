@@ -4,7 +4,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$projectRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$projectRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
 $seedFile = Join-Path $PSScriptRoot 'seed.sql'
 
 function Invoke-DockerCompose {
@@ -12,16 +12,16 @@ function Invoke-DockerCompose {
 
     & docker compose @Arguments
     if ($LASTEXITCODE -ne 0) {
-        throw "docker compose 실행에 실패했습니다. (exit code: $LASTEXITCODE)"
+        throw "docker compose command failed. (exit code: $LASTEXITCODE)"
     }
 }
 
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-    throw 'Docker CLI를 찾을 수 없습니다. Docker Desktop을 설치하고 실행하세요.'
+    throw 'Docker CLI was not found. Install and start Docker Desktop.'
 }
 
 if (-not (Test-Path -LiteralPath $seedFile)) {
-    throw "P0 시드 파일을 찾을 수 없습니다: $seedFile"
+    throw "P0 seed file was not found: $seedFile"
 }
 
 Push-Location $projectRoot
@@ -40,21 +40,21 @@ try {
         Start-Sleep -Seconds 1
     }
     if (-not $mysqlReady) {
-        throw 'MySQL이 30초 안에 준비 상태가 되지 않았습니다.'
+        throw 'MySQL did not become ready within 30 seconds.'
     }
 
     Get-Content -Raw -Encoding UTF8 $seedFile |
         docker compose exec -T mysql mysql -uregional_event -pregional_event regional_event
     if ($LASTEXITCODE -ne 0) {
-        throw "P0 MySQL 시드 적용에 실패했습니다. (exit code: $LASTEXITCODE)"
+        throw "P0 MySQL seed application failed. (exit code: $LASTEXITCODE)"
     }
 
     & docker compose exec -T redis redis-cli FLUSHDB | Out-Null
     if ($LASTEXITCODE -ne 0) {
-        throw "P0 Redis 초기화에 실패했습니다. (exit code: $LASTEXITCODE)"
+        throw "P0 Redis reset failed. (exit code: $LASTEXITCODE)"
     }
 
-    Write-Host 'P0 공통 시드와 Redis 초기화가 완료되었습니다.'
+    Write-Host 'P0 shared seed and Redis reset completed.'
 }
 finally {
     Pop-Location

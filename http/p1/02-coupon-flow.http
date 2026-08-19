@@ -1,0 +1,158 @@
+@baseUrl = http://localhost:8080
+@operatorAccessToken = {{p1OperatorAccessToken}}
+@visitorAccessToken = {{p1VisitorAccessToken}}
+@otherVisitorAccessToken = {{p1OtherVisitorAccessToken}}
+@contentId = {{p1PublishedContentId}}
+@visitId = {{p1VisitorVisitId}}
+@holdId = {{p1PaymentHoldId}}
+@existingCouponId = {{p1VisitorCouponId}}
+
+# P1 쿠폰 정책 수명주기·방문 기반 발급·내 쿠폰 조회
+# 선행 조건: contentId는 운영자가 소유한 유료 PUBLISHED 콘텐츠, visitId는 방문자 본인의 유효 방문이어야 합니다.
+
+### 1. 쿠폰 정책 생성 - 201 CREATED 기대
+POST {{baseUrl}}/api/v1/operator/coupon-policies
+Authorization: Bearer {{operatorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "contentId": "{{contentId}}",
+  "name": "P1 HTTP 재방문 할인 {{$timestamp}}",
+  "description": "P1 HTTP 시나리오용 방문 쿠폰",
+  "issueSourceType": "VISIT",
+  "discountAmount": 3000,
+  "minimumPaymentAmount": 10000,
+  "validDaysAfterIssue": 30,
+  "issueStartsAt": "2026-08-01T00:00:00Z",
+  "issueEndsAt": "2027-12-31T23:59:59Z",
+  "totalIssueLimit": 100
+}
+
+> {%
+client.test("쿠폰 정책 생성은 201 SUCCESS와 식별자를 반환한다.", () => {
+  client.assert(response.status === 201, "쿠폰 정책 생성은 201이어야 합니다.");
+  client.assert(response.body.code === "SUCCESS", "쿠폰 정책 생성은 SUCCESS여야 합니다.");
+  client.assert(response.body.data?.couponPolicyId, "쿠폰 정책 생성 응답에 couponPolicyId가 있어야 합니다.");
+});
+client.global.set("p1CouponPolicyFlowId", response.body.data.couponPolicyId);
+%}
+
+### 2. 내 쿠폰 정책 목록 조회
+GET {{baseUrl}}/api/v1/operator/coupon-policies
+Authorization: Bearer {{operatorAccessToken}}
+Accept: application/json
+
+> {% client.test("내 쿠폰 정책 목록 조회는 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "쿠폰 정책 목록 조회는 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "쿠폰 정책 목록 조회는 SUCCESS여야 합니다."); }); %}
+
+### 3. 생성 쿠폰 정책 상세 조회
+GET {{baseUrl}}/api/v1/operator/coupon-policies/{{p1CouponPolicyFlowId}}
+Authorization: Bearer {{operatorAccessToken}}
+Accept: application/json
+
+> {% client.test("생성 쿠폰 정책 상세 조회는 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "쿠폰 정책 상세 조회는 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "쿠폰 정책 상세 조회는 SUCCESS여야 합니다."); }); %}
+
+### 4. 쿠폰 정책 수정 - 200 OK 기대
+PATCH {{baseUrl}}/api/v1/operator/coupon-policies/{{p1CouponPolicyFlowId}}
+Authorization: Bearer {{operatorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "P1 HTTP 재방문 할인 수정 {{$timestamp}}",
+  "reason": "정책명 보완"
+}
+
+> {% client.test("쿠폰 정책 수정은 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "쿠폰 정책 수정은 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "쿠폰 정책 수정은 SUCCESS여야 합니다."); }); %}
+
+### 5. 쿠폰 정책 공개 - 200 OK 기대
+POST {{baseUrl}}/api/v1/operator/coupon-policies/{{p1CouponPolicyFlowId}}/publish
+Authorization: Bearer {{operatorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": "발급 정책 공개"
+}
+
+> {% client.test("쿠폰 정책 공개는 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "쿠폰 정책 공개는 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "쿠폰 정책 공개는 SUCCESS여야 합니다."); }); %}
+
+### 6. 방문 기반 쿠폰 발급 - 201 CREATED 기대
+POST {{baseUrl}}/api/v1/coupon-policies/{{p1CouponPolicyFlowId}}/coupons
+Authorization: Bearer {{visitorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "issueSourceType": "VISIT",
+  "sourceId": "{{visitId}}"
+}
+
+> {%
+client.test("방문 기반 쿠폰 발급은 201 SUCCESS와 식별자를 반환한다.", () => {
+  client.assert(response.status === 201, "쿠폰 발급은 201이어야 합니다.");
+  client.assert(response.body.code === "SUCCESS", "쿠폰 발급은 SUCCESS여야 합니다.");
+  client.assert(response.body.data?.couponId, "쿠폰 발급 응답에 couponId가 있어야 합니다.");
+});
+client.global.set("p1CouponFlowId", response.body.data.couponId);
+%}
+
+### 7. 같은 방문 기반 쿠폰 발급 재시도 - 기존 결과 기대
+POST {{baseUrl}}/api/v1/coupon-policies/{{p1CouponPolicyFlowId}}/coupons
+Authorization: Bearer {{visitorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "issueSourceType": "VISIT",
+  "sourceId": "{{visitId}}"
+}
+
+> {% client.test("같은 방문의 쿠폰 발급 재시도는 201 SUCCESS를 반환한다.", () => { client.assert(response.status === 201, "쿠폰 발급 재시도는 201이어야 합니다."); client.assert(response.body.code === "SUCCESS", "쿠폰 발급 재시도는 SUCCESS여야 합니다."); client.assert(response.body.data?.couponId === client.global.get("p1CouponFlowId"), "쿠폰 발급 재시도는 최초 couponId를 반환해야 합니다."); }); %}
+
+### 8. 내 쿠폰 목록 조회
+GET {{baseUrl}}/api/v1/me/coupons?status=AVAILABLE
+Authorization: Bearer {{visitorAccessToken}}
+Accept: application/json
+
+> {% client.test("내 쿠폰 목록 조회는 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "내 쿠폰 목록 조회는 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "내 쿠폰 목록 조회는 SUCCESS여야 합니다."); }); %}
+
+### 9. 홀드에 적용 가능한 내 쿠폰 목록 조회
+GET {{baseUrl}}/api/v1/me/coupons/available?holdId={{holdId}}
+Authorization: Bearer {{visitorAccessToken}}
+Accept: application/json
+
+> {% client.test("적용 가능한 쿠폰 목록 조회는 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "적용 가능한 쿠폰 목록 조회는 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "적용 가능한 쿠폰 목록 조회는 SUCCESS여야 합니다."); }); %}
+
+### 10. 내 쿠폰 상세 조회
+GET {{baseUrl}}/api/v1/me/coupons/{{p1CouponFlowId}}
+Authorization: Bearer {{visitorAccessToken}}
+Accept: application/json
+
+> {% client.test("내 쿠폰 상세 조회는 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "내 쿠폰 상세 조회는 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "내 쿠폰 상세 조회는 SUCCESS여야 합니다."); }); %}
+
+### 11. 타인 쿠폰 상세 조회 - 403 FORBIDDEN 또는 404 NOT_FOUND 기대
+GET {{baseUrl}}/api/v1/me/coupons/{{p1CouponFlowId}}
+Authorization: Bearer {{otherVisitorAccessToken}}
+Accept: application/json
+
+> {% client.test("타인 쿠폰 상세 조회는 403 또는 404를 반환한다.", () => { client.assert([403, 404].includes(response.status), "타인 쿠폰 상세 조회는 403 또는 404여야 합니다."); }); %}
+
+### 12. 내 쿠폰 사용 이력 조회
+GET {{baseUrl}}/api/v1/me/coupons/{{existingCouponId}}/usage-history
+Authorization: Bearer {{visitorAccessToken}}
+Accept: application/json
+
+> {% client.test("내 쿠폰 사용 이력 조회는 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "쿠폰 사용 이력 조회는 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "쿠폰 사용 이력 조회는 SUCCESS여야 합니다."); }); %}
+
+### 13. 쿠폰 정책 종료
+POST {{baseUrl}}/api/v1/operator/coupon-policies/{{p1CouponPolicyFlowId}}/end
+Authorization: Bearer {{operatorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": "P1 HTTP 시나리오 종료"
+}
+
+> {% client.test("쿠폰 정책 종료는 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "쿠폰 정책 종료는 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "쿠폰 정책 종료는 SUCCESS여야 합니다."); }); %}
