@@ -9,13 +9,15 @@ readonly PASSWORD='Test!23456'
 
 base_url='http://localhost:8080'
 prepare_only=false
+run_portone_fake_webhook=false
 temporary_directory=''
 
 print_usage() {
     cat <<'EOF'
-사용법: bash http/p1/scripts/run.sh [--base-url URL] [--prepare-only]
+사용법: bash http/p1/scripts/run.sh [--base-url URL] [--prepare-only] [--run-portone-fake-webhook]
 
 P0 공통 시드와 P1 전용 시드를 적용한 뒤 P1 HTTP 시나리오 전체를 실행합니다.
+PortOne fake 웹훅은 PORTONE_FAKE_ENABLED=true 전용 환경에서만 별도 실행합니다.
 EOF
 }
 
@@ -59,6 +61,17 @@ wait_for_application() {
     fail "로컬 애플리케이션 응답을 확인하지 못했습니다: $base_url/api/v1/regions"
 }
 
+get_http_client_base_url() {
+    local host_base_url="$1"
+
+    if [[ "$host_base_url" =~ ^(https?)://(localhost|127\.0\.0\.1|\[::1\])(:[0-9]+)?(/.*)?$ ]]; then
+        printf '%s://host.docker.internal%s%s' "${BASH_REMATCH[1]}" "${BASH_REMATCH[3]:-}" "${BASH_REMATCH[4]:-}"
+        return
+    fi
+
+    printf '%s' "$host_base_url"
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --base-url)
@@ -68,6 +81,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --prepare-only)
             prepare_only=true
+            shift
+            ;;
+        --run-portone-fake-webhook)
+            run_portone_fake_webhook=true
             shift
             ;;
         --help|-h)
@@ -92,6 +109,7 @@ if [[ "$prepare_only" == true ]]; then
 fi
 
 wait_for_application
+http_client_base_url="$(get_http_client_base_url "$base_url")"
 
 temporary_directory="$(mktemp -d)"
 trap cleanup EXIT
@@ -104,9 +122,14 @@ platform_admin_access_token="$(get_access_token 'p1-platform-admin@example.test'
 super_admin_access_token="$(get_access_token 'p1-super-admin@example.test')"
 
 http_files=()
-while IFS= read -r http_file; do
-    http_files+=("http/p1/$http_file")
-done < <(find "$HTTP_DIRECTORY" -maxdepth 1 -type f -name '*.http' -exec basename {} \; | sort)
+if [[ "$run_portone_fake_webhook" == true ]]; then
+    http_files=('http/p1/05-portone-webhook-fake.http')
+else
+    while IFS= read -r http_file; do
+        [[ "$http_file" == '05-portone-webhook-fake.http' ]] && continue
+        http_files+=("http/p1/$http_file")
+    done < <(find "$HTTP_DIRECTORY" -maxdepth 1 -type f -name '*.http' -exec basename {} \; | sort)
+fi
 
 [[ ${#http_files[@]} -gt 0 ]] || fail "P1 HTTP 파일을 찾을 수 없습니다: $HTTP_DIRECTORY"
 
@@ -118,6 +141,7 @@ docker_arguments=(
     -D
     -L BASIC
     --no-progress
+    -V "baseUrl=$http_client_base_url"
     -V "p1RegionAdminAccessToken=$region_admin_access_token"
     -V "p1OperatorAccessToken=$operator_access_token"
     -V "p1VisitorAccessToken=$visitor_access_token"
@@ -142,12 +166,6 @@ docker_arguments=(
     -V 'p1PaymentDiscrepancyId=971001'
     -V 'p1RefundFailureId=981001'
     -V 'p1RegionAdminCandidateUserId=12'
-    -V 'p1PortOneWebhookId=p1-local-webhook'
-    -V 'p1PortOneWebhookTimestamp=2026-09-01T00:00:00Z'
-    -V 'p1PortOneWebhookSignature=local-signature-not-for-production'
-    -V 'p1PortOneStoreId=local-store'
-    -V 'p1PortOneOrderId=p1-local-order-961001'
-    -V 'p1PortOneTransactionId=p1-local-transaction-961001'
 )
 
 docker_arguments+=("${http_files[@]}")

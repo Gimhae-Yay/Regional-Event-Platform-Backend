@@ -60,6 +60,17 @@ wait_for_application() {
     fail "로컬 애플리케이션 응답을 확인하지 못했습니다: $base_url/api/v1/regions"
 }
 
+get_http_client_base_url() {
+    local host_base_url="$1"
+
+    if [[ "$host_base_url" =~ ^(https?)://(localhost|127\.0\.0\.1|\[::1\])(:[0-9]+)?(/.*)?$ ]]; then
+        printf '%s://host.docker.internal%s%s' "${BASH_REMATCH[1]}" "${BASH_REMATCH[3]:-}" "${BASH_REMATCH[4]:-}"
+        return
+    fi
+
+    printf '%s' "$host_base_url"
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --base-url)
@@ -93,6 +104,7 @@ if [[ "$prepare_only" == true ]]; then
 fi
 
 wait_for_application
+http_client_base_url="$(get_http_client_base_url "$base_url")"
 
 temporary_directory="$(mktemp -d)"
 trap cleanup EXIT
@@ -119,6 +131,7 @@ docker_arguments=(
     -D
     -L BASIC
     --no-progress
+    -V "baseUrl=$http_client_base_url"
     -V "p0RegionAdminAccessToken=$region_admin_access_token"
     -V "p0OtherRegionAdminAccessToken=$other_region_admin_access_token"
     -V "p0OperatorAccessToken=$operator_access_token"

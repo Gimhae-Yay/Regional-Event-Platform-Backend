@@ -61,6 +61,19 @@ function Wait-ForApplication {
     throw "Local application did not respond: $BaseUrl/api/v1/regions"
 }
 
+function Get-HttpClientBaseUrl {
+    param([Parameter(Mandatory)][string]$HostBaseUrl)
+
+    $baseUri = [Uri]$HostBaseUrl
+    if ($baseUri.Host -notin @('localhost', '127.0.0.1', '::1')) {
+        return $baseUri.AbsoluteUri.TrimEnd('/')
+    }
+
+    $containerBaseUri = [UriBuilder]::new($baseUri)
+    $containerBaseUri.Host = 'host.docker.internal'
+    return $containerBaseUri.Uri.AbsoluteUri.TrimEnd('/')
+}
+
 & $prepareScript
 if ($LASTEXITCODE -ne 0) {
     throw "P0 preparation script failed. (exit code: $LASTEXITCODE)"
@@ -71,8 +84,10 @@ if ($PrepareOnly) {
 }
 
 Wait-ForApplication
+$httpClientBaseUrl = Get-HttpClientBaseUrl -HostBaseUrl $BaseUrl
 
 $variables = @{
+    baseUrl = $httpClientBaseUrl
     p0RegionAdminAccessToken = Get-AccessToken -Email 'p0-region-admin@example.test' -Password $password
     p0OtherRegionAdminAccessToken = Get-AccessToken -Email 'p0-other-region-admin@example.test' -Password $password
     p0OperatorAccessToken = Get-AccessToken -Email 'p0-operator@example.test' -Password $password

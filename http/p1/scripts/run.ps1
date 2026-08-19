@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$BaseUrl = 'http://localhost:8080',
-    [switch]$PrepareOnly
+    [switch]$PrepareOnly,
+    [switch]$RunPortOneFakeWebhook
 )
 
 $ErrorActionPreference = 'Stop'
@@ -61,6 +62,19 @@ function Wait-ForApplication {
     throw "Local application did not respond: $BaseUrl/api/v1/regions"
 }
 
+function Get-HttpClientBaseUrl {
+    param([Parameter(Mandatory)][string]$HostBaseUrl)
+
+    $baseUri = [Uri]$HostBaseUrl
+    if ($baseUri.Host -notin @('localhost', '127.0.0.1', '::1')) {
+        return $baseUri.AbsoluteUri.TrimEnd('/')
+    }
+
+    $containerBaseUri = [UriBuilder]::new($baseUri)
+    $containerBaseUri.Host = 'host.docker.internal'
+    return $containerBaseUri.Uri.AbsoluteUri.TrimEnd('/')
+}
+
 & $prepareScript
 if ($LASTEXITCODE -ne 0) {
     throw "P1 preparation script failed. (exit code: $LASTEXITCODE)"
@@ -71,8 +85,10 @@ if ($PrepareOnly) {
 }
 
 Wait-ForApplication
+$httpClientBaseUrl = Get-HttpClientBaseUrl -HostBaseUrl $BaseUrl
 
 $variables = @{
+    baseUrl = $httpClientBaseUrl
     p1RegionAdminAccessToken = Get-AccessToken -Email 'p0-region-admin@example.test' -Password $password
     p1OperatorAccessToken = Get-AccessToken -Email 'p0-operator@example.test' -Password $password
     p1VisitorAccessToken = Get-AccessToken -Email 'p0-visitor@example.test' -Password $password
@@ -97,15 +113,17 @@ $variables = @{
     p1PaymentDiscrepancyId = '971001'
     p1RefundFailureId = '981001'
     p1RegionAdminCandidateUserId = '12'
-    p1PortOneWebhookId = 'p1-local-webhook'
-    p1PortOneWebhookTimestamp = '2026-09-01T00:00:00Z'
-    p1PortOneWebhookSignature = 'local-signature-not-for-production'
-    p1PortOneStoreId = 'local-store'
-    p1PortOneOrderId = 'p1-local-order-961001'
-    p1PortOneTransactionId = 'p1-local-transaction-961001'
 }
 
-$httpFiles = Get-ChildItem -LiteralPath $httpDirectory -Filter '*.http' -File | Sort-Object Name
+$portOneFakeWebhookFile = Join-Path $httpDirectory '05-portone-webhook-fake.http'
+if ($RunPortOneFakeWebhook) {
+    $httpFiles = @(Get-Item -LiteralPath $portOneFakeWebhookFile)
+}
+else {
+    $httpFiles = Get-ChildItem -LiteralPath $httpDirectory -Filter '*.http' -File |
+        Where-Object { $_.FullName -ne $portOneFakeWebhookFile } |
+        Sort-Object Name
+}
 if ($httpFiles.Count -eq 0) {
     throw "P1 HTTP files were not found: $httpDirectory"
 }
