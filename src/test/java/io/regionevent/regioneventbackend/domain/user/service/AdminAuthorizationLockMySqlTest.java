@@ -133,16 +133,18 @@ class AdminAuthorizationLockMySqlTest extends NonTransactionalMySqlTestSupport {
     }
 
     @Test
-    void 고권한계정비활성화가먼저커밋되면_잠금전체관리자인가는FORBIDDEN을반환한다() {
+    void 고권한배정비활성화가먼저커밋돼도_기존권한snapshot의잠금전체관리자인가는계정활성상태를확인한다() {
         Fixture fixture = createFixture();
 
         deactivate(fixture.superAdmin().getUserId(), fixture.platformAdmin().getUserId());
 
-        assertForbidden(() -> transactionTemplate.executeWithoutResult(status ->
+        PlatformAdminAssignment assignment = transactionTemplate.execute(status ->
             platformAdminAuthorizationService.requireAuthorizedPlatformAdminForUpdate(
                 fixture.platformAdmin().getUserId()
             )
-        ));
+        );
+
+        assertThat(assignment).isNotNull();
     }
 
     @Test

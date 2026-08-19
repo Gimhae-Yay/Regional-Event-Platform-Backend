@@ -236,7 +236,7 @@ class ClaimMissionRewardUseCaseMySqlTest extends NonTransactionalMySqlTestSuppor
             userLocked.countDown();
             await(releaseClaim);
             return lockedUser;
-        }).when(appUserService).findActiveUserForUpdate(fixture.userId());
+        }).when(appUserService).findActiveOrdinaryUserForUpdate(fixture.userId());
 
         try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
             Future<ClaimMissionRewardResult> claim = executor.submit(() -> claim(fixture));

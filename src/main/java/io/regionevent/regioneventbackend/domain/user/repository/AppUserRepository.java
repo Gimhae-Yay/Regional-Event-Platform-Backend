@@ -14,7 +14,6 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserAccountKind;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminAssignment;
-import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminAssignmentStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminGrade;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
@@ -45,13 +44,11 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
         FROM PlatformAdminAssignment assignment
         JOIN FETCH assignment.appUser
         WHERE assignment.appUser.userId = :userId
-          AND assignment.status = :assignmentStatus
           AND assignment.appUser.status = :userStatus
           AND assignment.appUser.accountKind = :accountKind
         """)
-    Optional<PlatformAdminAssignment> findActivePrivilegedAssignment(
+    Optional<PlatformAdminAssignment> findPrivilegedAssignment(
         @Param("userId") Long userId,
-        @Param("assignmentStatus") PlatformAdminAssignmentStatus assignmentStatus,
         @Param("userStatus") AppUserStatus userStatus,
         @Param("accountKind") AppUserAccountKind accountKind
     );
@@ -62,13 +59,11 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
         FROM PlatformAdminAssignment assignment
         JOIN FETCH assignment.appUser
         WHERE assignment.appUser.userId = :userId
-          AND assignment.status = :assignmentStatus
           AND assignment.appUser.status = :userStatus
           AND assignment.appUser.accountKind = :accountKind
         """)
-    Optional<PlatformAdminAssignment> findActivePrivilegedAssignmentForUpdate(
+    Optional<PlatformAdminAssignment> findPrivilegedAssignmentForUpdate(
         @Param("userId") Long userId,
-        @Param("assignmentStatus") PlatformAdminAssignmentStatus assignmentStatus,
         @Param("userStatus") AppUserStatus userStatus,
         @Param("accountKind") AppUserAccountKind accountKind
     );
@@ -82,12 +77,14 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
           AND assignment.role = :role
           AND assignment.status = :assignmentStatus
           AND assignment.appUser.status = :userStatus
+          AND assignment.appUser.accountKind = :accountKind
         """)
     Optional<UserRoleAssignment> findActiveRoleAssignment(
         @Param("userId") Long userId,
         @Param("role") UserRole role,
         @Param("assignmentStatus") UserRoleAssignmentStatus assignmentStatus,
-        @Param("userStatus") AppUserStatus userStatus
+        @Param("userStatus") AppUserStatus userStatus,
+        @Param("accountKind") AppUserAccountKind accountKind
     );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -100,12 +97,14 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
           AND assignment.role = :role
           AND assignment.status = :assignmentStatus
           AND assignment.appUser.status = :userStatus
+          AND assignment.appUser.accountKind = :accountKind
         """)
     Optional<UserRoleAssignment> findActiveRoleAssignmentForUpdate(
         @Param("userId") Long userId,
         @Param("role") UserRole role,
         @Param("assignmentStatus") UserRoleAssignmentStatus assignmentStatus,
-        @Param("userStatus") AppUserStatus userStatus
+        @Param("userStatus") AppUserStatus userStatus,
+        @Param("accountKind") AppUserAccountKind accountKind
     );
 
     @Query("""

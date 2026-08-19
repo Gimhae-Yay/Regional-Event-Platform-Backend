@@ -14,7 +14,6 @@ import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.service.RegionService;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
-import io.regionevent.regioneventbackend.domain.user.service.UserRoleAssignmentService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
@@ -23,7 +22,6 @@ public class CreateMissionParticipationUseCase {
 
     private final MissionParticipationDuplicateReadService missionParticipationDuplicateReadService;
     private final AppUserService appUserService;
-    private final UserRoleAssignmentService userRoleAssignmentService;
     private final MissionService missionService;
     private final RegionService regionService;
     private final MissionParticipationReadService missionParticipationReadService;
@@ -33,7 +31,6 @@ public class CreateMissionParticipationUseCase {
     public CreateMissionParticipationUseCase(
         MissionParticipationDuplicateReadService missionParticipationDuplicateReadService,
         AppUserService appUserService,
-        UserRoleAssignmentService userRoleAssignmentService,
         MissionService missionService,
         RegionService regionService,
         MissionParticipationReadService missionParticipationReadService,
@@ -42,7 +39,6 @@ public class CreateMissionParticipationUseCase {
     ) {
         this.missionParticipationDuplicateReadService = missionParticipationDuplicateReadService;
         this.appUserService = appUserService;
-        this.userRoleAssignmentService = userRoleAssignmentService;
         this.missionService = missionService;
         this.regionService = regionService;
         this.missionParticipationReadService = missionParticipationReadService;
@@ -54,7 +50,7 @@ public class CreateMissionParticipationUseCase {
         Long userId,
         Long missionId
     ) {
-        userRoleAssignmentService.findActiveVisitor(userId);
+        appUserService.findActiveOrdinaryUser(userId);
         Mission mission = missionService.findMission(missionId);
         validatePublicRegion(mission.getRegion());
 
@@ -76,7 +72,7 @@ public class CreateMissionParticipationUseCase {
         Long userId,
         Long missionId
     ) {
-        AppUser user = appUserService.findActiveUserForUpdate(userId)
+        AppUser user = appUserService.findActiveOrdinaryUserForUpdate(userId)
             .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
         Mission mission = missionService.findMissionForParticipationUpdate(missionId);
         Region region = regionService.findRegionForUpdate(mission.getRegion().getRegionId());

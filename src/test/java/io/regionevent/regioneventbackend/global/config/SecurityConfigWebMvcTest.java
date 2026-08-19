@@ -195,11 +195,16 @@ class SecurityConfigWebMvcTest {
             .andExpect(status().isNoContent());
     }
 
-    @Test
-    void roleProtectedPath_withEmptyAuthorities_returnsForbiddenResponse() throws Exception {
+    @ParameterizedTest
+    @MethodSource("roleProtectedRequests")
+    void roleProtectedPath_withEmptyAuthorities_returnsForbiddenBeforeController(
+        HttpMethod method,
+        String path,
+        AccessTokenAuthority ignoredAuthority
+    ) throws Exception {
         String accessToken = jwtAccessTokenService.issue(1L);
 
-        mockMvc.perform(get("/api/v1/operator/protected")
+        mockMvc.perform(request(method, path)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.code").value("FORBIDDEN"));

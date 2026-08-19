@@ -52,8 +52,7 @@ public final class AuditEventActor {
             || platformAdminAssignment.getAppUser().getUserId() == null) {
             throw new IllegalArgumentException("platformAdminAssignment must be persisted");
         }
-        if (!platformAdminAssignment.isActive()
-            || platformAdminAssignment.getAppUser().getStatus() != AppUserStatus.ACTIVE
+        if (platformAdminAssignment.getAppUser().getStatus() != AppUserStatus.ACTIVE
             || platformAdminAssignment.getAppUser().getAccountKind()
                 != AppUserAccountKind.PRIVILEGED) {
             throw new IllegalArgumentException("platform admin actor must be active and privileged");

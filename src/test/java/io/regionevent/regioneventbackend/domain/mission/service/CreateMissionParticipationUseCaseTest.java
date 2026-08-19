@@ -29,9 +29,7 @@ import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.service.RegionService;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
-import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
-import io.regionevent.regioneventbackend.domain.user.service.UserRoleAssignmentService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
@@ -46,7 +44,6 @@ class CreateMissionParticipationUseCaseTest {
         MissionParticipationDuplicateReadService.class
     );
     private final AppUserService appUserService = mock(AppUserService.class);
-    private final UserRoleAssignmentService userRoleAssignmentService = mock(UserRoleAssignmentService.class);
     private final MissionService missionService = mock(MissionService.class);
     private final RegionService regionService = mock(RegionService.class);
     private final MissionParticipationReadService participationReadService = mock(
@@ -57,7 +54,6 @@ class CreateMissionParticipationUseCaseTest {
     private final CreateMissionParticipationUseCase useCase = new CreateMissionParticipationUseCase(
         duplicateReadService,
         appUserService,
-        userRoleAssignmentService,
         missionService,
         regionService,
         participationReadService,
@@ -66,7 +62,6 @@ class CreateMissionParticipationUseCaseTest {
     );
 
     private final AppUser user = mock(AppUser.class);
-    private final UserRoleAssignment visitor = mock(UserRoleAssignment.class);
     private final Mission initialMission = mock(Mission.class);
     private final Region initialRegion = mock(Region.class);
 
@@ -74,9 +69,8 @@ class CreateMissionParticipationUseCaseTest {
     void setUp() {
         when(transactionManager.getTransaction(any(TransactionDefinition.class)))
             .thenReturn(mock(TransactionStatus.class));
-        when(appUserService.findActiveUserForUpdate(USER_ID)).thenReturn(Optional.of(user));
-        when(userRoleAssignmentService.findActiveVisitor(USER_ID)).thenReturn(visitor);
-        when(visitor.getAppUser()).thenReturn(user);
+        when(appUserService.findActiveOrdinaryUser(USER_ID)).thenReturn(user);
+        when(appUserService.findActiveOrdinaryUserForUpdate(USER_ID)).thenReturn(Optional.of(user));
         when(missionService.findMission(MISSION_ID)).thenReturn(initialMission);
         when(initialMission.getRegion()).thenReturn(initialRegion);
         when(initialRegion.isPublic()).thenReturn(true);
@@ -99,7 +93,7 @@ class CreateMissionParticipationUseCaseTest {
         assertThat(result.participationId()).isEqualTo(9001L);
         assertThat(result.status()).isEqualTo(MissionParticipationStatus.COMPLETED);
         assertThat(result.joinedAt()).isEqualTo(OPERATION_AT.minusSeconds(60));
-        verifyNoInteractions(appUserService);
+        verify(appUserService).findActiveOrdinaryUser(USER_ID);
         verify(missionService, never()).findMissionForParticipationUpdate(any());
         verifyNoInteractions(regionService, participationService, duplicateReadService);
     }
@@ -136,7 +130,8 @@ class CreateMissionParticipationUseCaseTest {
         assertThat(result.participationId()).isEqualTo(9001L);
         assertThat(result.joinedAt()).isEqualTo(OPERATION_AT);
         InOrder inOrder = inOrder(appUserService, missionService, regionService, participationService);
-        inOrder.verify(appUserService).findActiveUserForUpdate(USER_ID);
+        inOrder.verify(appUserService).findActiveOrdinaryUser(USER_ID);
+        inOrder.verify(appUserService).findActiveOrdinaryUserForUpdate(USER_ID);
         inOrder.verify(missionService).findMissionForParticipationUpdate(MISSION_ID);
         inOrder.verify(regionService).findRegionForUpdate(REGION_ID);
         inOrder.verify(missionService).findCurrentDatabaseTime();
@@ -146,7 +141,7 @@ class CreateMissionParticipationUseCaseTest {
 
     @Test
     void create_비활성또는삭제사용자이면도메인잠금과변경없이금지한다() {
-        when(appUserService.findActiveUserForUpdate(USER_ID)).thenReturn(Optional.empty());
+        when(appUserService.findActiveOrdinaryUserForUpdate(USER_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> useCase.create(USER_ID, MISSION_ID))
             .isInstanceOfSatisfying(BusinessException.class, exception ->

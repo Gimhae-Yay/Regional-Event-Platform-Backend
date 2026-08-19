@@ -20,8 +20,8 @@ import io.regionevent.regioneventbackend.domain.audit.service.RecordFailedAuditE
 import io.regionevent.regioneventbackend.domain.review.entity.Review;
 import io.regionevent.regioneventbackend.domain.review.entity.ReviewStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
+import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
-import io.regionevent.regioneventbackend.domain.user.service.UserRoleAssignmentService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
@@ -31,7 +31,6 @@ public class DeleteReviewUseCase {
     private static final Logger log = LoggerFactory.getLogger(DeleteReviewUseCase.class);
 
     private final AppUserService appUserService;
-    private final UserRoleAssignmentService userRoleAssignmentService;
     private final ReviewService reviewService;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
     private final RecordFailedAuditEventUseCase recordFailedAuditEventUseCase;
@@ -39,14 +38,12 @@ public class DeleteReviewUseCase {
 
     public DeleteReviewUseCase(
         AppUserService appUserService,
-        UserRoleAssignmentService userRoleAssignmentService,
         ReviewService reviewService,
         RecordAuditEventUseCase recordAuditEventUseCase,
         RecordFailedAuditEventUseCase recordFailedAuditEventUseCase,
         Clock clock
     ) {
         this.appUserService = appUserService;
-        this.userRoleAssignmentService = userRoleAssignmentService;
         this.reviewService = reviewService;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
         this.recordFailedAuditEventUseCase = recordFailedAuditEventUseCase;
@@ -60,9 +57,9 @@ public class DeleteReviewUseCase {
         ReviewStatus previousStatus = null;
 
         try {
-            AppUser user = appUserService.findActiveUserForUpdate(userId)
+            AppUser user = appUserService.findActiveOrdinaryUserForUpdate(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
-            actor = new AuditEventActor(userRoleAssignmentService.findActiveVisitor(userId));
+            actor = new AuditEventActor(user, UserRole.VISITOR);
             review = reviewService.findByIdForUpdate(reviewId);
             previousStatus = review.getStatus();
             validatePublished(review);

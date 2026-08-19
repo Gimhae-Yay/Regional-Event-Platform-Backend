@@ -20,8 +20,7 @@ import org.springframework.data.domain.PageRequest;
 
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionParticipationStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
-import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
-import io.regionevent.regioneventbackend.domain.user.service.UserRoleAssignmentService;
+import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
 
 @ExtendWith(MockitoExtension.class)
 class GetMyMissionParticipationsUseCaseTest {
@@ -30,7 +29,7 @@ class GetMyMissionParticipationsUseCaseTest {
     private static final Instant JOINED_AT = Instant.parse("2026-08-07T05:00:00Z");
 
     @Mock
-    private UserRoleAssignmentService userRoleAssignmentService;
+    private AppUserService appUserService;
 
     @Mock
     private MissionParticipationReadService missionParticipationReadService;
@@ -40,7 +39,6 @@ class GetMyMissionParticipationsUseCaseTest {
 
     @Test
     void get_활성방문자와상태필터_본인참여페이지를반환한다() {
-        UserRoleAssignment visitor = mock(UserRoleAssignment.class);
         AppUser user = mock(AppUser.class);
         MissionParticipationSummary summary = new MissionParticipationSummary(
             9001L,
@@ -54,9 +52,7 @@ class GetMyMissionParticipationsUseCaseTest {
             null
         );
         PageRequest pageable = PageRequest.of(1, 2);
-        when(userRoleAssignmentService.findActiveVisitor(USER_ID)).thenReturn(visitor);
-        when(visitor.getAppUser()).thenReturn(user);
-        when(user.getUserId()).thenReturn(USER_ID);
+        when(appUserService.findActiveOrdinaryUser(USER_ID)).thenReturn(user);
         when(missionParticipationReadService.findByUserIdAndStatus(
             USER_ID,
             MissionParticipationStatus.IN_PROGRESS,
@@ -85,7 +81,7 @@ class GetMyMissionParticipationsUseCaseTest {
         assertThat(result.size()).isEqualTo(2);
         assertThat(result.totalElements()).isEqualTo(3);
         assertThat(result.totalPages()).isEqualTo(2);
-        verify(userRoleAssignmentService).findActiveVisitor(USER_ID);
+        verify(appUserService).findActiveOrdinaryUser(USER_ID);
         verify(missionParticipationReadService).findByUserIdAndStatus(
             USER_ID,
             MissionParticipationStatus.IN_PROGRESS,
@@ -95,12 +91,9 @@ class GetMyMissionParticipationsUseCaseTest {
 
     @Test
     void get_필터없고빈결과_빈페이지메타데이터를반환한다() {
-        UserRoleAssignment visitor = mock(UserRoleAssignment.class);
         AppUser user = mock(AppUser.class);
         PageRequest pageable = PageRequest.of(0, 20);
-        when(userRoleAssignmentService.findActiveVisitor(USER_ID)).thenReturn(visitor);
-        when(visitor.getAppUser()).thenReturn(user);
-        when(user.getUserId()).thenReturn(USER_ID);
+        when(appUserService.findActiveOrdinaryUser(USER_ID)).thenReturn(user);
         when(missionParticipationReadService.findByUserIdAndStatus(USER_ID, null, pageable))
             .thenReturn(new PageImpl<>(List.of(), pageable, 0));
 
