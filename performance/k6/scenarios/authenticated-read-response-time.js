@@ -190,11 +190,18 @@ function login(account) {
       tags: { endpoint: 'POST /auth/login', role: account.role, test: testTag },
     },
   );
-  const authorization = response.headers.Authorization || response.headers.authorization;
-  if (!authorization || !authorization.startsWith('Bearer ')) {
-    fail(`Login for ${account.role} did not return a Bearer token.`);
+  const headerAuthorization = response.headers.Authorization || response.headers.authorization;
+  if (headerAuthorization && headerAuthorization.startsWith('Bearer ')) {
+    return headerAuthorization;
   }
-  return authorization;
+
+  const bodyAuthorization = safeJson(response)?.data?.accessToken;
+  if (typeof bodyAuthorization !== 'string' || bodyAuthorization.trim() === '') {
+    fail(`Login for ${account.role} did not return an access token.`);
+  }
+  return bodyAuthorization.startsWith('Bearer ')
+    ? bodyAuthorization
+    : `Bearer ${bodyAuthorization}`;
 }
 
 function requestHeaders(testCase, sessionsByRole) {

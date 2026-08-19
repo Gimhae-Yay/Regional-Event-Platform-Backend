@@ -606,7 +606,7 @@
   },
   {
     "id": "operator-create-stampbook", "method": "POST", "route": "/api/v1/operator/stampbooks", "path": "/operator/stampbooks", "role": "OPERATOR", "expectedStatus": 201,
-    "body": { "regionId": "{{ids.regionId}}", "contentIds": ["{{ids.contentId}}"], "rewardCouponPolicyId": "{{ids.stampbookRewardCouponPolicyId}}", "reason": "K6 정상 응답 검증" }, "capture": { "stampbookId": "ids.createdStampbookId" }
+    "body": { "title": "K6 생성 스탬프북", "regionId": "{{ids.regionId}}", "contentIds": ["{{ids.contentId}}"], "rewardCouponPolicyId": "{{ids.stampbookRewardCouponPolicyId}}", "reason": "K6 정상 응답 검증" }, "capture": { "stampbookId": "ids.createdStampbookId" }
   },
   {
     "id": "operator-update-stampbook", "method": "PATCH", "route": "/api/v1/operator/stampbooks/{stampbookId}", "path": "/operator/stampbooks/{{ids.createdStampbookId}}", "role": "OPERATOR", "expectedStatus": 200,
