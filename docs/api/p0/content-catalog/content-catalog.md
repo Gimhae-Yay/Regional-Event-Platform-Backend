@@ -5,7 +5,7 @@
 | 대상 릴리스 | P0                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | 관련 요구사항 | `FR-02`, `FR-03`, `FR-04`, `FR-06`, `FR-10`, `FR-14`, `AUTH-01`, `CON-01`~`CON-09`, `SES-01`, `SES-02`, `RSV-02`, `RSV-06`                                                                                                                                                                                                                                                                                               |
 | 소유 도메인 | 지역·콘텐츠 카탈로그                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [정원 홀드·무료 예약](../../../p0/reservation.md), [인증·프로필](../../../p0/auth-profile.md), [ERD](../../../erd.md), [기술 스택](../../../local-stamp-platform-tech-stack.md), [ADR-0016](../../../adr/0016-use-private-s3-presigned-urls-and-immediate-image-deletion.md), [ADR-0031](../../../adr/0031-use-version-validated-cache-aside-for-public-content.md), [ADR-0038](../../../adr/0038-create-sessions-with-lifecycle-and-review-session-changes.md), [ADR-0059](../../../adr/0059-automatically-end-content-after-all-sessions-terminate.md), [ADR-0062](../../../adr/0062-coordinate-content-ending-with-usecase.md), [ADR-0101](../../../adr/0101-store-content-withdrawal-requests-and-serialize-review.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [정원 홀드·무료 예약](../../../p0/reservation.md), [인증·프로필](../../../p0/auth-profile.md), [ERD](../../../erd.md), [기술 스택](../../../local-stamp-platform-tech-stack.md), [ADR-0016](../../../adr/0016-use-private-s3-presigned-urls-and-immediate-image-deletion.md), [ADR-0031](../../../adr/0031-use-version-validated-cache-aside-for-public-content.md), [ADR-0038](../../../adr/0038-create-sessions-with-lifecycle-and-review-session-changes.md), [ADR-0059](../../../adr/0059-automatically-end-content-after-all-sessions-terminate.md), [ADR-0062](../../../adr/0062-coordinate-content-ending-with-usecase.md), [ADR-0101](../../../adr/0101-store-content-withdrawal-requests-and-serialize-review.md), [ADR-0112](../../../adr/0112-list-operator-owned-content-sessions-separately.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
@@ -20,6 +20,8 @@
 `PUBLISHED` 콘텐츠에서 새 `content_session`을 `PENDING`으로 생성하거나 기존 회차 수정을 `session_revision`으로 심사
 요청할 수 있다. `PENDING` 생성 회차와 `session_revision`은 담당 지역 관리자의 목록·상세 조회 뒤 승인 또는 반려로 종결한다.
 생성 회차는 승인 때만 `SCHEDULED`가 되며, 수정 요청의 심사 중·반려는 실제 회차·공개·예약 상태를 바꾸지 않는다.
+소유 운영자는 콘텐츠 상태와 관계없이 소프트 삭제되지 않은 자신의 콘텐츠에 연결된 모든 회차 상태와 현재 `PENDING`
+수정 요청을 별도 목록으로 조회할 수 있다. 이 목록은 실제 회차와 변경 후보를 구분하고 종결된 수정 요청 이력은 포함하지 않는다.
 소유 운영자의 회차 취소는
 `SCHEDULED → CANCELLED` 전이와 활성 홀드·미체크인 확정 예약의 종결, 성공 감사 기록을 하나의 트랜잭션으로 처리한다.
 운영자 API는 `OPERATOR` 역할, 담당 지역 일치와 콘텐츠 소유 관계를 함께 검증한다.
@@ -50,6 +52,7 @@
 | `CON-09` | `GET /region-admin/contents/{contentId}/history` | `content`, `content_log` |
 | `CON-02`, `CON-03` | `GET /region-admin/contents/{contentId}` | `content`, `content_session`, `content_representative_image` |
 | `FR-03`, `FR-04`, `AUTH-01`, `SES-01`, `SES-02` | `POST /operator/contents/{contentId}/sessions` | `content`, `content_session`, `user_role_assignment`, `audit_event`, `audit_event_actor_link` |
+| `FR-03`, `AUTH-01`, `SES-01`, `SES-02` | `GET /operator/contents/{contentId}/sessions` | `content`, `content_session`, `session_revision`, `user_role_assignment` |
 | `FR-03`, `FR-04`, `AUTH-01`, `SES-01`, `SES-02`, `RSV-02` | `POST /operator/sessions/{sessionId}/change-requests` | `content`, `content_session`, `session_revision`, `capacity_hold`, `reservation`, `audit_event`, `audit_event_actor_link` |
 | `FR-04`, `AUTH-01`, `SES-01`, `SES-02`, `CON-09` | `GET /region-admin/sessions?status=PENDING`, `GET /region-admin/sessions/{sessionId}`, `POST /region-admin/sessions/{sessionId}/approve`, `POST /region-admin/sessions/{sessionId}/reject` | `content`, `content_session`, `app_user`, `audit_event`, `audit_event_actor_link` |
 | `FR-04`, `AUTH-01`, `SES-01`, `SES-02`, `RSV-02`, `CON-09` | `GET /region-admin/session-revisions?status=PENDING`, `GET /region-admin/session-revisions/{revisionId}`, `POST /region-admin/session-revisions/{revisionId}/approve`, `POST /region-admin/session-revisions/{revisionId}/reject` | `content`, `content_session`, `session_revision`, `capacity_hold`, `reservation`, `audit_event`, `audit_event_actor_link` |
@@ -88,6 +91,7 @@
 | 전체 콘텐츠 철회 승인 | `POST /region-admin/content-withdrawal-requests/{withdrawalRequestId}/approve` | [approve-content-withdrawal.md](../region-content/approve-content-withdrawal.md) |
 | 전체 콘텐츠 철회 반려 | `POST /region-admin/content-withdrawal-requests/{withdrawalRequestId}/reject` | [reject-content-withdrawal.md](../region-content/reject-content-withdrawal.md) |
 | 콘텐츠 반려·승인·종료 이력 조회 | `GET /region-admin/contents/{contentId}/history` | [content-history.md](content-history.md) |
+| 내 콘텐츠 회차 목록 조회 | `GET /operator/contents/{contentId}/sessions` | [list-operator-content-sessions.md](list-operator-content-sessions.md) |
 | 내 콘텐츠 회차 생성 | `POST /operator/contents/{contentId}/sessions` | [session-create.md](session-create.md) |
 | 내 콘텐츠 회차 수정 요청 | `POST /operator/sessions/{sessionId}/change-requests` | [session-update.md](session-update.md) |
 | 심사 대기 회차 목록 조회 | `GET /region-admin/sessions?status=PENDING` | [list-pending-sessions.md](list-pending-sessions.md) |

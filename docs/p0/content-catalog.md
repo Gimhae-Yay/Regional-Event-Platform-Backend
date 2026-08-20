@@ -50,7 +50,9 @@
 7. 승인된 공개 예정 시각이 되면 시스템이 콘텐츠를 한 번만 `PUBLISHED`로 전환하고 지역 홈과 목록에 노출한다.
 8. `APPROVED` 또는 `PUBLISHED` 콘텐츠의 운영자는 추가 회차를 `PENDING`으로 생성하거나 기존 회차 변경안을 별도 심사 요청으로 제출할 수 있다.
    생성 회차는 승인 뒤 `SCHEDULED`가 되고, 심사 중·반려된 수정 요청은 기존 회차와 콘텐츠 공개 상태를 바꾸지 않는다.
-9. 연결된 회차가 하나 이상이고 모든 회차가 `COMPLETED`, `CANCELLED`, `REJECTED` 중 하나이면 시스템이 콘텐츠를 한 번만 `ENDED`로 전환해 예약 접수와 노출을 종료한다. `PENDING` 또는 `SCHEDULED` 회차가 있으면 종료하지 않으며, 지역 관리자는 같은 조건에서 스케줄러 실행을 기다리지 않고 정상 종료 처리할 수 있다.
+9. 소유 운영자는 콘텐츠 상태와 관계없이 소프트 삭제되지 않은 자신의 콘텐츠에 연결된 모든 회차 상태와 현재 `PENDING`
+   변경 요청을 별도 목록으로 조회해 생성·변경 요청·취소 뒤의 서버 상태를 복구할 수 있다.
+10. 연결된 회차가 하나 이상이고 모든 회차가 `COMPLETED`, `CANCELLED`, `REJECTED` 중 하나이면 시스템이 콘텐츠를 한 번만 `ENDED`로 전환해 예약 접수와 노출을 종료한다. `PENDING` 또는 `SCHEDULED` 회차가 있으면 종료하지 않으며, 지역 관리자는 같은 조건에서 스케줄러 실행을 기다리지 않고 정상 종료 처리할 수 있다.
 
 #### 예외 흐름
 
@@ -81,6 +83,8 @@
 MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 수정 후보만 `session_revision`에 분리해
 `PENDING → APPROVED` 또는 `PENDING → REJECTED`로 전이한다. 수정 요청은 심사 중·반려 시 기존 `SCHEDULED` 회차를
 유지하며, 승인 때 대상 회차의 시작 전 여부·버전 일치와 활성 홀드·`CONFIRMED`·`CHECKED_IN` 예약 부재를 다시 확인한다.
+소유 운영자 회차 목록은 공개 필터를 적용하지 않고 소프트 삭제되지 않은 자신의 콘텐츠에 연결된 모든 회차 상태와 현재
+`PENDING` 변경 요청을 반환한다. 변경 요청 후보는 실제 회차와 구분하며 승인·반려로 종결된 변경 요청 이력은 포함하지 않는다.
 회차 종료 이후 체크인 창이 닫히고 미체크인 예약의 노쇼 처리가 끝나면 `COMPLETED`로 전환한다.
 콘텐츠 상태 변경만으로 회차를 자동 취소하지 않고, 명시적 회차 취소는
 [정원 홀드·무료 예약](reservation.md)의 `RSV-06`을 적용한다.
@@ -96,6 +100,7 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 | [ADR-0020](../adr/0020-merge-event-experience-details-into-content-and-revision.md#결정) | 행사·체험 필드를 통합한 콘텐츠·수정본·회차의 모델 경계 |
 | [ADR-0011](../adr/0011-bootstrap-operator-ownership-on-content-creation.md#결정) | 서버가 인증 운영자와 승인된 담당 지역으로 최초 소유 관계를 생성하는 방식 |
 | [ADR-0038](../adr/0038-create-sessions-with-lifecycle-and-review-session-changes.md#결정) | 추가 회차는 상태 전이로 생성하고 기존 회차 수정만 별도 심사하는 정책 |
+| [ADR-0112](../adr/0112-list-operator-owned-content-sessions-separately.md#결정) | 모든 회차 상태와 현재 심사 대기 변경 요청을 별도 운영자 목록으로 조회하는 계약 |
 | [P0 명세](../p0-spec.md#88-감사-및-운영-로그) | 최초 소유자 설정과 상태 전이 감사 요건 |
 
 ### 기능 범위
@@ -105,6 +110,7 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 - 신규 회차의 상태는 `PENDING`이며, 담당 지역 관리자가 승인한 뒤에만 `SCHEDULED`가 된다.
 - 콘텐츠가 `APPROVED` 또는 `PUBLISHED`가 된 뒤에는 새 `PENDING` 회차를 생성할 수 있고, `SCHEDULED` 회차의
   일정·체크인 창·정원 변경만 별도 심사 요청으로 제출한다. 심사 중인 변경안은 현재 회차를 바꾸지 않는다.
+- 운영자는 소프트 삭제되지 않은 자신의 콘텐츠에서 모든 회차 상태와 현재 `PENDING` 변경 요청을 별도 목록으로 조회한다.
 - 필수 검증을 통과한 콘텐츠만 승인 요청할 수 있다.
 
 ### 콘텐츠·회차 등록 정책
