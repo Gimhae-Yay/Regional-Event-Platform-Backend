@@ -63,6 +63,16 @@ public interface StampbookRepository extends JpaRepository<Stampbook, Long> {
     );
 
     @Query("""
+        SELECT stampbook
+        FROM Stampbook stampbook
+        JOIN FETCH stampbook.region region
+        JOIN FETCH stampbook.rewardCouponPolicy rewardCouponPolicy
+        JOIN FETCH rewardCouponPolicy.region rewardCouponPolicyRegion
+        WHERE stampbook.stampbookId = :stampbookId
+        """)
+    Optional<Stampbook> findOperatorDetailByStampbookId(@Param("stampbookId") Long stampbookId);
+
+    @Query("""
         SELECT new io.regionevent.regioneventbackend.domain.stampbook.repository.StampbookReviewTargetContentProjection(
             content.contentId,
             contentRegion.regionId,
