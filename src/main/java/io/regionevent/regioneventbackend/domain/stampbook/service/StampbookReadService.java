@@ -12,6 +12,7 @@ import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookStatus
 import io.regionevent.regioneventbackend.domain.stampbook.repository.MyStampbookDetailProjection;
 import io.regionevent.regioneventbackend.domain.stampbook.repository.MyStampEarningProjection;
 import io.regionevent.regioneventbackend.domain.stampbook.repository.MyStampbookListProjection;
+import io.regionevent.regioneventbackend.domain.stampbook.repository.OperatorStampbookListProjection;
 import io.regionevent.regioneventbackend.domain.stampbook.repository.PendingRegionAdminStampbookProjection;
 import io.regionevent.regioneventbackend.domain.stampbook.repository.StampbookRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -52,6 +53,19 @@ public class StampbookReadService {
             )
             .stream()
             .map(this::toPendingRegionAdminResult)
+            .toList();
+    }
+
+    public List<OperatorStampbookListResult> findOperatorStampbooks(
+        Long operatorUserId,
+        Long regionId
+    ) {
+        validateUserId(operatorUserId);
+        validateRegionId(regionId);
+
+        return stampbookRepository.findOperatorStampbookListProjections(operatorUserId, regionId)
+            .stream()
+            .map(projection -> toOperatorStampbookListResult(projection, regionId))
             .toList();
     }
 
@@ -148,6 +162,53 @@ public class StampbookReadService {
             projection.rewardCouponPolicyId(),
             projection.requestedAt()
         );
+    }
+
+    private OperatorStampbookListResult toOperatorStampbookListResult(
+        OperatorStampbookListProjection projection,
+        Long regionId
+    ) {
+        if (projection == null
+            || projection.stampbookId() == null
+            || projection.stampbookId() <= 0
+            || projection.title() == null
+            || projection.title().isBlank()
+            || !isSame(projection.regionId(), regionId)
+            || projection.status() == null
+            || projection.targetCount() == null
+            || projection.targetCount() <= 0
+            || projection.targetCount() > Integer.MAX_VALUE
+            || !isSame(projection.minimumTargetContentRegionId(), regionId)
+            || !isSame(projection.maximumTargetContentRegionId(), regionId)
+            || projection.rewardCouponPolicyId() == null
+            || projection.rewardCouponPolicyId() <= 0
+            || !isSame(projection.rewardCouponPolicyRegionId(), regionId)
+            || !hasValidTimestamps(projection.status(), projection.publishedAt(), projection.endedAt())) {
+            throw new IllegalStateException("operator stampbook read data is inconsistent");
+        }
+
+        return new OperatorStampbookListResult(
+            projection.stampbookId(),
+            projection.title(),
+            projection.regionId(),
+            projection.status(),
+            projection.targetCount().intValue(),
+            projection.rewardCouponPolicyId(),
+            projection.publishedAt(),
+            projection.endedAt()
+        );
+    }
+
+    private boolean hasValidTimestamps(
+        StampbookStatus status,
+        Instant publishedAt,
+        Instant endedAt
+    ) {
+        return switch (status) {
+            case DRAFT, PENDING_REVIEW -> publishedAt == null && endedAt == null;
+            case PUBLISHED -> publishedAt != null && endedAt == null;
+            case ENDED -> publishedAt != null && endedAt != null;
+        };
     }
 
     private MyStampEarningsResult.Earning toEarning(
