@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceUnitUtil;
@@ -152,6 +153,62 @@ class SessionRevisionRepositoryTest {
             sessionRevision.getSessionRevisionId(),
             SessionRevisionStatus.PENDING
         )).isEmpty();
+    }
+
+    @Test
+    void 대상_콘텐츠_회차의_심사_대기_수정_요청만_관계와_함께_조회한다() {
+        SessionRevisionFixtures fixtures = createFixtures();
+        SessionRevision pendingRevision = sessionRevisionRepository.saveAndFlush(newRevision(
+            fixtures,
+            SessionRevisionStatus.PENDING,
+            null,
+            null,
+            null
+        ));
+        sessionRevisionRepository.saveAndFlush(newRevision(
+            fixtures,
+            SessionRevisionStatus.REJECTED,
+            REVIEWED_AT,
+            fixtures.reviewedBy(),
+            "일정을 다시 확인해 주세요."
+        ));
+        Content otherContent = saveContent(fixtures.region(), fixtures.requestedBy());
+        ContentSession otherSession = saveScheduledSession(
+            otherContent,
+            fixtures.region(),
+            fixtures.reviewedBy()
+        );
+        SessionRevisionFixtures otherFixtures = new SessionRevisionFixtures(
+            fixtures.region(),
+            otherContent,
+            otherSession,
+            fixtures.requestedBy(),
+            fixtures.reviewedBy()
+        );
+        sessionRevisionRepository.saveAndFlush(newRevision(
+            otherFixtures,
+            SessionRevisionStatus.PENDING,
+            null,
+            null,
+            null
+        ));
+        entityManager.clear();
+
+        List<SessionRevision> revisions = sessionRevisionRepository.findPendingByTargetContentId(
+            fixtures.content().getContentId(),
+            SessionRevisionStatus.PENDING
+        );
+
+        assertThat(revisions).extracting(SessionRevision::getSessionRevisionId)
+            .containsExactly(pendingRevision.getSessionRevisionId());
+        SessionRevision foundRevision = revisions.getFirst();
+        PersistenceUnitUtil persistenceUnitUtil = entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
+        assertThat(persistenceUnitUtil.isLoaded(foundRevision, "content")).isTrue();
+        assertThat(persistenceUnitUtil.isLoaded(foundRevision.getContent(), "region")).isTrue();
+        assertThat(persistenceUnitUtil.isLoaded(foundRevision, "region")).isTrue();
+        assertThat(persistenceUnitUtil.isLoaded(foundRevision, "targetSession")).isTrue();
+        assertThat(persistenceUnitUtil.isLoaded(foundRevision.getTargetSession(), "content")).isTrue();
+        assertThat(persistenceUnitUtil.isLoaded(foundRevision.getTargetSession(), "region")).isTrue();
     }
 
     @Test
@@ -349,6 +406,17 @@ class SessionRevisionRepositoryTest {
         AppUser operator = saveUser("operator@example.com");
         Content content = saveContent(region, operator);
         AppUser reviewedBy = saveUser("reviewer@example.com");
+        ContentSession targetSession = saveScheduledSession(content, region, reviewedBy);
+        AppUser requestedBy = saveUser("requester@example.com");
+
+        return new SessionRevisionFixtures(region, content, targetSession, requestedBy, reviewedBy);
+    }
+
+    private ContentSession saveScheduledSession(
+        Content content,
+        Region region,
+        AppUser reviewedBy
+    ) {
         ContentSession targetSession = new ContentSession(
             content,
             region,
@@ -359,10 +427,7 @@ class SessionRevisionRepositoryTest {
             20
         );
         targetSession.approve(reviewedBy, SUBMITTED_AT);
-        targetSession = contentSessionRepository.saveAndFlush(targetSession);
-        AppUser requestedBy = saveUser("requester@example.com");
-
-        return new SessionRevisionFixtures(region, content, targetSession, requestedBy, reviewedBy);
+        return contentSessionRepository.saveAndFlush(targetSession);
     }
 
     private Region saveRegion(String regionCode) {

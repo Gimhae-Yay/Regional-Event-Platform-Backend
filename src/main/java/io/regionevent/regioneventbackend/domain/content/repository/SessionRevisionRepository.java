@@ -102,4 +102,25 @@ public interface SessionRevisionRepository extends JpaRepository<SessionRevision
         @Param("regionId") Long regionId,
         @Param("status") SessionRevisionStatus status
     );
+
+    @EntityGraph(attributePaths = {
+        "content",
+        "content.region",
+        "region",
+        "targetSession",
+        "targetSession.content",
+        "targetSession.region"
+    })
+    @Query("""
+        SELECT sessionRevision
+        FROM SessionRevision sessionRevision
+        WHERE sessionRevision.targetSession.content.contentId = :contentId
+            AND sessionRevision.status = :status
+            AND sessionRevision.targetSession.content.deletedAt IS NULL
+        ORDER BY sessionRevision.targetSession.sessionId ASC, sessionRevision.sessionRevisionId ASC
+        """)
+    List<SessionRevision> findPendingByTargetContentId(
+        @Param("contentId") Long contentId,
+        @Param("status") SessionRevisionStatus status
+    );
 }
