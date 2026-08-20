@@ -8,29 +8,35 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
+import io.regionevent.regioneventbackend.domain.reservation.service.GetMyReservationUseCase.MyReservationDetailResult;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationReadResult;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationReadSnapshot;
+import io.regionevent.regioneventbackend.domain.review.entity.ReviewStatus;
+import io.regionevent.regioneventbackend.domain.review.service.ReviewService.ReviewReadResult;
 
 public record GetMyReservationResponse(
     ReservationResponse reservation,
     SessionResponse session,
     ContentResponse content,
-    CheckInResponse checkIn
+    CheckInResponse checkIn,
+    @JsonInclude(JsonInclude.Include.ALWAYS) ReviewResponse review
 ) {
 
     private static final ZoneId SEOUL_TIME_ZONE = ZoneId.of("Asia/Seoul");
 
-    public static GetMyReservationResponse from(ReservationReadResult result) {
-        ReservationReadSnapshot snapshot = result.snapshot();
+    public static GetMyReservationResponse from(MyReservationDetailResult result) {
+        ReservationReadResult reservation = result.reservation();
+        ReservationReadSnapshot snapshot = reservation.snapshot();
         return new GetMyReservationResponse(
             ReservationResponse.from(snapshot.reservation()),
             SessionResponse.from(snapshot.session(), snapshot.content()),
             ContentResponse.from(snapshot.content()),
             new CheckInResponse(
-                result.checkIn().checkedIn(),
-                result.checkIn().checkedAt(),
-                result.checkIn().visitId() == null ? null : result.checkIn().visitId().toString()
-            )
+                reservation.checkIn().checkedIn(),
+                reservation.checkIn().checkedAt(),
+                reservation.checkIn().visitId() == null ? null : reservation.checkIn().visitId().toString()
+            ),
+            result.review() == null ? null : ReviewResponse.from(result.review())
         );
     }
 
@@ -100,6 +106,27 @@ public record GetMyReservationResponse(
 
         private static ContentResponse from(ReservationReadSnapshot.ContentInfo content) {
             return new ContentResponse(content.contentId().toString(), content.title(), content.locationText());
+        }
+    }
+
+    public record ReviewResponse(
+        String reviewId,
+        ReviewStatus status,
+        @JsonInclude(JsonInclude.Include.ALWAYS) Integer rating,
+        @JsonInclude(JsonInclude.Include.ALWAYS) String reviewText,
+        Instant createdAt,
+        Instant updatedAt
+    ) {
+
+        private static ReviewResponse from(ReviewReadResult review) {
+            return new ReviewResponse(
+                review.reviewId().toString(),
+                review.status(),
+                review.rating(),
+                review.reviewText(),
+                review.createdAt(),
+                review.updatedAt()
+            );
         }
     }
 

@@ -39,6 +39,9 @@ import io.regionevent.regioneventbackend.domain.reservation.entity.Reservation;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.reservation.repository.CapacityHoldRepository;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationRepository;
+import io.regionevent.regioneventbackend.domain.review.entity.Review;
+import io.regionevent.regioneventbackend.domain.review.entity.ReviewStatus;
+import io.regionevent.regioneventbackend.domain.review.repository.ReviewRepository;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
@@ -71,6 +74,7 @@ class MyReservationDetailControllerIntegrationTest {
     private final CapacityHoldRepository capacityHoldRepository;
     private final ReservationRepository reservationRepository;
     private final VisitRepository visitRepository;
+    private final ReviewRepository reviewRepository;
     private final AuditEventRepository auditEventRepository;
     private final JwtAccessTokenService jwtAccessTokenService;
     private final EntityManager entityManager;
@@ -85,6 +89,7 @@ class MyReservationDetailControllerIntegrationTest {
         CapacityHoldRepository capacityHoldRepository,
         ReservationRepository reservationRepository,
         VisitRepository visitRepository,
+        ReviewRepository reviewRepository,
         AuditEventRepository auditEventRepository,
         JwtAccessTokenService jwtAccessTokenService,
         EntityManager entityManager
@@ -97,6 +102,7 @@ class MyReservationDetailControllerIntegrationTest {
         this.capacityHoldRepository = capacityHoldRepository;
         this.reservationRepository = reservationRepository;
         this.visitRepository = visitRepository;
+        this.reviewRepository = reviewRepository;
         this.auditEventRepository = auditEventRepository;
         this.jwtAccessTokenService = jwtAccessTokenService;
         this.entityManager = entityManager;
@@ -148,7 +154,8 @@ class MyReservationDetailControllerIntegrationTest {
             .andExpect(jsonPath("$.data.content.locationText").value("김해시"))
             .andExpect(jsonPath("$.data.checkIn.checkedIn").value(false))
             .andExpect(jsonPath("$.data.checkIn.checkedAt").doesNotExist())
-            .andExpect(jsonPath("$.data.checkIn.visitId").value(org.hamcrest.Matchers.nullValue()));
+            .andExpect(jsonPath("$.data.checkIn.visitId").value(org.hamcrest.Matchers.nullValue()))
+            .andExpect(jsonPath("$.data.review").value(org.hamcrest.Matchers.nullValue()));
 
         performGet(fixture.user(), checkedIn.getReservationId())
             .andExpect(status().isOk())
@@ -156,7 +163,8 @@ class MyReservationDetailControllerIntegrationTest {
             .andExpect(jsonPath("$.data.reservation.quantity").value(1))
             .andExpect(jsonPath("$.data.checkIn.checkedIn").value(true))
             .andExpect(jsonPath("$.data.checkIn.checkedAt").value("2030-08-04T01:00:00Z"))
-            .andExpect(jsonPath("$.data.checkIn.visitId").value(visit.getVisitId().toString()));
+            .andExpect(jsonPath("$.data.checkIn.visitId").value(visit.getVisitId().toString()))
+            .andExpect(jsonPath("$.data.review").value(org.hamcrest.Matchers.nullValue()));
         performGet(fixture.user(), cancelled.getReservationId())
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.reservation.status").value("CANCELLED"))
@@ -192,7 +200,117 @@ class MyReservationDetailControllerIntegrationTest {
             fixture.user().getPhone(),
             checkedIn.getQrReference()
         );
-        assertReadDoesNotChangeState(fixture, List.of(confirmed, checkedIn, cancelled, expired), 1);
+        assertReadDoesNotChangeState(
+            fixture,
+            List.of(confirmed, checkedIn, cancelled, expired),
+            List.of(visit)
+        );
+    }
+
+    @Test
+    void 예약_상세_조회는_방문_후기의_작성과_삭제_원문_보존_파기_상태를_직렬화하고_변경하지_않는다()
+        throws Exception {
+        Fixture fixture = createFixture(AppUserStatus.ACTIVE);
+        Reservation withPublishedReview = saveReservation(
+            fixture,
+            ReservationStatus.CHECKED_IN,
+            "published-review"
+        );
+        Reservation withRetainedDeletedReview = saveReservation(
+            fixture,
+            ReservationStatus.CHECKED_IN,
+            "retained-deleted-review"
+        );
+        Reservation withPurgedDeletedReview = saveReservation(
+            fixture,
+            ReservationStatus.CHECKED_IN,
+            "purged-deleted-review"
+        );
+        Visit publishedVisit = saveVisit(fixture, withPublishedReview);
+        Visit retainedDeletedVisit = saveVisit(fixture, withRetainedDeletedReview);
+        Visit purgedDeletedVisit = saveVisit(fixture, withPurgedDeletedReview);
+        Review publishedReview = reviewRepository.saveAndFlush(new Review(
+            fixture.region(),
+            publishedVisit,
+            fixture.user(),
+            fixture.content(),
+            5,
+            "공개 후기입니다.",
+            ReviewStatus.PUBLISHED,
+            null
+        ));
+        Review retainedDeletedReview = reviewRepository.saveAndFlush(new Review(
+            fixture.region(),
+            retainedDeletedVisit,
+            fixture.user(),
+            fixture.content(),
+            4,
+            "삭제 원문을 보존 중입니다.",
+            ReviewStatus.DELETED,
+            Instant.parse("2030-08-03T00:00:00Z")
+        ));
+        Review purgedDeletedReview = reviewRepository.saveAndFlush(new Review(
+            fixture.region(),
+            purgedDeletedVisit,
+            fixture.user(),
+            fixture.content(),
+            null,
+            null,
+            ReviewStatus.DELETED,
+            Instant.parse("2030-08-03T00:00:00Z")
+        ));
+        entityManager.flush();
+        entityManager.clear();
+        ReviewState publishedReviewState = ReviewState.from(
+            reviewRepository.findById(publishedReview.getReviewId()).orElseThrow()
+        );
+        ReviewState retainedDeletedReviewState = ReviewState.from(reviewRepository.findById(
+            retainedDeletedReview.getReviewId()
+        ).orElseThrow());
+        ReviewState purgedDeletedReviewState = ReviewState.from(reviewRepository.findById(
+            purgedDeletedReview.getReviewId()
+        ).orElseThrow());
+        entityManager.clear();
+
+        performGet(fixture.user(), withPublishedReview.getReservationId())
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.review.reviewId").value(publishedReview.getReviewId().toString()))
+            .andExpect(jsonPath("$.data.review.status").value("PUBLISHED"))
+            .andExpect(jsonPath("$.data.review.rating").value(5))
+            .andExpect(jsonPath("$.data.review.reviewText").value("공개 후기입니다."))
+            .andExpect(jsonPath("$.data.review.createdAt").value(publishedReviewState.createdAt().toString()))
+            .andExpect(jsonPath("$.data.review.updatedAt").value(publishedReviewState.updatedAt().toString()));
+        performGet(fixture.user(), withRetainedDeletedReview.getReservationId())
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.review.reviewId").value(retainedDeletedReview.getReviewId().toString()))
+            .andExpect(jsonPath("$.data.review.status").value("DELETED"))
+            .andExpect(jsonPath("$.data.review.rating").value(4))
+            .andExpect(jsonPath("$.data.review.reviewText").value("삭제 원문을 보존 중입니다."))
+            .andExpect(jsonPath("$.data.review.createdAt").value(
+                retainedDeletedReviewState.createdAt().toString()
+            ))
+            .andExpect(jsonPath("$.data.review.updatedAt").value(
+                retainedDeletedReviewState.updatedAt().toString()
+            ));
+        performGet(fixture.user(), withPurgedDeletedReview.getReservationId())
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.review.reviewId").value(purgedDeletedReview.getReviewId().toString()))
+            .andExpect(jsonPath("$.data.review.status").value("DELETED"))
+            .andExpect(jsonPath("$.data.review.rating").value(org.hamcrest.Matchers.nullValue()))
+            .andExpect(jsonPath("$.data.review.reviewText").value(org.hamcrest.Matchers.nullValue()))
+            .andExpect(jsonPath("$.data.review.createdAt").value(purgedDeletedReviewState.createdAt().toString()))
+            .andExpect(jsonPath("$.data.review.updatedAt").value(purgedDeletedReviewState.updatedAt().toString()));
+
+        assertReadDoesNotChangeState(
+            fixture,
+            List.of(withPublishedReview, withRetainedDeletedReview, withPurgedDeletedReview),
+            List.of(publishedVisit, retainedDeletedVisit, purgedDeletedVisit)
+        );
+        assertReviewsUnchanged(List.of(
+            publishedReviewState,
+            retainedDeletedReviewState,
+            purgedDeletedReviewState
+        ));
     }
 
     @Test
@@ -215,8 +333,8 @@ class MyReservationDetailControllerIntegrationTest {
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.code").value("FORBIDDEN"));
 
-        assertReadDoesNotChangeState(withdrawingFixture, List.of(withdrawingReservation), 0);
-        assertReadDoesNotChangeState(activeFixture, List.of(activeReservation), 0);
+        assertReadDoesNotChangeState(withdrawingFixture, List.of(withdrawingReservation), List.of());
+        assertReadDoesNotChangeState(activeFixture, List.of(activeReservation), List.of());
     }
 
     @Test
@@ -267,7 +385,7 @@ class MyReservationDetailControllerIntegrationTest {
             "reservationId=" + reservation.getReservationId()
                 + ", sessionId=null, visitId=null, resultCode=INTERNAL_SERVER_ERROR"
         );
-        assertReadDoesNotChangeState(fixture, List.of(reservation), 0);
+        assertReadDoesNotChangeState(fixture, List.of(reservation), List.of());
     }
 
     @Test
@@ -379,6 +497,19 @@ class MyReservationDetailControllerIntegrationTest {
         ));
     }
 
+    private Visit saveVisit(Fixture fixture, Reservation reservation) {
+        return visitRepository.saveAndFlush(new Visit(
+            fixture.region(),
+            reservation,
+            fixture.user(),
+            fixture.content(),
+            fixture.session(),
+            fixture.operator(),
+            CheckinMethod.QR,
+            CHECKED_AT
+        ));
+    }
+
     private AppUser saveUser(AppUserStatus status, String name, String phone) {
         String suffix = Long.toUnsignedString(System.nanoTime());
         return appUserRepository.saveAndFlush(new AppUser(
@@ -393,21 +524,46 @@ class MyReservationDetailControllerIntegrationTest {
     private void assertReadDoesNotChangeState(
         Fixture fixture,
         List<Reservation> reservations,
-        long expectedVisitCount
+        List<Visit> visits
     ) {
         entityManager.flush();
         entityManager.clear();
 
+        assertThat(contentRepository.findById(fixture.content().getContentId()))
+            .hasValueSatisfying(content -> {
+                assertThat(content.getStatus()).isEqualTo(ContentStatus.PUBLISHED);
+                assertThat(content.getTitle()).isEqualTo("김해 문화 체험");
+            });
         assertThat(contentSessionRepository.findById(fixture.session().getSessionId()))
-            .hasValueSatisfying(session -> assertThat(session.getRemainingCapacity()).isEqualTo(20));
+            .hasValueSatisfying(session -> {
+                assertThat(session.getRemainingCapacity()).isEqualTo(20);
+                assertThat(session.getStartsAt()).isEqualTo(SESSION_STARTS_AT);
+                assertThat(session.getEndsAt()).isEqualTo(SESSION_ENDS_AT);
+            });
+        assertThat(capacityHoldRepository.findAll())
+            .allSatisfy(hold -> assertThat(hold.getStatus()).isEqualTo(CapacityHoldStatus.CONSUMED));
         assertThat(reservations).allSatisfy(reservation -> assertThat(
             reservationRepository.findById(reservation.getReservationId())
         ).hasValueSatisfying(current -> {
             assertThat(current.getStatus()).isEqualTo(reservation.getStatus());
             assertThat(current.getConfirmedAt()).isEqualTo(reservation.getConfirmedAt());
+            assertThat(current.getQrReference()).isEqualTo(reservation.getQrReference());
         }));
-        assertThat(visitRepository.count()).isEqualTo(expectedVisitCount);
+        assertThat(visitRepository.findAll()).hasSize(visits.size());
+        assertThat(visits).allSatisfy(visit -> assertThat(visitRepository.findById(visit.getVisitId()))
+            .hasValueSatisfying(current -> assertThat(current.getCheckedAt()).isEqualTo(visit.getCheckedAt())));
         assertThat(auditEventRepository.findAll()).isEmpty();
+    }
+
+    private void assertReviewsUnchanged(List<ReviewState> expectedReviews) {
+        entityManager.flush();
+        entityManager.clear();
+
+        List<ReviewState> actualReviews = reviewRepository.findAll().stream()
+            .map(ReviewState::from)
+            .toList();
+
+        assertThat(actualReviews).containsExactlyInAnyOrderElementsOf(expectedReviews);
     }
 
     private String bearerToken(AppUser user) {
@@ -421,5 +577,28 @@ class MyReservationDetailControllerIntegrationTest {
         Content content,
         ContentSession session
     ) {
+    }
+
+    private record ReviewState(
+        Long reviewId,
+        ReviewStatus status,
+        Integer rating,
+        String reviewText,
+        Instant createdAt,
+        Instant updatedAt,
+        Instant deletedAt
+    ) {
+
+        private static ReviewState from(Review review) {
+            return new ReviewState(
+                review.getReviewId(),
+                review.getStatus(),
+                review.getRating(),
+                review.getReviewText(),
+                review.getCreatedAt(),
+                review.getUpdatedAt(),
+                review.getDeletedAt()
+            );
+        }
     }
 }
