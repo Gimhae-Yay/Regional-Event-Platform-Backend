@@ -7,7 +7,7 @@
 - 관련 요구사항: [인증·프로필](../p0/auth-profile.md#fr-01-인증역할지역-권한), [인증·인가 공통 계약](../api/common/authentication.md), [토큰 갱신 API](../api/p0/auth-profile/refresh.md#3-access-token-재발급)
 - 관련 단계: 단계 1. MVP 구현·검증
 - 관련 이슈: [#968](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/968), [#969](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/969)
-- 대체 대상: [ADR-0005](0005-use-jwt-access-and-rotating-refresh-tokens.md)의 회전형 Refresh Token·재사용 탐지·계열 폐기 범위, [ADR-0023](0023-manage-refresh-token-revocation-in-redis.md)의 Refresh Token Redis 상태 전부, [ADR-0052](0052-define-refresh-token-security-profile-and-fail-closed-redis-state.md)의 `jti`·`family_id`·Redis 활성 계열·회전 규칙, [ADR-0053](0053-serialize-logout-and-refresh-by-active-jti.md)의 로그아웃·갱신 Redis 직렬화 범위, [ADR-0027](0027-deliver-refresh-token-in-http-only-cookie.md)과 [ADR-0105](0105-deliver-access-token-in-json-response-body.md)의 재발급 성공 시 Refresh Cookie 교체 범위
+- 대체 대상: [ADR-0005](0005-use-jwt-access-and-rotating-refresh-tokens.md)의 회전형 Refresh Token·재사용 탐지·계열 폐기 범위, [ADR-0023](0023-manage-refresh-token-revocation-in-redis.md)의 Refresh Token Redis 상태 전부, [ADR-0052](0052-define-refresh-token-security-profile-and-fail-closed-redis-state.md)의 `jti`·`family_id`·Redis 활성 계열·회전 규칙, [ADR-0053](0053-serialize-logout-and-refresh-by-active-jti.md)의 로그아웃·갱신 Redis 직렬화 범위, [ADR-0108](0108-use-global-authority-snapshot-for-first-stage-rbac.md)의 재발급 시 `RefreshTokenService.rotate`·회전 진행 표지·새 Refresh Token 발급 범위, [ADR-0110](0110-separate-production-redis-from-api-compose.md)의 Redis가 Refresh Token 회전·폐기 상태를 제공한다는 애플리케이션 런타임 의존성 서술, [ADR-0027](0027-deliver-refresh-token-in-http-only-cookie.md)과 [ADR-0105](0105-deliver-access-token-in-json-response-body.md)의 재발급 성공 시 Refresh Cookie 교체 범위
 
 ## 맥락
 
