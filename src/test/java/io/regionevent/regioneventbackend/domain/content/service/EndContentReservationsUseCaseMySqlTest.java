@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -47,6 +48,9 @@ import io.regionevent.regioneventbackend.domain.region.repository.RegionReposito
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHold;
 import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus;
 import io.regionevent.regioneventbackend.domain.reservation.repository.CapacityHoldRepository;
+import io.regionevent.regioneventbackend.domain.reservation.service.CapacityHoldService;
+import io.regionevent.regioneventbackend.domain.reservation.service.ExpireOrInvalidateCapacityHoldsUseCase;
+import io.regionevent.regioneventbackend.domain.reservation.service.HoldTerminationResult;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
@@ -69,6 +73,9 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
     private static final int SESSION_CAPACITY = 10;
 
     private final EndContentReservationsUseCase endContentReservationsUseCase;
+    private final ExpireOrInvalidateCapacityHoldsUseCase expireOrInvalidateCapacityHoldsUseCase;
+    private final ContentSessionService contentSessionService;
+    private final CapacityHoldService capacityHoldService;
     private final ContentRepository contentRepository;
     private final ContentRevisionRepository contentRevisionRepository;
     private final ContentSessionRepository contentSessionRepository;
@@ -85,6 +92,9 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
     @Autowired
     EndContentReservationsUseCaseMySqlTest(
         EndContentReservationsUseCase endContentReservationsUseCase,
+        ExpireOrInvalidateCapacityHoldsUseCase expireOrInvalidateCapacityHoldsUseCase,
+        ContentSessionService contentSessionService,
+        CapacityHoldService capacityHoldService,
         ContentRepository contentRepository,
         ContentRevisionRepository contentRevisionRepository,
         ContentSessionRepository contentSessionRepository,
@@ -99,6 +109,9 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
         PlatformTransactionManager transactionManager
     ) {
         this.endContentReservationsUseCase = endContentReservationsUseCase;
+        this.expireOrInvalidateCapacityHoldsUseCase = expireOrInvalidateCapacityHoldsUseCase;
+        this.contentSessionService = contentSessionService;
+        this.capacityHoldService = capacityHoldService;
         this.contentRepository = contentRepository;
         this.contentRevisionRepository = contentRevisionRepository;
         this.contentSessionRepository = contentSessionRepository;
@@ -186,6 +199,10 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
 
         assertThat(contentRepository.findById(fixture.contentId()))
             .hasValueSatisfying(content -> assertThat(content.getStatus()).isEqualTo(ContentStatus.ENDED));
+        assertThat(capacityHoldRepository.findById(fixture.firstHoldId()))
+            .hasValueSatisfying(this::assertInvalidated);
+        assertThat(capacityHoldRepository.findById(fixture.secondHoldId()))
+            .hasValueSatisfying(this::assertInvalidated);
         assertThat(auditEventRepository.findAll())
             .filteredOn(auditEvent -> auditEvent.getTargetType() == AuditEventTargetType.CONTENT)
             .filteredOn(auditEvent -> fixture.contentId().equals(auditEvent.getTargetId()))
@@ -362,6 +379,62 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
             .hasValueSatisfying(this::assertInvalidated);
         assertThat(contentSessionRepository.findById(fixture.firstSessionId()))
             .hasValueSatisfying(session -> assertThat(session.getRemainingCapacity()).isEqualTo(SESSION_CAPACITY));
+    }
+
+    @Test
+    @Timeout(20)
+    void 자동종료와_만료홀드종료가_경합해도_교착상태없이_정원을_한번만_복구한다() throws Exception {
+        for (int attempt = 0; attempt < 5; attempt++) {
+            Fixture fixture = createFixture();
+            jdbcTemplate.update(
+                "UPDATE capacity_hold SET expires_at = DATE_SUB(CURRENT_TIMESTAMP(6), INTERVAL 1 SECOND) WHERE hold_id = ?",
+                fixture.firstHoldId()
+            );
+            CountDownLatch sessionLocked = new CountDownLatch(1);
+            CountDownLatch releaseHoldTermination = new CountDownLatch(1);
+
+            try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
+                Future<Optional<CapacityHoldService.TerminatedCapacityHold>> holdTermination =
+                    executorService.submit(
+                        () -> expireAfterLockingSession(
+                            fixture,
+                            sessionLocked,
+                            releaseHoldTermination
+                        )
+                    );
+                assertThat(sessionLocked.await(3, TimeUnit.SECONDS)).isTrue();
+                Future<EndContentReservationsSystemResult> endResult = executorService.submit(
+                    () -> endContentReservationsUseCase.endBySystem(
+                        fixture.contentId(),
+                        UUID.randomUUID()
+                    )
+                );
+                assertThat(awaitContentLockWaitCount(1)).isTrue();
+                releaseHoldTermination.countDown();
+
+                assertThat(endResult.get(5, TimeUnit.SECONDS).status())
+                    .isEqualTo(EndContentReservationsSystemResult.Status.ENDED);
+                holdTermination.get(5, TimeUnit.SECONDS).ifPresent(terminatedHold ->
+                    assertThat(terminatedHold.nextStatus()).isEqualTo(CapacityHoldStatus.EXPIRED)
+                );
+            }
+
+            assertThat(contentRepository.findById(fixture.contentId()))
+                .hasValueSatisfying(content -> assertThat(content.getStatus()).isEqualTo(ContentStatus.ENDED));
+            assertThat(capacityHoldRepository.findById(fixture.firstHoldId()))
+                .hasValueSatisfying(hold -> assertThat(hold.getStatus()).isNotEqualTo(CapacityHoldStatus.ACTIVE));
+            assertThat(capacityHoldRepository.findById(fixture.secondHoldId()))
+                .hasValueSatisfying(hold -> assertThat(hold.getStatus()).isNotEqualTo(CapacityHoldStatus.ACTIVE));
+            assertThat(contentSessionRepository.findById(fixture.firstSessionId()))
+                .hasValueSatisfying(session -> assertThat(session.getRemainingCapacity()).isEqualTo(SESSION_CAPACITY));
+            assertThat(contentSessionRepository.findById(fixture.secondSessionId()))
+                .hasValueSatisfying(session -> assertThat(session.getRemainingCapacity()).isEqualTo(SESSION_CAPACITY));
+
+            HoldTerminationResult retryResult = expireOrInvalidateCapacityHoldsUseCase.execute();
+            assertThat(retryResult.expiredHoldCount()).isZero();
+            assertThat(retryResult.invalidatedHoldCount()).isZero();
+            assertThat(retryResult.failedHoldCount()).isZero();
+        }
     }
 
     @Test
@@ -638,6 +711,22 @@ class EndContentReservationsUseCaseMySqlTest extends NonTransactionalMySqlTestSu
         ready.countDown();
         await(start);
         return endContentReservationsUseCase.endBySystem(fixture.contentId(), UUID.randomUUID());
+    }
+
+    private Optional<CapacityHoldService.TerminatedCapacityHold> expireAfterLockingSession(
+        Fixture fixture,
+        CountDownLatch sessionLocked,
+        CountDownLatch releaseHoldTermination
+    ) {
+        return transactionTemplate.execute(status -> {
+            contentSessionService.lockForUpdate(fixture.firstSessionId());
+            sessionLocked.countDown();
+            await(releaseHoldTermination);
+            return capacityHoldService.expireOrInvalidateExpiredHoldIfActive(
+                fixture.firstHoldId(),
+                "SESSION_STARTED"
+            );
+        });
     }
 
     private EndContentReservationsResult endByRegionAdminAfterSnapshot(

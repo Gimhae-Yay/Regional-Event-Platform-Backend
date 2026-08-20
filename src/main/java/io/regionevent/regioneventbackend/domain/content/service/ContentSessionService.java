@@ -84,6 +84,11 @@ public class ContentSessionService {
         return contentSessionRepository.findByContentContentIdOrderByStartsAtAscSessionIdAsc(contentId);
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public List<ContentSession> findEndTargetsForUpdate(Long contentId) {
+        return contentSessionRepository.findEndTargetsForUpdate(contentId);
+    }
+
     @Transactional(readOnly = true)
     public List<ContentSession> findPendingByContentId(Long contentId) {
         return contentSessionRepository.findByContentContentIdAndStatusOrderByStartsAtAsc(
