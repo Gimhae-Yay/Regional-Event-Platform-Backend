@@ -24,29 +24,26 @@
 | --- | --- |
 | [P0 명세](../p0-spec.md#7-기능-요구사항과-소유-문서) | `FR-01` 완료 조건과 현재 P0 범위 |
 | [ADR-0002](../adr/0002-isolate-regions-in-a-shared-schema.md#결정) | `region_id`와 소유 관계를 함께 검증하는 지역 격리 |
-| [ADR-0005](../adr/0005-use-jwt-access-and-rotating-refresh-tokens.md#결정) | JWT Access Token과 회전형 Refresh Token 인증 수명주기 |
+| [ADR-0111](../adr/0111-use-stateless-refresh-token.md#결정) | 14일 절대 만료 Stateless Refresh Token과 Cookie 경계 |
 | [ADR-0009](../adr/0009-exclude-platform-admin-from-initial-mvp.md#결정) | 전체 관리자 제외와 최초 지역 관리자 배포 초기화 |
 | [ADR-0012](../adr/0012-retain-author-unlinked-reviews-and-visits-after-withdrawal.md#결정) | 방문자 탈퇴, 연결 제거와 보존 데이터 불변 조건 |
 | [ADR-0017](../adr/0017-serialize-withdrawal-with-conditional-user-state.md#결정) | 회원 행 조건부 전환, 단일 트랜잭션 직렬화와 사용자 재시도 방식 |
-| [ADR-0023](../adr/0023-manage-refresh-token-revocation-in-redis.md#결정) | Redis TTL 블랙리스트 기반 Refresh Token 회전·폐기와 탈퇴 선행 폐기 |
 | [ADR-0026](../adr/0026-select-signup-role-and-create-operator-application.md#결정) | 가입 시 역할 선택, 방문자 즉시 부여와 운영자 `PENDING` 신청 생성 |
 | [ADR-0105](../adr/0105-deliver-access-token-in-json-response-body.md#결정) | Access Token JSON 응답 본문과 Refresh Token HttpOnly 쿠키 전달 |
 | [ADR-0043](../adr/0043-define-jwt-access-token-security-profile.md#결정) | JWT Access Token의 서명·claim·키 회전·유효기간 검증 |
 | [ADR-0108](../adr/0108-use-global-authority-snapshot-for-first-stage-rbac.md#결정) | 전역 authority snapshot 1차 RBAC와 DB 최종 인가 경계 |
 | [ADR-0044](../adr/0044-use-delegating-bcrypt-password-encoder.md#결정) | 교체 가능한 BCrypt 비밀번호 해싱 |
 | [ADR-0045](../adr/0045-use-stateless-bearer-security-with-same-site-refresh-cookie.md#결정) | 무상태 Bearer 보안 체인과 동일 사이트 Refresh 쿠키 경계 |
-| [ADR-0052](../adr/0052-define-refresh-token-security-profile-and-fail-closed-redis-state.md#결정) | 전용 Refresh JWT, 14일 절대 계열 수명과 Redis 상태 소실 페일 클로즈 |
-| [ADR-0053](../adr/0053-serialize-logout-and-refresh-by-active-jti.md#결정) | 활성 `jti` 기준 로그아웃 폐기와 갱신·로그아웃 경합 순서 |
 
-> ADR-0002와 ADR-0005의 전체 관리자 관련 결정 부분은 ADR-0009로 대체한다.
+> 기존 ADR의 전체 관리자 관련 결정 부분은 ADR-0009로 대체한다.
 
 ### 기능 범위
 
 - 회원 가입 시 클라이언트가 `VISITOR` 또는 `OPERATOR`를 선택하게 한다. `VISITOR`는 즉시 역할을 부여하고, `OPERATOR`는 사업자 정보와 요청 지역을 가진 `PENDING` 운영자 신청을 생성한다.
 - 회원 가입, 로그인과 로그아웃을 제공한다.
-- 로그인과 Access Token 재발급 성공 시 Access Token은 JSON 본문의 `data.accessToken`으로, Refresh Token은 `HttpOnly`·`Secure`·`SameSite=Strict` 쿠키로 발급한다.
-- 로그인마다 독립된 Refresh Token 계열을 만들며, 계열은 최초 로그인부터 최대 14일만 유효하다. 갱신은 같은 계열을 회전할 뿐 만료를 연장하지 않는다.
-- 로그아웃은 제출 Refresh Token의 `jti`가 활성 `jti`와 일치할 때만 현재 계열을 폐기하고 같은 이름·경로의 Refresh Token 쿠키를 만료시킨다. 갱신 완료 뒤 소비된 이전 토큰으로 요청하면 서버 상태는 바꾸지 않고 Cookie만 만료한다. Access Token은 짧은 만료 전까지 유효할 수 있다.
+- 로그인 성공 시 Access Token은 JSON 본문의 `data.accessToken`으로, 14일 절대 만료 Stateless Refresh Token은 `HttpOnly`·`Secure`·`SameSite=Strict` 쿠키로 발급한다. Access Token 재발급 성공 시에는 Access Token만 JSON 본문으로 반환하고 Refresh Token 쿠키를 교체하지 않는다.
+- Refresh Token은 서버 상태 없이 서명·claim·만료와 활성 회원 여부로만 검증한다. 같은 유효 토큰의 반복·동시 재발급은 허용하며, 재발급으로 14일 만료를 연장하지 않는다.
+- 로그아웃은 같은 이름·경로의 Refresh Token 쿠키만 만료시킨다. 복사된 토큰은 만료되거나 회원이 비활성·삭제되기 전까지 재발급에 사용될 수 있으며, Access Token도 짧은 만료 전까지 유효할 수 있다.
 - 방문자, 운영자, 지역 관리자 역할을 구분한다. 역할 보호 HTTP 경로는 Access Token의 전역 `ROLE_*` authority snapshot으로 1차 인가한다.
 - 서버는 신규 콘텐츠 생성과 기존 운영자 자원 접근에서 `ROLE_OPERATOR` snapshot을 먼저 확인하고, DB에서는 활성 `ORDINARY` 계정, 현재 담당 `region_id`, 운영자-콘텐츠 소유 관계와 업무 상태를 검증한다. 지역 관리자도 `ROLE_REGION_ADMIN` snapshot과 현재 담당 지역 관계를 같은 방식으로 분리한다.
 - 지역 관리자는 담당 지역만, 운영자는 자신에게 연결된 콘텐츠·회차·예약만 조회·처리한다.
@@ -112,8 +109,8 @@ P0 셀프 탈퇴는 부여된 운영자·지역 관리자 역할과 콘텐츠 �
 
 탈퇴 유스케이스의 첫 변경은 회원 행에 대한 `ACTIVE → WITHDRAWING` 조건부 갱신이다. 영향 행이 한 건인
 트랜잭션만 탈퇴 처리권을 얻으며, 이 갱신과 모든 MySQL 연결 제거·계정 파기는 하나의 MySQL 트랜잭션에서 처리한다.
-MySQL 커밋 전에 Redis 원자 스크립트로 활성 Refresh Token 계열 전체를 폐기하고 사용자→활성 계열 인덱스를
-제거한다. Redis 폐기가 실패하면 MySQL 트랜잭션을 롤백하고 사용자에게 재시도를 요청한다.
+Stateless Refresh Token은 서버에 폐기 상태를 저장하지 않는다. 탈퇴 성공 응답은 브라우저의 Refresh Token 쿠키를
+만료시키며, 계정 행이 파기된 뒤의 재발급은 활성 회원 조회에서 거부한다.
 홀드·예약 확정·QR·후기처럼 회원이 시작하는 변경 명령도 도메인 상태를 바꾸기 전에 같은 회원 행을
 `FOR UPDATE`로 읽거나 동등한 조건부 갱신으로 잠근 뒤 현재 상태를 확인한다.
 탈퇴 트랜잭션이 먼저 회원 행을 갱신하면 이후 명령은 해당 행의 잠금 해제 뒤
@@ -133,17 +130,16 @@ MySQL 커밋 전에 Redis 원자 스크립트로 활성 Refresh Token 계열 전
 재가입 계정에 과거 후기의 관리 권한을 복구하지 않는다. 이미 `DELETED`인 후기는 복구하지 않고
 기존 삭제 시점부터 30일 후 원문을 파기한다.
 
-Redis 폐기 전에 발생한 탈퇴 트랜잭션 예외는 `WITHDRAWING` 전환을 포함해 전체를 롤백하고 사용자에게 재시도
-가능한 실패를 반환한다. Redis 폐기 성공 뒤 MySQL 종결이 실패하면 MySQL 변경만 롤백하고 기존 Refresh Token은
-복구하지 않는다. 계정은 `ACTIVE`로 남지만 사용자는 다시 로그인해 새 계열을 발급받은 뒤 탈퇴를 재시도한다.
+탈퇴 MySQL 트랜잭션에서 예외가 발생하면 `WITHDRAWING` 전환을 포함해 전체를 롤백하고 사용자에게 재시도 가능한
+실패를 반환한다. 롤백 뒤 계정은 `ACTIVE`로 남고 기존 Refresh Token은 원래 만료 시각까지 재발급에 사용할 수 있다.
 처리 중 재시도 키·별도 회원 매핑·영구 탈퇴 작업 레코드는 저장하지 않는다. 모든 종결·연결 제거가 성공하면
 계정 행을 파기하며 사용자별 `WITHDRAWN` 레코드는 남기지 않는다. 커밋 성공 뒤 응답만 유실된 경우에는 개인별
-완료 결과를 보관하지 않으므로 계정 부재와 세션 무효 상태를 최종 상태로 취급한다.
+완료 결과를 보관하지 않으므로 계정 부재와 인증 불가 상태를 최종 상태로 취급한다.
 
 탈퇴 후 작성자 연결 제거와 보존 데이터의 불변 조건은
 [ADR-0012](../adr/0012-retain-author-unlinked-reviews-and-visits-after-withdrawal.md)와
 [ADR-0017](../adr/0017-serialize-withdrawal-with-conditional-user-state.md),
-[ADR-0023](../adr/0023-manage-refresh-token-revocation-in-redis.md)를 따른다.
+[ADR-0111](../adr/0111-use-stateless-refresh-token.md)를 따른다.
 
 ##### 탈퇴 후 관계 변환
 
