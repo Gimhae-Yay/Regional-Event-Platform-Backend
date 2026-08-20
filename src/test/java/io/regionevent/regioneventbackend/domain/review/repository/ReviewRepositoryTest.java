@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceUnitUtil;
@@ -243,6 +244,26 @@ class ReviewRepositoryTest {
             ReviewStatus.DELETED.name(),
             DELETED_AT
         )).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void 방문_식별자_목록으로_삭제_후기도_상태_필터_없이_조회한다() {
+        ReviewFixtures fixtures = createFixtures();
+        Review review = reviewRepository.saveAndFlush(newPublishedReview(fixtures));
+        review.delete(DELETED_AT);
+        reviewRepository.flush();
+        entityManager.clear();
+
+        List<Review> reviews = reviewRepository.findAllByVisitVisitIdIn(
+            List.of(fixtures.visit().getVisitId())
+        );
+
+        assertThat(reviews).singleElement().satisfies(foundReview -> {
+            assertThat(foundReview.getReviewId()).isEqualTo(review.getReviewId());
+            assertThat(foundReview.getStatus()).isEqualTo(ReviewStatus.DELETED);
+            assertThat(foundReview.getRating()).isEqualTo(5);
+            assertThat(foundReview.getReviewText()).isEqualTo("김해 가야 문화를 즐겁게 체험했습니다.");
+        });
     }
 
     private Review newPublishedReview(ReviewFixtures fixtures) {

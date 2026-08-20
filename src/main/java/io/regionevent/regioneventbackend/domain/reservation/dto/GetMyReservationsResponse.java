@@ -9,8 +9,11 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
+import io.regionevent.regioneventbackend.domain.reservation.service.GetMyReservationsUseCase.MyReservationListResult;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationReadResult;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationReadSnapshot;
+import io.regionevent.regioneventbackend.domain.review.entity.ReviewStatus;
+import io.regionevent.regioneventbackend.domain.review.service.ReviewService.ReviewReadResult;
 
 public record GetMyReservationsResponse(
     List<ReservationResponse> reservations
@@ -18,7 +21,7 @@ public record GetMyReservationsResponse(
 
     private static final ZoneId SEOUL_TIME_ZONE = ZoneId.of("Asia/Seoul");
 
-    public static GetMyReservationsResponse from(List<ReservationReadResult> results) {
+    public static GetMyReservationsResponse from(List<MyReservationListResult> results) {
         return new GetMyReservationsResponse(
             results.stream()
                 .map(ReservationResponse::from)
@@ -34,11 +37,13 @@ public record GetMyReservationsResponse(
         Instant confirmedAt,
         ContentResponse content,
         SessionResponse session,
-        CheckInResponse checkIn
+        CheckInResponse checkIn,
+        @JsonInclude(JsonInclude.Include.ALWAYS) ReviewResponse review
     ) {
 
-        private static ReservationResponse from(ReservationReadResult result) {
-            ReservationReadSnapshot snapshot = result.snapshot();
+        private static ReservationResponse from(MyReservationListResult result) {
+            ReservationReadResult reservation = result.reservation();
+            ReservationReadSnapshot snapshot = reservation.snapshot();
             return new ReservationResponse(
                 snapshot.reservation().reservationId().toString(),
                 snapshot.reservation().reservationNo(),
@@ -48,10 +53,11 @@ public record GetMyReservationsResponse(
                 ContentResponse.from(snapshot.content()),
                 SessionResponse.from(snapshot.session()),
                 new CheckInResponse(
-                    result.checkIn().checkedIn(),
-                    result.checkIn().checkedAt(),
-                    result.checkIn().visitId() == null ? null : result.checkIn().visitId().toString()
-                )
+                    reservation.checkIn().checkedIn(),
+                    reservation.checkIn().checkedAt(),
+                    reservation.checkIn().visitId() == null ? null : reservation.checkIn().visitId().toString()
+                ),
+                result.review() == null ? null : ReviewResponse.from(result.review())
             );
         }
     }
@@ -89,6 +95,27 @@ public record GetMyReservationsResponse(
         Instant checkedAt,
         @JsonInclude(JsonInclude.Include.ALWAYS) String visitId
     ) {
+    }
+
+    public record ReviewResponse(
+        String reviewId,
+        ReviewStatus status,
+        @JsonInclude(JsonInclude.Include.ALWAYS) Integer rating,
+        @JsonInclude(JsonInclude.Include.ALWAYS) String reviewText,
+        Instant createdAt,
+        Instant updatedAt
+    ) {
+
+        private static ReviewResponse from(ReviewReadResult review) {
+            return new ReviewResponse(
+                review.reviewId().toString(),
+                review.status(),
+                review.rating(),
+                review.reviewText(),
+                review.createdAt(),
+                review.updatedAt()
+            );
+        }
     }
 
     private static OffsetDateTime toSeoulOffsetDateTime(Instant instant) {
