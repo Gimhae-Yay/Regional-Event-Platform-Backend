@@ -19,6 +19,23 @@ import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminGrade;
 
 public interface PlatformAdminAssignmentRepository extends JpaRepository<PlatformAdminAssignment, Long> {
 
+    @Query("""
+        SELECT new io.regionevent.regioneventbackend.domain.user.repository.PlatformAdminAccountListProjection(
+            user.userId,
+            user.loginIdentifier,
+            user.name,
+            assignment.grade,
+            assignment.status,
+            assignment.grantedAt,
+            assignment.inactivatedAt
+        )
+        FROM PlatformAdminAssignment assignment
+        JOIN assignment.appUser user
+        WHERE user.accountKind = io.regionevent.regioneventbackend.domain.user.entity.AppUserAccountKind.PRIVILEGED
+        ORDER BY assignment.grantedAt DESC, user.userId DESC
+        """)
+    List<PlatformAdminAccountListProjection> findPlatformAdminAccountList();
+
     @EntityGraph(attributePaths = "appUser")
     Optional<PlatformAdminAssignment> findByAppUserUserIdAndStatusAndAppUserStatusAndAppUserAccountKind(
         Long userId,
