@@ -9,6 +9,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminAssignment;
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminAssignmentStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminGrade;
+import io.regionevent.regioneventbackend.domain.user.repository.PlatformAdminAccountListProjection;
 import io.regionevent.regioneventbackend.domain.user.repository.PlatformAdminAssignmentRepository;
 
 @Service
@@ -36,5 +37,9 @@ public class PlatformAdminAssignmentService {
             PlatformAdminGrade.SUPER_ADMIN,
             PlatformAdminAssignmentStatus.ACTIVE
         );
+    }
+
+    public List<PlatformAdminAccountListProjection> findPlatformAdminAccountList() {
+        return platformAdminAssignmentRepository.findPlatformAdminAccountList();
     }
 }
