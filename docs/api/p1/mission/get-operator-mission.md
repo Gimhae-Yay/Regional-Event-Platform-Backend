@@ -41,6 +41,7 @@ Accept: application/json
   "message": "내 미션 상세 조회에 성공했습니다.",
   "data": {
     "missionId": "701",
+    "title": "김해 골목 세 곳 방문하기",
     "regionId": "11",
     "status": "DRAFT",
     "conditionType": "CONTENT_SET",
@@ -67,6 +68,7 @@ Accept: application/json
 | `code` | String | `SUCCESS` |
 | `message` | String | 운영자 미션 상세 조회 성공 메시지 |
 | `data.missionId` | String | 미션 식별자 |
+| `data.title` | String | 미션이 직접 소유하는 null이 아닌 제목. Unicode code point 기준 1~255자 |
 | `data.regionId` | String | 미션 운영 지역 식별자 |
 | `data.status` | String | `DRAFT`, `PENDING_REVIEW`, `PUBLISHED`, `ENDED` 중 하나 |
 | `data.conditionType` | String | `VISIT_COUNT` 또는 `CONTENT_SET` |
