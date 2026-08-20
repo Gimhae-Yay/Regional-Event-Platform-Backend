@@ -92,7 +92,8 @@ Accept: application/json
       "checkedIn": false,
       "checkedAt": null,
       "visitId": null
-    }
+    },
+    "review": null
   }
 }
 ```
@@ -125,6 +126,13 @@ Accept: application/json
 | `data.checkIn.checkedIn` | Boolean | 예약 상태가 `CHECKED_IN`이면 `true`, 그 외에는 `false` |
 | `data.checkIn.checkedAt` | String or null | `checkedIn = true`인 경우 방문 기록의 체크인 시각. 그 외에는 `null` API 공통 규칙에 따른 UTC ISO 8601 일시다. |
 | `data.checkIn.visitId` | String or null | `checkedIn = true`인 경우 해당 예약·회차에 연결된 방문 기록 식별자. 그 외에는 `null` |
+| `data.review` | Object or null | 해당 방문에 연결된 후기 객체. 아직 후기를 작성하지 않은 방문이면 객체 내부 필드를 `null`로 채우지 않고 `null`을 반환한다. 후기 작성 이력이 있으면 `PUBLISHED`, `DELETED` 상태와 관계없이 객체를 반환한다. |
+| `data.review.reviewId` | String | 양의 10진 정수 문자열인 후기 식별자 |
+| `data.review.status` | String | 후기 상태. `PUBLISHED`, `DELETED` 중 하나 |
+| `data.review.rating` | Integer or null | `PUBLISHED` 또는 `DELETED`이면서 삭제 원문을 보존 중이면 `1~5` 정수. 삭제 원문 파기 완료 후에는 `null` |
+| `data.review.reviewText` | String or null | `PUBLISHED` 또는 `DELETED`이면서 삭제 원문을 보존 중이면 저장된 후기 본문. 삭제 원문 파기 완료 후에는 `null` |
+| `data.review.createdAt` | String | API 공통 규칙에 따른 UTC ISO 8601 후기 생성 시각 |
+| `data.review.updatedAt` | String | API 공통 규칙에 따른 UTC ISO 8601 후기 최종 수정 시각 |
 
 예약 QR 토큰, `qr_reference`, 사용자 식별자와 다른 예약자의 정보는 응답에 포함하지 않는다.
 
@@ -161,7 +169,12 @@ Accept: application/json
 7. 예약 상태가 `CHECKED_IN`이면 같은 예약과 회차에 연결된 방문 기록이 정확히 한 건 존재해야 하며, `checkedIn = true`, 그 방문의 `checked_at`과 `visitId`를 반환한다.
 8. 예약 상태가 `CHECKED_IN`이 아니면 `checkedIn = false`, `checkedAt = null`, `visitId = null`을 반환한다.
 9. `CHECKED_IN` 예약에 방문 기록이 없거나 방문의 예약·회차·콘텐츠·지역 연결이 일치하지 않으면 정상 응답을 만들지 않고 정합성 오류로 관찰한다.
-10. 조회 시 예약, 방문, 회차, 콘텐츠, 홀드, 정원, QR과 감사 기록을 생성·수정·삭제하지 않는다.
+10. 해당 방문에 연결된 후기가 없으면 `review = null`을 반환한다. 이는 아직 후기를 작성하지 않은 방문을 의미한다.
+11. 해당 방문에 연결된 후기가 있으면 `PUBLISHED`, `DELETED` 상태와 관계없이 `review` 객체를 반환한다. `review != null`은 이미 후기 작성 이력이 있음을 의미하므로, 방문당 후기 한 건 및 재작성 금지 정책에 따라 신규 후기 작성 대상으로 판단하지 않는다.
+12. `PUBLISHED` 후기는 `reviewId`, `status`, 저장된 `rating`, `reviewText`, `createdAt`, `updatedAt`을 반환한다. 클라이언트는 `reviewId`를 기존 [후기 수정 API](../review/update-review.md)와 [후기 삭제 API](../review/delete-review.md)의 경로 식별자로 사용하며, 수정 가능 기간과 삭제 가능 조건은 각 API 계약을 따른다.
+13. `DELETED` 후기는 후기 객체와 `reviewId`, `status`, `createdAt`, `updatedAt`을 유지한다. 삭제 후 30일이 경과한 뒤 최초 도래하는 `Asia/Seoul` 자정의 [삭제 원문 파기](../../../p0/review-text-purge-scheduler.md)가 완료되기 전에는 저장된 `rating`, `reviewText`를 반환하고, 파기 완료 후에는 두 필드를 `null`로 반환한다.
+14. `review` 필드 추가 외에 기존 응답 필드, 인증, 예약 소유권 검증, HTTP 상태, 오류 코드와 조회의 무변경 계약은 유지한다.
+15. 조회 시 예약, 방문, 후기, 회차, 콘텐츠, 홀드, 정원, QR과 감사 기록을 생성·수정·삭제하지 않는다.
 
 ### 감사 및 정합성
 
