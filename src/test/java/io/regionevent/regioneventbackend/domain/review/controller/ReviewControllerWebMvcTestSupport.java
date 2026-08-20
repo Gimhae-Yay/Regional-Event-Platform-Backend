@@ -15,7 +15,6 @@ import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
 import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
 @Import({SecurityConfig.class, RequestIdFilter.class, GlobalExceptionHandler.class})
 abstract class ReviewControllerWebMvcTestSupport {
@@ -33,9 +32,6 @@ abstract class ReviewControllerWebMvcTestSupport {
 
     @MockitoBean
     protected GetPublicContentReviewsUseCase getPublicContentReviewsUseCase;
-
-    @MockitoBean
-    protected RefreshTokenStore refreshTokenStore;
 
     protected MockHttpServletRequestBuilder authenticated(MockHttpServletRequestBuilder requestBuilder) {
         return requestBuilder.header(AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, AUTHENTICATED_USER_ID));

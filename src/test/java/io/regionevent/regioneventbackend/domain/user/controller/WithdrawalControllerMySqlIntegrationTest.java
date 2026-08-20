@@ -113,7 +113,6 @@ import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
 import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 
@@ -148,7 +147,6 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
     private final ExpireOrInvalidateCapacityHoldsUseCase expireOrInvalidateCapacityHoldsUseCase;
     private final FailingWithdrawalCapacityHoldService failingWithdrawalCapacityHoldService;
     private final LockOrderContentSessionService lockOrderContentSessionService;
-    private final RefreshTokenStore refreshTokenStore;
     private final CreateReservationHoldUseCase createReservationHoldUseCase;
     private final ReservationConfirmationUseCase reservationConfirmationUseCase;
     private final ReservationCancellationUseCase reservationCancellationUseCase;
@@ -192,7 +190,6 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         ExpireOrInvalidateCapacityHoldsUseCase expireOrInvalidateCapacityHoldsUseCase,
         FailingWithdrawalCapacityHoldService failingWithdrawalCapacityHoldService,
         LockOrderContentSessionService lockOrderContentSessionService,
-        RefreshTokenStore refreshTokenStore,
         CreateReservationHoldUseCase createReservationHoldUseCase,
         ReservationConfirmationUseCase reservationConfirmationUseCase,
         ReservationCancellationUseCase reservationCancellationUseCase,
@@ -226,7 +223,6 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         this.expireOrInvalidateCapacityHoldsUseCase = expireOrInvalidateCapacityHoldsUseCase;
         this.failingWithdrawalCapacityHoldService = failingWithdrawalCapacityHoldService;
         this.lockOrderContentSessionService = lockOrderContentSessionService;
-        this.refreshTokenStore = refreshTokenStore;
         this.createReservationHoldUseCase = createReservationHoldUseCase;
         this.reservationConfirmationUseCase = reservationConfirmationUseCase;
         this.reservationCancellationUseCase = reservationCancellationUseCase;
@@ -244,7 +240,6 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
     @BeforeEach
     void setUp() {
         reset(
-            refreshTokenStore,
             AopTestUtils.<CouponService>getTargetObject(couponService),
             AopTestUtils.<ReservationService>getTargetObject(reservationService)
         );
@@ -651,7 +646,6 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
                     .isEqualTo(fixture.reservation().getReservationId());
             });
         assertThat(refundRepository.findAll()).isEmpty();
-        verifyNoInteractions(refreshTokenStore);
     }
 
     @Test
@@ -708,7 +702,6 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
             .hasValueSatisfying(savedPayment -> assertThat(savedPayment.getStatus()).isEqualTo(PaymentStatus.APPROVED));
         assertThat(refundRepository.findById(refund.getRefundId()))
             .hasValueSatisfying(savedRefund -> assertThat(savedRefund.getStatus()).isEqualTo(refundStatus));
-        verifyNoInteractions(refreshTokenStore);
     }
 
     @Test
@@ -948,22 +941,16 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
     void withdraw_whenConcurrentRequestWaits_returnsUnauthenticatedAfterFirstRequestDeletesAccount() throws Exception {
         AppUser user = saveUser("visitor-" + Long.toUnsignedString(System.nanoTime()) + "@example.com");
         userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(user, UserRole.VISITOR, null));
-        CountDownLatch firstRequestEnteredRedis = new CountDownLatch(1);
-        CountDownLatch releaseFirstRequest = new CountDownLatch(1);
-        doAnswer(invocation -> {
-            firstRequestEnteredRedis.countDown();
-            await(releaseFirstRequest);
-            return null;
-        }).when(refreshTokenStore).revokeAllFamilies(anyLong());
+        failingWithdrawalCapacityHoldService.pauseAfterWithdrawalStarts();
 
         try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
             Future<?> firstRequest = executorService.submit(() -> withdrawUserUseCase.withdraw(user.getUserId()));
-            assertThat(firstRequestEnteredRedis.await(3, TimeUnit.SECONDS)).isTrue();
+            assertThat(failingWithdrawalCapacityHoldService.awaitWithdrawalStart()).isTrue();
 
             Future<ErrorCode> secondRequest = executorService.submit(() -> withdraw(user.getUserId()));
             assertThat(secondRequest.isDone()).isFalse();
 
-            releaseFirstRequest.countDown();
+            failingWithdrawalCapacityHoldService.releaseWithdrawal();
             firstRequest.get(3, TimeUnit.SECONDS);
             assertThat(secondRequest.get(3, TimeUnit.SECONDS)).isEqualTo(ErrorCode.UNAUTHENTICATED);
         }
@@ -1454,18 +1441,12 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         Long userId,
         Runnable userCommand
     ) throws Exception {
-        CountDownLatch withdrawalEnteredRedis = new CountDownLatch(1);
-        CountDownLatch releaseWithdrawal = new CountDownLatch(1);
         CountDownLatch commandStarted = new CountDownLatch(1);
-        doAnswer(invocation -> {
-            withdrawalEnteredRedis.countDown();
-            await(releaseWithdrawal);
-            return null;
-        }).when(refreshTokenStore).revokeAllFamilies(userId);
+        failingWithdrawalCapacityHoldService.pauseAfterWithdrawalStarts();
 
         try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
             Future<?> withdrawal = executorService.submit(() -> withdrawUserUseCase.withdraw(userId));
-            assertThat(withdrawalEnteredRedis.await(3, TimeUnit.SECONDS)).isTrue();
+            assertThat(failingWithdrawalCapacityHoldService.awaitWithdrawalStart()).isTrue();
 
             Future<ErrorCode> command = executorService.submit(() -> {
                 commandStarted.countDown();
@@ -1474,7 +1455,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
             assertThat(commandStarted.await(3, TimeUnit.SECONDS)).isTrue();
             assertThat(command.isDone()).isFalse();
 
-            releaseWithdrawal.countDown();
+            failingWithdrawalCapacityHoldService.releaseWithdrawal();
             withdrawal.get(3, TimeUnit.SECONDS);
             assertThat(command.get(3, TimeUnit.SECONDS)).isEqualTo(ErrorCode.FORBIDDEN);
         }
@@ -1525,12 +1506,6 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
 
         @Bean
         @Primary
-        RefreshTokenStore refreshTokenStore() {
-            return mock(RefreshTokenStore.class);
-        }
-
-        @Bean
-        @Primary
         FailingWithdrawalCapacityHoldService failingWithdrawalCapacityHoldService(
             CapacityHoldRepository capacityHoldRepository
         ) {
@@ -1549,9 +1524,22 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
     static class FailingWithdrawalCapacityHoldService extends CapacityHoldService {
 
         private boolean failAfterWithdrawalTermination;
+        private volatile boolean pauseWithdrawal;
+        private volatile CountDownLatch withdrawalStarted = new CountDownLatch(0);
+        private volatile CountDownLatch releaseWithdrawal = new CountDownLatch(0);
 
         FailingWithdrawalCapacityHoldService(CapacityHoldRepository capacityHoldRepository) {
             super(capacityHoldRepository);
+        }
+
+        @Override
+        public List<Long> findActiveSessionIdsForWithdrawal(Long userId) {
+            List<Long> sessionIds = super.findActiveSessionIdsForWithdrawal(userId);
+            if (pauseWithdrawal) {
+                withdrawalStarted.countDown();
+                awaitRelease();
+            }
+            return sessionIds;
         }
 
         @Override
@@ -1573,8 +1561,37 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
             failAfterWithdrawalTermination = true;
         }
 
+        void pauseAfterWithdrawalStarts() {
+            pauseWithdrawal = true;
+            withdrawalStarted = new CountDownLatch(1);
+            releaseWithdrawal = new CountDownLatch(1);
+        }
+
+        boolean awaitWithdrawalStart() throws InterruptedException {
+            return withdrawalStarted.await(3, TimeUnit.SECONDS);
+        }
+
+        void releaseWithdrawal() {
+            releaseWithdrawal.countDown();
+        }
+
         void reset() {
             failAfterWithdrawalTermination = false;
+            pauseWithdrawal = false;
+            releaseWithdrawal.countDown();
+            withdrawalStarted = new CountDownLatch(0);
+            releaseWithdrawal = new CountDownLatch(0);
+        }
+
+        private void awaitRelease() {
+            try {
+                if (!releaseWithdrawal.await(3, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("withdrawal synchronization timed out");
+                }
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("withdrawal synchronization interrupted", exception);
+            }
         }
     }
 

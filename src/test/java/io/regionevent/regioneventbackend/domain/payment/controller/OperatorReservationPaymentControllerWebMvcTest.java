@@ -26,7 +26,6 @@ import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
 import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
 @WebMvcTest(OperatorReservationPaymentController.class)
 @Import({SecurityConfig.class, RequestIdFilter.class, GlobalExceptionHandler.class})
@@ -42,9 +41,6 @@ class OperatorReservationPaymentControllerWebMvcTest {
 
     @MockitoBean
     private GetOperatorReservationPaymentUseCase getOperatorReservationPaymentUseCase;
-
-    @MockitoBean
-    private RefreshTokenStore refreshTokenStore;
 
     @Test
     void get_returnsPaymentRefundAndDiscrepancyFields() throws Exception {

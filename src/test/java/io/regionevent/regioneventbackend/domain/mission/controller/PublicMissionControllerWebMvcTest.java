@@ -34,7 +34,6 @@ import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
 import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
 @WebMvcTest(PublicMissionController.class)
 @Import({
@@ -54,9 +53,6 @@ class PublicMissionControllerWebMvcTest {
 
     @MockitoBean
     private GetPublicMissionUseCase getPublicMissionUseCase;
-
-    @MockitoBean
-    private RefreshTokenStore refreshTokenStore;
 
     @Test
     void publicMissionDetailLogUriFilter_targetGet_setsTemplateUri() throws Exception {

@@ -1,11 +1,7 @@
 package io.regionevent.regioneventbackend.domain.user.dto;
 
-import java.time.Duration;
-
 public record RefreshAccessTokenResult(
-    String accessToken,
-    String refreshToken,
-    Duration refreshTokenMaxAge
+    String accessToken
 ) {
 
     @Override

@@ -19,7 +19,6 @@ import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
 import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
 @WebMvcTest(RegionAdminStampbookDetailController.class)
 @Import({SecurityConfig.class, GlobalExceptionHandler.class})
@@ -35,9 +34,6 @@ class RegionAdminStampbookDetailControllerWebMvcTest {
 
     @MockitoBean
     private GetRegionAdminStampbookDetailUseCase getRegionAdminStampbookDetailUseCase;
-
-    @MockitoBean
-    private RefreshTokenStore refreshTokenStore;
 
     @Test
     void detail_범위를_벗어난식별자면입력오류를응답한다() throws Exception {

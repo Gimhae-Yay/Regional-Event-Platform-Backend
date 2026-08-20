@@ -29,7 +29,6 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
 import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
 @WebMvcTest(ResolvePaymentDiscrepancyController.class)
 @Import({SecurityConfig.class, RequestIdFilter.class, GlobalExceptionHandler.class})
@@ -45,9 +44,6 @@ class ResolvePaymentDiscrepancyControllerWebMvcTest {
 
     @MockitoBean
     private ResolvePaymentDiscrepancyUseCase resolvePaymentDiscrepancyUseCase;
-
-    @MockitoBean
-    private RefreshTokenStore refreshTokenStore;
 
     @Test
     void resolve_유효한요청은문제없음종결결과를반환한다() throws Exception {

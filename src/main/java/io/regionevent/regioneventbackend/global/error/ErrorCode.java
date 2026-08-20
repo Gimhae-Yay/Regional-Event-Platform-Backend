@@ -30,7 +30,6 @@ public enum ErrorCode {
     QR_VERIFICATION_FAILED(HttpStatus.BAD_REQUEST, "QR_VERIFICATION_FAILED", "QR을 확인할 수 없습니다."),
     CHECK_IN_CONFLICT(HttpStatus.CONFLICT, "CHECK_IN_CONFLICT", "체크인할 수 없는 상태입니다."),
     RESERVATION_CANCEL_CONFLICT(HttpStatus.CONFLICT, "RESERVATION_CANCEL_CONFLICT", "예약을 취소할 수 없는 상태입니다."),
-    REFRESH_TOKEN_CONFLICT(HttpStatus.CONFLICT, "REFRESH_TOKEN_CONFLICT", "토큰 갱신 요청이 이미 진행 중입니다."),
     OPERATOR_APPLICATION_PENDING(HttpStatus.CONFLICT, "OPERATOR_APPLICATION_PENDING", "처리 중인 운영자 권한 신청이 있습니다."),
     OPERATOR_APPLICATION_REAPPLICATION_NOT_ALLOWED(HttpStatus.CONFLICT, "OPERATOR_APPLICATION_REAPPLICATION_NOT_ALLOWED", "운영자 권한 재신청을 할 수 없습니다."),
     OPERATOR_APPLICATION_STATE_CONFLICT(HttpStatus.CONFLICT, "OPERATOR_APPLICATION_STATE_CONFLICT", "운영자 신청 상태가 요청과 일치하지 않습니다."),
@@ -53,7 +52,6 @@ public enum ErrorCode {
     FORBIDDEN(HttpStatus.FORBIDDEN, "FORBIDDEN", "접근 권한이 없습니다."),
     NOT_FOUND(HttpStatus.NOT_FOUND, "NOT_FOUND", "요청한 리소스를 찾을 수 없습니다."),
     METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "METHOD_NOT_ALLOWED", "허용되지 않은 HTTP 메서드입니다."),
-    AUTH_SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "AUTH_SERVICE_UNAVAILABLE", "인증 서비스를 일시적으로 사용할 수 없습니다."),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR", "서버 오류가 발생했습니다.");
 
     private final HttpStatus httpStatus;

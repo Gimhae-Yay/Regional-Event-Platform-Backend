@@ -31,7 +31,6 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
 import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
 @WebMvcTest(MyStampEarningsController.class)
 @Import({SecurityConfig.class, RequestIdFilter.class, GlobalExceptionHandler.class})
@@ -48,9 +47,6 @@ class MyStampEarningsControllerWebMvcTest {
 
     @MockitoBean
     private GetMyStampEarningsUseCase getMyStampEarningsUseCase;
-
-    @MockitoBean
-    private RefreshTokenStore refreshTokenStore;
 
     @Test
     void 내_스탬프_적립_이력_조회에_성공하면_방문_근거를_반환한다() throws Exception {
