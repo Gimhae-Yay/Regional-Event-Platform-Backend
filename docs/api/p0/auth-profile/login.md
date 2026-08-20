@@ -5,22 +5,22 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | [FR-01 인증·역할·지역 권한](../../../p0/auth-profile.md#fr-01-인증역할지역-권한) |
 | 소유 도메인 | 인증·프로필 |
-| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ADR-0005](../../../adr/0005-use-jwt-access-and-rotating-refresh-tokens.md), [ADR-0023](../../../adr/0023-manage-refresh-token-revocation-in-redis.md), [ADR-0105](../../../adr/0105-deliver-access-token-in-json-response-body.md), [ADR-0043](../../../adr/0043-define-jwt-access-token-security-profile.md), [ADR-0044](../../../adr/0044-use-delegating-bcrypt-password-encoder.md), [ADR-0045](../../../adr/0045-use-stateless-bearer-security-with-same-site-refresh-cookie.md), [ADR-0052](../../../adr/0052-define-refresh-token-security-profile-and-fail-closed-redis-state.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ADR-0111](../../../adr/0111-use-stateless-refresh-token.md), [ADR-0105](../../../adr/0105-deliver-access-token-in-json-response-body.md), [ADR-0043](../../../adr/0043-define-jwt-access-token-security-profile.md), [ADR-0044](../../../adr/0044-use-delegating-bcrypt-password-encoder.md), [ADR-0045](../../../adr/0045-use-stateless-bearer-security-with-same-site-refresh-cookie.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
-이 문서는 이메일과 비밀번호를 검증해 짧은 수명의 Access Token과 회전형 Refresh Token을 발급하는 HTTP API
+이 문서는 이메일과 비밀번호를 검증해 짧은 수명의 Access Token과 14일 절대 만료 Stateless Refresh Token을 발급하는 HTTP API
 계약을 정의한다. Access Token은 JSON 응답 본문의 `data.accessToken`으로, Refresh Token은 `HttpOnly` 쿠키로만 전달한다.
 
 `PENDING` 운영자 신청 계정도 활성 계정이면 로그인할 수 있지만, 승인 전에는 `OPERATOR` 역할이 없어 운영자 API를
-호출할 수 없다. Access Token은 사용자 식별자만 포함하며, 로그인 응답의 역할 목록은 표시용 정보다. 역할·지역·소유권·
-승인 상태의 최종 검증은 서버의 현재 데이터를 따른다.
+호출할 수 없다. Access Token에는 사용자 식별자와 전역 authority snapshot이 포함되고, 로그인 응답의 역할 목록은 표시용
+정보다. 역할 보호 API의 1차 RBAC와 지역·소유권·업무 상태의 최종 검증은 [인증·인가](../../common/authentication.md)를 따른다.
 
 ### 요구사항 추적
 
 | 요구사항 | HTTP 계약 | 주요 데이터 |
 | --- | --- | --- |
-| FR-01 | `POST /api/v1/auth/login` | `app_user`, `user_role_assignment`, Redis Refresh Token 계열·폐기 키 |
+| FR-01 | `POST /api/v1/auth/login` | `app_user`, `user_role_assignment` |
 
 ## 2. 공통 계약 참조
 
@@ -33,7 +33,7 @@
 
 ## 3. 로그인
 
-이 API는 정규화한 이메일과 비밀번호가 일치하는 활성 회원에게 새 Access Token과 새 Refresh Token 계열을 발급한다.
+이 API는 정규화한 이메일과 비밀번호가 일치하는 활성 회원에게 새 Access Token과 Stateless Refresh Token을 발급한다.
 자격 증명이 올바르지 않거나 계정이 로그인할 수 없는 상태이면 같은 오류를 반환해 계정 존재 여부를 공개하지 않는다.
 
 ### Request
@@ -99,7 +99,7 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Set-Cookie` | Y | `refreshToken=<refreshToken>; Max-Age=1209600; Path=/api/v1/auth; HttpOnly; Secure; SameSite=Strict`. 새 Refresh Token 계열은 발급 시점부터 14일간 유효하며, `Domain`은 생략해 호스트 전용으로 한다. |
+| `Set-Cookie` | Y | `refreshToken=<refreshToken>; Max-Age=1209600; Path=/api/v1/auth; HttpOnly; Secure; SameSite=Strict`. Refresh Token은 발급 시점부터 14일간 유효하며, `Domain`은 생략해 호스트 전용으로 한다. |
 
 성공 응답에는 Access Token을 담은 `Authorization` 응답 헤더를 포함하지 않는다.
 
@@ -137,10 +137,9 @@ Refresh Token은 JSON 본문, `Authorization` 헤더 또는 다른 일반 응답
 
 | HTTP Status | Code | Description |
 | --- | --- | --- |
-| 400 | `INVALID_INPUT` | 필수 요청 값 누락 또는 `email`, `password`의 형식 위반이다. 토큰·계열을 발급하지 않으며 값을 수정한 뒤 재시도할 수 있다. |
-| 400 | `INVALID_JSON` | 요청 본문이 JSON 형식이 아니거나 역직렬화할 수 없다. 토큰·계열을 발급하지 않으며 본문을 수정한 뒤 재시도할 수 있다. |
-| 401 | `INVALID_CREDENTIALS` | 이메일·비밀번호가 일치하지 않거나 계정이 로그인할 수 없는 상태다. 계정 존재 여부를 공개하지 않으며 토큰·계열을 발급하지 않는다. |
-| 503 | `AUTH_SERVICE_UNAVAILABLE` | Redis를 사용할 수 없어 Refresh Token 계열을 안전하게 발급할 수 없다. 토큰·계열을 발급하지 않으며 잠시 뒤 재시도할 수 있다. 메시지는 `인증 서비스를 일시적으로 사용할 수 없습니다.`다. |
+| 400 | `INVALID_INPUT` | 필수 요청 값 누락 또는 `email`, `password`의 형식 위반이다. 토큰을 발급하지 않으며 값을 수정한 뒤 재시도할 수 있다. |
+| 400 | `INVALID_JSON` | 요청 본문이 JSON 형식이 아니거나 역직렬화할 수 없다. 토큰을 발급하지 않으며 본문을 수정한 뒤 재시도할 수 있다. |
+| 401 | `INVALID_CREDENTIALS` | 이메일·비밀번호가 일치하지 않거나 계정이 로그인할 수 없는 상태다. 계정 존재 여부를 공개하지 않으며 토큰을 발급하지 않는다. |
 
 #### Error Response Body
 
@@ -153,4 +152,4 @@ Refresh Token은 JSON 본문, `Authorization` 헤더 또는 다른 일반 응답
 }
 ```
 
-오류 응답에는 비밀번호 원문·해시, Access Token, Refresh Token, `jti`, `family_id` 또는 내부 예외 정보를 포함하지 않는다.
+오류 응답에는 비밀번호 원문·해시, Access Token, Refresh Token 또는 내부 예외 정보를 포함하지 않는다.

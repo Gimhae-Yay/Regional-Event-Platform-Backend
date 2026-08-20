@@ -6,8 +6,8 @@
 | --- | --- |
 | 인증 헤더 | `Authorization: Bearer <accessToken>` |
 | Access Token 성공 응답 | 로그인·토큰 갱신 성공 응답은 JSON 본문의 `data.accessToken`에 Access Token을 포함하고 `Authorization` 응답 헤더를 포함하지 않는다. 보호 업무 API 요청은 기존과 같이 `Authorization: Bearer <accessToken>` 헤더를 사용한다. ([ADR-0105](../../adr/0105-deliver-access-token-in-json-response-body.md)) |
-| Refresh Token 전달 | 로그인 성공 응답은 `Set-Cookie: refreshToken=<refreshToken>; Max-Age=1209600; Path=/api/v1/auth; HttpOnly; Secure; SameSite=Strict`를 포함한다. 토큰 갱신 성공 응답의 `Max-Age`는 최초 로그인부터 14일인 계열 절대 만료까지 남은 전체 초다. `Domain`은 생략해 호스트 전용 쿠키로 유지하며 Refresh Token은 JSON·`Authorization` 헤더에 넣지 않는다. |
-| 갱신·로그아웃 순서 | 브라우저 클라이언트는 갱신과 로그아웃을 하나의 인증 상태 전이로 직렬화한다. 로그아웃 전 진행 중인 갱신이 끝나면 최신 Cookie로 로그아웃을 요청하며, 로그아웃이 끝날 때까지 새 갱신을 시작하지 않는다. |
+| Refresh Token 전달 | 로그인 성공 응답만 `Set-Cookie: refreshToken=<refreshToken>; Max-Age=1209600; Path=/api/v1/auth; HttpOnly; Secure; SameSite=Strict`를 포함한다. 토큰 갱신 성공 응답은 Cookie를 교체하지 않고 `data.accessToken`만 반환한다. `Domain`은 생략해 호스트 전용 쿠키로 유지하며 Refresh Token은 JSON·`Authorization` 헤더에 넣지 않는다. ([ADR-0111](../../adr/0111-use-stateless-refresh-token.md)) |
+| 갱신·로그아웃 한계 | Refresh Token은 상태를 저장하거나 회전하지 않는다. 같은 유효 Token의 반복·동시 갱신은 허용되며, 로그아웃은 브라우저 Cookie만 만료한다. 복사된 Token은 만료 또는 계정 비활성화 전까지 재발급에 사용할 수 있다. ([ADR-0111](../../adr/0111-use-stateless-refresh-token.md)) |
 | 토큰 만료·무효 | `401 Unauthorized`, `UNAUTHENTICATED` |
 
 Refresh Token은 `Path=/api/v1/auth` 범위의 인증 API에서만 수신하며 보호 업무 API의 인증 수단으로 사용할 수 없다.
@@ -50,7 +50,7 @@ claim에 없는 현재 담당 지역 범위를 얻기 위해 활성 배정 관�
 | 우선순위 | HTTP method | 정확한 path/pattern | 접근 | 최소 authority | 선택 인증 | DB 최종 검증 |
 | --- | --- | --- | --- | --- | --- |
 | 1 | `POST` | `/internal/performance/fixtures/reset` | 성능 전용 내부 API | 해당 없음 | 아니오 | Access Token 대신 성능 전용 설정과 `X-Performance-Fixture-Token`을 별도로 검증한다. 운영 환경에는 Controller를 등록하지 않는다. |
-| 2 | `POST` | `/api/v1/auth/signup`, `/api/v1/auth/login`, `/api/v1/auth/refresh`, `/api/v1/auth/logout` | 인증 제외 | 해당 없음 | 아니오 | 각 인증 API의 입력·Refresh Token·회전·폐기 규칙을 적용한다. |
+| 2 | `POST` | `/api/v1/auth/signup`, `/api/v1/auth/login`, `/api/v1/auth/refresh`, `/api/v1/auth/logout` | 인증 제외 | 해당 없음 | 아니오 | 각 인증 API의 입력, Stateless Refresh Token 서명·만료 검증, 활성 사용자 및 Cookie 규칙을 적용한다. |
 | 3 | `POST` | `/api/v1/webhooks/portone` | 인증 제외 | 해당 없음 | 아니오 | PortOne webhook 서명·결제 상태 검증을 적용한다. |
 | 4 | `GET` | `/actuator/health` | 인증 제외 | 해당 없음 | 아니오 | 배포 상태 확인 전용이며 구성 요소·예외·상세 정보를 반환하지 않는다. |
 | 5 | `GET` | `/api/v1/regions`, `/api/v1/regions/*/home`, `/api/v1/contents`, `/api/v1/contents/*`, `/api/v1/contents/*/reviews`, `/api/v1/contents/*/sessions`, `/api/v1/sessions/*` | 공개 | 해당 없음 | 아니오 | 공개 여부와 도메인별 노출 상태를 조회 조건으로 적용한다. |
@@ -65,7 +65,7 @@ claim에 없는 현재 담당 지역 범위를 얻기 위해 활성 배정 관�
 | 14 | `POST`, `PATCH`, `DELETE` | `/api/v1/visits/*/reviews`, `/api/v1/reviews/*` | 역할 보호 | `ROLE_VISITOR` | 아니오 | `app_user.status = ACTIVE`, `ORDINARY` 계정, 본인 방문·후기 소유권과 후기 상태를 확인한다. 호출자의 현재 `VISITOR` 배정은 이 행의 claim authority 판정을 다시 수행하는 근거로 사용하지 않는다. |
 | 15 | `POST` | `/api/v1/missions/*/participations`, `/api/v1/me/mission-participations/*/rewards/claim` | 역할 보호 | `ROLE_VISITOR` | 아니오 | `app_user.status = ACTIVE`, `ORDINARY` 계정, 본인 참여·미션·보상·쿠폰 상태를 확인한다. 호출자의 현재 `VISITOR` 배정은 이 행의 claim authority 판정을 다시 수행하는 근거로 사용하지 않는다. |
 | 16 | `GET` | `/api/v1/me/mission-participations`, `/api/v1/me/mission-participations/*` | 역할 보호 | `ROLE_VISITOR` | 아니오 | `app_user.status = ACTIVE`, `ORDINARY` 계정과 본인 참여 소유권을 확인한다. 호출자의 현재 `VISITOR` 배정은 이 행의 claim authority 판정을 다시 수행하는 근거로 사용하지 않는다. |
-| 17 | `DELETE` | `/api/v1/auth/delete` | 인증 전용 | 해당 없음 | 아니오 | 활성 회원, 탈퇴 차단 관계와 Refresh Token 계열 폐기를 확인한다. |
+| 17 | `DELETE` | `/api/v1/auth/delete` | 인증 전용 | 해당 없음 | 아니오 | 활성 회원과 탈퇴 차단 관계를 확인하고 성공 시 Refresh Cookie를 만료한다. |
 | 18 | `POST` | `/api/v1/reservations`, `/api/v1/reservation-holds/*/confirm`, `/api/v1/coupon-policies/*/coupons` | 인증 전용 | 해당 없음 | 아니오 | 활성 회원, 본인 홀드·발급 근거·정원·쿠폰 상태를 확인한다. |
 | 19 | `GET`, `POST` | `/api/v1/me/**` | 인증 전용 | 해당 없음 | 아니오 | 각 API 명세에 정한 활성 회원 또는 활성 방문자 상태와 본인 예약·결제·환불·쿠폰·스탬프북·홀드 소유권을 확인한다. 활성 방문자 조건은 `app_user.status = ACTIVE`, `ACTIVE VISITOR`, `account_kind = ORDINARY`를 함께 확인한다. 15·16번 행이 먼저 적용된다. |
 | 20 | `GET`, `POST`, `PUT`, `PATCH`, `DELETE` | `/actuator/**` | 인증 전용 | 해당 없음 | 아니오 | 4번 `health` 예외 외 Actuator 엔드포인트는 Access Token 인증을 요구한다. |
