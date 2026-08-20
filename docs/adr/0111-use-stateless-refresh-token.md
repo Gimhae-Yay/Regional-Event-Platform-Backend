@@ -37,9 +37,13 @@
 
 ## 결정
 
-Refresh Token은 Access Token과 별도의 HS256 JWS로 발급·검증한다. 활성 Refresh 서명 키 하나만 `kid`와 함께
-외부 설정 또는 비밀 저장소에서 주입하고, 키 교체 시 이전 키 Refresh Token은 재로그인을 요구한다. 다음 claim만
-발급·검증한다.
+검토한 선택지 1인 **14일 절대 만료 Stateless Refresh Token**을 채택한다. Redis 회전·계열 폐기를 유지하는 경우의
+상태 키, 원자 스크립트, Redis 장애와 갱신 경합 예외를 인증 변경마다 함께 유지·검증하지 않도록 해 유지보수와 장애 진단
+범위를 줄이는 것이 선택 이유다. 즉시 서버 측 폐기와 재사용 탐지는 제공하지 않는 대신, 짧은 Access Token과 활성 회원
+조회로 현재 MVP의 인증 경계를 유지한다.
+
+Refresh Token은 Access Token과 별도의 HS256 JWS로 발급·검증한다. 활성 Refresh 서명 키 하나만 `kid`와 함께 외부
+설정 또는 비밀 저장소에서 주입하고, 키 교체 시 이전 키 Refresh Token은 재로그인을 요구한다. 다음 claim만 발급·검증한다.
 
 | Claim | 값 | 용도 |
 | --- | --- | --- |
