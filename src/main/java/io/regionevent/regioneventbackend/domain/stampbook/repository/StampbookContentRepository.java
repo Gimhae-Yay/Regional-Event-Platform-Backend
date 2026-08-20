@@ -22,6 +22,17 @@ public interface StampbookContentRepository extends JpaRepository<StampbookConte
         """)
     List<Long> findContentIdsByStampbookId(@Param("stampbookId") Long stampbookId);
 
+    @Query("""
+        SELECT stampbookContent
+        FROM StampbookContent stampbookContent
+        JOIN FETCH stampbookContent.content content
+        JOIN FETCH content.region contentRegion
+        JOIN FETCH content.operator contentOperator
+        WHERE stampbookContent.stampbook.stampbookId = :stampbookId
+        ORDER BY content.contentId ASC
+        """)
+    List<StampbookContent> findDetailByStampbookId(@Param("stampbookId") Long stampbookId);
+
     @Modifying(flushAutomatically = true)
     @Query("""
         DELETE FROM StampbookContent stampbookContent

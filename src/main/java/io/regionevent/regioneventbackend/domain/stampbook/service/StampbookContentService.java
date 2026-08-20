@@ -37,6 +37,13 @@ public class StampbookContentService {
         return List.copyOf(stampbookContentRepository.findContentIdsByStampbookId(stampbookId));
     }
 
+    public List<StampbookContent> findDetails(Long stampbookId) {
+        if (stampbookId == null || stampbookId <= 0) {
+            throw new IllegalArgumentException("stampbookId must be positive");
+        }
+        return List.copyOf(stampbookContentRepository.findDetailByStampbookId(stampbookId));
+    }
+
     @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
     public long countTargetContents(Long stampbookId) {
         return stampbookContentRepository.countByStampbookStampbookId(stampbookId);
