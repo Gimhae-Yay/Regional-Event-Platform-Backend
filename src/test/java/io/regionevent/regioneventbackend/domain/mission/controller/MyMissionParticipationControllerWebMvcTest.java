@@ -25,6 +25,7 @@ import io.regionevent.regioneventbackend.domain.mission.service.MyMissionPartici
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
@@ -55,6 +56,7 @@ class MyMissionParticipationControllerWebMvcTest {
                 List.of(new MyMissionParticipationListResult.Participation(
                     9001L,
                     701L,
+                    "김해 문화 미션",
                     MissionParticipationStatus.IN_PROGRESS,
                     1,
                     3,
@@ -76,6 +78,7 @@ class MyMissionParticipationControllerWebMvcTest {
             .andExpect(jsonPath("$.message").value("내 미션 참여 목록 조회에 성공했습니다."))
             .andExpect(jsonPath("$.data.content[0].participationId").value("9001"))
             .andExpect(jsonPath("$.data.content[0].missionId").value("701"))
+            .andExpect(jsonPath("$.data.content[0].title").value("김해 문화 미션"))
             .andExpect(jsonPath("$.data.content[0].status").value("IN_PROGRESS"))
             .andExpect(jsonPath("$.data.content[0].progressCount").value(1))
             .andExpect(jsonPath("$.data.content[0].requiredCount").value(3))
@@ -145,6 +148,6 @@ class MyMissionParticipationControllerWebMvcTest {
     }
 
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder authenticatedGet() {
-        return get(PATH).header(AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(USER_ID));
+        return get(PATH).header(AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, USER_ID));
     }
 }

@@ -46,6 +46,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.support.jpa.CleanH2Database;
 
@@ -110,10 +111,11 @@ class CreateOperatorMissionAuditAtomicityTest {
             .record(any(AuditEventCommand.class));
 
         mockMvc.perform(post("/api/v1/operator/missions")
-                .header("Authorization", "Bearer " + jwtAccessTokenService.issue(fixture.operator().getUserId()))
+                .header("Authorization", "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, fixture.operator().getUserId()))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
+                      "title": "감사 원자성 미션",
                       "conditionType": "CONTENT_SET",
                       "requiredVisitCount": null,
                       "targetContentIds": ["%d"],
@@ -173,10 +175,11 @@ class CreateOperatorMissionAuditAtomicityTest {
         Long rewardCouponPolicyId
     ) throws Exception {
         return mockMvc.perform(post("/api/v1/operator/missions")
-            .header("Authorization", "Bearer " + jwtAccessTokenService.issue(fixture.operator().getUserId()))
+            .header("Authorization", "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, fixture.operator().getUserId()))
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {
+                  "title": "감사 원자성 미션",
                   "conditionType": "CONTENT_SET",
                   "requiredVisitCount": null,
                   "targetContentIds": ["%d"],

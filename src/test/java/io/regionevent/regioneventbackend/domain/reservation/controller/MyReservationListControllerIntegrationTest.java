@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 import jakarta.persistence.EntityManager;
 
@@ -44,6 +45,7 @@ import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepositor
 import io.regionevent.regioneventbackend.domain.visit.entity.CheckinMethod;
 import io.regionevent.regioneventbackend.domain.visit.entity.Visit;
 import io.regionevent.regioneventbackend.domain.visit.repository.VisitRepository;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 
 @SpringBootTest
@@ -164,20 +166,30 @@ class MyReservationListControllerIntegrationTest {
                 expired.getReservationId().toString()
             ))
             .andExpect(jsonPath("$.data.reservations[0].status").value("EXPIRED"))
+            .andExpect(jsonPath("$.data.reservations[0].quantity").value(1))
+            .andExpect(jsonPath("$.data.reservations[0].checkIn.visitId").value(
+                org.hamcrest.Matchers.nullValue()
+            ))
             .andExpect(jsonPath("$.data.reservations[1].reservationId").value(
                 cancelled.getReservationId().toString()
             ))
             .andExpect(jsonPath("$.data.reservations[1].status").value("CANCELLED"))
+            .andExpect(jsonPath("$.data.reservations[1].quantity").value(1))
+            .andExpect(jsonPath("$.data.reservations[1].checkIn.visitId").value(
+                org.hamcrest.Matchers.nullValue()
+            ))
             .andExpect(jsonPath("$.data.reservations[2].reservationId").value(
                 checkedIn.getReservationId().toString()
             ))
             .andExpect(jsonPath("$.data.reservations[2].reservationNo").value(checkedIn.getReservationNo()))
             .andExpect(jsonPath("$.data.reservations[2].status").value("CHECKED_IN"))
+            .andExpect(jsonPath("$.data.reservations[2].quantity").value(1))
             .andExpect(jsonPath("$.data.reservations[2].confirmedAt").value("2030-08-02T01:00:00Z"))
             .andExpect(jsonPath("$.data.reservations[2].content.contentId").value(
                 fixture.content().getContentId().toString()
             ))
             .andExpect(jsonPath("$.data.reservations[2].content.title").value("김해 문화 체험"))
+            .andExpect(jsonPath("$.data.reservations[2].content.locationText").value("김해시"))
             .andExpect(jsonPath("$.data.reservations[2].session.sessionId").value(
                 fixture.session().getSessionId().toString()
             ))
@@ -192,12 +204,19 @@ class MyReservationListControllerIntegrationTest {
             .andExpect(jsonPath("$.data.reservations[2].checkIn.checkedAt").value(
                 "2030-08-02T01:05:00Z"
             ))
+            .andExpect(jsonPath("$.data.reservations[2].checkIn.visitId").value(
+                visit.getVisitId().toString()
+            ))
             .andExpect(jsonPath("$.data.reservations[3].reservationId").value(
                 confirmed.getReservationId().toString()
             ))
             .andExpect(jsonPath("$.data.reservations[3].status").value("CONFIRMED"))
+            .andExpect(jsonPath("$.data.reservations[3].quantity").value(1))
             .andExpect(jsonPath("$.data.reservations[3].checkIn.checkedIn").value(false))
-            .andExpect(jsonPath("$.data.reservations[3].checkIn.checkedAt").doesNotExist());
+            .andExpect(jsonPath("$.data.reservations[3].checkIn.checkedAt").doesNotExist())
+            .andExpect(jsonPath("$.data.reservations[3].checkIn.visitId").value(
+                org.hamcrest.Matchers.nullValue()
+            ));
 
         String responseBody = result.andReturn().getResponse().getContentAsString();
         assertThat(responseBody).doesNotContain(
@@ -290,6 +309,41 @@ class MyReservationListControllerIntegrationTest {
             "resultCount=0, resultCode=INTERNAL_SERVER_ERROR"
         );
         assertReadDoesNotChangeState(fixture, List.of(reservation), List.of());
+    }
+
+    @Test
+    void 내_예약_목록은_콘텐츠_종료_중단_철회_뒤에도_콘텐츠_표시_정보를_반환한다() throws Exception {
+        List<Consumer<Content>> lifecycleChanges = List.of(
+            Content::end,
+            Content::suspend,
+            Content::withdraw
+        );
+
+        for (Consumer<Content> lifecycleChange : lifecycleChanges) {
+            Fixture fixture = createFixture(AppUserStatus.ACTIVE);
+            Reservation reservation = saveReservation(
+                fixture,
+                fixture.user(),
+                ReservationStatus.CONFIRMED,
+                EARLIER_CONFIRMED_AT,
+                "content-lifecycle"
+            );
+            lifecycleChange.accept(fixture.content());
+            entityManager.flush();
+            entityManager.clear();
+
+            performGet(fixture.user())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.reservations.length()").value(1))
+                .andExpect(jsonPath("$.data.reservations[0].reservationId").value(
+                    reservation.getReservationId().toString()
+                ))
+                .andExpect(jsonPath("$.data.reservations[0].content.contentId").value(
+                    fixture.content().getContentId().toString()
+                ))
+                .andExpect(jsonPath("$.data.reservations[0].content.title").value("김해 문화 체험"))
+                .andExpect(jsonPath("$.data.reservations[0].content.locationText").value("김해시"));
+        }
     }
 
     private ResultActions performGet(AppUser user) throws Exception {
@@ -423,7 +477,7 @@ class MyReservationListControllerIntegrationTest {
     }
 
     private String bearerToken(AppUser user) {
-        return "Bearer " + jwtAccessTokenService.issue(user.getUserId());
+        return "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, user.getUserId());
     }
 
     private record Fixture(

@@ -68,6 +68,7 @@ Accept: application/json
       "reservationId": "123",
       "reservationNo": "R20260730A7K3M9Q2W5XZ",
       "status": "CONFIRMED",
+      "quantity": 3,
       "confirmedAt": "2026-07-30T03:00:00Z",
       "cancelledAt": null,
       "cancellationReason": null,
@@ -82,9 +83,15 @@ Accept: application/json
       "checkinOpenAt": "2026-08-03T13:30:00+09:00",
       "checkinCloseAt": "2026-08-03T16:00:00+09:00"
     },
+    "content": {
+      "contentId": "789",
+      "title": "김해 가야문화 체험",
+      "locationText": "김해시 대성동고분박물관"
+    },
     "checkIn": {
       "checkedIn": false,
-      "checkedAt": null
+      "checkedAt": null,
+      "visitId": null
     }
   }
 }
@@ -100,19 +107,24 @@ Accept: application/json
 | `data.reservation.reservationId` | String | 예약 식별자 |
 | `data.reservation.reservationNo` | String | 시스템 전체에서 유일한 예약 번호. 서버가 `Asia/Seoul` 날짜의 `RyyyyMMdd`와 12자리 Crockford Base32 난수 접미사로 생성한다. |
 | `data.reservation.status` | String | 예약 상태. `CONFIRMED`, `CHECKED_IN`, `CANCELLED`, `EXPIRED` 중 하나 |
+| `data.reservation.quantity` | Number | 예약이 소비한 홀드의 확정 인원. 항상 양수이며 회차의 공통 값이 아니다. |
 | `data.reservation.confirmedAt` | String | 예약 확정 시각. API 공통 규칙에 따른 UTC ISO 8601 일시다. |
 | `data.reservation.cancelledAt` | String or null | `CANCELLED` 상태의 취소 시각. 그 외 상태에서는 `null` API 공통 규칙에 따른 UTC ISO 8601 일시다. |
 | `data.reservation.cancellationReason` | String or null | `CANCELLED` 상태의 취소 사유. 그 외 상태에서는 `null` |
 | `data.reservation.expiredAt` | String or null | `EXPIRED` 상태의 노쇼 처리 시각. 그 외 상태에서는 `null` API 공통 규칙에 따른 UTC ISO 8601 일시다. |
 | `data.session.sessionId` | String | 예약이 속한 회차 식별자 |
-| `data.session.contentId` | String | 회차가 속한 콘텐츠 식별자 |
+| `data.session.contentId` | String | 회차가 속한 콘텐츠 식별자. 하위 호환성을 위해 유지한다. |
 | `data.session.status` | String | 회차 상태. `SCHEDULED`, `COMPLETED`, `CANCELLED` 중 하나 |
 | `data.session.startsAt` | String | 회차 시작 시각 |
 | `data.session.endsAt` | String | 회차 종료 시각 |
 | `data.session.checkinOpenAt` | String | 체크인 창 시작 시각 |
 | `data.session.checkinCloseAt` | String | 체크인 창 종료 시각 |
+| `data.content.contentId` | String | 예약 콘텐츠 식별자 |
+| `data.content.title` | String | 예약 콘텐츠 제목 |
+| `data.content.locationText` | String | 예약 콘텐츠 위치 안내 |
 | `data.checkIn.checkedIn` | Boolean | 예약 상태가 `CHECKED_IN`이면 `true`, 그 외에는 `false` |
 | `data.checkIn.checkedAt` | String or null | `checkedIn = true`인 경우 방문 기록의 체크인 시각. 그 외에는 `null` API 공통 규칙에 따른 UTC ISO 8601 일시다. |
+| `data.checkIn.visitId` | String or null | `checkedIn = true`인 경우 해당 예약·회차에 연결된 방문 기록 식별자. 그 외에는 `null` |
 
 예약 QR 토큰, `qr_reference`, 사용자 식별자와 다른 예약자의 정보는 응답에 포함하지 않는다.
 
@@ -143,12 +155,13 @@ Accept: application/json
 1. 인증 주체는 `ACTIVE` 상태의 회원이어야 한다.
 2. 인증 회원과 대상 예약의 `user_id`가 일치해야 한다.
 3. `reservationId`의 필수 여부, 타입과 양수 범위를 검증한다.
-4. 예약은 어느 상태에서나 조회할 수 있다. `CONFIRMED`, `CHECKED_IN`, `CANCELLED`, `EXPIRED` 상태에 따라 nullable 시각과 사유 필드를 반환한다.
-5. 회차는 예약의 `session_id`와 일치하는 회차만 반환하며, 예약·회차·콘텐츠·지역의 연결 일치 제약을 유지한다.
-6. 예약 상태가 `CHECKED_IN`이면 같은 예약과 회차에 연결된 방문 기록이 정확히 한 건 존재해야 하며, `checkedIn = true`와 그 방문의 `checked_at`을 반환한다.
-7. 예약 상태가 `CHECKED_IN`이 아니면 `checkedIn = false`, `checkedAt = null`을 반환한다.
-8. `CHECKED_IN` 예약에 방문 기록이 없거나 방문의 예약·회차·콘텐츠·지역 연결이 일치하지 않으면 정상 응답을 만들지 않고 정합성 오류로 관찰한다.
-9. 조회 시 예약, 방문, 회차, 홀드, 정원, QR과 감사 기록을 생성·수정·삭제하지 않는다.
+4. 예약은 어느 상태에서나 조회할 수 있다. `CONFIRMED`, `CHECKED_IN`, `CANCELLED`, `EXPIRED` 상태에 따라 nullable 시각과 사유 필드를 반환하며, 콘텐츠 종료·중단·철회 또는 회차 완료·취소 뒤에도 본인 예약 이력의 콘텐츠 표시 정보를 유지한다.
+5. 회차는 예약의 `session_id`와 일치하는 회차만 반환하며, 기존 `data.session.contentId`를 유지한다. 별도 `data.content` 객체에는 회차 일정 정보와 구분한 연결 콘텐츠의 `contentId`, `title`, `locationText`를 반환하고, 예약·회차·콘텐츠·지역의 연결 일치 제약을 유지한다.
+6. 예약은 소비한 홀드의 확정 인원 `quantity`를 반환하며, `quantity`는 항상 양수이고 회차의 공통 값으로 대체하지 않는다.
+7. 예약 상태가 `CHECKED_IN`이면 같은 예약과 회차에 연결된 방문 기록이 정확히 한 건 존재해야 하며, `checkedIn = true`, 그 방문의 `checked_at`과 `visitId`를 반환한다.
+8. 예약 상태가 `CHECKED_IN`이 아니면 `checkedIn = false`, `checkedAt = null`, `visitId = null`을 반환한다.
+9. `CHECKED_IN` 예약에 방문 기록이 없거나 방문의 예약·회차·콘텐츠·지역 연결이 일치하지 않으면 정상 응답을 만들지 않고 정합성 오류로 관찰한다.
+10. 조회 시 예약, 방문, 회차, 콘텐츠, 홀드, 정원, QR과 감사 기록을 생성·수정·삭제하지 않는다.
 
 ### 감사 및 정합성
 

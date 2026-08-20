@@ -13,6 +13,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
+import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationReadProjection;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationRepository;
@@ -37,6 +38,7 @@ class ReservationReadServiceTest {
 
         assertThat(result.snapshot().reservation().reservationId()).isEqualTo(10L);
         assertThat(result.snapshot().content().title()).isEqualTo("김해 가야문화 체험");
+        assertThat(result.snapshot().content().locationText()).isEqualTo("김해시 대성동고분박물관");
         assertThat(result.snapshot().participant().name()).isEqualTo("김민수");
         assertThat(result.checkIn()).isEqualTo(
             new ReservationReadIntegrityValidator.CheckInInfo(17L, true, CHECKED_AT)
@@ -71,6 +73,19 @@ class ReservationReadServiceTest {
         ReservationReadService reservationReadService = service(reservationRepository);
         when(reservationRepository.findReadProjectionsByReservationNo(RESERVATION_NO)).thenReturn(List.of(
             projection(ReservationStatus.CHECKED_IN, null, null)
+        ));
+
+        assertThatThrownBy(() -> reservationReadService.findByReservationNo(RESERVATION_NO))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("reservation read data is inconsistent");
+    }
+
+    @Test
+    void findByReservationNo_whenConsumedHoldQuantityIsNotPositive_throwsConsistencyException() {
+        ReservationRepository reservationRepository = mock(ReservationRepository.class);
+        ReservationReadService reservationReadService = service(reservationRepository);
+        when(reservationRepository.findReadProjectionsByReservationNo(RESERVATION_NO)).thenReturn(List.of(
+            projection(10L, RESERVATION_NO, ReservationStatus.CONFIRMED, null, null, USER_ID, 0)
         ));
 
         assertThatThrownBy(() -> reservationReadService.findByReservationNo(RESERVATION_NO))
@@ -200,6 +215,26 @@ class ReservationReadServiceTest {
         Instant checkedAt,
         Long participantUserId
     ) {
+        return projection(
+            reservationId,
+            reservationNo,
+            reservationStatus,
+            visitId,
+            checkedAt,
+            participantUserId,
+            3
+        );
+    }
+
+    private ReservationReadProjection projection(
+        Long reservationId,
+        String reservationNo,
+        ReservationStatus reservationStatus,
+        Long visitId,
+        Instant checkedAt,
+        Long participantUserId,
+        Integer holdQuantity
+    ) {
         return new ReservationReadProjection(
             reservationId,
             reservationNo,
@@ -218,6 +253,7 @@ class ReservationReadServiceTest {
             1L,
             3L,
             "김해 가야문화 체험",
+            "김해시 대성동고분박물관",
             1L,
             participantUserId,
             "김민수",
@@ -228,7 +264,13 @@ class ReservationReadServiceTest {
             visitId == null ? null : 2L,
             visitId == null ? null : 3L,
             visitId == null ? null : participantUserId,
-            checkedAt
+            checkedAt,
+            100L,
+            CapacityHoldStatus.CONSUMED,
+            holdQuantity,
+            2L,
+            1L,
+            reservationId
         );
     }
 }

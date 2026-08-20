@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Date;
+import java.util.List;
 import java.util.stream.Stream;
 
 import javax.crypto.SecretKey;
@@ -45,10 +46,13 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenAuthority;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenProperties;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.common.ApiResponseAccessDeniedHandler;
@@ -134,6 +138,102 @@ class SecurityConfigWebMvcTest {
             .andExpect(cookie().doesNotExist("JSESSIONID"));
     }
 
+    @ParameterizedTest
+    @MethodSource("roleProtectedRequests")
+    void roleProtectedPath_withRequiredAuthority_isAllowed(
+        HttpMethod method,
+        String path,
+        AccessTokenAuthority authority
+    ) throws Exception {
+        String accessToken = jwtAccessTokenService.issue(1L, List.of(authority));
+
+        mockMvc.perform(request(method, path)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+            .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void superAdminOnlyPath_withPlatformAdminAuthority_returnsForbiddenResponse() throws Exception {
+        String accessToken = jwtAccessTokenService.issue(1L, List.of(AccessTokenAuthority.PLATFORM_ADMIN));
+
+        mockMvc.perform(request(HttpMethod.POST, "/api/v1/platform-admin/admin-accounts")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    void roleProtectedPath_withInsufficientAuthority_returnsForbiddenBeforeController() throws Exception {
+        String accessToken = jwtAccessTokenService.issue(1L, List.of(AccessTokenAuthority.VISITOR));
+
+        mockMvc.perform(get("/api/v1/operator/protected")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @ParameterizedTest
+    @MethodSource("legacyRoleProtectedRequests")
+    void legacyRoleProtectedPath_withInsufficientAuthority_returnsForbiddenBeforeController(
+        HttpMethod method,
+        String path
+    ) throws Exception {
+        String accessToken = jwtAccessTokenService.issue(1L, List.of(AccessTokenAuthority.VISITOR));
+
+        mockMvc.perform(request(method, path)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    void operatorRequest_withEmptyAuthorities_isAuthenticatedOnly() throws Exception {
+        String accessToken = jwtAccessTokenService.issue(1L);
+
+        mockMvc.perform(request(HttpMethod.POST, "/api/v1/operator/operator-requests")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+            .andExpect(status().isNoContent());
+    }
+
+    @ParameterizedTest
+    @MethodSource("roleProtectedRequests")
+    void roleProtectedPath_withEmptyAuthorities_returnsForbiddenBeforeController(
+        HttpMethod method,
+        String path,
+        AccessTokenAuthority ignoredAuthority
+    ) throws Exception {
+        String accessToken = jwtAccessTokenService.issue(1L);
+
+        mockMvc.perform(request(method, path)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    void compatibilityTokenWithoutAuthorities_isAuthenticatedOnlyAndForbiddenOnRoleProtectedPath() throws Exception {
+        String accessToken = issueAccessTokenWithoutAuthorities();
+
+        mockMvc.perform(get("/api/v1/me/protected")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+            .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/v1/operator/protected")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    void publicGetAndProtectedWriteWithSamePath_haveDifferentAuthenticationRequirements() throws Exception {
+        mockMvc.perform(get("/api/v1/contents"))
+            .andExpect(status().isNoContent());
+
+        mockMvc.perform(request(HttpMethod.POST, "/api/v1/contents"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+    }
+
     @Test
     void protectedPath_withRefreshTokenCookieOnly_returnsUnauthenticatedResponse() throws Exception {
         mockMvc.perform(get("/test/protected")
@@ -205,6 +305,101 @@ class SecurityConfigWebMvcTest {
         );
     }
 
+    private static Stream<Arguments> roleProtectedRequests() {
+        return Stream.of(
+            Arguments.of(
+                HttpMethod.POST,
+                "/api/v1/platform-admin/admin-accounts",
+                AccessTokenAuthority.SUPER_ADMIN
+            ),
+            Arguments.of(
+                HttpMethod.POST,
+                "/api/v1/platform-admin/admin-accounts/1/deactivate",
+                AccessTokenAuthority.SUPER_ADMIN
+            ),
+            Arguments.of(
+                HttpMethod.GET,
+                "/api/v1/platform-admin/protected",
+                AccessTokenAuthority.SUPER_ADMIN
+            ),
+            Arguments.of(
+                HttpMethod.GET,
+                "/api/v1/platform-admin/protected",
+                AccessTokenAuthority.PLATFORM_ADMIN
+            ),
+            Arguments.of(
+                HttpMethod.GET,
+                "/api/v1/region-admin/protected",
+                AccessTokenAuthority.REGION_ADMIN
+            ),
+            Arguments.of(
+                HttpMethod.GET,
+                "/api/v1/operator/protected",
+                AccessTokenAuthority.OPERATOR
+            ),
+            Arguments.of(
+                HttpMethod.POST,
+                "/api/v1/visits/1/reviews",
+                AccessTokenAuthority.VISITOR
+            ),
+            Arguments.of(
+                HttpMethod.POST,
+                "/api/v1/missions/1/participations",
+                AccessTokenAuthority.VISITOR
+            ),
+            Arguments.of(
+                HttpMethod.PATCH,
+                "/api/v1/reviews/1",
+                AccessTokenAuthority.VISITOR
+            ),
+            Arguments.of(
+                HttpMethod.DELETE,
+                "/api/v1/reviews/1",
+                AccessTokenAuthority.VISITOR
+            ),
+            Arguments.of(
+                HttpMethod.GET,
+                "/api/v1/me/mission-participations",
+                AccessTokenAuthority.VISITOR
+            ),
+            Arguments.of(
+                HttpMethod.GET,
+                "/operator/contents/1",
+                AccessTokenAuthority.OPERATOR
+            ),
+            Arguments.of(
+                HttpMethod.POST,
+                "/operator/check-ins",
+                AccessTokenAuthority.OPERATOR
+            ),
+            Arguments.of(
+                HttpMethod.POST,
+                "/operator/check-ins/manual",
+                AccessTokenAuthority.OPERATOR
+            ),
+            Arguments.of(
+                HttpMethod.GET,
+                "/region-admin/qr-exceptions",
+                AccessTokenAuthority.REGION_ADMIN
+            ),
+            Arguments.of(
+                HttpMethod.GET,
+                "/region-admin/qr-exceptions/1",
+                AccessTokenAuthority.REGION_ADMIN
+            )
+        );
+    }
+
+    private static Stream<Arguments> legacyRoleProtectedRequests() {
+        return Stream.of(
+            Arguments.of(HttpMethod.POST, "/operator/check-ins"),
+            Arguments.of(HttpMethod.POST, "/operator/check-ins/manual"),
+            Arguments.of(HttpMethod.GET, "/operator/contents/1"),
+            Arguments.of(HttpMethod.GET, "/region-admin/qr-exceptions"),
+            Arguments.of(HttpMethod.GET, "/region-admin/qr-exceptions/1")
+        );
+    }
+
     private String issueAccessTokenWithoutAudience() {
         Instant issuedAt = Instant.now();
         SecretKey key = Keys.hmacShaKeyFor(Base64.getDecoder().decode(jwtAccessTokenProperties.getActiveKey()));
@@ -215,6 +410,27 @@ class SecurityConfigWebMvcTest {
                 .keyId(jwtAccessTokenProperties.getActiveKeyId())
                 .and()
             .issuer(jwtAccessTokenProperties.getIssuer())
+            .subject("1")
+            .claim("token_type", "ACCESS")
+            .issuedAt(Date.from(issuedAt))
+            .expiration(Date.from(issuedAt.plusSeconds(900)))
+            .signWith(key, Jwts.SIG.HS256)
+            .compact();
+    }
+
+    private String issueAccessTokenWithoutAuthorities() {
+        Instant issuedAt = Instant.now();
+        SecretKey key = Keys.hmacShaKeyFor(Base64.getDecoder().decode(jwtAccessTokenProperties.getActiveKey()));
+
+        return Jwts.builder()
+            .header()
+                .type("JWT")
+                .keyId(jwtAccessTokenProperties.getActiveKeyId())
+                .and()
+            .issuer(jwtAccessTokenProperties.getIssuer())
+            .audience()
+                .add(jwtAccessTokenProperties.getAudience())
+                .and()
             .subject("1")
             .claim("token_type", "ACCESS")
             .issuedAt(Date.from(issuedAt))
@@ -273,6 +489,44 @@ class SecurityConfigWebMvcTest {
         @GetMapping("/test/protected")
         java.util.Map<String, Object> protectedResource(Authentication authentication) {
             return java.util.Map.of("userId", authentication.getPrincipal());
+        }
+
+        @PostMapping({
+            "/api/v1/platform-admin/admin-accounts",
+            "/api/v1/platform-admin/admin-accounts/{userId}/deactivate",
+            "/api/v1/operator/operator-requests",
+            "/api/v1/visits/{visitId}/reviews",
+            "/api/v1/missions/{missionId}/participations",
+            "/api/v1/contents",
+            "/operator/check-ins",
+            "/operator/check-ins/manual"
+        })
+        ResponseEntity<Void> postResource() {
+            return ResponseEntity.noContent().build();
+        }
+
+        @GetMapping({
+            "/api/v1/platform-admin/protected",
+            "/api/v1/region-admin/protected",
+            "/api/v1/operator/protected",
+            "/api/v1/me/protected",
+            "/api/v1/me/mission-participations",
+            "/operator/contents/{contentId}",
+            "/region-admin/qr-exceptions",
+            "/region-admin/qr-exceptions/{exceptionId}"
+        })
+        ResponseEntity<Void> roleProtectedResource() {
+            return ResponseEntity.noContent().build();
+        }
+
+        @PatchMapping("/api/v1/reviews/{reviewId}")
+        ResponseEntity<Void> updateReviewResource() {
+            return ResponseEntity.noContent().build();
+        }
+
+        @DeleteMapping("/api/v1/reviews/{reviewId}")
+        ResponseEntity<Void> deleteReviewResource() {
+            return ResponseEntity.noContent().build();
         }
     }
 }

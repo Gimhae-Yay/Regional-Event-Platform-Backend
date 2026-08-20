@@ -94,7 +94,12 @@ Accept: application/json
       "currency": "KRW",
       "status": "PROCESSING",
       "requestedAt": "2026-08-07T01:00:00Z"
-    }
+    },
+    "sessionId": "456",
+    "status": "CANCELLED",
+    "cancellationReason": "USER_REQUEST",
+    "cancelledAt": "2026-08-07T01:00:00Z",
+    "capacityReleasedAt": "2026-08-07T01:00:00Z"
   }
 }
 ```
@@ -102,7 +107,9 @@ Accept: application/json
 이미 `CANCELLED`인 예약을 다시 요청하면 새 정원 복구나 새 환불 효과를 만들지 않고, 같은 형식으로 현재
 예약·환불 상태를 그대로 반환한다.
 
-최종 금액이 0원이어서 결제·환불 행이 없는 예약은 `refund: null`을 반환한다.
+환불 응답이 없으면 `refund: null`을 반환한다. 최종 금액이 0원이어서 결제 행이 없는 경우와 연결 결제가
+`APPROVED`·`DISCREPANT`가 아닌 경우에는 환불을 시작하지 않는다. 취소 재요청에서는 기존 환불을 찾지 못하면
+`refund: null`을 반환한다.
 
 ```json
 {
@@ -112,7 +119,12 @@ Accept: application/json
   "data": {
     "reservationId": "123",
     "reservationStatus": "CANCELLED",
-    "refund": null
+    "refund": null,
+    "sessionId": "456",
+    "status": "CANCELLED",
+    "cancellationReason": "USER_REQUEST",
+    "cancelledAt": "2026-08-07T01:00:00Z",
+    "capacityReleasedAt": "2026-08-07T01:00:00Z"
   }
 }
 ```
@@ -125,14 +137,19 @@ Accept: application/json
 | `code` | String | 성공 코드 `SUCCESS`다. |
 | `message` | String | 성공 메시지다. |
 | `data.reservationId` | String | 취소한 예약 식별자다. |
-| `data.reservationStatus` | String | 취소 처리 뒤 예약 상태다. 이 API에서는 항상 `CANCELLED`다. |
-| `data.refund` | Object 또는 null | 양수 결제의 환불이 있으면 객체이고, 최종 금액 0원 예약이면 `null`이다. |
+| `data.reservationStatus` | String | 취소 처리 뒤 예약 상태다. 항상 `CANCELLED`이며 현재 `data.status`와 같은 값을 중복 표현한다. |
+| `data.refund` | Object 또는 null | 환불 응답이 있으면 객체다. 결제 행이 없거나 연결 결제가 `APPROVED`·`DISCREPANT`가 아니거나, 취소 재요청에서 기존 환불을 찾지 못하면 `null`이다. |
 | `data.refund.refundId` | String | `data.refund`가 객체일 때만 존재한다. 시작되었거나 기존에 있던 환불 식별자다. |
 | `data.refund.paymentId` | String | `data.refund`가 객체일 때만 존재한다. 환불 대상 결제 식별자다. |
 | `data.refund.amount` | Integer | `data.refund`가 객체일 때만 존재한다. 환불 금액이며 결제 최종 금액 전체다. |
 | `data.refund.currency` | String | `data.refund`가 객체일 때만 존재한다. 통화 코드다. |
 | `data.refund.status` | String | `data.refund`가 객체일 때만 존재한다. `REQUESTED`, `PROCESSING`, `SUCCEEDED`, `FAILED`, `DISCREPANT` 중 하나다. |
 | `data.refund.requestedAt` | String | `data.refund`가 객체일 때만 존재한다. 환불 요청 시각이며 UTC ISO 8601 형식이다. |
+| `data.sessionId` | String | 예약이 속한 회차 식별자다. |
+| `data.status` | String | 취소 처리 뒤 예약 상태다. 항상 `CANCELLED`이며 현재 `data.reservationStatus`와 같은 값을 중복 표현한다. |
+| `data.cancellationReason` | String | 최초 취소 사유다. 이 API로 최초 취소한 경우 `USER_REQUEST`다. |
+| `data.cancelledAt` | String | 최초 취소 시각이며 UTC ISO 8601 형식이다. |
+| `data.capacityReleasedAt` | String or null | 최초 정원 복구 시각이며 UTC ISO 8601 형식이다. 정원을 복구하지 않은 취소는 `null`이다. |
 
 ### Error Code
 

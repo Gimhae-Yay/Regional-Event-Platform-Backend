@@ -51,6 +51,7 @@ import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepositor
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
 import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
@@ -114,7 +115,7 @@ class RejectRegionAdminStampbookMySqlIntegrationTest extends NonTransactionalMyS
         );
 
         mockMvc.perform(post("/api/v1/region-admin/stampbooks/{stampbookId}/reject", fixture.stampbookId())
-                .header(AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(otherRegionAdmin.getUserId()))
+                .header(AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, otherRegionAdmin.getUserId()))
                 .contentType("application/json")
                 .content(requestBody(REJECTION_REASON)))
             .andExpect(status().isForbidden())
@@ -137,7 +138,7 @@ class RejectRegionAdminStampbookMySqlIntegrationTest extends NonTransactionalMyS
         Fixture fixture = createFixture();
 
         mockMvc.perform(post("/api/v1/region-admin/stampbooks/{stampbookId}/reject", fixture.stampbookId())
-                .header(AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(fixture.regionAdminUserId()))
+                .header(AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, fixture.regionAdminUserId()))
                 .contentType("application/json")
                 .content(requestBody("   ")))
             .andExpect(status().isBadRequest())
@@ -158,7 +159,7 @@ class RejectRegionAdminStampbookMySqlIntegrationTest extends NonTransactionalMyS
         stampbookRepository.saveAndFlush(stampbook);
 
         mockMvc.perform(post("/api/v1/region-admin/stampbooks/{stampbookId}/reject", fixture.stampbookId())
-                .header(AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(fixture.regionAdminUserId()))
+                .header(AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, fixture.regionAdminUserId()))
                 .contentType("application/json")
                 .content(requestBody(REJECTION_REASON)))
             .andExpect(status().isConflict())
@@ -280,7 +281,7 @@ class RejectRegionAdminStampbookMySqlIntegrationTest extends NonTransactionalMyS
             BASE_TIME.plusSeconds(3_600),
             null
         ));
-        Stampbook stampbook = stampbookRepository.save(new Stampbook(region, couponPolicy));
+        Stampbook stampbook = stampbookRepository.save(new Stampbook(region, couponPolicy, "스탬프북 제목"));
         stampbookContentRepository.saveAndFlush(new StampbookContent(stampbook, content));
         stampbook.requestPublication();
         stampbookRepository.saveAndFlush(stampbook);

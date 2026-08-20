@@ -8,20 +8,19 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionParticipationStatus;
-import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
-import io.regionevent.regioneventbackend.domain.user.service.UserRoleAssignmentService;
+import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
 
 @Service
 public class GetMyMissionParticipationsUseCase {
 
-    private final UserRoleAssignmentService userRoleAssignmentService;
+    private final AppUserService appUserService;
     private final MissionParticipationReadService missionParticipationReadService;
 
     public GetMyMissionParticipationsUseCase(
-        UserRoleAssignmentService userRoleAssignmentService,
+        AppUserService appUserService,
         MissionParticipationReadService missionParticipationReadService
     ) {
-        this.userRoleAssignmentService = userRoleAssignmentService;
+        this.appUserService = appUserService;
         this.missionParticipationReadService = missionParticipationReadService;
     }
 
@@ -32,9 +31,9 @@ public class GetMyMissionParticipationsUseCase {
         int page,
         int size
     ) {
-        UserRoleAssignment visitor = userRoleAssignmentService.findActiveVisitor(userId);
+        appUserService.findActiveOrdinaryUser(userId);
         Page<MissionParticipationSummary> summaries = missionParticipationReadService.findByUserIdAndStatus(
-            visitor.getAppUser().getUserId(),
+            userId,
             status,
             PageRequest.of(page, size)
         );

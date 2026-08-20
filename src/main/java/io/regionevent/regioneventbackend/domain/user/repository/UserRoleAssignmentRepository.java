@@ -12,6 +12,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
+import io.regionevent.regioneventbackend.domain.user.entity.AppUserAccountKind;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentStatus;
@@ -32,6 +33,24 @@ public interface UserRoleAssignmentRepository extends JpaRepository<UserRoleAssi
         UserRole role,
         UserRoleAssignmentStatus status,
         AppUserStatus appUserStatus
+    );
+
+    @EntityGraph(attributePaths = {"appUser", "region"})
+    @Query("""
+        SELECT assignment
+        FROM UserRoleAssignment assignment
+        WHERE assignment.appUser.userId = :userId
+          AND assignment.role = :role
+          AND assignment.status = :status
+          AND assignment.appUser.status = :appUserStatus
+          AND assignment.appUser.accountKind = :accountKind
+        """)
+    Optional<UserRoleAssignment> findActiveOrdinaryRoleAssignment(
+        @Param("userId") Long userId,
+        @Param("role") UserRole role,
+        @Param("status") UserRoleAssignmentStatus status,
+        @Param("appUserStatus") AppUserStatus appUserStatus,
+        @Param("accountKind") AppUserAccountKind accountKind
     );
 
     @EntityGraph(attributePaths = {"appUser", "region"})
@@ -63,6 +82,25 @@ public interface UserRoleAssignmentRepository extends JpaRepository<UserRoleAssi
         @Param("role") UserRole role,
         @Param("status") UserRoleAssignmentStatus status,
         @Param("appUserStatus") AppUserStatus appUserStatus
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = {"appUser", "region"})
+    @Query("""
+        SELECT assignment
+        FROM UserRoleAssignment assignment
+        WHERE assignment.appUser.userId = :userId
+          AND assignment.role = :role
+          AND assignment.status = :status
+          AND assignment.appUser.status = :appUserStatus
+          AND assignment.appUser.accountKind = :accountKind
+        """)
+    Optional<UserRoleAssignment> findActiveOrdinaryRoleAssignmentForUpdate(
+        @Param("userId") Long userId,
+        @Param("role") UserRole role,
+        @Param("status") UserRoleAssignmentStatus status,
+        @Param("appUserStatus") AppUserStatus appUserStatus,
+        @Param("accountKind") AppUserAccountKind accountKind
     );
 
     @Query("""

@@ -38,6 +38,7 @@ import io.regionevent.regioneventbackend.domain.region.repository.RegionReposito
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 
 @SpringBootTest
@@ -106,12 +107,14 @@ class PublicRegionMissionControllerIntegrationTest {
             .andExpect(jsonPath("$.data.totalElements").value(2))
             .andExpect(jsonPath("$.data.totalPages").value(1))
             .andExpect(jsonPath("$.data.content[0].missionId").value(first.getMissionId().toString()))
+            .andExpect(jsonPath("$.data.content[0].title").value("테스트 미션"))
             .andExpect(jsonPath("$.data.content[0].conditionType").value("CONTENT_SET"))
             .andExpect(jsonPath("$.data.content[0].requiredVisitCount").isEmpty())
             .andExpect(jsonPath("$.data.content[0].targetContentCount").value(3))
             .andExpect(jsonPath("$.data.content[0].endsAt").value("2030-09-30T23:59:59+09:00"))
             .andExpect(jsonPath("$.data.content[0].participationStatus").isEmpty())
             .andExpect(jsonPath("$.data.content[1].missionId").value(second.getMissionId().toString()))
+            .andExpect(jsonPath("$.data.content[1].title").value("테스트 미션"))
             .andExpect(jsonPath("$.data.content[1].requiredVisitCount").value(3))
             .andExpect(jsonPath("$.data.content[1].targetContentCount").value(0))
             .andExpect(jsonPath("$.data.content[2]").doesNotExist());
@@ -127,7 +130,7 @@ class PublicRegionMissionControllerIntegrationTest {
             fixture.visitor(),
             PUBLISHED_AT.plusSeconds(60)
         ));
-        String accessToken = jwtAccessTokenService.issue(fixture.visitor().getUserId());
+        String accessToken = AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, fixture.visitor().getUserId());
 
         mockMvc.perform(get("/api/v1/regions/{regionId}/missions", fixture.region().getRegionId())
                 .header(AUTHORIZATION, "Bearer " + accessToken))
@@ -146,7 +149,7 @@ class PublicRegionMissionControllerIntegrationTest {
             fixture.visitor(),
             PUBLISHED_AT.plusSeconds(60)
         ));
-        String accessToken = jwtAccessTokenService.issue(fixture.operator().getUserId());
+        String accessToken = AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, fixture.operator().getUserId());
 
         mockMvc.perform(get("/api/v1/regions/{regionId}/missions", fixture.region().getRegionId())
                 .header(AUTHORIZATION, "Bearer " + accessToken))
@@ -247,6 +250,7 @@ class PublicRegionMissionControllerIntegrationTest {
         Content rewardContent = saveContent(fixture, suffix + "-reward");
         CouponPolicy rewardCouponPolicy = saveMissionRewardCouponPolicy(fixture, rewardContent, suffix);
         Mission mission = new Mission(
+            "테스트 미션",
             fixture.region(),
             MissionConditionType.CONTENT_SET,
             null,
@@ -268,6 +272,7 @@ class PublicRegionMissionControllerIntegrationTest {
         Content rewardContent = saveContent(fixture, suffix + "-reward");
         CouponPolicy rewardCouponPolicy = saveMissionRewardCouponPolicy(fixture, rewardContent, suffix);
         return missionRepository.saveAndFlush(new Mission(
+            "테스트 미션",
             fixture.region(),
             MissionConditionType.VISIT_COUNT,
             requiredVisitCount,

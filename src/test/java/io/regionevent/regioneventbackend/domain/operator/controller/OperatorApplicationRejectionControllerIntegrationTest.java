@@ -31,6 +31,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignmentStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 
 @SpringBootTest
@@ -209,7 +210,7 @@ class OperatorApplicationRejectionControllerIntegrationTest {
         return mockMvc.perform(post(
             "/api/v1/region-admin/operator-requests/{applicationId}/reject",
             applicationId
-        ).header("Authorization", "Bearer " + jwtAccessTokenService.issue(user.getUserId()))
+        ).header("Authorization", "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, user.getUserId()))
             .contentType(MediaType.APPLICATION_JSON)
             .content(body));
     }

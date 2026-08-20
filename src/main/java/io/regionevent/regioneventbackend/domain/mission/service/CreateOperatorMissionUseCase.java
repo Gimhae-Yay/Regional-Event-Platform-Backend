@@ -73,7 +73,6 @@ public class CreateOperatorMissionUseCase {
     ) {
         ValidatedCommand validatedCommand = validateCommand(command);
         AuthorizedOperator operator = operatorAuthorizationService.requireAuthorizedOperatorForUpdate(userId);
-
         try {
             CouponPolicy rewardCouponPolicy = couponPolicyService.findForUpdate(
                 validatedCommand.rewardCouponPolicyId()
@@ -89,6 +88,7 @@ public class CreateOperatorMissionUseCase {
             }
 
             Mission mission = missionService.create(
+                validatedCommand.title(),
                 operator.region(),
                 validatedCommand.conditionType(),
                 validatedCommand.requiredVisitCount(),
@@ -124,6 +124,7 @@ public class CreateOperatorMissionUseCase {
 
     private ValidatedCommand validateCommand(CreateOperatorMissionCommand command) {
         if (command == null
+            || command.title() == null
             || command.conditionType() == null
             || command.rewardCouponPolicyId() == null
             || command.rewardCouponPolicyId() <= 0
@@ -136,6 +137,7 @@ public class CreateOperatorMissionUseCase {
         MissionConditionType conditionType = toConditionType(command.conditionType());
         validateConditionFields(conditionType, command.requiredVisitCount(), command.targetContentIds());
         return new ValidatedCommand(
+            command.title(),
             conditionType,
             command.requiredVisitCount(),
             normalizeTargetContentIds(command.targetContentIds()),
@@ -219,6 +221,7 @@ public class CreateOperatorMissionUseCase {
     }
 
     public record CreateOperatorMissionCommand(
+        String title,
         String conditionType,
         Integer requiredVisitCount,
         List<Long> targetContentIds,
@@ -228,6 +231,7 @@ public class CreateOperatorMissionUseCase {
     }
 
     private record ValidatedCommand(
+        String title,
         MissionConditionType conditionType,
         Integer requiredVisitCount,
         List<Long> targetContentIds,

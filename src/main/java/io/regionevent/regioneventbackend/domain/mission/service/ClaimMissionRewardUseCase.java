@@ -35,7 +35,6 @@ import io.regionevent.regioneventbackend.domain.mission.entity.MissionStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
-import io.regionevent.regioneventbackend.domain.user.service.UserRoleAssignmentService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
@@ -44,7 +43,6 @@ public class ClaimMissionRewardUseCase {
 
     private final FindMissionRewardClaimResultUseCase findMissionRewardClaimResultUseCase;
     private final AppUserService appUserService;
-    private final UserRoleAssignmentService userRoleAssignmentService;
     private final MissionParticipationReadService missionParticipationReadService;
     private final MissionParticipationService missionParticipationService;
     private final MissionService missionService;
@@ -60,7 +58,6 @@ public class ClaimMissionRewardUseCase {
     public ClaimMissionRewardUseCase(
         FindMissionRewardClaimResultUseCase findMissionRewardClaimResultUseCase,
         AppUserService appUserService,
-        UserRoleAssignmentService userRoleAssignmentService,
         MissionParticipationReadService missionParticipationReadService,
         MissionParticipationService missionParticipationService,
         MissionService missionService,
@@ -75,7 +72,6 @@ public class ClaimMissionRewardUseCase {
     ) {
         this.findMissionRewardClaimResultUseCase = findMissionRewardClaimResultUseCase;
         this.appUserService = appUserService;
-        this.userRoleAssignmentService = userRoleAssignmentService;
         this.missionParticipationReadService = missionParticipationReadService;
         this.missionParticipationService = missionParticipationService;
         this.missionService = missionService;
@@ -90,7 +86,7 @@ public class ClaimMissionRewardUseCase {
     }
 
     public ClaimMissionRewardResult claim(Long userId, Long participationId, UUID requestId) {
-        userRoleAssignmentService.findActiveVisitor(userId);
+        appUserService.findActiveOrdinaryUser(userId);
         MissionParticipation participation = missionParticipationReadService.findDetail(participationId);
         validateOwnership(userId, participation);
 
@@ -122,7 +118,7 @@ public class ClaimMissionRewardUseCase {
         Long participationId,
         UUID requestId
     ) {
-        AppUser user = appUserService.findActiveUserForUpdate(userId)
+        AppUser user = appUserService.findActiveOrdinaryUserForUpdate(userId)
             .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
         CouponPolicy couponPolicy = couponPolicyService.findForUpdate(couponPolicyId);
         Mission mission = missionService.findByMissionIdForUpdate(missionId);

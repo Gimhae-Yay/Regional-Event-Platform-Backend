@@ -52,6 +52,7 @@ import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignme
 import io.regionevent.regioneventbackend.domain.visit.entity.CheckinMethod;
 import io.regionevent.regioneventbackend.domain.visit.entity.Visit;
 import io.regionevent.regioneventbackend.domain.visit.repository.VisitRepository;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 
 @SpringBootTest
@@ -149,6 +150,7 @@ class MyMissionParticipationDetailControllerIntegrationTest {
             .andExpect(jsonPath("$.message").value("내 미션 참여 상세 조회에 성공했습니다."))
             .andExpect(jsonPath("$.data.participationId").value(participation.getMissionParticipationId().toString()))
             .andExpect(jsonPath("$.data.missionId").value(fixtures.mission().getMissionId().toString()))
+            .andExpect(jsonPath("$.data.title").value("테스트 미션"))
             .andExpect(jsonPath("$.data.status").value("IN_PROGRESS"))
             .andExpect(jsonPath("$.data.conditionType").value("CONTENT_SET"))
             .andExpect(jsonPath("$.data.progressCount").value(1))
@@ -328,6 +330,7 @@ class MyMissionParticipationDetailControllerIntegrationTest {
             100L
         ));
         Mission mission = new Mission(
+            "테스트 미션",
             region,
             conditionType,
             requiredVisitCount,
@@ -465,7 +468,7 @@ class MyMissionParticipationDetailControllerIntegrationTest {
     }
 
     private String bearerToken(AppUser user) {
-        return "Bearer " + jwtAccessTokenService.issue(user.getUserId());
+        return "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, user.getUserId());
     }
 
     private record MissionFixtures(

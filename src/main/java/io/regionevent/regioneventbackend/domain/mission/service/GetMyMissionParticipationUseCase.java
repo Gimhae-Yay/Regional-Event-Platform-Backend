@@ -12,28 +12,27 @@ import io.regionevent.regioneventbackend.domain.mission.entity.MissionConditionT
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionParticipation;
 import io.regionevent.regioneventbackend.domain.mission.entity.MissionProgress;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
-import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
-import io.regionevent.regioneventbackend.domain.user.service.UserRoleAssignmentService;
+import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 @Service
 public class GetMyMissionParticipationUseCase {
 
-    private final UserRoleAssignmentService userRoleAssignmentService;
+    private final AppUserService appUserService;
     private final MissionParticipationReadService missionParticipationReadService;
     private final MissionProgressService missionProgressService;
     private final MissionRewardClaimService missionRewardClaimService;
     private final MissionTargetContentService missionTargetContentService;
 
     public GetMyMissionParticipationUseCase(
-        UserRoleAssignmentService userRoleAssignmentService,
+        AppUserService appUserService,
         MissionParticipationReadService missionParticipationReadService,
         MissionProgressService missionProgressService,
         MissionRewardClaimService missionRewardClaimService,
         MissionTargetContentService missionTargetContentService
     ) {
-        this.userRoleAssignmentService = userRoleAssignmentService;
+        this.appUserService = appUserService;
         this.missionParticipationReadService = missionParticipationReadService;
         this.missionProgressService = missionProgressService;
         this.missionRewardClaimService = missionRewardClaimService;
@@ -42,10 +41,10 @@ public class GetMyMissionParticipationUseCase {
 
     @Transactional(readOnly = true)
     public MissionParticipationDetailResult get(Long userId, Long participationId) {
-        UserRoleAssignment visitor = userRoleAssignmentService.findActiveVisitor(userId);
+        appUserService.findActiveOrdinaryUser(userId);
         MissionParticipation participation = missionParticipationReadService.findDetail(participationId);
         AppUser participationUser = participation.getUser();
-        if (participationUser == null || !visitor.getAppUser().getUserId().equals(participationUser.getUserId())) {
+        if (participationUser == null || !userId.equals(participationUser.getUserId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         List<MissionProgress> progresses = missionProgressService.findAllByParticipationId(
@@ -55,6 +54,7 @@ public class GetMyMissionParticipationUseCase {
         List<MissionProgress> visibleProgresses = resolveVisibleProgresses(mission, progresses);
         return new MissionParticipationDetailResult(
             participation,
+            mission.getTitle(),
             visibleProgresses,
             visibleProgresses.size(),
             resolveRequiredCount(mission),

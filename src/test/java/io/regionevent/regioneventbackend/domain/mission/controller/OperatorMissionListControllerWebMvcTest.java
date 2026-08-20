@@ -27,6 +27,7 @@ import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
@@ -70,6 +71,7 @@ class OperatorMissionListControllerWebMvcTest {
             .andExpect(jsonPath("$.code").value("SUCCESS"))
             .andExpect(jsonPath("$.message").value("내 미션 목록 조회에 성공했습니다."))
             .andExpect(jsonPath("$.data.content[0].missionId").value("702"))
+            .andExpect(jsonPath("$.data.content[0].title").doesNotExist())
             .andExpect(jsonPath("$.data.content[0].status").value("PUBLISHED"))
             .andExpect(jsonPath("$.data.content[0].conditionType").value("CONTENT_SET"))
             .andExpect(jsonPath("$.data.content[0].endsAt").value("2026-09-30T23:59:59+09:00"))
@@ -148,6 +150,6 @@ class OperatorMissionListControllerWebMvcTest {
     }
 
     private MockHttpServletRequestBuilder authenticated(MockHttpServletRequestBuilder requestBuilder) {
-        return requestBuilder.header("Authorization", "Bearer " + jwtAccessTokenService.issue(OPERATOR_ID));
+        return requestBuilder.header("Authorization", "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, OPERATOR_ID));
     }
 }

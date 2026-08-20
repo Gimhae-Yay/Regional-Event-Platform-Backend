@@ -4,6 +4,8 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationReadResult;
@@ -12,6 +14,7 @@ import io.regionevent.regioneventbackend.domain.reservation.service.ReservationR
 public record GetMyReservationResponse(
     ReservationResponse reservation,
     SessionResponse session,
+    ContentResponse content,
     CheckInResponse checkIn
 ) {
 
@@ -22,7 +25,12 @@ public record GetMyReservationResponse(
         return new GetMyReservationResponse(
             ReservationResponse.from(snapshot.reservation()),
             SessionResponse.from(snapshot.session(), snapshot.content()),
-            new CheckInResponse(result.checkIn().checkedIn(), result.checkIn().checkedAt())
+            ContentResponse.from(snapshot.content()),
+            new CheckInResponse(
+                result.checkIn().checkedIn(),
+                result.checkIn().checkedAt(),
+                result.checkIn().visitId() == null ? null : result.checkIn().visitId().toString()
+            )
         );
     }
 
@@ -30,6 +38,7 @@ public record GetMyReservationResponse(
         String reservationId,
         String reservationNo,
         ReservationStatus status,
+        int quantity,
         Instant confirmedAt,
         Instant cancelledAt,
         String cancellationReason,
@@ -41,6 +50,7 @@ public record GetMyReservationResponse(
                 reservation.reservationId().toString(),
                 reservation.reservationNo(),
                 reservation.status(),
+                reservation.quantity(),
                 reservation.confirmedAt(),
                 reservation.cancelledAt(),
                 reservation.cancellationReason(),
@@ -77,8 +87,20 @@ public record GetMyReservationResponse(
 
     public record CheckInResponse(
         boolean checkedIn,
-        Instant checkedAt
+        Instant checkedAt,
+        @JsonInclude(JsonInclude.Include.ALWAYS) String visitId
     ) {
+    }
+
+    public record ContentResponse(
+        String contentId,
+        String title,
+        String locationText
+    ) {
+
+        private static ContentResponse from(ReservationReadSnapshot.ContentInfo content) {
+            return new ContentResponse(content.contentId().toString(), content.title(), content.locationText());
+        }
     }
 
     private static OffsetDateTime toSeoulOffsetDateTime(Instant instant) {

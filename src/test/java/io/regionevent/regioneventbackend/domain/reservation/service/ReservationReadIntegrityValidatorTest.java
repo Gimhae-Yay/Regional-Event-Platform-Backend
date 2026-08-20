@@ -103,6 +103,7 @@ class ReservationReadIntegrityValidatorTest {
                 null,
                 null,
                 null,
+                1,
                 1L
             ),
             new ReservationReadSnapshot.SessionInfo(
@@ -114,7 +115,7 @@ class ReservationReadIntegrityValidatorTest {
                 Instant.parse("2026-08-04T02:30:00Z"),
                 1L
             ),
-            new ReservationReadSnapshot.ContentInfo(3L, "김해 가야문화 체험", 1L),
+            new ReservationReadSnapshot.ContentInfo(3L, "김해 가야문화 체험", "김해시", 1L),
             new ReservationReadSnapshot.ParticipantInfo(
                 participantUserId,
                 participantUserId == null ? null : "김민수",

@@ -61,9 +61,22 @@ public class AppUserService {
             .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
     }
 
+    public AppUser findActiveOrdinaryUser(Long userId) {
+        return appUserRepository.findById(userId)
+            .filter(user -> user.getStatus() == AppUserStatus.ACTIVE)
+            .filter(user -> user.getAccountKind() == AppUserAccountKind.ORDINARY)
+            .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+    }
+
     public Optional<AppUser> findActiveUserForUpdate(Long userId) {
         return appUserRepository.findByIdForUpdate(userId)
             .filter(user -> user.getStatus() == AppUserStatus.ACTIVE);
+    }
+
+    public Optional<AppUser> findActiveOrdinaryUserForUpdate(Long userId) {
+        return appUserRepository.findByIdForUpdate(userId)
+            .filter(user -> user.getStatus() == AppUserStatus.ACTIVE)
+            .filter(user -> user.getAccountKind() == AppUserAccountKind.ORDINARY);
     }
 
     public List<AppUser> findUsersForUpdate(Long firstUserId, Long secondUserId) {

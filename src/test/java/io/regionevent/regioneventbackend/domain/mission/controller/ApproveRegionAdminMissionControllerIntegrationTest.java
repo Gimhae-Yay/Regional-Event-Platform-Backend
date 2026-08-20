@@ -48,6 +48,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.support.jpa.CleanH2Database;
 
@@ -144,7 +145,7 @@ class ApproveRegionAdminMissionControllerIntegrationTest {
         );
 
         mockMvc.perform(post("/api/v1/region-admin/missions/{missionId}/reject", fixture.missionId())
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(fixture.adminUserId()))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, fixture.adminUserId()))
                 .contentType("application/json")
                 .content("{\"reasonCode\":\"MISSION_REWARD_POLICY_INVALID\"}"))
             .andExpect(status().isOk())
@@ -172,7 +173,7 @@ class ApproveRegionAdminMissionControllerIntegrationTest {
         );
 
         mockMvc.perform(post("/api/v1/region-admin/missions/{missionId}/reject", fixture.missionId())
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(fixture.adminUserId()))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, fixture.adminUserId()))
                 .contentType("application/json")
                 .content("{\"reasonCode\":\"PERSONAL_OPINION\"}"))
             .andExpect(status().isBadRequest())
@@ -197,7 +198,7 @@ class ApproveRegionAdminMissionControllerIntegrationTest {
         mockMvc.perform(post("/api/v1/region-admin/missions/{missionId}/reject", fixture.missionId())
                 .header(
                     HttpHeaders.AUTHORIZATION,
-                    "Bearer " + jwtAccessTokenService.issue(otherAdminUserId)
+                    "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, otherAdminUserId)
                 )
                 .contentType("application/json")
                 .content("{\"reasonCode\":\"MISSION_REWARD_POLICY_INVALID\"}"))
@@ -327,7 +328,7 @@ class ApproveRegionAdminMissionControllerIntegrationTest {
             )
             .header(
                 HttpHeaders.AUTHORIZATION,
-                "Bearer " + jwtAccessTokenService.issue(userId)
+                "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, userId)
             ));
     }
 
@@ -405,6 +406,7 @@ class ApproveRegionAdminMissionControllerIntegrationTest {
             rewardCouponPolicy = couponPolicyRepository.save(rewardCouponPolicy);
 
             Mission mission = new Mission(
+                "테스트 미션",
                 region,
                 conditionType,
                 conditionType == MissionConditionType.VISIT_COUNT ? 3 : null,

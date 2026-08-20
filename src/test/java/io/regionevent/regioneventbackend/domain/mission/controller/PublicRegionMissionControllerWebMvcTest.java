@@ -27,6 +27,7 @@ import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
@@ -54,6 +55,7 @@ class PublicRegionMissionControllerWebMvcTest {
                 List.of(new PublicRegionMissionListResult.Mission(
                     701L,
                     11L,
+                    "김해 문화 미션",
                     MissionConditionType.CONTENT_SET,
                     null,
                     3,
@@ -73,6 +75,7 @@ class PublicRegionMissionControllerWebMvcTest {
             .andExpect(jsonPath("$.message").value("공개 미션 목록 조회에 성공했습니다."))
             .andExpect(jsonPath("$.data.content[0].missionId").value("701"))
             .andExpect(jsonPath("$.data.content[0].regionId").value("11"))
+            .andExpect(jsonPath("$.data.content[0].title").value("김해 문화 미션"))
             .andExpect(jsonPath("$.data.content[0].conditionType").value("CONTENT_SET"))
             .andExpect(jsonPath("$.data.content[0].targetContentCount").value(3))
             .andExpect(jsonPath("$.data.content[0].endsAt").value("2026-09-30T23:59:59+09:00"))
@@ -87,12 +90,13 @@ class PublicRegionMissionControllerWebMvcTest {
 
     @Test
     void getPublicRegionMissions_authenticated_returnsParticipationStatus() throws Exception {
-        String accessToken = jwtAccessTokenService.issue(100L);
+        String accessToken = AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, 100L);
         when(getPublicRegionMissionsUseCase.get(11L, 100L, 1, 1))
             .thenReturn(new PublicRegionMissionListResult(
                 List.of(new PublicRegionMissionListResult.Mission(
                     702L,
                     11L,
+                    "김해 방문 미션",
                     MissionConditionType.VISIT_COUNT,
                     3,
                     0,

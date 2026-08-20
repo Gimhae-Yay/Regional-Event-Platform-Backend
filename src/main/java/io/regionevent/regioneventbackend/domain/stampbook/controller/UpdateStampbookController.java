@@ -70,6 +70,7 @@ public class UpdateStampbookController {
             : parsePositiveId(request.rewardCouponPolicyId());
         return new UpdateStampbookCommand(
             parsePositiveId(stampbookId),
+            request.title(),
             contentIds,
             rewardCouponPolicyId,
             request.reason()

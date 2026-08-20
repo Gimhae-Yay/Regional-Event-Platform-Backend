@@ -19,8 +19,8 @@ import io.regionevent.regioneventbackend.domain.review.dto.CreateVisitReviewRequ
 import io.regionevent.regioneventbackend.domain.review.dto.CreateVisitReviewResponse;
 import io.regionevent.regioneventbackend.domain.review.entity.Review;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
+import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
-import io.regionevent.regioneventbackend.domain.user.service.UserRoleAssignmentService;
 import io.regionevent.regioneventbackend.domain.visit.entity.Visit;
 import io.regionevent.regioneventbackend.domain.visit.service.VisitService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -31,7 +31,6 @@ public class CreateVisitReviewUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(CreateVisitReviewUseCase.class);
     private final AppUserService appUserService;
-    private final UserRoleAssignmentService userRoleAssignmentService;
     private final VisitService visitService;
     private final ReviewService reviewService;
     private final RecordAuditEventUseCase recordAuditEventUseCase;
@@ -39,14 +38,12 @@ public class CreateVisitReviewUseCase {
 
     public CreateVisitReviewUseCase(
         AppUserService appUserService,
-        UserRoleAssignmentService userRoleAssignmentService,
         VisitService visitService,
         ReviewService reviewService,
         RecordAuditEventUseCase recordAuditEventUseCase,
         RecordFailedAuditEventUseCase recordFailedAuditEventUseCase
     ) {
         this.appUserService = appUserService;
-        this.userRoleAssignmentService = userRoleAssignmentService;
         this.visitService = visitService;
         this.reviewService = reviewService;
         this.recordAuditEventUseCase = recordAuditEventUseCase;
@@ -64,9 +61,9 @@ public class CreateVisitReviewUseCase {
         Visit visit = null;
 
         try {
-            AppUser user = appUserService.findActiveUserForUpdate(userId)
+            AppUser user = appUserService.findActiveOrdinaryUserForUpdate(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
-            actor = new AuditEventActor(userRoleAssignmentService.findActiveVisitor(userId));
+            actor = new AuditEventActor(user, UserRole.VISITOR);
             visit = visitService.findById(visitId);
             validateOwner(visit, user);
             Review review = reviewService.createPublished(visit, user, request.rating(), request.reviewText());

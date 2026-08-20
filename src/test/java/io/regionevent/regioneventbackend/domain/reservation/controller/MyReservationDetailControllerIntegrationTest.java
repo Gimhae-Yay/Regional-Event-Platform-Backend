@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 import jakarta.persistence.EntityManager;
 
@@ -44,6 +45,7 @@ import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepositor
 import io.regionevent.regioneventbackend.domain.visit.entity.CheckinMethod;
 import io.regionevent.regioneventbackend.domain.visit.entity.Visit;
 import io.regionevent.regioneventbackend.domain.visit.repository.VisitRepository;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 
 @SpringBootTest
@@ -129,6 +131,7 @@ class MyReservationDetailControllerIntegrationTest {
             .andExpect(jsonPath("$.message").value("예약 상세 조회에 성공했습니다."))
             .andExpect(jsonPath("$.data.reservation.reservationId").value(confirmed.getReservationId().toString()))
             .andExpect(jsonPath("$.data.reservation.status").value("CONFIRMED"))
+            .andExpect(jsonPath("$.data.reservation.quantity").value(1))
             .andExpect(jsonPath("$.data.reservation.confirmedAt").value("2030-08-01T01:00:00Z"))
             .andExpect(jsonPath("$.data.reservation.cancelledAt").doesNotExist())
             .andExpect(jsonPath("$.data.reservation.cancellationReason").doesNotExist())
@@ -140,25 +143,35 @@ class MyReservationDetailControllerIntegrationTest {
             .andExpect(jsonPath("$.data.session.endsAt").value("2030-08-10T12:00:00+09:00"))
             .andExpect(jsonPath("$.data.session.checkinOpenAt").value("2030-08-10T09:30:00+09:00"))
             .andExpect(jsonPath("$.data.session.checkinCloseAt").value("2030-08-10T10:30:00+09:00"))
+            .andExpect(jsonPath("$.data.content.contentId").value(fixture.content().getContentId().toString()))
+            .andExpect(jsonPath("$.data.content.title").value("김해 문화 체험"))
+            .andExpect(jsonPath("$.data.content.locationText").value("김해시"))
             .andExpect(jsonPath("$.data.checkIn.checkedIn").value(false))
-            .andExpect(jsonPath("$.data.checkIn.checkedAt").doesNotExist());
+            .andExpect(jsonPath("$.data.checkIn.checkedAt").doesNotExist())
+            .andExpect(jsonPath("$.data.checkIn.visitId").value(org.hamcrest.Matchers.nullValue()));
 
         performGet(fixture.user(), checkedIn.getReservationId())
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.reservation.status").value("CHECKED_IN"))
+            .andExpect(jsonPath("$.data.reservation.quantity").value(1))
             .andExpect(jsonPath("$.data.checkIn.checkedIn").value(true))
-            .andExpect(jsonPath("$.data.checkIn.checkedAt").value("2030-08-04T01:00:00Z"));
+            .andExpect(jsonPath("$.data.checkIn.checkedAt").value("2030-08-04T01:00:00Z"))
+            .andExpect(jsonPath("$.data.checkIn.visitId").value(visit.getVisitId().toString()));
         performGet(fixture.user(), cancelled.getReservationId())
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.reservation.status").value("CANCELLED"))
+            .andExpect(jsonPath("$.data.reservation.quantity").value(1))
             .andExpect(jsonPath("$.data.reservation.cancelledAt").value("2030-08-02T01:00:00Z"))
             .andExpect(jsonPath("$.data.reservation.cancellationReason").value("방문자 요청"))
-            .andExpect(jsonPath("$.data.checkIn.checkedIn").value(false));
+            .andExpect(jsonPath("$.data.checkIn.checkedIn").value(false))
+            .andExpect(jsonPath("$.data.checkIn.visitId").value(org.hamcrest.Matchers.nullValue()));
         performGet(fixture.user(), expired.getReservationId())
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.reservation.status").value("EXPIRED"))
+            .andExpect(jsonPath("$.data.reservation.quantity").value(1))
             .andExpect(jsonPath("$.data.reservation.expiredAt").value("2030-08-03T01:00:00Z"))
-            .andExpect(jsonPath("$.data.checkIn.checkedIn").value(false));
+            .andExpect(jsonPath("$.data.checkIn.checkedIn").value(false))
+            .andExpect(jsonPath("$.data.checkIn.visitId").value(org.hamcrest.Matchers.nullValue()));
 
         String responseBody = confirmedResult.andReturn().getResponse().getContentAsString();
         assertThat(responseBody).doesNotContain(
@@ -255,6 +268,34 @@ class MyReservationDetailControllerIntegrationTest {
                 + ", sessionId=null, visitId=null, resultCode=INTERNAL_SERVER_ERROR"
         );
         assertReadDoesNotChangeState(fixture, List.of(reservation), 0);
+    }
+
+    @Test
+    void 예약_상세_조회는_콘텐츠_종료_중단_철회_뒤에도_콘텐츠_표시_정보를_반환한다() throws Exception {
+        List<Consumer<Content>> lifecycleChanges = List.of(
+            Content::end,
+            Content::suspend,
+            Content::withdraw
+        );
+
+        for (Consumer<Content> lifecycleChange : lifecycleChanges) {
+            Fixture fixture = createFixture(AppUserStatus.ACTIVE);
+            Reservation reservation = saveReservation(fixture, ReservationStatus.CONFIRMED, "content-lifecycle");
+            lifecycleChange.accept(fixture.content());
+            entityManager.flush();
+            entityManager.clear();
+
+            performGet(fixture.user(), reservation.getReservationId())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.session.contentId").value(
+                    fixture.content().getContentId().toString()
+                ))
+                .andExpect(jsonPath("$.data.content.contentId").value(
+                    fixture.content().getContentId().toString()
+                ))
+                .andExpect(jsonPath("$.data.content.title").value("김해 문화 체험"))
+                .andExpect(jsonPath("$.data.content.locationText").value("김해시"));
+        }
     }
 
     private ResultActions performGet(AppUser user, Long reservationId) throws Exception {
@@ -370,7 +411,7 @@ class MyReservationDetailControllerIntegrationTest {
     }
 
     private String bearerToken(AppUser user) {
-        return "Bearer " + jwtAccessTokenService.issue(user.getUserId());
+        return "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, user.getUserId());
     }
 
     private record Fixture(

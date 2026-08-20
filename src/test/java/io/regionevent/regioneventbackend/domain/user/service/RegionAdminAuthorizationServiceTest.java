@@ -14,6 +14,7 @@ import org.mockito.InOrder;
 
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
+import io.regionevent.regioneventbackend.domain.user.entity.AppUserAccountKind;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
@@ -123,7 +124,8 @@ class RegionAdminAuthorizationServiceTest {
                 USER_ID,
                 UserRole.REGION_ADMIN,
                 UserRoleAssignmentStatus.ACTIVE,
-                AppUserStatus.ACTIVE
+                AppUserStatus.ACTIVE,
+                AppUserAccountKind.ORDINARY
             )).thenReturn(Optional.of(assignment));
 
         assertThat(authorizationService.authorizeForUpdate(USER_ID, GIMHAE_REGION_ID))
@@ -134,7 +136,8 @@ class RegionAdminAuthorizationServiceTest {
             USER_ID,
             UserRole.REGION_ADMIN,
             UserRoleAssignmentStatus.ACTIVE,
-            AppUserStatus.ACTIVE
+            AppUserStatus.ACTIVE,
+            AppUserAccountKind.ORDINARY
         );
     }
 
@@ -143,13 +146,15 @@ class RegionAdminAuthorizationServiceTest {
                 USER_ID,
                 UserRole.REGION_ADMIN,
                 UserRoleAssignmentStatus.ACTIVE,
-                AppUserStatus.ACTIVE
+                AppUserStatus.ACTIVE,
+                AppUserAccountKind.ORDINARY
             )).thenReturn(assignment);
     }
 
     private void givenActiveUserForUpdate() {
         AppUser user = mock(AppUser.class);
         when(user.getStatus()).thenReturn(AppUserStatus.ACTIVE);
+        when(user.getAccountKind()).thenReturn(AppUserAccountKind.ORDINARY);
         when(appUserRepository.findByIdForUpdate(USER_ID)).thenReturn(Optional.of(user));
     }
 

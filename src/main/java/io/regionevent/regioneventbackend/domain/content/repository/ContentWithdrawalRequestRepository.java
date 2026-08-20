@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.content.repository;
 
+import java.util.List;
 import java.util.Optional;
 
 import jakarta.persistence.LockModeType;
@@ -12,9 +13,22 @@ import org.springframework.data.repository.query.Param;
 
 import io.regionevent.regioneventbackend.domain.content.entity.ContentWithdrawalRequest;
 import io.regionevent.regioneventbackend.domain.content.entity.ContentWithdrawalRequestStatus;
+import io.regionevent.regioneventbackend.domain.content.entity.ContentStatus;
 
 public interface ContentWithdrawalRequestRepository
     extends JpaRepository<ContentWithdrawalRequest, Long> {
+
+    @Query("""
+        SELECT request
+        FROM ContentWithdrawalRequest request
+        LEFT JOIN FETCH request.content content
+        LEFT JOIN FETCH content.region
+        LEFT JOIN FETCH request.requestedBy
+        WHERE request.contentWithdrawalRequestId = :withdrawalRequestId
+        """)
+    Optional<ContentWithdrawalRequest> findReviewDetailById(
+        @Param("withdrawalRequestId") Long withdrawalRequestId
+    );
 
     @Query("""
         SELECT request.content.contentId
@@ -57,6 +71,24 @@ public interface ContentWithdrawalRequestRepository
     Optional<ContentWithdrawalRequest> findByContentIdAndStatusForUpdate(
         @Param("contentId") Long contentId,
         @Param("status") ContentWithdrawalRequestStatus status
+    );
+
+    @Query("""
+        SELECT request
+        FROM ContentWithdrawalRequest request
+        JOIN FETCH request.content content
+        JOIN FETCH content.region region
+        LEFT JOIN FETCH request.requestedBy requester
+        WHERE region.regionId = :regionId
+            AND request.status = :requestStatus
+            AND content.status = :contentStatus
+            AND content.deletedAt IS NULL
+        ORDER BY request.requestedAt ASC, request.contentWithdrawalRequestId ASC
+        """)
+    List<ContentWithdrawalRequest> findReviewCandidatesByRegionId(
+        @Param("regionId") Long regionId,
+        @Param("requestStatus") ContentWithdrawalRequestStatus requestStatus,
+        @Param("contentStatus") ContentStatus contentStatus
     );
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)

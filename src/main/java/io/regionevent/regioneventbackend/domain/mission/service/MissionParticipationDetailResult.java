@@ -7,6 +7,7 @@ import io.regionevent.regioneventbackend.domain.mission.entity.MissionProgress;
 
 public record MissionParticipationDetailResult(
     MissionParticipation participation,
+    String title,
     List<MissionProgress> progresses,
     int progressCount,
     int requiredCount,

@@ -5,6 +5,8 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 import io.regionevent.regioneventbackend.domain.reservation.service.ReservationReadResult;
@@ -28,6 +30,7 @@ public record GetMyReservationsResponse(
         String reservationId,
         String reservationNo,
         ReservationStatus status,
+        int quantity,
         Instant confirmedAt,
         ContentResponse content,
         SessionResponse session,
@@ -40,21 +43,27 @@ public record GetMyReservationsResponse(
                 snapshot.reservation().reservationId().toString(),
                 snapshot.reservation().reservationNo(),
                 snapshot.reservation().status(),
+                snapshot.reservation().quantity(),
                 snapshot.reservation().confirmedAt(),
                 ContentResponse.from(snapshot.content()),
                 SessionResponse.from(snapshot.session()),
-                new CheckInResponse(result.checkIn().checkedIn(), result.checkIn().checkedAt())
+                new CheckInResponse(
+                    result.checkIn().checkedIn(),
+                    result.checkIn().checkedAt(),
+                    result.checkIn().visitId() == null ? null : result.checkIn().visitId().toString()
+                )
             );
         }
     }
 
     public record ContentResponse(
         String contentId,
-        String title
+        String title,
+        String locationText
     ) {
 
         private static ContentResponse from(ReservationReadSnapshot.ContentInfo content) {
-            return new ContentResponse(content.contentId().toString(), content.title());
+            return new ContentResponse(content.contentId().toString(), content.title(), content.locationText());
         }
     }
 
@@ -77,7 +86,8 @@ public record GetMyReservationsResponse(
 
     public record CheckInResponse(
         boolean checkedIn,
-        Instant checkedAt
+        Instant checkedAt,
+        @JsonInclude(JsonInclude.Include.ALWAYS) String visitId
     ) {
     }
 

@@ -98,6 +98,7 @@ class UpdateOperatorMissionUseCaseTest {
             .thenReturn(List.of(firstContent, secondContent));
         when(missionService.replaceDraftCoreValues(
             lockedMission,
+            "수정 미션",
             MissionConditionType.CONTENT_SET,
             null,
             requestedPolicy,
@@ -135,6 +136,50 @@ class UpdateOperatorMissionUseCaseTest {
     }
 
     @Test
+    void update_withMissingTitle_rejectsBeforeAuthorizationOrLocks() {
+        assertThatThrownBy(() -> useCase.update(
+            100L,
+            701L,
+            command(null, "VISIT_COUNT", 4, List.of(), 501L),
+            REQUEST_ID
+        )).isInstanceOf(BusinessException.class)
+            .extracting(exception -> ((BusinessException) exception).getErrorCode())
+            .isEqualTo(ErrorCode.INVALID_INPUT);
+        verifyNoInteractions(
+            operatorAuthorizationService,
+            couponPolicyService,
+            missionService,
+            contentService,
+            missionTargetContentService,
+            recordAuditEventUseCase,
+            recordFailedAuditEventUseCase
+        );
+    }
+
+    @Test
+    void update_withBlankOrOverlongTitle_returnsInvalidInput() {
+        AuthorizedOperator operator = operator(100L, 11L, 900L);
+        CouponPolicy policy = rewardPolicy(501L, 11L, CouponPolicyStatus.DRAFT);
+        Mission mission = mission(701L, 11L, MissionStatus.DRAFT, policy);
+        givenCommonUpdate(operator, mission, policy);
+        for (String invalidTitle : List.of("   ", "가".repeat(256))) {
+            when(missionService.replaceDraftCoreValues(
+                mission,
+                invalidTitle,
+                MissionConditionType.VISIT_COUNT,
+                4,
+                policy,
+                Instant.parse("2027-09-30T14:59:59Z")
+            )).thenThrow(new BusinessException(ErrorCode.INVALID_INPUT));
+
+            assertBusinessError(
+                command(invalidTitle, "VISIT_COUNT", 4, List.of(), 501L),
+                ErrorCode.INVALID_INPUT
+            );
+        }
+    }
+
+    @Test
     void update_withVisitCount_deletesExistingTargetConnectionsWithoutLockingContents() {
         AuthorizedOperator operator = operator(100L, 11L, 900L);
         CouponPolicy policy = rewardPolicy(501L, 11L, CouponPolicyStatus.DRAFT);
@@ -142,6 +187,7 @@ class UpdateOperatorMissionUseCaseTest {
         givenCommonUpdate(operator, mission, policy);
         when(missionService.replaceDraftCoreValues(
             mission,
+            "수정 미션",
             MissionConditionType.VISIT_COUNT,
             4,
             policy,
@@ -282,6 +328,15 @@ class UpdateOperatorMissionUseCaseTest {
             .isInstanceOf(BusinessException.class)
             .extracting(exception -> ((BusinessException) exception).getErrorCode())
             .isEqualTo(ErrorCode.INVALID_INPUT);
+        assertThatThrownBy(() -> useCase.update(
+            100L,
+            701L,
+            command(null, "CONTENT_SET", null, List.of(), 501L),
+            REQUEST_ID
+        ))
+            .isInstanceOf(BusinessException.class)
+            .extracting(exception -> ((BusinessException) exception).getErrorCode())
+            .isEqualTo(ErrorCode.INVALID_INPUT);
 
         verifyNoInteractions(
             operatorAuthorizationService,
@@ -322,7 +377,18 @@ class UpdateOperatorMissionUseCaseTest {
         List<Long> targetContentIds,
         Long rewardCouponPolicyId
     ) {
+        return command("수정 미션", conditionType, requiredVisitCount, targetContentIds, rewardCouponPolicyId);
+    }
+
+    private UpdateOperatorMissionUseCase.UpdateOperatorMissionCommand command(
+        String title,
+        String conditionType,
+        Integer requiredVisitCount,
+        List<Long> targetContentIds,
+        Long rewardCouponPolicyId
+    ) {
         return new UpdateOperatorMissionUseCase.UpdateOperatorMissionCommand(
+            title,
             conditionType,
             requiredVisitCount,
             targetContentIds,

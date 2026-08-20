@@ -50,6 +50,8 @@ public class ReservationReadIntegrityValidator {
             || reservation.reservationNo() == null
             || reservation.reservationNo().isBlank()
             || reservation.status() == null
+            || reservation.quantity() == null
+            || reservation.quantity() <= 0
             || !hasValue(reservation.regionId())
             || !hasValue(session.sessionId())
             || session.status() == null
@@ -57,6 +59,8 @@ public class ReservationReadIntegrityValidator {
             || !hasValue(content.contentId())
             || content.title() == null
             || content.title().isBlank()
+            || content.locationText() == null
+            || content.locationText().isBlank()
             || !hasValue(content.regionId())
             || !sameId(reservation.regionId(), session.regionId())
             || !sameId(session.regionId(), content.regionId())) {

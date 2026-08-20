@@ -34,6 +34,7 @@ import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
@@ -70,6 +71,7 @@ class RegionAdminMissionControllerWebMvcTest {
         when(getRegionAdminMissionDetailUseCase.get(REGION_ADMIN_ID, 701L))
             .thenReturn(new RegionAdminMissionDetailResponse(
                 "701",
+                "테스트 미션",
                 "11",
                 MissionStatus.DRAFT,
                 MissionConditionType.CONTENT_SET,
@@ -85,6 +87,7 @@ class RegionAdminMissionControllerWebMvcTest {
             .andExpect(jsonPath("$.code").value("SUCCESS"))
             .andExpect(jsonPath("$.message").value("지역 미션 상세 조회에 성공했습니다."))
             .andExpect(jsonPath("$.data.missionId").value("701"))
+            .andExpect(jsonPath("$.data.title").value("테스트 미션"))
             .andExpect(jsonPath("$.data.regionId").value("11"))
             .andExpect(jsonPath("$.data.status").value("DRAFT"))
             .andExpect(jsonPath("$.data.conditionType").value("CONTENT_SET"))
@@ -309,6 +312,6 @@ class RegionAdminMissionControllerWebMvcTest {
     }
 
     private MockHttpServletRequestBuilder authenticated(MockHttpServletRequestBuilder requestBuilder) {
-        return requestBuilder.header("Authorization", "Bearer " + jwtAccessTokenService.issue(REGION_ADMIN_ID));
+        return requestBuilder.header("Authorization", "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, REGION_ADMIN_ID));
     }
 }

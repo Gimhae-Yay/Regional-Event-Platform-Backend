@@ -9,6 +9,7 @@ import java.util.Objects;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationReadProjection;
 import io.regionevent.regioneventbackend.domain.reservation.repository.ReservationRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -91,6 +92,7 @@ public class ReservationReadService {
         if (projections.stream().anyMatch(projection -> !sameReservation(snapshot, projection))) {
             throw new IllegalStateException("reservation read data is inconsistent");
         }
+        projections.forEach(projection -> validateCapacityHold(snapshot, projection));
 
         List<ReservationReadSnapshot.VisitInfo> visits = projections.stream()
             .map(this::toVisitInfo)
@@ -133,6 +135,7 @@ public class ReservationReadService {
                 projection.cancelledAt(),
                 projection.cancellationReason(),
                 projection.expiredAt(),
+                projection.holdQuantity(),
                 projection.reservationRegionId()
             ),
             new ReservationReadSnapshot.SessionInfo(
@@ -147,6 +150,7 @@ public class ReservationReadService {
             new ReservationReadSnapshot.ContentInfo(
                 projection.contentId(),
                 projection.contentTitle(),
+                projection.contentLocationText(),
                 projection.contentRegionId()
             ),
             new ReservationReadSnapshot.ParticipantInfo(
@@ -155,6 +159,25 @@ public class ReservationReadService {
                 projection.participantPhone()
             )
         );
+    }
+
+    private void validateCapacityHold(
+        ReservationReadSnapshot snapshot,
+        ReservationReadProjection projection
+    ) {
+        if (projection.holdId() == null
+            || projection.holdStatus() != CapacityHoldStatus.CONSUMED
+            || projection.holdQuantity() == null
+            || projection.holdQuantity() <= 0
+            || !sameId(snapshot.reservation().reservationId(), projection.holdReservationId())
+            || !sameId(snapshot.reservation().regionId(), projection.holdRegionId())
+            || !sameId(snapshot.session().sessionId(), projection.holdSessionId())) {
+            throw new IllegalStateException("reservation read data is inconsistent");
+        }
+    }
+
+    private boolean sameId(Long expected, Long actual) {
+        return Objects.equals(expected, actual);
     }
 
     private ReservationReadSnapshot.VisitInfo toVisitInfo(ReservationReadProjection projection) {

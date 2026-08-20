@@ -2,7 +2,7 @@
 
 ## 1. 개요
 
-지역 관리자가 담당 지역 미션의 상세와 검토에 필요한 조건·보상 정보를 조회한다.
+지역 관리자가 담당 지역 미션의 제목과 검토에 필요한 조건·보상 정보를 조회한다.
 
 ### Request
 
@@ -41,6 +41,7 @@ Accept: application/json
   "message": "지역 미션 상세 조회에 성공했습니다.",
   "data": {
     "missionId": "701",
+    "title": "김해 골목 세 곳 방문하기",
     "regionId": "11",
     "status": "PENDING_REVIEW",
     "conditionType": "CONTENT_SET",
@@ -65,6 +66,7 @@ Accept: application/json
 | `code` | String | `SUCCESS` |
 | `message` | String | 지역 관리자 미션 상세 조회 성공 메시지 |
 | `data.missionId` | String | 미션 식별자 |
+| `data.title` | String | 미션이 직접 소유하는 null이 아닌 제목. Unicode code point 기준 1~255자 |
 | `data.regionId` | String | 미션 운영 지역 식별자 |
 | `data.status` | String | `DRAFT`, `PENDING_REVIEW`, `PUBLISHED`, `ENDED` 중 하나 |
 | `data.conditionType` | String | `VISIT_COUNT` 또는 `CONTENT_SET` |
@@ -87,4 +89,5 @@ Accept: application/json
 
 ### 처리 규칙
 
-인증 지역 관리자의 담당 지역 미션만 조회할 수 있다.
+1. 인증 지역 관리자의 담당 지역 미션만 조회할 수 있다.
+2. `title`은 해당 미션 행에 저장된 제목이며 목록 응답의 같은 미션 제목과 일치한다.

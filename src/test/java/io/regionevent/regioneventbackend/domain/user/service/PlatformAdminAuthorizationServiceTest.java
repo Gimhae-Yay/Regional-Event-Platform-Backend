@@ -18,7 +18,6 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserAccountKind;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminAssignment;
-import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminAssignmentStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminGrade;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -34,7 +33,7 @@ class PlatformAdminAuthorizationServiceTest {
 
     @ParameterizedTest
     @EnumSource(value = PlatformAdminGrade.class)
-    void 활성_고권한_등급은_전체관리자_인가를_통과한다(PlatformAdminGrade grade) {
+    void 활성_PRIVILEGED_계정의_고권한_배정은_전체관리자_인가를_통과한다(PlatformAdminGrade grade) {
         PlatformAdminAssignment assignment = assignment(grade);
         givenActiveAssignment(Optional.of(assignment));
 
@@ -44,22 +43,15 @@ class PlatformAdminAuthorizationServiceTest {
     }
 
     @Test
-    void 활성_고권한_배정이_없으면_전체관리자_인가를_거부한다() {
+    void 고권한_배정_이력이_없으면_전체관리자_인가를_거부한다() {
         givenActiveAssignment(Optional.empty());
 
         assertForbidden(() -> platformAdminAuthorizationService.requireAuthorizedPlatformAdmin(USER_ID));
     }
 
     @Test
-    void 플랫폼관리자는_슈퍼관리자_전용_인가를_통과하지_못한다() {
-        givenActiveAssignment(Optional.of(assignment(PlatformAdminGrade.PLATFORM_ADMIN)));
-
-        assertForbidden(() -> platformAdminAuthorizationService.requireAuthorizedSuperAdmin(USER_ID));
-    }
-
-    @Test
-    void 슈퍼관리자는_슈퍼관리자_전용_인가를_통과한다() {
-        PlatformAdminAssignment assignment = assignment(PlatformAdminGrade.SUPER_ADMIN);
+    void 슈퍼관리자_전용_등급은_SecurityConfig에서_검증하고_DB인가서비스는_활성_PRIVILEGED_계정만_확인한다() {
+        PlatformAdminAssignment assignment = assignment(PlatformAdminGrade.PLATFORM_ADMIN);
         givenActiveAssignment(Optional.of(assignment));
 
         assertThat(platformAdminAuthorizationService.requireAuthorizedSuperAdmin(USER_ID))
@@ -88,9 +80,8 @@ class PlatformAdminAuthorizationServiceTest {
     }
 
     private void givenActiveAssignment(Optional<PlatformAdminAssignment> assignment) {
-        when(appUserRepository.findActivePrivilegedAssignment(
+        when(appUserRepository.findPrivilegedAssignment(
                 USER_ID,
-                PlatformAdminAssignmentStatus.ACTIVE,
                 AppUserStatus.ACTIVE,
                 AppUserAccountKind.PRIVILEGED
             ))
@@ -98,9 +89,8 @@ class PlatformAdminAuthorizationServiceTest {
     }
 
     private void givenActiveAssignmentForUpdate(Optional<PlatformAdminAssignment> assignment) {
-        when(appUserRepository.findActivePrivilegedAssignmentForUpdate(
+        when(appUserRepository.findPrivilegedAssignmentForUpdate(
                 USER_ID,
-                PlatformAdminAssignmentStatus.ACTIVE,
                 AppUserStatus.ACTIVE,
                 AppUserAccountKind.PRIVILEGED
             ))
@@ -115,18 +105,16 @@ class PlatformAdminAuthorizationServiceTest {
     }
 
     private void verifyActiveAssignmentLookup() {
-        verify(appUserRepository).findActivePrivilegedAssignment(
+        verify(appUserRepository).findPrivilegedAssignment(
                 USER_ID,
-                PlatformAdminAssignmentStatus.ACTIVE,
                 AppUserStatus.ACTIVE,
                 AppUserAccountKind.PRIVILEGED
             );
     }
 
     private void verifyActiveAssignmentForUpdateLookup(InOrder inOrder) {
-        inOrder.verify(appUserRepository).findActivePrivilegedAssignmentForUpdate(
+        inOrder.verify(appUserRepository).findPrivilegedAssignmentForUpdate(
             USER_ID,
-            PlatformAdminAssignmentStatus.ACTIVE,
             AppUserStatus.ACTIVE,
             AppUserAccountKind.PRIVILEGED
         );

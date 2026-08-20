@@ -243,6 +243,7 @@ class MissionParticipationProgressRepositoryTest {
     void 콘텐츠_집합_대상은_미션과_콘텐츠로_포함여부와_목표수를_조회한다() {
         MissionFixtures fixtures = createMissionFixtures();
         Mission contentSetMission = new Mission(
+            "테스트 미션",
             fixtures.region(),
             MissionConditionType.CONTENT_SET,
             null,
@@ -333,6 +334,7 @@ class MissionParticipationProgressRepositoryTest {
         assertThat(secondPage.getContent()).singleElement().satisfies(summary -> {
             assertThat(summary.getParticipationId()).isEqualTo(completedParticipation.getMissionParticipationId());
             assertThat(summary.getMissionId()).isEqualTo(fixtures.mission().getMissionId());
+            assertThat(summary.getTitle()).isEqualTo("테스트 미션");
             assertThat(summary.getStatus()).isEqualTo(MissionParticipationStatus.COMPLETED);
             assertThat(summary.getProgressCount()).isEqualTo(2);
             assertThat(summary.getRequiredCount()).isEqualTo(3);
@@ -355,6 +357,7 @@ class MissionParticipationProgressRepositoryTest {
             "content-set-second"
         );
         Mission contentSetMission = new Mission(
+            "테스트 미션",
             fixtures.region(),
             MissionConditionType.CONTENT_SET,
             null,
@@ -401,6 +404,7 @@ class MissionParticipationProgressRepositoryTest {
 
         assertThat(summary.getProgressCount()).isEqualTo(2);
         assertThat(summary.getRequiredCount()).isEqualTo(2);
+        assertThat(summary.getTitle()).isEqualTo("테스트 미션");
         assertThat(summary.getRewardClaimed()).isFalse();
         MissionParticipationSummaryProjection singleSummary = missionParticipationRepository
             .findSummaryByMissionIdAndUserId(
@@ -409,6 +413,7 @@ class MissionParticipationProgressRepositoryTest {
             )
             .orElseThrow();
         assertThat(singleSummary.getParticipationId()).isEqualTo(participation.getMissionParticipationId());
+        assertThat(singleSummary.getTitle()).isEqualTo("테스트 미션");
         assertThat(singleSummary.getProgressCount()).isEqualTo(2);
         assertThat(singleSummary.getRequiredCount()).isEqualTo(2);
     }
@@ -498,6 +503,7 @@ class MissionParticipationProgressRepositoryTest {
             100L
         ));
         Mission mission = missionRepository.saveAndFlush(new Mission(
+            "테스트 미션",
             region,
             MissionConditionType.VISIT_COUNT,
             3,
@@ -572,6 +578,7 @@ class MissionParticipationProgressRepositoryTest {
 
     private Mission saveVisitCountMission(MissionFixtures fixtures, int requiredVisitCount) {
         return missionRepository.saveAndFlush(new Mission(
+            "테스트 미션",
             fixtures.region(),
             MissionConditionType.VISIT_COUNT,
             requiredVisitCount,

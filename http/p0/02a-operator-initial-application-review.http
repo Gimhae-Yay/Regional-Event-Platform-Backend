@@ -43,8 +43,7 @@ Accept: application/json
 }
 
 > {%
-const authorization = response.headers.valueOf("Authorization");
-client.global.set("initialOperatorAccessToken", authorization.replace("Bearer ", ""));
+client.global.set("initialOperatorAccessToken", response.body.data.accessToken);
 %}
 
 ### 3. 승인 전 me 조회 - 200 OK, OPERATOR 권한 미부여 기대

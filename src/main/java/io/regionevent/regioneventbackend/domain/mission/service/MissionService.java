@@ -81,6 +81,7 @@ public class MissionService {
     }
 
     public Mission create(
+        String title,
         Region region,
         MissionConditionType conditionType,
         Integer requiredVisitCount,
@@ -89,6 +90,7 @@ public class MissionService {
     ) {
         try {
             return new Mission(
+                title,
                 region,
                 conditionType,
                 requiredVisitCount,
@@ -111,6 +113,7 @@ public class MissionService {
 
     public Mission replaceDraftCoreValues(
         Mission mission,
+        String title,
         MissionConditionType conditionType,
         Integer requiredVisitCount,
         CouponPolicy rewardCouponPolicy,
@@ -121,6 +124,7 @@ public class MissionService {
         }
         try {
             mission.replaceDraftCoreValues(
+                title,
                 conditionType,
                 requiredVisitCount,
                 rewardCouponPolicy,
@@ -208,6 +212,7 @@ public class MissionService {
             .map(mission -> new PublicRegionMissionListResult.Mission(
                 mission.getMissionId(),
                 mission.getRegionId(),
+                mission.getTitle(),
                 mission.getConditionType(),
                 mission.getRequiredVisitCount(),
                 Math.toIntExact(mission.getTargetContentCount()),

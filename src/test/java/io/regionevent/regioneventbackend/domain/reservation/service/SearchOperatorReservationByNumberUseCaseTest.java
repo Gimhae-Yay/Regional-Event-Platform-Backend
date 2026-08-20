@@ -126,6 +126,7 @@ class SearchOperatorReservationByNumberUseCaseTest {
                     null,
                     null,
                     null,
+                    1,
                     100L
                 ),
                 new ReservationReadSnapshot.SessionInfo(
@@ -137,7 +138,7 @@ class SearchOperatorReservationByNumberUseCaseTest {
                     checkinCloseAt,
                     100L
                 ),
-                new ReservationReadSnapshot.ContentInfo(30L, "김해 가야문화 체험", 100L),
+                new ReservationReadSnapshot.ContentInfo(30L, "김해 가야문화 체험", "김해시", 100L),
                 new ReservationReadSnapshot.ParticipantInfo(40L, "김민수", "01012345678")
             );
             ReservationReadResult readResult = new ReservationReadResult(

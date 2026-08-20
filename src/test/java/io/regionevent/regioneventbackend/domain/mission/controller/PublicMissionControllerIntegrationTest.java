@@ -37,6 +37,7 @@ import io.regionevent.regioneventbackend.domain.region.repository.RegionReposito
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 
 @SpringBootTest
@@ -88,13 +89,13 @@ class PublicMissionControllerIntegrationTest {
             .andExpect(jsonPath("$.data.endsAt").value("2030-09-30T23:59:59+09:00"))
             .andExpect(jsonPath("$.data.participation").isEmpty());
         mockMvc.perform(get("/api/v1/missions/{missionId}", mission.getMissionId())
-                .header(AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(fixture.visitor().getUserId())))
+                .header(AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, fixture.visitor().getUserId())))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.participation.status").value("IN_PROGRESS"))
             .andExpect(jsonPath("$.data.participation.progressCount").value(0))
             .andExpect(jsonPath("$.data.participation.requiredCount").value(1));
         mockMvc.perform(get("/api/v1/missions/{missionId}", mission.getMissionId())
-                .header(AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(fixture.operator().getUserId())))
+                .header(AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, fixture.operator().getUserId())))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.participation").isEmpty());
     }
@@ -141,6 +142,7 @@ class PublicMissionControllerIntegrationTest {
     private Mission saveContentSetMission(Fixture fixture, Instant endsAt) {
         Content rewardContent = saveContent(fixture, "reward");
         Mission mission = new Mission(
+            "테스트 미션",
             fixture.region(), MissionConditionType.CONTENT_SET, null, saveRewardPolicy(fixture, rewardContent), endsAt
         );
         mission.addTargetContent(saveContent(fixture, "target"));
@@ -149,6 +151,7 @@ class PublicMissionControllerIntegrationTest {
 
     private Mission saveVisitCountMission(Fixture fixture, Instant endsAt) {
         return missionRepository.saveAndFlush(new Mission(
+            "테스트 미션",
             fixture.region(), MissionConditionType.VISIT_COUNT, 3, saveRewardPolicy(fixture, saveContent(fixture, "reward")), endsAt
         ));
     }

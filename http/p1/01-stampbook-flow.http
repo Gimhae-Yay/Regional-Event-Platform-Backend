@@ -1,0 +1,129 @@
+@baseUrl = http://localhost:8080
+@operatorAccessToken = {{p1OperatorAccessToken}}
+@regionAdminAccessToken = {{p1RegionAdminAccessToken}}
+@visitorAccessToken = {{p1VisitorAccessToken}}
+@otherVisitorAccessToken = {{p1OtherVisitorAccessToken}}
+@regionId = {{p1RegionId}}
+@contentId = {{p1PublishedContentId}}
+@rewardCouponPolicyId = {{p1PublishedStampbookRewardCouponPolicyId}}
+@existingStampbookId = {{p1PublishedStampbookId}}
+
+# P1 스탬프북 생성·심사·방문자 조회
+# 선행 조건: 모든 토큰은 활성 역할이어야 하며, contentId와 rewardCouponPolicyId는 같은 지역의 공개 상태여야 합니다.
+
+### 1. 스탬프북 생성 - 201 CREATED 기대
+POST {{baseUrl}}/api/v1/operator/stampbooks
+Authorization: Bearer {{operatorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "P1 HTTP 스탬프북 {{$timestamp}}",
+  "regionId": "{{regionId}}",
+  "contentIds": ["{{contentId}}"],
+  "rewardCouponPolicyId": "{{rewardCouponPolicyId}}",
+  "reason": "P1 HTTP 시나리오 생성"
+}
+
+> {%
+client.test("스탬프북 생성은 201 SUCCESS와 식별자를 반환한다.", () => {
+  client.assert(response.status === 201, "스탬프북 생성은 201이어야 합니다.");
+  client.assert(response.body.code === "SUCCESS", "스탬프북 생성은 SUCCESS여야 합니다.");
+  client.assert(response.body.data?.stampbookId, "스탬프북 생성 응답에 stampbookId가 있어야 합니다.");
+});
+client.global.set("p1StampbookFlowId", response.body.data.stampbookId);
+%}
+
+### 2. 생성 스탬프북 수정 - 200 OK 기대
+PATCH {{baseUrl}}/api/v1/operator/stampbooks/{{p1StampbookFlowId}}
+Authorization: Bearer {{operatorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "P1 HTTP 스탬프북 수정 {{$timestamp}}",
+  "reason": "제목 보완"
+}
+
+> {% client.test("생성 스탬프북 수정은 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "스탬프북 수정은 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "스탬프북 수정은 SUCCESS여야 합니다."); }); %}
+
+### 3. 공개 심사 요청 - 200 OK 기대
+POST {{baseUrl}}/api/v1/operator/stampbooks/{{p1StampbookFlowId}}/publish
+Authorization: Bearer {{operatorAccessToken}}
+Accept: application/json
+
+> {% client.test("스탬프북 공개 심사 요청은 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "공개 심사 요청은 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "공개 심사 요청은 SUCCESS여야 합니다."); }); %}
+
+### 4. 지역 관리자 심사 대기 목록 조회
+GET {{baseUrl}}/api/v1/region-admin/stampbooks?status=PENDING_REVIEW
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+> {% client.test("스탬프북 심사 대기 목록 조회는 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "심사 대기 목록 조회는 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "심사 대기 목록 조회는 SUCCESS여야 합니다."); }); %}
+
+### 5. 생성 스탬프북 심사 상세 조회
+GET {{baseUrl}}/api/v1/region-admin/stampbooks/{{p1StampbookFlowId}}
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+> {% client.test("스탬프북 심사 상세 조회는 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "심사 상세 조회는 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "심사 상세 조회는 SUCCESS여야 합니다."); }); %}
+
+### 6. 생성 스탬프북 승인 - 200 OK 기대
+POST {{baseUrl}}/api/v1/region-admin/stampbooks/{{p1StampbookFlowId}}/approve
+Authorization: Bearer {{regionAdminAccessToken}}
+Accept: application/json
+
+> {% client.test("스탬프북 승인은 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "스탬프북 승인은 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "스탬프북 승인은 SUCCESS여야 합니다."); }); %}
+
+### 7. 내 스탬프북 목록 조회
+GET {{baseUrl}}/api/v1/me/stampbooks
+Authorization: Bearer {{visitorAccessToken}}
+Accept: application/json
+
+> {% client.test("내 스탬프북 목록 조회는 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "내 스탬프북 목록 조회는 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "내 스탬프북 목록 조회는 SUCCESS여야 합니다."); }); %}
+
+### 8. 내 스탬프북 상세·진행도 조회
+GET {{baseUrl}}/api/v1/me/stampbooks/{{existingStampbookId}}
+Authorization: Bearer {{visitorAccessToken}}
+Accept: application/json
+
+> {% client.test("내 스탬프북 상세 조회는 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "내 스탬프북 상세 조회는 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "내 스탬프북 상세 조회는 SUCCESS여야 합니다."); }); %}
+
+### 9. 타인 스탬프북 상세 조회 - 403 FORBIDDEN 기대
+GET {{baseUrl}}/api/v1/me/stampbooks/{{existingStampbookId}}
+Authorization: Bearer {{otherVisitorAccessToken}}
+Accept: application/json
+
+> {% client.test("타인 스탬프북 상세 조회는 403 FORBIDDEN을 반환한다.", () => { client.assert(response.status === 403, "타인 스탬프북 상세 조회는 403이어야 합니다."); client.assert(response.body.code === "FORBIDDEN", "타인 스탬프북 상세 조회는 FORBIDDEN이어야 합니다."); }); %}
+
+### 10. 내 스탬프 적립 이력 조회
+GET {{baseUrl}}/api/v1/me/stampbooks/{{existingStampbookId}}/earnings
+Authorization: Bearer {{visitorAccessToken}}
+Accept: application/json
+
+> {% client.test("내 스탬프 적립 이력 조회는 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "스탬프 적립 이력 조회는 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "스탬프 적립 이력 조회는 SUCCESS여야 합니다."); }); %}
+
+### 11. 반려 흐름 확인용 심사 대기 스탬프북 반려
+# 별도 PENDING_REVIEW 스탬프북 ID를 입력해야 합니다.
+POST {{baseUrl}}/api/v1/region-admin/stampbooks/{{p1PendingStampbookId}}/reject
+Authorization: Bearer {{regionAdminAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": "보상 정책과 대상 콘텐츠를 보완해 주세요."
+}
+
+> {% client.test("스탬프북 반려는 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "스탬프북 반려는 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "스탬프북 반려는 SUCCESS여야 합니다."); }); %}
+
+### 12. 공개 스탬프북 종료
+POST {{baseUrl}}/api/v1/operator/stampbooks/{{p1StampbookFlowId}}/end
+Authorization: Bearer {{operatorAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": "P1 HTTP 시나리오 종료"
+}
+
+> {% client.test("스탬프북 종료는 200 SUCCESS를 반환한다.", () => { client.assert(response.status === 200, "스탬프북 종료는 200이어야 합니다."); client.assert(response.body.code === "SUCCESS", "스탬프북 종료는 SUCCESS여야 합니다."); }); %}

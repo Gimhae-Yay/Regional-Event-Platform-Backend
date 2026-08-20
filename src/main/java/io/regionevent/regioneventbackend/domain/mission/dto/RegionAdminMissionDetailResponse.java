@@ -12,6 +12,7 @@ import io.regionevent.regioneventbackend.domain.mission.entity.MissionTargetCont
 
 public record RegionAdminMissionDetailResponse(
     String missionId,
+    String title,
     String regionId,
     MissionStatus status,
     MissionConditionType conditionType,
@@ -26,6 +27,7 @@ public record RegionAdminMissionDetailResponse(
     public static RegionAdminMissionDetailResponse from(Mission mission) {
         return new RegionAdminMissionDetailResponse(
             mission.getMissionId().toString(),
+            mission.getTitle(),
             mission.getRegion().getRegionId().toString(),
             mission.getStatus(),
             mission.getConditionType(),

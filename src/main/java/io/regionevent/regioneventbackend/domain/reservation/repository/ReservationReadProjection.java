@@ -3,6 +3,7 @@ package io.regionevent.regioneventbackend.domain.reservation.repository;
 import java.time.Instant;
 
 import io.regionevent.regioneventbackend.domain.content.entity.ContentSessionStatus;
+import io.regionevent.regioneventbackend.domain.reservation.entity.CapacityHoldStatus;
 import io.regionevent.regioneventbackend.domain.reservation.entity.ReservationStatus;
 
 public record ReservationReadProjection(
@@ -23,6 +24,7 @@ public record ReservationReadProjection(
     Long sessionRegionId,
     Long contentId,
     String contentTitle,
+    String contentLocationText,
     Long contentRegionId,
     Long participantUserId,
     String participantName,
@@ -33,6 +35,12 @@ public record ReservationReadProjection(
     Long visitSessionId,
     Long visitContentId,
     Long visitParticipantUserId,
-    Instant checkedAt
+    Instant checkedAt,
+    Long holdId,
+    CapacityHoldStatus holdStatus,
+    Integer holdQuantity,
+    Long holdSessionId,
+    Long holdRegionId,
+    Long holdReservationId
 ) {
 }

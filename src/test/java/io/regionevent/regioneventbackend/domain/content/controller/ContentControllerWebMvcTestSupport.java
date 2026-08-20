@@ -19,6 +19,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 import io.regionevent.regioneventbackend.domain.content.service.ApproveContentRevisionUseCase;
@@ -35,15 +36,17 @@ import io.regionevent.regioneventbackend.domain.content.service.DeleteContentUse
 import io.regionevent.regioneventbackend.domain.content.service.EndContentReservationsUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetContentHistoryUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetContentRevisionReviewDetailUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.GetContentWithdrawalReviewDetailUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetMyContentUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetOriginalContentReviewDetailUseCase;
-import io.regionevent.regioneventbackend.domain.content.service.GetPendingContentsUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.GetPendingContentWithdrawalRequestsUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetPendingContentRevisionsUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetPendingSessionReviewDetailUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetPendingSessionRevisionsUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetPublicContentSessionsUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetPublicContentUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetPublicContentsUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.GetRegionAdminContentsUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetSessionRevisionReviewDetailUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.RejectContentRevisionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.RejectContentSessionUseCase;
@@ -120,13 +123,19 @@ abstract class ContentControllerWebMvcTestSupport {
     protected GetContentRevisionReviewDetailUseCase getContentRevisionReviewDetailUseCase;
 
     @MockitoBean
+    protected GetContentWithdrawalReviewDetailUseCase getContentWithdrawalReviewDetailUseCase;
+
+    @MockitoBean
     protected GetMyContentUseCase getMyContentUseCase;
 
     @MockitoBean
     protected GetOriginalContentReviewDetailUseCase getOriginalContentReviewDetailUseCase;
 
     @MockitoBean
-    protected GetPendingContentsUseCase getPendingContentsUseCase;
+    protected GetRegionAdminContentsUseCase getRegionAdminContentsUseCase;
+
+    @MockitoBean
+    protected GetPendingContentWithdrawalRequestsUseCase getPendingContentWithdrawalRequestsUseCase;
 
     @MockitoBean
     protected GetPendingContentRevisionsUseCase getPendingContentRevisionsUseCase;
@@ -187,7 +196,7 @@ abstract class ContentControllerWebMvcTestSupport {
         MockHttpServletRequestBuilder requestBuilder,
         long userId
     ) {
-        return requestBuilder.header(AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(userId));
+        return requestBuilder.header(AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, userId));
     }
 
     protected boolean hasDatabaseInfrastructure() {

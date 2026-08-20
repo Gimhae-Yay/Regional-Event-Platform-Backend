@@ -61,6 +61,7 @@ import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignme
 import io.regionevent.regioneventbackend.domain.user.service.AppUserService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
 import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
@@ -212,7 +213,7 @@ class MissionParticipationControllerMySqlIntegrationTest extends NonTransactiona
             userLocked.countDown();
             await(releaseCreate);
             return lockedUser;
-        }).when(appUserService).findActiveUserForUpdate(fixture.visitor().getUserId());
+        }).when(appUserService).findActiveOrdinaryUserForUpdate(fixture.visitor().getUserId());
 
         try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
             Future<MvcResult> creation = executorService.submit(
@@ -342,7 +343,8 @@ class MissionParticipationControllerMySqlIntegrationTest extends NonTransactiona
         Fixture fixture = createFixture(true, true);
         AppUser nonVisitor = saveUser("non-visitor");
 
-        performCreate(nonVisitor, fixture.mission())
+        mockMvc.perform(post(PATH, fixture.mission().getMissionId())
+                .header(AUTHORIZATION, bearerTokenWithoutAuthority(nonVisitor)))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.code").value("FORBIDDEN"));
         mockMvc.perform(post(PATH, Long.MAX_VALUE)
@@ -430,6 +432,7 @@ class MissionParticipationControllerMySqlIntegrationTest extends NonTransactiona
             100L
         ));
         Mission mission = missionRepository.saveAndFlush(new Mission(
+            "테스트 미션",
             region,
             MissionConditionType.VISIT_COUNT,
             1,
@@ -501,7 +504,11 @@ class MissionParticipationControllerMySqlIntegrationTest extends NonTransactiona
     }
 
     private String bearerToken(AppUser user) {
-        return "Bearer " + jwtAccessTokenService.issue(user.getUserId());
+        return "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, user.getUserId());
+    }
+
+    private String bearerTokenWithoutAuthority(AppUser user) {
+        return "Bearer " + jwtAccessTokenService.issue(user.getUserId(), List.of());
     }
 
     private void withdrawVisitor(Long userId) {

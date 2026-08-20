@@ -55,6 +55,7 @@ import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepositor
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
 import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
@@ -346,7 +347,7 @@ class ApproveRegionAdminMissionConcurrencyMySqlTest extends NonTransactionalMySq
             )
                 .header(
                     HttpHeaders.AUTHORIZATION,
-                    "Bearer " + jwtAccessTokenService.issue(fixture.adminUserId())
+                    "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, fixture.adminUserId())
                 )
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"reasonCode\":\"MISSION_REWARD_POLICY_INVALID\"}"))
@@ -480,6 +481,7 @@ class ApproveRegionAdminMissionConcurrencyMySqlTest extends NonTransactionalMySq
             alternativeRewardPolicy.publish(BASE_TIME);
             alternativeRewardPolicy = couponPolicyRepository.save(alternativeRewardPolicy);
             Mission mission = new Mission(
+                "테스트 미션",
                 region,
                 conditionType,
                 conditionType == MissionConditionType.VISIT_COUNT ? 3 : null,

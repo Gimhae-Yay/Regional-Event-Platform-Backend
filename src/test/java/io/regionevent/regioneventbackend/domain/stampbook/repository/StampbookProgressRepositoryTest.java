@@ -194,7 +194,7 @@ class StampbookProgressRepositoryTest {
             ISSUE_ENDS_AT,
             100L
         ));
-        return stampbookRepository.saveAndFlush(new Stampbook(region, couponPolicy));
+        return stampbookRepository.saveAndFlush(new Stampbook(region, couponPolicy, "스탬프북 제목"));
     }
 
     private AppUser saveUser(String loginIdentifier) {

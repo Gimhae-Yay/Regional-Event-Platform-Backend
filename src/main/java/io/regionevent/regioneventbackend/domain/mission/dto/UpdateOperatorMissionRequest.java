@@ -14,6 +14,10 @@ import tools.jackson.databind.annotation.JsonDeserialize;
 public record UpdateOperatorMissionRequest(
     @JsonDeserialize(using = CreateOperatorMissionRequest.StringValueDeserializer.class)
     @NotBlank
+    String title,
+
+    @JsonDeserialize(using = CreateOperatorMissionRequest.StringValueDeserializer.class)
+    @NotBlank
     String conditionType,
 
     @JsonDeserialize(using = CreateOperatorMissionRequest.IntegerValueDeserializer.class)

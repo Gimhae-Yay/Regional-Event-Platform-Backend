@@ -111,6 +111,7 @@ import io.regionevent.regioneventbackend.domain.visit.entity.Visit;
 import io.regionevent.regioneventbackend.domain.visit.repository.VisitRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 import io.regionevent.regioneventbackend.support.mysql.NonTransactionalMySqlTestSupport;
@@ -256,7 +257,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         Fixture fixture = createFixture();
 
         mockMvc.perform(delete(WITHDRAWAL_PATH)
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(fixture.user().getUserId())))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, fixture.user().getUserId())))
             .andExpect(status().isOk());
 
         assertThat(appUserRepository.findById(fixture.user().getUserId())).isEmpty();
@@ -283,7 +284,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         expireActiveHold(fixture);
 
         mockMvc.perform(delete(WITHDRAWAL_PATH)
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(fixture.user().getUserId())))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, fixture.user().getUserId())))
             .andExpect(status().isOk());
 
         assertThat(appUserRepository.findById(fixture.user().getUserId())).isEmpty();
@@ -305,7 +306,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         CouponWithdrawalFixture couponFixture = createCouponWithdrawalFixture(fixture);
 
         mockMvc.perform(delete(WITHDRAWAL_PATH)
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(fixture.user().getUserId())))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, fixture.user().getUserId())))
             .andExpect(status().isOk());
 
         assertCouponStatusAndUnlinkedUser(couponFixture.availableCouponId(), CouponStatus.INVALIDATED);
@@ -457,7 +458,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         expireOrInvalidateCapacityHoldsUseCase.execute();
 
         mockMvc.perform(delete(WITHDRAWAL_PATH)
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(fixture.user().getUserId())))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, fixture.user().getUserId())))
             .andExpect(status().isOk());
 
         assertThat(capacityHoldRepository.findById(fixture.activeHold().getHoldId()))
@@ -772,7 +773,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         userRoleAssignmentRepository.saveAndFlush(reviewerRole);
 
         mockMvc.perform(delete(WITHDRAWAL_PATH)
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(reviewer.getUserId())))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, reviewer.getUserId())))
             .andExpect(status().isOk());
 
         assertThat(appUserRepository.findById(reviewer.getUserId())).isEmpty();
@@ -881,7 +882,7 @@ class WithdrawalControllerMySqlIntegrationTest extends NonTransactionalMySqlTest
         mockMvc.perform(delete(WITHDRAWAL_PATH)
                 .header(
                     HttpHeaders.AUTHORIZATION,
-                    "Bearer " + jwtAccessTokenService.issue(withdrawingUser.getUserId())
+                    "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, withdrawingUser.getUserId())
                 ))
             .andExpect(status().isOk());
 

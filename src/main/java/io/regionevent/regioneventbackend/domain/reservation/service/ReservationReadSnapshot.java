@@ -20,6 +20,7 @@ public record ReservationReadSnapshot(
         Instant cancelledAt,
         String cancellationReason,
         Instant expiredAt,
+        Integer quantity,
         Long regionId
     ) {
     }
@@ -38,6 +39,7 @@ public record ReservationReadSnapshot(
     public record ContentInfo(
         Long contentId,
         String title,
+        String locationText,
         Long regionId
     ) {
     }

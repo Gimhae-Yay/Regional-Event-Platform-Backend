@@ -45,6 +45,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.support.jpa.CleanH2Database;
 
@@ -112,6 +113,7 @@ class UpdateOperatorMissionAuditAtomicityTest {
 
         transactionTemplate.executeWithoutResult(status -> {
             Mission mission = missionRepository.findMissionDetailByMissionId(fixture.missionId()).orElseThrow();
+            assertThat(mission.getTitle()).isEqualTo("테스트 미션");
             assertThat(mission.getConditionType()).isEqualTo(MissionConditionType.CONTENT_SET);
             assertThat(mission.getRewardCouponPolicy().getCouponPolicyId())
                 .isEqualTo(fixture.originalPolicyId());
@@ -149,10 +151,11 @@ class UpdateOperatorMissionAuditAtomicityTest {
 
     private org.springframework.test.web.servlet.ResultActions performUpdate(Fixture fixture) throws Exception {
         return mockMvc.perform(patch("/api/v1/operator/missions/{missionId}", fixture.missionId())
-            .header("Authorization", "Bearer " + jwtAccessTokenService.issue(fixture.operatorId()))
+            .header("Authorization", "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, fixture.operatorId()))
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {
+                  "title": "감사 실패 시 롤백할 제목",
                   "conditionType": "CONTENT_SET",
                   "requiredVisitCount": null,
                   "targetContentIds": ["%d"],
@@ -181,6 +184,7 @@ class UpdateOperatorMissionAuditAtomicityTest {
             CouponPolicy originalPolicy = couponPolicyRepository.save(newPolicy(originalReward, region, "original"));
             CouponPolicy requestedPolicy = couponPolicyRepository.save(newPolicy(requestedReward, region, "requested"));
             Mission mission = new Mission(
+                "테스트 미션",
                 region,
                 MissionConditionType.CONTENT_SET,
                 null,

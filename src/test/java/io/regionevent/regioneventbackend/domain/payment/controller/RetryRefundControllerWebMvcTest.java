@@ -22,6 +22,7 @@ import io.regionevent.regioneventbackend.domain.payment.service.RetryRefundUseCa
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
@@ -68,6 +69,6 @@ class RetryRefundControllerWebMvcTest {
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder authenticated(
         org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request
     ) {
-        return request.header(AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(USER_ID));
+        return request.header(AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, USER_ID));
     }
 }

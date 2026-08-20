@@ -32,6 +32,7 @@ import io.regionevent.regioneventbackend.domain.mission.service.GetPublicMission
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
@@ -101,6 +102,7 @@ class PublicMissionControllerWebMvcTest {
             .andExpect(jsonPath("$.code").value("SUCCESS"))
             .andExpect(jsonPath("$.message").value("공개 미션 상세 조회에 성공했습니다."))
             .andExpect(jsonPath("$.data.missionId").value("701"))
+            .andExpect(jsonPath("$.data.title").doesNotExist())
             .andExpect(jsonPath("$.data.requiredVisitCount").isEmpty())
             .andExpect(jsonPath("$.data.targetContents[0].contentId").value("101"))
             .andExpect(jsonPath("$.data.endsAt").value("2026-09-30T23:59:59+09:00"))
@@ -111,11 +113,19 @@ class PublicMissionControllerWebMvcTest {
 
     @Test
     void getPublicMission_authenticated_returnsParticipation() throws Exception {
-        String accessToken = jwtAccessTokenService.issue(100L);
+        String accessToken = AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, 100L);
         io.regionevent.regioneventbackend.domain.mission.entity.Mission mission = mission();
         io.regionevent.regioneventbackend.domain.mission.service.MissionParticipationSummary participation =
             new io.regionevent.regioneventbackend.domain.mission.service.MissionParticipationSummary(
-                9001L, 701L, MissionParticipationStatus.IN_PROGRESS, 1, 3, false, Instant.EPOCH, null
+                9001L,
+                701L,
+                "공개 상세 비노출 제목",
+                MissionParticipationStatus.IN_PROGRESS,
+                1,
+                3,
+                false,
+                Instant.EPOCH,
+                null
             );
         when(getPublicMissionUseCase.get(701L, 100L))
             .thenReturn(new io.regionevent.regioneventbackend.domain.mission.service.PublicMissionDetailResult(
@@ -180,7 +190,7 @@ class PublicMissionControllerWebMvcTest {
     void getPublicMission_invalidIdAuthenticated_logsTemplateUriWithoutRawValue(CapturedOutput output)
         throws Exception {
         String sensitiveMissionId = "someone@example.com";
-        String accessToken = jwtAccessTokenService.issue(100L);
+        String accessToken = AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, 100L);
 
         mockMvc.perform(get("/api/v1/missions/{missionId}", sensitiveMissionId)
             .header(AUTHORIZATION, "Bearer " + accessToken))

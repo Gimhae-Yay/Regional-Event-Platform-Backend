@@ -102,6 +102,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
             contentSession.region.regionId,
             content.contentId,
             content.title,
+            content.locationText,
             content.region.regionId,
             participant.userId,
             participant.name,
@@ -112,7 +113,13 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
             visit.contentSession.sessionId,
             visit.content.contentId,
             visitParticipant.userId,
-            visit.checkedAt
+            visit.checkedAt,
+            capacityHold.holdId,
+            capacityHold.status,
+            capacityHold.quantity,
+            holdSession.sessionId,
+            holdRegion.regionId,
+            holdReservation.reservationId
         )
         FROM Reservation reservation
         JOIN reservation.contentSession contentSession
@@ -120,6 +127,10 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
         LEFT JOIN reservation.user participant
         LEFT JOIN Visit visit ON visit.reservation = reservation
         LEFT JOIN visit.user visitParticipant
+        JOIN reservation.capacityHold capacityHold
+        JOIN capacityHold.contentSession holdSession
+        JOIN capacityHold.region holdRegion
+        LEFT JOIN capacityHold.reservation holdReservation
         WHERE reservation.reservationNo = :reservationNo
         ORDER BY visit.visitId ASC
         """)
@@ -146,6 +157,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
             contentSession.region.regionId,
             content.contentId,
             content.title,
+            content.locationText,
             content.region.regionId,
             participant.userId,
             participant.name,
@@ -156,7 +168,13 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
             visit.contentSession.sessionId,
             visit.content.contentId,
             visitParticipant.userId,
-            visit.checkedAt
+            visit.checkedAt,
+            capacityHold.holdId,
+            capacityHold.status,
+            capacityHold.quantity,
+            holdSession.sessionId,
+            holdRegion.regionId,
+            holdReservation.reservationId
         )
         FROM Reservation reservation
         JOIN reservation.contentSession contentSession
@@ -164,6 +182,10 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
         LEFT JOIN reservation.user participant
         LEFT JOIN Visit visit ON visit.reservation = reservation
         LEFT JOIN visit.user visitParticipant
+        JOIN reservation.capacityHold capacityHold
+        JOIN capacityHold.contentSession holdSession
+        JOIN capacityHold.region holdRegion
+        LEFT JOIN capacityHold.reservation holdReservation
         WHERE reservation.reservationId = :reservationId
         ORDER BY visit.visitId ASC
         """)
@@ -190,6 +212,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
             contentSession.region.regionId,
             content.contentId,
             content.title,
+            content.locationText,
             content.region.regionId,
             participant.userId,
             participant.name,
@@ -200,7 +223,13 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
             visit.contentSession.sessionId,
             visit.content.contentId,
             visitParticipant.userId,
-            visit.checkedAt
+            visit.checkedAt,
+            capacityHold.holdId,
+            capacityHold.status,
+            capacityHold.quantity,
+            holdSession.sessionId,
+            holdRegion.regionId,
+            holdReservation.reservationId
         )
         FROM Reservation reservation
         JOIN reservation.contentSession contentSession
@@ -208,6 +237,10 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
         JOIN reservation.user participant
         LEFT JOIN Visit visit ON visit.reservation = reservation
         LEFT JOIN visit.user visitParticipant
+        JOIN reservation.capacityHold capacityHold
+        JOIN capacityHold.contentSession holdSession
+        JOIN capacityHold.region holdRegion
+        LEFT JOIN capacityHold.reservation holdReservation
         WHERE participant.userId = :userId
         ORDER BY reservation.confirmedAt DESC, reservation.reservationId DESC, visit.visitId ASC
         """)
@@ -229,6 +262,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
             contentSession.region.regionId,
             content.contentId,
             content.title,
+            content.locationText,
             content.region.regionId,
             participant.userId,
             participant.name,

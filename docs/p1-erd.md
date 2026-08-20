@@ -116,6 +116,7 @@ erDiagram
     }
     stampbook {
         BIGINT stampbook_id PK "스탬프북 식별자; NOT NULL"
+        VARCHAR title "스탬프북 고유 제목; 앞뒤 공백 제거 뒤 1~100자; NOT NULL"
         BIGINT region_id FK "소속 지역; NOT NULL"
         BIGINT reward_coupon_policy_id FK "완료 보상 쿠폰 정책; 지역·발급 경로 일치; NOT NULL"
         VARCHAR status "상태: DRAFT|PENDING_REVIEW|PUBLISHED|ENDED; NOT NULL"
@@ -184,6 +185,7 @@ erDiagram
     mission {
         BIGINT mission_id PK "지역 미션 식별자; NOT NULL"
         BIGINT region_id FK "미션 운영 지역; NOT NULL"
+        VARCHAR title "방문자 표시 제목; Unicode code point 1~255자; NOT NULL"
         VARCHAR condition_type "완료 조건: VISIT_COUNT|CONTENT_SET; NOT NULL"
         INT required_visit_count "VISIT_COUNT의 목표 횟수(양수); CONTENT_SET면 NULL"
         BIGINT reward_coupon_policy_id FK "완료 보상 쿠폰 정책; 지역·발급 경로 일치; NOT NULL"
@@ -557,7 +559,7 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 
 | 테이블 | 핵심 열 | 책임 |
 | --- | --- | --- |
-| `stampbook` | `stampbook_id`, `region_id`, `reward_coupon_policy_id`, 상태·공개·종료 시각 | 지역 단위 스탬프북의 현재 상태와 보상 정책 |
+| `stampbook` | `stampbook_id`, `title VARCHAR(100) NOT NULL`, `region_id`, `reward_coupon_policy_id`, 상태·공개·종료 시각 | 지역 단위 스탬프북의 제목·현재 상태와 보상 정책 |
 | `stampbook_content` | `stampbook_id`, `content_id` | 적립 대상 콘텐츠 목록 |
 | `stampbook_progress` | `stampbook_progress_id`, `stampbook_id`, `user_id`, `status`, `completed_at` | 사용자별 현재 진행·완료·종료 미완료 상태 |
 | `stamp_earn` | `stamp_earn_id`, `stampbook_progress_id`, `visit_id`, `content_id`, `earned_at` | 콘텐츠별 한 번의 스탬프 근거 |
@@ -568,6 +570,7 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 | 무결성 | 규칙 |
 | --- | --- |
 | 대상 콘텐츠 | `content.region_id = stampbook.region_id` |
+| 제목 | `title VARCHAR(100) NOT NULL`. 생성·수정 저장 전 앞뒤 공백을 제거한 값이 1~100자여야 하며, 빈 값·공백만 있는 값·100자 초과 값은 거부한다. 내부 공백은 보존한다. |
 | 보상 정책 | 작성·검토 때 `coupon_policy.region_id = stampbook.region_id`와 `issuance_type = STAMPBOOK_COMPLETION`을 검증한다. `PUBLISHED` 전이 때 잠근 정책도 `PUBLISHED`여야 한다. |
 | 적립 원본 | `visit.content_id = stamp_earn.content_id`, `visit.user_id = stampbook_progress.user_id` |
 | 사용자 진행 | `UNIQUE (stampbook_id, user_id)`로 활성 사용자의 스탬프북 진행 행을 하나만 둔다. |
@@ -582,7 +585,7 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 
 | 테이블 | 핵심 열 | 책임 |
 | --- | --- | --- |
-| `mission` | `mission_id`, `region_id`, `condition_type`, `required_visit_count`, `reward_coupon_policy_id`, 상태·예정·실제 종료 시각 | 미션 조건과 공개·종료 상태 |
+| `mission` | `mission_id`, `region_id`, `title`, `condition_type`, `required_visit_count`, `reward_coupon_policy_id`, 상태·예정·실제 종료 시각 | 방문자 표시 제목과 미션 조건·공개·종료 상태 |
 | `mission_target_content` | `mission_id`, `content_id` | `CONTENT_SET` 미션의 지정 콘텐츠 |
 | `mission_participation` | `mission_participation_id`, `mission_id`, `user_id`, `status`, `joined_at`, `completed_at` | 사용자의 명시적 참여와 완료 자격 |
 | `mission_progress` | `mission_participation_id`, `visit_id`, `content_id`, `recorded_at` | 참여 뒤 방문의 진행 근거 |
@@ -595,6 +598,7 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 
 | 무결성 | 규칙 |
 | --- | --- |
+| 제목 | 최종 스키마는 `title VARCHAR(255) NOT NULL`이다. 애플리케이션은 양끝 공백을 제거하고 내부 공백은 보존하며, 정규화 뒤 Unicode code point 기준 1~255자를 허용한다. 문자 allowlist와 유일 제약·유일 인덱스는 두지 않는다. |
 | 예정 종료 | `ends_at`은 필수다. `PUBLISHED` 전이 때 `published_at < ends_at`를 검증하며, 공개 뒤 수정하지 않는다. |
 | 대상 콘텐츠 | `CONTENT_SET` 생성·수정은 `content.region_id = mission.region_id AND content.deleted_at IS NULL`인 행만 `content_id` 오름차순으로 잠가 연결한다. 승인에서는 보상 정책, 미션, 지역 뒤 모든 대상 콘텐츠를 같은 순서로 잠그고 `deleted_at IS NULL AND status = PUBLISHED`를 재검증한다. 하나라도 불일치하면 `PUBLISHED` 전이를 거부한다. `VISIT_COUNT`는 대상 콘텐츠 행을 두지 않는다. |
 | 보상 정책 | 작성·수정·검토 요청 때 `coupon_policy.region_id = mission.region_id`, `issuance_type = MISSION_REWARD`, `status IN (DRAFT, PUBLISHED)`를 검증하고 `ENDED` 정책 연결을 거부한다. 검토 요청은 최초 조회한 정책 행을 먼저 잠그고 미션 행을 잠근다. 승인은 정책 행, 미션 행, 지역 행 순서로 잠근다. 두 전이 모두 `mission.reward_coupon_policy_id`가 잠근 정책과 같은지 재검증하고, 연결이 달라졌으면 전이를 거부한다. `PUBLISHED` 전이 때 잠근 정책도 `PUBLISHED`이고 지역은 `is_public = true`여야 한다. |
@@ -604,6 +608,12 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 | 보상 정책 고정 | `mission_reward_claim.coupon_policy_id = mission.reward_coupon_policy_id`를 보상 수령 생성과 같은 조건부 쓰기로 검증한다. |
 | 보상 수령 시한 | 신규 수령은 모든 잠금 획득 직후 고정한 `operation_at`에 대해 `mission.status = PUBLISHED AND mission.ends_at > operation_at`일 때만 허용한다. 수동·자동 종료 또는 `ends_at` 도달과 동시에 완료·미수령 참여자의 권리가 만료되며 유예 기간과 수동 지급을 두지 않는다. |
 | 진행도 | `visit.user_id = mission_participation.user_id`, `visit.region_id = mission.region_id`, `visit.checked_at >= mission_participation.joined_at`을 검증한다. `UNIQUE (mission_participation_id, visit_id)`로 같은 참여에 같은 방문을 두 번 반영하지 않는다. `VISIT_COUNT`는 서로 다른 방문이면 같은 콘텐츠 재방문도 허용한다. `CONTENT_SET`은 잠근 참여에서 같은 `content_id`의 기존 근거가 없는 경우에만 조건부 삽입한다. |
+
+미션 제목은 [ADR-0108](adr/0108-apply-final-mission-title-contract-before-first-client.md)에 따라 아직 운영에
+적용되지 않은 migration에서 `VARCHAR(255) NOT NULL`로 바로 추가하고, 제목 필수 서버를 먼저 배포한 뒤 제목을
+전송하는 최초 운영자 클라이언트를 배포한다. 운영 migration과 시작 코드가 미션 행을 만들지 않고 운영 미션
+생성 API와 운영자 클라이언트의 사용 이력이 없으므로 nullable 중간 열, 호환 서버, backfill과 후속 `NOT NULL`
+migration은 두지 않는다. 제목 이외의 식별자·조건·상태·보상·시각은 변경하지 않는다.
 
 같은 유효 방문은 조건을 만족하는 여러 공개 미션에 각각 반영할 수 있다. 방문자 공개 목록·상세와 신규 참여는 `region.is_public = true`인 지역에만 허용하며 비공개 지역은 대상 부재와 동일하게 처리한다. 신규 참여는 미션 행을 먼저 잠근 뒤 해당 지역 행을 잠그고, 모든 잠금 획득 직후 DB 현재 시각을 한 번만 읽어 `operation_at`으로 고정한다. 지역 공개 여부와 `status = PUBLISHED AND ends_at > operation_at`을 재검증한 뒤 `joined_at = operation_at`으로 기록해 지역 비공개 전환과 직렬화한다. `mission_progress.content_id`를 유지하므로 `visit.content_id = mission_progress.content_id`, `visit.user_id = mission_participation.user_id`, `visit.region_id = mission.region_id`, `visit.checked_at >= mission_participation.joined_at`을 함께 검증한다. 참여·진행도 반영·수동 종료·자동 종료는 모두 `mission` 행을 `PESSIMISTIC_WRITE`로 먼저 잠근다. 그 뒤 참여 행이 필요하면 `mission_participation_id` 오름차순으로 잠근다. 진행도 반영은 모든 잠금 획득 직후 DB 현재 시각을 한 번만 읽어 `operation_at`으로 고정하고 `status = PUBLISHED AND ends_at > operation_at`과 참여 `IN_PROGRESS`를 재검증한다. 진행 근거의 `recorded_at`과 완료 전이의 `completed_at`은 같은 `operation_at`으로 기록하며, 종료는 잠금 획득 뒤 종료 조건을 재검증한다. `CONTENT_SET` 진행도는 이 참여 잠금을 보유한 상태에서 같은 콘텐츠 근거의 존재 여부를 확인하고, 이미 있으면 새 `mission_progress`를 만들지 않는 정상 무변경 처리로 종료한다. 따라서 여러 인스턴스가 같은 콘텐츠의 서로 다른 방문을 동시에 전달해도 콘텐츠 하나는 진행도 한 칸만 채운다. `VISIT_COUNT`는 같은 잠금 아래 서로 다른 `visit_id`를 각각 삽입하므로 같은 콘텐츠 재방문도 별도 유효 방문으로 센다. 종료 작업이 지연되거나 진행도 반영과 경합해도 종료 시각 뒤 신규 참여·진행도 또는 `ENDED_INCOMPLETE`의 완료 전이는 생기지 않는다.
 
@@ -852,6 +862,7 @@ PUBLISHED mission AND ends_at <= 현재 시각
 | 높음 | `mission_progress` | 방문 근거 중복 차단 복합 유일 제약 |
 | 높음 | `mission_participation` | `UNIQUE (mission_id, user_id)` — 사용자·미션당 참여 하나 |
 | 높음 | `mission_reward_claim` | `UNIQUE (mission_participation_id)` — 참여당 보상 수령 하나, 원본 `mission.reward_coupon_policy_id` 일치 조건부 쓰기 |
+| 높음 | `mission` | `title VARCHAR(255) NOT NULL`, 제목 유일 제약 없음. 조건 유형·상태별 CHECK와 FK 유지 |
 | 높음 | `stampbook_reward_grant` | `UNIQUE (stampbook_progress_id)`, 원본 `stampbook.reward_coupon_policy_id` 일치 조건부 쓰기 |
 | 높음 | `coupon_policy` | `content_id` FK, `(content_id, region_id)` 복합 FK, 금액·기간·유효 일수·발급 한도·상태별 시각 CHECK; 정책 작업 시 `content.operator_id` 소유권 조건부 쓰기 |
 | 높음 | `coupon_issuance` | `coupon_id`, 발급 식별 키, `mission_reward_claim_id`, `stampbook_reward_grant_id` 유일; 세 FK 중 정확히 하나 CHECK; 방문 근거의 콘텐츠·지역과 정책 일치 |

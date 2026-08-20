@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
@@ -36,6 +37,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 
 @SpringBootTest
@@ -120,6 +122,7 @@ class MyMissionParticipationControllerIntegrationTest {
                 endedParticipation.getMissionParticipationId().toString()
             ))
             .andExpect(jsonPath("$.data.content[0].missionId").value(endedMission.getMissionId().toString()))
+            .andExpect(jsonPath("$.data.content[0].title").value("테스트 미션"))
             .andExpect(jsonPath("$.data.content[0].status").value("ENDED_INCOMPLETE"))
             .andExpect(jsonPath("$.data.content[0].progressCount").value(0))
             .andExpect(jsonPath("$.data.content[0].requiredCount").value(1))
@@ -195,18 +198,23 @@ class MyMissionParticipationControllerIntegrationTest {
         mockMvc.perform(get(PATH))
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
-        performGet(inactiveFixture.visitor())
+        mockMvc.perform(get(PATH)
+                .header(AUTHORIZATION, bearerTokenWithoutAuthority(inactiveFixture.visitor())))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.code").value("FORBIDDEN"));
     }
 
     private ResultActions performGet(AppUser user, String... parameters) throws Exception {
         org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request = get(PATH)
-            .header(AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(user.getUserId()));
+            .header(AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, user.getUserId()));
         for (int index = 0; index < parameters.length; index += 2) {
             request.param(parameters[index], parameters[index + 1]);
         }
         return mockMvc.perform(request);
+    }
+
+    private String bearerTokenWithoutAuthority(AppUser user) {
+        return "Bearer " + jwtAccessTokenService.issue(user.getUserId(), List.of());
     }
 
     private Fixture createFixture(boolean activeVisitor) {
@@ -253,6 +261,7 @@ class MyMissionParticipationControllerIntegrationTest {
 
     private Mission saveMission(Fixture fixture, int requiredVisitCount) {
         return missionRepository.saveAndFlush(new Mission(
+            "테스트 미션",
             fixture.region(),
             MissionConditionType.VISIT_COUNT,
             requiredVisitCount,

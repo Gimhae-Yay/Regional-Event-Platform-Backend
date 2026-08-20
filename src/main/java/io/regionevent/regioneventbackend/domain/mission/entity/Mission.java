@@ -75,10 +75,15 @@ import io.regionevent.regioneventbackend.domain.region.entity.Region;
 )
 public class Mission {
 
+    private static final int MAX_TITLE_CODE_POINTS = 255;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "mission_id")
     private Long missionId;
+
+    @Column(name = "title", nullable = false, length = 255)
+    private String title;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(
@@ -123,12 +128,14 @@ public class Mission {
     }
 
     public Mission(
+        String title,
         Region region,
         MissionConditionType conditionType,
         Integer requiredVisitCount,
         CouponPolicy rewardCouponPolicy,
         Instant endsAt
     ) {
+        this.title = normalizeTitle(title);
         this.region = requireNotNull(region, "region");
         this.conditionType = requireNotNull(conditionType, "conditionType");
         this.requiredVisitCount = validateRequiredVisitCount(conditionType, requiredVisitCount);
@@ -151,6 +158,7 @@ public class Mission {
     }
 
     public void replaceDraftCoreValues(
+        String title,
         MissionConditionType conditionType,
         Integer requiredVisitCount,
         CouponPolicy rewardCouponPolicy,
@@ -159,6 +167,7 @@ public class Mission {
         if (status != MissionStatus.DRAFT) {
             throw new IllegalStateException("mission status must be DRAFT but was " + status);
         }
+        String validatedTitle = normalizeTitle(title);
         MissionConditionType validatedConditionType = requireNotNull(conditionType, "conditionType");
         Integer validatedRequiredVisitCount = validateRequiredVisitCount(
             validatedConditionType,
@@ -167,6 +176,7 @@ public class Mission {
         CouponPolicy validatedRewardCouponPolicy = validateRewardCouponPolicy(rewardCouponPolicy, region);
         Instant validatedEndsAt = requireNotNull(endsAt, "endsAt");
 
+        this.title = validatedTitle;
         this.conditionType = validatedConditionType;
         this.requiredVisitCount = validatedRequiredVisitCount;
         this.rewardCouponPolicy = validatedRewardCouponPolicy;
@@ -210,6 +220,10 @@ public class Mission {
 
     public Long getMissionId() {
         return missionId;
+    }
+
+    public String getTitle() {
+        return title;
     }
 
     public Region getRegion() {
@@ -262,6 +276,15 @@ public class Mission {
             throw new IllegalArgumentException("CONTENT_SET must not have requiredVisitCount");
         }
         return null;
+    }
+
+    private static String normalizeTitle(String title) {
+        String normalizedTitle = requireNotNull(title, "title").strip();
+        int codePointCount = normalizedTitle.codePointCount(0, normalizedTitle.length());
+        if (codePointCount < 1 || codePointCount > MAX_TITLE_CODE_POINTS) {
+            throw new IllegalArgumentException("title must contain 1 to 255 Unicode code points");
+        }
+        return normalizedTitle;
     }
 
     private static CouponPolicy validateRewardCouponPolicy(

@@ -82,6 +82,7 @@ class CreateOperatorMissionUseCaseTest {
         when(operatorAuthorizationService.requireAuthorizedOperatorForUpdate(100L)).thenReturn(operator);
         when(couponPolicyService.findForUpdate(501L)).thenReturn(rewardCouponPolicy);
         when(missionService.create(
+            "김해 미션",
             operator.region(),
             MissionConditionType.VISIT_COUNT,
             3,
@@ -115,6 +116,62 @@ class CreateOperatorMissionUseCaseTest {
     }
 
     @Test
+    void create_withMissingTitle_rejectsBeforeAuthorizationOrWrites() {
+        assertThatThrownBy(() -> useCase.create(
+            100L,
+            command(null, "VISIT_COUNT", 3, List.of(), 501L, "2026-09-30T23:59:59+09:00"),
+            REQUEST_ID
+        )).isInstanceOf(BusinessException.class)
+            .extracting(exception -> ((BusinessException) exception).getErrorCode())
+            .isEqualTo(ErrorCode.INVALID_INPUT);
+        verifyNoInteractions(
+            operatorAuthorizationService,
+            contentService,
+            couponPolicyService,
+            missionService,
+            recordAuditEventUseCase,
+            recordFailedAuditEventUseCase
+        );
+    }
+
+    @Test
+    void create_withBlankOrOverlongTitle_returnsInvalidInput() {
+        AuthorizedOperator operator = operator(100L, 11L, 900L);
+        CouponPolicy rewardCouponPolicy = rewardCouponPolicy(
+            11L,
+            CouponIssuanceType.MISSION_REWARD,
+            CouponPolicyStatus.DRAFT
+        );
+        when(operatorAuthorizationService.requireAuthorizedOperatorForUpdate(100L)).thenReturn(operator);
+        when(couponPolicyService.findForUpdate(501L)).thenReturn(rewardCouponPolicy);
+        for (String invalidTitle : List.of("   ", "가".repeat(256))) {
+            when(missionService.create(
+                invalidTitle,
+                operator.region(),
+                MissionConditionType.VISIT_COUNT,
+                3,
+                rewardCouponPolicy,
+                Instant.parse("2026-09-30T14:59:59Z")
+            )).thenThrow(new BusinessException(ErrorCode.INVALID_INPUT));
+
+            assertThatThrownBy(() -> useCase.create(
+                100L,
+                command(
+                    invalidTitle,
+                    "VISIT_COUNT",
+                    3,
+                    List.of(),
+                    501L,
+                    "2026-09-30T23:59:59+09:00"
+                ),
+                REQUEST_ID
+            )).isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_INPUT);
+        }
+    }
+
+    @Test
     void create_withContentSetCondition_locksTargetContentsInAscendingOrder() {
         AuthorizedOperator operator = operator(100L, 11L, 900L);
         CouponPolicy rewardCouponPolicy = rewardCouponPolicy(11L, CouponIssuanceType.MISSION_REWARD, CouponPolicyStatus.PUBLISHED);
@@ -126,6 +183,7 @@ class CreateOperatorMissionUseCaseTest {
         when(contentService.findMissionTargetContentsForUpdate(List.of(101L, 102L), 11L))
             .thenReturn(List.of(firstContent, secondContent));
         when(missionService.create(
+            "김해 미션",
             operator.region(),
             MissionConditionType.CONTENT_SET,
             null,
@@ -276,6 +334,7 @@ class CreateOperatorMissionUseCaseTest {
         when(operatorAuthorizationService.requireAuthorizedOperatorForUpdate(100L)).thenReturn(operator);
         when(couponPolicyService.findForUpdate(501L)).thenReturn(rewardCouponPolicy);
         when(missionService.create(
+            "김해 미션",
             operator.region(),
             MissionConditionType.VISIT_COUNT,
             3,
@@ -329,7 +388,26 @@ class CreateOperatorMissionUseCaseTest {
         Long rewardCouponPolicyId,
         String endsAt
     ) {
+        return command(
+            "김해 미션",
+            conditionType,
+            requiredVisitCount,
+            targetContentIds,
+            rewardCouponPolicyId,
+            endsAt
+        );
+    }
+
+    private CreateOperatorMissionUseCase.CreateOperatorMissionCommand command(
+        String title,
+        String conditionType,
+        Integer requiredVisitCount,
+        List<Long> targetContentIds,
+        Long rewardCouponPolicyId,
+        String endsAt
+    ) {
         return new CreateOperatorMissionUseCase.CreateOperatorMissionCommand(
+            title,
             conditionType,
             requiredVisitCount,
             targetContentIds,

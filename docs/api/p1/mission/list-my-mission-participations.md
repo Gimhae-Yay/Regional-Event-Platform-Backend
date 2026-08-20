@@ -48,6 +48,7 @@ Accept: application/json
       {
         "participationId": "9001",
         "missionId": "701",
+        "title": "김해 역사 탐방 미션",
         "status": "IN_PROGRESS",
         "progressCount": 1,
         "requiredCount": 3,
@@ -74,6 +75,7 @@ Accept: application/json
 | `data.content` | Array | 참여 목록. 없으면 빈 배열이며 `null`이 아님 |
 | `data.content[].participationId` | String | 참여 식별자 |
 | `data.content[].missionId` | String | 참여한 미션 식별자 |
+| `data.content[].title` | String | 참여한 미션에 저장된 Unicode code point 기준 1~255자 방문자 표시 제목 |
 | `data.content[].status` | String | `IN_PROGRESS`, `COMPLETED`, `ENDED_INCOMPLETE` 중 하나 |
 | `data.content[].progressCount` | Integer | `VISIT_COUNT`는 반영된 서로 다른 유효 방문 수, `CONTENT_SET`은 최초 방문이 반영된 서로 다른 목표 콘텐츠 수. 0 이상 |
 | `data.content[].requiredCount` | Integer | 완료에 필요한 방문 수. 1 이상 |
@@ -97,4 +99,5 @@ Accept: application/json
 ### 처리 규칙
 
 1. 인증 사용자 본인의 참여만 반환한다.
-2. 빈 결과는 `200 OK`, 빈 `content` 배열, `totalElements = 0`, `totalPages = 0`으로 반환한다.
+2. 각 참여가 참조하는 미션의 현재 `title`을 반환한다. 제목은 공개 뒤 수정되지 않으며 대상 콘텐츠 제목에서 파생하지 않는다.
+3. 빈 결과는 `200 OK`, 빈 `content` 배열, `totalElements = 0`, `totalPages = 0`으로 반환한다.

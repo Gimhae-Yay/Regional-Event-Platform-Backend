@@ -42,6 +42,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 
 @SpringBootTest
@@ -148,7 +149,7 @@ class RegionAdminStampbookListControllerIntegrationTest {
     private ResultActions getPendingStampbooks(AppUser user) throws Exception {
         return mockMvc.perform(get("/api/v1/region-admin/stampbooks")
             .param("status", "PENDING_REVIEW")
-            .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(user.getUserId())));
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, user.getUserId())));
     }
 
     private Fixture createRegionAdminFixture(String regionCode) {
@@ -221,7 +222,8 @@ class RegionAdminStampbookListControllerIntegrationTest {
         ));
         Stampbook stampbook = stampbookRepository.saveAndFlush(new Stampbook(
             fixture.region(),
-            rewardCouponPolicy
+            rewardCouponPolicy,
+            "스탬프북 제목"
         ));
         for (int index = 0; index < targetCount; index++) {
             Content targetContent = index == 0

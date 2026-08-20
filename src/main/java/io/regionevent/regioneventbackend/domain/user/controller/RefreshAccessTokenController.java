@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import io.regionevent.regioneventbackend.domain.user.dto.RefreshAccessTokenResult;
+import io.regionevent.regioneventbackend.domain.user.dto.RefreshAccessTokenResponse;
 import io.regionevent.regioneventbackend.domain.user.service.RefreshAccessTokenUseCase;
 import io.regionevent.regioneventbackend.global.response.ApiResponse;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenCookie;
@@ -28,7 +29,7 @@ public class RefreshAccessTokenController {
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<ApiResponse<Void>> refresh(
+    public ResponseEntity<ApiResponse<RefreshAccessTokenResponse>> refresh(
         @CookieValue(value = "refreshToken", required = false) Cookie refreshToken
     ) {
         RefreshAccessTokenResult result = refreshAccessTokenUseCase.reissue(
@@ -36,11 +37,14 @@ public class RefreshAccessTokenController {
         );
         return ResponseEntity
             .status(HttpStatus.OK)
-            .header(HttpHeaders.AUTHORIZATION, "Bearer " + result.accessToken())
             .header(
                 HttpHeaders.SET_COOKIE,
                 RefreshTokenCookie.create(result.refreshToken(), result.refreshTokenMaxAge())
             )
-            .body(ApiResponse.success(HttpStatus.OK, REFRESH_SUCCESS_MESSAGE));
+            .body(ApiResponse.success(
+                HttpStatus.OK,
+                REFRESH_SUCCESS_MESSAGE,
+                new RefreshAccessTokenResponse(result.accessToken())
+            ));
     }
 }

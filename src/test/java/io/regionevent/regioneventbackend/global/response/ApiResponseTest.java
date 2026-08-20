@@ -9,7 +9,6 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.params.provider.Arguments;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
@@ -22,7 +21,6 @@ class ApiResponseTest {
             () -> new ApiResponseTest().success_withData_createsSuccessResponse(),
             () -> new ApiResponseTest().success_withoutData_setsDataToNull(),
             () -> new ApiResponseTest().fail_withErrorCode_preservesPublicErrorContract(),
-            () -> new ApiResponseTest().toResponseEntity_withAccessToken_addsAuthorizationHeader(),
             () -> new ApiResponseTest().constructor_whenSuccessResponseUsesErrorCode_throwsException(),
             () -> new ApiResponseTest().constructor_whenErrorResponseContainsData_throwsException(),
             () -> new ApiResponseTest().constructor_whenErrorResponseDoesNotMatchErrorCode_throwsException()
@@ -62,16 +60,6 @@ class ApiResponseTest {
         });
 
         assertAll(contracts);
-    }
-
-    void toResponseEntity_withAccessToken_addsAuthorizationHeader() {
-        ApiResponse<String> response = ApiResponse.success(HttpStatus.OK, "로그인에 성공했습니다.", "profile");
-
-        var responseEntity = response.toResponseEntity("access-token");
-
-        assertThat(responseEntity.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(responseEntity.getHeaders().getFirst(HttpHeaders.AUTHORIZATION)).isEqualTo("Bearer access-token");
-        assertThat(responseEntity.getBody()).isEqualTo(response);
     }
 
     void constructor_whenSuccessResponseUsesErrorCode_throwsException() {

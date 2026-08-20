@@ -56,6 +56,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.support.jpa.CleanH2Database;
 
@@ -288,7 +289,7 @@ class EndOperatorMissionControllerIntegrationTest {
         String body
     ) throws Exception {
         return mockMvc.perform(post("/api/v1/operator/missions/{missionId}/end", missionId)
-            .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(userId))
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, userId))
             .contentType(MediaType.APPLICATION_JSON)
             .content(body));
     }
@@ -366,6 +367,7 @@ class EndOperatorMissionControllerIntegrationTest {
             rewardPolicy.publish(BASE_TIME);
             rewardPolicy = couponPolicyRepository.save(rewardPolicy);
             Mission mission = missionRepository.saveAndFlush(new Mission(
+                "테스트 미션",
                 region,
                 MissionConditionType.VISIT_COUNT,
                 3,

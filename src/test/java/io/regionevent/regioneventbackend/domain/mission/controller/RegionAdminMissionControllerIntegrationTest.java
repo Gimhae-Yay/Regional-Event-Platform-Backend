@@ -38,6 +38,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 
 @SpringBootTest
@@ -88,10 +89,10 @@ class RegionAdminMissionControllerIntegrationTest {
     void getMissions_returnsOnlyAuthorizedRegionMissionsWithStatusFilterAndPagination() throws Exception {
         Fixture fixture = createFixture("L");
         Fixture otherFixture = createFixture("O");
-        Mission draftMission = saveVisitCountMission(fixture);
-        Mission pendingReviewMission = saveVisitCountMission(fixture);
-        Mission publishedMission = saveVisitCountMission(fixture);
-        Mission endedMission = saveVisitCountMission(fixture);
+        Mission draftMission = saveVisitCountMission(fixture, "초안 미션");
+        Mission pendingReviewMission = saveVisitCountMission(fixture, "검토 대기 미션");
+        Mission publishedMission = saveVisitCountMission(fixture, "공개 미션");
+        Mission endedMission = saveVisitCountMission(fixture, "종료 미션");
         saveVisitCountMission(otherFixture);
         updateMissionStatus(pendingReviewMission, MissionStatus.PENDING_REVIEW);
         updateMissionStatus(publishedMission, MissionStatus.PUBLISHED);
@@ -102,13 +103,16 @@ class RegionAdminMissionControllerIntegrationTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.content.length()").value(2))
             .andExpect(jsonPath("$.data.content[0].missionId").value(endedMission.getMissionId().toString()))
+            .andExpect(jsonPath("$.data.content[0].title").value(endedMission.getTitle()))
             .andExpect(jsonPath("$.data.content[1].missionId").value(publishedMission.getMissionId().toString()))
+            .andExpect(jsonPath("$.data.content[1].title").value(publishedMission.getTitle()))
             .andExpect(jsonPath("$.data.totalElements").value(4))
             .andExpect(jsonPath("$.data.totalPages").value(2));
         getMissions(fixture.admin(), MissionStatus.PENDING_REVIEW.name(), "0", "20")
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.content.length()").value(1))
             .andExpect(jsonPath("$.data.content[0].missionId").value(pendingReviewMission.getMissionId().toString()))
+            .andExpect(jsonPath("$.data.content[0].title").value(pendingReviewMission.getTitle()))
             .andExpect(jsonPath("$.data.content[0].status").value("PENDING_REVIEW"));
         getMissions(otherFixture.admin(), null, "0", "20")
             .andExpect(status().isOk())
@@ -145,6 +149,7 @@ class RegionAdminMissionControllerIntegrationTest {
             fixture.region()
         );
         Mission mission = new Mission(
+            "테스트 미션",
             fixture.region(),
             MissionConditionType.CONTENT_SET,
             null,
@@ -162,6 +167,7 @@ class RegionAdminMissionControllerIntegrationTest {
             .andExpect(jsonPath("$.code").value("SUCCESS"))
             .andExpect(jsonPath("$.message").value("지역 미션 상세 조회에 성공했습니다."))
             .andExpect(jsonPath("$.data.missionId").value(mission.getMissionId().toString()))
+            .andExpect(jsonPath("$.data.title").value(mission.getTitle()))
             .andExpect(jsonPath("$.data.regionId").value(fixture.region().getRegionId().toString()))
             .andExpect(jsonPath("$.data.status").value("DRAFT"))
             .andExpect(jsonPath("$.data.conditionType").value("CONTENT_SET"))
@@ -254,7 +260,7 @@ class RegionAdminMissionControllerIntegrationTest {
 
     private ResultActions getDetail(AppUser user, String missionId) throws Exception {
         return mockMvc.perform(get("/api/v1/region-admin/missions/{missionId}", missionId)
-            .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(user.getUserId())));
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, user.getUserId())));
     }
 
     private ResultActions getMissions(
@@ -266,7 +272,7 @@ class RegionAdminMissionControllerIntegrationTest {
         MockHttpServletRequestBuilder requestBuilder = get("/api/v1/region-admin/missions")
             .param("page", page)
             .param("size", size)
-            .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(user.getUserId()));
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, user.getUserId()));
         if (status != null) {
             requestBuilder.param("status", status);
         }
@@ -281,9 +287,17 @@ class RegionAdminMissionControllerIntegrationTest {
     }
 
     private Mission saveVisitCountMission(Fixture fixture) {
+        return saveVisitCountMission(fixture, "테스트 미션");
+    }
+
+    private Mission saveVisitCountMission(
+        Fixture fixture,
+        String title
+    ) {
         Content rewardContent = saveContent(fixture.region(), fixture.admin(), "reward");
         CouponPolicy rewardCouponPolicy = saveMissionRewardCouponPolicy(rewardContent, fixture.region());
         return missionRepository.saveAndFlush(new Mission(
+            title,
             fixture.region(),
             MissionConditionType.VISIT_COUNT,
             3,

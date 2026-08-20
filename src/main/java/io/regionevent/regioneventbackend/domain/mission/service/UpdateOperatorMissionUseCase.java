@@ -105,6 +105,7 @@ public class UpdateOperatorMissionUseCase {
 
             Mission updatedMission = missionService.replaceDraftCoreValues(
                 mission,
+                validatedCommand.title(),
                 validatedCommand.conditionType(),
                 validatedCommand.requiredVisitCount(),
                 requestedRewardCouponPolicy,
@@ -144,6 +145,7 @@ public class UpdateOperatorMissionUseCase {
 
     private ValidatedCommand validateCommand(UpdateOperatorMissionCommand command) {
         if (command == null
+            || command.title() == null
             || command.conditionType() == null
             || command.rewardCouponPolicyId() == null
             || command.rewardCouponPolicyId() <= 0
@@ -156,6 +158,7 @@ public class UpdateOperatorMissionUseCase {
         MissionConditionType conditionType = toConditionType(command.conditionType());
         validateConditionFields(conditionType, command.requiredVisitCount(), command.targetContentIds());
         return new ValidatedCommand(
+            command.title(),
             conditionType,
             command.requiredVisitCount(),
             normalizeTargetContentIds(command.targetContentIds()),
@@ -325,6 +328,7 @@ public class UpdateOperatorMissionUseCase {
     }
 
     public record UpdateOperatorMissionCommand(
+        String title,
         String conditionType,
         Integer requiredVisitCount,
         List<Long> targetContentIds,
@@ -334,6 +338,7 @@ public class UpdateOperatorMissionUseCase {
     }
 
     private record ValidatedCommand(
+        String title,
         MissionConditionType conditionType,
         Integer requiredVisitCount,
         List<Long> targetContentIds,

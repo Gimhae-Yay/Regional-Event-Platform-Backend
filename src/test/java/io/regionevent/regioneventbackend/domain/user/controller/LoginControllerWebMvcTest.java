@@ -35,8 +35,7 @@ class LoginControllerWebMvcTest extends UserControllerWebMvcTestSupport {
     @Test
     void login_유효한요청_토큰과역할을응답한다() throws Exception {
         when(loginUseCase.login(any())).thenReturn(new LoginResult(
-            new LoginResponse("100", List.of("VISITOR")),
-            "access-token",
+            new LoginResponse("100", List.of("VISITOR"), "access-token"),
             "refresh-token"
         ));
 
@@ -49,7 +48,7 @@ class LoginControllerWebMvcTest extends UserControllerWebMvcTestSupport {
                     }
                     """))
             .andExpect(status().isOk())
-            .andExpect(header().string(HttpHeaders.AUTHORIZATION, "Bearer access-token"))
+            .andExpect(header().doesNotExist(HttpHeaders.AUTHORIZATION))
             .andExpect(header().string(HttpHeaders.SET_COOKIE, org.hamcrest.Matchers.containsString("refreshToken=refresh-token")))
             .andExpect(header().string(HttpHeaders.SET_COOKIE, org.hamcrest.Matchers.containsString("Max-Age=1209600")))
             .andExpect(header().string(HttpHeaders.SET_COOKIE, org.hamcrest.Matchers.containsString("Path=/api/v1/auth")))
@@ -61,7 +60,7 @@ class LoginControllerWebMvcTest extends UserControllerWebMvcTestSupport {
             .andExpect(jsonPath("$.message").value("로그인에 성공했습니다."))
             .andExpect(jsonPath("$.data.userId").value("100"))
             .andExpect(jsonPath("$.data.roles[0]").value("VISITOR"))
-            .andExpect(jsonPath("$.data.accessToken").doesNotExist())
+            .andExpect(jsonPath("$.data.accessToken").value("access-token"))
             .andExpect(jsonPath("$.data.refreshToken").doesNotExist());
 
         verify(loginUseCase).login(any());
@@ -79,6 +78,7 @@ class LoginControllerWebMvcTest extends UserControllerWebMvcTestSupport {
                     """))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+            .andExpect(jsonPath("$.data").isEmpty())
             .andExpect(header().doesNotExist(HttpHeaders.AUTHORIZATION))
             .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE));
 
@@ -95,6 +95,7 @@ class LoginControllerWebMvcTest extends UserControllerWebMvcTestSupport {
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"))
             .andExpect(jsonPath("$.message").value("이메일 또는 비밀번호가 올바르지 않습니다."))
+            .andExpect(jsonPath("$.data").isEmpty())
             .andExpect(header().doesNotExist(HttpHeaders.AUTHORIZATION))
             .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE));
     }
@@ -111,6 +112,7 @@ class LoginControllerWebMvcTest extends UserControllerWebMvcTestSupport {
             .andExpect(status().isServiceUnavailable())
             .andExpect(jsonPath("$.code").value("AUTH_SERVICE_UNAVAILABLE"))
             .andExpect(jsonPath("$.message").value("인증 서비스를 일시적으로 사용할 수 없습니다."))
+            .andExpect(jsonPath("$.data").isEmpty())
             .andExpect(header().doesNotExist(HttpHeaders.AUTHORIZATION))
             .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE));
     }

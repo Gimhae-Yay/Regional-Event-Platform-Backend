@@ -6,8 +6,6 @@ import org.springframework.transaction.annotation.Transactional;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserAccountKind;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminAssignment;
-import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminAssignmentStatus;
-import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminGrade;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
@@ -25,49 +23,39 @@ public class PlatformAdminAuthorizationService {
 
     @Transactional(readOnly = true)
     public PlatformAdminAssignment requireAuthorizedPlatformAdmin(Long userId) {
-        return requireActivePrivilegedAssignment(userId);
+        return requirePrivilegedAssignment(userId);
     }
 
     @Transactional(readOnly = true)
     public PlatformAdminAssignment requireAuthorizedSuperAdmin(Long userId) {
-        PlatformAdminAssignment assignment = requireActivePrivilegedAssignment(userId);
-        if (assignment.getGrade() != PlatformAdminGrade.SUPER_ADMIN) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
-        return assignment;
+        return requirePrivilegedAssignment(userId);
     }
 
     @Transactional
     public PlatformAdminAssignment requireAuthorizedPlatformAdminForUpdate(Long userId) {
-        return requireActivePrivilegedAssignmentForUpdate(userId);
+        return requirePrivilegedAssignmentForUpdate(userId);
     }
 
     @Transactional
     public PlatformAdminAssignment requireAuthorizedSuperAdminForUpdate(Long userId) {
-        PlatformAdminAssignment assignment = requireActivePrivilegedAssignmentForUpdate(userId);
-        if (assignment.getGrade() != PlatformAdminGrade.SUPER_ADMIN) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
-        return assignment;
+        return requirePrivilegedAssignmentForUpdate(userId);
     }
 
-    private PlatformAdminAssignment requireActivePrivilegedAssignment(Long userId) {
+    private PlatformAdminAssignment requirePrivilegedAssignment(Long userId) {
         validateUserId(userId);
-        return appUserRepository.findActivePrivilegedAssignment(
+        return appUserRepository.findPrivilegedAssignment(
                 userId,
-                PlatformAdminAssignmentStatus.ACTIVE,
                 AppUserStatus.ACTIVE,
                 AppUserAccountKind.PRIVILEGED
             )
             .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
     }
 
-    private PlatformAdminAssignment requireActivePrivilegedAssignmentForUpdate(Long userId) {
+    private PlatformAdminAssignment requirePrivilegedAssignmentForUpdate(Long userId) {
         validateUserId(userId);
         lockActivePrivilegedUser(userId);
-        return appUserRepository.findActivePrivilegedAssignmentForUpdate(
+        return appUserRepository.findPrivilegedAssignmentForUpdate(
                 userId,
-                PlatformAdminAssignmentStatus.ACTIVE,
                 AppUserStatus.ACTIVE,
                 AppUserAccountKind.PRIVILEGED
             )

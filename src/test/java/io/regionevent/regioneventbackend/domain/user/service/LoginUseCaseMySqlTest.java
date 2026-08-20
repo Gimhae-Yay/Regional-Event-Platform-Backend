@@ -47,6 +47,7 @@ import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 @Import({
     AppUserService.class,
     UserRoleAssignmentService.class,
+    AccessTokenAuthorityResolver.class,
     LoginUseCase.class,
     LoginUseCaseMySqlTest.LoginTestConfiguration.class
 })
@@ -102,7 +103,10 @@ class LoginUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
             await(releaseRefreshTokenIssuance);
             return "refresh-token";
         }).when(refreshTokenService).issue(userId);
-        when(jwtAccessTokenService.issue(userId)).thenReturn("access-token");
+        when(jwtAccessTokenService.issue(
+            org.mockito.ArgumentMatchers.eq(userId),
+            org.mockito.ArgumentMatchers.anyList()
+        )).thenReturn("access-token");
 
         try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
             Future<LoginResult> login = executorService.submit(

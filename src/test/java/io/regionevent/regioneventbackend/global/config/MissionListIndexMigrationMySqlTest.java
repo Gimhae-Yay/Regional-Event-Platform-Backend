@@ -38,6 +38,7 @@ class MissionListIndexMigrationMySqlTest {
     void migration_createsIndexesUsedByRegionMissionListQueries() {
         JdbcTemplate jdbcTemplate = createJdbcTemplate();
         migrate(jdbcTemplate);
+        assertMissionTitleColumn(jdbcTemplate);
         insertMissions(jdbcTemplate);
         jdbcTemplate.execute("ANALYZE TABLE mission");
 
@@ -92,6 +93,7 @@ class MissionListIndexMigrationMySqlTest {
                 """
                 INSERT INTO mission (
                     mission_id,
+                    title,
                     region_id,
                     condition_type,
                     required_visit_count,
@@ -100,14 +102,15 @@ class MissionListIndexMigrationMySqlTest {
                     ends_at,
                     published_at,
                     ended_at
-                ) VALUES (?, ?, 'VISIT_COUNT', 1, 1, ?, ?, NULL, NULL)
+                ) VALUES (?, ?, ?, 'VISIT_COUNT', 1, 1, ?, ?, NULL, NULL)
                 """
             )) {
                 for (int missionId = 1; missionId <= MISSION_COUNT; missionId++) {
                     statement.setLong(1, missionId);
-                    statement.setLong(2, missionId % REGION_COUNT + 1L);
-                    statement.setString(3, missionId / REGION_COUNT % 2 == 0 ? "DRAFT" : "PENDING_REVIEW");
-                    statement.setTimestamp(4, Timestamp.from(MISSION_ENDS_AT));
+                    statement.setString(2, "테스트 미션");
+                    statement.setLong(3, missionId % REGION_COUNT + 1L);
+                    statement.setString(4, missionId / REGION_COUNT % 2 == 0 ? "DRAFT" : "PENDING_REVIEW");
+                    statement.setTimestamp(5, Timestamp.from(MISSION_ENDS_AT));
                     statement.addBatch();
                 }
                 statement.executeBatch();
@@ -118,6 +121,22 @@ class MissionListIndexMigrationMySqlTest {
             }
             return null;
         });
+    }
+
+    private void assertMissionTitleColumn(JdbcTemplate jdbcTemplate) {
+        Map<String, Object> titleColumn = jdbcTemplate.queryForMap(
+            """
+            SELECT IS_NULLABLE, CHARACTER_MAXIMUM_LENGTH, COLUMN_DEFAULT
+            FROM information_schema.columns
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'mission'
+              AND COLUMN_NAME = 'title'
+            """
+        );
+
+        assertThat(titleColumn.get("IS_NULLABLE")).isEqualTo("NO");
+        assertThat(((Number) titleColumn.get("CHARACTER_MAXIMUM_LENGTH")).longValue()).isEqualTo(255L);
+        assertThat(titleColumn.get("COLUMN_DEFAULT")).isNull();
     }
 
     private void assertIndexPlan(

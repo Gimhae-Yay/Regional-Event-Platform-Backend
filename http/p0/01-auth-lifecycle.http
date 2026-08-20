@@ -65,9 +65,8 @@ Accept: application/json
 }
 
 > {%
-const authorization = response.headers.valueOf("Authorization");
 const setCookie = response.headers.valueOf("Set-Cookie");
-client.global.set("visitorAccessToken", authorization.replace("Bearer ", ""));
+client.global.set("visitorAccessToken", response.body.data.accessToken);
 client.global.set("visitorRefreshCookie", setCookie.split(";")[0]);
 client.global.set("visitorRefreshCookieBeforeRotation", setCookie.split(";")[0]);
 %}
@@ -97,9 +96,8 @@ Cookie: {{visitorRefreshCookie}}
 Accept: application/json
 
 > {%
-const authorization = response.headers.valueOf("Authorization");
 const setCookie = response.headers.valueOf("Set-Cookie");
-client.global.set("visitorAccessToken", authorization.replace("Bearer ", ""));
+client.global.set("visitorAccessToken", response.body.data.accessToken);
 client.global.set("visitorRefreshCookie", setCookie.split(";")[0]);
 %}
 
@@ -138,9 +136,8 @@ Accept: application/json
 }
 
 > {%
-const authorization = response.headers.valueOf("Authorization");
 const setCookie = response.headers.valueOf("Set-Cookie");
-client.global.set("visitorAccessToken", authorization.replace("Bearer ", ""));
+client.global.set("visitorAccessToken", response.body.data.accessToken);
 client.global.set("visitorRefreshCookie", setCookie.split(";")[0]);
 %}
 

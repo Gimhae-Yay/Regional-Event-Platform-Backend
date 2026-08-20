@@ -4,6 +4,12 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME:}
     password: ${SPRING_DATASOURCE_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      host: ${AUTH_REDIS_HOST}
+      port: ${AUTH_REDIS_PORT:6379}
+      # 운영 Redis는 독립 EC2에서 requirepass를 사용하므로, Compose가 전달한 값으로 인증합니다.
+      password: ${AUTH_REDIS_PASSWORD}
   h2:
     console:
       enabled: false

@@ -28,6 +28,7 @@ import io.regionevent.regioneventbackend.domain.stampbook.service.StampbookCompl
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
@@ -62,6 +63,7 @@ class MyStampbookControllerWebMvcTest {
             .andExpect(jsonPath("$.code").value("SUCCESS"))
             .andExpect(jsonPath("$.message").value("내 스탬프북 목록 조회에 성공했습니다."))
             .andExpect(jsonPath("$.data.stampbooks[0].stampbookId").value("101"))
+            .andExpect(jsonPath("$.data.stampbooks[0].title").value("김해 가야 문화 완주"))
             .andExpect(jsonPath("$.data.stampbooks[0].regionId").value("10"))
             .andExpect(jsonPath("$.data.stampbooks[0].status").value("PUBLISHED"))
             .andExpect(jsonPath("$.data.stampbooks[0].progress.status").value("NOT_STARTED"))
@@ -107,6 +109,7 @@ class MyStampbookControllerWebMvcTest {
     private MyStampbookListResult result() {
         return new MyStampbookListResult(
             101L,
+            "김해 가야 문화 완주",
             10L,
             StampbookStatus.PUBLISHED,
             Instant.parse("2026-08-01T00:00:00Z"),
@@ -124,6 +127,7 @@ class MyStampbookControllerWebMvcTest {
     private MyStampbookListResult completedResult() {
         return new MyStampbookListResult(
             101L,
+            "김해 역사 산책",
             10L,
             StampbookStatus.ENDED,
             Instant.parse("2026-08-01T00:00:00Z"),
@@ -141,6 +145,6 @@ class MyStampbookControllerWebMvcTest {
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder authenticated(
         org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder requestBuilder
     ) {
-        return requestBuilder.header(AUTHORIZATION, "Bearer " + jwtAccessTokenService.issue(USER_ID));
+        return requestBuilder.header(AUTHORIZATION, "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, USER_ID));
     }
 }

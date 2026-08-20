@@ -148,7 +148,7 @@ class StampbookRewardGrantRepositoryTest {
 
     private StampbookProgress saveCompletedProgress(CouponPolicy rewardCouponPolicy) {
         Stampbook stampbook = stampbookRepository.saveAndFlush(
-            new Stampbook(rewardCouponPolicy.getRegion(), rewardCouponPolicy)
+            new Stampbook(rewardCouponPolicy.getRegion(), rewardCouponPolicy, "스탬프북 제목")
         );
         AppUser user = saveUser("visitor@example.com");
         StampbookProgress stampbookProgress = stampbookProgressRepository.saveAndFlush(

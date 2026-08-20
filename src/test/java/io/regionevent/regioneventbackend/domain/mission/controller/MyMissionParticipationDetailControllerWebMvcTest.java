@@ -33,6 +33,7 @@ import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
+import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
@@ -75,7 +76,7 @@ class MyMissionParticipationDetailControllerWebMvcTest {
         when(content.getContentId()).thenReturn(301L);
         when(content.getTitle()).thenReturn("Target content");
         when(getMyMissionParticipationUseCase.get(VISITOR_ID, 701L)).thenReturn(
-            new MissionParticipationDetailResult(participation, List.of(progress), 1, 3, true)
+            new MissionParticipationDetailResult(participation, "김해 문화 미션", List.of(progress), 1, 3, true)
         );
 
         mockMvc.perform(authenticated(get("/api/v1/me/mission-participations/701")))
@@ -85,6 +86,7 @@ class MyMissionParticipationDetailControllerWebMvcTest {
             .andExpect(jsonPath("$.message").value("내 미션 참여 상세 조회에 성공했습니다."))
             .andExpect(jsonPath("$.data.participationId").value("701"))
             .andExpect(jsonPath("$.data.missionId").value("501"))
+            .andExpect(jsonPath("$.data.title").value("김해 문화 미션"))
             .andExpect(jsonPath("$.data.status").value("COMPLETED"))
             .andExpect(jsonPath("$.data.conditionType").value("VISIT_COUNT"))
             .andExpect(jsonPath("$.data.progressCount").value(1))
@@ -135,6 +137,6 @@ class MyMissionParticipationDetailControllerWebMvcTest {
     }
 
     private MockHttpServletRequestBuilder authenticated(MockHttpServletRequestBuilder requestBuilder) {
-        return requestBuilder.header("Authorization", "Bearer " + jwtAccessTokenService.issue(VISITOR_ID));
+        return requestBuilder.header("Authorization", "Bearer " + AccessTokenTestFactory.issueForAuthenticatedRequest(jwtAccessTokenService, VISITOR_ID));
     }
 }
