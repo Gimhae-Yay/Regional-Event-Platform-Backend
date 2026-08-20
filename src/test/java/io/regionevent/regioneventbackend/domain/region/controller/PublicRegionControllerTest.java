@@ -23,7 +23,6 @@ import io.regionevent.regioneventbackend.domain.region.service.PublicRegionStati
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
 @WebMvcTest(PublicRegionController.class)
 @Import({
@@ -39,9 +38,6 @@ class PublicRegionControllerTest {
 
     @MockitoBean
     private GetPublicRegionsUseCase getPublicRegionsUseCase;
-
-    @MockitoBean
-    private RefreshTokenStore refreshTokenStore;
 
     @Test
     void 인증_없이_공개_지역_목록_응답을_반환하고_성공_로그를_남긴다(CapturedOutput output) throws Exception {

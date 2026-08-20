@@ -31,7 +31,6 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
 import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
 @WebMvcTest(EndCouponPolicyController.class)
 @Import({SecurityConfig.class, RequestIdFilter.class, GlobalExceptionHandler.class})
@@ -48,9 +47,6 @@ class EndCouponPolicyControllerWebMvcTest {
 
     @MockitoBean
     private EndCouponPolicyUseCase endCouponPolicyUseCase;
-
-    @MockitoBean
-    private RefreshTokenStore refreshTokenStore;
 
     @Test
     void end_유효한_요청이면_종료_응답을_반환한다() throws Exception {

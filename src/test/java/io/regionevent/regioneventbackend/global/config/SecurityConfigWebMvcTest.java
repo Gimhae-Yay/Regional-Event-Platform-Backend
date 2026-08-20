@@ -56,7 +56,6 @@ import io.regionevent.regioneventbackend.global.security.access.AccessTokenAutho
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenProperties;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.common.ApiResponseAccessDeniedHandler;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
 
 @WebMvcTest(SecurityConfigWebMvcTest.SecurityTestController.class)
@@ -82,9 +81,6 @@ class SecurityConfigWebMvcTest {
 
     @Autowired
     private ObjectMapper objectMapper;
-
-    @MockitoBean
-    private RefreshTokenStore refreshTokenStore;
 
     @Test
     void securityMvcSlice_데이터베이스인프라를초기화하지않는다() {

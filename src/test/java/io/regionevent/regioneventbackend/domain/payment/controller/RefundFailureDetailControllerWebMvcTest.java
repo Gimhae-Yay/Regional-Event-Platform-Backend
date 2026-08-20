@@ -31,7 +31,6 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
 import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
 @WebMvcTest(RefundFailureDetailController.class)
 @Import({SecurityConfig.class, RequestIdFilter.class, GlobalExceptionHandler.class})
@@ -47,9 +46,6 @@ class RefundFailureDetailControllerWebMvcTest {
 
     @MockitoBean
     private GetRefundFailureUseCase getRefundFailureUseCase;
-
-    @MockitoBean
-    private RefreshTokenStore refreshTokenStore;
 
     @Test
     void get_환불과결제및오름차순시도이력을반환하고비밀값을노출하지않는다() throws Exception {

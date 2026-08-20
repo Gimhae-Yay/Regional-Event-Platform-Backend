@@ -13,7 +13,6 @@ import org.springframework.http.HttpHeaders;
 
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStoreUnavailableException;
 
 @WebMvcTest({
     LoginController.class,
@@ -53,18 +52,6 @@ class WithdrawalControllerWebMvcTest extends UserControllerWebMvcTestSupport {
         mockMvc.perform(authenticated(delete(WITHDRAWAL_PATH)))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.code").value("FORBIDDEN"))
-            .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE));
-    }
-
-    @Test
-    void withdraw_토큰저장소장애_서비스이용불가를응답하고쿠키를변경하지않는다() throws Exception {
-        doThrow(new RefreshTokenStoreUnavailableException(new IllegalStateException("Redis unavailable")))
-            .when(withdrawUserUseCase)
-            .withdraw(AUTHENTICATED_USER_ID);
-
-        mockMvc.perform(authenticated(delete(WITHDRAWAL_PATH)))
-            .andExpect(status().isServiceUnavailable())
-            .andExpect(jsonPath("$.code").value("AUTH_SERVICE_UNAVAILABLE"))
             .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE));
     }
 

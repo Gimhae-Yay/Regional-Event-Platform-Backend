@@ -30,7 +30,6 @@ import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
 import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
 @WebMvcTest(MyStampbookController.class)
 @Import({SecurityConfig.class, RequestIdFilter.class, GlobalExceptionHandler.class})
@@ -49,9 +48,6 @@ class MyStampbookControllerWebMvcTest {
 
     @MockitoBean
     private GetMyStampbookDetailUseCase getMyStampbookDetailUseCase;
-
-    @MockitoBean
-    private RefreshTokenStore refreshTokenStore;
 
     @Test
     void getMyStampbooks_목록을_정상_응답으로_반환한다() throws Exception {

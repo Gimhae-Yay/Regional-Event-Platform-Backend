@@ -29,7 +29,6 @@ import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
 @WebMvcTest(RegionHomeController.class)
 @Import({
@@ -47,9 +46,6 @@ class RegionHomeControllerTest {
 
     @MockitoBean
     private GetRegionHomeUseCase getRegionHomeUseCase;
-
-    @MockitoBean
-    private RefreshTokenStore refreshTokenStore;
 
     @Test
     void 인증_없이_지역_홈_응답을_반환하고_결과를_로그로_남긴다(CapturedOutput output) throws Exception {

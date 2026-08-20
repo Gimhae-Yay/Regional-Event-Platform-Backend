@@ -33,7 +33,6 @@ import io.regionevent.regioneventbackend.global.security.qr.QrTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.JwtRefreshTokenProperties;
 import io.regionevent.regioneventbackend.global.security.refresh.JwtRefreshTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenService;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 import io.regionevent.regioneventbackend.domain.payment.service.PortOneProperties;
 import io.regionevent.regioneventbackend.domain.payment.service.PortOneFakeProperties;
 
@@ -88,10 +87,9 @@ public class SecurityConfig {
     @Bean
     public RefreshTokenService refreshTokenService(
         JwtRefreshTokenService jwtRefreshTokenService,
-        RefreshTokenStore refreshTokenStore,
         Clock clock
     ) {
-        return new RefreshTokenService(jwtRefreshTokenService, refreshTokenStore, clock);
+        return new RefreshTokenService(jwtRefreshTokenService, clock);
     }
 
     @Bean

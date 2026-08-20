@@ -30,7 +30,6 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
 import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
 @WebMvcTest(UploadRepresentativeImageController.class)
 @Import({SecurityConfig.class, RequestIdFilter.class, GlobalExceptionHandler.class})
@@ -46,9 +45,6 @@ class UploadRepresentativeImageControllerWebMvcTest {
 
     @MockitoBean
     private UploadRepresentativeImageUseCase uploadRepresentativeImageUseCase;
-
-    @MockitoBean
-    private RefreshTokenStore refreshTokenStore;
 
     @Test
     void createPresignedUrl_유효한요청_업로드정보를응답한다() throws Exception {

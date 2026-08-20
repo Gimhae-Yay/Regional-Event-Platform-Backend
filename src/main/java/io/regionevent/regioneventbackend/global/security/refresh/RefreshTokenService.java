@@ -4,22 +4,17 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Objects;
-import java.util.UUID;
-import java.util.function.Function;
 
 public class RefreshTokenService {
 
     private final JwtRefreshTokenService jwtRefreshTokenService;
-    private final RefreshTokenStore refreshTokenStore;
     private final Clock clock;
 
     public RefreshTokenService(
         JwtRefreshTokenService jwtRefreshTokenService,
-        RefreshTokenStore refreshTokenStore,
         Clock clock
     ) {
         this.jwtRefreshTokenService = Objects.requireNonNull(jwtRefreshTokenService, "jwtRefreshTokenService must not be null");
-        this.refreshTokenStore = Objects.requireNonNull(refreshTokenStore, "refreshTokenStore must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
     }
 
@@ -29,69 +24,14 @@ public class RefreshTokenService {
         Instant issuedAt = currentInstant();
         RefreshToken refreshToken = new RefreshToken(
             userId,
-            UUID.randomUUID(),
-            UUID.randomUUID(),
             issuedAt,
             issuedAt.plus(JwtRefreshTokenService.REFRESH_TOKEN_TTL)
         );
-        String token = jwtRefreshTokenService.issue(refreshToken);
-        refreshTokenStore.createFamily(refreshToken);
-        return token;
+        return jwtRefreshTokenService.issue(refreshToken);
     }
 
-    public String rotate(String token) {
-        return rotate(token, ignored -> null).rotatedTokenValue();
-    }
-
-    public <T> RotationResult<T> rotate(
-        String token,
-        Function<RefreshToken, T> prepareBeforeCompletion
-    ) {
-        Objects.requireNonNull(prepareBeforeCompletion, "prepareBeforeCompletion must not be null");
-
-        RefreshToken currentToken = jwtRefreshTokenService.authenticate(token);
-        UUID attemptId = UUID.randomUUID();
-        RefreshTokenStore.RotationStartResult result = refreshTokenStore.startRotation(currentToken, attemptId);
-        if (result == RefreshTokenStore.RotationStartResult.CONFLICT) {
-            throw new RefreshTokenConflictException();
-        }
-        if (result == RefreshTokenStore.RotationStartResult.INVALID) {
-            throw new InvalidRefreshTokenException();
-        }
-
-        try {
-            T preparationResult = prepareBeforeCompletion.apply(currentToken);
-            RefreshToken nextToken = currentToken.rotate(UUID.randomUUID(), currentInstant());
-            String rotatedToken = jwtRefreshTokenService.issue(nextToken);
-            RefreshTokenStore.RotationCompletionResult completionResult = refreshTokenStore.completeRotation(
-                currentToken,
-                nextToken.tokenId(),
-                attemptId
-            );
-            if (completionResult == RefreshTokenStore.RotationCompletionResult.CONFLICT) {
-                throw new RefreshTokenConflictException();
-            }
-            if (completionResult == RefreshTokenStore.RotationCompletionResult.INVALID) {
-                throw new InvalidRefreshTokenException();
-            }
-            return new RotationResult<>(rotatedToken, nextToken, preparationResult);
-        } catch (RuntimeException exception) {
-            refreshTokenStore.cancelRotation(currentToken, attemptId);
-            throw exception;
-        }
-    }
-
-    public void revokeCurrentFamily(String token) {
-        try {
-            refreshTokenStore.revokeFamily(jwtRefreshTokenService.authenticate(token));
-        } catch (InvalidRefreshTokenException exception) {
-            return;
-        }
-    }
-
-    public void revokeAllFamilies(Long userId) {
-        validateUserId(userId);
-        refreshTokenStore.revokeAllFamilies(userId);
+    public RefreshToken authenticate(String token) {
+        return jwtRefreshTokenService.authenticate(token);
     }
 
     private Instant currentInstant() {
@@ -101,18 +41,6 @@ public class RefreshTokenService {
     private void validateUserId(Long userId) {
         if (userId == null || userId <= 0) {
             throw new IllegalArgumentException("userId must be positive");
-        }
-    }
-
-    public record RotationResult<T>(
-        String rotatedTokenValue,
-        RefreshToken rotatedToken,
-        T preparationResult
-    ) {
-
-        @Override
-        public String toString() {
-            return "RotationResult[redacted]";
         }
     }
 }

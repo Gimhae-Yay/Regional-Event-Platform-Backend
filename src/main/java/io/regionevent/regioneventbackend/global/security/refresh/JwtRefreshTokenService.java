@@ -7,7 +7,6 @@ import java.util.Base64;
 import java.util.Date;
 import java.util.Objects;
 import java.util.Set;
-import java.util.UUID;
 
 import javax.crypto.SecretKey;
 
@@ -22,7 +21,6 @@ public class JwtRefreshTokenService {
     public static final Duration REFRESH_TOKEN_TTL = Duration.ofDays(14);
 
     private static final String TOKEN_TYPE_CLAIM = "token_type";
-    private static final String FAMILY_ID_CLAIM = "family_id";
     private static final String REFRESH_TOKEN_TYPE = "REFRESH";
     private static final String JWT_TYPE = "JWT";
 
@@ -54,9 +52,7 @@ public class JwtRefreshTokenService {
                 .add(audience)
                 .and()
             .subject(refreshToken.userId().toString())
-            .id(refreshToken.tokenId().toString())
             .claim(TOKEN_TYPE_CLAIM, REFRESH_TOKEN_TYPE)
-            .claim(FAMILY_ID_CLAIM, refreshToken.familyId().toString())
             .issuedAt(Date.from(refreshToken.issuedAt()))
             .expiration(Date.from(refreshToken.expiresAt()))
             .signWith(activeKey, Jwts.SIG.HS256)
@@ -103,13 +99,11 @@ public class JwtRefreshTokenService {
             || !REFRESH_TOKEN_TYPE.equals(claims.get(TOKEN_TYPE_CLAIM, String.class))
             || issuedAtInstant.isAfter(now)
             || !expiresAtInstant.isAfter(now)
-            || expiresAtInstant.isAfter(issuedAtInstant.plus(REFRESH_TOKEN_TTL))) {
+            || !expiresAtInstant.equals(issuedAtInstant.plus(REFRESH_TOKEN_TTL))) {
             throw new InvalidRefreshTokenException();
         }
         return new RefreshToken(
             toUserId(claims.getSubject()),
-            toUuid(claims.getId()),
-            toUuid(claims.get(FAMILY_ID_CLAIM, String.class)),
             issuedAtInstant,
             expiresAtInstant
         );
@@ -141,17 +135,6 @@ public class JwtRefreshTokenService {
         try {
             return Long.valueOf(subject);
         } catch (NumberFormatException exception) {
-            throw new InvalidRefreshTokenException();
-        }
-    }
-
-    private UUID toUuid(String value) {
-        if (value == null) {
-            throw new InvalidRefreshTokenException();
-        }
-        try {
-            return UUID.fromString(value);
-        } catch (IllegalArgumentException exception) {
             throw new InvalidRefreshTokenException();
         }
     }

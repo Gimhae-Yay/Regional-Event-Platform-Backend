@@ -21,7 +21,6 @@ import io.regionevent.regioneventbackend.domain.user.dto.LoginResult;
 import io.regionevent.regioneventbackend.domain.user.service.LoginUseCase;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStoreUnavailableException;
 
 @WebMvcTest({
     LoginController.class,
@@ -95,23 +94,6 @@ class LoginControllerWebMvcTest extends UserControllerWebMvcTestSupport {
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"))
             .andExpect(jsonPath("$.message").value("이메일 또는 비밀번호가 올바르지 않습니다."))
-            .andExpect(jsonPath("$.data").isEmpty())
-            .andExpect(header().doesNotExist(HttpHeaders.AUTHORIZATION))
-            .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE));
-    }
-
-    @Test
-    void login_토큰저장소장애_서비스이용불가를응답한다() throws Exception {
-        when(loginUseCase.login(any())).thenThrow(
-            new RefreshTokenStoreUnavailableException(new IllegalStateException("Redis unavailable"))
-        );
-
-        mockMvc.perform(post("/api/v1/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(loginRequest()))
-            .andExpect(status().isServiceUnavailable())
-            .andExpect(jsonPath("$.code").value("AUTH_SERVICE_UNAVAILABLE"))
-            .andExpect(jsonPath("$.message").value("인증 서비스를 일시적으로 사용할 수 없습니다."))
             .andExpect(jsonPath("$.data").isEmpty())
             .andExpect(header().doesNotExist(HttpHeaders.AUTHORIZATION))
             .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE));

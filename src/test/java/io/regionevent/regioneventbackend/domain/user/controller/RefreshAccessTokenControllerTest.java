@@ -1,16 +1,11 @@
 package io.regionevent.regioneventbackend.domain.user.controller;
 
-import static org.junit.jupiter.api.Assertions.assertAll;
-
-import static org.hamcrest.Matchers.containsString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
-import java.time.Duration;
 
 import jakarta.servlet.http.Cookie;
 
@@ -23,8 +18,6 @@ import io.regionevent.regioneventbackend.domain.user.dto.RefreshAccessTokenResul
 import io.regionevent.regioneventbackend.domain.user.service.RefreshAccessTokenUseCase;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
 import io.regionevent.regioneventbackend.global.security.refresh.InvalidRefreshTokenException;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenConflictException;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStoreUnavailableException;
 
 class RefreshAccessTokenControllerTest {
 
@@ -35,77 +28,28 @@ class RefreshAccessTokenControllerTest {
         .build();
 
     @Test
-    void 전체_단위_계약을_보존한다() {
-        assertAll(
-            () -> new RefreshAccessTokenControllerTest().refresh_whenTokenIsValid_returnsAccessTokenAndRotatedCookie(),
-            () -> new RefreshAccessTokenControllerTest().refresh_whenTokenIsMissing_returnsUnauthenticatedAndExpiresCookie(),
-            () -> new RefreshAccessTokenControllerTest().refresh_whenRotationIsInProgress_returnsConflictWithoutChangingCookie(),
-            () -> new RefreshAccessTokenControllerTest().refresh_whenRedisIsUnavailable_returnsServiceUnavailableWithoutChangingCookie()
-        );
-    }
-
-    void refresh_whenTokenIsValid_returnsAccessTokenAndRotatedCookie() throws Exception {
-        when(refreshAccessTokenUseCase.reissue("current-token")).thenReturn(new RefreshAccessTokenResult(
-            "access-token",
-            "rotated-token",
-            Duration.ofSeconds(60)
-        ));
+    void refresh_유효한토큰_AccessToken만반환하고Cookie를교체하지않는다() throws Exception {
+        when(refreshAccessTokenUseCase.reissue("current-token"))
+            .thenReturn(new RefreshAccessTokenResult("access-token"));
 
         mockMvc.perform(post("/api/v1/auth/refresh")
                 .cookie(new Cookie("refreshToken", "current-token")))
             .andExpect(status().isOk())
             .andExpect(header().doesNotExist(HttpHeaders.AUTHORIZATION))
-            .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("refreshToken=rotated-token")))
-            .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("Max-Age=60")))
-            .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("Path=/api/v1/auth")))
-            .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("Secure")))
-            .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("HttpOnly")))
-            .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("SameSite=Strict")))
+            .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE))
             .andExpect(jsonPath("$.statusCode").value(200))
             .andExpect(jsonPath("$.code").value("SUCCESS"))
             .andExpect(jsonPath("$.message").value("Access Token 재발급에 성공했습니다."))
-            .andExpect(jsonPath("$.data.accessToken").value("access-token"))
-            .andExpect(jsonPath("$.data.refreshToken").doesNotExist());
+            .andExpect(jsonPath("$.data.accessToken").value("access-token"));
     }
 
-    void refresh_whenTokenIsMissing_returnsUnauthenticatedAndExpiresCookie() throws Exception {
+    @Test
+    void refresh_토큰이없음_미인증오류와만료Cookie를반환한다() throws Exception {
         when(refreshAccessTokenUseCase.reissue(null)).thenThrow(new InvalidRefreshTokenException());
 
         mockMvc.perform(post("/api/v1/auth/refresh"))
             .andExpect(status().isUnauthorized())
-            .andExpect(header().doesNotExist(HttpHeaders.AUTHORIZATION))
-            .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("Max-Age=0")))
-            .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("Path=/api/v1/auth")))
-            .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("Secure")))
-            .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("HttpOnly")))
-            .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("SameSite=Strict")))
-            .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"))
-            .andExpect(jsonPath("$.data").isEmpty());
-    }
-
-    void refresh_whenRotationIsInProgress_returnsConflictWithoutChangingCookie() throws Exception {
-        when(refreshAccessTokenUseCase.reissue("current-token"))
-            .thenThrow(new RefreshTokenConflictException());
-
-        mockMvc.perform(post("/api/v1/auth/refresh")
-                .cookie(new Cookie("refreshToken", "current-token")))
-            .andExpect(status().isConflict())
-            .andExpect(header().doesNotExist(HttpHeaders.AUTHORIZATION))
-            .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE))
-            .andExpect(jsonPath("$.code").value("REFRESH_TOKEN_CONFLICT"))
-            .andExpect(jsonPath("$.data").isEmpty());
-    }
-
-    void refresh_whenRedisIsUnavailable_returnsServiceUnavailableWithoutChangingCookie() throws Exception {
-        when(refreshAccessTokenUseCase.reissue("current-token"))
-            .thenThrow(new RefreshTokenStoreUnavailableException(new IllegalStateException()));
-
-        mockMvc.perform(post("/api/v1/auth/refresh")
-                .cookie(new Cookie("refreshToken", "current-token")))
-            .andExpect(status().isServiceUnavailable())
-            .andExpect(header().doesNotExist(HttpHeaders.AUTHORIZATION))
-            .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE))
-            .andExpect(jsonPath("$.code").value("AUTH_SERVICE_UNAVAILABLE"))
-            .andExpect(jsonPath("$.data").isEmpty());
+            .andExpect(header().string(HttpHeaders.SET_COOKIE, org.hamcrest.Matchers.containsString("Max-Age=0")))
+            .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
     }
 }

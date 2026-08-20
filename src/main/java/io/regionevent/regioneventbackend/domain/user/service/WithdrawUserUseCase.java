@@ -28,7 +28,6 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.visit.service.VisitService;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenService;
 
 @Service
 public class WithdrawUserUseCase {
@@ -41,7 +40,6 @@ public class WithdrawUserUseCase {
     private final ContentService contentService;
     private final ContentSessionService contentSessionService;
     private final ContentWithdrawalRequestService contentWithdrawalRequestService;
-    private final RefreshTokenService refreshTokenService;
     private final CouponService couponService;
     private final CouponIssuanceService couponIssuanceService;
     private final CouponStatusHistoryService couponStatusHistoryService;
@@ -62,7 +60,6 @@ public class WithdrawUserUseCase {
         ContentService contentService,
         ContentSessionService contentSessionService,
         ContentWithdrawalRequestService contentWithdrawalRequestService,
-        RefreshTokenService refreshTokenService,
         CouponService couponService,
         CouponIssuanceService couponIssuanceService,
         CouponStatusHistoryService couponStatusHistoryService,
@@ -82,7 +79,6 @@ public class WithdrawUserUseCase {
         this.contentService = contentService;
         this.contentSessionService = contentSessionService;
         this.contentWithdrawalRequestService = contentWithdrawalRequestService;
-        this.refreshTokenService = refreshTokenService;
         this.couponService = couponService;
         this.couponIssuanceService = couponIssuanceService;
         this.couponStatusHistoryService = couponStatusHistoryService;
@@ -105,7 +101,6 @@ public class WithdrawUserUseCase {
         validateWithdrawable(userId);
         appUserService.startWithdrawal(user);
 
-        refreshTokenService.revokeAllFamilies(userId);
         List<Long> activeSessionIds = capacityHoldService.findActiveSessionIdsForWithdrawal(userId);
         activeSessionIds.forEach(contentSessionService::lockForUpdate);
         reservationService.cancelConfirmedReservationsForWithdrawal(userId);

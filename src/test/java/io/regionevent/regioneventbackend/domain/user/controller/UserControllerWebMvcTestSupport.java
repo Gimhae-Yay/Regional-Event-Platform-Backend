@@ -17,8 +17,6 @@ import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
 import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenService;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
 @Import({SecurityConfig.class, RequestIdFilter.class, GlobalExceptionHandler.class})
 abstract class UserControllerWebMvcTestSupport {
@@ -31,9 +29,6 @@ abstract class UserControllerWebMvcTestSupport {
     @Autowired
     protected JwtAccessTokenService jwtAccessTokenService;
 
-    @Autowired
-    protected RefreshTokenService refreshTokenService;
-
     @MockitoBean
     protected LoginUseCase loginUseCase;
 
@@ -45,9 +40,6 @@ abstract class UserControllerWebMvcTestSupport {
 
     @MockitoBean
     protected WithdrawUserUseCase withdrawUserUseCase;
-
-    @MockitoBean
-    protected RefreshTokenStore refreshTokenStore;
 
     protected MockHttpServletRequestBuilder authenticated(MockHttpServletRequestBuilder requestBuilder) {
         return authenticated(requestBuilder, AUTHENTICATED_USER_ID);
