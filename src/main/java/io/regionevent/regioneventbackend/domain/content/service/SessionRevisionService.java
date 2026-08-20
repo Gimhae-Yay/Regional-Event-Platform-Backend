@@ -98,6 +98,14 @@ public class SessionRevisionService {
         );
     }
 
+    @Transactional(readOnly = true)
+    public List<SessionRevision> findPendingByTargetContentId(Long contentId) {
+        return sessionRevisionRepository.findPendingByTargetContentId(
+            contentId,
+            SessionRevisionStatus.PENDING
+        );
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
     public Long findContentIdByRevisionId(Long revisionId) {
         return sessionRevisionRepository.findContentIdBySessionRevisionId(revisionId)
