@@ -583,6 +583,7 @@ class OperatorMissionControllerWebMvcTest {
     void getDetail_withValidMissionId_returnsOperatorMissionDetail() throws Exception {
         when(getOperatorMissionDetailUseCase.get(OPERATOR_ID, 701L)).thenReturn(new OperatorMissionDetailResponse(
             "701",
+            "운영자 미션",
             "11",
             MissionStatus.DRAFT,
             MissionConditionType.CONTENT_SET,
@@ -600,7 +601,7 @@ class OperatorMissionControllerWebMvcTest {
             .andExpect(jsonPath("$.code").value("SUCCESS"))
             .andExpect(jsonPath("$.message").value("내 미션 상세 조회에 성공했습니다."))
             .andExpect(jsonPath("$.data.missionId").value("701"))
-            .andExpect(jsonPath("$.data.title").doesNotExist())
+            .andExpect(jsonPath("$.data.title").value("운영자 미션"))
             .andExpect(jsonPath("$.data.regionId").value("11"))
             .andExpect(jsonPath("$.data.status").value("DRAFT"))
             .andExpect(jsonPath("$.data.conditionType").value("CONTENT_SET"))
@@ -653,6 +654,7 @@ class OperatorMissionControllerWebMvcTest {
     void getDetail_withPublishedAndEndedTimestamps_serializesInstantAsUtcZ() throws Exception {
         when(getOperatorMissionDetailUseCase.get(OPERATOR_ID, 701L)).thenReturn(new OperatorMissionDetailResponse(
             "701",
+            "운영자 미션",
             "11",
             MissionStatus.ENDED,
             MissionConditionType.VISIT_COUNT,
