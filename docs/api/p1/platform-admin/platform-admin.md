@@ -18,6 +18,7 @@
 | 요구사항 | HTTP 계약 | 주요 데이터 |
 | --- | --- | --- |
 | P1-FR-09, ADM-01 | `GET /api/v1/platform-admin/users` | `app_user`, `user_role_assignment`, `region` |
+| P1-FR-09, ADM-01 | `GET /api/v1/platform-admin/admin-accounts` | `app_user`, `platform_admin_assignment` |
 | P1-FR-09, ADM-01, ADM-05 | `POST /api/v1/platform-admin/admin-accounts` | `app_user`, `platform_admin_assignment`, `audit_event` |
 | P1-FR-09, ADM-01, ADM-05 | `POST /api/v1/platform-admin/admin-accounts/{userId}/deactivate` | `platform_admin_assignment`, `audit_event` |
 | P1-FR-09, ADM-03, ADM-05 | `PATCH /api/v1/platform-admin/users/{userId}/role` | `user_role_assignment`, `app_user`, `audit_event` |
@@ -29,13 +30,14 @@
 | Base URL·미디어 타입·시간 형식 | [API 공통 규칙](../../common/api-conventions.md) | Base URL `/api/v1`과 사건 시각 UTC ISO 8601 표기를 사용한다. |
 | 인증·인가 | [인증·인가](../../common/authentication.md) | 목록 조회는 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN`, 고권한 계정 변경은 활성 `SUPER_ADMIN`, 지역관리자 역할 변경은 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN`이 필요하다. |
 | 성공·오류 응답 | [응답·오류](../../common/response-and-error.md) | API별 성공 상태, `data` 필드와 오류 코드를 명시한다. |
-| 페이지네이션 | [페이지네이션](../../common/pagination.md) | 사용자 목록 조회는 단순 목록이므로 적용하지 않는다. |
+| 페이지네이션 | [페이지네이션](../../common/pagination.md) | 사용자 목록과 전체관리자 계정 목록 조회는 단순 목록이므로 적용하지 않는다. |
 
 ## 기능별 API 명세
 
 | 기능 | API 경로 | 명세 |
 | --- | --- | --- |
 | 전체관리자의 사용자 목록 조회 | `GET /api/v1/platform-admin/users` | [list-users.md](list-users.md) |
+| 전체관리자 계정 목록 조회 | `GET /api/v1/platform-admin/admin-accounts` | [list-admin-accounts.md](list-admin-accounts.md) |
 | 전체관리자 계정 생성 | `POST /api/v1/platform-admin/admin-accounts` | [create-admin-account.md](create-admin-account.md) |
 | 전체관리자 계정 비활성화 | `POST /api/v1/platform-admin/admin-accounts/{userId}/deactivate` | [deactivate-admin-account.md](deactivate-admin-account.md) |
 | 지역관리자 역할 부여·회수 | `PATCH /api/v1/platform-admin/users/{userId}/role` | [update-user-role.md](update-user-role.md) |
