@@ -3,6 +3,7 @@ package io.regionevent.regioneventbackend.domain.content.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -15,9 +16,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 
 import io.regionevent.regioneventbackend.domain.audit.entity.AuditEventTargetType;
 import io.regionevent.regioneventbackend.domain.audit.service.AuditEventCommand;
@@ -82,7 +84,7 @@ class EndContentReservationsUseCaseTest {
 
     @BeforeEach
     void setUp() {
-        when(capacityHoldService.invalidateAllActiveHoldsForContent(CONTENT_ID, "CONTENT_ENDED"))
+        when(capacityHoldService.invalidateAllActiveHoldsForSessions(any(), eq("CONTENT_ENDED")))
             .thenReturn(List.of());
         when(contentService.findContentRegionId(CONTENT_ID)).thenReturn(REGION_ID);
         Region lockedRegion = region();
@@ -97,7 +99,7 @@ class EndContentReservationsUseCaseTest {
         when(contentService.findEndTargetForUpdate(CONTENT_ID)).thenReturn(content);
         givenAuthorizedRegionAdmin(regionAdmin);
         when(contentSessionService.hasNonTerminalSessionForEnd(CONTENT_ID)).thenReturn(false);
-        when(contentSessionService.findCurrentSessionsByContentId(CONTENT_ID)).thenReturn(List.of(contentSession));
+        when(contentSessionService.findEndTargetsForUpdate(CONTENT_ID)).thenReturn(List.of(contentSession));
         when(contentService.findCurrentDatabaseTime()).thenReturn(ENDED_AT);
         when(contentService.end(content, ENDED_AT)).thenReturn(content);
 
@@ -113,7 +115,7 @@ class EndContentReservationsUseCaseTest {
         when(completedSession.getStatus()).thenReturn(ContentSessionStatus.COMPLETED);
         when(completedSession.getCompletedAt()).thenReturn(ENDED_AT);
         when(contentService.findEndTargetForUpdate(CONTENT_ID)).thenReturn(content);
-        when(contentSessionService.findCurrentSessionsByContentId(CONTENT_ID)).thenReturn(List.of(completedSession));
+        when(contentSessionService.findEndTargetsForUpdate(CONTENT_ID)).thenReturn(List.of(completedSession));
         when(contentSessionService.getEndTerminalStatuses()).thenReturn(List.of(ContentSessionStatus.COMPLETED));
         when(contentService.findCurrentDatabaseTime()).thenReturn(ENDED_AT);
         when(contentService.end(content, ENDED_AT)).thenReturn(content);
@@ -121,6 +123,12 @@ class EndContentReservationsUseCaseTest {
         useCase.endBySystem(CONTENT_ID, UUID.randomUUID());
 
         verify(publicCatalogCacheInvalidator).invalidateContentAfterCommit(REGION_ID, CONTENT_ID, VERSION_NO);
+        InOrder lockOrder = inOrder(contentSessionService, capacityHoldService);
+        lockOrder.verify(contentSessionService).findEndTargetsForUpdate(CONTENT_ID);
+        lockOrder.verify(capacityHoldService).invalidateAllActiveHoldsForSessions(
+            List.of(completedSession),
+            "CONTENT_ENDED"
+        );
     }
 
     @Test
@@ -133,7 +141,7 @@ class EndContentReservationsUseCaseTest {
         when(contentService.findEndTargetForUpdate(CONTENT_ID)).thenReturn(content);
         givenAuthorizedRegionAdmin(regionAdmin);
         when(contentSessionService.hasNonTerminalSessionForEnd(CONTENT_ID)).thenReturn(false);
-        when(contentSessionService.findCurrentSessionsByContentId(CONTENT_ID)).thenReturn(List.of(contentSession));
+        when(contentSessionService.findEndTargetsForUpdate(CONTENT_ID)).thenReturn(List.of(contentSession));
         when(contentService.findCurrentDatabaseTime()).thenReturn(ENDED_AT);
         when(contentService.end(content, ENDED_AT)).thenReturn(content);
         AppUser admin = regionAdmin.getAppUser();
@@ -166,7 +174,7 @@ class EndContentReservationsUseCaseTest {
         when(completedSession.getStatus()).thenReturn(ContentSessionStatus.COMPLETED);
         when(completedSession.getCompletedAt()).thenReturn(ENDED_AT);
         when(contentService.findEndTargetForUpdate(CONTENT_ID)).thenReturn(content);
-        when(contentSessionService.findCurrentSessionsByContentId(CONTENT_ID)).thenReturn(List.of(completedSession));
+        when(contentSessionService.findEndTargetsForUpdate(CONTENT_ID)).thenReturn(List.of(completedSession));
         when(contentSessionService.getEndTerminalStatuses()).thenReturn(List.of(ContentSessionStatus.COMPLETED));
         when(contentService.findCurrentDatabaseTime()).thenReturn(ENDED_AT);
         when(contentService.end(content, ENDED_AT)).thenReturn(content);
@@ -194,7 +202,7 @@ class EndContentReservationsUseCaseTest {
         Content endedContent = mock(Content.class);
         when(endedContent.getStatus()).thenReturn(ContentStatus.ENDED);
         when(contentService.findEndTargetForUpdate(CONTENT_ID)).thenReturn(endedContent);
-        when(contentSessionService.findCurrentSessionsByContentId(CONTENT_ID)).thenReturn(List.of());
+        when(contentSessionService.findEndTargetsForUpdate(CONTENT_ID)).thenReturn(List.of());
 
         useCase.endBySystem(CONTENT_ID, UUID.randomUUID());
 

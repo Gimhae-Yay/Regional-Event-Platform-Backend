@@ -186,6 +186,24 @@ public class CapacityHoldService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
+    public List<TerminatedCapacityHold> invalidateAllActiveHoldsForSessions(
+        List<ContentSession> contentSessions,
+        String invalidationReason
+    ) {
+        validateInvalidationReason(invalidationReason);
+        return contentSessions.stream()
+            .flatMap(contentSession -> capacityHoldRepository.findActiveBySessionIdForUpdate(
+                contentSession.getSessionId()
+            ).stream())
+            .map(capacityHold -> invalidateAndReleaseCapacityIfActive(
+                capacityHold.getHoldId(),
+                invalidationReason
+            ))
+            .flatMap(Optional::stream)
+            .toList();
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
     public List<Long> findActiveSessionIdsForWithdrawal(Long userId) {
         return capacityHoldRepository.findActiveSessionIdsByUserId(userId);
     }
