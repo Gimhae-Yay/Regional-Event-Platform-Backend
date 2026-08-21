@@ -302,6 +302,19 @@ class ContentRevisionServiceTest {
         );
     }
 
+    @Test
+    void findLatestRevisionByContentId_whenRevisionDoesNotExist_throwsNotFound() {
+        Fixture fixture = createFixture(ContentStatus.PENDING, CANDIDATE_PUBLISH_AT);
+        Long contentId = fixture.content().getContentId();
+        contentRevisionRepository.delete(fixture.revision());
+        contentRevisionRepository.flush();
+
+        assertThatThrownBy(() -> contentRevisionService.findLatestRevisionByContentId(contentId))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.NOT_FOUND)
+            );
+    }
+
     private Fixture createFixture(ContentStatus contentStatus, Instant candidatePublishAt) {
         String suffix = Long.toUnsignedString(System.nanoTime());
         Region region = regionRepository.saveAndFlush(new Region("R" + suffix, "김해시", true));
