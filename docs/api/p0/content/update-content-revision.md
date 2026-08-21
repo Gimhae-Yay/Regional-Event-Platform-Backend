@@ -9,9 +9,9 @@
 
 ## 1. 개요
 
-소유 운영자가 `EDIT_REJECTED` 수정본의 후보 콘텐츠 정보를 전체 교체 방식으로 편집한다. 공개 콘텐츠 원본과 회차는
-수정하지 않으며 새 대표 이미지를 사용할 때는 이미 존재하는 `ACTIVE` 이미지 객체를 지정한다. 공개 전 수정본의
-후보 공개 예정 시각도 이 수정본의 후보 값으로 함께 편집한다.
+소유 운영자가 해당 콘텐츠의 가장 최근 `EDIT_REJECTED` 수정본에 저장된 후보 콘텐츠 정보를 전체 교체 방식으로 편집한다.
+공개 콘텐츠 원본과 회차는 수정하지 않으며 새 대표 이미지를 사용할 때는 이미 존재하는 `ACTIVE` 이미지 객체를 지정한다.
+공개 전 수정본의 후보 공개 예정 시각도 이 수정본의 후보 값으로 함께 편집한다.
 
 ### 요구사항 추적
 
@@ -159,7 +159,7 @@ Accept: application/json
 | `401` | `UNAUTHENTICATED` | Access Token이 없거나 유효하지 않다. 수정본을 변경하지 않는다. |
 | `403` | `FORBIDDEN` | 운영자 역할, 담당 지역 또는 원본 콘텐츠 소유 관계가 없다. 수정본을 변경하지 않는다. |
 | `404` | `NOT_FOUND` | 수정본이 없다. 수정본을 변경하지 않는다. |
-| `409` | `CONTENT_STATE_CONFLICT` | 수정본이 `EDIT_REJECTED`가 아니다. 공개본과 수정본을 변경하지 않는다. |
+| `409` | `CONTENT_STATE_CONFLICT` | 수정본이 해당 콘텐츠의 가장 최근 `EDIT_REJECTED` 수정본이 아니다. 공개본과 수정본을 변경하지 않는다. |
 
 #### Error Response Body
 
@@ -174,10 +174,11 @@ Accept: application/json
 
 ### 처리 규칙
 
-1. `contentId`, 지역, 소유자와 콘텐츠 유형은 수정본 편집으로 바꾸지 않는다.
+1. `contentId`, 지역, 소유자와 콘텐츠 유형은 수정본 편집으로 바꾸지 않는다. 대상은 해당 콘텐츠에서 가장 큰
+   `revision_no`를 가진 `EDIT_REJECTED` 수정본이어야 하며, 이전 반려 이력을 편집할 수 없다.
 2. 기존 수정본의 후보 `publish_at`이 있으면 `publishAt`이 필수이며 해당 후보 값을 교체한다. 후보 `publish_at`이 `NULL`인 공개 콘텐츠 수정본은 `publishAt`을 제공할 수 없다.
 3. `representativeImageObjectId`를 제공하면 서버는 [대표 이미지 S3 업로드 URL 발급](upload-representative-image.md)의 연결 검증 조건을 모두 만족하는 이미지 객체일 때만 후보 대표 이미지로 연결한다. 제공하지 않으면 기존 후보 대표 이미지 스냅샷을 유지한다.
-4. `reservationPrice`는 모든 회차에 적용할 0 이상 정수 KRW 후보 가격이며, 편집 시 `content_revision.reservation_price`를 함께 교체한다. 이 API는 원본 `content.reservation_price`와 이미 생성된 `reservation_price_snapshot`을 변경하지 않는다. `EDIT_REJECTED` 수정본에서 바꾼 후보 가격은 해당 수정본이 종결 상태로 남으므로 원본 가격에 반영되지 않으며, [콘텐츠 수정본 생성](create-content-revision.md) 요청으로 새로 생성한 수정본의 `reservationPrice`만 승인된 뒤 원본 가격을 변경한다.
+4. `reservationPrice`는 모든 회차에 적용할 0 이상 정수 KRW 후보 가격이며, 편집 시 `content_revision.reservation_price`를 함께 교체한다. 이 API는 원본 `content.reservation_price`와 이미 생성된 `reservation_price_snapshot`을 변경하지 않는다. `EDIT_REJECTED` 수정본에서 바꾼 후보 가격은 해당 수정본이 종결 상태로 남으므로 원본 가격에 바로 반영되지 않으며, [반려 콘텐츠 수정본 재제출](resubmit-content-revision.md)로 생성한 새 수정본이 승인된 뒤에만 원본 가격을 변경한다.
 5. 공개 회차의 수정 가능 필드는 P0에서 확정되지 않았으므로 이 API는 회차·정원·체크인 창을 수정하지 않는다.
-6. `EDIT_REQUESTED`에서는 후보 필드가 동결된다. 심사에서 반려된 수정본은 이 API로 보완할 수 있지만 `EDIT_REJECTED` 상태는 종결 상태로 유지한다. 새 심사를 요청하려면 [콘텐츠 수정본 생성](create-content-revision.md)으로 새 수정본을 생성해야 한다.
+6. `EDIT_REQUESTED`에서는 후보 필드가 동결된다. 심사에서 반려된 수정본은 이 API로 보완할 수 있지만 `EDIT_REJECTED` 상태는 종결 상태로 유지한다. 새 심사는 [반려 콘텐츠 수정본 재제출](resubmit-content-revision.md)로 후보 필드와 후보 대표 이미지를 복제한 새 수정본을 만들어 요청한다.
 7. 편집은 원본 `content`와 공개 캐시의 버전을 변경하지 않는다.
