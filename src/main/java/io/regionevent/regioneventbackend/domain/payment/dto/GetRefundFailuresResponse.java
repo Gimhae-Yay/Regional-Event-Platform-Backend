@@ -33,7 +33,7 @@ public record GetRefundFailuresResponse(List<RefundFailureResponse> refunds) {
             return new RefundFailureResponse(
                 refund.refundId().toString(),
                 refund.paymentId().toString(),
-                refund.reservationId().toString(),
+                refund.reservationId() == null ? null : refund.reservationId().toString(),
                 refund.amount(),
                 refund.currency(),
                 refund.status().name(),
