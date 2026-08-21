@@ -102,6 +102,24 @@ class ContentServiceTest {
     }
 
     @Test
+    void findRevisionResubmissionTargetForUpdate_미삭제_콘텐츠를_반환한다() {
+        Content content = mock(Content.class);
+        when(contentRepository.findByContentIdAndDeletedAtIsNull(CONTENT_ID)).thenReturn(Optional.of(content));
+
+        assertThat(contentService.findRevisionResubmissionTargetForUpdate(CONTENT_ID)).isSameAs(content);
+    }
+
+    @Test
+    void findRevisionResubmissionTargetForUpdate_대상이_없으면_찾을수없음을_반환한다() {
+        when(contentRepository.findByContentIdAndDeletedAtIsNull(CONTENT_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> contentService.findRevisionResubmissionTargetForUpdate(CONTENT_ID))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.NOT_FOUND)
+            );
+    }
+
+    @Test
     void findMissionTargetContentsForUpdate_대상_콘텐츠를_잠금_조회하고_반환한다() {
         Content firstContent = ownedContent(false, true, ContentStatus.PUBLISHED);
         Content secondContent = ownedContent(false, true, ContentStatus.APPROVED);
