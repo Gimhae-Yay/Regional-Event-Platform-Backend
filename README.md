@@ -6,7 +6,7 @@
 [조직 소개](https://github.com/Gimhae-Yay) ·
 [프론트엔드](https://github.com/Gimhae-Yay/local-stamp-front) ·
 [API 명세](docs/api/api-specification.md) ·
-[ERD](docs/erd.md)
+[ERD P0](docs/erd.md) · [ERD P1](docs/p1-erd.md)
 
 ---
 
@@ -105,7 +105,7 @@
 | 종류             | 링크                                                  |
 |----------------|-----------------------------------------------------|
 | 요청·응답·상태 코드·오류 코드 | [API 명세](docs/api/api-specification.md)             |
-| 엔티티·테이블·인덱스·제약 | [ERD](docs/erd.md)                                  |
+| 엔티티·테이블·인덱스·제약 | [ERD P0](docs/erd.md) · [ERD P1](docs/p1-erd.md)            |
 | 제품 정책과 도메인 규칙  | [P0 명세](docs/p0-spec.md) · [P1 명세](docs/p1-spec.md) |
 | 기술 선택과 변경 이유   | [ADR](docs/adr/)                                    |
 
@@ -119,8 +119,8 @@
 | 전체 테스트 | `./gradlew test` | 같은 작업 트리에서 동시에 실행하지 않음      |
 | CI 빠른 검사 | `./gradlew ciFastCheck` | 애플리케이션 패키징 및 빠른 테스트         |
 | 컨테이너 테스트 | `./gradlew containerTestShard1` / `containerTestShard2` | Docker 필요                   |
-| HTTP 시나리오 | `http/README.md` 참고 | API 계약 기반 시나리오              |
-| 성능 시나리오 | `performance/k6/README.md` 참고 | 전용 환경과 fixture 조건 확인 필요     |
+| HTTP 시나리오 | [http/README.md](http/README.md) 참고 | API 계약 기반 시나리오              |
+| 성능 시나리오 | [performance/k6/README.md](performance/k6/README.md) 참고 | 전용 환경과 fixture 조건 확인 필요     |
 
 > 테스트 통과는 해당 범위의 자동 검증 결과일뿐, 운영 배포 성공이나 전체 성능을 보장하지 않습니다.
 
