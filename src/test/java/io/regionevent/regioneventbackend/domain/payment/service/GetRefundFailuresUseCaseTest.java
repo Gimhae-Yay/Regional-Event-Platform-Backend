@@ -68,6 +68,40 @@ class GetRefundFailuresUseCaseTest {
     }
 
     @Test
+    void get_예약없는실패및불일치환불이면_예약식별자가없는목록을반환한다() {
+        PlatformAdminAuthorizationService authorizationService = mock(
+            PlatformAdminAuthorizationService.class
+        );
+        RefundService refundService = mock(RefundService.class);
+        RefundAttemptService refundAttemptService = mock(RefundAttemptService.class);
+        Refund failedRefund = refund(551L, Instant.parse("2026-08-07T01:00:00Z"));
+        Refund discrepantRefund = refund(552L, Instant.parse("2026-08-07T01:10:00Z"));
+        when(failedRefund.getStatus()).thenReturn(RefundStatus.FAILED);
+        when(failedRefund.getPayment().getReservation()).thenReturn(null);
+        when(discrepantRefund.getPayment().getReservation()).thenReturn(null);
+        when(refundService.findAllByStatuses(Set.of(RefundStatus.FAILED, RefundStatus.DISCREPANT)))
+            .thenReturn(List.of(failedRefund, discrepantRefund));
+        when(refundAttemptService.findAllByRefundIds(List.of(551L, 552L))).thenReturn(List.of());
+        GetRefundFailuresUseCase useCase = new GetRefundFailuresUseCase(
+            authorizationService,
+            refundService,
+            refundAttemptService
+        );
+
+        List<RefundFailureListInfo> actual = useCase.get(
+            ACTOR_USER_ID,
+            Set.of(RefundStatus.FAILED, RefundStatus.DISCREPANT)
+        );
+
+        assertThat(actual).extracting(RefundFailureListInfo::refundId).containsExactly(551L, 552L);
+        assertThat(actual).extracting(RefundFailureListInfo::reservationId).containsOnlyNulls();
+        verify(authorizationService).requireAuthorizedPlatformAdmin(ACTOR_USER_ID);
+        verify(refundService).findAllByStatuses(Set.of(RefundStatus.FAILED, RefundStatus.DISCREPANT));
+        verify(refundAttemptService).findAllByRefundIds(List.of(551L, 552L));
+        verifyNoMoreInteractions(authorizationService, refundService, refundAttemptService);
+    }
+
+    @Test
     void get_권한이없으면_환불을조회하지않는다() {
         PlatformAdminAuthorizationService authorizationService = mock(
             PlatformAdminAuthorizationService.class
