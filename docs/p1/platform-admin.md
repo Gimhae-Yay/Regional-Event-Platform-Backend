@@ -3,7 +3,7 @@
 | 항목 | 내용 |
 | --- | --- |
 | 상위 명세 | [로컬스탬프 P1 명세](../p1-spec.md) |
-| 관련 핵심 결정 | [ADR-0064 고권한 계정 분리](../adr/0064-separate-privileged-account-class-from-ordinary-roles.md), [ADR-0065 지역 공개·역할 이력](../adr/0065-use-is-public-for-region-availability-and-history-roles.md), [ADR-0070 거래 예외 처리](../adr/0070-use-full-refund-with-bounded-manual-retry-and-discrepancy-closure.md), [ADR-0071 탈퇴 비식별화·감사](../adr/0071-deidentify-p1-benefit-data-on-withdrawal-and-extend-common-audit.md), [ADR-0077 지역 코드 대문자 정규화](../adr/0077-normalize-region-code-to-uppercase.md), [ADR-0078 동일 공개 여부 무변경 성공](../adr/0078-treat-repeated-region-visibility-as-no-op-success.md), [ADR-0082 전환 실패 증빙 감사](../adr/0082-store-evidence-reference-in-region-visibility-failure-audits.md), [ADR-0085 지역 증빙 참조 자유 문자열](../adr/0085-keep-region-evidence-reference-as-free-string.md), [ADR-0108 전역 authority snapshot RBAC](../adr/0108-use-global-authority-snapshot-for-first-stage-rbac.md) |
+| 관련 핵심 결정 | [ADR-0064 고권한 계정 분리](../adr/0064-separate-privileged-account-class-from-ordinary-roles.md), [ADR-0065 지역 공개·역할 이력](../adr/0065-use-is-public-for-region-availability-and-history-roles.md), [ADR-0070 거래 예외 처리](../adr/0070-use-full-refund-with-bounded-manual-retry-and-discrepancy-closure.md), [ADR-0071 탈퇴 비식별화·감사](../adr/0071-deidentify-p1-benefit-data-on-withdrawal-and-extend-common-audit.md), [ADR-0077 지역 코드 대문자 정규화](../adr/0077-normalize-region-code-to-uppercase.md), [ADR-0078 동일 공개 여부 무변경 성공](../adr/0078-treat-repeated-region-visibility-as-no-op-success.md), [ADR-0082 전환 실패 증빙 감사](../adr/0082-store-evidence-reference-in-region-visibility-failure-audits.md), [ADR-0085 지역 증빙 참조 자유 문자열](../adr/0085-keep-region-evidence-reference-as-free-string.md), [ADR-0108 전역 authority snapshot RBAC](../adr/0108-use-global-authority-snapshot-for-first-stage-rbac.md), [ADR-0113 전체관리자 본인 권한 조회 분리](../adr/0113-separate-platform-admin-self-access-from-account-list.md) |
 | 지역 세부·보정 기록 | [ADR-0076 지역 변경 사유 코드](../adr/0076-use-allowlisted-reason-codes-for-region-changes.md), [ADR-0079 실제 상태 전이 성공 감사](../adr/0079-limit-region-success-audits-to-state-transitions.md), [ADR-0080 지역 코드 공백 처리](../adr/0080-trim-region-code-outer-whitespace.md), [ADR-0081 운영 전 지역 비공개](../adr/0081-limit-region-hiding-to-pre-operation.md), [ADR-0083 실패 감사 저장 장애 응답](../adr/0083-preserve-region-conflict-response-when-failure-audit-write-fails.md), [ADR-0084 실패 감사 다음 상태 없음](../adr/0084-leave-next-state-null-for-failed-region-visibility-transition.md) |
 | 소유 범위 | 전체관리자 계정, 지역, 관리자 역할, 결제 불일치·환불 실패 수동 처리 |
 | API 명세 | [API 명세서](../api/api-specification.md) |
@@ -22,6 +22,8 @@ DB 최종 검증은 처리자의 활성 `PRIVILEGED` 계정, 대상·감사·업
 ### P1-FR-09. 전체관리자와 지역·역할 관리
 
 - `PRIVILEGED` 계정에 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN` 고권한 배정을 생성하고 비활성화한다.
+- 전체관리자는 본인 식별자와 Access Token에 적용된 고권한 등급을 다른 고권한 계정 목록과 분리해 조회한다.
+- 전체관리자 계정 목록 조회·생성·비활성화는 `SUPER_ADMIN`만 수행한다.
 - 지역을 생성·조회하고 기존 `is_public`으로 공개 전 준비 지역의 노출 여부를 변경한다. 콘텐츠 운영 이력이 있는 지역의 운영 종료·비공개는 P1에서 제공하지 않는다.
 - `ORDINARY` 계정에 지역 관리자 역할을 이력형으로 임명하고 회수한다.
 - 모든 특권 변경은 대상, 처리자, 사유와 시각을 감사 이력으로 남긴다.
@@ -87,6 +89,8 @@ DB 최종 검증은 처리자의 활성 `PRIVILEGED` 계정, 대상·감사·업
 - `ADM-01`:
   `app_user.account_kind`는 생성 때 `ORDINARY` 또는 `PRIVILEGED`로 고정한다. `PRIVILEGED` 계정은 별도 `platform_admin_assignment`의 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN` 활성 배정을 Access Token authority snapshot의 발급 원천으로만 사용하고 일반 역할을 겸임할 수 없다.
   최초 슈퍼관리자는 배포 bootstrap으로 한 번만 생성한다. 비활성 고권한 계정도 일반 계정으로 전환하지 않으며, 비활성화된 계정의 새 특권 요청은 허용하지 않는다.
+  전체관리자 본인 권한 조회는 인증 주체의 `userId`와 Access Token authority snapshot에 해당하는 `grade`만 반환한다. 고권한 배정의 현재 상태는 ADR-0108의 최대 15분 snapshot 지연과 다른 Frontend 판정을 만들지 않도록 반환하지 않는다.
+  전체관리자 계정 목록 조회·생성·비활성화는 `ROLE_SUPER_ADMIN`만 허용하며, `ROLE_PLATFORM_ADMIN`은 다른 고권한 계정의 목록을 조회할 수 없다.
 - `ADM-02`:
   지역은 별도 운영 상태를 만들지 않고 `is_public = false`를 비공개·준비, `true`를 공개·운영으로 사용한다. 지역 생성·공개 여부 변경은 전체관리자 전용 유스케이스에서만 수행한다.
   비삭제 콘텐츠가 하나라도 있는 공개 지역은 비공개로 전환할 수 없다. 공개 이후 콘텐츠는 삭제하지 않으므로 콘텐츠 운영 이력이 있는 지역의 운영 종료·비공개는 P1에서 제공하지 않는다.
