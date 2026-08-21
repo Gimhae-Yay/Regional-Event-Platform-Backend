@@ -5,7 +5,7 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | [FR-01 인증·역할·지역 권한](../../../p0/auth-profile.md#fr-01-인증역할지역-권한) |
 | 소유 도메인 | 인증·프로필 |
-| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ADR-0111](../../../adr/0111-use-stateless-refresh-token.md), [ADR-0105](../../../adr/0105-deliver-access-token-in-json-response-body.md), [ADR-0043](../../../adr/0043-define-jwt-access-token-security-profile.md), [ADR-0044](../../../adr/0044-use-delegating-bcrypt-password-encoder.md), [ADR-0045](../../../adr/0045-use-stateless-bearer-security-with-same-site-refresh-cookie.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ADR-0111](../../../adr/0111-use-stateless-refresh-token.md), [ADR-0114](../../../adr/0114-support-cross-origin-browser-authentication-with-configured-allowlist.md), [ADR-0105](../../../adr/0105-deliver-access-token-in-json-response-body.md), [ADR-0043](../../../adr/0043-define-jwt-access-token-security-profile.md), [ADR-0044](../../../adr/0044-use-delegating-bcrypt-password-encoder.md), [ADR-0045](../../../adr/0045-use-stateless-bearer-security-with-same-site-refresh-cookie.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
@@ -48,6 +48,7 @@ POST /api/v1/auth/login
 POST /api/v1/auth/login HTTP/1.1
 Content-Type: application/json; charset=UTF-8
 Accept: application/json
+X-CSRF-Token: {csrfToken}
 
 {
   "email": "visitor@example.com",
@@ -60,6 +61,7 @@ Accept: application/json
 | Name | Required | Description |
 | --- | --- | --- |
 | `Authorization` | N | 공개 API이므로 전송하지 않는다. |
+| `X-CSRF-Token` | Y | `GET /api/v1/auth/csrf`가 반환한 값이다. `credentials: include`와 함께 전송한다. |
 | `Content-Type` | Y | `application/json; charset=UTF-8` |
 | `Accept` | N | `application/json` |
 
@@ -99,7 +101,7 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Set-Cookie` | Y | `refreshToken=<refreshToken>; Max-Age=1209600; Path=/api/v1/auth; HttpOnly; Secure; SameSite=Strict`. Refresh Token은 발급 시점부터 14일간 유효하며, `Domain`은 생략해 호스트 전용으로 한다. |
+| `Set-Cookie` | Y | `refreshToken=<refreshToken>; Max-Age=1209600; Path=/api/v1/auth; HttpOnly; Secure; SameSite=<configuredSameSite>`. Refresh Token은 발급 시점부터 14일간 유효하며, `<configuredSameSite>`는 공통 인증 계약의 환경별 `Strict` 또는 `None`, `Domain`은 생략한 호스트 전용 값이다. |
 
 성공 응답에는 Access Token을 담은 `Authorization` 응답 헤더를 포함하지 않는다.
 

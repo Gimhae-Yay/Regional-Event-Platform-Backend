@@ -5,7 +5,7 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | [FR-01 인증·역할·지역 권한](../../../p0/auth-profile.md#fr-01-인증역할지역-권한), [PRV-01](../../../p0/auth-profile.md#prv-01), [PRV-02](../../../p0/auth-profile.md#prv-02) |
 | 소유 도메인 | 인증·프로필 |
-| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ADR-0111](../../../adr/0111-use-stateless-refresh-token.md), [ADR-0012](../../../adr/0012-retain-author-unlinked-reviews-and-visits-after-withdrawal.md), [ADR-0017](../../../adr/0017-serialize-withdrawal-with-conditional-user-state.md), [ADR-0027](../../../adr/0027-deliver-refresh-token-in-http-only-cookie.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ADR-0111](../../../adr/0111-use-stateless-refresh-token.md), [ADR-0114](../../../adr/0114-support-cross-origin-browser-authentication-with-configured-allowlist.md), [ADR-0012](../../../adr/0012-retain-author-unlinked-reviews-and-visits-after-withdrawal.md), [ADR-0017](../../../adr/0017-serialize-withdrawal-with-conditional-user-state.md), [ADR-0027](../../../adr/0027-deliver-refresh-token-in-http-only-cookie.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
@@ -98,7 +98,7 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Set-Cookie` | Y | `refreshToken=; Max-Age=0; Path=/api/v1/auth; HttpOnly; Secure; SameSite=Strict`. `Domain`은 생략해 호스트 전용 쿠키로 유지한다. |
+| `Set-Cookie` | Y | `refreshToken=; Max-Age=0; Path=/api/v1/auth; HttpOnly; Secure; SameSite=<configuredSameSite>`. `<configuredSameSite>`는 공통 인증 계약의 환경별 `Strict` 또는 `None`이고, `Domain`은 생략해 호스트 전용 쿠키로 유지한다. |
 
 성공 응답에는 Access Token, Refresh Token 또는 탈퇴 전 회원 식별 정보를 포함하지 않는다.
 

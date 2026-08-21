@@ -5,7 +5,7 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | [FR-01 인증·역할·지역 권한](../../../p0/auth-profile.md#fr-01-인증역할지역-권한) |
 | 소유 도메인 | 인증·프로필 |
-| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ADR-0111](../../../adr/0111-use-stateless-refresh-token.md), [ADR-0105](../../../adr/0105-deliver-access-token-in-json-response-body.md), [ADR-0043](../../../adr/0043-define-jwt-access-token-security-profile.md), [ADR-0045](../../../adr/0045-use-stateless-bearer-security-with-same-site-refresh-cookie.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ADR-0111](../../../adr/0111-use-stateless-refresh-token.md), [ADR-0114](../../../adr/0114-support-cross-origin-browser-authentication-with-configured-allowlist.md), [ADR-0105](../../../adr/0105-deliver-access-token-in-json-response-body.md), [ADR-0043](../../../adr/0043-define-jwt-access-token-security-profile.md), [ADR-0045](../../../adr/0045-use-stateless-bearer-security-with-same-site-refresh-cookie.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
@@ -51,6 +51,7 @@ POST /api/v1/auth/refresh
 POST /api/v1/auth/refresh HTTP/1.1
 Cookie: refreshToken={refreshToken}
 Accept: application/json
+X-CSRF-Token: {csrfToken}
 ```
 
 #### Request Headers
@@ -59,6 +60,7 @@ Accept: application/json
 | --- | --- | --- |
 | `Authorization` | N | Access Token은 갱신 자격으로 사용하지 않으므로 전송하지 않는다. |
 | `Cookie` | Y | `refreshToken=<refreshToken>`. 브라우저가 `HttpOnly` 쿠키를 자동으로 전송한다. |
+| `X-CSRF-Token` | Y | `GET /api/v1/auth/csrf`가 반환한 값이다. `credentials: include`와 함께 전송한다. |
 | `Content-Type` | N | 요청 본문이 없으므로 전송하지 않는다. |
 | `Accept` | N | `application/json` |
 
@@ -138,7 +140,7 @@ Refresh Token은 JSON 본문, `Authorization` 헤더 또는 다른 일반 응답
 `UNAUTHENTICATED` 응답은 다음과 같은 `Set-Cookie` 헤더로 기존 Refresh Token을 제거한다.
 
 ```http
-Set-Cookie: refreshToken=; Max-Age=0; Path=/api/v1/auth; HttpOnly; Secure; SameSite=Strict
+Set-Cookie: refreshToken=; Max-Age=0; Path=/api/v1/auth; HttpOnly; Secure; SameSite=<configuredSameSite>
 ```
 
 오류 응답에는 Access Token, Refresh Token 또는 내부 예외 정보를 포함하지 않는다.
