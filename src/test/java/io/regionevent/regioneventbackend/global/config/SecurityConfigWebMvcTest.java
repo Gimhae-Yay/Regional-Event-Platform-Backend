@@ -159,6 +159,16 @@ class SecurityConfigWebMvcTest {
     }
 
     @Test
+    void superAdminOnlyGetPath_withPlatformAdminAuthority_returnsForbiddenResponse() throws Exception {
+        String accessToken = jwtAccessTokenService.issue(1L, List.of(AccessTokenAuthority.PLATFORM_ADMIN));
+
+        mockMvc.perform(request(HttpMethod.GET, "/api/v1/platform-admin/admin-accounts")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
     void roleProtectedPath_withInsufficientAuthority_returnsForbiddenBeforeController() throws Exception {
         String accessToken = jwtAccessTokenService.issue(1L, List.of(AccessTokenAuthority.VISITOR));
 
@@ -317,11 +327,6 @@ class SecurityConfigWebMvcTest {
                 HttpMethod.GET,
                 "/api/v1/platform-admin/admin-accounts",
                 AccessTokenAuthority.SUPER_ADMIN
-            ),
-            Arguments.of(
-                HttpMethod.GET,
-                "/api/v1/platform-admin/admin-accounts",
-                AccessTokenAuthority.PLATFORM_ADMIN
             ),
             Arguments.of(
                 HttpMethod.POST,

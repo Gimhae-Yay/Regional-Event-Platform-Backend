@@ -158,6 +158,10 @@ public class SecurityConfig {
                     AccessTokenAuthority.PLATFORM_ADMIN.claimValue()
                 )
                 .requestMatchers(
+                    HttpMethod.GET,
+                    "/api/v1/platform-admin/admin-accounts"
+                ).hasAuthority(AccessTokenAuthority.SUPER_ADMIN.claimValue())
+                .requestMatchers(
                     HttpMethod.POST,
                     "/api/v1/platform-admin/admin-accounts",
                     "/api/v1/platform-admin/admin-accounts/*/deactivate"

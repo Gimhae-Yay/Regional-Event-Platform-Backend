@@ -71,7 +71,7 @@ class GetAdminAccountsControllerWebMvcTest {
         ));
 
         mockMvc.perform(get("/api/v1/platform-admin/admin-accounts")
-                .header(AUTHORIZATION, bearerToken(AccessTokenAuthority.PLATFORM_ADMIN)))
+                .header(AUTHORIZATION, bearerToken(AccessTokenAuthority.SUPER_ADMIN)))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.statusCode").value(200))
             .andExpect(jsonPath("$.code").value("SUCCESS"))
@@ -113,9 +113,19 @@ class GetAdminAccountsControllerWebMvcTest {
             .thenThrow(new BusinessException(ErrorCode.FORBIDDEN));
 
         mockMvc.perform(get("/api/v1/platform-admin/admin-accounts")
+                .header(AUTHORIZATION, bearerToken(AccessTokenAuthority.SUPER_ADMIN)))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    void getAdminAccounts_플랫폼관리자이면_유스케이스호출전권한오류를반환한다() throws Exception {
+        mockMvc.perform(get("/api/v1/platform-admin/admin-accounts")
                 .header(AUTHORIZATION, bearerToken(AccessTokenAuthority.PLATFORM_ADMIN)))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        verifyNoInteractions(getAdminAccountsUseCase);
     }
 
     @Test
@@ -131,6 +141,16 @@ class GetAdminAccountsControllerWebMvcTest {
     @Test
     void getAdminAccounts_인증정보가없으면_미인증오류를반환한다() throws Exception {
         mockMvc.perform(get("/api/v1/platform-admin/admin-accounts"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+
+        verifyNoInteractions(getAdminAccountsUseCase);
+    }
+
+    @Test
+    void getAdminAccounts_유효하지않은토큰이면_미인증오류를반환한다() throws Exception {
+        mockMvc.perform(get("/api/v1/platform-admin/admin-accounts")
+                .header(AUTHORIZATION, "Bearer malformed"))
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
 

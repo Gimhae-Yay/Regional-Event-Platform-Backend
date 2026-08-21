@@ -79,7 +79,7 @@ class GetAdminAccountsUseCaseTest {
                 null
             )
         );
-        verify(authorizationService).requireAuthorizedPlatformAdmin(ACTOR_USER_ID);
+        verify(authorizationService).requireAuthorizedSuperAdmin(ACTOR_USER_ID);
         verify(assignmentService).findPlatformAdminAccountList();
     }
 
@@ -92,7 +92,7 @@ class GetAdminAccountsUseCaseTest {
 
     @Test
     void get_활성PRIVILEGED계정이아니면_조회하지않고권한오류를전파한다() {
-        when(authorizationService.requireAuthorizedPlatformAdmin(ACTOR_USER_ID))
+        when(authorizationService.requireAuthorizedSuperAdmin(ACTOR_USER_ID))
             .thenThrow(new BusinessException(ErrorCode.FORBIDDEN));
 
         assertThatThrownBy(() -> useCase.get(ACTOR_USER_ID))
