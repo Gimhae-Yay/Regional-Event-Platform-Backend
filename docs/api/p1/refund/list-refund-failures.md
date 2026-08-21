@@ -100,7 +100,7 @@ Accept: application/json
         "amount": 12000,
         "currency": "KRW",
         "status": "DISCREPANT",
-        "attemptCount": 2,
+        "attemptCount": 1,
         "requestedAt": "2026-08-07T01:15:00Z",
         "updatedAt": "2026-08-07T01:15:31Z"
       }
