@@ -56,7 +56,6 @@ import io.regionevent.regioneventbackend.global.security.access.AccessTokenAutho
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenProperties;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.common.ApiResponseAccessDeniedHandler;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
 
 @WebMvcTest(SecurityConfigWebMvcTest.SecurityTestController.class)
@@ -82,9 +81,6 @@ class SecurityConfigWebMvcTest {
 
     @Autowired
     private ObjectMapper objectMapper;
-
-    @MockitoBean
-    private RefreshTokenStore refreshTokenStore;
 
     @Test
     void securityMvcSlice_데이터베이스인프라를초기화하지않는다() {
@@ -157,6 +153,16 @@ class SecurityConfigWebMvcTest {
         String accessToken = jwtAccessTokenService.issue(1L, List.of(AccessTokenAuthority.PLATFORM_ADMIN));
 
         mockMvc.perform(request(HttpMethod.POST, "/api/v1/platform-admin/admin-accounts")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    void superAdminOnlyGetPath_withPlatformAdminAuthority_returnsForbiddenResponse() throws Exception {
+        String accessToken = jwtAccessTokenService.issue(1L, List.of(AccessTokenAuthority.PLATFORM_ADMIN));
+
+        mockMvc.perform(request(HttpMethod.GET, "/api/v1/platform-admin/admin-accounts")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.code").value("FORBIDDEN"));
@@ -307,6 +313,21 @@ class SecurityConfigWebMvcTest {
 
     private static Stream<Arguments> roleProtectedRequests() {
         return Stream.of(
+            Arguments.of(
+                HttpMethod.GET,
+                "/api/v1/platform-admin/me",
+                AccessTokenAuthority.SUPER_ADMIN
+            ),
+            Arguments.of(
+                HttpMethod.GET,
+                "/api/v1/platform-admin/me",
+                AccessTokenAuthority.PLATFORM_ADMIN
+            ),
+            Arguments.of(
+                HttpMethod.GET,
+                "/api/v1/platform-admin/admin-accounts",
+                AccessTokenAuthority.SUPER_ADMIN
+            ),
             Arguments.of(
                 HttpMethod.POST,
                 "/api/v1/platform-admin/admin-accounts",
@@ -506,6 +527,8 @@ class SecurityConfigWebMvcTest {
         }
 
         @GetMapping({
+            "/api/v1/platform-admin/me",
+            "/api/v1/platform-admin/admin-accounts",
             "/api/v1/platform-admin/protected",
             "/api/v1/region-admin/protected",
             "/api/v1/operator/protected",

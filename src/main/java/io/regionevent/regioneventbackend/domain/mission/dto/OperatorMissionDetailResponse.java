@@ -13,6 +13,7 @@ import io.regionevent.regioneventbackend.domain.mission.entity.MissionTargetCont
 
 public record OperatorMissionDetailResponse(
     String missionId,
+    String title,
     String regionId,
     MissionStatus status,
     MissionConditionType conditionType,
@@ -29,6 +30,7 @@ public record OperatorMissionDetailResponse(
     public static OperatorMissionDetailResponse from(Mission mission) {
         return new OperatorMissionDetailResponse(
             mission.getMissionId().toString(),
+            mission.getTitle(),
             mission.getRegion().getRegionId().toString(),
             mission.getStatus(),
             mission.getConditionType(),

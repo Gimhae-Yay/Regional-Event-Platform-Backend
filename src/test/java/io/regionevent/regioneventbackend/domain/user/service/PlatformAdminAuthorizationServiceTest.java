@@ -18,6 +18,7 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserAccountKind;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUserStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminAssignment;
+import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminAssignmentStatus;
 import io.regionevent.regioneventbackend.domain.user.entity.PlatformAdminGrade;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -55,6 +56,17 @@ class PlatformAdminAuthorizationServiceTest {
         givenActiveAssignment(Optional.of(assignment));
 
         assertThat(platformAdminAuthorizationService.requireAuthorizedSuperAdmin(USER_ID))
+            .isSameAs(assignment);
+        verifyActiveAssignmentLookup();
+    }
+
+    @Test
+    void 비활성_고권한배정이어도_계정이활성PRIVILEGED이면_조회인가를통과한다() {
+        PlatformAdminAssignment assignment = assignment(PlatformAdminGrade.PLATFORM_ADMIN);
+        when(assignment.getStatus()).thenReturn(PlatformAdminAssignmentStatus.INACTIVE);
+        givenActiveAssignment(Optional.of(assignment));
+
+        assertThat(platformAdminAuthorizationService.requireAuthorizedPlatformAdmin(USER_ID))
             .isSameAs(assignment);
         verifyActiveAssignmentLookup();
     }

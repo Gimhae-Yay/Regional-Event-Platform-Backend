@@ -36,6 +36,7 @@ class ContentRevisionServiceTest {
     private static final Instant ORIGINAL_PUBLISH_AT = Instant.parse("2026-08-05T00:00:00Z");
     private static final Instant CANDIDATE_PUBLISH_AT = Instant.parse("2026-08-06T00:00:00Z");
     private static final Instant REVIEWED_AT = Instant.parse("2026-08-02T01:00:00Z");
+    private static final Instant RESUBMITTED_AT = Instant.parse("2026-08-21T01:00:00Z");
     private static final long ORIGINAL_RESERVATION_PRICE = 2_147_483_648L;
     private static final long CANDIDATE_RESERVATION_PRICE = 2_147_483_649L;
 
@@ -300,6 +301,86 @@ class ContentRevisionServiceTest {
         )).isInstanceOfSatisfying(BusinessException.class, exception ->
             assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.NOT_FOUND)
         );
+    }
+
+    @Test
+    void resubmitRejectedRevision_반려_후보와_이미지를_새_수정본으로_복제한다() {
+        Fixture fixture = createFixture(ContentStatus.PUBLISHED, null);
+        ContentRevision sourceRevision = contentRevisionService.reject(
+            fixture.revision(),
+            fixture.reviewer(),
+            REVIEWED_AT,
+            "후보를 보완해 주세요."
+        );
+
+        ContentRevision resubmittedRevision = contentRevisionService.resubmitRejectedRevision(
+            fixture.content(),
+            sourceRevision,
+            fixture.content().getOperator(),
+            RESUBMITTED_AT
+        );
+
+        assertThat(resubmittedRevision.getRevisionNo()).isEqualTo(2);
+        assertThat(resubmittedRevision.getBaseContentVersion()).isEqualTo(fixture.content().getVersionNo());
+        assertThat(resubmittedRevision.getStatus()).isEqualTo(ContentRevisionStatus.EDIT_REQUESTED);
+        assertThat(resubmittedRevision.getTitle()).isEqualTo(sourceRevision.getTitle());
+        assertThat(resubmittedRevision.getDescription()).isEqualTo(sourceRevision.getDescription());
+        assertThat(resubmittedRevision.getLocationText()).isEqualTo(sourceRevision.getLocationText());
+        assertThat(resubmittedRevision.getOperatingHoursText())
+            .isEqualTo(sourceRevision.getOperatingHoursText());
+        assertThat(resubmittedRevision.getContactText()).isEqualTo(sourceRevision.getContactText());
+        assertThat(resubmittedRevision.getPrecautions()).isEqualTo(sourceRevision.getPrecautions());
+        assertThat(resubmittedRevision.getAgeRequirement()).isEqualTo(sourceRevision.getAgeRequirement());
+        assertThat(resubmittedRevision.getMaterials()).isEqualTo(sourceRevision.getMaterials());
+        assertThat(resubmittedRevision.getCancellationPolicyText())
+            .isEqualTo(sourceRevision.getCancellationPolicyText());
+        assertThat(resubmittedRevision.getReservationPrice()).isEqualTo(sourceRevision.getReservationPrice());
+        assertThat(resubmittedRevision.getPublishAt()).isEqualTo(sourceRevision.getPublishAt());
+        assertThat(resubmittedRevision.getCandidateImageObject())
+            .isEqualTo(sourceRevision.getCandidateImageObject());
+        assertThat(resubmittedRevision.getCandidateImageAssignedAt())
+            .isEqualTo(sourceRevision.getCandidateImageAssignedAt());
+        assertThat(resubmittedRevision.getSubmittedAt()).isEqualTo(RESUBMITTED_AT);
+        assertThat(sourceRevision.getStatus()).isEqualTo(ContentRevisionStatus.EDIT_REJECTED);
+        assertThat(sourceRevision.getReviewReason()).isEqualTo("후보를 보완해 주세요.");
+        assertThat(sourceRevision.getReviewedAt()).isEqualTo(REVIEWED_AT);
+    }
+
+    @Test
+    void resubmitRejectedRevision_후보_이미지가_비활성이면_정합성_오류로_중단한다() {
+        Fixture fixture = createFixture(ContentStatus.PUBLISHED, null);
+        ContentRevision sourceRevision = contentRevisionService.reject(
+            fixture.revision(),
+            fixture.reviewer(),
+            REVIEWED_AT,
+            "후보를 보완해 주세요."
+        );
+        sourceRevision.getCandidateImageObject().markDeletePending();
+        imageObjectRepository.flush();
+
+        assertThatThrownBy(() -> contentRevisionService.resubmitRejectedRevision(
+            fixture.content(),
+            sourceRevision,
+            fixture.content().getOperator(),
+            RESUBMITTED_AT
+        )).isInstanceOf(IllegalStateException.class);
+        assertThat(contentRevisionRepository.findMaxRevisionNoByContentId(
+            fixture.content().getContentId()
+        )).isEqualTo(1);
+        assertThat(sourceRevision.getStatus()).isEqualTo(ContentRevisionStatus.EDIT_REJECTED);
+    }
+
+    @Test
+    void findLatestRevisionByContentId_whenRevisionDoesNotExist_throwsNotFound() {
+        Fixture fixture = createFixture(ContentStatus.PENDING, CANDIDATE_PUBLISH_AT);
+        Long contentId = fixture.content().getContentId();
+        contentRevisionRepository.delete(fixture.revision());
+        contentRevisionRepository.flush();
+
+        assertThatThrownBy(() -> contentRevisionService.findLatestRevisionByContentId(contentId))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.NOT_FOUND)
+            );
     }
 
     private Fixture createFixture(ContentStatus contentStatus, Instant candidatePublishAt) {

@@ -46,6 +46,17 @@ class ContentServiceTest {
         assertThat(result).isEqualTo(Instant.ofEpochSecond(1_754_356_800L, 123_456_000));
     }
 
+    @Test
+    void findMyContentDetail_미삭제_콘텐츠가_없으면_찾을수없음을_반환한다() {
+        when(contentRepository.findDetailByContentIdAndDeletedAtIsNull(CONTENT_ID))
+            .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> contentService.findMyContentDetail(CONTENT_ID))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.NOT_FOUND)
+            );
+    }
+
     @ParameterizedTest
     @MethodSource("invalidIds")
     void findOwnedContentForRevisionCreation_필수_식별자가_없거나_양수가_아니면_입력_오류를_반환한다(
@@ -99,6 +110,24 @@ class ContentServiceTest {
 
         assertThat(contentService.findOwnedContentForRevisionCreation(CONTENT_ID, USER_ID, REGION_ID))
             .isSameAs(content);
+    }
+
+    @Test
+    void findRevisionResubmissionTargetForUpdate_미삭제_콘텐츠를_반환한다() {
+        Content content = mock(Content.class);
+        when(contentRepository.findByContentIdAndDeletedAtIsNull(CONTENT_ID)).thenReturn(Optional.of(content));
+
+        assertThat(contentService.findRevisionResubmissionTargetForUpdate(CONTENT_ID)).isSameAs(content);
+    }
+
+    @Test
+    void findRevisionResubmissionTargetForUpdate_대상이_없으면_찾을수없음을_반환한다() {
+        when(contentRepository.findByContentIdAndDeletedAtIsNull(CONTENT_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> contentService.findRevisionResubmissionTargetForUpdate(CONTENT_ID))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.NOT_FOUND)
+            );
     }
 
     @Test

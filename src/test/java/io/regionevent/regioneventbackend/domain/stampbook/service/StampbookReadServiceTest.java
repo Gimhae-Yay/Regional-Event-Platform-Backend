@@ -21,6 +21,7 @@ import io.regionevent.regioneventbackend.domain.stampbook.entity.StampbookStatus
 import io.regionevent.regioneventbackend.domain.stampbook.repository.MyStampbookDetailProjection;
 import io.regionevent.regioneventbackend.domain.stampbook.repository.MyStampEarningProjection;
 import io.regionevent.regioneventbackend.domain.stampbook.repository.MyStampbookListProjection;
+import io.regionevent.regioneventbackend.domain.stampbook.repository.OperatorStampbookListProjection;
 import io.regionevent.regioneventbackend.domain.stampbook.repository.PendingRegionAdminStampbookProjection;
 import io.regionevent.regioneventbackend.domain.stampbook.repository.StampbookRepository;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
@@ -228,6 +229,63 @@ class StampbookReadServiceTest {
         assertThatThrownBy(() -> stampbookReadService.findPendingRegionAdminStampbooks(10L))
             .isInstanceOf(IllegalStateException.class)
             .hasMessage("stampbook review read data is inconsistent");
+    }
+
+    @Test
+    void 운영자_스탬프북_목록은_모든_상태의_타임스탬프_계약을_반환한다() {
+        Long regionId = 10L;
+        Instant publishedAt = Instant.parse("2026-08-01T00:00:00Z");
+        Instant endedAt = Instant.parse("2026-08-10T00:00:00Z");
+        when(stampbookRepository.findOperatorStampbookListProjections(USER_ID, regionId)).thenReturn(List.of(
+            operatorProjection(104L, StampbookStatus.ENDED, publishedAt, endedAt),
+            operatorProjection(103L, StampbookStatus.PUBLISHED, publishedAt, null),
+            operatorProjection(102L, StampbookStatus.PENDING_REVIEW, null, null),
+            operatorProjection(101L, StampbookStatus.DRAFT, null, null)
+        ));
+
+        List<OperatorStampbookListResult> results = stampbookReadService.findOperatorStampbooks(
+            USER_ID,
+            regionId
+        );
+
+        assertThat(results)
+            .extracting(OperatorStampbookListResult::stampbookId)
+            .containsExactly(104L, 103L, 102L, 101L);
+        assertThat(results.getFirst())
+            .isEqualTo(new OperatorStampbookListResult(
+                104L,
+                "스탬프북 제목 104",
+                regionId,
+                StampbookStatus.ENDED,
+                2,
+                304L,
+                publishedAt,
+                endedAt
+            ));
+        verify(stampbookRepository).findOperatorStampbookListProjections(USER_ID, regionId);
+    }
+
+    @Test
+    void 운영자_스탬프북_목록은_보상정책_지역이_다르면_정합성오류로_처리한다() {
+        when(stampbookRepository.findOperatorStampbookListProjections(USER_ID, 10L)).thenReturn(List.of(
+            new OperatorStampbookListProjection(
+                101L,
+                "스탬프북 제목",
+                10L,
+                StampbookStatus.DRAFT,
+                1L,
+                10L,
+                10L,
+                301L,
+                20L,
+                null,
+                null
+            )
+        ));
+
+        assertThatThrownBy(() -> stampbookReadService.findOperatorStampbooks(USER_ID, 10L))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("operator stampbook read data is inconsistent");
     }
 
     @Test
@@ -674,6 +732,27 @@ class StampbookReadServiceTest {
             progressStatus == StampbookProgressStatus.COMPLETED ? 901L : null,
             progressStatus == StampbookProgressStatus.COMPLETED ? 301L : null,
             301L
+        );
+    }
+
+    private OperatorStampbookListProjection operatorProjection(
+        Long stampbookId,
+        StampbookStatus status,
+        Instant publishedAt,
+        Instant endedAt
+    ) {
+        return new OperatorStampbookListProjection(
+            stampbookId,
+            "스탬프북 제목 " + stampbookId,
+            10L,
+            status,
+            2L,
+            10L,
+            10L,
+            300L + stampbookId % 100,
+            10L,
+            publishedAt,
+            endedAt
         );
     }
 

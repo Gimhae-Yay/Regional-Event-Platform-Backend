@@ -35,7 +35,6 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
 import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
 @WebMvcTest(MyStampbookController.class)
 @Import({SecurityConfig.class, RequestIdFilter.class, GlobalExceptionHandler.class})
@@ -55,9 +54,6 @@ class MyStampbookDetailControllerIntegrationTest {
 
     @MockitoBean
     private GetMyStampbookDetailUseCase getMyStampbookDetailUseCase;
-
-    @MockitoBean
-    private RefreshTokenStore refreshTokenStore;
 
     @Test
     void 내_스탬프북_상세_조회에_성공하면_콘텐츠별_적립과_진행도를_반환한다() throws Exception {

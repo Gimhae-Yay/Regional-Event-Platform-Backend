@@ -25,7 +25,6 @@ import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
 import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
 @WebMvcTest(RegionAdminMissionListController.class)
 @Import({SecurityConfig.class, RequestIdFilter.class, GlobalExceptionHandler.class})
@@ -41,9 +40,6 @@ class RegionAdminMissionListControllerWebMvcTest {
 
     @MockitoBean
     private GetRegionAdminMissionsUseCase getRegionAdminMissionsUseCase;
-
-    @MockitoBean
-    private RefreshTokenStore refreshTokenStore;
 
     @Test
     void getMissions_withDefaultParameters_returnsPagedMissionSummaries() throws Exception {

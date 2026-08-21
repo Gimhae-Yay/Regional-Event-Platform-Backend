@@ -3,7 +3,6 @@ package io.regionevent.regioneventbackend.domain.user.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.verify;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,7 +20,6 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
 import io.regionevent.regioneventbackend.domain.user.service.WithdrawUserUseCase;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenService;
 import io.regionevent.regioneventbackend.support.jpa.CleanH2Database;
 import io.regionevent.regioneventbackend.support.jpa.AtomicityJpaTestConfiguration;
 
@@ -43,11 +41,8 @@ class WithdrawalControllerFailureIntegrationTest {
     @MockitoBean
     private ReviewRepository reviewRepository;
 
-    @MockitoBean
-    private RefreshTokenService refreshTokenService;
-
     @Test
-    void withdraw_whenMySqlTerminationFails_keepsAccountAndDoesNotRestoreRevokedRefreshTokens() {
+    void withdraw_whenMySqlTerminationFails_keepsAccountActive() {
         AppUser user = appUserRepository.saveAndFlush(new AppUser(
             "mysql-failure@example.com",
             "password-hash",
@@ -65,6 +60,5 @@ class WithdrawalControllerFailureIntegrationTest {
 
         assertThat(appUserRepository.findById(user.getUserId()))
             .hasValueSatisfying(unchanged -> assertThat(unchanged.getStatus()).isEqualTo(AppUserStatus.ACTIVE));
-        verify(refreshTokenService).revokeAllFamilies(user.getUserId());
     }
 }

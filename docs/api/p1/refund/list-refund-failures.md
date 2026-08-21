@@ -92,6 +92,17 @@ Accept: application/json
         "attemptCount": 1,
         "requestedAt": "2026-08-07T01:10:00Z",
         "updatedAt": "2026-08-07T01:10:31Z"
+      },
+      {
+        "refundId": "553",
+        "paymentId": "904",
+        "reservationId": null,
+        "amount": 12000,
+        "currency": "KRW",
+        "status": "DISCREPANT",
+        "attemptCount": 1,
+        "requestedAt": "2026-08-07T01:15:00Z",
+        "updatedAt": "2026-08-07T01:15:31Z"
       }
     ]
   }
@@ -110,7 +121,7 @@ Accept: application/json
 | `data.refunds` | Array | 조회 조건을 만족하는 환불 배열이다. 결과가 없으면 빈 배열 `[]`이다. |
 | `data.refunds[].refundId` | String | 환불 식별자다. |
 | `data.refunds[].paymentId` | String | 환불 대상 결제 식별자다. |
-| `data.refunds[].reservationId` | String | 환불 대상 결제와 연결된 예약 식별자다. |
+| `data.refunds[].reservationId` | String 또는 null | 환불 대상 결제와 연결된 예약 식별자다. 확정 예약 없이 생성된 결제 불일치 환불이면 `null`이다. |
 | `data.refunds[].amount` | Integer | 환불 금액이다. |
 | `data.refunds[].currency` | String | 통화 코드다. |
 | `data.refunds[].status` | String | 환불 상태다. `REQUESTED`, `PROCESSING`, `SUCCEEDED`, `FAILED`, `DISCREPANT` 중 하나다. |
@@ -144,5 +155,6 @@ Accept: application/json
 2. `status`를 생략하면 `FAILED`와 `DISCREPANT`를 함께 조회한다. 제공하면 해당 단일 상태만 조회하며, 정의된 값 외에는 `400 INVALID_INPUT`으로 거부한다.
 3. 목록은 `updatedAt` 오름차순, 같은 시각이면 `refundId` 오름차순으로 정렬해 오래 대기한 건을 먼저 표시한다.
 4. `attemptCount`는 대상 환불에 연결된 `refund_attempt` 전체 개수다.
-5. 이 API는 단순 목록이다. 페이지·커서와 사용자 지정 정렬을 제공하지 않는다.
-6. 조회 시 환불, 결제와 감사 이력을 생성·수정·삭제하지 않는다.
+5. 확정 예약 없이 생성된 결제 불일치 환불은 유효한 목록 항목이며 `reservationId: null`로 반환한다. 예약이 연결된 환불은 예약 식별자를 문자열로 반환하며, 예약 연결이 없다는 이유만으로 정합성 오류로 처리하지 않는다.
+6. 이 API는 단순 목록이다. 페이지·커서와 사용자 지정 정렬을 제공하지 않는다.
+7. 조회 시 환불, 결제와 감사 이력을 생성·수정·삭제하지 않는다.

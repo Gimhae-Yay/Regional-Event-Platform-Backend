@@ -110,8 +110,11 @@ public class EndContentReservationsUseCase {
                 return EndContentReservationsResult.from(content, endedLog.getDate());
             }
             if (content.getStatus() != ContentStatus.PUBLISHED
-                || contentSessionService.hasNonTerminalSessionForEnd(contentId)
-                || contentSessionService.findCurrentSessionsByContentId(contentId).isEmpty()) {
+                || contentSessionService.hasNonTerminalSessionForEnd(contentId)) {
+                throw new BusinessException(ErrorCode.CONTENT_END_CONFLICT);
+            }
+            List<ContentSession> contentSessions = contentSessionService.findEndTargetsForUpdate(contentId);
+            if (contentSessions.isEmpty()) {
                 throw new BusinessException(ErrorCode.CONTENT_END_CONFLICT);
             }
 
@@ -131,8 +134,8 @@ public class EndContentReservationsUseCase {
                 ContentRevisionInvalidationReason.CONTENT_ENDED
             );
             contentLogService.recordEnded(endedContent, actor.getAppUser(), endedAt);
-            capacityHoldService.invalidateAllActiveHoldsForContent(
-                contentId,
+            capacityHoldService.invalidateAllActiveHoldsForSessions(
+                contentSessions,
                 CONTENT_ENDED_INVALIDATION_REASON
             ).forEach(capacityHold -> expirePendingPaymentForTerminatedHoldUseCase.expire(
                 capacityHold,
@@ -179,7 +182,7 @@ public class EndContentReservationsUseCase {
         Long regionId = contentService.findContentRegionId(contentId);
         Region region = regionService.findRegionForUpdate(regionId);
         Content content = contentService.findEndTargetForUpdate(contentId);
-        List<ContentSession> contentSessions = contentSessionService.findCurrentSessionsByContentId(contentId);
+        List<ContentSession> contentSessions = contentSessionService.findEndTargetsForUpdate(contentId);
         if (content.getStatus() != ContentStatus.PUBLISHED
             || content.getDeletedAt() != null
             || contentSessions.isEmpty()
@@ -207,8 +210,8 @@ public class EndContentReservationsUseCase {
                 ContentRevisionInvalidationReason.CONTENT_ENDED
             );
             contentLogService.recordEnded(endedContent, null, endedAt);
-            capacityHoldService.invalidateAllActiveHoldsForContent(
-                contentId,
+            capacityHoldService.invalidateAllActiveHoldsForSessions(
+                contentSessions,
                 CONTENT_ENDED_INVALIDATION_REASON
             ).forEach(capacityHold -> expirePendingPaymentForTerminatedHoldUseCase.expire(
                 capacityHold,

@@ -28,7 +28,6 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
 import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
 @WebMvcTest(PaymentDiscrepancyController.class)
 @Import({SecurityConfig.class, RequestIdFilter.class, GlobalExceptionHandler.class})
@@ -44,9 +43,6 @@ class PaymentDiscrepancyControllerWebMvcTest {
 
     @MockitoBean
     private GetPaymentDiscrepanciesUseCase getPaymentDiscrepanciesUseCase;
-
-    @MockitoBean
-    private RefreshTokenStore refreshTokenStore;
 
     @Test
     void getDiscrepancies_기본상태로민감정보없이목록을반환한다() throws Exception {

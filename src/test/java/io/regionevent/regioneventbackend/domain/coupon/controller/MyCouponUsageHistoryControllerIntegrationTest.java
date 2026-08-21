@@ -31,7 +31,6 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
 import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
 @WebMvcTest(MyCouponUsageHistoryController.class)
 @Import({SecurityConfig.class, RequestIdFilter.class, GlobalExceptionHandler.class})
@@ -45,9 +44,6 @@ class MyCouponUsageHistoryControllerIntegrationTest {
 
     @Autowired
     private JwtAccessTokenService jwtAccessTokenService;
-
-    @MockitoBean
-    private RefreshTokenStore refreshTokenStore;
 
     @MockitoBean
     private GetMyCouponUsageHistoryUseCase getMyCouponUsageHistoryUseCase;

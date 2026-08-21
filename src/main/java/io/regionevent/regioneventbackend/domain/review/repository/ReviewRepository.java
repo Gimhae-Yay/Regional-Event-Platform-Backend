@@ -78,6 +78,8 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
         """)
     int purgeDeletedReviewOriginalIfEligible(@Param("reviewId") Long reviewId);
 
+    List<Review> findAllByVisitVisitIdIn(List<Long> visitIds);
+
     Page<Review> findByContentContentIdAndStatusOrderByCreatedAtDescReviewIdDesc(
         Long contentId,
         ReviewStatus status,

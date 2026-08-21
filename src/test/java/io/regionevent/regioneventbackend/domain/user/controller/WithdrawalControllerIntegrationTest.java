@@ -1,10 +1,6 @@
 package io.regionevent.regioneventbackend.domain.user.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.reset;
-import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -12,17 +8,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.Instant;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
-import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Propagation;
@@ -70,12 +61,9 @@ import io.regionevent.regioneventbackend.domain.visit.entity.Visit;
 import io.regionevent.regioneventbackend.domain.visit.repository.VisitRepository;
 import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStoreUnavailableException;
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import(WithdrawalControllerIntegrationTest.WithdrawalTestConfiguration.class)
 @Transactional
 class WithdrawalControllerIntegrationTest {
 
@@ -126,14 +114,6 @@ class WithdrawalControllerIntegrationTest {
 
     @Autowired
     private JwtAccessTokenService jwtAccessTokenService;
-
-    @Autowired
-    private RefreshTokenStore refreshTokenStore;
-
-    @BeforeEach
-    void setUp() {
-        reset(refreshTokenStore);
-    }
 
     @Test
     void withdraw_withVisitor_removesAccountAndDirectUserLinks() throws Exception {
@@ -201,7 +181,6 @@ class WithdrawalControllerIntegrationTest {
                 assertThat(record.getIdempotencyKeyHash()).isNull();
             });
         assertThat(auditEventActorLinkRepository.findById(fixture.auditEvent().getAuditEventId())).isEmpty();
-        verify(refreshTokenStore).revokeAllFamilies(fixture.user().getUserId());
     }
 
     @Test
@@ -245,25 +224,6 @@ class WithdrawalControllerIntegrationTest {
                 .header(HttpHeaders.AUTHORIZATION, bearerTokenFor(user)))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.code").value("FORBIDDEN"));
-
-        assertThat(appUserRepository.findById(user.getUserId())).hasValueSatisfying(
-            unchanged -> assertThat(unchanged.getStatus()).isEqualTo(AppUserStatus.ACTIVE)
-        );
-    }
-
-    @Test
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    void withdraw_whenRefreshTokenStoreIsUnavailable_rollsBackUserState() throws Exception {
-        AppUser user = saveUser("redis-unavailable@example.com", AppUserStatus.ACTIVE);
-        doThrow(new RefreshTokenStoreUnavailableException(new IllegalStateException("Redis unavailable")))
-            .when(refreshTokenStore)
-            .revokeAllFamilies(user.getUserId());
-
-        mockMvc.perform(delete(WITHDRAWAL_PATH)
-                .header(HttpHeaders.AUTHORIZATION, bearerTokenFor(user)))
-            .andExpect(status().isServiceUnavailable())
-            .andExpect(jsonPath("$.code").value("AUTH_SERVICE_UNAVAILABLE"))
-            .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE));
 
         assertThat(appUserRepository.findById(user.getUserId())).hasValueSatisfying(
             unchanged -> assertThat(unchanged.getStatus()).isEqualTo(AppUserStatus.ACTIVE)
@@ -447,13 +407,4 @@ class WithdrawalControllerIntegrationTest {
     ) {
     }
 
-    @TestConfiguration
-    static class WithdrawalTestConfiguration {
-
-        @Bean
-        @Primary
-        RefreshTokenStore refreshTokenStore() {
-            return mock(RefreshTokenStore.class);
-        }
-    }
 }

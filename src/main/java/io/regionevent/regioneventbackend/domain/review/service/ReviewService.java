@@ -1,6 +1,12 @@
 package io.regionevent.regioneventbackend.domain.review.service;
 
+import java.time.Instant;
+import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.hibernate.exception.ConstraintViolationException;
 
@@ -104,6 +110,18 @@ public class ReviewService {
         );
     }
 
+    public Map<Long, ReviewReadResult> findAllByVisitIds(List<Long> visitIds) {
+        if (visitIds.isEmpty()) {
+            return Map.of();
+        }
+        return reviewRepository.findAllByVisitVisitIdIn(visitIds).stream()
+            .map(ReviewReadResult::from)
+            .collect(Collectors.collectingAndThen(
+                Collectors.toMap(ReviewReadResult::visitId, Function.identity()),
+                Collections::unmodifiableMap
+            ));
+    }
+
     private boolean isReviewVisitUniqueConstraintViolation(DataIntegrityViolationException exception) {
         Throwable cause = exception;
         while (cause != null) {
@@ -120,5 +138,28 @@ public class ReviewService {
             cause = cause.getCause();
         }
         return false;
+    }
+
+    public record ReviewReadResult(
+        Long reviewId,
+        Long visitId,
+        ReviewStatus status,
+        Integer rating,
+        String reviewText,
+        Instant createdAt,
+        Instant updatedAt
+    ) {
+
+        private static ReviewReadResult from(Review review) {
+            return new ReviewReadResult(
+                review.getReviewId(),
+                review.getVisit().getVisitId(),
+                review.getStatus(),
+                review.getRating(),
+                review.getReviewText(),
+                review.getCreatedAt(),
+                review.getUpdatedAt()
+            );
+        }
     }
 }

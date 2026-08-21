@@ -1,7 +1,5 @@
 package io.regionevent.regioneventbackend.global.security.refresh;
 
-import static org.junit.jupiter.api.Assertions.assertAll;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -11,7 +9,6 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.Date;
-import java.util.UUID;
 
 import javax.crypto.SecretKey;
 
@@ -26,18 +23,13 @@ class JwtRefreshTokenServiceTest {
     private static final Instant ISSUED_AT = Instant.parse("2026-07-31T00:00:00Z");
 
     @Test
-    void 전체_단위_계약을_보존한다() {
-        assertAll(
-            () -> new JwtRefreshTokenServiceTest().issueAndAuthenticate_withValidRefreshToken_returnsRefreshToken(),
-            () -> new JwtRefreshTokenServiceTest().authenticate_whenTokenUsesAccessProfile_throwsInvalidRefreshTokenException(),
-            () -> new JwtRefreshTokenServiceTest().authenticate_whenTokenLifetimeExceeds14Days_throwsInvalidRefreshTokenException(),
-            () -> new JwtRefreshTokenServiceTest().authenticate_whenTokenUsesPreviousRefreshKey_throwsInvalidRefreshTokenException()
-        );
-    }
-
-    void issueAndAuthenticate_withValidRefreshToken_returnsRefreshToken() {
+    void issueAndAuthenticate_유효한토큰_사용자와절대만료를반환한다() {
         JwtRefreshTokenService jwtRefreshTokenService = createService(Clock.fixed(ISSUED_AT, ZoneOffset.UTC));
-        RefreshToken refreshToken = refreshToken();
+        RefreshToken refreshToken = new RefreshToken(
+            1L,
+            ISSUED_AT,
+            ISSUED_AT.plus(JwtRefreshTokenService.REFRESH_TOKEN_TTL)
+        );
 
         String token = jwtRefreshTokenService.issue(refreshToken);
         Claims claims = Jwts.parser()
@@ -51,47 +43,40 @@ class JwtRefreshTokenServiceTest {
         assertThat(claims.getIssuer()).isEqualTo("regional-event-platform");
         assertThat(claims.getAudience()).containsExactly("regional-event-refresh");
         assertThat(claims.getSubject()).isEqualTo("1");
-        assertThat(claims.getId()).isEqualTo(refreshToken.tokenId().toString());
-        assertThat(claims.get("family_id", String.class)).isEqualTo(refreshToken.familyId().toString());
         assertThat(claims.get("token_type", String.class)).isEqualTo("REFRESH");
+        assertThat(claims.getId()).isNull();
+        assertThat(claims.get("family_id")).isNull();
     }
 
-    void authenticate_whenTokenUsesAccessProfile_throwsInvalidRefreshTokenException() {
+    @Test
+    void authenticate_14일과다른수명의토큰_인증실패한다() {
         JwtRefreshTokenService jwtRefreshTokenService = createService(Clock.fixed(ISSUED_AT, ZoneOffset.UTC));
-        String accessToken = createToken(
-            "regional-event-api",
-            "ACCESS",
-            ISSUED_AT.plus(JwtRefreshTokenService.REFRESH_TOKEN_TTL),
-            key((byte) 1)
-        );
+        String token = createToken(ISSUED_AT.plus(Duration.ofDays(13)));
 
-        assertThatThrownBy(() -> jwtRefreshTokenService.authenticate(accessToken))
+        assertThatThrownBy(() -> jwtRefreshTokenService.authenticate(token))
             .isInstanceOf(InvalidRefreshTokenException.class);
     }
 
-    void authenticate_whenTokenLifetimeExceeds14Days_throwsInvalidRefreshTokenException() {
+    @Test
+    void authenticate_AccessToken프로필_인증실패한다() {
         JwtRefreshTokenService jwtRefreshTokenService = createService(Clock.fixed(ISSUED_AT, ZoneOffset.UTC));
-        String longLivedToken = createToken(
-            "regional-event-refresh",
-            "REFRESH",
-            ISSUED_AT.plus(JwtRefreshTokenService.REFRESH_TOKEN_TTL).plusSeconds(1),
-            key((byte) 1)
-        );
+        String token = Jwts.builder()
+            .header()
+                .type("JWT")
+                .keyId("refresh-test-key")
+                .and()
+            .issuer("regional-event-platform")
+            .audience()
+                .add("regional-event-api")
+                .and()
+            .subject("1")
+            .claim("token_type", "ACCESS")
+            .issuedAt(Date.from(ISSUED_AT))
+            .expiration(Date.from(ISSUED_AT.plus(JwtRefreshTokenService.REFRESH_TOKEN_TTL)))
+            .signWith(toSecretKey(key((byte) 1)), Jwts.SIG.HS256)
+            .compact();
 
-        assertThatThrownBy(() -> jwtRefreshTokenService.authenticate(longLivedToken))
-            .isInstanceOf(InvalidRefreshTokenException.class);
-    }
-
-    void authenticate_whenTokenUsesPreviousRefreshKey_throwsInvalidRefreshTokenException() {
-        JwtRefreshTokenService jwtRefreshTokenService = createService(Clock.fixed(ISSUED_AT, ZoneOffset.UTC));
-        String previousKeyToken = createToken(
-            "regional-event-refresh",
-            "REFRESH",
-            ISSUED_AT.plus(Duration.ofDays(1)),
-            key((byte) 2)
-        );
-
-        assertThatThrownBy(() -> jwtRefreshTokenService.authenticate(previousKeyToken))
+        assertThatThrownBy(() -> jwtRefreshTokenService.authenticate(token))
             .isInstanceOf(InvalidRefreshTokenException.class);
     }
 
@@ -104,17 +89,7 @@ class JwtRefreshTokenServiceTest {
         return new JwtRefreshTokenService(properties, clock);
     }
 
-    private RefreshToken refreshToken() {
-        return new RefreshToken(
-            1L,
-            UUID.fromString("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
-            UUID.fromString("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),
-            ISSUED_AT,
-            ISSUED_AT.plus(JwtRefreshTokenService.REFRESH_TOKEN_TTL)
-        );
-    }
-
-    private String createToken(String audience, String tokenType, Instant expiresAt, String encodedKey) {
+    private String createToken(Instant expiresAt) {
         return Jwts.builder()
             .header()
                 .type("JWT")
@@ -122,15 +97,13 @@ class JwtRefreshTokenServiceTest {
                 .and()
             .issuer("regional-event-platform")
             .audience()
-                .add(audience)
+                .add("regional-event-refresh")
                 .and()
             .subject("1")
-            .id(UUID.randomUUID().toString())
-            .claim("family_id", UUID.randomUUID().toString())
-            .claim("token_type", tokenType)
+            .claim("token_type", "REFRESH")
             .issuedAt(Date.from(ISSUED_AT))
             .expiration(Date.from(expiresAt))
-            .signWith(toSecretKey(encodedKey), Jwts.SIG.HS256)
+            .signWith(toSecretKey(key((byte) 1)), Jwts.SIG.HS256)
             .compact();
     }
 

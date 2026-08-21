@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import io.regionevent.regioneventbackend.domain.reservation.dto.GetMyReservationsResponse;
 import io.regionevent.regioneventbackend.domain.reservation.service.GetMyReservationsUseCase;
-import io.regionevent.regioneventbackend.domain.reservation.service.ReservationReadResult;
+import io.regionevent.regioneventbackend.domain.reservation.service.GetMyReservationsUseCase.MyReservationListResult;
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
@@ -41,7 +41,7 @@ public class MyReservationListController {
         @RequestAttribute(RequestIdFilter.REQUEST_ID_ATTRIBUTE) String requestId
     ) {
         try {
-            List<ReservationReadResult> results = getMyReservationsUseCase.findAll(userId);
+            List<MyReservationListResult> results = getMyReservationsUseCase.findAll(userId);
             logResult(requestId, results.size(), SUCCESS_RESULT_CODE);
             return ApiResponse.success(
                 HttpStatus.OK,

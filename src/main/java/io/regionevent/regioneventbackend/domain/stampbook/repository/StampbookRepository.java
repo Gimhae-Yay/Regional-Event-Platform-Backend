@@ -63,6 +63,16 @@ public interface StampbookRepository extends JpaRepository<Stampbook, Long> {
     );
 
     @Query("""
+        SELECT stampbook
+        FROM Stampbook stampbook
+        JOIN FETCH stampbook.region region
+        JOIN FETCH stampbook.rewardCouponPolicy rewardCouponPolicy
+        JOIN FETCH rewardCouponPolicy.region rewardCouponPolicyRegion
+        WHERE stampbook.stampbookId = :stampbookId
+        """)
+    Optional<Stampbook> findOperatorDetailByStampbookId(@Param("stampbookId") Long stampbookId);
+
+    @Query("""
         SELECT new io.regionevent.regioneventbackend.domain.stampbook.repository.StampbookReviewTargetContentProjection(
             content.contentId,
             contentRegion.regionId,
@@ -117,6 +127,52 @@ public interface StampbookRepository extends JpaRepository<Stampbook, Long> {
         @Param("auditResult") AuditEventResult auditResult,
         @Param("previousState") String previousState,
         @Param("nextState") String nextState
+    );
+
+    @Query("""
+        SELECT new io.regionevent.regioneventbackend.domain.stampbook.repository.OperatorStampbookListProjection(
+            stampbook.stampbookId,
+            stampbook.title,
+            stampbook.region.regionId,
+            stampbook.status,
+            COUNT(DISTINCT targetContentEntity.contentId),
+            MIN(targetContentRegion.regionId),
+            MAX(targetContentRegion.regionId),
+            rewardCouponPolicy.couponPolicyId,
+            rewardCouponPolicyRegion.regionId,
+            stampbook.publishedAt,
+            stampbook.endedAt
+        )
+        FROM Stampbook stampbook
+        LEFT JOIN StampbookContent targetContent ON targetContent.stampbook = stampbook
+        LEFT JOIN targetContent.content targetContentEntity
+        LEFT JOIN targetContentEntity.region targetContentRegion
+        LEFT JOIN stampbook.rewardCouponPolicy rewardCouponPolicy
+        LEFT JOIN rewardCouponPolicy.region rewardCouponPolicyRegion
+        WHERE stampbook.region.regionId = :regionId
+          AND NOT EXISTS (
+              SELECT 1
+              FROM StampbookContent ownedTargetContent
+              JOIN ownedTargetContent.content ownedContent
+              WHERE ownedTargetContent.stampbook = stampbook
+                AND (
+                    ownedContent.operator.userId IS NULL
+                    OR ownedContent.operator.userId <> :operatorUserId
+                )
+          )
+        GROUP BY stampbook.stampbookId,
+                 stampbook.title,
+                 stampbook.region.regionId,
+                 stampbook.status,
+                 stampbook.rewardCouponPolicy.couponPolicyId,
+                 rewardCouponPolicyRegion.regionId,
+                 stampbook.publishedAt,
+                 stampbook.endedAt
+        ORDER BY stampbook.stampbookId DESC
+        """)
+    List<OperatorStampbookListProjection> findOperatorStampbookListProjections(
+        @Param("operatorUserId") Long operatorUserId,
+        @Param("regionId") Long regionId
     );
 
     @Query("""

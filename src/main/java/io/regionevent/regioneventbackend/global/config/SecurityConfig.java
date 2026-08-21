@@ -33,7 +33,6 @@ import io.regionevent.regioneventbackend.global.security.qr.QrTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.JwtRefreshTokenProperties;
 import io.regionevent.regioneventbackend.global.security.refresh.JwtRefreshTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenService;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 import io.regionevent.regioneventbackend.domain.payment.service.PortOneProperties;
 import io.regionevent.regioneventbackend.domain.payment.service.PortOneFakeProperties;
 
@@ -88,10 +87,9 @@ public class SecurityConfig {
     @Bean
     public RefreshTokenService refreshTokenService(
         JwtRefreshTokenService jwtRefreshTokenService,
-        RefreshTokenStore refreshTokenStore,
         Clock clock
     ) {
-        return new RefreshTokenService(jwtRefreshTokenService, refreshTokenStore, clock);
+        return new RefreshTokenService(jwtRefreshTokenService, clock);
     }
 
     @Bean
@@ -152,6 +150,17 @@ public class SecurityConfig {
                     "/api/v1/contents/*/sessions",
                     "/api/v1/sessions/*"
                 ).permitAll()
+                .requestMatchers(
+                    HttpMethod.GET,
+                    "/api/v1/platform-admin/me"
+                ).hasAnyAuthority(
+                    AccessTokenAuthority.SUPER_ADMIN.claimValue(),
+                    AccessTokenAuthority.PLATFORM_ADMIN.claimValue()
+                )
+                .requestMatchers(
+                    HttpMethod.GET,
+                    "/api/v1/platform-admin/admin-accounts"
+                ).hasAuthority(AccessTokenAuthority.SUPER_ADMIN.claimValue())
                 .requestMatchers(
                     HttpMethod.POST,
                     "/api/v1/platform-admin/admin-accounts",

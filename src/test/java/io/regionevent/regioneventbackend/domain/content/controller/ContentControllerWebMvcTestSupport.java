@@ -21,7 +21,6 @@ import io.regionevent.regioneventbackend.global.config.SecurityConfig;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
 import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 import io.regionevent.regioneventbackend.domain.content.service.ApproveContentRevisionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.ApproveContentSessionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.ApproveContentUseCase;
@@ -37,6 +36,7 @@ import io.regionevent.regioneventbackend.domain.content.service.EndContentReserv
 import io.regionevent.regioneventbackend.domain.content.service.GetContentHistoryUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetContentRevisionReviewDetailUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetContentWithdrawalReviewDetailUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.GetLatestContentRevisionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetMyContentUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetOriginalContentReviewDetailUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.GetPendingContentWithdrawalRequestsUseCase;
@@ -54,6 +54,7 @@ import io.regionevent.regioneventbackend.domain.content.service.RejectContentUse
 import io.regionevent.regioneventbackend.domain.content.service.RejectContentWithdrawalUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.RejectSessionRevisionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.RequestContentWithdrawalUseCase;
+import io.regionevent.regioneventbackend.domain.content.service.ResubmitContentRevisionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.SubmitContentUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.UpdateContentRevisionUseCase;
 import io.regionevent.regioneventbackend.domain.content.service.UpdateMyContentUseCase;
@@ -76,9 +77,6 @@ abstract class ContentControllerWebMvcTestSupport {
 
     @Autowired
     private JwtAccessTokenService jwtAccessTokenService;
-
-    @MockitoBean
-    private RefreshTokenStore refreshTokenStore;
 
     @MockitoBean
     protected ApproveContentRevisionUseCase approveContentRevisionUseCase;
@@ -124,6 +122,9 @@ abstract class ContentControllerWebMvcTestSupport {
 
     @MockitoBean
     protected GetContentWithdrawalReviewDetailUseCase getContentWithdrawalReviewDetailUseCase;
+
+    @MockitoBean
+    protected GetLatestContentRevisionUseCase getLatestContentRevisionUseCase;
 
     @MockitoBean
     protected GetMyContentUseCase getMyContentUseCase;
@@ -175,6 +176,9 @@ abstract class ContentControllerWebMvcTestSupport {
 
     @MockitoBean
     protected RequestContentWithdrawalUseCase requestContentWithdrawalUseCase;
+
+    @MockitoBean
+    protected ResubmitContentRevisionUseCase resubmitContentRevisionUseCase;
 
     @MockitoBean
     protected SubmitContentUseCase submitContentUseCase;

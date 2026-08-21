@@ -1,5 +1,6 @@
 package io.regionevent.regioneventbackend.domain.payment.controller;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -30,7 +31,6 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
 import io.regionevent.regioneventbackend.global.security.access.AccessTokenTestFactory;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
 
 @WebMvcTest(RefundFailureController.class)
 @Import({SecurityConfig.class, RequestIdFilter.class, GlobalExceptionHandler.class})
@@ -46,9 +46,6 @@ class RefundFailureControllerWebMvcTest {
 
     @MockitoBean
     private GetRefundFailuresUseCase getRefundFailuresUseCase;
-
-    @MockitoBean
-    private RefreshTokenStore refreshTokenStore;
 
     @Test
     void getFailures_기본상태로_실패환불목록을_반환한다() throws Exception {
@@ -67,6 +64,32 @@ class RefundFailureControllerWebMvcTest {
             .andExpect(jsonPath("$.data.refunds[0].attemptCount").value(1))
             .andExpect(jsonPath("$.data.refunds[0].requestedAt").value("2026-08-07T01:10:00Z"))
             .andExpect(jsonPath("$.data.refunds[0].updatedAt").value("2026-08-07T01:10:31Z"));
+
+        verify(getRefundFailuresUseCase).get(
+            USER_ID,
+            java.util.Set.of(RefundStatus.FAILED, RefundStatus.DISCREPANT)
+        );
+    }
+
+    @Test
+    void getFailures_예약없는실패환불이면_예약식별자를_null로반환한다() throws Exception {
+        RefundFailureListInfo refund = new RefundFailureListInfo(
+            552L,
+            903L,
+            null,
+            12_000L,
+            "KRW",
+            RefundStatus.DISCREPANT,
+            1,
+            Instant.parse("2026-08-07T01:10:00Z"),
+            Instant.parse("2026-08-07T01:10:31Z")
+        );
+        when(getRefundFailuresUseCase.get(eq(USER_ID), any())).thenReturn(List.of(refund));
+
+        mockMvc.perform(authenticated(get("/api/v1/platform-admin/refund-failures")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.refunds[0].refundId").value("552"))
+            .andExpect(jsonPath("$.data.refunds[0].reservationId").value(nullValue()));
 
         verify(getRefundFailuresUseCase).get(
             USER_ID,

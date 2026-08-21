@@ -3,8 +3,8 @@
 ## 1. 목적과 범위
 
 이 문서는 김해시·동해시 무료 예약 P0의 MySQL 논리 데이터 모델, 관계, 상태, 제약과 계산식을 정의한다.
-구현은 이 문서의 논리 모델을 기준으로 MySQL 8용 Flyway migration을 작성한다. Redis의 Refresh Token
-회전·폐기 TTL 키 공간은 관계형 엔티티가 아니므로 이 ERD에 표현하지 않는다.
+구현은 이 문서의 논리 모델을 기준으로 MySQL 8용 Flyway migration을 작성한다. Stateless Refresh Token은
+관계형 엔티티나 Redis 상태를 사용하지 않으므로 이 ERD에 표현하지 않는다.
 
 기준 문서의 우선순위는 다음과 같다.
 
@@ -529,6 +529,10 @@ erDiagram
   수정본 종결과 성공 감사 이벤트를 한 트랜잭션에서 처리한다.
 - `EDIT_REJECTED`, `EDIT_WITHDRAWN`, `EDIT_INVALIDATED` 수정본은 원본 후보 필드를 반영하지 않고 보존한다. 원본이 공개 전 수정 심사로
   `PENDING`이 된 경우에는 이 종결 뒤에도 `PENDING`을 유지한다.
+- 가장 큰 `revision_no`를 가진 `EDIT_REJECTED` 수정본만 편집·재제출할 수 있다. 재제출은 원본 콘텐츠 행과 반려 수정본을
+  잠근 뒤 활성 `EDIT_REQUESTED` 부재와 원본 상태·후보 `publish_at` 조건을 검증하고, 기존 후보 필드·후보 대표 이미지
+  객체·연결 시각을 현재 원본 버전과 새 `revision_no`를 가진 `EDIT_REQUESTED` 행으로 복제한다. 기존 반려 행은 변경하지
+  않으며 일반 수정본 생성·다른 재제출과 경합하면 활성 수정본 유일 제약으로 하나만 성공한다.
 - 추가 회차는 `content_session`을 `PENDING`, `remaining_capacity = capacity`로 생성한다. 지역 관리자 승인 시에만
   `SCHEDULED`로 전이하며, `PENDING`·`REJECTED` 회차는 홀드·예약·공개 조회의 대상이 아니다.
 - `session_revision`은 MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 수정 후보와 심사 상태만
@@ -1028,7 +1032,7 @@ SQL의 단순 cascade가 아래 업무 순서를 대신해서는 안 된다.
 | --- | --- |
 | 방문자 계정 | `ACTIVE → WITHDRAWING` 후 새 명령을 차단하고 모든 연결 제거가 성공하면 계정 행 파기 |
 | 역할·자격 증명 | 탈퇴 시작 시 역할을 해제하고 완료 전 자격 증명을 파기 |
-| Refresh Token 폐기 상태 | MySQL 커밋 전 Redis에서 활성 계열 전체를 폐기하고 사용자→활성 계열 인덱스를 제거한다. Redis 실패 시 MySQL 탈퇴를 롤백하며, Redis 성공 뒤 MySQL 실패 시 기존 계열은 복구하지 않는다. |
+| Refresh Token | 서버 상태를 저장하지 않는다. 탈퇴 성공 응답은 브라우저 Cookie만 만료하고, 이후 재발급 거부는 삭제된 회원 행으로 판정한다. |
 | 운영자 신청 | 신청자 탈퇴 시 `PENDING`은 `CANCELLED`; 모든 상태에서 신청자 연결과 사업자 개인정보 제거. 과거 심사자 탈퇴 시 승인·반려 신청의 `inspected_user_id`만 제거하고 심사 상태·심사 시각·반려 사유 보존 |
 | 활성 홀드 | `INVALIDATED` 최초 전이와 정원 복구 후 `user_id` 제거 |
 | 미체크인 예약 | `CANCELLED`; 회차 시작 전만 정원 복구한 뒤 `user_id` 제거 |
@@ -1071,6 +1075,6 @@ API 요청·응답에 영향을 주는 항목은 [API 명세서](api/api-specifi
 - 전체 관리자와 전역 권한
 - Transactional Outbox와 외부 알림·분석 전달
 - 영속 QR 토큰
-- Redis 캐시·요청 제한·Refresh Token 회전·폐기 TTL 키 공간·분산 락
+- Redis 캐시·요청 제한·분산 락
 - 행사·체험 외 콘텐츠 유형과 그 상세 필드
 - 사용자별 탈퇴 tombstone·안정 가명·재식별 매핑

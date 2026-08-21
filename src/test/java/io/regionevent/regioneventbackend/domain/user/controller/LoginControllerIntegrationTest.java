@@ -1,25 +1,14 @@
 package io.regionevent.regioneventbackend.domain.user.controller;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.reset;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
-import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -32,12 +21,9 @@ import io.regionevent.regioneventbackend.domain.user.entity.UserRole;
 import io.regionevent.regioneventbackend.domain.user.entity.UserRoleAssignment;
 import io.regionevent.regioneventbackend.domain.user.repository.AppUserRepository;
 import io.regionevent.regioneventbackend.domain.user.repository.UserRoleAssignmentRepository;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStore;
-import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenStoreUnavailableException;
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import(LoginControllerIntegrationTest.LoginTestConfiguration.class)
 @Transactional
 class LoginControllerIntegrationTest {
 
@@ -55,14 +41,6 @@ class LoginControllerIntegrationTest {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
-
-    @Autowired
-    private RefreshTokenStore refreshTokenStore;
-
-    @BeforeEach
-    void setUp() {
-        reset(refreshTokenStore);
-    }
 
     @Test
     void login_withActiveUser_returnsTokensAndRoles() throws Exception {
@@ -93,7 +71,6 @@ class LoginControllerIntegrationTest {
             .andExpect(jsonPath("$.data.accessToken").isNotEmpty())
             .andExpect(jsonPath("$.data.refreshToken").doesNotExist());
 
-        verify(refreshTokenStore).createFamily(any());
     }
 
     @Test
@@ -124,7 +101,6 @@ class LoginControllerIntegrationTest {
             .andExpect(header().doesNotExist(HttpHeaders.AUTHORIZATION))
             .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE));
 
-        verifyNoInteractions(refreshTokenStore);
     }
 
     @Test
@@ -139,7 +115,6 @@ class LoginControllerIntegrationTest {
             .andExpect(header().doesNotExist(HttpHeaders.AUTHORIZATION))
             .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE));
 
-        verifyNoInteractions(refreshTokenStore);
     }
 
     @Test
@@ -156,7 +131,6 @@ class LoginControllerIntegrationTest {
             .andExpect(header().doesNotExist(HttpHeaders.AUTHORIZATION))
             .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE));
 
-        verifyNoInteractions(refreshTokenStore);
     }
 
     @Test
@@ -173,25 +147,6 @@ class LoginControllerIntegrationTest {
             .andExpect(header().doesNotExist(HttpHeaders.AUTHORIZATION))
             .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE));
 
-        verifyNoInteractions(refreshTokenStore);
-    }
-
-    @Test
-    void login_whenRefreshTokenStoreIsUnavailable_returnsServiceUnavailableWithoutTokens() throws Exception {
-        saveUser(AppUserStatus.ACTIVE, PASSWORD);
-        doThrow(new RefreshTokenStoreUnavailableException(new IllegalStateException("Redis unavailable")))
-            .when(refreshTokenStore)
-            .createFamily(any());
-
-        mockMvc.perform(post("/api/v1/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(loginRequest(EMAIL, PASSWORD)))
-            .andExpect(status().isServiceUnavailable())
-            .andExpect(jsonPath("$.code").value("AUTH_SERVICE_UNAVAILABLE"))
-            .andExpect(jsonPath("$.message").value("인증 서비스를 일시적으로 사용할 수 없습니다."))
-            .andExpect(jsonPath("$.data").isEmpty())
-            .andExpect(header().doesNotExist(HttpHeaders.AUTHORIZATION))
-            .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE));
     }
 
     private AppUser saveUser(AppUserStatus status, String password) {
@@ -213,13 +168,4 @@ class LoginControllerIntegrationTest {
             """.formatted(email, password);
     }
 
-    @TestConfiguration
-    static class LoginTestConfiguration {
-
-        @Bean
-        @Primary
-        RefreshTokenStore refreshTokenStore() {
-            return mock(RefreshTokenStore.class);
-        }
-    }
 }

@@ -23,10 +23,10 @@ HTTP API 계약을 관리한다. 공개 API는 회원가입·로그인·토큰 �
 | 요구사항 | HTTP 계약 | 주요 데이터 |
 | --- | --- | --- |
 | FR-01 | `POST /api/v1/auth/signup` | `app_user`, `user_role_assignment`, `operator_application` |
-| FR-01 | `POST /api/v1/auth/login` | `app_user`, Redis Refresh Token 계열 |
-| FR-01 | `POST /api/v1/auth/refresh` | Redis Refresh Token 계열 |
-| FR-01 | `POST /api/v1/auth/logout` | Redis Refresh Token 계열 폐기 키 |
-| FR-01, PRV-01, PRV-02 | `DELETE /api/v1/auth/delete` | `app_user`, 역할·소유 관계, `operator_application`, Redis Refresh Token 계열 |
+| FR-01 | `POST /api/v1/auth/login` | `app_user`, `user_role_assignment` |
+| FR-01 | `POST /api/v1/auth/refresh` | `app_user` |
+| FR-01 | `POST /api/v1/auth/logout` | 브라우저 `refreshToken` 쿠키 |
+| FR-01, PRV-01, PRV-02 | `DELETE /api/v1/auth/delete` | `app_user`, 역할·소유 관계, `operator_application` |
 | FR-01, AUTH-01 | `GET /api/v1/me` | `app_user`, `user_role_assignment`, `region` |
 | FR-09, AUTH-02 | `POST /api/v1/operator/operator-requests` | `operator_application`, `region` |
 | FR-09, AUTH-02 | `GET /api/v1/region-admin/operator-requests?status=PENDING` | `operator_application`, `user_role_assignment`, `region` |
@@ -48,9 +48,9 @@ HTTP API 계약을 관리한다. 공개 API는 회원가입·로그인·토큰 �
 | 기능 | API 경로 | 명세 |
 | --- | --- | --- |
 | 역할 선택 회원가입 | `POST /api/v1/auth/signup` | [signup.md](signup.md) |
-| Access·Refresh Token 발급 로그인 | `POST /api/v1/auth/login` | [login.md](login.md) |
+| Access·Stateless Refresh Token 발급 로그인 | `POST /api/v1/auth/login` | [login.md](login.md) |
 | Access Token 재발급 | `POST /api/v1/auth/refresh` | [refresh.md](refresh.md) |
-| Refresh Token 계열 폐기 로그아웃 | `POST /api/v1/auth/logout` | [logout.md](logout.md) |
+| Refresh Token 쿠키 만료 로그아웃 | `POST /api/v1/auth/logout` | [logout.md](logout.md) |
 | 본인 회원탈퇴 | `DELETE /api/v1/auth/delete` | [withdrawal.md](withdrawal.md) |
 | 내 역할·담당 지역 조회 | `GET /api/v1/me` | [me.md](me.md) |
 | 운영자 권한 신청 | `POST /api/v1/operator/operator-requests` | [operator-request.md](operator-request.md) |

@@ -79,6 +79,12 @@ public class ContentService {
         return content;
     }
 
+    public Content findRevisionResubmissionTargetForUpdate(Long contentId) {
+        validateRequiredId(contentId);
+        return contentRepository.findByContentIdAndDeletedAtIsNull(contentId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
     public List<Content> findOwnedContentsForStampbookCreation(
         List<Long> contentIds,
         Long operatorUserId,

@@ -41,6 +41,14 @@ public class StampbookService {
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
+    public Stampbook findOperatorDetail(Long stampbookId) {
+        if (stampbookId == null || stampbookId <= 0) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        return stampbookRepository.findOperatorDetailByStampbookId(stampbookId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
     @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
     public Stampbook findStampbook(Long stampbookId) {
         if (stampbookId == null || stampbookId <= 0) {

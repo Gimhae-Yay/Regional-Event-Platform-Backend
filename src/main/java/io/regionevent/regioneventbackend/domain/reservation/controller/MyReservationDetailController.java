@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import io.regionevent.regioneventbackend.domain.reservation.dto.GetMyReservationResponse;
 import io.regionevent.regioneventbackend.domain.reservation.service.GetMyReservationUseCase;
-import io.regionevent.regioneventbackend.domain.reservation.service.ReservationReadResult;
+import io.regionevent.regioneventbackend.domain.reservation.service.GetMyReservationUseCase.MyReservationDetailResult;
 import io.regionevent.regioneventbackend.global.config.RequestIdFilter;
 import io.regionevent.regioneventbackend.global.error.BusinessException;
 import io.regionevent.regioneventbackend.global.error.ErrorCode;
@@ -42,7 +42,7 @@ public class MyReservationDetailController {
         Long parsedReservationId = null;
         try {
             parsedReservationId = MyReservationDetailRequestIdParser.parseRequired(reservationId);
-            ReservationReadResult result = getMyReservationUseCase.find(userId, parsedReservationId);
+            MyReservationDetailResult result = getMyReservationUseCase.find(userId, parsedReservationId);
             logResult(
                 requestId,
                 result,
@@ -64,14 +64,14 @@ public class MyReservationDetailController {
 
     private void logResult(
         String requestId,
-        ReservationReadResult result,
+        MyReservationDetailResult result,
         String resultCode
     ) {
         logResult(
             requestId,
-            result.snapshot().reservation().reservationId(),
-            result.snapshot().session().sessionId(),
-            result.checkIn().visitId(),
+            result.reservation().snapshot().reservation().reservationId(),
+            result.reservation().snapshot().session().sessionId(),
+            result.reservation().checkIn().visitId(),
             resultCode
         );
     }

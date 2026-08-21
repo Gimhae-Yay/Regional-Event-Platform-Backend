@@ -1,14 +1,12 @@
 package io.regionevent.regioneventbackend.domain.user.service;
 
-import java.time.Clock;
-import java.time.Duration;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import io.regionevent.regioneventbackend.domain.user.dto.RefreshAccessTokenResult;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.InvalidRefreshTokenException;
+import io.regionevent.regioneventbackend.global.security.refresh.RefreshToken;
 import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenService;
 
 @Service
@@ -18,20 +16,17 @@ public class RefreshAccessTokenUseCase {
     private final AccessTokenAuthorityResolver accessTokenAuthorityResolver;
     private final JwtAccessTokenService jwtAccessTokenService;
     private final RefreshTokenService refreshTokenService;
-    private final Clock clock;
 
     public RefreshAccessTokenUseCase(
         AppUserService appUserService,
         AccessTokenAuthorityResolver accessTokenAuthorityResolver,
         JwtAccessTokenService jwtAccessTokenService,
-        RefreshTokenService refreshTokenService,
-        Clock clock
+        RefreshTokenService refreshTokenService
     ) {
         this.appUserService = appUserService;
         this.accessTokenAuthorityResolver = accessTokenAuthorityResolver;
         this.jwtAccessTokenService = jwtAccessTokenService;
         this.refreshTokenService = refreshTokenService;
-        this.clock = clock;
     }
 
     @Transactional
@@ -40,25 +35,15 @@ public class RefreshAccessTokenUseCase {
             throw new InvalidRefreshTokenException();
         }
 
-        RefreshTokenService.RotationResult<String> rotation = refreshTokenService.rotate(
-            refreshTokenValue,
-            currentToken -> {
-                var user = appUserService.findActiveUserForUpdate(currentToken.userId())
-                    .orElseThrow(InvalidRefreshTokenException::new);
-                try {
-                    return jwtAccessTokenService.issue(
-                        currentToken.userId(),
-                        accessTokenAuthorityResolver.resolve(user)
-                    );
-                } catch (AccessTokenAuthoritySourceConflictException exception) {
-                    throw new InvalidRefreshTokenException(exception);
-                }
-            }
-        );
-        return new RefreshAccessTokenResult(
-            rotation.preparationResult(),
-            rotation.rotatedTokenValue(),
-            Duration.between(clock.instant(), rotation.rotatedToken().expiresAt())
-        );
+        RefreshToken refreshToken = refreshTokenService.authenticate(refreshTokenValue);
+        var user = appUserService.findActiveUserForUpdate(refreshToken.userId())
+            .orElseThrow(InvalidRefreshTokenException::new);
+        try {
+            return new RefreshAccessTokenResult(
+                jwtAccessTokenService.issue(refreshToken.userId(), accessTokenAuthorityResolver.resolve(user))
+            );
+        } catch (AccessTokenAuthoritySourceConflictException exception) {
+            throw new InvalidRefreshTokenException(exception);
+        }
     }
 }

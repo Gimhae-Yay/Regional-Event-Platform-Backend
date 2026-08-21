@@ -2,8 +2,10 @@ package io.regionevent.regioneventbackend.domain.user.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import jakarta.persistence.EntityManager;
@@ -114,6 +116,101 @@ class PlatformAdminAssignmentRepositoryTest {
         )).isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
+    void 전체관리자계정목록은_연결된PRIVILEGED배정을_등급상태전체와고정순서로조회한다() {
+        Instant newestGrantedAt = Instant.parse("2026-08-20T04:00:00Z");
+        Instant tiedGrantedAt = Instant.parse("2026-08-20T03:00:00Z");
+        Instant oldestGrantedAt = Instant.parse("2026-08-20T02:00:00Z");
+        AppUser oldestUser = savePrivilegedUser(AppUserStatus.ACTIVE);
+        PlatformAdminAssignment oldestAssignment = saveAssignment(
+            oldestUser,
+            PlatformAdminGrade.SUPER_ADMIN,
+            Instant.parse("2026-08-20T05:00:00Z")
+        );
+        AppUser tiedLowerUser = savePrivilegedUser(AppUserStatus.ACTIVE);
+        PlatformAdminAssignment tiedLowerAssignment = saveAssignment(
+            tiedLowerUser,
+            PlatformAdminGrade.PLATFORM_ADMIN,
+            null
+        );
+        AppUser tiedHigherUser = savePrivilegedUser(AppUserStatus.WITHDRAWING);
+        PlatformAdminAssignment tiedHigherAssignment = saveAssignment(
+            tiedHigherUser,
+            PlatformAdminGrade.SUPER_ADMIN,
+            Instant.parse("2026-08-20T06:00:00Z")
+        );
+        AppUser newestUser = savePrivilegedUser(AppUserStatus.ACTIVE);
+        PlatformAdminAssignment newestAssignment = saveAssignment(
+            newestUser,
+            PlatformAdminGrade.PLATFORM_ADMIN,
+            null
+        );
+        AppUser unlinkedUser = savePrivilegedUser(AppUserStatus.ACTIVE);
+        PlatformAdminAssignment unlinkedAssignment = saveAssignment(
+            unlinkedUser,
+            PlatformAdminGrade.PLATFORM_ADMIN,
+            null
+        );
+        setGrantedAt(oldestAssignment, oldestGrantedAt);
+        setGrantedAt(tiedLowerAssignment, tiedGrantedAt);
+        setGrantedAt(tiedHigherAssignment, tiedGrantedAt);
+        setGrantedAt(newestAssignment, newestGrantedAt);
+        unlinkAssignment(unlinkedAssignment);
+        entityManager.clear();
+
+        List<PlatformAdminAccountListProjection> adminAccounts =
+            platformAdminAssignmentRepository.findPlatformAdminAccountList();
+
+        assertThat(adminAccounts)
+            .extracting(
+                PlatformAdminAccountListProjection::userId,
+                PlatformAdminAccountListProjection::loginIdentifier,
+                PlatformAdminAccountListProjection::name,
+                PlatformAdminAccountListProjection::grade,
+                PlatformAdminAccountListProjection::status,
+                PlatformAdminAccountListProjection::grantedAt,
+                PlatformAdminAccountListProjection::inactivatedAt
+            )
+            .containsExactly(
+                tuple(
+                    newestUser.getUserId(),
+                    newestUser.getLoginIdentifier(),
+                    newestUser.getName(),
+                    PlatformAdminGrade.PLATFORM_ADMIN,
+                    PlatformAdminAssignmentStatus.ACTIVE,
+                    newestGrantedAt,
+                    null
+                ),
+                tuple(
+                    tiedHigherUser.getUserId(),
+                    tiedHigherUser.getLoginIdentifier(),
+                    tiedHigherUser.getName(),
+                    PlatformAdminGrade.SUPER_ADMIN,
+                    PlatformAdminAssignmentStatus.INACTIVE,
+                    tiedGrantedAt,
+                    Instant.parse("2026-08-20T06:00:00Z")
+                ),
+                tuple(
+                    tiedLowerUser.getUserId(),
+                    tiedLowerUser.getLoginIdentifier(),
+                    tiedLowerUser.getName(),
+                    PlatformAdminGrade.PLATFORM_ADMIN,
+                    PlatformAdminAssignmentStatus.ACTIVE,
+                    tiedGrantedAt,
+                    null
+                ),
+                tuple(
+                    oldestUser.getUserId(),
+                    oldestUser.getLoginIdentifier(),
+                    oldestUser.getName(),
+                    PlatformAdminGrade.SUPER_ADMIN,
+                    PlatformAdminAssignmentStatus.INACTIVE,
+                    oldestGrantedAt,
+                    Instant.parse("2026-08-20T05:00:00Z")
+                )
+            );
+    }
+
     private Optional<PlatformAdminAssignment> findActiveAssignment(Long userId) {
         return platformAdminAssignmentRepository
             .findByAppUserUserIdAndStatusAndAppUserStatusAndAppUserAccountKind(
@@ -122,6 +219,39 @@ class PlatformAdminAssignmentRepositoryTest {
                 AppUserStatus.ACTIVE,
                 AppUserAccountKind.PRIVILEGED
             );
+    }
+
+    private PlatformAdminAssignment saveAssignment(
+        AppUser appUser,
+        PlatformAdminGrade grade,
+        Instant inactivatedAt
+    ) {
+        PlatformAdminAssignment assignment = new PlatformAdminAssignment(appUser, grade);
+        if (inactivatedAt != null) {
+            assignment.inactivate(inactivatedAt, "ADMIN_ACCOUNT_INACTIVATION");
+        }
+        return platformAdminAssignmentRepository.saveAndFlush(assignment);
+    }
+
+    private void setGrantedAt(PlatformAdminAssignment assignment, Instant grantedAt) {
+        entityManager.createQuery("""
+                UPDATE PlatformAdminAssignment target
+                SET target.grantedAt = :grantedAt
+                WHERE target.platformAdminAssignmentId = :assignmentId
+                """)
+            .setParameter("grantedAt", grantedAt)
+            .setParameter("assignmentId", assignment.getPlatformAdminAssignmentId())
+            .executeUpdate();
+    }
+
+    private void unlinkAssignment(PlatformAdminAssignment assignment) {
+        entityManager.createQuery("""
+                UPDATE PlatformAdminAssignment target
+                SET target.appUser = NULL
+                WHERE target.platformAdminAssignmentId = :assignmentId
+                """)
+            .setParameter("assignmentId", assignment.getPlatformAdminAssignmentId())
+            .executeUpdate();
     }
 
     private AppUser savePrivilegedUser(AppUserStatus status) {
