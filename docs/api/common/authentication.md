@@ -6,7 +6,7 @@
 | --- | --- |
 | 인증 헤더 | `Authorization: Bearer <accessToken>` |
 | Access Token 성공 응답 | 로그인·토큰 갱신 성공 응답은 JSON 본문의 `data.accessToken`에 Access Token을 포함하고 `Authorization` 응답 헤더를 포함하지 않는다. 보호 업무 API 요청은 기존과 같이 `Authorization: Bearer <accessToken>` 헤더를 사용한다. ([ADR-0105](../../adr/0105-deliver-access-token-in-json-response-body.md)) |
-| Refresh Token 전달 | 로그인 성공 응답만 `Set-Cookie: refreshToken=<refreshToken>; Max-Age=1209600; Path=/api/v1/auth; HttpOnly; Secure; SameSite=<configuredSameSite>`를 포함한다. `<configuredSameSite>`는 [ADR-0114](../../adr/0114-support-cross-origin-browser-authentication-with-configured-allowlist.md)의 환경별 `Strict` 또는 `None`이다. 토큰 갱신 성공 응답은 Cookie를 교체하지 않고 `data.accessToken`만 반환한다. `Domain`은 생략해 호스트 전용 쿠키로 유지하며 Refresh Token은 JSON·`Authorization` 헤더에 넣지 않는다. ([ADR-0111](../../adr/0111-use-stateless-refresh-token.md)) |
+| Refresh Token 전달 | 로그인 성공 응답만 `Set-Cookie: refreshToken=<refreshToken>; Max-Age=1209600; Path=/api/v1/auth; HttpOnly; Secure; SameSite=Strict`를 포함한다. 토큰 갱신 성공 응답은 Cookie를 교체하지 않고 `data.accessToken`만 반환한다. `Domain`은 생략해 호스트 전용 쿠키로 유지하며 Refresh Token은 JSON·`Authorization` 헤더에 넣지 않는다. ([ADR-0111](../../adr/0111-use-stateless-refresh-token.md)) |
 | 갱신·로그아웃 한계 | Refresh Token은 상태를 저장하거나 회전하지 않는다. 같은 유효 Token의 반복·동시 갱신은 허용되며, 로그아웃은 브라우저 Cookie만 만료한다. 복사된 Token은 만료 또는 계정 비활성화 전까지 재발급에 사용할 수 있다. ([ADR-0111](../../adr/0111-use-stateless-refresh-token.md)) |
 | 토큰 만료·무효 | `401 Unauthorized`, `UNAUTHENTICATED` |
 
@@ -15,21 +15,16 @@ Refresh Token은 `Path=/api/v1/auth` 범위의 인증 API에서만 수신하며 
 ## 교차 출처 CORS·Cookie·Origin 검증 계약
 
 교차 출처 브라우저 지원은 [ADR-0114](../../adr/0114-support-cross-origin-browser-authentication-with-configured-allowlist.md)를
-따른다. 실제 배포 Origin은 문서나 코드 상수가 아니라 다음 환경별 설정으로만 관리한다.
+따른다. 허용 Origin은 `https://local-stamp.org` 하나로 고정하며 환경 변수나 런타임 구성으로 변경하지 않는다.
 
-| 구성 키 | 환경 변수 | 값과 검증 규칙 |
-| --- | --- | --- |
-| `security.cors.allowed-origins` | `SECURITY_CORS_ALLOWED_ORIGINS` | 쉼표로 구분한 절대 Origin 목록이다. 각 값은 `scheme + host + port`만 가지며 경로·쿼리·fragment·마지막 `/`·와일드카드·정규식을 허용하지 않는다. 비어 있으면 교차 출처를 허용하지 않고, 잘못된 값은 서버 시작을 실패시킨다. |
-| `security.cors.refresh-cookie-same-site` | `SECURITY_CORS_REFRESH_COOKIE_SAME_SITE` | `Strict` 또는 `None`이다. 같은 site의 교차 Origin은 `Strict`, 서로 다른 site의 Refresh Cookie 전송이 필요할 때만 `None`을 사용한다. `None`은 HTTPS와 `Secure=true`를 반드시 함께 사용한다. |
-
-서버는 요청 `Origin`이 allowlist와 정확히 일치할 때만 `Access-Control-Allow-Origin`에 그 Origin을 넣고
+서버는 요청 `Origin`이 `https://local-stamp.org`와 정확히 일치할 때만 `Access-Control-Allow-Origin`에 그 Origin을 넣고
 `Access-Control-Allow-Credentials: true`, `Vary: Origin`을 반환한다. 허용 method는 `GET`, `POST`, `PUT`,
 `PATCH`, `DELETE`, `OPTIONS`이며 허용 request header는 `Authorization`, `Content-Type`, `Accept`다. Origin,
-credential, method, header에 와일드카드를 쓰지 않는다. 사전 요청은 위 allowlist와 method·header만으로 인증 전에
+credential, method, header에 와일드카드를 쓰지 않는다. 사전 요청은 위 단일 Origin과 method·header만으로 인증 전에
 처리하며, 미허용 Origin에는 CORS 응답 헤더를 추가하지 않는다.
 
 `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout` 요청은 브라우저가 설정한
-`Origin` header를 반드시 포함해야 한다. 서버는 이 값이 allowlist와 정확히 일치할 때만 처리하며, Origin 누락·불일치는
+`Origin` header를 반드시 포함해야 한다. 서버는 이 값이 `https://local-stamp.org`와 정확히 일치할 때만 처리하며, Origin 누락·불일치는
 `403 FORBIDDEN`이다. 이 경로는 교차 출처 Refresh Cookie를 수신하거나 사용하므로 CORS 처리와 별도로 Origin을
 검증한다. 별도 CSRF Cookie, 전용 요청 header, Token bootstrap API는 제공하지 않는다.
 
