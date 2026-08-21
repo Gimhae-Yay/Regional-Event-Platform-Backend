@@ -2,7 +2,11 @@ package io.regionevent.regioneventbackend.domain.content.service;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 
+import org.hibernate.exception.ConstraintViolationException;
+
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +24,11 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
 
 @Service
 public class ContentRevisionService {
+
+    private static final String CONTENT_REVISION_NO_UNIQUE_CONSTRAINT =
+        "uk_content_revision_content_revision_no";
+    private static final String ACTIVE_REQUEST_UNIQUE_CONSTRAINT =
+        "uk_content_revision_active_request";
 
     private final ContentRevisionRepository contentRevisionRepository;
 
@@ -42,33 +51,40 @@ public class ContentRevisionService {
             throw new BusinessException(ErrorCode.CONTENT_STATE_CONFLICT);
         }
 
-        ContentRevision contentRevision = new ContentRevision(
-            content,
-            contentRevisionRepository.findMaxRevisionNoByContentId(content.getContentId()) + 1,
-            content.getVersionNo(),
-            editor,
-            ContentRevisionStatus.EDIT_REQUESTED,
-            command.title(),
-            command.description(),
-            command.locationText(),
-            command.operatingHoursText(),
-            command.contactText(),
-            command.precautions(),
-            command.ageRequirement(),
-            command.materials(),
-            command.cancellationPolicyText(),
-            command.reservationPrice(),
-            command.publishAt(),
-            submittedAt,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null
-        );
-        contentRevision.assignCandidateImage(candidateImageObject, candidateImageAssignedAt);
-        return contentRevisionRepository.saveAndFlush(contentRevision);
+        try {
+            ContentRevision contentRevision = new ContentRevision(
+                content,
+                contentRevisionRepository.findMaxRevisionNoByContentId(content.getContentId()) + 1,
+                content.getVersionNo(),
+                editor,
+                ContentRevisionStatus.EDIT_REQUESTED,
+                command.title(),
+                command.description(),
+                command.locationText(),
+                command.operatingHoursText(),
+                command.contactText(),
+                command.precautions(),
+                command.ageRequirement(),
+                command.materials(),
+                command.cancellationPolicyText(),
+                command.reservationPrice(),
+                command.publishAt(),
+                submittedAt,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+            );
+            contentRevision.assignCandidateImage(candidateImageObject, candidateImageAssignedAt);
+            return contentRevisionRepository.saveAndFlush(contentRevision);
+        } catch (DataIntegrityViolationException exception) {
+            if (isContentRevisionUniqueConstraintViolation(exception)) {
+                throw new BusinessException(ErrorCode.CONTENT_STATE_CONFLICT, exception);
+            }
+            throw exception;
+        }
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -91,6 +107,52 @@ public class ContentRevisionService {
             throw new BusinessException(ErrorCode.CONTENT_STATE_CONFLICT);
         }
         return contentRevision;
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ContentRevision findResubmissionSourceForUpdate(Long revisionId) {
+        return contentRevisionRepository.findByContentRevisionId(revisionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void validateLatestRejectedRevision(ContentRevision sourceRevision) {
+        if (sourceRevision.getStatus() != ContentRevisionStatus.EDIT_REJECTED
+            || sourceRevision.getRevisionNo() != contentRevisionRepository.findMaxRevisionNoByContentId(
+                sourceRevision.getContent().getContentId()
+            )) {
+            throw new BusinessException(ErrorCode.CONTENT_STATE_CONFLICT);
+        }
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ContentRevision resubmitRejectedRevision(
+        Content content,
+        ContentRevision sourceRevision,
+        AppUser editor,
+        Instant submittedAt
+    ) {
+        validateCandidateImage(sourceRevision, content);
+        return createEditRequestedRevision(
+            content,
+            editor,
+            new CreateContentRevisionCommand(
+                sourceRevision.getTitle(),
+                sourceRevision.getDescription(),
+                sourceRevision.getLocationText(),
+                sourceRevision.getOperatingHoursText(),
+                sourceRevision.getContactText(),
+                sourceRevision.getPrecautions(),
+                sourceRevision.getAgeRequirement(),
+                sourceRevision.getMaterials(),
+                sourceRevision.getCancellationPolicyText(),
+                sourceRevision.getReservationPrice(),
+                sourceRevision.getPublishAt()
+            ),
+            sourceRevision.getCandidateImageObject(),
+            sourceRevision.getCandidateImageAssignedAt(),
+            submittedAt
+        );
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -243,6 +305,33 @@ public class ContentRevisionService {
             || !candidateImage.isScopedTo(content.getRegion().getRegionId())) {
             throw new IllegalStateException("content revision candidate image must be active and linked");
         }
+    }
+
+    private static boolean isContentRevisionUniqueConstraintViolation(
+        DataIntegrityViolationException exception
+    ) {
+        Throwable cause = exception;
+        while (cause != null) {
+            if (cause instanceof ConstraintViolationException constraintViolationException
+                && isContentRevisionUniqueConstraint(constraintViolationException.getConstraintName())) {
+                return true;
+            }
+            String message = cause.getMessage();
+            if (message != null && isContentRevisionUniqueConstraint(message.toLowerCase(Locale.ROOT))) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+        return false;
+    }
+
+    private static boolean isContentRevisionUniqueConstraint(String value) {
+        if (value == null) {
+            return false;
+        }
+        String normalizedValue = value.toLowerCase(Locale.ROOT);
+        return normalizedValue.contains(CONTENT_REVISION_NO_UNIQUE_CONSTRAINT)
+            || normalizedValue.contains(ACTIVE_REQUEST_UNIQUE_CONSTRAINT);
     }
 
     private void applyCandidateFields(
