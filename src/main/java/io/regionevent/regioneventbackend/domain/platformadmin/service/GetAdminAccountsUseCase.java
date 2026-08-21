@@ -24,7 +24,7 @@ public class GetAdminAccountsUseCase {
 
     @Transactional(readOnly = true)
     public List<AdminAccountListInfo> get(Long actorUserId) {
-        platformAdminAuthorizationService.requireAuthorizedPlatformAdmin(actorUserId);
+        platformAdminAuthorizationService.requireAuthorizedSuperAdmin(actorUserId);
         return AdminAccountListInfo.from(platformAdminAssignmentService.findPlatformAdminAccountList());
     }
 }
