@@ -33,7 +33,8 @@
 | [ADR-0043](../adr/0043-define-jwt-access-token-security-profile.md#결정) | JWT Access Token의 서명·claim·키 회전·유효기간 검증 |
 | [ADR-0108](../adr/0108-use-global-authority-snapshot-for-first-stage-rbac.md#결정) | 전역 authority snapshot 1차 RBAC와 DB 최종 인가 경계 |
 | [ADR-0044](../adr/0044-use-delegating-bcrypt-password-encoder.md#결정) | 교체 가능한 BCrypt 비밀번호 해싱 |
-| [ADR-0045](../adr/0045-use-stateless-bearer-security-with-same-site-refresh-cookie.md#결정) | 무상태 Bearer 보안 체인과 동일 사이트 Refresh 쿠키 경계 |
+| [ADR-0045](../adr/0045-use-stateless-bearer-security-with-same-site-refresh-cookie.md#결정) | 무상태 Bearer 보안 체인 |
+| [ADR-0114](../adr/0114-support-cross-origin-browser-authentication-with-configured-allowlist.md#결정) | 환경별 교차 출처 CORS allowlist, Refresh Cookie와 CSRF 경계 |
 
 > 기존 ADR의 전체 관리자 관련 결정 부분은 ADR-0009로 대체한다.
 
@@ -41,7 +42,7 @@
 
 - 회원 가입 시 클라이언트가 `VISITOR` 또는 `OPERATOR`를 선택하게 한다. `VISITOR`는 즉시 역할을 부여하고, `OPERATOR`는 사업자 정보와 요청 지역을 가진 `PENDING` 운영자 신청을 생성한다.
 - 회원 가입, 로그인과 로그아웃을 제공한다.
-- 로그인 성공 시 Access Token은 JSON 본문의 `data.accessToken`으로, 14일 절대 만료 Stateless Refresh Token은 `HttpOnly`·`Secure`·`SameSite=Strict` 쿠키로 발급한다. Access Token 재발급 성공 시에는 Access Token만 JSON 본문으로 반환하고 Refresh Token 쿠키를 교체하지 않는다.
+- 로그인 성공 시 Access Token은 JSON 본문의 `data.accessToken`으로, 14일 절대 만료 Stateless Refresh Token은 `HttpOnly`·`Secure`·환경별 `SameSite` Cookie로 발급한다. `SameSite` 값, 허용 Origin, credential과 CSRF 규칙은 [인증·인가 공통 계약](../api/common/authentication.md#교차-출처-corscookiecsrf-계약)을 따른다. Access Token 재발급 성공 시에는 Access Token만 JSON 본문으로 반환하고 Refresh Token 쿠키를 교체하지 않는다.
 - Refresh Token은 서버 상태 없이 서명·claim·만료와 활성 회원 여부로만 검증한다. 같은 유효 토큰의 반복·동시 재발급은 허용하며, 재발급으로 14일 만료를 연장하지 않는다.
 - 로그아웃은 같은 이름·경로의 Refresh Token 쿠키만 만료시킨다. 복사된 토큰은 만료되거나 회원이 비활성·삭제되기 전까지 재발급에 사용될 수 있으며, Access Token도 짧은 만료 전까지 유효할 수 있다.
 - 방문자, 운영자, 지역 관리자 역할을 구분한다. 역할 보호 HTTP 경로는 Access Token의 전역 `ROLE_*` authority snapshot으로 1차 인가한다.
