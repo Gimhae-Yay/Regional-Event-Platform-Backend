@@ -27,7 +27,10 @@ public record RefundFailureListInfo(
         List<RefundAttempt> attempts
     ) {
         Payment payment = requireNotNull(refund.getPayment(), "refund payment");
-        Reservation reservation = requireNotNull(payment.getReservation(), "refund payment reservation");
+        Reservation reservation = payment.getReservation();
+        Long reservationId = reservation == null
+            ? null
+            : requireNotNull(reservation.getReservationId(), "reservationId");
         ReservationPriceSnapshot snapshot = requireNotNull(
             payment.getReservationPriceSnapshot(),
             "refund payment reservationPriceSnapshot"
@@ -36,7 +39,7 @@ public record RefundFailureListInfo(
         return new RefundFailureListInfo(
             requireNotNull(refund.getRefundId(), "refundId"),
             requireNotNull(payment.getPaymentId(), "paymentId"),
-            requireNotNull(reservation.getReservationId(), "reservationId"),
+            reservationId,
             refund.getAmount(),
             requireNotNull(snapshot.getCurrency(), "currency"),
             requireNotNull(refund.getStatus(), "status"),
