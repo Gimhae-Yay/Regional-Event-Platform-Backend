@@ -46,6 +46,17 @@ class ContentServiceTest {
         assertThat(result).isEqualTo(Instant.ofEpochSecond(1_754_356_800L, 123_456_000));
     }
 
+    @Test
+    void findMyContentDetail_미삭제_콘텐츠가_없으면_찾을수없음을_반환한다() {
+        when(contentRepository.findDetailByContentIdAndDeletedAtIsNull(CONTENT_ID))
+            .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> contentService.findMyContentDetail(CONTENT_ID))
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.NOT_FOUND)
+            );
+    }
+
     @ParameterizedTest
     @MethodSource("invalidIds")
     void findOwnedContentForRevisionCreation_필수_식별자가_없거나_양수가_아니면_입력_오류를_반환한다(

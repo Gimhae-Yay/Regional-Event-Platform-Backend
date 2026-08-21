@@ -145,6 +145,87 @@ class ContentRevisionRepositoryTest {
     }
 
     @Test
+    void 미삭제_원본의_가장_큰_수정본_번호와_후보_이미지를_조회한다() {
+        Content content = saveContent();
+        AppUser editor = saveUser("latest-editor@example.com");
+        AppUser reviewer = saveUser("latest-reviewer@example.com");
+        ImageObject candidateImage = saveLinkedImageObject(
+            "content/latest-revision.webp",
+            editor,
+            content.getRegion()
+        );
+        ContentRevision earlierRevision = newRevision(
+            content,
+            1,
+            editor,
+            ContentRevisionStatus.EDIT_REJECTED,
+            REVIEWED_AT,
+            reviewer,
+            "이미지를 보완해 주세요.",
+            null,
+            null,
+            null
+        );
+        earlierRevision.assignCandidateImage(candidateImage, SUBMITTED_AT);
+        contentRevisionRepository.saveAndFlush(earlierRevision);
+        ContentRevision latestRevision = newRevision(
+            content,
+            2,
+            editor,
+            ContentRevisionStatus.EDIT_REQUESTED,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+        );
+        latestRevision.assignCandidateImage(candidateImage, SUBMITTED_AT.plusSeconds(1));
+        contentRevisionRepository.saveAndFlush(latestRevision);
+        entityManager.clear();
+
+        ContentRevision foundRevision = contentRevisionRepository
+            .findTopByContentContentIdAndContentDeletedAtIsNullOrderByRevisionNoDesc(content.getContentId())
+            .orElseThrow();
+        PersistenceUnitUtil persistenceUnitUtil = entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
+
+        assertThat(foundRevision.getContentRevisionId()).isEqualTo(latestRevision.getContentRevisionId());
+        assertThat(foundRevision.getRevisionNo()).isEqualTo(2);
+        assertThat(persistenceUnitUtil.isLoaded(foundRevision, "candidateImageObject")).isTrue();
+        assertThat(persistenceUnitUtil.isLoaded(foundRevision.getCandidateImageObject(), "region")).isTrue();
+        assertThat(foundRevision.getCandidateImageObject().getImageObjectId())
+            .isEqualTo(candidateImage.getImageObjectId());
+    }
+
+    @Test
+    void 소프트_삭제된_원본의_최신_수정본은_조회하지_않는다() {
+        Content content = saveContent();
+        AppUser editor = saveUser("latest-deleted-editor@example.com");
+        ContentRevision revision = contentRevisionRepository.saveAndFlush(
+            newRevision(
+                content,
+                1,
+                editor,
+                ContentRevisionStatus.EDIT_REQUESTED,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+            )
+        );
+        content.softDelete();
+        contentRepository.flush();
+        entityManager.clear();
+
+        assertThat(contentRevisionRepository
+            .findTopByContentContentIdAndContentDeletedAtIsNullOrderByRevisionNoDesc(
+                revision.getContent().getContentId()
+            )).isEmpty();
+    }
+
+    @Test
     void 심사_대상_조회는_수정본과_미삭제_원본_지역을_함께_조회한다() {
         Content content = saveContent();
         AppUser editor = saveUser("editor@example.com");
@@ -735,5 +816,23 @@ class ContentRevisionRepositoryTest {
             0,
             null
         ));
+    }
+
+    private ImageObject saveLinkedImageObject(
+        String objectKey,
+        AppUser uploader,
+        Region region
+    ) {
+        ImageObject imageObject = ImageObject.createUploadCandidate(
+            objectKey,
+            uploader,
+            region,
+            "image/webp",
+            1L,
+            "sha256:" + objectKey,
+            SUBMITTED_AT.plusSeconds(60)
+        );
+        imageObject.markLinked(SUBMITTED_AT);
+        return imageObjectRepository.saveAndFlush(imageObject);
     }
 }

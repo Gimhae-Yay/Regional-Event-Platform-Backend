@@ -37,6 +37,14 @@ public interface ContentRevisionRepository extends JpaRepository<ContentRevision
         ContentRevisionStatus status
     );
 
+    @EntityGraph(attributePaths = {
+        "candidateImageObject",
+        "candidateImageObject.region"
+    })
+    Optional<ContentRevision> findTopByContentContentIdAndContentDeletedAtIsNullOrderByRevisionNoDesc(
+        Long contentId
+    );
+
     @Query("""
         SELECT revision.content.contentId
         FROM ContentRevision revision

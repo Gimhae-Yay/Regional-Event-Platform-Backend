@@ -239,6 +239,13 @@ public class ContentRevisionService {
     }
 
     @Transactional(readOnly = true)
+    public ContentRevision findLatestRevisionByContentId(Long contentId) {
+        return contentRevisionRepository
+            .findTopByContentContentIdAndContentDeletedAtIsNullOrderByRevisionNoDesc(contentId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    @Transactional(readOnly = true)
     public List<ContentRevisionReviewCandidate> findReviewCandidatesByRegionId(Long regionId) {
         return contentRevisionRepository
             .findByContentRegionRegionIdAndStatusAndContentDeletedAtIsNullOrderBySubmittedAtAscContentRevisionIdAsc(
