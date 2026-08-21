@@ -33,7 +33,7 @@ GET /api/v1/me/refunds/{refundId}
 #### Request Example
 
 ```http
-GET /api/v1/me/refunds/551 HTTP/1.1
+GET /api/v1/me/refunds/553 HTTP/1.1
 Authorization: Bearer {accessToken}
 Accept: application/json
 ```
@@ -80,13 +80,13 @@ Accept: application/json
   "code": "SUCCESS",
   "message": "내 환불 상세 조회에 성공했습니다.",
   "data": {
-    "refundId": "551",
-    "paymentId": "902",
-    "reservationId": "123",
-    "amount": 17000,
+    "refundId": "553",
+    "paymentId": "904",
+    "reservationId": null,
+    "amount": 12000,
     "currency": "KRW",
-    "status": "PROCESSING",
-    "requestedAt": "2026-08-07T01:00:00Z",
+    "status": "DISCREPANT",
+    "requestedAt": "2026-08-07T01:15:00Z",
     "completedAt": null
   }
 }
@@ -101,7 +101,7 @@ Accept: application/json
 | `message` | String | 성공 메시지다. |
 | `data.refundId` | String | 환불 식별자다. |
 | `data.paymentId` | String | 환불 대상 결제 식별자다. |
-| `data.reservationId` | String | 환불 대상 결제와 연결된 예약 식별자다. |
+| `data.reservationId` | String 또는 null | 환불 대상 결제와 연결된 예약 식별자다. 확정 예약 없이 생성된 결제 불일치 환불이면 `null`이다. |
 | `data.amount` | Integer | 환불 금액이다. 결제 최종 금액과 같다. |
 | `data.currency` | String | 통화 코드다. |
 | `data.status` | String | 환불 상태다. `REQUESTED`, `PROCESSING`, `SUCCEEDED`, `FAILED`, `DISCREPANT` 중 하나다. |
@@ -131,5 +131,6 @@ Accept: application/json
 ### 처리 규칙
 
 1. 서버는 인증 주체가 대상 환불이 연결된 결제가 속한 홀드의 `user_id`와 일치하는지 검증한다. 일치하지 않으면 대상이 존재하지 않을 때와 같은 `404 NOT_FOUND`로 응답해, 다른 회원의 환불은 존재 여부를 포함해 노출하지 않는다.
-2. 내부 시도 이력(`refund_attempt`)과 실패 사유는 노출하지 않는다. 방문자에게는 `refund` 상태와 금액·시각만 제공한다.
-3. 조회 시 환불, 결제와 감사 이력을 생성·수정·삭제하지 않는다.
+2. 본인 소유 결제의 확정 예약 유무는 조회 조건이 아니다. 확정 예약 없이 생성된 결제 불일치 환불은 `reservationId: null`로, 예약이 연결된 환불은 예약 식별자를 문자열로 반환한다.
+3. 내부 시도 이력(`refund_attempt`)과 실패 사유는 노출하지 않는다. 방문자에게는 `refund` 상태와 금액·시각만 제공한다.
+4. 조회 시 환불, 결제와 감사 이력을 생성·수정·삭제하지 않는다.

@@ -33,7 +33,7 @@ GET /api/v1/platform-admin/refund-failures/{refundId}
 #### Request Example
 
 ```http
-GET /api/v1/platform-admin/refund-failures/552 HTTP/1.1
+GET /api/v1/platform-admin/refund-failures/553 HTTP/1.1
 Authorization: Bearer {accessToken}
 Accept: application/json
 ```
@@ -81,17 +81,17 @@ Accept: application/json
   "message": "환불 실패 상세 조회에 성공했습니다.",
   "data": {
     "refund": {
-      "refundId": "552",
-      "paymentId": "903",
-      "reservationId": "124",
+      "refundId": "553",
+      "paymentId": "904",
+      "reservationId": null,
       "amount": 12000,
       "currency": "KRW",
       "status": "DISCREPANT",
-      "requestedAt": "2026-08-07T01:10:00Z",
+      "requestedAt": "2026-08-07T01:15:00Z",
       "completedAt": null
     },
     "payment": {
-      "paymentId": "903",
+      "paymentId": "904",
       "orderId": "ORD-20260807-3K9P1M",
       "portonePaymentId": "portone-txn-def456",
       "finalAmount": 12000,
@@ -106,7 +106,7 @@ Accept: application/json
         "outcomeKind": "NO_RESPONSE",
         "failureReasonCode": "TIMEOUT",
         "externalStatus": null,
-        "attemptedAt": "2026-08-07T01:10:31Z"
+        "attemptedAt": "2026-08-07T01:15:31Z"
       }
     ]
   }
@@ -122,7 +122,7 @@ Accept: application/json
 | `message` | String | 성공 메시지다. |
 | `data.refund.refundId` | String | 환불 식별자다. |
 | `data.refund.paymentId` | String | 환불 대상 결제 식별자다. |
-| `data.refund.reservationId` | String | 환불 대상 결제와 연결된 예약 식별자다. |
+| `data.refund.reservationId` | String 또는 null | 환불 대상 결제와 연결된 예약 식별자다. 확정 예약 없이 생성된 결제 불일치 환불이면 `null`이다. |
 | `data.refund.amount` | Integer | 환불 금액이다. |
 | `data.refund.currency` | String | 통화 코드다. |
 | `data.refund.status` | String | 환불 상태다. 이 API에서는 보통 `FAILED` 또는 `DISCREPANT`다. |
@@ -168,5 +168,6 @@ Accept: application/json
 
 1. 인증 주체는 활성 `SUPER_ADMIN` 또는 `PLATFORM_ADMIN` 배정을 가져야 한다.
 2. `attempts`는 대상 환불에 연결된 `refund_attempt` 전체를 `attempt_no` 오름차순으로 반환한다.
-3. PortOne 원문, 응답 원문 해시와 비밀값은 응답에 포함하지 않는다.
-4. 조회 시 환불, 결제와 시도 이력을 생성·수정·삭제하지 않는다.
+3. 확정 예약 없이 생성된 결제 불일치 환불은 `reservationId: null`로 반환한다. 예약이 연결된 환불은 예약 식별자를 문자열로 반환하며, 예약 연결이 없다는 이유만으로 정합성 오류로 처리하지 않는다.
+4. PortOne 원문, 응답 원문 해시와 비밀값은 응답에 포함하지 않는다.
+5. 조회 시 환불, 결제와 시도 이력을 생성·수정·삭제하지 않는다.
