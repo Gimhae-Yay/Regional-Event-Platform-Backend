@@ -305,6 +305,16 @@ class SecurityConfigWebMvcTest {
         return Stream.of(
             Arguments.of(
                 HttpMethod.GET,
+                "/api/v1/platform-admin/me",
+                AccessTokenAuthority.SUPER_ADMIN
+            ),
+            Arguments.of(
+                HttpMethod.GET,
+                "/api/v1/platform-admin/me",
+                AccessTokenAuthority.PLATFORM_ADMIN
+            ),
+            Arguments.of(
+                HttpMethod.GET,
                 "/api/v1/platform-admin/admin-accounts",
                 AccessTokenAuthority.SUPER_ADMIN
             ),
@@ -512,6 +522,7 @@ class SecurityConfigWebMvcTest {
         }
 
         @GetMapping({
+            "/api/v1/platform-admin/me",
             "/api/v1/platform-admin/admin-accounts",
             "/api/v1/platform-admin/protected",
             "/api/v1/region-admin/protected",

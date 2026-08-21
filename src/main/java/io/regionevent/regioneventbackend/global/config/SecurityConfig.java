@@ -151,6 +151,13 @@ public class SecurityConfig {
                     "/api/v1/sessions/*"
                 ).permitAll()
                 .requestMatchers(
+                    HttpMethod.GET,
+                    "/api/v1/platform-admin/me"
+                ).hasAnyAuthority(
+                    AccessTokenAuthority.SUPER_ADMIN.claimValue(),
+                    AccessTokenAuthority.PLATFORM_ADMIN.claimValue()
+                )
+                .requestMatchers(
                     HttpMethod.POST,
                     "/api/v1/platform-admin/admin-accounts",
                     "/api/v1/platform-admin/admin-accounts/*/deactivate"
