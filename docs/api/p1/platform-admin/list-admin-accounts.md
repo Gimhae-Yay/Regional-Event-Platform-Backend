@@ -5,12 +5,12 @@
 | 대상 릴리스 | P1 |
 | 관련 요구사항 | [P1-FR-09](../../../p1-spec.md#6-기능-요구사항과-소유-문서), `ADM-01` |
 | 소유 도메인 | 전체관리자 |
-| 기준 문서 | [전체관리자 API](platform-admin.md), [전체관리자](../../../p1/platform-admin.md), [P1 ERD](../../../p1-erd.md), [ADR-0064](../../../adr/0064-separate-privileged-account-class-from-ordinary-roles.md), [ADR-0108](../../../adr/0108-use-global-authority-snapshot-for-first-stage-rbac.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [전체관리자 API](platform-admin.md), [전체관리자](../../../p1/platform-admin.md), [P1 ERD](../../../p1-erd.md), [ADR-0064](../../../adr/0064-separate-privileged-account-class-from-ordinary-roles.md), [ADR-0108](../../../adr/0108-use-global-authority-snapshot-for-first-stage-rbac.md), [ADR-0113](../../../adr/0113-separate-platform-admin-self-access-from-account-list.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
-이 문서는 `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` authority snapshot을 가진 활성 `PRIVILEGED` 계정이
-전체관리자 계정의 등급과 배정 상태를 확인하는 HTTP API 계약을 정의한다.
+이 문서는 `ROLE_SUPER_ADMIN` authority snapshot을 가진 활성 `PRIVILEGED` 계정이 전체관리자 계정의 등급과 배정
+상태를 확인하는 HTTP API 계약을 정의한다. `ROLE_PLATFORM_ADMIN`은 다른 고권한 계정의 목록을 조회할 수 없다.
 
 ### 요구사항 추적
 
@@ -51,7 +51,7 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Authorization` | Y | `Bearer {accessToken}` 형식의 유효한 Access Token이다. `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN` authority가 필요하다. |
+| `Authorization` | Y | `Bearer {accessToken}` 형식의 유효한 Access Token이다. `ROLE_SUPER_ADMIN` authority가 필요하다. |
 | `Content-Type` | N | 요청 본문이 없으므로 전송하지 않는다. |
 | `Accept` | N | `application/json` |
 
@@ -75,9 +75,9 @@ Accept: application/json
 
 ### 인증·인가
 
-[공통 권한 행렬](../../common/authentication.md#권한-행렬)의 전체관리자 공통 조회 경로 계약을 적용한다.
+[공통 권한 행렬](../../common/authentication.md#권한-행렬)의 전체관리자 계정 목록 조회 계약을 적용한다.
 
-- 유효한 Access Token의 authority가 `ROLE_SUPER_ADMIN` 또는 `ROLE_PLATFORM_ADMIN`이어야 한다.
+- 유효한 Access Token의 authority가 `ROLE_SUPER_ADMIN`이어야 한다.
 - DB 최종 검증에서 요청자의 `app_user.status = ACTIVE`와 `account_kind = PRIVILEGED`를 확인한다.
 - 요청자의 현재 고권한 등급이나 고권한 배정의 활성 여부를 DB에서 authority 판정 근거로 다시 사용하지 않는다.
 - Access Token이 없거나 유효하지 않으면 `401 UNAUTHENTICATED`, authority 또는 DB 최종 인가가 부족하면

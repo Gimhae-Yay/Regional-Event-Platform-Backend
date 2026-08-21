@@ -529,6 +529,10 @@ erDiagram
   수정본 종결과 성공 감사 이벤트를 한 트랜잭션에서 처리한다.
 - `EDIT_REJECTED`, `EDIT_WITHDRAWN`, `EDIT_INVALIDATED` 수정본은 원본 후보 필드를 반영하지 않고 보존한다. 원본이 공개 전 수정 심사로
   `PENDING`이 된 경우에는 이 종결 뒤에도 `PENDING`을 유지한다.
+- 가장 큰 `revision_no`를 가진 `EDIT_REJECTED` 수정본만 편집·재제출할 수 있다. 재제출은 원본 콘텐츠 행과 반려 수정본을
+  잠근 뒤 활성 `EDIT_REQUESTED` 부재와 원본 상태·후보 `publish_at` 조건을 검증하고, 기존 후보 필드·후보 대표 이미지
+  객체·연결 시각을 현재 원본 버전과 새 `revision_no`를 가진 `EDIT_REQUESTED` 행으로 복제한다. 기존 반려 행은 변경하지
+  않으며 일반 수정본 생성·다른 재제출과 경합하면 활성 수정본 유일 제약으로 하나만 성공한다.
 - 추가 회차는 `content_session`을 `PENDING`, `remaining_capacity = capacity`로 생성한다. 지역 관리자 승인 시에만
   `SCHEDULED`로 전이하며, `PENDING`·`REJECTED` 회차는 홀드·예약·공개 조회의 대상이 아니다.
 - `session_revision`은 MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 수정 후보와 심사 상태만
