@@ -48,7 +48,6 @@ POST /api/v1/auth/login
 POST /api/v1/auth/login HTTP/1.1
 Content-Type: application/json; charset=UTF-8
 Accept: application/json
-X-CSRF-Token: {csrfToken}
 
 {
   "email": "visitor@example.com",
@@ -61,7 +60,6 @@ X-CSRF-Token: {csrfToken}
 | Name | Required | Description |
 | --- | --- | --- |
 | `Authorization` | N | 공개 API이므로 전송하지 않는다. |
-| `X-CSRF-Token` | Y | `GET /api/v1/auth/csrf`가 반환한 값이다. `credentials: include`와 함께 전송한다. |
 | `Content-Type` | Y | `application/json; charset=UTF-8` |
 | `Accept` | N | `application/json` |
 

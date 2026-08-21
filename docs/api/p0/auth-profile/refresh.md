@@ -51,7 +51,6 @@ POST /api/v1/auth/refresh
 POST /api/v1/auth/refresh HTTP/1.1
 Cookie: refreshToken={refreshToken}
 Accept: application/json
-X-CSRF-Token: {csrfToken}
 ```
 
 #### Request Headers
@@ -60,7 +59,6 @@ X-CSRF-Token: {csrfToken}
 | --- | --- | --- |
 | `Authorization` | N | Access Token은 갱신 자격으로 사용하지 않으므로 전송하지 않는다. |
 | `Cookie` | Y | `refreshToken=<refreshToken>`. 브라우저가 `HttpOnly` 쿠키를 자동으로 전송한다. |
-| `X-CSRF-Token` | Y | `GET /api/v1/auth/csrf`가 반환한 값이다. `credentials: include`와 함께 전송한다. |
 | `Content-Type` | N | 요청 본문이 없으므로 전송하지 않는다. |
 | `Accept` | N | `application/json` |
 

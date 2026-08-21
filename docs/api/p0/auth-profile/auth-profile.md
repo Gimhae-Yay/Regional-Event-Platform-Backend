@@ -9,10 +9,10 @@
 
 ## 1. 개요
 
-이 문서는 인증·프로필 도메인의 회원가입, 로그인, CSRF Token bootstrap, 토큰 갱신, 로그아웃, 회원탈퇴, 내 역할 조회와
-운영자 신청·심사 HTTP API 계약을 관리한다. 공개 API는 회원가입·로그인·CSRF Token bootstrap·토큰 갱신·로그아웃이고,
-회원탈퇴·내 역할 조회·운영자 신청과 지역 관리자 심사 API는 Access Token을 요구한다. 요청·응답 공통 형식과 인증 전달
-방식은 `common/` 문서를 단일 출처로 삼으며, 각 API 명세에는 해당 API의 입력·상태 전이·응답·오류만 작성한다.
+이 문서는 인증·프로필 도메인의 회원가입, 로그인, 토큰 갱신, 로그아웃, 회원탈퇴, 내 역할 조회와 운영자 신청·심사
+HTTP API 계약을 관리한다. 공개 API는 회원가입·로그인·토큰 갱신·로그아웃이고, 회원탈퇴·내 역할 조회·운영자 신청과
+지역 관리자 심사 API는 Access Token을 요구한다. 요청·응답 공통 형식과 인증 전달 방식은 `common/` 문서를 단일
+출처로 삼으며, 각 API 명세에는 해당 API의 입력·상태 전이·응답·오류만 작성한다.
 
 회원가입은 클라이언트가 `VISITOR` 또는 `OPERATOR` 역할을 선택한다. `VISITOR`는 가입 즉시 역할을 부여하고,
 `OPERATOR`는 요청 지역과 사업자 정보를 포함한 `PENDING` 운영자 신청만 생성한다. 승인 전에는 운영자 역할과
@@ -24,7 +24,6 @@
 | --- | --- | --- |
 | FR-01 | `POST /api/v1/auth/signup` | `app_user`, `user_role_assignment`, `operator_application` |
 | FR-01 | `POST /api/v1/auth/login` | `app_user`, `user_role_assignment` |
-| FR-01 | `GET /api/v1/auth/csrf` | 브라우저 `__Host-csrf` Cookie |
 | FR-01 | `POST /api/v1/auth/refresh` | `app_user` |
 | FR-01 | `POST /api/v1/auth/logout` | 브라우저 `refreshToken` 쿠키 |
 | FR-01, PRV-01, PRV-02 | `DELETE /api/v1/auth/delete` | `app_user`, 역할·소유 관계, `operator_application` |
@@ -50,7 +49,6 @@
 | --- | --- | --- |
 | 역할 선택 회원가입 | `POST /api/v1/auth/signup` | [signup.md](signup.md) |
 | Access·Stateless Refresh Token 발급 로그인 | `POST /api/v1/auth/login` | [login.md](login.md) |
-| 교차 출처 인증용 CSRF Token bootstrap | `GET /api/v1/auth/csrf` | [인증·인가 공통 계약](../../common/authentication.md#교차-출처-corscookiecsrf-계약) |
 | Access Token 재발급 | `POST /api/v1/auth/refresh` | [refresh.md](refresh.md) |
 | Refresh Token 쿠키 만료 로그아웃 | `POST /api/v1/auth/logout` | [logout.md](logout.md) |
 | 본인 회원탈퇴 | `DELETE /api/v1/auth/delete` | [withdrawal.md](withdrawal.md) |

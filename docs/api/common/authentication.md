@@ -12,7 +12,7 @@
 
 Refresh Token은 `Path=/api/v1/auth` 범위의 인증 API에서만 수신하며 보호 업무 API의 인증 수단으로 사용할 수 없다.
 
-## 교차 출처 CORS·Cookie·CSRF 계약
+## 교차 출처 CORS·Cookie·Origin 검증 계약
 
 교차 출처 브라우저 지원은 [ADR-0114](../../adr/0114-support-cross-origin-browser-authentication-with-configured-allowlist.md)를
 따른다. 실제 배포 Origin은 문서나 코드 상수가 아니라 다음 환경별 설정으로만 관리한다.
@@ -24,33 +24,18 @@ Refresh Token은 `Path=/api/v1/auth` 범위의 인증 API에서만 수신하며 
 
 서버는 요청 `Origin`이 allowlist와 정확히 일치할 때만 `Access-Control-Allow-Origin`에 그 Origin을 넣고
 `Access-Control-Allow-Credentials: true`, `Vary: Origin`을 반환한다. 허용 method는 `GET`, `POST`, `PUT`,
-`PATCH`, `DELETE`, `OPTIONS`이며 허용 request header는 `Authorization`, `Content-Type`, `Accept`,
-`X-CSRF-Token`이다. `X-CSRF-Token`만 노출 response header로 둔다. Origin, credential, method, header에
-와일드카드를 쓰지 않는다. 사전 요청은 위 allowlist와 method·header만으로 인증 전에 처리하며, 미허용 Origin에는
-CORS 응답 헤더를 추가하지 않는다.
+`PATCH`, `DELETE`, `OPTIONS`이며 허용 request header는 `Authorization`, `Content-Type`, `Accept`다. Origin,
+credential, method, header에 와일드카드를 쓰지 않는다. 사전 요청은 위 allowlist와 method·header만으로 인증 전에
+처리하며, 미허용 Origin에는 CORS 응답 헤더를 추가하지 않는다.
 
-브라우저는 `GET /api/v1/auth/csrf`를 `credentials: include`로 먼저 호출한다. 서버는 API 호스트 전용
-`__Host-csrf` Cookie(`Secure`, `Path=/`, `Domain` 생략, 구성된 `SameSite`, `HttpOnly` 미설정)를 만들거나 기존 값을
-유지하고, 같은 값을 노출 header `X-CSRF-Token`으로 반환한다. 프런트엔드는 그 값을 영속 저장소가 아닌 메모리에
-보관한다.
+`POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout` 요청은 브라우저가 설정한
+`Origin` header를 반드시 포함해야 한다. 서버는 이 값이 allowlist와 정확히 일치할 때만 처리하며, Origin 누락·불일치는
+`403 FORBIDDEN`이다. 이 경로는 교차 출처 Refresh Cookie를 수신하거나 사용하므로 CORS 처리와 별도로 Origin을
+검증한다. 별도 CSRF Cookie, 전용 요청 header, Token bootstrap API는 제공하지 않는다.
 
-### CSRF Token bootstrap API
-
-| 항목 | 계약 |
-| --- | --- |
-| 요청 | `GET /api/v1/auth/csrf`이며 `Authorization`과 요청 본문은 없다. 브라우저 요청은 `credentials: include`를 사용한다. |
-| 성공 상태 | `204 No Content` |
-| `Set-Cookie` | 새 Token이 필요할 때만 `__Host-csrf=<csrfToken>; Secure; Path=/; SameSite=<configuredSameSite>`를 반환한다. `Domain`과 `HttpOnly`는 설정하지 않는다. 기존 Token이 있으면 Cookie를 교체하지 않는다. |
-| `X-CSRF-Token` | 항상 반환하며 `__Host-csrf` Cookie와 같은 값이다. 허용 Origin에만 `Access-Control-Expose-Headers: X-CSRF-Token`으로 노출한다. |
-| 미허용 Origin | CORS 응답 헤더를 반환하지 않는다. 브라우저는 응답과 `X-CSRF-Token`을 읽을 수 없다. |
-
-`POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout` 요청은 `credentials: include`와
-`X-CSRF-Token` header를 반드시 보낸다. 서버는 header와 CSRF Cookie의 이중 제출 일치, 그리고 요청 `Origin`의
-allowlist 정확 일치를 모두 검증한다. Origin 누락·불일치 또는 CSRF Token 누락·불일치는 `403 FORBIDDEN`이다.
-`GET /api/v1/auth/csrf`는 CSRF 검증 대상이 아니며 기존 CSRF Token을 회전시키지 않는다.
-
-로그인 요청도 credential을 포함해야 교차 출처 응답의 Refresh Cookie를 브라우저가 저장한다. 보호 업무 API는 계속
-Bearer Access Token으로만 인증하므로 Refresh Cookie나 CSRF Token을 업무 API 인증·인가에 사용하지 않는다.
+로그인·토큰 갱신·로그아웃 요청은 `credentials: include`를 사용해야 교차 출처에서 Refresh Cookie를 저장하거나
+전송할 수 있다. 보호 업무 API는 계속 Bearer Access Token으로만 인증하므로 Refresh Cookie를 업무 API 인증·인가에
+사용하지 않는다.
 
 ## 전역 authority snapshot 계약
 

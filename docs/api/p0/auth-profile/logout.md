@@ -51,7 +51,6 @@ POST /api/v1/auth/logout
 POST /api/v1/auth/logout HTTP/1.1
 Cookie: refreshToken={refreshToken}
 Accept: application/json
-X-CSRF-Token: {csrfToken}
 ```
 
 #### Request Headers
@@ -60,7 +59,6 @@ X-CSRF-Token: {csrfToken}
 | --- | --- | --- |
 | `Authorization` | N | Access Token은 로그아웃 자격으로 사용하지 않으므로 전송하지 않는다. |
 | `Cookie` | N | `refreshToken=<refreshToken>`. 쿠키가 없더라도 로컬 인증 상태 정리를 위해 성공으로 처리한다. |
-| `X-CSRF-Token` | Y | `GET /api/v1/auth/csrf`가 반환한 값이다. `credentials: include`와 함께 전송한다. |
 | `Content-Type` | N | 요청 본문이 없으므로 전송하지 않는다. |
 | `Accept` | N | `application/json` |
 
