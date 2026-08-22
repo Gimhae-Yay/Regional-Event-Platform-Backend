@@ -131,6 +131,15 @@ class SecurityConfigWebMvcTest {
             .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
     }
 
+    @Test
+    void preflight_미허용Method_허용Cors헤더없이거부한다() throws Exception {
+        mockMvc.perform(options("/api/v1/auth/login")
+                .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN)
+                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, HttpMethod.TRACE.name()))
+            .andExpect(status().isForbidden())
+            .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
+    }
+
     @ParameterizedTest
     @MethodSource("authCommandPaths")
     void authCommand_허용Origin_처리하고Cors헤더를반환한다(String path) throws Exception {
