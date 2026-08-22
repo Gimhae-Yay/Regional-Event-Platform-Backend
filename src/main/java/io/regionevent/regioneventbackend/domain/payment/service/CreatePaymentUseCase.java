@@ -184,7 +184,7 @@ public class CreatePaymentUseCase {
         if (reservationPrice == null || !contentSessionService.lockConfirmableReservationTarget(sessionId)) {
             throw new BusinessException(ErrorCode.PAYMENT_HOLD_CONFLICT);
         }
-        return reservationPrice;
+        return Math.multiplyExact(reservationPrice, hold.getQuantity());
     }
 
     private ReservationPriceSnapshot createSnapshot(
