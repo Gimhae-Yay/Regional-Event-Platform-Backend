@@ -220,6 +220,45 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
     }
 
     @Test
+    void holdQuantityIsIncludedInTheSnapshotAndSameKeyRetryKeepsIt() {
+        Fixture fixture = createFixture(3, 3);
+        Coupon coupon = createCoupon(fixture, 3_000);
+        String key = "payment-key-" + System.nanoTime();
+
+        CreatePaymentResponse first = createPaymentUseCase.create(
+            fixture.user().getUserId(),
+            fixture.hold().getHoldId().toString(),
+            new CreatePaymentRequest(JsonNodeFactory.instance.stringNode(coupon.getCouponId().toString())),
+            key,
+            UUID.randomUUID()
+        );
+        CreatePaymentResponse retry = createPaymentUseCase.create(
+            fixture.user().getUserId(),
+            fixture.hold().getHoldId().toString(),
+            new CreatePaymentRequest(JsonNodeFactory.instance.stringNode(coupon.getCouponId().toString())),
+            key,
+            UUID.randomUUID()
+        );
+
+        assertThat(first.payment().amount())
+            .extracting(
+                CreatePaymentResponse.AmountResponse::baseAmount,
+                CreatePaymentResponse.AmountResponse::discountAmount,
+                CreatePaymentResponse.AmountResponse::finalAmount
+            )
+            .containsExactly(60_000L, 3_000L, 57_000L);
+        assertThat(retry.payment().amount()).isEqualTo(first.payment().amount());
+        assertThat(reservationPriceSnapshotRepository.findByCapacityHoldHoldId(fixture.hold().getHoldId()))
+            .hasValueSatisfying(snapshot -> assertThat(snapshot)
+                .extracting(
+                    snapshotValue -> snapshotValue.getBaseAmount(),
+                    snapshotValue -> snapshotValue.getDiscountAmount(),
+                    snapshotValue -> snapshotValue.getFinalAmount()
+                )
+                .containsExactly(60_000L, 3_000L, 57_000L));
+    }
+
+    @Test
     void 비공개_지역의_활성_홀드는_결제와_쿠폰_선점으로_진행하지_않는다() {
         Fixture fixture = createFixture();
         Coupon coupon = createCoupon(fixture, 1_000);
@@ -543,8 +582,8 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
 
     @Test
     void zeroAmountPaymentConsumesTheHoldAndRecordsAllStateTransitions() {
-        Fixture fixture = createFixture();
-        Coupon coupon = createCoupon(fixture, 20_000);
+        Fixture fixture = createFixture(3, 3);
+        Coupon coupon = createCoupon(fixture, 60_000);
         UUID requestId = UUID.randomUUID();
         String key = "payment-key-" + System.nanoTime();
 
@@ -568,6 +607,14 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
         assertThat(retry.reservation().reservationId()).isEqualTo(response.reservation().reservationId());
         assertThat(reservationRepository.findAll()).hasSize(1);
         assertThat(paymentRepository.findAll()).isEmpty();
+        assertThat(reservationPriceSnapshotRepository.findByCapacityHoldHoldId(fixture.hold().getHoldId()))
+            .hasValueSatisfying(snapshot -> assertThat(snapshot)
+                .extracting(
+                    snapshotValue -> snapshotValue.getBaseAmount(),
+                    snapshotValue -> snapshotValue.getDiscountAmount(),
+                    snapshotValue -> snapshotValue.getFinalAmount()
+                )
+                .containsExactly(60_000L, 60_000L, 0L));
         assertThat(couponRepository.findById(coupon.getCouponId())).get()
             .extracting(Coupon::getStatus)
             .isEqualTo(CouponStatus.USED);
@@ -712,6 +759,28 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
     }
 
     @Test
+    void paymentCreationRollsBackWhenHoldQuantityOverflowsTheBaseAmount() {
+        Fixture fixture = createFixture(2, 2);
+        jdbcTemplate.update(
+            "UPDATE content SET reservation_price = ? WHERE content_id = ?",
+            Long.MAX_VALUE,
+            fixture.contentId()
+        );
+
+        assertThatThrownBy(() -> createPaymentUseCase.create(
+            fixture.user().getUserId(),
+            fixture.hold().getHoldId().toString(),
+            new CreatePaymentRequest(null),
+            "payment-key-" + System.nanoTime(),
+            UUID.randomUUID()
+        )).isInstanceOf(ArithmeticException.class);
+
+        assertThat(reservationPriceSnapshotRepository.findAll()).isEmpty();
+        assertThat(paymentRepository.findAll()).isEmpty();
+        assertThat(paymentIdempotencyRepository.findAll()).isEmpty();
+    }
+
+    @Test
     @Timeout(10)
     void paymentCreationUsesThePriceCommittedWhileHoldingTheContentLock() throws Exception {
         Fixture fixture = createFixture();
@@ -852,6 +921,10 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
     }
 
     private Fixture createFixture(int sessionCapacity) {
+        return createFixture(sessionCapacity, 1);
+    }
+
+    private Fixture createFixture(int sessionCapacity, int holdQuantity) {
         return transactionTemplate.execute(status -> {
             String suffix = Long.toUnsignedString(System.nanoTime());
             Instant now = Instant.now();
@@ -902,7 +975,7 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
             ContentSession savedSession = contentSessionRepository.saveAndFlush(session);
             contentSessionRepository.decreaseRemainingCapacityIfReservable(
                 savedSession.getSessionId(),
-                1,
+                holdQuantity,
                 ContentStatus.PUBLISHED,
                 ContentSessionStatus.SCHEDULED
             );
@@ -910,7 +983,7 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
                 region,
                 savedSession,
                 user,
-                1,
+                holdQuantity,
                 CapacityHoldStatus.ACTIVE,
                 now.plusSeconds(600),
                 null,
