@@ -2,9 +2,11 @@ package io.regionevent.regioneventbackend.global.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -58,7 +60,10 @@ import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenSe
 import io.regionevent.regioneventbackend.global.security.common.ApiResponseAccessDeniedHandler;
 import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
 
-@WebMvcTest(SecurityConfigWebMvcTest.SecurityTestController.class)
+@WebMvcTest(
+    value = SecurityConfigWebMvcTest.SecurityTestController.class,
+    properties = "security.cors.allowed-origins=https://local-stamp.org"
+)
 @Import({
     SecurityConfig.class,
     RequestIdFilter.class,
@@ -66,6 +71,9 @@ import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
     SecurityConfigWebMvcTest.SecurityTestController.class
 })
 class SecurityConfigWebMvcTest {
+
+    private static final String ALLOWED_ORIGIN = "https://local-stamp.org";
+    private static final String DISALLOWED_ORIGIN = "https://untrusted.example";
 
     @Autowired
     private MockMvc mockMvc;
@@ -104,6 +112,37 @@ class SecurityConfigWebMvcTest {
         mockMvc.perform(get("/api/v1/contents")
                 .header(HttpHeaders.AUTHORIZATION, "Basic malformed"))
             .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void preflight_허용Origin과IdempotencyKey를허용한다() throws Exception {
+        mockMvc.perform(options("/api/v1/auth/refresh")
+                .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN)
+                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, HttpMethod.POST.name())
+                .header(
+                    HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS,
+                    "Authorization, Content-Type, Idempotency-Key"
+                ))
+            .andExpect(status().isOk())
+            .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, ALLOWED_ORIGIN))
+            .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"))
+            .andExpect(result -> assertThat(
+                result.getResponse().getHeader(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS)
+            ).contains(HttpMethod.POST.name()))
+            .andExpect(result -> assertThat(
+                result.getResponse().getHeader(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS)
+            ).contains("Authorization", "Content-Type", "Idempotency-Key"))
+            .andExpect(result -> assertThat(result.getResponse().getHeaderValues(HttpHeaders.VARY))
+                .anySatisfy(value -> assertThat(String.valueOf(value)).contains("Origin")));
+    }
+
+    @Test
+    void preflight_미허용Origin은거부하고CORS응답헤더를추가하지않는다() throws Exception {
+        mockMvc.perform(options("/api/v1/auth/refresh")
+                .header(HttpHeaders.ORIGIN, DISALLOWED_ORIGIN)
+                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, HttpMethod.POST.name()))
+            .andExpect(status().isForbidden())
+            .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
     }
 
     @Test

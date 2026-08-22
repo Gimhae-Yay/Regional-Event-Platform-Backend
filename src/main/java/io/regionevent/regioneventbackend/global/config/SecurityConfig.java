@@ -2,6 +2,7 @@ package io.regionevent.regioneventbackend.global.config;
 
 import java.time.Clock;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import tools.jackson.databind.ObjectMapper;
@@ -21,6 +22,8 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
 
 import io.regionevent.regioneventbackend.global.security.access.AccessTokenAuthority;
 import io.regionevent.regioneventbackend.global.security.access.BearerAccessTokenAuthenticationFilter;
@@ -41,12 +44,27 @@ import io.regionevent.regioneventbackend.domain.payment.service.PortOneFakePrope
     JwtAccessTokenProperties.class,
     JwtRefreshTokenProperties.class,
     QrTokenProperties.class,
+    CorsProperties.class,
     PortOneProperties.class,
     PortOneFakeProperties.class
 })
 public class SecurityConfig {
 
     private static final int BCRYPT_STRENGTH = 12;
+    private static final List<String> ALLOWED_CORS_METHODS = List.of(
+        HttpMethod.GET.name(),
+        HttpMethod.POST.name(),
+        HttpMethod.PUT.name(),
+        HttpMethod.PATCH.name(),
+        HttpMethod.DELETE.name(),
+        HttpMethod.OPTIONS.name()
+    );
+    private static final List<String> ALLOWED_CORS_HEADERS = List.of(
+        "Authorization",
+        "Content-Type",
+        "Accept",
+        "Idempotency-Key"
+    );
 
     @Bean
     public Clock clock() {
@@ -111,6 +129,17 @@ public class SecurityConfig {
     }
 
     @Bean
+    public CorsConfigurationSource corsConfigurationSource(CorsProperties corsProperties) {
+        CorsConfiguration corsConfiguration = new CorsConfiguration();
+        corsConfiguration.setAllowedOrigins(corsProperties.getAllowedOrigins());
+        corsConfiguration.setAllowedMethods(ALLOWED_CORS_METHODS);
+        corsConfiguration.setAllowedHeaders(ALLOWED_CORS_HEADERS);
+        corsConfiguration.setAllowCredentials(true);
+
+        return request -> corsConfiguration;
+    }
+
+    @Bean
     public SecurityFilterChain securityFilterChain(
         HttpSecurity http,
         BearerAccessTokenAuthenticationFilter bearerAccessTokenAuthenticationFilter,
@@ -119,7 +148,7 @@ public class SecurityConfig {
     ) throws Exception {
         http
             .csrf(AbstractHttpConfigurer::disable)
-            .cors(AbstractHttpConfigurer::disable)
+            .cors(Customizer.withDefaults())
             .httpBasic(AbstractHttpConfigurer::disable)
             .formLogin(AbstractHttpConfigurer::disable)
             .logout(AbstractHttpConfigurer::disable)
