@@ -119,7 +119,7 @@ public class CreatePaymentUseCase {
         }
         PaymentIdempotency idempotency = acquired.idempotency();
         CapacityHold requestedHold = capacityHoldService.findOwnedHold(holdId, user);
-        long baseAmount = lockReservationTarget(requestedHold);
+        long reservationPrice = lockReservationTarget(requestedHold);
         CapacityHold hold = capacityHoldService.findActiveOwnedHoldForUpdate(holdId, user);
         ReservationPriceSnapshot snapshot = reservationPriceSnapshotService.findByHoldIdForUpdate(holdId)
             .orElse(null);
@@ -131,6 +131,7 @@ public class CreatePaymentUseCase {
         }
         boolean snapshotCreated = snapshot == null;
         if (snapshot == null) {
+            long baseAmount = Math.multiplyExact(reservationPrice, hold.getQuantity());
             snapshot = createSnapshot(hold, couponId, user, baseAmount);
         }
         validateSnapshotCoupon(snapshot, couponId);

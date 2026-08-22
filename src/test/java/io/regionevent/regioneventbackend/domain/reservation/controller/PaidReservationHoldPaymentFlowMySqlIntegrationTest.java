@@ -69,6 +69,8 @@ import io.regionevent.regioneventbackend.support.mysql.SharedMySqlTestContainer;
 class PaidReservationHoldPaymentFlowMySqlIntegrationTest extends NonTransactionalMySqlTestSupport {
 
     private static final int RESERVATION_PRICE = 20_000;
+    private static final int HOLD_QUANTITY = 2;
+    private static final long HOLD_BASE_AMOUNT = (long) RESERVATION_PRICE * HOLD_QUANTITY;
     private static final String WEBHOOK_TIMESTAMP = "1785983465";
     private static final String WEBHOOK_SIGNATURE = "v1,signature";
     private static final String TRANSACTION_ID = "transaction-payment-retry";
@@ -137,9 +139,9 @@ class PaidReservationHoldPaymentFlowMySqlIntegrationTest extends NonTransactiona
                 .content("""
                     {
                       "sessionId": "%d",
-                      "quantity": 2
+                      "quantity": %d
                     }
-                    """.formatted(fixture.session().getSessionId())))
+                    """.formatted(fixture.session().getSessionId(), HOLD_QUANTITY)))
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.code").value("SUCCESS"))
             .andExpect(jsonPath("$.data.status").value("ACTIVE"));
@@ -152,7 +154,7 @@ class PaidReservationHoldPaymentFlowMySqlIntegrationTest extends NonTransactiona
         CapacityHold capacityHold = capacityHolds.getFirst();
         Long holdId = capacityHold.getHoldId();
         assertThat(capacityHold.getStatus()).isEqualTo(CapacityHoldStatus.ACTIVE);
-        assertThat(capacityHold.getQuantity()).isEqualTo(2);
+        assertThat(capacityHold.getQuantity()).isEqualTo(HOLD_QUANTITY);
 
         mockMvc.perform(post("/api/v1/me/reservation-holds/{holdId}/payments", holdId)
                 .header("Authorization", bearerToken(fixture.user()))
@@ -164,13 +166,19 @@ class PaidReservationHoldPaymentFlowMySqlIntegrationTest extends NonTransactiona
             .andExpect(jsonPath("$.data.requiresPayment").value(true))
             .andExpect(jsonPath("$.data.payment.holdId").value(holdId.toString()))
             .andExpect(jsonPath("$.data.payment.status").value("PENDING"))
-            .andExpect(jsonPath("$.data.payment.amount.finalAmount").value(RESERVATION_PRICE));
+            .andExpect(jsonPath("$.data.payment.amount.baseAmount").value(HOLD_BASE_AMOUNT))
+            .andExpect(jsonPath("$.data.payment.amount.finalAmount").value(HOLD_BASE_AMOUNT));
 
         assertThat(paymentRepository.findAll())
             .singleElement()
             .satisfies(payment -> assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING));
         assertThat(reservationPriceSnapshotRepository.findByCapacityHoldHoldId(holdId))
-            .hasValueSatisfying(snapshot -> assertThat(snapshot.getFinalAmount()).isEqualTo(RESERVATION_PRICE));
+            .hasValueSatisfying(snapshot -> assertThat(snapshot)
+                .extracting(
+                    snapshotValue -> snapshotValue.getBaseAmount(),
+                    snapshotValue -> snapshotValue.getFinalAmount()
+                )
+                .containsExactly(HOLD_BASE_AMOUNT, HOLD_BASE_AMOUNT));
     }
 
     @Test
