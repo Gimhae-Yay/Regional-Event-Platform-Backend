@@ -90,7 +90,7 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Set-Cookie` | Y | `refreshToken=; Max-Age=0; Path=/api/v1/auth; HttpOnly; Secure; SameSite=<configuredSameSite>`. `<configuredSameSite>`는 공통 인증 계약의 환경별 `Strict` 또는 `None`이고, `Domain`은 생략해 호스트 전용 쿠키로 유지한다. |
+| `Set-Cookie` | Y | `refreshToken=; Max-Age=0; Path=/api/v1/auth; HttpOnly; Secure; SameSite=Strict`. `Domain`은 생략해 호스트 전용 쿠키로 유지한다. |
 
 성공 응답에는 Access Token이나 Refresh Token을 포함하지 않는다.
 

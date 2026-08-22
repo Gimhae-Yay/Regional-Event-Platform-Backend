@@ -15,16 +15,20 @@ Refresh Token은 `Path=/api/v1/auth` 범위의 인증 API에서만 수신하며 
 ## 교차 출처 CORS·Cookie·Origin 검증 계약
 
 교차 출처 브라우저 지원은 [ADR-0114](../../adr/0114-support-cross-origin-browser-authentication-with-configured-allowlist.md)를
-따른다. 허용 Origin은 `https://local-stamp.org` 하나로 고정하며 환경 변수나 런타임 구성으로 변경하지 않는다.
+따른다. 실제 배포 Origin은 문서나 코드 상수가 아니라 다음 환경별 설정으로만 관리한다.
 
-서버는 요청 `Origin`이 `https://local-stamp.org`와 정확히 일치할 때만 `Access-Control-Allow-Origin`에 그 Origin을 넣고
+| 구성 키 | 환경 변수 | 값과 검증 규칙 |
+| --- | --- | --- |
+| `security.cors.allowed-origins` | `SECURITY_CORS_ALLOWED_ORIGINS` | API와 같은 HTTPS site의 쉼표로 구분한 절대 Origin 목록이다. 각 값은 `scheme + host + port`만 가지며 API와 scheme 및 registrable domain이 같아야 한다. 경로·쿼리·fragment·마지막 `/`·와일드카드·정규식을 허용하지 않는다. 비어 있으면 교차 출처를 허용하지 않고, 이 조건을 벗어난 값은 서버 시작을 실패시킨다. |
+
+서버는 요청 `Origin`이 allowlist와 정확히 일치할 때만 `Access-Control-Allow-Origin`에 그 Origin을 넣고
 `Access-Control-Allow-Credentials: true`, `Vary: Origin`을 반환한다. 허용 method는 `GET`, `POST`, `PUT`,
-`PATCH`, `DELETE`, `OPTIONS`이며 허용 request header는 `Authorization`, `Content-Type`, `Accept`다. Origin,
-credential, method, header에 와일드카드를 쓰지 않는다. 사전 요청은 위 단일 Origin과 method·header만으로 인증 전에
+`PATCH`, `DELETE`, `OPTIONS`이며 허용 request header는 `Authorization`, `Content-Type`, `Accept`, `Idempotency-Key`다.
+Origin, credential, method, header에 와일드카드를 쓰지 않는다. 사전 요청은 위 allowlist와 method·header만으로 인증 전에
 처리하며, 미허용 Origin에는 CORS 응답 헤더를 추가하지 않는다.
 
 `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout` 요청은 브라우저가 설정한
-`Origin` header를 반드시 포함해야 한다. 서버는 이 값이 `https://local-stamp.org`와 정확히 일치할 때만 처리하며, Origin 누락·불일치는
+`Origin` header를 반드시 포함해야 한다. 서버는 이 값이 allowlist와 정확히 일치할 때만 처리하며, Origin 누락·불일치는
 `403 FORBIDDEN`이다. 이 경로는 교차 출처 Refresh Cookie를 수신하거나 사용하므로 CORS 처리와 별도로 Origin을
 검증한다. 별도 CSRF Cookie, 전용 요청 header, Token bootstrap API는 제공하지 않는다.
 

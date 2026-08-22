@@ -99,7 +99,7 @@ Accept: application/json
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `Set-Cookie` | Y | `refreshToken=<refreshToken>; Max-Age=1209600; Path=/api/v1/auth; HttpOnly; Secure; SameSite=<configuredSameSite>`. Refresh Token은 발급 시점부터 14일간 유효하며, `<configuredSameSite>`는 공통 인증 계약의 환경별 `Strict` 또는 `None`, `Domain`은 생략한 호스트 전용 값이다. |
+| `Set-Cookie` | Y | `refreshToken=<refreshToken>; Max-Age=1209600; Path=/api/v1/auth; HttpOnly; Secure; SameSite=Strict`. Refresh Token은 발급 시점부터 14일간 유효하며, `Domain`은 생략한 호스트 전용 값이다. |
 
 성공 응답에는 Access Token을 담은 `Authorization` 응답 헤더를 포함하지 않는다.
 

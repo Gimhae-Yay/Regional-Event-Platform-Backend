@@ -138,7 +138,7 @@ Refresh Token은 JSON 본문, `Authorization` 헤더 또는 다른 일반 응답
 `UNAUTHENTICATED` 응답은 다음과 같은 `Set-Cookie` 헤더로 기존 Refresh Token을 제거한다.
 
 ```http
-Set-Cookie: refreshToken=; Max-Age=0; Path=/api/v1/auth; HttpOnly; Secure; SameSite=<configuredSameSite>
+Set-Cookie: refreshToken=; Max-Age=0; Path=/api/v1/auth; HttpOnly; Secure; SameSite=Strict
 ```
 
 오류 응답에는 Access Token, Refresh Token 또는 내부 예외 정보를 포함하지 않는다.
