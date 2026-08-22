@@ -3,6 +3,7 @@ package io.regionevent.regioneventbackend.global.config;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
@@ -48,6 +49,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -101,7 +103,12 @@ class SecurityConfigWebMvcTest {
     @ParameterizedTest
     @MethodSource("publicRequests")
     void publicPath_withoutAccessToken_isAllowed(HttpMethod method, String path) throws Exception {
-        mockMvc.perform(request(method, path))
+        MockHttpServletRequestBuilder requestBuilder = request(method, path);
+        if (isAuthenticationPostRequest(method, path)) {
+            requestBuilder.header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN);
+        }
+
+        mockMvc.perform(requestBuilder)
             .andExpect(result -> assertThat(result.getResponse().getStatus())
                 .isNotIn(401, 403))
             .andExpect(cookie().doesNotExist("JSESSIONID"));
@@ -141,6 +148,30 @@ class SecurityConfigWebMvcTest {
         mockMvc.perform(options("/api/v1/auth/refresh")
                 .header(HttpHeaders.ORIGIN, DISALLOWED_ORIGIN)
                 .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, HttpMethod.POST.name()))
+            .andExpect(status().isForbidden())
+            .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
+    }
+
+    @ParameterizedTest
+    @MethodSource("authCommandPaths")
+    void authCommand_허용Origin이면처리한다(String path) throws Exception {
+        mockMvc.perform(post(path)
+                .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN))
+            .andExpect(status().isNoContent())
+            .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, ALLOWED_ORIGIN));
+    }
+
+    @Test
+    void authCommand_Origin이없으면거부한다() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/login"))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    void authCommand_미허용Origin이면거부하고CORS응답헤더를추가하지않는다() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/login")
+                .header(HttpHeaders.ORIGIN, DISALLOWED_ORIGIN))
             .andExpect(status().isForbidden())
             .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
     }
@@ -350,6 +381,18 @@ class SecurityConfigWebMvcTest {
         );
     }
 
+    private static Stream<String> authCommandPaths() {
+        return Stream.of(
+            "/api/v1/auth/login",
+            "/api/v1/auth/refresh",
+            "/api/v1/auth/logout"
+        );
+    }
+
+    private static boolean isAuthenticationPostRequest(HttpMethod method, String path) {
+        return method == HttpMethod.POST && path.startsWith("/api/v1/auth/");
+    }
+
     private static Stream<Arguments> roleProtectedRequests() {
         return Stream.of(
             Arguments.of(
@@ -526,7 +569,9 @@ class SecurityConfigWebMvcTest {
 
         @PostMapping({
             "/api/v1/auth/signup",
-            "/api/v1/auth/refresh"
+            "/api/v1/auth/login",
+            "/api/v1/auth/refresh",
+            "/api/v1/auth/logout"
         })
         ResponseEntity<Void> publicAuthenticationResource() {
             return ResponseEntity.noContent().build();

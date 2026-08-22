@@ -45,6 +45,20 @@ class CorsPropertiesTest {
     }
 
     @Test
+    void allowedOrigins_쿼리가포함되면_시작하지않는다() {
+        contextRunner
+            .withPropertyValues("security.cors.allowed-origins=https://local-stamp.org?redirect=/app")
+            .run(context -> assertThat(context).hasFailed());
+    }
+
+    @Test
+    void allowedOrigins_fragment가포함되면_시작하지않는다() {
+        contextRunner
+            .withPropertyValues("security.cors.allowed-origins=https://local-stamp.org#login")
+            .run(context -> assertThat(context).hasFailed());
+    }
+
+    @Test
     void allowedOrigins_와일드카드가포함되면_시작하지않는다() {
         contextRunner
             .withPropertyValues("security.cors.allowed-origins=https://*.local-stamp.org")

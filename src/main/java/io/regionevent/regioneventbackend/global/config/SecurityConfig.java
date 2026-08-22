@@ -29,6 +29,7 @@ import io.regionevent.regioneventbackend.global.security.access.AccessTokenAutho
 import io.regionevent.regioneventbackend.global.security.access.BearerAccessTokenAuthenticationFilter;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenProperties;
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
+import io.regionevent.regioneventbackend.global.security.common.AuthCommandOriginFilter;
 import io.regionevent.regioneventbackend.global.security.common.ApiResponseAccessDeniedHandler;
 import io.regionevent.regioneventbackend.global.security.common.ApiResponseAuthenticationEntryPoint;
 import io.regionevent.regioneventbackend.global.security.qr.QrTokenProperties;
@@ -129,6 +130,14 @@ public class SecurityConfig {
     }
 
     @Bean
+    public AuthCommandOriginFilter authCommandOriginFilter(
+        CorsProperties corsProperties,
+        AccessDeniedHandler accessDeniedHandler
+    ) {
+        return new AuthCommandOriginFilter(corsProperties, accessDeniedHandler);
+    }
+
+    @Bean
     public CorsConfigurationSource corsConfigurationSource(CorsProperties corsProperties) {
         CorsConfiguration corsConfiguration = new CorsConfiguration();
         corsConfiguration.setAllowedOrigins(corsProperties.getAllowedOrigins());
@@ -143,6 +152,7 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(
         HttpSecurity http,
         BearerAccessTokenAuthenticationFilter bearerAccessTokenAuthenticationFilter,
+        AuthCommandOriginFilter authCommandOriginFilter,
         AuthenticationEntryPoint authenticationEntryPoint,
         AccessDeniedHandler accessDeniedHandler
     ) throws Exception {
@@ -295,6 +305,10 @@ public class SecurityConfig {
             .addFilterBefore(
                 bearerAccessTokenAuthenticationFilter,
                 UsernamePasswordAuthenticationFilter.class
+            )
+            .addFilterBefore(
+                authCommandOriginFilter,
+                BearerAccessTokenAuthenticationFilter.class
             )
             .securityContext(Customizer.withDefaults());
         return http.build();
