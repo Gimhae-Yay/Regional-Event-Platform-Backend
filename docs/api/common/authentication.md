@@ -11,10 +11,30 @@
 | 토큰 만료·무효 | `401 Unauthorized`, `UNAUTHENTICATED` |
 
 Refresh Token은 `Path=/api/v1/auth` 범위의 인증 API에서만 수신하며 보호 업무 API의 인증 수단으로 사용할 수 없다.
-현재 MVP는 단일 신뢰 사이트 브라우저 클라이언트만 지원하므로 CORS 허용 구성을 두지 않으며, Spring Security의 CSRF
-검사는 적용하지 않는다. 이는 보호 업무 API가 Bearer Access Token으로만 인증되고 Refresh Token이 호스트 전용
-`SameSite=Strict` 쿠키로 위 경로에만 전송된다는 조건에 한정한다. 교차 사이트 또는 신뢰할 수 없는 같은 사이트 하위
-출처를 지원하려면 CSRF 방어·허용 Origin 정책을 ADR과 인증 API 명세에 먼저 확정한다.
+
+## 교차 출처 CORS·Cookie·Origin 검증 계약
+
+교차 출처 브라우저 지원은 [ADR-0114](../../adr/0114-support-cross-origin-browser-authentication-with-configured-allowlist.md)를
+따른다. 실제 배포 Origin은 문서나 코드 상수가 아니라 다음 환경별 설정으로만 관리한다.
+
+| 구성 키 | 환경 변수 | 값과 검증 규칙 |
+| --- | --- | --- |
+| `security.cors.allowed-origins` | `SECURITY_CORS_ALLOWED_ORIGINS` | API와 같은 HTTPS site의 쉼표로 구분한 절대 Origin 목록이다. 각 값은 `scheme + host + port`만 가지며 API와 scheme 및 registrable domain이 같아야 한다. 경로·쿼리·fragment·마지막 `/`·와일드카드·정규식을 허용하지 않는다. 비어 있으면 교차 출처를 허용하지 않고, 이 조건을 벗어난 값은 서버 시작을 실패시킨다. |
+
+서버는 요청 `Origin`이 allowlist와 정확히 일치할 때만 `Access-Control-Allow-Origin`에 그 Origin을 넣고
+`Access-Control-Allow-Credentials: true`, `Vary: Origin`을 반환한다. 허용 method는 `GET`, `POST`, `PUT`,
+`PATCH`, `DELETE`, `OPTIONS`이며 허용 request header는 `Authorization`, `Content-Type`, `Accept`, `Idempotency-Key`다.
+Origin, credential, method, header에 와일드카드를 쓰지 않는다. 사전 요청은 위 allowlist와 method·header만으로 인증 전에
+처리하며, 미허용 Origin에는 CORS 응답 헤더를 추가하지 않는다.
+
+`POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout` 요청은 브라우저가 설정한
+`Origin` header를 반드시 포함해야 한다. 서버는 이 값이 allowlist와 정확히 일치할 때만 처리하며, Origin 누락·불일치는
+`403 FORBIDDEN`이다. 이 경로는 교차 출처 Refresh Cookie를 수신하거나 사용하므로 CORS 처리와 별도로 Origin을
+검증한다. 별도 CSRF Cookie, 전용 요청 header, Token bootstrap API는 제공하지 않는다.
+
+로그인·토큰 갱신·로그아웃 요청은 `credentials: include`를 사용해야 교차 출처에서 Refresh Cookie를 저장하거나
+전송할 수 있다. 보호 업무 API는 계속 Bearer Access Token으로만 인증하므로 Refresh Cookie를 업무 API 인증·인가에
+사용하지 않는다.
 
 ## 전역 authority snapshot 계약
 
