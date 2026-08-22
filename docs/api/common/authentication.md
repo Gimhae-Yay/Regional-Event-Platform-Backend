@@ -14,12 +14,13 @@ Refresh Token은 `Path=/api/v1/auth` 범위의 인증 API에서만 수신하며 
 
 ## 교차 출처 CORS·Cookie·Origin 검증 계약
 
-교차 출처 브라우저 지원은 [ADR-0114](../../adr/0114-support-cross-origin-browser-authentication-with-configured-allowlist.md)를
-따른다. 실제 배포 Origin은 문서나 코드 상수가 아니라 다음 환경별 설정으로만 관리한다.
+교차 출처 브라우저 지원은 [ADR-0114](../../adr/0114-support-cross-origin-browser-authentication-with-configured-allowlist.md)와
+[ADR-0115](../../adr/0115-delegate-same-site-compatibility-to-deployment.md)를 따른다. 실제 배포 Origin은 문서나 코드
+상수가 아니라 다음 환경별 설정으로만 관리한다.
 
 | 구성 키 | 환경 변수 | 값과 검증 규칙 |
 | --- | --- | --- |
-| `security.cors.allowed-origins` | `SECURITY_CORS_ALLOWED_ORIGINS` | API와 같은 HTTPS site의 쉼표로 구분한 절대 Origin 목록이다. 각 값은 `scheme + host + port`만 가지며 API와 scheme 및 registrable domain이 같아야 한다. 경로·쿼리·fragment·마지막 `/`·와일드카드·정규식을 허용하지 않는다. 비어 있으면 교차 출처를 허용하지 않고, 이 조건을 벗어난 값은 서버 시작을 실패시킨다. |
+| `security.cors.allowed-origins` | `SECURITY_CORS_ALLOWED_ORIGINS` | 쉼표로 구분한 HTTPS 절대 Origin 목록이다. 각 값은 `scheme + host + port`만 가지며 경로·쿼리·fragment·마지막 `/`·와일드카드·정규식을 허용하지 않는다. 비어 있으면 교차 출처 CORS를 비활성화한다. 비어 있지 않은 목록의 형식 오류는 서버 시작을 실패시킨다. 서버는 API 공개 Origin·registrable domain 설정을 추가로 받지 않으며, API와 같은 site인지는 판별하지 않는다. `SameSite=Strict` Refresh Cookie를 쓰려면 운영자가 같은 HTTPS site의 프런트 Origin만 등록하고 브라우저 E2E로 Cookie 흐름을 확인한다. |
 
 서버는 요청 `Origin`이 allowlist와 정확히 일치할 때만 `Access-Control-Allow-Origin`에 그 Origin을 넣고
 `Access-Control-Allow-Credentials: true`, `Vary: Origin`을 반환한다. 허용 method는 `GET`, `POST`, `PUT`,
