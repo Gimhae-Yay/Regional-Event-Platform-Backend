@@ -29,6 +29,7 @@ class LoginControllerIntegrationTest {
 
     private static final String EMAIL = "visitor@example.com";
     private static final String PASSWORD = "LocalStamp!2026";
+    private static final String ALLOWED_ORIGIN = "https://frontend.local";
 
     @Autowired
     private MockMvc mockMvc;
@@ -48,6 +49,7 @@ class LoginControllerIntegrationTest {
         userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(user, UserRole.VISITOR, null));
 
         mockMvc.perform(post("/api/v1/auth/login")
+                .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
@@ -78,6 +80,7 @@ class LoginControllerIntegrationTest {
         AppUser user = saveUser(AppUserStatus.ACTIVE, PASSWORD);
 
         mockMvc.perform(post("/api/v1/auth/login")
+                .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(loginRequest(EMAIL, PASSWORD)))
             .andExpect(status().isOk())
@@ -88,6 +91,7 @@ class LoginControllerIntegrationTest {
     @Test
     void login_withInvalidInput_returnsInvalidInputWithoutTokens() throws Exception {
         mockMvc.perform(post("/api/v1/auth/login")
+                .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
@@ -106,6 +110,7 @@ class LoginControllerIntegrationTest {
     @Test
     void login_withUnknownEmail_returnsInvalidCredentialsWithoutTokens() throws Exception {
         mockMvc.perform(post("/api/v1/auth/login")
+                .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(loginRequest(EMAIL, PASSWORD)))
             .andExpect(status().isUnauthorized())
@@ -122,6 +127,7 @@ class LoginControllerIntegrationTest {
         saveUser(AppUserStatus.ACTIVE, PASSWORD);
 
         mockMvc.perform(post("/api/v1/auth/login")
+                .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(loginRequest(EMAIL, "WrongPassword!2026")))
             .andExpect(status().isUnauthorized())
@@ -138,6 +144,7 @@ class LoginControllerIntegrationTest {
         saveUser(AppUserStatus.WITHDRAWING, PASSWORD);
 
         mockMvc.perform(post("/api/v1/auth/login")
+                .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(loginRequest(EMAIL, PASSWORD)))
             .andExpect(status().isUnauthorized())

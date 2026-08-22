@@ -2,6 +2,7 @@ package io.regionevent.regioneventbackend.global.config;
 
 import java.time.Clock;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import tools.jackson.databind.ObjectMapper;
@@ -21,6 +22,10 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.filter.CorsFilter;
 
 import io.regionevent.regioneventbackend.global.security.access.AccessTokenAuthority;
 import io.regionevent.regioneventbackend.global.security.access.BearerAccessTokenAuthenticationFilter;
@@ -28,6 +33,7 @@ import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenPr
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.common.ApiResponseAccessDeniedHandler;
 import io.regionevent.regioneventbackend.global.security.common.ApiResponseAuthenticationEntryPoint;
+import io.regionevent.regioneventbackend.global.security.common.AuthCommandOriginFilter;
 import io.regionevent.regioneventbackend.global.security.qr.QrTokenProperties;
 import io.regionevent.regioneventbackend.global.security.qr.QrTokenService;
 import io.regionevent.regioneventbackend.global.security.refresh.JwtRefreshTokenProperties;
@@ -40,6 +46,7 @@ import io.regionevent.regioneventbackend.domain.payment.service.PortOneFakePrope
 @EnableConfigurationProperties({
     JwtAccessTokenProperties.class,
     JwtRefreshTokenProperties.class,
+    CorsProperties.class,
     QrTokenProperties.class,
     PortOneProperties.class,
     PortOneFakeProperties.class
@@ -103,6 +110,19 @@ public class SecurityConfig {
     }
 
     @Bean
+    public CorsConfigurationSource corsConfigurationSource(CorsProperties corsProperties) {
+        CorsConfiguration corsConfiguration = new CorsConfiguration();
+        corsConfiguration.setAllowedOrigins(corsProperties.getAllowedOrigins());
+        corsConfiguration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        corsConfiguration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Idempotency-Key"));
+        corsConfiguration.setAllowCredentials(true);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", corsConfiguration);
+        return source;
+    }
+
+    @Bean
     public BearerAccessTokenAuthenticationFilter bearerAccessTokenAuthenticationFilter(
         JwtAccessTokenService jwtAccessTokenService,
         AuthenticationEntryPoint authenticationEntryPoint
@@ -114,12 +134,13 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(
         HttpSecurity http,
         BearerAccessTokenAuthenticationFilter bearerAccessTokenAuthenticationFilter,
+        CorsProperties corsProperties,
         AuthenticationEntryPoint authenticationEntryPoint,
         AccessDeniedHandler accessDeniedHandler
     ) throws Exception {
         http
             .csrf(AbstractHttpConfigurer::disable)
-            .cors(AbstractHttpConfigurer::disable)
+            .cors(Customizer.withDefaults())
             .httpBasic(AbstractHttpConfigurer::disable)
             .formLogin(AbstractHttpConfigurer::disable)
             .logout(AbstractHttpConfigurer::disable)
@@ -262,6 +283,10 @@ public class SecurityConfig {
             .exceptionHandling(exceptionHandling -> exceptionHandling
                 .authenticationEntryPoint(authenticationEntryPoint)
                 .accessDeniedHandler(accessDeniedHandler)
+            )
+            .addFilterBefore(
+                new AuthCommandOriginFilter(corsProperties, accessDeniedHandler),
+                CorsFilter.class
             )
             .addFilterBefore(
                 bearerAccessTokenAuthenticationFilter,

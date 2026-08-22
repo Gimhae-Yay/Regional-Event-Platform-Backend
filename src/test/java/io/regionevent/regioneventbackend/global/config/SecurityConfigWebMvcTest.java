@@ -2,9 +2,11 @@ package io.regionevent.regioneventbackend.global.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -67,6 +69,9 @@ import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
 })
 class SecurityConfigWebMvcTest {
 
+    private static final String ALLOWED_ORIGIN = "https://frontend.local";
+    private static final String DISALLOWED_ORIGIN = "https://untrusted.local";
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -88,6 +93,84 @@ class SecurityConfigWebMvcTest {
         assertThat(applicationContext.getBeansOfType(Flyway.class)).isEmpty();
         assertThat(applicationContext.getBeansOfType(EntityManagerFactory.class)).isEmpty();
         assertThat(applicationContext.getBeansOfType(HikariDataSource.class)).isEmpty();
+    }
+
+    @Test
+    void preflight_허용Origin과허용Header_인증전에Cors응답을반환한다() throws Exception {
+        mockMvc.perform(options("/api/v1/auth/login")
+                .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN)
+                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, HttpMethod.POST.name())
+                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "Content-Type, Idempotency-Key"))
+            .andExpect(status().isOk())
+            .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, ALLOWED_ORIGIN))
+            .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"))
+            .andExpect(header().string(
+                HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS,
+                org.hamcrest.Matchers.containsString("Idempotency-Key")
+            ))
+            .andExpect(header().string(HttpHeaders.VARY, org.hamcrest.Matchers.containsString(HttpHeaders.ORIGIN)));
+    }
+
+    @Test
+    void preflight_미허용Origin_허용Cors헤더없이거부한다() throws Exception {
+        mockMvc.perform(options("/api/v1/auth/login")
+                .header(HttpHeaders.ORIGIN, DISALLOWED_ORIGIN)
+                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, HttpMethod.POST.name()))
+            .andExpect(status().isForbidden())
+            .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN))
+            .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS));
+    }
+
+    @Test
+    void preflight_미허용Header_허용Cors헤더없이거부한다() throws Exception {
+        mockMvc.perform(options("/api/v1/auth/login")
+                .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN)
+                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, HttpMethod.POST.name())
+                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "X-Requested-With"))
+            .andExpect(status().isForbidden())
+            .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
+    }
+
+    @ParameterizedTest
+    @MethodSource("authCommandPaths")
+    void authCommand_허용Origin_처리하고Cors헤더를반환한다(String path) throws Exception {
+        mockMvc.perform(request(HttpMethod.POST, path)
+                .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN))
+            .andExpect(status().isNoContent())
+            .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, ALLOWED_ORIGIN))
+            .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"))
+            .andExpect(header().string(HttpHeaders.VARY, org.hamcrest.Matchers.containsString(HttpHeaders.ORIGIN)));
+    }
+
+    @ParameterizedTest
+    @MethodSource("authCommandPaths")
+    void authCommand_Origin누락_Forbidden으로거부한다(String path) throws Exception {
+        mockMvc.perform(request(HttpMethod.POST, path))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+            .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
+    }
+
+    @ParameterizedTest
+    @MethodSource("authCommandPaths")
+    void authCommand_미허용Origin_Forbidden으로거부한다(String path) throws Exception {
+        mockMvc.perform(request(HttpMethod.POST, path)
+                .header(HttpHeaders.ORIGIN, DISALLOWED_ORIGIN))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+            .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
+    }
+
+    @Test
+    void protectedPath_허용Origin과BearerToken_Cors헤더를반환한다() throws Exception {
+        String accessToken = jwtAccessTokenService.issue(1L);
+
+        mockMvc.perform(get("/test/protected")
+                .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+            .andExpect(status().isOk())
+            .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, ALLOWED_ORIGIN))
+            .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
     }
 
     @ParameterizedTest
@@ -296,9 +379,6 @@ class SecurityConfigWebMvcTest {
     private static Stream<Arguments> publicRequests() {
         return Stream.of(
             Arguments.of(HttpMethod.POST, "/api/v1/auth/signup"),
-            Arguments.of(HttpMethod.POST, "/api/v1/auth/login"),
-            Arguments.of(HttpMethod.POST, "/api/v1/auth/refresh"),
-            Arguments.of(HttpMethod.POST, "/api/v1/auth/logout"),
             Arguments.of(HttpMethod.GET, "/api/v1/regions"),
             Arguments.of(HttpMethod.GET, "/api/v1/regions/1/home"),
             Arguments.of(HttpMethod.GET, "/api/v1/regions/1/missions"),
@@ -308,6 +388,14 @@ class SecurityConfigWebMvcTest {
             Arguments.of(HttpMethod.GET, "/api/v1/contents/1/reviews"),
             Arguments.of(HttpMethod.GET, "/api/v1/contents/1/sessions"),
             Arguments.of(HttpMethod.GET, "/api/v1/sessions/1")
+        );
+    }
+
+    private static Stream<String> authCommandPaths() {
+        return Stream.of(
+            "/api/v1/auth/login",
+            "/api/v1/auth/refresh",
+            "/api/v1/auth/logout"
         );
     }
 
@@ -487,6 +575,8 @@ class SecurityConfigWebMvcTest {
 
         @PostMapping({
             "/api/v1/auth/signup",
+            "/api/v1/auth/login",
+            "/api/v1/auth/logout",
             "/api/v1/auth/refresh"
         })
         ResponseEntity<Void> publicAuthenticationResource() {

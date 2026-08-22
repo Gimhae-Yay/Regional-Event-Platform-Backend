@@ -25,6 +25,8 @@ import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenSer
 @AutoConfigureMockMvc
 class LogoutControllerIntegrationTest {
 
+    private static final String ALLOWED_ORIGIN = "https://frontend.local";
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -40,6 +42,7 @@ class LogoutControllerIntegrationTest {
     @Test
     void logout_제출된토큰을검증하지않고Cookie를만료한다() throws Exception {
         mockMvc.perform(post("/api/v1/auth/logout")
+                .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN)
                 .cookie(new Cookie("refreshToken", "copied-token")))
             .andExpect(status().isOk())
             .andExpect(header().string(HttpHeaders.SET_COOKIE, org.hamcrest.Matchers.containsString("Max-Age=0")))
@@ -58,6 +61,7 @@ class LogoutControllerIntegrationTest {
         String copiedRefreshToken = refreshTokenService.issue(user.getUserId());
 
         mockMvc.perform(post("/api/v1/auth/logout")
+                .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN)
                 .cookie(new Cookie("refreshToken", copiedRefreshToken)))
             .andExpect(status().isOk())
             .andExpect(header().string(HttpHeaders.SET_COOKIE, org.hamcrest.Matchers.containsString("Max-Age=0")));

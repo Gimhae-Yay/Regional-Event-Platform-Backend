@@ -31,6 +31,8 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
 })
 class LoginControllerWebMvcTest extends UserControllerWebMvcTestSupport {
 
+    private static final String ALLOWED_ORIGIN = "https://frontend.local";
+
     @Test
     void login_유효한요청_토큰과역할을응답한다() throws Exception {
         when(loginUseCase.login(any())).thenReturn(new LoginResult(
@@ -39,6 +41,7 @@ class LoginControllerWebMvcTest extends UserControllerWebMvcTestSupport {
         ));
 
         mockMvc.perform(post("/api/v1/auth/login")
+                .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
@@ -68,6 +71,7 @@ class LoginControllerWebMvcTest extends UserControllerWebMvcTestSupport {
     @Test
     void login_입력이유효하지않음_입력오류를응답하고유스케이스를호출하지않는다() throws Exception {
         mockMvc.perform(post("/api/v1/auth/login")
+                .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
@@ -89,6 +93,7 @@ class LoginControllerWebMvcTest extends UserControllerWebMvcTestSupport {
         when(loginUseCase.login(any())).thenThrow(new BusinessException(ErrorCode.INVALID_CREDENTIALS));
 
         mockMvc.perform(post("/api/v1/auth/login")
+                .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(loginRequest()))
             .andExpect(status().isUnauthorized())

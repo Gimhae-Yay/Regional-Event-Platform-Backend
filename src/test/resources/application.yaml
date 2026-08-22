@@ -13,6 +13,9 @@ management:
           - metrics
 
 security:
+  cors:
+    allowed-origins:
+      - https://frontend.local
   jwt:
     access:
       issuer: regional-event-platform

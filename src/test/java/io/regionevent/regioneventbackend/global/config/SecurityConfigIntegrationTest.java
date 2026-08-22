@@ -192,9 +192,6 @@ class SecurityConfigIntegrationTest {
     private static Stream<Arguments> publicRequests() {
         return Stream.of(
             Arguments.of(HttpMethod.POST, "/api/v1/auth/signup"),
-            Arguments.of(HttpMethod.POST, "/api/v1/auth/login"),
-            Arguments.of(HttpMethod.POST, "/api/v1/auth/refresh"),
-            Arguments.of(HttpMethod.POST, "/api/v1/auth/logout"),
             Arguments.of(HttpMethod.GET, "/api/v1/regions"),
             Arguments.of(HttpMethod.GET, "/api/v1/regions/1/home"),
             Arguments.of(HttpMethod.GET, "/api/v1/regions/1/missions"),
