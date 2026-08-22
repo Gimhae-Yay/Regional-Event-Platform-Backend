@@ -6,6 +6,7 @@ services:
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      SECURITY_CORS_ALLOWED_ORIGINS: ${SECURITY_CORS_ALLOWED_ORIGINS:?SECURITY_CORS_ALLOWED_ORIGINS must be set}
       AUTH_REDIS_HOST: ${AUTH_REDIS_HOST:?AUTH_REDIS_HOST must be set}
       AUTH_REDIS_PORT: ${AUTH_REDIS_PORT:-6379}
       # Terraform user-data가 SSM SecureString을 .env에만 기록합니다.
