@@ -19,7 +19,11 @@ Refresh Token은 `Path=/api/v1/auth` 범위의 인증 API에서만 수신하며 
 
 | 구성 키 | 환경 변수 | 값과 검증 규칙 |
 | --- | --- | --- |
-| `security.cors.allowed-origins` | `SECURITY_CORS_ALLOWED_ORIGINS` | API와 같은 HTTPS site의 쉼표로 구분한 절대 Origin 목록이다. 각 값은 `scheme + host + port`만 가지며 API와 scheme 및 registrable domain이 같아야 한다. 경로·쿼리·fragment·마지막 `/`·와일드카드·정규식을 허용하지 않는다. 비어 있으면 교차 출처를 허용하지 않고, 이 조건을 벗어난 값은 서버 시작을 실패시킨다. |
+| `security.cors.allowed-origins` | `SECURITY_CORS_ALLOWED_ORIGINS` | 쉼표로 구분한 HTTPS Origin allowlist다. 비어 있으면 교차 출처를 허용하지 않으며, 아래 두 site 설정을 요구하지 않는다. 비어 있지 않으면 각 값은 API 공개 Origin과 같은 scheme 및 명시한 site 기준 도메인에 속해야 한다. |
+| `security.cors.api-public-origin` | `SECURITY_CORS_API_PUBLIC_ORIGIN` | allowlist가 비어 있지 않을 때 필수인 API의 공개 HTTPS Origin이다. 허용 Origin과 같은 site 기준에 속해야 한다. |
+| `security.cors.site-registrable-domain` | `SECURITY_CORS_SITE_REGISTRABLE_DOMAIN` | allowlist가 비어 있지 않을 때 필수인 신뢰된 site 기준 도메인이다. API 공개 Origin과 모든 허용 Origin의 host는 이 값과 같거나 그 하위 도메인이어야 한다. 현재 의존성에는 Public Suffix List 처리기가 없으므로 마지막 두 라벨 비교를 사용하지 않는다. |
+
+API 공개 Origin과 허용 Origin은 `scheme + host + port`만 가지는 HTTPS Origin이어야 한다. IP host·경로·쿼리·fragment·마지막 `/`·사용자 정보·와일드카드·정규식을 허용하지 않으며, 조건을 벗어난 값은 서버 시작을 실패시킨다. HTTPS 기본 포트 `:443`은 생략하고 host는 소문자로 정규화해 브라우저 `Origin` 직렬화와 일치시킨다. 실제 배포 값은 저장소에 넣지 않고 위 환경 변수로만 주입한다.
 
 서버는 요청 `Origin`이 allowlist와 정확히 일치할 때만 `Access-Control-Allow-Origin`에 그 Origin을 넣고
 `Access-Control-Allow-Credentials: true`, `Vary: Origin`을 반환한다. 허용 method는 `GET`, `POST`, `PUT`,

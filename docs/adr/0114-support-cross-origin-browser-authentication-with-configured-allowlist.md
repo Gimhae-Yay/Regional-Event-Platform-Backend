@@ -20,11 +20,13 @@ credential Cookie 또는 CSRF 경계에서 계약을 잃는다.
 다만 `SameSite=Strict` Refresh Cookie는 API와 같은 HTTPS site의 프런트엔드에서만 전송된다. 허용 Origin을 넓게
 해석하거나 와일드카드로 대체하면 credential Cookie가 있는 브라우저 인증 경계를 무너뜨린다. Stateless Bearer 업무
 API와 Refresh Cookie의 경계를 유지한 채, API와 같은 HTTPS site의 정확한 Origin만 구성으로 받고 Cookie 기반 인증
-명령의 Origin을 서버에서 검증해야 한다.
+명령의 Origin을 서버에서 검증해야 한다. 현재 의존성에는 Public Suffix List로 registrable domain을 계산하는 수단이 없으므로,
+호스트의 마지막 두 라벨을 비교하는 휴리스틱을 사용하지 않는다.
 
 ## 결정 동인과 불변 조건
 
-- 허용 Origin은 API와 같은 HTTPS site인 환경별 구성의 정확한 `scheme + host + port` 값만 허용하며, 와일드카드·정규식·경로·쿼리·fragment를 허용하지 않는다.
+- allowlist가 비어 있지 않으면 API 공개 Origin과 명시적인 site 기준 도메인을 함께 설정하고, API 공개 Origin과 허용 Origin이 모두 그 site 기준에 속하는지 기동 시 검증한다.
+- API 공개 Origin과 허용 Origin은 정확한 `scheme + host + port` 값만 허용하며, IP host·와일드카드·정규식·경로·쿼리·fragment·사용자 정보를 허용하지 않는다.
 - Refresh Token은 계속 호스트 전용 `HttpOnly`·`Secure`·`SameSite=Strict` Cookie이고 `/api/v1/auth`에서만 수신하며, 보호 업무 API의 인증 수단이 될 수 없다.
 - CORS credential을 허용하더라도 Access Token은 JSON 본문으로만 받고 보호 업무 API는 `Authorization: Bearer`만으로 인증한다.
 - Refresh Cookie를 수신하거나 사용하는 인증 명령은 CORS 처리와 별도로 정확한 `Origin` 검증을 통과해야 한다.
@@ -35,17 +37,23 @@ API와 Refresh Cookie의 경계를 유지한 채, API와 같은 HTTPS site의 �
 
 | 순서 | 선택지 | 장점 | 단점·실패 위험 | 되돌림 비용 | 현재 단계 적합성 |
 | --- | --- | --- | --- | --- | --- |
-| 1 | 같은 HTTPS site의 환경별 정확한 allowlist, `SameSite=Strict`, credential CORS와 서버 Origin 검증 | 배포 Origin을 코드에 고정하지 않으면서 필요한 교차 Origin만 허용한다. 별도 Token 발급·저장·회전 API 없이 Cookie 기반 인증 명령을 보호하고 `SameSite=Strict`를 유지한다. | Origin 설정 오류는 요청 차단으로 드러난다. | 낮음 | 추천안. #1023·#1024의 환경별 Origin 조건과 현재 Stateless Bearer·제한된 Refresh Cookie 경계에 맞는다. |
+| 1 | API 공개 Origin·명시적 site 기준 도메인·환경별 정확한 allowlist, `SameSite=Strict`, credential CORS와 서버 Origin 검증 | Public Suffix List 의존성이나 불완전한 호스트 휴리스틱 없이 API와 허용 Origin의 site 소속을 기동 시 검증한다. 배포 Origin을 코드에 고정하지 않으면서 필요한 교차 Origin만 허용한다. | site 기준 도메인 설정이 하나 더 필요하며, 설정 오류는 요청 차단으로 드러난다. | 낮음 | 추천안. #1023·#1024의 환경별 Origin 조건과 현재 Stateless Bearer·제한된 Refresh Cookie 경계에 맞는다. |
 | 2 | 단일 Origin을 코드에 고정 | 환경 변수 오설정을 줄이고 계약이 단순하다. | 배포 Origin 변경에 코드 변경이 필요하며 #1023·#1024의 환경별 설정 완료 조건을 충족하지 못한다. | 중간 | 현재 이슈 범위에 맞지 않는다. |
 | 3 | 동일 Origin 프록시만 유지 | Cookie와 CSRF 계약이 단순하다. | #1023의 서로 다른 Origin 배포 조건을 충족하지 못하며 배포 선택지를 제한한다. | 낮음 | 현재 요구사항에 맞지 않는다. |
 
 ## 결정
 
-`security.cors.allowed-origins`를 교차 출처 브라우저 요청의 유일한 allowlist로 둔다. 환경 변수
-`SECURITY_CORS_ALLOWED_ORIGINS`는 API와 같은 HTTPS site의 쉼표로 구분한 절대 Origin 목록이며, 예를 들어
-`https://local-stamp.org`처럼 경로와 마지막 `/` 없이 설정한다. 각 값은 API와 scheme 및 registrable domain이 같아야
-한다. 실제 값은 환경 변수에서만 관리하고 저장소에는 넣지 않는다. 비어 있으면 CORS 응답 헤더를 추가하지 않고, 이 조건을
-벗어난 값은 서버 시작을 실패시킨다.
+`security.cors.allowed-origins`를 교차 출처 브라우저 요청의 유일한 allowlist로 둔다. allowlist가 비어 있으면 CORS
+응답 헤더를 추가하지 않으며, `security.cors.api-public-origin`과 `security.cors.site-registrable-domain`을 요구하거나
+검증하지 않는다.
+
+allowlist가 비어 있지 않으면 환경 변수 `SECURITY_CORS_ALLOWED_ORIGINS`,
+`SECURITY_CORS_API_PUBLIC_ORIGIN`, `SECURITY_CORS_SITE_REGISTRABLE_DOMAIN`을 함께 설정한다. API 공개 Origin과 허용
+Origin은 HTTPS Origin 형식이고 IP host·경로·쿼리·fragment·사용자 정보·와일드카드가 없어야 한다. 기본 HTTPS 포트
+`443`은 생략하고 host는 소문자로 정규화해 브라우저 `Origin` 직렬화와 일치시킨다. API 공개 Origin의 host와 모든 허용
+Origin host는 명시적으로 설정한 site 기준 도메인과 같거나 그 하위 도메인이어야 한다. 이 기준 도메인은 Public Suffix List를
+대신하는 환경별 신뢰 기준이며, 마지막 두 라벨 비교로 추론하지 않는다. 실제 값은 환경 변수에서만 관리하고 저장소에는 넣지
+않는다. 이 조건을 벗어난 설정은 서버 시작을 실패시킨다.
 
 구현은 요청 `Origin`을 목록과 정확히 비교해 일치할 때만 해당 값을 `Access-Control-Allow-Origin`에 반영하고
 `Access-Control-Allow-Credentials: true`, `Vary: Origin`을 보낸다. 허용 method는 `GET`, `POST`, `PUT`, `PATCH`,
@@ -70,7 +78,7 @@ Refresh Cookie를 수신하거나 사용하는 `POST /api/v1/auth/login`, `POST 
 
 ### 기대 효과
 
-- 프런트엔드와 API의 실제 배포 Origin을 환경별로 바꾸면서도 같은 HTTPS site의 정확한 Origin만 허용한다.
+- 프런트엔드와 API의 실제 배포 Origin을 환경별로 바꾸면서도 명시적인 site 기준에 속하는 정확한 Origin만 허용한다.
 - 허용 Origin의 JSON·Bearer 요청은 필요한 사전 요청과 credential Cookie 계약을 일관되게 사용한다.
 - Refresh Cookie를 쓰는 로그인·토큰 갱신·로그아웃 등 인증 명령은 CORS만 믿지 않고 서버에서 `Origin`을 함께 검증한다.
 - Refresh Cookie와 Bearer 업무 API의 분리, 무상태 Access Token 검증, 호스트 전용 Cookie 경계는 유지한다.
@@ -78,7 +86,8 @@ Refresh Cookie를 수신하거나 사용하는 `POST /api/v1/auth/login`, `POST 
 ### 수용한 단점과 위험
 
 - Origin 목록 오설정은 의도적으로 인증 명령을 `403 FORBIDDEN`으로 막는다. 운영 장애를 피하려고 와일드카드로 완화하지 않는다.
-- API와 다른 site의 Origin을 설정하면 `SameSite=Strict` Cookie가 인증 명령에 전송되지 않으므로, 시작 단계에서 거부한다.
+- API 공개 Origin 또는 허용 Origin이 명시한 site 기준에서 벗어나면 `SameSite=Strict` Cookie가 인증 명령에 전송되지 않을 수 있으므로, 시작 단계에서 거부한다.
+- site 기준 도메인은 환경 설정으로 관리해야 한다. Public Suffix List가 필요한 동적·다중 site 정책은 현재 범위에 포함하지 않는다.
 - 서버가 Origin 없는 브라우저 인증 명령을 허용하면 교차 사이트 form 요청을 구분할 수 없으므로, 호환성보다 fail-closed를 택한다.
 
 ## 전환과 롤백
@@ -94,7 +103,8 @@ Refresh Cookie를 수신하거나 사용하는 `POST /api/v1/auth/login`, `POST 
 ## 검증 방법
 
 - 허용 Origin과 허용 method·header 조합의 `OPTIONS`가 정확한 `Access-Control-Allow-*`와 `Vary: Origin`을 반환하는지 검증한다.
-- 미허용 Origin, API와 다른 site·와일드카드·경로를 포함한 설정값, 허용하지 않은 method·header, 비어 있는 allowlist가 CORS credential을 허용하지 않는지 검증한다.
+- 같은 site의 API·프런트 Origin 조합은 허용하고, 다른 site·다른 scheme·IP host·와일드카드·경로를 포함한 설정값과 API 공개 Origin 누락은 기동 실패하는지 검증한다.
+- 기본 HTTPS 포트와 host 대소문자가 브라우저 Origin 형식으로 정규화되고, 비어 있는 allowlist가 CORS credential을 허용하지 않는지 검증한다.
 - 허용 Origin의 로그인·재발급·로그아웃 요청만 성공하고, 다른 Origin·Origin 누락은 `403 FORBIDDEN`인지 검증한다.
 - 같은 HTTPS site 환경에서 `SameSite=Strict` Refresh Cookie 송수신, 로그인 후 Bearer 보호 API 응답 읽기, 로그아웃 Cookie 만료를 실제 브라우저 E2E로 검증한다.
 - 응답·로그에 Refresh Token 원문이 남지 않고, 보호 업무 API가 Refresh Cookie만으로 인증되지 않는지 검증한다.
