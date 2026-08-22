@@ -18,7 +18,7 @@ import org.springframework.http.HttpHeaders;
 })
 class LogoutControllerWebMvcTest extends UserControllerWebMvcTestSupport {
 
-    private static final String ALLOWED_ORIGIN = "https://frontend.local";
+    private static final String ALLOWED_ORIGIN = "https://frontend.example.test";
 
     @Test
     void logout_RefreshToken유무와무관하게Cookie만만료한다() throws Exception {

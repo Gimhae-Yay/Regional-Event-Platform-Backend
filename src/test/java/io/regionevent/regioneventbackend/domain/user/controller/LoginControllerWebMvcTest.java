@@ -31,7 +31,7 @@ import io.regionevent.regioneventbackend.global.error.ErrorCode;
 })
 class LoginControllerWebMvcTest extends UserControllerWebMvcTestSupport {
 
-    private static final String ALLOWED_ORIGIN = "https://frontend.local";
+    private static final String ALLOWED_ORIGIN = "https://frontend.example.test";
 
     @Test
     void login_유효한요청_토큰과역할을응답한다() throws Exception {

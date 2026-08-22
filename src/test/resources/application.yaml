@@ -15,7 +15,9 @@ management:
 security:
   cors:
     allowed-origins:
-      - https://frontend.local
+      - https://frontend.example.test
+    api-public-origin: https://api.example.test
+    site-registrable-domain: example.test
   jwt:
     access:
       issuer: regional-event-platform

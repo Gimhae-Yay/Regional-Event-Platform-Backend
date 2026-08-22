@@ -25,7 +25,7 @@ import io.regionevent.regioneventbackend.global.security.refresh.RefreshTokenSer
 @AutoConfigureMockMvc
 class LogoutControllerIntegrationTest {
 
-    private static final String ALLOWED_ORIGIN = "https://frontend.local";
+    private static final String ALLOWED_ORIGIN = "https://frontend.example.test";
 
     @Autowired
     private MockMvc mockMvc;

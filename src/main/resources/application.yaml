@@ -21,6 +21,8 @@ security:
       active-key: ${JWT_REFRESH_ACTIVE_KEY}
   cors:
     allowed-origins: ${SECURITY_CORS_ALLOWED_ORIGINS:}
+    api-public-origin: ${SECURITY_CORS_API_PUBLIC_ORIGIN:}
+    site-registrable-domain: ${SECURITY_CORS_SITE_REGISTRABLE_DOMAIN:}
   qr:
     active-key-id: ${QR_ACTIVE_KEY_ID}
     active-key: ${QR_ACTIVE_KEY}

@@ -69,7 +69,7 @@ import io.regionevent.regioneventbackend.global.error.GlobalExceptionHandler;
 })
 class SecurityConfigWebMvcTest {
 
-    private static final String ALLOWED_ORIGIN = "https://frontend.local";
+    private static final String ALLOWED_ORIGIN = "https://frontend.example.test";
     private static final String DISALLOWED_ORIGIN = "https://untrusted.local";
 
     @Autowired

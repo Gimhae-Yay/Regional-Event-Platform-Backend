@@ -29,7 +29,7 @@ class LoginControllerIntegrationTest {
 
     private static final String EMAIL = "visitor@example.com";
     private static final String PASSWORD = "LocalStamp!2026";
-    private static final String ALLOWED_ORIGIN = "https://frontend.local";
+    private static final String ALLOWED_ORIGIN = "https://frontend.example.test";
 
     @Autowired
     private MockMvc mockMvc;
