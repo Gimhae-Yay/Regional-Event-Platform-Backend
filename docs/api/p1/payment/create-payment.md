@@ -86,6 +86,9 @@ Accept: application/json
 ### Response
 
 두 가지 결과가 있다. 최종 금액이 양수이면 결제 시도가 생성되고, 0원이면 결제 없이 예약이 즉시 확정된다.
+`baseAmount`는 잠금으로 읽은 콘텐츠의 1인 `reservationPrice`와 활성 홀드의 `quantity`를 곱한 금액이다.
+이후 쿠폰 할인 금액을 뺀 `finalAmount`를 가격 스냅샷에 고정한다. 아래 양수 결제 예시는 1인 예약 가격
+`20,000원`, 예약 인원 `3명`, 쿠폰 할인 `3,000원`을 적용한 결과다.
 
 #### Status
 
@@ -110,9 +113,9 @@ Accept: application/json
       "orderId": "ORD-20260806-9F3K7Q",
       "status": "PENDING",
       "amount": {
-        "baseAmount": 20000,
+        "baseAmount": 60000,
         "discountAmount": 3000,
-        "finalAmount": 17000,
+        "finalAmount": 57000,
         "currency": "KRW"
       },
       "createdAt": "2026-08-06T02:30:00Z"
@@ -158,9 +161,9 @@ Accept: application/json
 | `data.payment.holdId` | String | 결제 대상 정원 홀드 식별자다. |
 | `data.payment.orderId` | String | 서버가 발급한 내부 주문 식별자다. 클라이언트는 이 값으로 PortOne 결제 절차를 시작한다. |
 | `data.payment.status` | String | 항상 `PENDING`이다. |
-| `data.payment.amount.baseAmount` | Integer | 쿠폰 적용 전 기본 금액이다. |
+| `data.payment.amount.baseAmount` | Integer | 쿠폰 적용 전 기본 금액이다. 잠금으로 읽은 콘텐츠의 1인 `reservationPrice`와 활성 홀드의 `quantity`를 곱한다. 예: `20,000원 × 3명 = 60,000원`이다. |
 | `data.payment.amount.discountAmount` | Integer | 쿠폰 할인 금액이다. 쿠폰을 적용하지 않으면 `0`이다. |
-| `data.payment.amount.finalAmount` | Integer | 결제할 최종 금액이다. `baseAmount - discountAmount`이며 항상 1 이상이다. |
+| `data.payment.amount.finalAmount` | Integer | 결제할 최종 금액이다. `baseAmount - discountAmount`이며 항상 1 이상이다. 예: `60,000원 - 3,000원 = 57,000원`이다. |
 | `data.payment.amount.currency` | String | 통화 코드다. 현재는 항상 `KRW`다. |
 | `data.payment.createdAt` | String | 결제 시도 생성 시각이다. UTC ISO 8601 형식이다. |
 | `data.reservation` | Object 또는 null | `requiresPayment = false`일 때만 값이 있다. |
@@ -205,9 +208,9 @@ Accept: application/json
 3. 멱등 키의 논리 유일 범위는 `(actor_user_id, operation = PAYMENT_CREATE, idempotency_key_hash)`다. `request_hash`는 정규화한 `(holdId, couponId)`로 계산하고 쿠폰을 적용하지 않으면 `couponId = null`을 포함한다. 성공 기록은 양수 결제의 `payment_id` 또는 0원 확정의 `reservation_id` 중 정확히 하나를 연결한다. 같은 키·같은 요청 해시면 연결된 결과를 반환하고 새 스냅샷·결제·멱등 작업을 실행하지 않는다. 같은 키·다른 요청 해시는 `409 IDEMPOTENCY_KEY_CONFLICT`로 거부한다.
 4. 대상 홀드는 유효한 `ACTIVE` 상태여야 하고 `expires_at`이 MySQL 기준 현재 시각보다 미래여야 한다.
 5. 홀드에 이미 다른 `Idempotency-Key`로 생성된 진행 중 `PENDING` 결제가 있으면 새 결제를 만들지 않고 `409 PAYMENT_HOLD_CONFLICT`로 거부한다. 홀드당 진행 중 결제는 최대 하나다.
-6. 홀드에 아직 `reservation_price_snapshot`이 없으면 이 요청에서 한 번만 생성한다(`UNIQUE (hold_id)`). 같은 홀드의 재시도는 항상 같은 스냅샷을 사용한다.
+6. 홀드에 아직 `reservation_price_snapshot`이 없으면 콘텐츠 행을 잠금으로 읽고, `base_amount = content.reservation_price × capacity_hold.quantity`를 산정해 이 요청에서 한 번만 스냅샷을 생성한다(`UNIQUE (hold_id)`). 같은 홀드의 재시도는 최초 산정된 `base_amount`, `discount_amount`, `final_amount`를 가진 같은 스냅샷을 사용한다.
 7. `couponId`를 제공하면 쿠폰이 인증 회원 소유이고 `AVAILABLE` 상태이며 만료 전이고, 정책 콘텐츠·지역이 홀드 회차와 일치하며 기본 금액이 최소 결제 금액 이상인지 검증한다. 검증에 성공하면 `AVAILABLE → RESERVED`와 상태 이력을 기록하고 스냅샷에 연결한다. 기존 스냅샷을 재사용하면 요청 `couponId`는 기존 적용 쿠폰과 `null` 여부까지 같아야 하며 한 스냅샷에는 쿠폰을 최대 하나만 연결한다.
-8. `final_amount = base_amount - discount_amount`를 계산한다.
+8. `final_amount = base_amount - discount_amount`를 계산한다. 양수 결제의 PortOne 승인 확인은 이 최초 스냅샷의 동일한 `final_amount`와 외부 거래 금액을 비교한다.
 9. `final_amount > 0`이면 `order_id`를 발급하고 `payment(PENDING)`을 생성해 스냅샷·홀드에 연결한다. PortOne은 호출하지 않는다. 클라이언트는 응답의 `orderId`로 PortOne 결제 절차를 계속한다.
 10. `final_amount = 0`이면 `payment` 행을 만들지 않는다. P0 예약 확정의 `content → content_session → capacity_hold` 잠금과 `ACTIVE → CONSUMED` 조건부 전이만 재사용하되 P0 공개 확정 API를 호출하지 않는다. 잠근 가격 스냅샷의 `final_amount = 0`이면 `content.reservation_price`가 양수여도 `CONFIRMED` 예약을 생성할 수 있으며, P0 공개 API의 `reservation_price = 0` 및 P1 연결 부재 조건은 적용하지 않는다. 쿠폰을 적용했으면 같은 트랜잭션에서 `RESERVED → USED`, 상태 이력과 `coupon_redemption(CONFIRMED)`도 기록한다.
 11. 도메인 행 잠금과 조건부 전이는 `content → content_session → capacity_hold → reservation_price_snapshot → payment → coupon` 순서를 따른다. 생성할 행은 해당 위치에서 유일 제약을 사용하고, 존재하는 행은 잠금 획득 뒤 상태·소유권·유효 시각을 다시 검증한다. 없는 `payment` 또는 쿠폰을 적용하지 않는 경우 해당 단계를 건너뛴다.
