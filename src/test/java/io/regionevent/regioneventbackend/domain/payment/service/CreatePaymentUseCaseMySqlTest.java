@@ -781,6 +781,38 @@ class CreatePaymentUseCaseMySqlTest extends NonTransactionalMySqlTestSupport {
     }
 
     @Test
+    void existingSnapshotIsReusedWhenCurrentPriceWouldOverflow() {
+        Fixture fixture = createFixture(2, 2);
+        CreatePaymentResponse first = createPaymentUseCase.create(
+            fixture.user().getUserId(),
+            fixture.hold().getHoldId().toString(),
+            new CreatePaymentRequest(null),
+            "payment-key-" + System.nanoTime(),
+            UUID.randomUUID()
+        );
+        transactionTemplate.executeWithoutResult(status -> paymentRepository.findById(
+            Long.parseLong(first.payment().paymentId())
+        ).orElseThrow().decline(Instant.now()));
+        jdbcTemplate.update(
+            "UPDATE content SET reservation_price = ? WHERE content_id = ?",
+            Long.MAX_VALUE,
+            fixture.contentId()
+        );
+
+        CreatePaymentResponse retry = createPaymentUseCase.create(
+            fixture.user().getUserId(),
+            fixture.hold().getHoldId().toString(),
+            new CreatePaymentRequest(null),
+            "payment-key-" + System.nanoTime(),
+            UUID.randomUUID()
+        );
+
+        assertThat(retry.payment().amount().baseAmount()).isEqualTo(40_000L);
+        assertThat(reservationPriceSnapshotRepository.findByCapacityHoldHoldId(fixture.hold().getHoldId()))
+            .hasValueSatisfying(snapshot -> assertThat(snapshot.getBaseAmount()).isEqualTo(40_000L));
+    }
+
+    @Test
     @Timeout(10)
     void paymentCreationUsesThePriceCommittedWhileHoldingTheContentLock() throws Exception {
         Fixture fixture = createFixture();
