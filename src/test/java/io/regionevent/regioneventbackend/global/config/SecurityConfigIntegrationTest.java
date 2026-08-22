@@ -40,6 +40,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -48,10 +49,12 @@ import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenPr
 import io.regionevent.regioneventbackend.global.security.access.JwtAccessTokenService;
 import io.regionevent.regioneventbackend.global.security.common.ApiResponseAccessDeniedHandler;
 
-@SpringBootTest
+@SpringBootTest(properties = "security.cors.allowed-origins=https://local-stamp.org")
 @AutoConfigureMockMvc
 @Import(SecurityConfigIntegrationTest.SecurityTestController.class)
 class SecurityConfigIntegrationTest {
+
+    private static final String ALLOWED_ORIGIN = "https://local-stamp.org";
 
     @Autowired
     private MockMvc mockMvc;
@@ -68,7 +71,12 @@ class SecurityConfigIntegrationTest {
     @ParameterizedTest
     @MethodSource("publicRequests")
     void publicPath_withoutAccessToken_isAllowed(HttpMethod method, String path) throws Exception {
-        mockMvc.perform(request(method, path))
+        MockHttpServletRequestBuilder requestBuilder = request(method, path);
+        if (isAuthenticationPostRequest(method, path)) {
+            requestBuilder.header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN);
+        }
+
+        mockMvc.perform(requestBuilder)
             .andExpect(result -> assertThat(result.getResponse().getStatus())
                 .isNotIn(401, 403))
             .andExpect(cookie().doesNotExist("JSESSIONID"));
@@ -205,6 +213,10 @@ class SecurityConfigIntegrationTest {
             Arguments.of(HttpMethod.GET, "/api/v1/contents/1/sessions"),
             Arguments.of(HttpMethod.GET, "/api/v1/sessions/1")
         );
+    }
+
+    private static boolean isAuthenticationPostRequest(HttpMethod method, String path) {
+        return method == HttpMethod.POST && path.startsWith("/api/v1/auth/");
     }
 
     private String issueAccessTokenWithoutAudience() {

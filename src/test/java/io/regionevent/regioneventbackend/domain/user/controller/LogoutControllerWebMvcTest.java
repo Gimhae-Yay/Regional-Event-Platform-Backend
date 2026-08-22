@@ -9,18 +9,21 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.HttpHeaders;
 
-@WebMvcTest({
+@WebMvcTest(value = {
     LoginController.class,
     LogoutController.class,
     MyRoleController.class,
     SignupController.class,
     WithdrawalController.class
-})
+}, properties = "security.cors.allowed-origins=https://local-stamp.org")
 class LogoutControllerWebMvcTest extends UserControllerWebMvcTestSupport {
+
+    private static final String ALLOWED_ORIGIN = "https://local-stamp.org";
 
     @Test
     void logout_RefreshToken유무와무관하게Cookie만만료한다() throws Exception {
-        mockMvc.perform(post("/api/v1/auth/logout"))
+        mockMvc.perform(post("/api/v1/auth/logout")
+                .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN))
             .andExpect(status().isOk())
             .andExpect(header().string(HttpHeaders.SET_COOKIE, org.hamcrest.Matchers.containsString("refreshToken=")))
             .andExpect(header().string(HttpHeaders.SET_COOKIE, org.hamcrest.Matchers.containsString("Max-Age=0")))
