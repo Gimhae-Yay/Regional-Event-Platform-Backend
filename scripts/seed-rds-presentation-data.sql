@@ -70,7 +70,9 @@ INSERT INTO operator_application (
     (@gimhae_operator_id, @gimhae_region_id, '김해 지역 문화 체험 운영', 'APPROVED', @gimhae_admin_id, NULL, DATE_SUB(@now, INTERVAL 100 DAY), DATE_SUB(@now, INTERVAL 95 DAY)),
     (@donghae_operator_id, @donghae_region_id, '동해 관광 체험 운영', 'APPROVED', @donghae_admin_id, NULL, DATE_SUB(@now, INTERVAL 100 DAY), DATE_SUB(@now, INTERVAL 95 DAY));
 
--- 콘텐츠: 지역별 7개(종료 1, 진행 중 3, 시작 전 3)
+-- 대표 이미지 연결 대상 콘텐츠: 지역별 7개(콘텐츠 상태: ENDED 1, PUBLISHED 6)
+-- PUBLISHED 콘텐츠는 회차 시점 기준으로 종료 1, 진행 중 3, 시작 전 3개를 구성합니다.
+-- 아래에는 관리자·예외 상태 화면을 위한 추가 콘텐츠를 함께 생성합니다.
 INSERT INTO content (
     region_id, operator_id, content_type, status, version_no, title, description,
     location_text, operating_hours_text, contact_text, precautions, age_requirement,
@@ -132,7 +134,27 @@ INSERT INTO content (
     (@donghae_region_id, @donghae_operator_id, 'EVENT_EXPERIENCE', 'PUBLISHED', 1,
         '논골담길 사진 산책', '골목 풍경을 기록하며 걷는 스마트폰 사진 산책입니다.',
         '논골담길 관광안내소', '일요일 16:00~18:00', '010-7000-0002', '스마트폰 충전 상태를 확인해 주세요.', '전 연령', '사진 미션 카드 제공', '회차 시작 24시간 전까지 취소할 수 있습니다.',
-        DATE_SUB(@now, INTERVAL 30 DAY), NULL, DATE_SUB(@now, INTERVAL 30 DAY), @now, 6000);
+        DATE_SUB(@now, INTERVAL 30 DAY), NULL, DATE_SUB(@now, INTERVAL 30 DAY), @now, 6000),
+    (@gimhae_region_id, @gimhae_operator_id, 'EVENT_EXPERIENCE', 'PENDING', 1,
+        '김해 가을 문화 해설', '관리자 심사를 기다리는 가을 문화 해설 프로그램입니다.',
+        '김해한옥체험관', '토요일 14:00~16:00', '010-7000-0001', '심사 완료 후 참가 안내를 확인해 주세요.', '전 연령', '해설 자료 제공', '회차 시작 24시간 전까지 취소할 수 있습니다.',
+        DATE_ADD(@now, INTERVAL 14 DAY), NULL, DATE_SUB(@now, INTERVAL 2 DAY), DATE_SUB(@now, INTERVAL 2 DAY), 7000),
+    (@gimhae_region_id, @gimhae_operator_id, 'EVENT_EXPERIENCE', 'REJECTED', 1,
+        '김해 야외 음악 체험', '심사에서 반려된 야외 음악 체험 프로그램입니다.',
+        '김해 시민공원', '일요일 17:00~19:00', '010-7000-0001', '운영 계획 보완 후 다시 신청할 수 있습니다.', '전 연령', '간단한 악기 체험', '회차 시작 24시간 전까지 취소할 수 있습니다.',
+        DATE_ADD(@now, INTERVAL 21 DAY), NULL, DATE_SUB(@now, INTERVAL 4 DAY), DATE_SUB(@now, INTERVAL 3 DAY), 9000),
+    (@gimhae_region_id, @gimhae_operator_id, 'EVENT_EXPERIENCE', 'APPROVED', 1,
+        '김해 전통차 시음 체험', '승인되어 공개를 기다리는 전통차 시음 체험입니다.',
+        '김해 전통문화관', '토요일 11:00~12:30', '010-7000-0001', '뜨거운 차를 다룰 때 안내를 따라 주세요.', '전 연령', '전통차와 다과 제공', '회차 시작 24시간 전까지 취소할 수 있습니다.',
+        DATE_ADD(@now, INTERVAL 10 DAY), NULL, DATE_SUB(@now, INTERVAL 5 DAY), DATE_SUB(@now, INTERVAL 1 DAY), 8000),
+    (@donghae_region_id, @donghae_operator_id, 'EVENT_EXPERIENCE', 'SUSPENDED', 1,
+        '동해 해안 생태 관찰', '기상 점검으로 일시 중단된 해안 생태 관찰 프로그램입니다.',
+        '추암해변 탐방로', '토요일 10:00~12:00', '010-7000-0002', '재개 일정은 별도 공지합니다.', '전 연령', '관찰 노트 제공', '회차 시작 24시간 전까지 취소할 수 있습니다.',
+        DATE_SUB(@now, INTERVAL 20 DAY), NULL, DATE_SUB(@now, INTERVAL 20 DAY), DATE_SUB(@now, INTERVAL 1 DAY), 6000),
+    (@donghae_region_id, @donghae_operator_id, 'EVENT_EXPERIENCE', 'WITHDRAWN', 1,
+        '동해 항구 드로잉 체험', '운영자가 철회를 요청해 종료된 항구 드로잉 체험입니다.',
+        '묵호항 문화광장', '일요일 15:00~17:00', '010-7000-0002', '운영 철회된 프로그램입니다.', '만 10세 이상', '드로잉 도구 제공', '회차 시작 24시간 전까지 취소할 수 있습니다.',
+        DATE_SUB(@now, INTERVAL 15 DAY), NULL, DATE_SUB(@now, INTERVAL 15 DAY), DATE_SUB(@now, INTERVAL 2 DAY), 10000);
 
 SET @gimhae_ended_content_id = (SELECT content_id FROM content WHERE title = '가야금과 함께 걷는 김해 역사 여행');
 SET @gimhae_pottery_content_id = (SELECT content_id FROM content WHERE title = '김해 도예 체험');
@@ -148,6 +170,11 @@ SET @donghae_climbing_content_id = (SELECT content_id FROM content WHERE title =
 SET @donghae_surf_content_id = (SELECT content_id FROM content WHERE title = '망상 해변 서핑 입문');
 SET @donghae_cave_content_id = (SELECT content_id FROM content WHERE title = '천곡황금박쥐동굴 탐험');
 SET @donghae_photo_content_id = (SELECT content_id FROM content WHERE title = '논골담길 사진 산책');
+SET @gimhae_pending_content_id = (SELECT content_id FROM content WHERE title = '김해 가을 문화 해설');
+SET @gimhae_rejected_content_id = (SELECT content_id FROM content WHERE title = '김해 야외 음악 체험');
+SET @gimhae_approved_content_id = (SELECT content_id FROM content WHERE title = '김해 전통차 시음 체험');
+SET @donghae_suspended_content_id = (SELECT content_id FROM content WHERE title = '동해 해안 생태 관찰');
+SET @donghae_withdrawn_content_id = (SELECT content_id FROM content WHERE title = '동해 항구 드로잉 체험');
 
 INSERT INTO content_log (content_id, actor_id, status, reason, date) VALUES
     (@gimhae_ended_content_id, @gimhae_operator_id, 'PUBLISHED', NULL, DATE_SUB(@now, INTERVAL 90 DAY)),
@@ -165,7 +192,16 @@ INSERT INTO content_log (content_id, actor_id, status, reason, date) VALUES
     (@donghae_climbing_content_id, @donghae_operator_id, 'PUBLISHED', NULL, DATE_SUB(@now, INTERVAL 60 DAY)),
     (@donghae_surf_content_id, @donghae_operator_id, 'PUBLISHED', NULL, DATE_SUB(@now, INTERVAL 30 DAY)),
     (@donghae_cave_content_id, @donghae_operator_id, 'PUBLISHED', NULL, DATE_SUB(@now, INTERVAL 30 DAY)),
-    (@donghae_photo_content_id, @donghae_operator_id, 'PUBLISHED', NULL, DATE_SUB(@now, INTERVAL 30 DAY));
+    (@donghae_photo_content_id, @donghae_operator_id, 'PUBLISHED', NULL, DATE_SUB(@now, INTERVAL 30 DAY)),
+    (@gimhae_pending_content_id, @gimhae_operator_id, 'PENDING', NULL, DATE_SUB(@now, INTERVAL 2 DAY)),
+    (@gimhae_rejected_content_id, @gimhae_operator_id, 'PENDING', NULL, DATE_SUB(@now, INTERVAL 4 DAY)),
+    (@gimhae_rejected_content_id, @gimhae_admin_id, 'REJECTED', '안전 운영 계획을 보완해 주세요.', DATE_SUB(@now, INTERVAL 3 DAY)),
+    (@gimhae_approved_content_id, @gimhae_operator_id, 'PENDING', NULL, DATE_SUB(@now, INTERVAL 5 DAY)),
+    (@gimhae_approved_content_id, @gimhae_admin_id, 'APPROVED', NULL, DATE_SUB(@now, INTERVAL 1 DAY)),
+    (@donghae_suspended_content_id, @donghae_operator_id, 'PUBLISHED', NULL, DATE_SUB(@now, INTERVAL 20 DAY)),
+    (@donghae_suspended_content_id, @donghae_admin_id, 'SUSPENDED', '기상 안전 점검', DATE_SUB(@now, INTERVAL 1 DAY)),
+    (@donghae_withdrawn_content_id, @donghae_operator_id, 'PUBLISHED', NULL, DATE_SUB(@now, INTERVAL 15 DAY)),
+    (@donghae_withdrawn_content_id, @donghae_operator_id, 'WITHDRAWN', '운영자 요청으로 철회', DATE_SUB(@now, INTERVAL 2 DAY));
 
 -- 종료 회차는 진행 중 콘텐츠마다 0~3개로 고정 분포를 사용합니다.
 SET @gimhae_ended_starts = TIMESTAMP(DATE_SUB(UTC_DATE(), INTERVAL 45 DAY), '10:00:00');
@@ -179,18 +215,33 @@ SET @donghae_ended_starts = TIMESTAMP(DATE_SUB(UTC_DATE(), INTERVAL 45 DAY), '05
 SET @donghae_yoga_past_1_starts = TIMESTAMP(DATE_SUB(UTC_DATE(), INTERVAL 25 DAY), '08:00:00');
 SET @donghae_yoga_past_2_starts = TIMESTAMP(DATE_SUB(UTC_DATE(), INTERVAL 11 DAY), '08:00:00');
 SET @donghae_climbing_past_starts = TIMESTAMP(DATE_SUB(UTC_DATE(), INTERVAL 10 DAY), '13:00:00');
-SET @gimhae_pottery_current_starts = DATE_SUB(@now, INTERVAL 45 MINUTE);
+-- 김해 도예 체험: 2026-08-25 KST 10:00~22:00, 체크인 13:00~21:00
+-- 시드는 UTC로 저장하므로 한국시간에서 9시간을 뺀 값을 사용합니다.
+SET @gimhae_pottery_august_25_starts = TIMESTAMP('2026-08-25', '01:00:00');
+SET @gimhae_pottery_august_25_ends = TIMESTAMP('2026-08-25', '13:00:00');
+SET @gimhae_pottery_august_25_checkin_open = TIMESTAMP('2026-08-25', '04:00:00');
+SET @gimhae_pottery_august_25_checkin_close = TIMESTAMP('2026-08-25', '12:00:00');
 SET @gimhae_walk_current_starts = DATE_SUB(@now, INTERVAL 30 MINUTE);
 SET @gimhae_museum_current_starts = DATE_SUB(@now, INTERVAL 20 MINUTE);
 SET @donghae_yoga_current_starts = DATE_SUB(@now, INTERVAL 40 MINUTE);
 SET @donghae_skywalk_current_starts = DATE_SUB(@now, INTERVAL 35 MINUTE);
 SET @donghae_climbing_current_starts = DATE_SUB(@now, INTERVAL 25 MINUTE);
 SET @gimhae_kayak_future_starts = TIMESTAMP(DATE_ADD(UTC_DATE(), INTERVAL 7 DAY), '17:00:00');
+-- 김해 카약 일몰 체험: 시드 실행일(KST)의 09:00~23:59에 체크인할 수 있습니다.
+-- 세션은 UTC로 저장하므로 KST 날짜의 09:00과 23:59를 각각 UTC 00:00과 14:59로 변환합니다.
+SET @gimhae_kayak_checkin_open = TIMESTAMP(DATE(DATE_ADD(@now, INTERVAL 9 HOUR)), '00:00:00');
+SET @gimhae_kayak_checkin_close = TIMESTAMP(DATE(DATE_ADD(@now, INTERVAL 9 HOUR)), '14:59:00');
 SET @gimhae_baking_future_starts = TIMESTAMP(DATE_ADD(UTC_DATE(), INTERVAL 8 DAY), '13:00:00');
 SET @gimhae_wetland_future_starts = TIMESTAMP(DATE_ADD(UTC_DATE(), INTERVAL 9 DAY), '09:00:00');
 SET @donghae_surf_future_starts = TIMESTAMP(DATE_ADD(UTC_DATE(), INTERVAL 7 DAY), '10:00:00');
+-- 망상 해변 서핑 입문: 시드 실행일(KST)의 09:00~23:59에 체크인할 수 있습니다.
+SET @donghae_surf_checkin_open = TIMESTAMP(DATE(DATE_ADD(@now, INTERVAL 9 HOUR)), '00:00:00');
+SET @donghae_surf_checkin_close = TIMESTAMP(DATE(DATE_ADD(@now, INTERVAL 9 HOUR)), '14:59:00');
 SET @donghae_cave_future_starts = TIMESTAMP(DATE_ADD(UTC_DATE(), INTERVAL 8 DAY), '14:00:00');
 SET @donghae_photo_future_starts = TIMESTAMP(DATE_ADD(UTC_DATE(), INTERVAL 9 DAY), '16:00:00');
+SET @gimhae_approved_pending_starts = TIMESTAMP(DATE_ADD(UTC_DATE(), INTERVAL 10 DAY), '11:00:00');
+SET @gimhae_approved_rejected_starts = TIMESTAMP(DATE_ADD(UTC_DATE(), INTERVAL 17 DAY), '11:00:00');
+SET @gimhae_wetland_cancelled_starts = TIMESTAMP(DATE_ADD(UTC_DATE(), INTERVAL 12 DAY), '09:00:00');
 
 INSERT INTO content_session (
     content_id, region_id, status, starts_at, ends_at, checkin_open_at, checkin_close_at,
@@ -208,18 +259,21 @@ INSERT INTO content_session (
     (@donghae_yoga_content_id, @donghae_region_id, 'COMPLETED', @donghae_yoga_past_1_starts, DATE_ADD(@donghae_yoga_past_1_starts, INTERVAL 90 MINUTE), DATE_SUB(@donghae_yoga_past_1_starts, INTERVAL 30 MINUTE), DATE_ADD(@donghae_yoga_past_1_starts, INTERVAL 75 MINUTE), 20, 19, NULL, NULL, NULL, DATE_ADD(@donghae_yoga_past_1_starts, INTERVAL 90 MINUTE), 1, @now, @now, DATE_SUB(@donghae_yoga_past_1_starts, INTERVAL 7 DAY), @donghae_admin_id, NULL),
     (@donghae_yoga_content_id, @donghae_region_id, 'COMPLETED', @donghae_yoga_past_2_starts, DATE_ADD(@donghae_yoga_past_2_starts, INTERVAL 90 MINUTE), DATE_SUB(@donghae_yoga_past_2_starts, INTERVAL 30 MINUTE), DATE_ADD(@donghae_yoga_past_2_starts, INTERVAL 75 MINUTE), 20, 20, NULL, NULL, NULL, DATE_ADD(@donghae_yoga_past_2_starts, INTERVAL 90 MINUTE), 1, @now, @now, DATE_SUB(@donghae_yoga_past_2_starts, INTERVAL 7 DAY), @donghae_admin_id, NULL),
     (@donghae_climbing_content_id, @donghae_region_id, 'COMPLETED', @donghae_climbing_past_starts, DATE_ADD(@donghae_climbing_past_starts, INTERVAL 2 HOUR), DATE_SUB(@donghae_climbing_past_starts, INTERVAL 30 MINUTE), DATE_ADD(@donghae_climbing_past_starts, INTERVAL 105 MINUTE), 12, 10, NULL, NULL, NULL, DATE_ADD(@donghae_climbing_past_starts, INTERVAL 2 HOUR), 1, @now, @now, DATE_SUB(@donghae_climbing_past_starts, INTERVAL 7 DAY), @donghae_admin_id, NULL),
-    (@gimhae_pottery_content_id, @gimhae_region_id, 'SCHEDULED', @gimhae_pottery_current_starts, DATE_ADD(@gimhae_pottery_current_starts, INTERVAL 2 HOUR), DATE_SUB(@gimhae_pottery_current_starts, INTERVAL 30 MINUTE), DATE_ADD(@gimhae_pottery_current_starts, INTERVAL 105 MINUTE), 20, 20, NULL, NULL, NULL, NULL, 1, @now, @now, DATE_SUB(@now, INTERVAL 7 DAY), @gimhae_admin_id, NULL),
+    (@gimhae_pottery_content_id, @gimhae_region_id, 'SCHEDULED', @gimhae_pottery_august_25_starts, @gimhae_pottery_august_25_ends, @gimhae_pottery_august_25_checkin_open, @gimhae_pottery_august_25_checkin_close, 20, 20, NULL, NULL, NULL, NULL, 1, @now, @now, DATE_SUB(@now, INTERVAL 7 DAY), @gimhae_admin_id, NULL),
     (@gimhae_walk_content_id, @gimhae_region_id, 'SCHEDULED', @gimhae_walk_current_starts, DATE_ADD(@gimhae_walk_current_starts, INTERVAL 2 HOUR), DATE_SUB(@gimhae_walk_current_starts, INTERVAL 30 MINUTE), DATE_ADD(@gimhae_walk_current_starts, INTERVAL 105 MINUTE), 25, 25, NULL, NULL, NULL, NULL, 1, @now, @now, DATE_SUB(@now, INTERVAL 7 DAY), @gimhae_admin_id, NULL),
     (@gimhae_museum_content_id, @gimhae_region_id, 'SCHEDULED', @gimhae_museum_current_starts, DATE_ADD(@gimhae_museum_current_starts, INTERVAL 2 HOUR), DATE_SUB(@gimhae_museum_current_starts, INTERVAL 30 MINUTE), DATE_ADD(@gimhae_museum_current_starts, INTERVAL 105 MINUTE), 20, 20, NULL, NULL, NULL, NULL, 1, @now, @now, DATE_SUB(@now, INTERVAL 7 DAY), @gimhae_admin_id, NULL),
     (@donghae_yoga_content_id, @donghae_region_id, 'SCHEDULED', @donghae_yoga_current_starts, DATE_ADD(@donghae_yoga_current_starts, INTERVAL 90 MINUTE), DATE_SUB(@donghae_yoga_current_starts, INTERVAL 30 MINUTE), DATE_ADD(@donghae_yoga_current_starts, INTERVAL 75 MINUTE), 20, 20, NULL, NULL, NULL, NULL, 1, @now, @now, DATE_SUB(@now, INTERVAL 7 DAY), @donghae_admin_id, NULL),
     (@donghae_skywalk_content_id, @donghae_region_id, 'SCHEDULED', @donghae_skywalk_current_starts, DATE_ADD(@donghae_skywalk_current_starts, INTERVAL 90 MINUTE), DATE_SUB(@donghae_skywalk_current_starts, INTERVAL 30 MINUTE), DATE_ADD(@donghae_skywalk_current_starts, INTERVAL 75 MINUTE), 20, 20, NULL, NULL, NULL, NULL, 1, @now, @now, DATE_SUB(@now, INTERVAL 7 DAY), @donghae_admin_id, NULL),
     (@donghae_climbing_content_id, @donghae_region_id, 'SCHEDULED', @donghae_climbing_current_starts, DATE_ADD(@donghae_climbing_current_starts, INTERVAL 2 HOUR), DATE_SUB(@donghae_climbing_current_starts, INTERVAL 30 MINUTE), DATE_ADD(@donghae_climbing_current_starts, INTERVAL 105 MINUTE), 12, 12, NULL, NULL, NULL, NULL, 1, @now, @now, DATE_SUB(@now, INTERVAL 7 DAY), @donghae_admin_id, NULL),
-    (@gimhae_kayak_content_id, @gimhae_region_id, 'SCHEDULED', @gimhae_kayak_future_starts, DATE_ADD(@gimhae_kayak_future_starts, INTERVAL 2 HOUR), DATE_SUB(@gimhae_kayak_future_starts, INTERVAL 30 MINUTE), DATE_ADD(@gimhae_kayak_future_starts, INTERVAL 105 MINUTE), 12, 11, NULL, NULL, NULL, NULL, 1, @now, @now, DATE_SUB(@now, INTERVAL 7 DAY), @gimhae_admin_id, NULL),
+    (@gimhae_kayak_content_id, @gimhae_region_id, 'SCHEDULED', @gimhae_kayak_checkin_open, DATE_ADD(@gimhae_kayak_checkin_close, INTERVAL 1 MINUTE), @gimhae_kayak_checkin_open, @gimhae_kayak_checkin_close, 12, 11, NULL, NULL, NULL, NULL, 1, @now, @now, DATE_SUB(@now, INTERVAL 7 DAY), @gimhae_admin_id, NULL),
     (@gimhae_baking_content_id, @gimhae_region_id, 'SCHEDULED', @gimhae_baking_future_starts, DATE_ADD(@gimhae_baking_future_starts, INTERVAL 2 HOUR), DATE_SUB(@gimhae_baking_future_starts, INTERVAL 30 MINUTE), DATE_ADD(@gimhae_baking_future_starts, INTERVAL 105 MINUTE), 10, 10, NULL, NULL, NULL, NULL, 1, @now, @now, DATE_SUB(@now, INTERVAL 7 DAY), @gimhae_admin_id, NULL),
-    (@gimhae_wetland_content_id, @gimhae_region_id, 'SCHEDULED', @gimhae_wetland_future_starts, DATE_ADD(@gimhae_wetland_future_starts, INTERVAL 2 HOUR), DATE_SUB(@gimhae_wetland_future_starts, INTERVAL 30 MINUTE), DATE_ADD(@gimhae_wetland_future_starts, INTERVAL 105 MINUTE), 18, 18, NULL, NULL, NULL, NULL, 1, @now, @now, DATE_SUB(@now, INTERVAL 7 DAY), @gimhae_admin_id, NULL),
-    (@donghae_surf_content_id, @donghae_region_id, 'SCHEDULED', @donghae_surf_future_starts, DATE_ADD(@donghae_surf_future_starts, INTERVAL 2 HOUR), DATE_SUB(@donghae_surf_future_starts, INTERVAL 30 MINUTE), DATE_ADD(@donghae_surf_future_starts, INTERVAL 105 MINUTE), 14, 13, NULL, NULL, NULL, NULL, 1, @now, @now, DATE_SUB(@now, INTERVAL 7 DAY), @donghae_admin_id, NULL),
+    (@gimhae_wetland_content_id, @gimhae_region_id, 'SCHEDULED', @gimhae_wetland_future_starts, DATE_ADD(@gimhae_wetland_future_starts, INTERVAL 2 HOUR), DATE_SUB(@gimhae_wetland_future_starts, INTERVAL 30 MINUTE), DATE_ADD(@gimhae_wetland_future_starts, INTERVAL 105 MINUTE), 18, 16, NULL, NULL, NULL, NULL, 1, @now, @now, DATE_SUB(@now, INTERVAL 7 DAY), @gimhae_admin_id, NULL),
+    (@donghae_surf_content_id, @donghae_region_id, 'SCHEDULED', @donghae_surf_checkin_open, DATE_ADD(@donghae_surf_checkin_close, INTERVAL 1 MINUTE), @donghae_surf_checkin_open, @donghae_surf_checkin_close, 14, 13, NULL, NULL, NULL, NULL, 1, @now, @now, DATE_SUB(@now, INTERVAL 7 DAY), @donghae_admin_id, NULL),
     (@donghae_cave_content_id, @donghae_region_id, 'SCHEDULED', @donghae_cave_future_starts, DATE_ADD(@donghae_cave_future_starts, INTERVAL 2 HOUR), DATE_SUB(@donghae_cave_future_starts, INTERVAL 30 MINUTE), DATE_ADD(@donghae_cave_future_starts, INTERVAL 105 MINUTE), 20, 20, NULL, NULL, NULL, NULL, 1, @now, @now, DATE_SUB(@now, INTERVAL 7 DAY), @donghae_admin_id, NULL),
-    (@donghae_photo_content_id, @donghae_region_id, 'SCHEDULED', @donghae_photo_future_starts, DATE_ADD(@donghae_photo_future_starts, INTERVAL 2 HOUR), DATE_SUB(@donghae_photo_future_starts, INTERVAL 30 MINUTE), DATE_ADD(@donghae_photo_future_starts, INTERVAL 105 MINUTE), 18, 18, NULL, NULL, NULL, NULL, 1, @now, @now, DATE_SUB(@now, INTERVAL 7 DAY), @donghae_admin_id, NULL);
+    (@donghae_photo_content_id, @donghae_region_id, 'SCHEDULED', @donghae_photo_future_starts, DATE_ADD(@donghae_photo_future_starts, INTERVAL 2 HOUR), DATE_SUB(@donghae_photo_future_starts, INTERVAL 30 MINUTE), DATE_ADD(@donghae_photo_future_starts, INTERVAL 105 MINUTE), 18, 18, NULL, NULL, NULL, NULL, 1, @now, @now, DATE_SUB(@now, INTERVAL 7 DAY), @donghae_admin_id, NULL),
+    (@gimhae_approved_content_id, @gimhae_region_id, 'PENDING', @gimhae_approved_pending_starts, DATE_ADD(@gimhae_approved_pending_starts, INTERVAL 90 MINUTE), DATE_SUB(@gimhae_approved_pending_starts, INTERVAL 30 MINUTE), DATE_ADD(@gimhae_approved_pending_starts, INTERVAL 75 MINUTE), 15, 15, NULL, NULL, NULL, NULL, 1, @now, @now, NULL, NULL, NULL),
+    (@gimhae_approved_content_id, @gimhae_region_id, 'REJECTED', @gimhae_approved_rejected_starts, DATE_ADD(@gimhae_approved_rejected_starts, INTERVAL 90 MINUTE), DATE_SUB(@gimhae_approved_rejected_starts, INTERVAL 30 MINUTE), DATE_ADD(@gimhae_approved_rejected_starts, INTERVAL 75 MINUTE), 15, 15, NULL, NULL, NULL, NULL, 1, @now, @now, DATE_SUB(@now, INTERVAL 1 DAY), @gimhae_admin_id, '운영 인력 배치 계획을 보완해 주세요.'),
+    (@gimhae_wetland_content_id, @gimhae_region_id, 'CANCELLED', @gimhae_wetland_cancelled_starts, DATE_ADD(@gimhae_wetland_cancelled_starts, INTERVAL 2 HOUR), DATE_SUB(@gimhae_wetland_cancelled_starts, INTERVAL 30 MINUTE), DATE_ADD(@gimhae_wetland_cancelled_starts, INTERVAL 105 MINUTE), 18, 18, DATE_SUB(@now, INTERVAL 1 DAY), @gimhae_operator_id, '집중호우 예보', NULL, 1, @now, @now, DATE_SUB(@now, INTERVAL 7 DAY), @gimhae_admin_id, NULL);
 
 SET @gimhae_pottery_session_1 = (SELECT session_id FROM content_session WHERE content_id = @gimhae_pottery_content_id AND starts_at = @gimhae_pottery_past_1_starts);
 SET @gimhae_pottery_session_2 = (SELECT session_id FROM content_session WHERE content_id = @gimhae_pottery_content_id AND starts_at = @gimhae_pottery_past_2_starts);
@@ -228,9 +282,10 @@ SET @gimhae_museum_session_1 = (SELECT session_id FROM content_session WHERE con
 SET @donghae_yoga_session_1 = (SELECT session_id FROM content_session WHERE content_id = @donghae_yoga_content_id AND starts_at = @donghae_yoga_past_1_starts);
 SET @donghae_yoga_session_2 = (SELECT session_id FROM content_session WHERE content_id = @donghae_yoga_content_id AND starts_at = @donghae_yoga_past_2_starts);
 SET @donghae_climbing_session_1 = (SELECT session_id FROM content_session WHERE content_id = @donghae_climbing_content_id AND starts_at = @donghae_climbing_past_starts);
-SET @gimhae_kayak_session_id = (SELECT session_id FROM content_session WHERE content_id = @gimhae_kayak_content_id AND starts_at = @gimhae_kayak_future_starts);
+SET @gimhae_kayak_session_id = (SELECT session_id FROM content_session WHERE content_id = @gimhae_kayak_content_id AND starts_at = @gimhae_kayak_checkin_open);
 SET @gimhae_baking_session_id = (SELECT session_id FROM content_session WHERE content_id = @gimhae_baking_content_id AND starts_at = @gimhae_baking_future_starts);
-SET @donghae_surf_session_id = (SELECT session_id FROM content_session WHERE content_id = @donghae_surf_content_id AND starts_at = @donghae_surf_future_starts);
+SET @gimhae_wetland_session_id = (SELECT session_id FROM content_session WHERE content_id = @gimhae_wetland_content_id AND starts_at = @gimhae_wetland_future_starts);
+SET @donghae_surf_session_id = (SELECT session_id FROM content_session WHERE content_id = @donghae_surf_content_id AND starts_at = @donghae_surf_checkin_open);
 SET @donghae_cave_session_id = (SELECT session_id FROM content_session WHERE content_id = @donghae_cave_content_id AND starts_at = @donghae_cave_future_starts);
 
 -- 예약, 방문, 후기
@@ -250,7 +305,9 @@ INSERT INTO capacity_hold (
     (@gimhae_region_id, @gimhae_kayak_session_id, @minji_id, 1, 'CONSUMED', DATE_ADD(@now, INTERVAL 10 MINUTE), @now, NULL, NULL, @now),
     (@gimhae_region_id, @gimhae_baking_session_id, @junho_id, 1, 'CONSUMED', DATE_SUB(@now, INTERVAL 2 DAY), DATE_SUB(@now, INTERVAL 3 DAY), NULL, NULL, DATE_SUB(@now, INTERVAL 3 DAY)),
     (@donghae_region_id, @donghae_surf_session_id, @sora_id, 1, 'CONSUMED', DATE_ADD(@now, INTERVAL 10 MINUTE), @now, NULL, NULL, @now),
-    (@donghae_region_id, @donghae_cave_session_id, @taeyang_id, 1, 'EXPIRED', DATE_SUB(@now, INTERVAL 1 DAY), DATE_SUB(@now, INTERVAL 1 DAY), NULL, DATE_SUB(@now, INTERVAL 1 DAY), DATE_SUB(@now, INTERVAL 1 DAY));
+    (@donghae_region_id, @donghae_cave_session_id, @taeyang_id, 1, 'EXPIRED', DATE_SUB(@now, INTERVAL 1 DAY), DATE_SUB(@now, INTERVAL 1 DAY), NULL, DATE_SUB(@now, INTERVAL 1 DAY), DATE_SUB(@now, INTERVAL 1 DAY)),
+    (@gimhae_region_id, @gimhae_wetland_session_id, @minji_id, 2, 'ACTIVE', DATE_ADD(@now, INTERVAL 15 MINUTE), NULL, NULL, NULL, @now),
+    (@gimhae_region_id, @gimhae_wetland_session_id, @taeyang_id, 1, 'INVALIDATED', DATE_ADD(@now, INTERVAL 15 MINUTE), DATE_SUB(@now, INTERVAL 10 MINUTE), '참가자 요청으로 무효화', DATE_SUB(@now, INTERVAL 10 MINUTE), DATE_SUB(@now, INTERVAL 20 MINUTE));
 
 SET @hold_gimhae_pottery_1 = (SELECT hold_id FROM capacity_hold WHERE session_id = @gimhae_pottery_session_1 AND user_id = @minji_id);
 SET @hold_gimhae_pottery_2 = (SELECT hold_id FROM capacity_hold WHERE session_id = @gimhae_pottery_session_2 AND user_id = @junho_id);
@@ -265,6 +322,7 @@ SET @hold_gimhae_kayak = (SELECT hold_id FROM capacity_hold WHERE session_id = @
 SET @hold_gimhae_baking = (SELECT hold_id FROM capacity_hold WHERE session_id = @gimhae_baking_session_id AND user_id = @junho_id);
 SET @hold_donghae_surf = (SELECT hold_id FROM capacity_hold WHERE session_id = @donghae_surf_session_id AND user_id = @sora_id);
 SET @hold_donghae_cave = (SELECT hold_id FROM capacity_hold WHERE session_id = @donghae_cave_session_id AND user_id = @taeyang_id);
+SET @hold_gimhae_wetland_active = (SELECT hold_id FROM capacity_hold WHERE session_id = @gimhae_wetland_session_id AND user_id = @minji_id);
 
 INSERT INTO reservation (
     reservation_no, qr_reference, region_id, hold_id, session_id, user_id, status, confirmed_at,
@@ -341,12 +399,12 @@ INSERT INTO coupon_policy (
     minimum_payment_amount, valid_days, issue_starts_at, issue_ends_at, total_issue_limit,
     issued_count, status, published_at, ended_at, updated_at
 ) VALUES
-    (@gimhae_pottery_content_id, @gimhae_region_id, '김해 방문 감사 쿠폰', '김해 체험 방문 완료 후 발급되는 할인 쿠폰입니다.', 'VISIT', 1000, 5000, 30, DATE_SUB(@now, INTERVAL 60 DAY), DATE_ADD(@now, INTERVAL 60 DAY), NULL, 1, 'PUBLISHED', DATE_SUB(@now, INTERVAL 60 DAY), NULL, @now),
+    (@gimhae_pottery_content_id, @gimhae_region_id, '김해 방문 감사 쿠폰', '김해 체험 방문 완료 후 발급되는 할인 쿠폰입니다.', 'VISIT', 1000, 5000, 30, DATE_SUB(@now, INTERVAL 60 DAY), DATE_ADD(@now, INTERVAL 60 DAY), NULL, 2, 'PUBLISHED', DATE_SUB(@now, INTERVAL 60 DAY), NULL, @now),
     (@gimhae_kayak_content_id, @gimhae_region_id, '김해 미션 완주 쿠폰', '김해 지역 미션을 완주한 방문자에게 드리는 쿠폰입니다.', 'MISSION_REWARD', 2000, 10000, 30, DATE_SUB(@now, INTERVAL 60 DAY), DATE_ADD(@now, INTERVAL 60 DAY), NULL, 1, 'PUBLISHED', DATE_SUB(@now, INTERVAL 60 DAY), NULL, @now),
     (@gimhae_wetland_content_id, @gimhae_region_id, '김해 스탬프 완성 쿠폰', '김해 스탬프북을 완성한 방문자에게 드리는 쿠폰입니다.', 'STAMPBOOK_COMPLETION', 1500, 7000, 30, DATE_SUB(@now, INTERVAL 60 DAY), DATE_ADD(@now, INTERVAL 60 DAY), NULL, 1, 'PUBLISHED', DATE_SUB(@now, INTERVAL 60 DAY), NULL, @now),
     (@gimhae_baking_content_id, @gimhae_region_id, '김해 여름 한정 쿠폰', '종료된 여름 한정 쿠폰 정책입니다.', 'VISIT', 1000, 5000, 14, DATE_SUB(@now, INTERVAL 90 DAY), DATE_SUB(@now, INTERVAL 3 DAY), 100, 0, 'ENDED', DATE_SUB(@now, INTERVAL 90 DAY), DATE_SUB(@now, INTERVAL 3 DAY), DATE_SUB(@now, INTERVAL 3 DAY)),
     (@gimhae_wetland_content_id, @gimhae_region_id, '김해 가을 준비 쿠폰', '아직 공개되지 않은 쿠폰 정책입니다.', 'VISIT', 1000, 5000, 30, DATE_ADD(@now, INTERVAL 20 DAY), DATE_ADD(@now, INTERVAL 80 DAY), 100, 0, 'DRAFT', NULL, NULL, @now),
-    (@donghae_yoga_content_id, @donghae_region_id, '동해 방문 감사 쿠폰', '동해 체험 방문 완료 후 발급되는 할인 쿠폰입니다.', 'VISIT', 1000, 5000, 30, DATE_SUB(@now, INTERVAL 60 DAY), DATE_ADD(@now, INTERVAL 60 DAY), NULL, 1, 'PUBLISHED', DATE_SUB(@now, INTERVAL 60 DAY), NULL, @now),
+    (@donghae_yoga_content_id, @donghae_region_id, '동해 방문 감사 쿠폰', '동해 체험 방문 완료 후 발급되는 할인 쿠폰입니다.', 'VISIT', 1000, 5000, 30, DATE_SUB(@now, INTERVAL 60 DAY), DATE_ADD(@now, INTERVAL 60 DAY), NULL, 2, 'PUBLISHED', DATE_SUB(@now, INTERVAL 60 DAY), NULL, @now),
     (@donghae_surf_content_id, @donghae_region_id, '동해 미션 완주 쿠폰', '동해 지역 미션을 완주한 방문자에게 드리는 쿠폰입니다.', 'MISSION_REWARD', 2000, 10000, 30, DATE_SUB(@now, INTERVAL 60 DAY), DATE_ADD(@now, INTERVAL 60 DAY), NULL, 1, 'PUBLISHED', DATE_SUB(@now, INTERVAL 60 DAY), NULL, @now),
     (@donghae_photo_content_id, @donghae_region_id, '동해 스탬프 완성 쿠폰', '동해 스탬프북을 완성한 방문자에게 드리는 쿠폰입니다.', 'STAMPBOOK_COMPLETION', 1500, 7000, 7, DATE_SUB(@now, INTERVAL 60 DAY), DATE_ADD(@now, INTERVAL 60 DAY), NULL, 1, 'PUBLISHED', DATE_SUB(@now, INTERVAL 60 DAY), NULL, @now),
     (@donghae_cave_content_id, @donghae_region_id, '동해 여름 한정 쿠폰', '종료된 여름 한정 쿠폰 정책입니다.', 'VISIT', 1000, 5000, 14, DATE_SUB(@now, INTERVAL 90 DAY), DATE_SUB(@now, INTERVAL 3 DAY), 100, 0, 'ENDED', DATE_SUB(@now, INTERVAL 90 DAY), DATE_SUB(@now, INTERVAL 3 DAY), DATE_SUB(@now, INTERVAL 3 DAY)),
@@ -446,14 +504,16 @@ INSERT INTO mission_reward_claim (mission_participation_id, coupon_policy_id, cl
 SET @gimhae_mission_claim_id = (SELECT mission_reward_claim_id FROM mission_reward_claim WHERE mission_participation_id = @gimhae_mission_minji);
 SET @donghae_mission_claim_id = (SELECT mission_reward_claim_id FROM mission_reward_claim WHERE mission_participation_id = @donghae_mission_sora);
 
--- 쿠폰: 사용됨, 사용 후 환불 복구됨, 사용 가능, 만료됨 상태를 모두 포함합니다.
+-- 쿠폰: 사용 가능, 사용됨, 예약됨, 만료됨, 무효화됨 상태를 모두 포함합니다.
 INSERT INTO coupon (coupon_policy_id, user_id, status, issued_at, expires_at) VALUES
     (@gimhae_visit_policy_id, @junho_id, 'AVAILABLE', DATE_ADD(@gimhae_pottery_past_2_starts, INTERVAL 1 DAY), DATE_ADD(@gimhae_pottery_past_2_starts, INTERVAL 31 DAY)),
     (@gimhae_mission_policy_id, @minji_id, 'USED', DATE_ADD(@gimhae_museum_past_1_starts, INTERVAL 1 DAY), DATE_ADD(@gimhae_museum_past_1_starts, INTERVAL 31 DAY)),
     (@gimhae_stamp_policy_id, @minji_id, 'AVAILABLE', DATE_ADD(@gimhae_museum_past_1_starts, INTERVAL 1 DAY), DATE_ADD(@gimhae_museum_past_1_starts, INTERVAL 31 DAY)),
     (@donghae_visit_policy_id, @taeyang_id, 'AVAILABLE', DATE_ADD(@donghae_climbing_past_starts, INTERVAL 1 DAY), DATE_ADD(@donghae_climbing_past_starts, INTERVAL 31 DAY)),
     (@donghae_mission_policy_id, @sora_id, 'AVAILABLE', DATE_ADD(@donghae_climbing_past_starts, INTERVAL 1 DAY), DATE_ADD(@donghae_climbing_past_starts, INTERVAL 31 DAY)),
-    (@donghae_stamp_policy_id, @sora_id, 'EXPIRED', DATE_ADD(@donghae_climbing_past_starts, INTERVAL 1 DAY), DATE_ADD(@donghae_climbing_past_starts, INTERVAL 8 DAY));
+    (@donghae_stamp_policy_id, @sora_id, 'EXPIRED', DATE_ADD(@donghae_climbing_past_starts, INTERVAL 1 DAY), DATE_ADD(@donghae_climbing_past_starts, INTERVAL 8 DAY)),
+    (@gimhae_visit_policy_id, @minji_id, 'RESERVED', DATE_ADD(@gimhae_pottery_past_1_starts, INTERVAL 1 DAY), DATE_ADD(@gimhae_pottery_past_1_starts, INTERVAL 31 DAY)),
+    (@donghae_visit_policy_id, @minji_id, 'INVALIDATED', DATE_ADD(@donghae_yoga_past_2_starts, INTERVAL 1 DAY), DATE_ADD(@donghae_yoga_past_2_starts, INTERVAL 31 DAY));
 
 SET @coupon_gimhae_visit = (SELECT coupon_id FROM coupon WHERE coupon_policy_id = @gimhae_visit_policy_id AND user_id = @junho_id);
 SET @coupon_gimhae_mission = (SELECT coupon_id FROM coupon WHERE coupon_policy_id = @gimhae_mission_policy_id AND user_id = @minji_id);
@@ -461,6 +521,8 @@ SET @coupon_gimhae_stamp = (SELECT coupon_id FROM coupon WHERE coupon_policy_id 
 SET @coupon_donghae_visit = (SELECT coupon_id FROM coupon WHERE coupon_policy_id = @donghae_visit_policy_id AND user_id = @taeyang_id);
 SET @coupon_donghae_mission = (SELECT coupon_id FROM coupon WHERE coupon_policy_id = @donghae_mission_policy_id AND user_id = @sora_id);
 SET @coupon_donghae_stamp = (SELECT coupon_id FROM coupon WHERE coupon_policy_id = @donghae_stamp_policy_id AND user_id = @sora_id);
+SET @coupon_gimhae_visit_reserved = (SELECT coupon_id FROM coupon WHERE coupon_policy_id = @gimhae_visit_policy_id AND user_id = @minji_id);
+SET @coupon_donghae_visit_invalidated = (SELECT coupon_id FROM coupon WHERE coupon_policy_id = @donghae_visit_policy_id AND user_id = @minji_id);
 
 INSERT INTO coupon_issuance (
     coupon_id, coupon_policy_id, recipient_user_id, visit_id, mission_reward_claim_id,
@@ -471,7 +533,9 @@ INSERT INTO coupon_issuance (
     (@coupon_gimhae_stamp, @gimhae_stamp_policy_id, @minji_id, NULL, NULL, @gimhae_stamp_grant_id, SHA2('coupon-gimhae-stamp-minji', 256), DATE_ADD(@gimhae_museum_past_1_starts, INTERVAL 1 DAY)),
     (@coupon_donghae_visit, @donghae_visit_policy_id, @taeyang_id, @visit_donghae_climbing_taeyang, NULL, NULL, SHA2('coupon-donghae-visit-taeyang', 256), DATE_ADD(@donghae_climbing_past_starts, INTERVAL 1 DAY)),
     (@coupon_donghae_mission, @donghae_mission_policy_id, @sora_id, NULL, @donghae_mission_claim_id, NULL, SHA2('coupon-donghae-mission-sora', 256), DATE_ADD(@donghae_climbing_past_starts, INTERVAL 1 DAY)),
-    (@coupon_donghae_stamp, @donghae_stamp_policy_id, @sora_id, NULL, NULL, @donghae_stamp_grant_id, SHA2('coupon-donghae-stamp-sora', 256), DATE_ADD(@donghae_climbing_past_starts, INTERVAL 1 DAY));
+    (@coupon_donghae_stamp, @donghae_stamp_policy_id, @sora_id, NULL, NULL, @donghae_stamp_grant_id, SHA2('coupon-donghae-stamp-sora', 256), DATE_ADD(@donghae_climbing_past_starts, INTERVAL 1 DAY)),
+    (@coupon_gimhae_visit_reserved, @gimhae_visit_policy_id, @minji_id, @visit_gimhae_pottery_minji, NULL, NULL, SHA2('coupon-gimhae-visit-minji', 256), DATE_ADD(@gimhae_pottery_past_1_starts, INTERVAL 1 DAY)),
+    (@coupon_donghae_visit_invalidated, @donghae_visit_policy_id, @minji_id, @visit_donghae_yoga_minji, NULL, NULL, SHA2('coupon-donghae-visit-minji', 256), DATE_ADD(@donghae_yoga_past_2_starts, INTERVAL 1 DAY));
 
 INSERT INTO coupon_status_history (
     coupon_id, previous_status, next_status, reason_code, actor_kind, occurred_at
@@ -487,24 +551,31 @@ INSERT INTO coupon_status_history (
     (@coupon_donghae_visit, NULL, 'AVAILABLE', 'VISIT_REWARD_ISSUED', 'SYSTEM', DATE_ADD(@donghae_climbing_past_starts, INTERVAL 1 DAY)),
     (@coupon_donghae_mission, NULL, 'AVAILABLE', 'MISSION_REWARD_ISSUED', 'SYSTEM', DATE_ADD(@donghae_climbing_past_starts, INTERVAL 1 DAY)),
     (@coupon_donghae_stamp, NULL, 'AVAILABLE', 'STAMPBOOK_REWARD_ISSUED', 'SYSTEM', DATE_ADD(@donghae_climbing_past_starts, INTERVAL 1 DAY)),
-    (@coupon_donghae_stamp, 'AVAILABLE', 'EXPIRED', 'EXPIRES_AT_REACHED', 'SYSTEM', DATE_SUB(@now, INTERVAL 1 DAY));
+    (@coupon_donghae_stamp, 'AVAILABLE', 'EXPIRED', 'EXPIRES_AT_REACHED', 'SYSTEM', DATE_SUB(@now, INTERVAL 1 DAY)),
+    (@coupon_gimhae_visit_reserved, NULL, 'AVAILABLE', 'VISIT_REWARD_ISSUED', 'SYSTEM', DATE_ADD(@gimhae_pottery_past_1_starts, INTERVAL 1 DAY)),
+    (@coupon_gimhae_visit_reserved, 'AVAILABLE', 'RESERVED', 'PAYMENT_CREATE', 'USER', @now),
+    (@coupon_donghae_visit_invalidated, NULL, 'AVAILABLE', 'VISIT_REWARD_ISSUED', 'SYSTEM', DATE_ADD(@donghae_yoga_past_2_starts, INTERVAL 1 DAY)),
+    (@coupon_donghae_visit_invalidated, 'AVAILABLE', 'INVALIDATED', 'ISSUANCE_REVOKED', 'SYSTEM', DATE_SUB(@now, INTERVAL 1 DAY));
 
 -- 유료 예약, 쿠폰 사용, 환불 이력
 INSERT INTO reservation_price_snapshot (
     hold_id, coupon_id, base_amount, discount_amount, final_amount, currency, created_at
 ) VALUES
     (@hold_gimhae_kayak, @coupon_gimhae_mission, 18000, 2000, 16000, 'KRW', @now),
-    (@hold_gimhae_baking, @coupon_gimhae_visit, 22000, 1000, 21000, 'KRW', DATE_SUB(@now, INTERVAL 3 DAY));
+    (@hold_gimhae_baking, @coupon_gimhae_visit, 22000, 1000, 21000, 'KRW', DATE_SUB(@now, INTERVAL 3 DAY)),
+    (@hold_gimhae_wetland_active, @coupon_gimhae_visit_reserved, 10000, 1000, 9000, 'KRW', @now);
 
 SET @kayak_snapshot_id = (SELECT reservation_price_snapshot_id FROM reservation_price_snapshot WHERE hold_id = @hold_gimhae_kayak);
 SET @baking_snapshot_id = (SELECT reservation_price_snapshot_id FROM reservation_price_snapshot WHERE hold_id = @hold_gimhae_baking);
+SET @wetland_pending_snapshot_id = (SELECT reservation_price_snapshot_id FROM reservation_price_snapshot WHERE hold_id = @hold_gimhae_wetland_active);
 
 INSERT INTO payment (
     hold_id, reservation_price_snapshot_id, reservation_id, order_id, portone_payment_id,
     status, finalized_at, created_at
 ) VALUES
     (@hold_gimhae_kayak, @kayak_snapshot_id, @reservation_gimhae_kayak, 'order-gimhae-kayak-2026', 'portone-gimhae-kayak-2026', 'APPROVED', @now, @now),
-    (@hold_gimhae_baking, @baking_snapshot_id, @reservation_gimhae_baking, 'order-gimhae-baking-2026', 'portone-gimhae-baking-2026', 'APPROVED', DATE_SUB(@now, INTERVAL 3 DAY), DATE_SUB(@now, INTERVAL 3 DAY));
+    (@hold_gimhae_baking, @baking_snapshot_id, @reservation_gimhae_baking, 'order-gimhae-baking-2026', 'portone-gimhae-baking-2026', 'APPROVED', DATE_SUB(@now, INTERVAL 3 DAY), DATE_SUB(@now, INTERVAL 3 DAY)),
+    (@hold_gimhae_wetland_active, @wetland_pending_snapshot_id, NULL, 'order-gimhae-wetland-pending-2026', NULL, 'PENDING', NULL, @now);
 
 SET @kayak_payment_id = (SELECT payment_id FROM payment WHERE order_id = 'order-gimhae-kayak-2026');
 SET @baking_payment_id = (SELECT payment_id FROM payment WHERE order_id = 'order-gimhae-baking-2026');
@@ -586,3 +657,26 @@ LEFT JOIN coupon_policy cp ON cp.region_id = r.region_id
 WHERE r.region_code IN ('GIMHAE', 'DONGHAE')
 GROUP BY r.region_id, r.name
 ORDER BY r.name;
+
+SELECT
+    상태대상,
+    상태,
+    건수
+FROM (
+    SELECT '회차' AS 상태대상, status AS 상태, COUNT(*) AS 건수
+    FROM content_session
+    GROUP BY status
+    UNION ALL
+    SELECT '정원 홀드', status, COUNT(*)
+    FROM capacity_hold
+    GROUP BY status
+    UNION ALL
+    SELECT '쿠폰', status, COUNT(*)
+    FROM coupon
+    GROUP BY status
+    UNION ALL
+    SELECT '결제', status, COUNT(*)
+    FROM payment
+    GROUP BY status
+) AS status_summary
+ORDER BY 상태대상, 상태;

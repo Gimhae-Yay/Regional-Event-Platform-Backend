@@ -63,6 +63,33 @@
     "checksum": "7FZqUsVpatuSPbJXbW0GvqPqwkaDwEs7Uv/oLIUDhes="
   },
   {
+    "regionCode": "GIMHAE",
+    "contentTitle": "김해 전통차 시음 체험",
+    "file": "presentation-images/gimhae-traditional-tea-tasting.png",
+    "objectKey": "contents/presentation/2026/08/23/a3f2d104-720a-43cf-8c4d-10c60fa52ff2.png",
+    "mediaType": "image/png",
+    "byteSize": 1793109,
+    "checksum": "bodMOG5McIGIRle1kU3NsRq84Cc70Qx7lys26r6tRPo="
+  },
+  {
+    "regionCode": "GIMHAE",
+    "contentTitle": "김해 가을 문화 해설",
+    "file": "presentation-images/gimhae-autumn-cultural-walk.png",
+    "objectKey": "contents/presentation/2026/08/23/5c08eeca-ffb9-4c42-ba85-8bd69cc93c37.png",
+    "mediaType": "image/png",
+    "byteSize": 2247860,
+    "checksum": "5OwGi9fhVvMiqxXrQ0m9FJIwMfxk4AKHVEM3R6Ni8GI="
+  },
+  {
+    "regionCode": "GIMHAE",
+    "contentTitle": "김해 야외 음악 체험",
+    "file": "presentation-images/gimhae-outdoor-music-experience.png",
+    "objectKey": "contents/presentation/2026/08/23/3a57279e-121f-418b-8d85-f2941500114e.png",
+    "mediaType": "image/png",
+    "byteSize": 1899166,
+    "checksum": "GMiAorZY3FT9fHda/yglV5JSvB9CniDgXWPNDEBOXgw="
+  },
+  {
     "regionCode": "DONGHAE",
     "contentTitle": "묵호항 새벽 경매 체험",
     "file": "presentation-images/donghae-mukho-harbor-auction.png",
@@ -70,6 +97,24 @@
     "mediaType": "image/png",
     "byteSize": 2371701,
     "checksum": "fIfQyBWB2OAqp+FCW/uIiILDLxl0SqhchMn+JUSL9aA="
+  },
+  {
+    "regionCode": "DONGHAE",
+    "contentTitle": "동해 해안 생태 관찰",
+    "file": "presentation-images/donghae-coastal-ecology-observation.png",
+    "objectKey": "contents/presentation/2026/08/23/2ac3305d-3d37-437b-9ae3-48c75c9866e5.png",
+    "mediaType": "image/png",
+    "byteSize": 2085457,
+    "checksum": "HVs4eYr/PibWWZspww/ZjD0vsjRLcu1DI3VucPsKDkc="
+  },
+  {
+    "regionCode": "DONGHAE",
+    "contentTitle": "동해 항구 드로잉 체험",
+    "file": "presentation-images/donghae-harbor-drawing-experience.png",
+    "objectKey": "contents/presentation/2026/08/23/7863cad0-2b33-4575-97a1-dda7ba5e1782.png",
+    "mediaType": "image/png",
+    "byteSize": 2220160,
+    "checksum": "G7aZUN+5k1YXY1X4VEHn/auaJ2FTFRsyiabg/ExzHPA="
   },
   {
     "regionCode": "DONGHAE",
