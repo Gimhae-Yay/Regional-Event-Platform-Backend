@@ -4,6 +4,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOnePaymentGateway;
+import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneResponseException;
 import io.regionevent.regioneventbackend.domain.payment.service.PortOneFakeProperties;
 
 @Component
@@ -34,6 +35,13 @@ public class FakePortOnePaymentAdapter implements PortOnePaymentGateway {
 
     @Override
     public PortOneCancellation cancelPayment(String paymentId, long amount, String reason) {
+        if (paymentId.startsWith(properties.getTransactionIdPrefix())) {
+            throw new PortOneResponseException(
+                "HTTP_404",
+                "fake-payment-not-found-" + paymentId,
+                new IllegalStateException("Fake PortOne payment does not exist")
+            );
+        }
         return new PortOneCancellation(
             properties.getCancellationIdPrefix() + paymentId,
             SUCCEEDED_STATUS,

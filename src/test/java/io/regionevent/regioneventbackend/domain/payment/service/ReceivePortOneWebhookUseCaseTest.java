@@ -290,7 +290,7 @@ class ReceivePortOneWebhookUseCaseTest {
 
         useCase.receive(WEBHOOK_ID, WEBHOOK_TIMESTAMP, WEBHOOK_SIGNATURE, validPaymentEvent());
 
-        verify(payment).markDiscrepant(eq(TRANSACTION_ID), any());
+        verify(payment).markDiscrepant(eq(PAYMENT_ID), any());
         verify(paymentDiscrepancyService).create(any());
         verify(capacityHoldService, never()).consumeForPaidPaymentIfConfirmable(any(), any(), any());
     }
