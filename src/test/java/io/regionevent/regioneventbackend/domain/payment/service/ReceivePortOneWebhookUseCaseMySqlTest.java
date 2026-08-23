@@ -254,8 +254,10 @@ class ReceivePortOneWebhookUseCaseMySqlTest extends NonTransactionalMySqlTestSup
             "webhook-coupon-approved", WEBHOOK_TIMESTAMP, WEBHOOK_SIGNATURE, paymentEvent(orderId)
         );
 
-        assertThat(paymentRepository.findAll()).extracting(payment -> payment.getStatus())
-            .containsExactly(PaymentStatus.APPROVED);
+        assertThat(paymentRepository.findAll()).singleElement().satisfies(payment -> {
+            assertThat(payment.getStatus()).isEqualTo(PaymentStatus.APPROVED);
+            assertThat(payment.getPortonePaymentId()).isEqualTo(orderId);
+        });
         assertThat(reservationRepository.findAll()).hasSize(1);
         assertThat(couponRepository.findAll()).extracting(Coupon::getStatus).containsExactly(CouponStatus.USED);
         assertThat(couponStatusHistoryRepository.findAll()).hasSize(2);

@@ -263,7 +263,7 @@ public class ReceivePortOneWebhookUseCase {
         } else if ("DISCREPANT".equals(decision)) {
             String discrepancyType = discrepancyType(payment, snapshot, event, observed);
             PaymentStatus previousStatus = payment.getStatus();
-            payment.markDiscrepant(observed.transactionId(), now);
+            payment.markDiscrepant(observed.paymentId(), now);
             PaymentDiscrepancy discrepancy = paymentDiscrepancyService.create(new PaymentDiscrepancy(
                 payment, discrepancyType, "OPEN", now
             ));
@@ -309,7 +309,7 @@ public class ReceivePortOneWebhookUseCase {
             recordReservationAudit(reservation, requestId, now);
             useCoupon(snapshot, reservation, requestId, now);
             Payment approvedPayment = findPaymentAfterCapacityHoldUpdate(payment.getOrderId());
-            approvedPayment.approve(reservation, observed.transactionId(), now);
+            approvedPayment.approve(reservation, observed.paymentId(), now);
             recordPaymentAudit(approvedPayment, PaymentStatus.PENDING, PaymentStatus.APPROVED, requestId, now);
             return new ApprovalResult(approvedPayment, false);
         } catch (ReservationConfirmationConflictException exception) {
@@ -318,7 +318,7 @@ public class ReceivePortOneWebhookUseCase {
                 return new ApprovalResult(discrepantPayment, true);
             }
             PaymentStatus previousStatus = discrepantPayment.getStatus();
-            discrepantPayment.markDiscrepant(observed.transactionId(), now);
+            discrepantPayment.markDiscrepant(observed.paymentId(), now);
             PaymentDiscrepancy discrepancy = paymentDiscrepancyService.create(new PaymentDiscrepancy(
                 discrepantPayment, "LATE_APPROVAL", "OPEN", now
             ));

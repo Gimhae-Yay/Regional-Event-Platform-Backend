@@ -1,10 +1,12 @@
 package io.regionevent.regioneventbackend.infra.payment;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
 
 import io.regionevent.regioneventbackend.domain.payment.port.out.PortOnePaymentGateway;
+import io.regionevent.regioneventbackend.domain.payment.port.out.PortOneResponseException;
 import io.regionevent.regioneventbackend.domain.payment.service.PortOneFakeProperties;
 
 class FakePortOnePaymentAdapterTest {
@@ -25,7 +27,7 @@ class FakePortOnePaymentAdapterTest {
     }
 
     @Test
-    void cancelPayment_요청값과무관하게_결정적성공결과를반환한다() {
+    void cancelPayment_결제식별자로_결정적성공결과를반환한다() {
         FakePortOnePaymentAdapter adapter = new FakePortOnePaymentAdapter(properties());
 
         PortOnePaymentGateway.PortOneCancellation cancellation = adapter.cancelPayment(
@@ -36,6 +38,19 @@ class FakePortOnePaymentAdapterTest {
 
         assertThat(cancellation.cancellationId()).isEqualTo("fixture-cancellation-payment-100");
         assertThat(cancellation.isSucceeded()).isTrue();
+    }
+
+    @Test
+    void cancelPayment_결제시도식별자면_미존재오류를반환한다() {
+        FakePortOnePaymentAdapter adapter = new FakePortOnePaymentAdapter(properties());
+
+        assertThatThrownBy(() -> adapter.cancelPayment(
+            "fixture-transaction-payment-100",
+            12_000L,
+            "MANUAL_REFUND"
+        )).isInstanceOf(PortOneResponseException.class)
+            .extracting(exception -> ((PortOneResponseException) exception).getExternalStatus())
+            .isEqualTo("HTTP_404");
     }
 
     private PortOneFakeProperties properties() {
