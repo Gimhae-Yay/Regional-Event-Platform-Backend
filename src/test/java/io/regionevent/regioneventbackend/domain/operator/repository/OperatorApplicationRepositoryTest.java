@@ -3,6 +3,8 @@ package io.regionevent.regioneventbackend.domain.operator.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.Instant;
+
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceUnitUtil;
 
@@ -239,6 +241,101 @@ class OperatorApplicationRepositoryTest {
     }
 
     @Test
+    void 신청자별_최신_신청만_조회한다() {
+        AppUser applicant = saveUser("latest-applicant@example.com");
+        AppUser otherApplicant = saveUser("other-latest-applicant@example.com");
+        Region region = saveRegion();
+        OperatorApplication expected = operatorApplicationRepository.saveAndFlush(new OperatorApplication(
+            applicant,
+            region,
+            "신청자 본인의 신청",
+            OperatorApplicationStatus.PENDING,
+            null,
+            null
+        ));
+        operatorApplicationRepository.saveAndFlush(new OperatorApplication(
+            otherApplicant,
+            region,
+            "다른 신청자의 신청",
+            OperatorApplicationStatus.PENDING,
+            null,
+            null
+        ));
+        entityManager.clear();
+
+        assertThat(operatorApplicationRepository
+            .findFirstByApplicantOrderByCreatedAtDescOperatorApplicationIdDesc(applicant))
+            .hasValueSatisfying(application -> assertThat(application.getOperatorApplicationId())
+                .isEqualTo(expected.getOperatorApplicationId()));
+    }
+
+    @Test
+    void 상태를_필터링하지_않고_생성_시각이_가장_최근인_신청과_요청_지역을_조회한다() {
+        AppUser applicant = saveUser("status-free-applicant@example.com");
+        Region region = saveRegion();
+        OperatorApplication earlier = operatorApplicationRepository.saveAndFlush(new OperatorApplication(
+            applicant,
+            region,
+            "이전 신청",
+            OperatorApplicationStatus.PENDING,
+            null,
+            null
+        ));
+        OperatorApplication latest = operatorApplicationRepository.saveAndFlush(new OperatorApplication(
+            applicant,
+            region,
+            "최신 취소 신청",
+            OperatorApplicationStatus.CANCELLED,
+            null,
+            null
+        ));
+        updateCreatedAt(earlier.getOperatorApplicationId(), Instant.parse("2026-08-20T00:00:00Z"));
+        updateCreatedAt(latest.getOperatorApplicationId(), Instant.parse("2026-08-21T00:00:00Z"));
+        entityManager.clear();
+
+        OperatorApplication found = operatorApplicationRepository
+            .findFirstByApplicantOrderByCreatedAtDescOperatorApplicationIdDesc(applicant)
+            .orElseThrow();
+        PersistenceUnitUtil persistenceUnitUtil = entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
+
+        assertThat(found.getOperatorApplicationId()).isEqualTo(latest.getOperatorApplicationId());
+        assertThat(found.getStatus()).isEqualTo(OperatorApplicationStatus.CANCELLED);
+        assertThat(persistenceUnitUtil.isLoaded(found, "requestedRegion")).isTrue();
+        assertThat(found.getRequestedRegion().getRegionId()).isEqualTo(region.getRegionId());
+    }
+
+    @Test
+    void 생성_시각이_같으면_신청_식별자가_큰_신청을_조회한다() {
+        AppUser applicant = saveUser("same-time-applicant@example.com");
+        Region region = saveRegion();
+        OperatorApplication lowerId = operatorApplicationRepository.saveAndFlush(new OperatorApplication(
+            applicant,
+            region,
+            "먼저 생성된 신청",
+            OperatorApplicationStatus.PENDING,
+            null,
+            null
+        ));
+        OperatorApplication higherId = operatorApplicationRepository.saveAndFlush(new OperatorApplication(
+            applicant,
+            region,
+            "나중에 생성된 신청",
+            OperatorApplicationStatus.PENDING,
+            null,
+            null
+        ));
+        Instant tiedCreatedAt = Instant.parse("2026-08-20T00:00:00Z");
+        updateCreatedAt(lowerId.getOperatorApplicationId(), tiedCreatedAt);
+        updateCreatedAt(higherId.getOperatorApplicationId(), tiedCreatedAt);
+        entityManager.clear();
+
+        assertThat(operatorApplicationRepository
+            .findFirstByApplicantOrderByCreatedAtDescOperatorApplicationIdDesc(applicant))
+            .hasValueSatisfying(application -> assertThat(application.getOperatorApplicationId())
+                .isEqualTo(higherId.getOperatorApplicationId()));
+    }
+
+    @Test
     void 탈퇴_후_신청자와_사업자_정보를_null로_저장할_수_있다() {
         AppUser applicant = saveUser("withdrawn-applicant@example.com");
         Region region = saveRegion();
@@ -280,5 +377,13 @@ class OperatorApplicationRepositoryTest {
 
     private Region saveRegion() {
         return regionRepository.saveAndFlush(new Region("GIMHAE", "김해시", true));
+    }
+
+    private void updateCreatedAt(Long operatorApplicationId, Instant createdAt) {
+        jdbcTemplate.update(
+            "UPDATE operator_application SET created_at = ? WHERE operator_application_id = ?",
+            createdAt,
+            operatorApplicationId
+        );
     }
 }

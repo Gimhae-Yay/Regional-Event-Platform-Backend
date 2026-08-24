@@ -10,6 +10,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 import io.regionevent.regioneventbackend.domain.operator.service.ApproveOperatorApplicationUseCase;
 import io.regionevent.regioneventbackend.domain.operator.service.GetOperatorApplicationDetailUseCase;
+import io.regionevent.regioneventbackend.domain.operator.service.GetMyOperatorApplicationUseCase;
 import io.regionevent.regioneventbackend.domain.operator.service.GetPendingOperatorApplicationsUseCase;
 import io.regionevent.regioneventbackend.domain.operator.service.ReapplyOperatorApplicationUseCase;
 import io.regionevent.regioneventbackend.domain.operator.service.RejectOperatorApplicationUseCase;
@@ -35,6 +36,9 @@ abstract class OperatorControllerWebMvcTestSupport {
 
     @MockitoBean
     protected GetOperatorApplicationDetailUseCase getOperatorApplicationDetailUseCase;
+
+    @MockitoBean
+    protected GetMyOperatorApplicationUseCase getMyOperatorApplicationUseCase;
 
     @MockitoBean
     protected GetPendingOperatorApplicationsUseCase getPendingOperatorApplicationsUseCase;

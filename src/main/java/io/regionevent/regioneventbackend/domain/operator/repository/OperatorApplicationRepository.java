@@ -20,6 +20,11 @@ public interface OperatorApplicationRepository extends JpaRepository<OperatorApp
 
     boolean existsByApplicantAndStatus(AppUser applicant, OperatorApplicationStatus status);
 
+    @EntityGraph(attributePaths = "requestedRegion")
+    Optional<OperatorApplication> findFirstByApplicantOrderByCreatedAtDescOperatorApplicationIdDesc(
+        AppUser applicant
+    );
+
     @EntityGraph(attributePaths = {"requestedRegion", "applicant"})
     List<OperatorApplication> findByRequestedRegionRegionIdAndStatusOrderByCreatedAtAscOperatorApplicationIdAsc(
         Long regionId,
