@@ -173,11 +173,30 @@ class OperatorApplicationControllerIntegrationTest {
     }
 
     @ParameterizedTest
+    @EnumSource(value = OperatorApplicationStatus.class, names = {"APPROVED", "CANCELLED"})
+    void reapply_whenLatestApplicationIsNotRejected_returnsReapplicationNotAllowed(
+        OperatorApplicationStatus latestStatus
+    ) throws Exception {
+        Region region = saveRegion(true);
+        AppUser applicant = saveUser(AppUserStatus.ACTIVE);
+        createRejectedApplication(applicant, region);
+        createApplication(applicant, region, latestStatus);
+
+        performReapplication(applicant, region.getRegionId(), "Business information")
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code").value("OPERATOR_APPLICATION_REAPPLICATION_NOT_ALLOWED"));
+
+        assertThat(operatorApplicationRepository.findAll())
+            .filteredOn(application -> application.getStatus() == OperatorApplicationStatus.PENDING)
+            .isEmpty();
+    }
+
+    @ParameterizedTest
     @EnumSource(value = UserRole.class, names = {"OPERATOR", "REGION_ADMIN"})
     void reapply_withOperatorAuthority_returnsForbidden(UserRole role) throws Exception {
         Region region = saveRegion(true);
         AppUser applicant = saveUser(AppUserStatus.ACTIVE);
-        createRejectedApplication(applicant, region);
+        createApplication(applicant, region, OperatorApplicationStatus.PENDING);
         userRoleAssignmentRepository.saveAndFlush(new UserRoleAssignment(applicant, role, region));
 
         performReapplication(applicant, region.getRegionId(), "Business information")
@@ -186,7 +205,7 @@ class OperatorApplicationControllerIntegrationTest {
 
         assertThat(operatorApplicationRepository.findAll())
             .filteredOn(application -> application.getStatus() == OperatorApplicationStatus.PENDING)
-            .isEmpty();
+            .singleElement();
     }
 
     @Test
@@ -237,14 +256,24 @@ class OperatorApplicationControllerIntegrationTest {
     }
 
     private void createRejectedApplication(AppUser applicant, Region region) {
+        createApplication(applicant, region, OperatorApplicationStatus.REJECTED);
+    }
+
+    private void createApplication(
+        AppUser applicant,
+        Region region,
+        OperatorApplicationStatus status
+    ) {
         AppUser inspector = saveUser(AppUserStatus.ACTIVE);
         operatorApplicationRepository.saveAndFlush(new OperatorApplication(
             applicant,
             region,
             "Previous business information",
-            OperatorApplicationStatus.REJECTED,
-            inspector,
-            "Rejected"
+            status,
+            status == OperatorApplicationStatus.APPROVED || status == OperatorApplicationStatus.REJECTED
+                ? inspector
+                : null,
+            status == OperatorApplicationStatus.REJECTED ? "Rejected" : null
         ));
     }
 

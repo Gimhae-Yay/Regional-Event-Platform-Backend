@@ -18,7 +18,7 @@
 
 지역 비공개 전환의 거부 판정과 롤백은 감사 저장 전에 이미 확정된다. 이후 감사 저장 장애를 새로운 도메인 처리
 실패로 응답하면 클라이언트가 재시도해도 같은 상태 조건 때문에 다시 거부되고, 실제 원인과 다른 `500`을 받게 된다.
-[ADR-0063](0063-record-failed-session-creation-after-ended-content-check.md)은 같은 독립 실패 감사 경계에서 감사 저장
+[ADR-0122](0122-record-failed-session-creation-after-ended-content-check.md)은 같은 독립 실패 감사 경계에서 감사 저장
 실패가 원래 거부 응답을 바꾸지 않고 구조화 로그로 관찰되도록 정한 선례를 제공한다.
 
 ## 결정 동인과 불변 조건

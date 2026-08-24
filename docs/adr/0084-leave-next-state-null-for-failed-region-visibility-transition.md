@@ -15,7 +15,7 @@
 지역 공개 여부 변경의 실패 감사에 현재 공개 여부와 요청 목표를 포함하도록 정했지만, 이를
 `audit_event.previous_state`와 `next_state`에 어떻게 매핑할지는 확정하지 않았다.
 
-P0 `audit_event`는 상태 전이 기준 기록이며, [ADR-0063](0063-record-failed-session-creation-after-ended-content-check.md)은
+P0 `audit_event`는 상태 전이 기준 기록이며, [ADR-0122](0122-record-failed-session-creation-after-ended-content-check.md)은
 상태가 바뀌지 않은 실패 감사에서 확인한 현재 상태를 `previous_state`에 저장하고 `next_state = NULL`을 사용한다.
 지역 전환 실패에서 `next_state = false`를 저장하면 실제로 전이하지 않은 값을 다음 상태로 기록해 성공 전이와 같은
 형태로 오해할 수 있다.

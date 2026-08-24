@@ -5,15 +5,15 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | FR-01, AUTH-02 |
 | 소유 도메인 | 인증·프로필 |
-| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ADR-0036](../../../adr/0036-expose-business-information-only-in-protected-review-detail.md), [ADR-0055](../../../adr/0055-defer-business-information-encryption-until-after-operator-request.md), [ERD](../../../erd.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [인증·프로필](../../../p0/auth-profile.md), [ADR-0036](../../../adr/0036-expose-business-information-only-in-protected-review-detail.md), [ADR-0055](../../../adr/0055-defer-business-information-encryption-until-after-operator-request.md), [ADR-0116](../../../adr/0116-use-latest-operator-application-for-status-and-reapplication.md), [ERD](../../../erd.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
-이전에 `REJECTED`된 운영자 신청이 있는 활성 회원이 운영자 역할을 다시 신청한다. 서버는 요청 지역과 사업자 정보를
+가장 최근 운영자 신청이 `REJECTED`인 활성 회원이 운영자 역할을 다시 신청한다. 서버는 요청 지역과 사업자 정보를
 가진 `PENDING` 신청을 새로 만들며, 지역 관리자가 승인하기 전까지 `OPERATOR` 역할과 담당 지역을 부여하지 않는다.
 
-최초 운영자 신청은 회원가입에서 `requestedRole`을 `OPERATOR`로 선택해 생성한다. 반려된 신청만 새 행으로 다시
-신청할 수 있다. `PENDING` 신청이 이미 있거나 이미 `OPERATOR` 역할이 부여된 회원은 새 신청을 만들 수 없다.
+최초 운영자 신청은 회원가입에서 `requestedRole`을 `OPERATOR`로 선택해 생성한다. 가장 최근 신청이 반려된 경우에만
+새 행으로 다시 신청할 수 있다. 가장 최근 신청이 `PENDING`이거나 이미 `OPERATOR` 역할이 부여된 회원은 새 신청을 만들 수 없다.
 
 ### 요구사항 추적
 
@@ -32,8 +32,14 @@
 
 ## 3. 운영자 권한 신청
 
-이전에 `REJECTED`된 신청이 있는 활성 회원이 공개 지역을 선택하고 사업자 정보를 제출해 운영자 권한 심사를 다시
-요청한다. 최초 신청은 회원가입에서 처리한다. 재신청 구현 단계에서는 기존 평문 저장을 사용하되 이 신청 응답과 로그에 포함하지 않으며,
+가장 최근 신청이 `REJECTED`인 활성 회원이 공개 지역을 선택하고 사업자 정보를 제출해 운영자 권한 심사를 다시
+요청한다. 최초 신청은 회원가입에서 처리한다. 서버는 회원 행을 잠근 쓰기 트랜잭션에서 현재 역할과 가장 최근 신청을
+다시 조회하므로, 본인 신청 현황 조회 뒤 상태가 바뀌어도 제출 시점의 상태로 허용 여부를 판정한다.
+현재 `OPERATOR` 또는 `REGION_ADMIN` 역할 검사를 가장 최근 신청 상태 검사보다 먼저 적용한다. 따라서 승인 뒤
+`OPERATOR` 역할이 유지된 정상 회원은 `OPERATOR_APPLICATION_REAPPLICATION_NOT_ALLOWED`가 아니라 `FORBIDDEN`을 받는다.
+
+가장 최근 신청은 `created_at` 내림차순, 같은 시각이면 `operator_application_id` 내림차순으로 정렬한 첫 행이다.
+재신청 구현 단계에서는 기존 평문 저장을 사용하되 이 신청 응답과 로그에 포함하지 않으며,
 담당 지역 관리자 전용 심사용 상세 조회에서만 원문을 제공한다. 암호화 전환은 [#266](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/266)에서 처리한다.
 
 ### Request
@@ -134,8 +140,8 @@ Accept: application/json
 | 401 | `UNAUTHENTICATED` | Access Token이 없거나 만료·변조되었다. 신청은 생성되지 않으며 유효한 Token으로 다시 요청할 수 있다. |
 | 403 | `FORBIDDEN` | 활성 회원이 아니거나 이미 `OPERATOR` 또는 `REGION_ADMIN` 역할이 부여된 회원이다. 신청은 생성되지 않는다. |
 | 404 | `NOT_FOUND` | 요청 지역이 없거나 공개 지역이 아니다. 신청은 생성되지 않으며 공개 지역을 선택해 다시 요청할 수 있다. |
-| 409 | `OPERATOR_APPLICATION_PENDING` | 해당 회원의 `PENDING` 운영자 신청이 이미 있다. 신청은 생성되지 않으며 기존 신청이 `REJECTED`로 종결된 뒤 새로 신청할 수 있다. |
-| 409 | `OPERATOR_APPLICATION_REAPPLICATION_NOT_ALLOWED` | 이전 `REJECTED` 운영자 신청이 없다. 최초 신청은 회원가입에서 `requestedRole`을 `OPERATOR`로 선택해야 한다. 신청은 생성되지 않는다. |
+| 409 | `OPERATOR_APPLICATION_PENDING` | 가장 최근 운영자 신청이 `PENDING`이다. 신청은 생성되지 않으며 기존 신청이 `REJECTED`로 종결된 뒤 새로 신청할 수 있다. |
+| 409 | `OPERATOR_APPLICATION_REAPPLICATION_NOT_ALLOWED` | 신청 이력이 없거나 가장 최근 신청이 `APPROVED` 또는 `CANCELLED`이다. 최초 신청은 회원가입에서 `requestedRole`을 `OPERATOR`로 선택해야 하며, 재신청은 가장 최근 신청이 `REJECTED`일 때만 허용한다. 신청은 생성되지 않는다. |
 
 #### Error Response Body
 

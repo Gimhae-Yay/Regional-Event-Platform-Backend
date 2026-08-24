@@ -5,7 +5,7 @@
 | 대상 릴리스 | P1 |
 | 관련 요구사항 | [P1-FR-01](../../../p1-spec.md#6-기능-요구사항과-소유-문서), `STB-01`, `STB-02` |
 | 소유 도메인 | 스탬프북 |
-| 기준 문서 | [스탬프북 API](stampbook.md), [스탬프북](../../../p1/stampbook.md), [P1 ERD](../../../p1-erd.md), [ADR-0066](../../../adr/0066-require-regional-admin-approval-for-p1-benefit-publication.md), [ADR-0104](../../../adr/0104-store-stampbook-title-as-a-not-null-intrinsic-field.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [스탬프북 API](stampbook.md), [스탬프북](../../../p1/stampbook.md), [P1 ERD](../../../p1-erd.md), [ADR-0066](../../../adr/0066-require-regional-admin-approval-for-p1-benefit-publication.md), [ADR-0128](../../../adr/0128-store-stampbook-title-as-a-not-null-intrinsic-field.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 

@@ -1,4 +1,4 @@
-# ADR-0105: Access Token을 JSON 응답 본문으로 전달
+# ADR-0129: Access Token을 JSON 응답 본문으로 전달
 
 - 상태: 채택됨
 - 기록 유형: 신규

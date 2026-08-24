@@ -1,4 +1,4 @@
-# ADR-0108: 최초 운영자 클라이언트 전에 미션 제목 최종 계약을 직접 적용한다
+# ADR-0132: 최초 운영자 클라이언트 전에 미션 제목 최종 계약을 직접 적용한다
 
 - 상태: 채택됨
 - 기록 유형: 신규
@@ -7,11 +7,11 @@
 - 관련 요구사항: [지역 미션 `MSN-01`·`MSN-05`](../p1/regional-mission.md#3-지역-미션-정책), [P1 ERD 지역 미션](../p1-erd.md#53-지역-미션), [미션 생성·수정 API](../api/p1/mission/mission.md#기능별-api-명세)
 - 관련 단계: 단계 1. MVP 구현·검증
 - 관련 이슈: [#910](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/910), [#925](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/925), [#926](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/926)
-- 대체 대상: [ADR-0106](0106-store-mission-title-on-mission.md)의 `전환과 롤백`·backfill 검증 범위, [ADR-0107](0107-deploy-compatible-server-before-mission-title-clients.md)의 전환·롤백·호환 검증 전체
+- 대체 대상: [ADR-0130](0130-store-mission-title-on-mission.md)의 `전환과 롤백`·backfill 검증 범위, [ADR-0131](0131-deploy-compatible-server-before-mission-title-clients.md)의 전환·롤백·호환 검증 전체
 
 ## 맥락
 
-ADR-0106과 ADR-0107은 제목 없는 기존 미션 행과 제목을 보내지 않는 운영자 클라이언트가 존재한다는 전제에서
+ADR-0130과 ADR-0131은 제목 없는 기존 미션 행과 제목을 보내지 않는 운영자 클라이언트가 존재한다는 전제에서
 nullable 열, 호환 서버, backfill, 최종 서버와 후속 `NOT NULL` migration을 순서대로 배포하도록 정했다.
 
 2026-08-18 확인 결과 운영 migration과 애플리케이션 시작 코드에는 미션 행을 만드는 seed가 없고, 프로젝트
@@ -25,7 +25,7 @@ nullable 열, 호환 서버, backfill, 최종 서버와 후속 `NOT NULL` migrat
 ## 결정 동인과 불변 조건
 
 - 최초 운영 미션부터 제목이 존재하고 최종 API 계약만 외부에 노출한다.
-- `mission.title`의 최종 `VARCHAR(255) NOT NULL` 계약과 ADR-0106의 검증·수정·응답 범위는 유지한다.
+- `mission.title`의 최종 `VARCHAR(255) NOT NULL` 계약과 ADR-0130의 검증·수정·응답 범위는 유지한다.
 - V20처럼 이미 운영 배포에 포함된 migration은 수정하지 않는다.
 - 제목 값은 감사 이벤트, 구조화 로그와 운영 지표에 기록하지 않는다.
 - 제목 이외의 미션 식별자·조건·상태·보상·시각과 기존 조회 계약은 변경하지 않는다.
@@ -35,7 +35,7 @@ nullable 열, 호환 서버, backfill, 최종 서버와 후속 `NOT NULL` migrat
 | 순서 | 선택지 | 장점 | 단점·실패 위험 | 되돌림 비용 | 현재 단계 적합성 |
 | --- | --- | --- | --- | --- | --- |
 | 1 | 추천안: 미배포 V45에서 `NOT NULL` 열과 최종 서버 계약을 직접 적용 | 전환 전용 fallback·계측·backfill·후속 제약 migration 없이 최초 데이터부터 최종 계약을 지킨다. | 운영 사용 이력 확인이 틀렸다면 기존 행이나 구버전 요청을 수용하지 못한다. | 중간. 배포 뒤에는 새 migration으로 nullable 전환 후 서버를 되돌려야 한다. | 높음. 기존 행과 운영 클라이언트가 없다. |
-| 2 | ADR-0107의 단계적 호환 전환 유지 | 확인 오류가 있어도 기존 행과 구버전 요청을 보존할 수 있다. | 실제 호환 대상이 없는데 임시 fallback·계측과 여러 배포·migration을 만들고 제거해야 한다. | 낮음. 각 단계를 역순으로 되돌릴 수 있다. | 낮음. 확인된 현재 운영 단계보다 복잡하다. |
+| 2 | ADR-0131의 단계적 호환 전환 유지 | 확인 오류가 있어도 기존 행과 구버전 요청을 보존할 수 있다. | 실제 호환 대상이 없는데 임시 fallback·계측과 여러 배포·migration을 만들고 제거해야 한다. | 낮음. 각 단계를 역순으로 되돌릴 수 있다. | 낮음. 확인된 현재 운영 단계보다 복잡하다. |
 | 3 | V20 초기 migration에 제목을 추가 | 새로 만든 DB는 처음부터 최종 스키마를 가진다. | 운영 배포에 포함된 migration checksum을 바꾸며 기존 DB에 열을 추가하지 못한다. | 높음. 적용 이력 복구와 별도 migration이 다시 필요하다. | 부적합 |
 
 ## 결정
@@ -44,7 +44,7 @@ nullable 열, 호환 서버, backfill, 최종 서버와 후속 `NOT NULL` migrat
 backfill, nullable 중간 열, 제목 누락 fallback, 호환 누락 계측과 후속 `NOT NULL` migration은 운영 계약으로
 배포하지 않는다. 이미 운영 배포에 포함된 V20은 수정하지 않는다.
 
-애플리케이션은 ADR-0106의 최종 계약을 바로 적용한다. 생성·수정 제목을 필수 검증하고, 세 방문자 조회에 저장된
+애플리케이션은 ADR-0130의 최종 계약을 바로 적용한다. 생성·수정 제목을 필수 검증하고, 세 방문자 조회에 저장된
 제목을 반환하며, 운영자·지역 관리자 조회와 공개 미션 상세 응답은 변경하지 않는다. 제목 필수 서버를 먼저
 배포하고 정상 상태를 확인한 뒤, 제목을 항상 전송하는 최초 운영자 클라이언트를 배포한다.
 

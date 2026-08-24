@@ -110,4 +110,4 @@ MySQL migration 테스트에 FK, 상태별 CHECK, 생성 컬럼 유일 제약을
 ## 관련 자료
 
 - Issue #873 구현 인계 요약
-- `docs/adr/0101-store-content-withdrawal-requests-and-serialize-review.md`
+- `docs/adr/0127-store-content-withdrawal-requests-and-serialize-review.md`

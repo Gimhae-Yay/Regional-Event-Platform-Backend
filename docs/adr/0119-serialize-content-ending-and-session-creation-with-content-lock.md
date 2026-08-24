@@ -1,4 +1,4 @@
-# ADR-0060: 콘텐츠 종료와 회차 생성을 같은 content 행 잠금으로 순서 보장
+# ADR-0119: 콘텐츠 종료와 회차 생성을 같은 content 행 잠금으로 순서 보장
 
 - 상태: 채택됨
 - 기록 유형: 신규
@@ -7,7 +7,7 @@
 - 관련 요구사항: [FR-03·FR-04 연결 유저 시나리오](../p0/content-catalog.md#fr-03fr-04-연결-유저-시나리오), [추가 회차 생성](../api/p0/content-catalog/session-create.md#3-내-콘텐츠-회차-생성), [모든 회차 종결 콘텐츠 자동 종료](../api/p0/content-catalog/end-completed-contents.md#처리-규칙)
 - 관련 단계: 단계 0. 정책·설계 확정, 단계 1. MVP 구현·검증
 - 관련 이슈: 없음
-- 대체 대상: [ADR-0059](0059-automatically-end-content-after-all-sessions-terminate.md#결정)의 자동·수동 종료와 추가 회차 생성 간 경합 처리 범위. 조정 스케줄러와 자동 종료 조건은 유지한다.
+- 대체 대상: [ADR-0118](0118-automatically-end-content-after-all-sessions-terminate.md#결정)의 자동·수동 종료와 추가 회차 생성 간 경합 처리 범위. 조정 스케줄러와 자동 종료 조건은 유지한다.
 
 ## 맥락
 
@@ -16,7 +16,7 @@
 순서가 정해지지 않는다.
 
 예를 들어 자동 종료가 모든 기존 회차의 종결을 확인한 직후 추가 회차 생성이 `PENDING` 행을 넣으면 두 트랜잭션이
-모두 성공할 수 있다. 그러면 `ENDED` 콘텐츠에 `PENDING` 회차가 남는다. ADR-0059는 종료끼리의 중복 전이를
+모두 성공할 수 있다. 그러면 `ENDED` 콘텐츠에 `PENDING` 회차가 남는다. ADR-0118은 종료끼리의 중복 전이를
 막는 규칙은 정했지만, 종료와 추가 회차 생성이 함께 사용할 잠금 기준은 정하지 않았다.
 
 ## 결정 동인과 불변 조건

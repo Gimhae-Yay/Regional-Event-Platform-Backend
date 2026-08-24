@@ -7,11 +7,11 @@
 - 관련 요구사항: [지역·콘텐츠 카탈로그](../p0/content-catalog.md)의 `CON-09`, [P0 명세](../p0-spec.md)의 `8.8 감사 및 운영 로그`, [전체 콘텐츠 철회 승인 API](../api/p0/region-content/approve-content-withdrawal.md)의 `실패 감사·구조화 로그 경계`
 - 관련 단계: 단계 1. MVP 구현·검증
 - 관련 이슈: [#880](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/880), [#743](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/743)
-- 대체 대상: 없음. [ADR-0101](0101-store-content-withdrawal-requests-and-serialize-review.md)의 성공 감사 계약을 유지하고 미확정이던 승인 실패 감사 경계를 보완한다.
+- 대체 대상: 없음. [ADR-0127](0127-store-content-withdrawal-requests-and-serialize-review.md)의 성공 감사 계약을 유지하고 미확정이던 승인 실패 감사 경계를 보완한다.
 
 ## 맥락
 
-ADR-0101은 전체 콘텐츠 철회 승인 성공 시 요청·콘텐츠·수정본·실제로 전이된 홀드·결제·쿠폰의 성공 감사를 원
+ADR-0127은 전체 콘텐츠 철회 승인 성공 시 요청·콘텐츠·수정본·실제로 전이된 홀드·결제·쿠폰의 성공 감사를 원
 업무 트랜잭션에 포함했지만, 승인 실패의 감사 범위는 정하지 않았다. 승인 API는 입력 파싱, 인증, 역할·지역 검증,
 대상·상태 확인과 원자적 상태 전이 중 서로 다른 단계에서 실패할 수 있다. 대상이나 actor가 확인되지 않은 사건을
 동일한 감사 모델에 저장하면 nullable 필드가 사실 확인 실패와 실제 업무 거부를 함께 표현하고, 경로의 원문

@@ -6,6 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 import io.regionevent.regioneventbackend.domain.operator.dto.CreateOperatorApplicationRequest;
 import io.regionevent.regioneventbackend.domain.operator.dto.CreateOperatorApplicationResponse;
 import io.regionevent.regioneventbackend.domain.operator.entity.OperatorApplication;
+import io.regionevent.regioneventbackend.domain.operator.entity.OperatorApplicationStatus;
 import io.regionevent.regioneventbackend.domain.region.entity.Region;
 import io.regionevent.regioneventbackend.domain.region.service.RegionService;
 import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
@@ -63,10 +64,15 @@ public class ReapplyOperatorApplicationUseCase {
     }
 
     private void validateReapplicationAllowed(AppUser user) {
-        if (operatorApplicationService.hasPendingApplication(user)) {
+        OperatorApplicationStatus latestStatus = operatorApplicationService.findLatestApplication(user)
+            .map(OperatorApplication::getStatus)
+            .orElseThrow(() -> new BusinessException(
+                ErrorCode.OPERATOR_APPLICATION_REAPPLICATION_NOT_ALLOWED
+            ));
+        if (latestStatus == OperatorApplicationStatus.PENDING) {
             throw new BusinessException(ErrorCode.OPERATOR_APPLICATION_PENDING);
         }
-        if (!operatorApplicationService.hasRejectedApplication(user)) {
+        if (latestStatus != OperatorApplicationStatus.REJECTED) {
             throw new BusinessException(ErrorCode.OPERATOR_APPLICATION_REAPPLICATION_NOT_ALLOWED);
         }
     }

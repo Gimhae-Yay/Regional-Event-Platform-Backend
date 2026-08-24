@@ -7,7 +7,7 @@
 - 관련 요구사항: [FR-01 인증·역할·지역 권한](../p0/auth-profile.md#fr-01-인증역할지역-권한), [인증·인가 공통 계약](../api/common/authentication.md)
 - 관련 단계: 단계 1. MVP 구현·검증
 - 관련 이슈: [#1023 교차 출처 배포에서 인증 API가 CORS 사전 요청으로 차단된다](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/1023), [#1024 CORS 교차 출처 정책과 인증 계약을 확정한다](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/1024)
-- 대체 대상: [ADR-0027](0027-deliver-refresh-token-in-http-only-cookie.md)의 Refresh Cookie `SameSite=Strict` 고정 범위, [ADR-0045](0045-use-stateless-bearer-security-with-same-site-refresh-cookie.md)의 CORS 미허용·단일 동일 사이트 범위, [ADR-0105](0105-deliver-access-token-in-json-response-body.md)의 Refresh Cookie `SameSite=Strict` 고정 범위, [ADR-0111](0111-use-stateless-refresh-token.md)의 Refresh Cookie `SameSite=Strict` 고정 범위
+- 대체 대상: [ADR-0027](0027-deliver-refresh-token-in-http-only-cookie.md)의 Refresh Cookie `SameSite=Strict` 고정 범위, [ADR-0045](0045-use-stateless-bearer-security-with-same-site-refresh-cookie.md)의 CORS 미허용·단일 동일 사이트 범위, [ADR-0129](0129-deliver-access-token-in-json-response-body.md)의 Refresh Cookie `SameSite=Strict` 고정 범위, [ADR-0111](0111-use-stateless-refresh-token.md)의 Refresh Cookie `SameSite=Strict` 고정 범위
 
 ## 맥락
 

@@ -5,7 +5,7 @@
 | 대상 릴리스 | P0 |
 | 관련 요구사항 | `FR-10`, `FR-14`, `AUTH-01`, `CON-07` |
 | 소유 도메인 | 콘텐츠·지역 관리자 |
-| 기준 문서 | [P0 명세](../../../p0-spec.md), [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [ERD](../../../erd.md), [ADR-0101](../../../adr/0101-store-content-withdrawal-requests-and-serialize-review.md), [API 공통 계약](../../common/README.md) |
+| 기준 문서 | [P0 명세](../../../p0-spec.md), [지역·콘텐츠 카탈로그](../../../p0/content-catalog.md), [ERD](../../../erd.md), [ADR-0127](../../../adr/0127-store-content-withdrawal-requests-and-serialize-review.md), [API 공통 계약](../../common/README.md) |
 
 ## 1. 개요
 
