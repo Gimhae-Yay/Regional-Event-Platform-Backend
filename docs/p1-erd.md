@@ -609,7 +609,7 @@ DRAFT → PENDING_REVIEW → PUBLISHED → ENDED
 | 보상 수령 시한 | 신규 수령은 모든 잠금 획득 직후 고정한 `operation_at`에 대해 `mission.status = PUBLISHED AND mission.ends_at > operation_at`일 때만 허용한다. 수동·자동 종료 또는 `ends_at` 도달과 동시에 완료·미수령 참여자의 권리가 만료되며 유예 기간과 수동 지급을 두지 않는다. |
 | 진행도 | `visit.user_id = mission_participation.user_id`, `visit.region_id = mission.region_id`, `visit.checked_at >= mission_participation.joined_at`을 검증한다. `UNIQUE (mission_participation_id, visit_id)`로 같은 참여에 같은 방문을 두 번 반영하지 않는다. `VISIT_COUNT`는 서로 다른 방문이면 같은 콘텐츠 재방문도 허용한다. `CONTENT_SET`은 잠근 참여에서 같은 `content_id`의 기존 근거가 없는 경우에만 조건부 삽입한다. |
 
-미션 제목은 [ADR-0108](adr/0108-apply-final-mission-title-contract-before-first-client.md)에 따라 아직 운영에
+미션 제목은 [ADR-0132](adr/0132-apply-final-mission-title-contract-before-first-client.md)에 따라 아직 운영에
 적용되지 않은 migration에서 `VARCHAR(255) NOT NULL`로 바로 추가하고, 제목 필수 서버를 먼저 배포한 뒤 제목을
 전송하는 최초 운영자 클라이언트를 배포한다. 운영 migration과 시작 코드가 미션 행을 만들지 않고 운영 미션
 생성 API와 운영자 클라이언트의 사용 이력이 없으므로 nullable 중간 열, 호환 서버, backfill과 후속 `NOT NULL`

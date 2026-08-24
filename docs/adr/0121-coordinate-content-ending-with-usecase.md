@@ -1,4 +1,4 @@
-# ADR-0062: 자동·수동 콘텐츠 종료를 같은 UseCase에서 조정
+# ADR-0121: 자동·수동 콘텐츠 종료를 같은 UseCase에서 조정
 
 - 상태: 채택됨
 - 기록 유형: 신규
@@ -7,7 +7,7 @@
 - 관련 요구사항: [FR-04 승인·자동 공개·종료](../p0/content-catalog.md#fr-04-승인자동-공개종료), [UseCase 책임](../ARCHITECTURE.md#33-usecase), [모든 회차 종결 콘텐츠 자동 종료](../api/p0/content-catalog/end-completed-contents.md), [예약·노출 종료](../api/p0/reservation/end-content-reservations.md)
 - 관련 단계: 단계 0. 정책·설계 확정, 단계 1. MVP 구현·검증
 - 관련 이슈: 없음
-- 대체 대상: [ADR-0059](0059-automatically-end-content-after-all-sessions-terminate.md#결정)의 "공통 종료 서비스", "공통 홀드 무효화 서비스"와 종료 트랜잭션 책임 범위. 자동 종료 조건과 조정 스케줄러 선택은 유지한다.
+- 대체 대상: [ADR-0118](0118-automatically-end-content-after-all-sessions-terminate.md#결정)의 "공통 종료 서비스", "공통 홀드 무효화 서비스"와 종료 트랜잭션 책임 범위. 자동 종료 조건과 조정 스케줄러 선택은 유지한다.
 
 ## 맥락
 

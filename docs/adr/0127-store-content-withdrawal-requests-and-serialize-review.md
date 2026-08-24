@@ -1,4 +1,4 @@
-# ADR-0101: 전체 콘텐츠 철회 요청을 별도 영속화하고 심사를 직렬화한다
+# ADR-0127: 전체 콘텐츠 철회 요청을 별도 영속화하고 심사를 직렬화한다
 
 - 상태: 채택됨
 - 기록 유형: 신규
@@ -7,7 +7,7 @@
 - 관련 요구사항: [지역·콘텐츠 카탈로그](../p0/content-catalog.md)의 `CON-05`~`CON-07`, `CON-09`, `SES-02`
 - 관련 단계: 단계 1. MVP 구현·검증
 - 관련 이슈: [#789](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/789), [#743](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/743)
-- 대체 대상: 없음. [ADR-0100](0100-invalidate-active-content-revisions-on-content-termination.md)의 수정본 무효화 원인 범위를 전체 철회까지 확장한다.
+- 대체 대상: 없음. [ADR-0126](0126-invalidate-active-content-revisions-on-content-termination.md)의 수정본 무효화 원인 범위를 전체 철회까지 확장한다.
 
 ## 맥락
 

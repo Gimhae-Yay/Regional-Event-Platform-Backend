@@ -1,4 +1,4 @@
-# ADR-0107: 호환 서버를 먼저 배포해 미션 제목 계약을 전환한다
+# ADR-0131: 호환 서버를 먼저 배포해 미션 제목 계약을 전환한다
 
 - 상태: 채택됨
 - 기록 유형: 신규
@@ -7,7 +7,7 @@
 - 관련 요구사항: [지역 미션 `MSN-01`](../p1/regional-mission.md#3-지역-미션-정책), [미션 생성·수정 API](../api/p1/mission/mission.md#기능별-api-명세)
 - 관련 단계: 단계 0. 정책·설계 확정
 - 관련 이슈: [#912](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/912)
-- 대체 대상: [ADR-0106](0106-store-mission-title-on-mission.md)의 `전환과 롤백` 및 그 전환 순서에 대한 검증 범위
+- 대체 대상: [ADR-0130](0130-store-mission-title-on-mission.md)의 `전환과 롤백` 및 그 전환 순서에 대한 검증 범위
 
 ## 맥락
 

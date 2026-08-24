@@ -7,7 +7,7 @@
 - 관련 요구사항: [지역·콘텐츠 카탈로그](../p0/content-catalog.md)의 `CON-09`, [P0 명세](../p0-spec.md)의 `8.8 감사 및 운영 로그`, [전체 콘텐츠 철회 승인 API](../api/p0/region-content/approve-content-withdrawal.md)의 `실패 감사·구조화 로그 경계`
 - 관련 단계: 단계 1. MVP 구현·검증
 - 관련 이슈: [#880](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/880), [#743](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/743)
-- 대체 대상: 없음. [ADR-0101](0101-store-content-withdrawal-requests-and-serialize-review.md)의 성공 감사 계약을 유지하고 미확정이던 승인 실패 감사 경계를 보완한다.
+- 대체 대상: 없음. [ADR-0127](0127-store-content-withdrawal-requests-and-serialize-review.md)의 성공 감사 계약을 유지하고 미확정이던 승인 실패 감사 경계를 보완한다.
 
 ## 맥락
 

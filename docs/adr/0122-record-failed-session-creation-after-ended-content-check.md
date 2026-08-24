@@ -1,4 +1,4 @@
-# ADR-0063: 종료된 콘텐츠 확인 뒤 거부된 회차 생성 요청의 실패 감사를 기록한다
+# ADR-0122: 종료된 콘텐츠 확인 뒤 거부된 회차 생성 요청의 실패 감사를 기록한다
 
 - 상태: 채택됨
 - 기록 유형: 후속
@@ -7,7 +7,7 @@
 - 관련 요구사항: [추가 회차 생성](../api/p0/content-catalog/session-create.md), [감사 정규화 규칙](../erd.md#감사-정규화-규칙)
 - 관련 단계: 단계 0. 정책·설계 확정, 단계 1. MVP 구현·검증
 - 관련 이슈: #383
-- 대체하는 결정: [ADR-0060](0060-serialize-content-ending-and-session-creation-with-content-lock.md#결정)의 회차 생성 요청이 `ENDED` 콘텐츠를 확인한 뒤 거부될 때 감사 기록을 만들지 않는 범위. `content` 선점 잠금, 잠금 획득 뒤 상태 재확인, 종료와 회차 생성의 직렬화 결정은 대체하지 않는다.
+- 대체하는 결정: [ADR-0119](0119-serialize-content-ending-and-session-creation-with-content-lock.md#결정)의 회차 생성 요청이 `ENDED` 콘텐츠를 확인한 뒤 거부될 때 감사 기록을 만들지 않는 범위. `content` 선점 잠금, 잠금 획득 뒤 상태 재확인, 종료와 회차 생성의 직렬화 결정은 대체하지 않는다.
 
 ## 맥락
 

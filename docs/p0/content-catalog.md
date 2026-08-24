@@ -135,10 +135,10 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 | [정원 홀드·무료 예약](reservation.md#rsv-06) | 회차 취소 시 활성 홀드·확정 예약 처리 |
 | [P0 명세](../p0-spec.md#88-감사-및-운영-로그) | 승인·자동 공개·종료 처리자와 상태 이력 감사 |
 | [ADR-0021](../adr/0021-record-content-reasons-in-content-log.md#결정) | 콘텐츠 사유를 상태 로그에 기록하고 현재 상태와 분리하는 모델 |
-| [ADR-0059](../adr/0059-automatically-end-content-after-all-sessions-terminate.md#결정) | 모든 회차 종결을 기준으로 한 콘텐츠 자동 종료와 조정 스케줄러 |
-| [ADR-0060](../adr/0060-serialize-content-ending-and-session-creation-with-content-lock.md#결정) | 자동·수동 종료와 추가 회차 생성을 같은 콘텐츠 행 잠금으로 처리하는 규칙 |
-| [ADR-0061](../adr/0061-treat-rejected-sessions-as-terminal-for-content-ending.md#결정) | `REJECTED` 회차를 콘텐츠 종료 판정의 종결 상태로 처리하는 규칙 |
-| [ADR-0062](../adr/0062-coordinate-content-ending-with-usecase.md#결정) | 별도 Scheduler와 수동 Controller가 같은 종료 UseCase를 호출하고 콘텐츠 한 건 단위 트랜잭션을 사용하는 규칙 |
+| [ADR-0118](../adr/0118-automatically-end-content-after-all-sessions-terminate.md#결정) | 모든 회차 종결을 기준으로 한 콘텐츠 자동 종료와 조정 스케줄러 |
+| [ADR-0119](../adr/0119-serialize-content-ending-and-session-creation-with-content-lock.md#결정) | 자동·수동 종료와 추가 회차 생성을 같은 콘텐츠 행 잠금으로 처리하는 규칙 |
+| [ADR-0120](../adr/0120-treat-rejected-sessions-as-terminal-for-content-ending.md#결정) | `REJECTED` 회차를 콘텐츠 종료 판정의 종결 상태로 처리하는 규칙 |
+| [ADR-0121](../adr/0121-coordinate-content-ending-with-usecase.md#결정) | 별도 Scheduler와 수동 Controller가 같은 종료 UseCase를 호출하고 콘텐츠 한 건 단위 트랜잭션을 사용하는 규칙 |
 
 ### 기능 범위
 
@@ -198,7 +198,7 @@ MySQL 현재 시각보다 `starts_at`이 미래인 기존 `SCHEDULED` 회차의 
 | [ADR-0037](../adr/0037-block-automatic-publication-during-pre-publication-revision-review.md#결정) | 공개 전 수정 심사 중 자동 공개 차단과 후보 공개 예정 시각 |
 | [P0 명세](../p0-spec.md#88-감사-및-운영-로그)                                           | 수정본 철회·중단·철회·삭제 상태 전이 감사    |
 | [ADR-0021](../adr/0021-record-content-reasons-in-content-log.md#결정)              | 콘텐츠 사유를 상태 로그에 기록하고 현재 상태와 분리하는 모델 |
-| [ADR-0101](../adr/0101-store-content-withdrawal-requests-and-serialize-review.md#결정) | 전체 콘텐츠 철회 요청·심사, 활성 수정본 종결과 경합 모델 |
+| [ADR-0127](../adr/0127-store-content-withdrawal-requests-and-serialize-review.md#결정) | 전체 콘텐츠 철회 요청·심사, 활성 수정본 종결과 경합 모델 |
 
 ### 기능 범위
 

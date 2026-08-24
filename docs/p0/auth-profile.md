@@ -29,7 +29,7 @@
 | [ADR-0012](../adr/0012-retain-author-unlinked-reviews-and-visits-after-withdrawal.md#결정) | 방문자 탈퇴, 연결 제거와 보존 데이터 불변 조건 |
 | [ADR-0017](../adr/0017-serialize-withdrawal-with-conditional-user-state.md#결정) | 회원 행 조건부 전환, 단일 트랜잭션 직렬화와 사용자 재시도 방식 |
 | [ADR-0026](../adr/0026-select-signup-role-and-create-operator-application.md#결정) | 가입 시 역할 선택, 방문자 즉시 부여와 운영자 `PENDING` 신청 생성 |
-| [ADR-0105](../adr/0105-deliver-access-token-in-json-response-body.md#결정) | Access Token JSON 응답 본문과 Refresh Token HttpOnly 쿠키 전달 |
+| [ADR-0129](../adr/0129-deliver-access-token-in-json-response-body.md#결정) | Access Token JSON 응답 본문과 Refresh Token HttpOnly 쿠키 전달 |
 | [ADR-0043](../adr/0043-define-jwt-access-token-security-profile.md#결정) | JWT Access Token의 서명·claim·키 회전·유효기간 검증 |
 | [ADR-0108](../adr/0108-use-global-authority-snapshot-for-first-stage-rbac.md#결정) | 전역 authority snapshot 1차 RBAC와 DB 최종 인가 경계 |
 | [ADR-0044](../adr/0044-use-delegating-bcrypt-password-encoder.md#결정) | 교체 가능한 BCrypt 비밀번호 해싱 |

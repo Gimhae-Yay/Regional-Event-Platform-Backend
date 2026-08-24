@@ -1,4 +1,4 @@
-# ADR-0108: 최초 운영자 클라이언트 전에 미션 제목 최종 계약을 직접 적용한다
+# ADR-0132: 최초 운영자 클라이언트 전에 미션 제목 최종 계약을 직접 적용한다
 
 - 상태: 채택됨
 - 기록 유형: 신규
@@ -7,7 +7,7 @@
 - 관련 요구사항: [지역 미션 `MSN-01`·`MSN-05`](../p1/regional-mission.md#3-지역-미션-정책), [P1 ERD 지역 미션](../p1-erd.md#53-지역-미션), [미션 생성·수정 API](../api/p1/mission/mission.md#기능별-api-명세)
 - 관련 단계: 단계 1. MVP 구현·검증
 - 관련 이슈: [#910](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/910), [#925](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/925), [#926](https://github.com/Gimhae-Yay/Regional-Event-Platform-Backend/issues/926)
-- 대체 대상: [ADR-0106](0106-store-mission-title-on-mission.md)의 `전환과 롤백`·backfill 검증 범위, [ADR-0107](0107-deploy-compatible-server-before-mission-title-clients.md)의 전환·롤백·호환 검증 전체
+- 대체 대상: [ADR-0130](0130-store-mission-title-on-mission.md)의 `전환과 롤백`·backfill 검증 범위, [ADR-0131](0131-deploy-compatible-server-before-mission-title-clients.md)의 전환·롤백·호환 검증 전체
 
 ## 맥락
 

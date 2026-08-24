@@ -7,7 +7,7 @@
 - 관련 요구사항: [지역 미션 `P1-FR-03`](../p1/regional-mission.md#p1-fr-03-지역-미션-운영조회), [지역 미션 `US-P1-03`](../p1/regional-mission.md#us-p1-03-운영-주체가-지역-미션을-공개한다), [지역 미션 `MSN-01`](../p1/regional-mission.md#3-지역-미션-정책)
 - 관련 단계: 단계 1. MVP 구현·검증
 - 관련 이슈: 없음
-- 대체 대상: [ADR-0106](0106-store-mission-title-on-mission.md)의 지역 관리자 제목 응답 제외 범위, [ADR-0108](0108-apply-final-mission-title-contract-before-first-client.md)의 지역 관리자 조회 응답 유지 범위
+- 대체 대상: [ADR-0130](0130-store-mission-title-on-mission.md)의 지역 관리자 제목 응답 제외 범위, [ADR-0132](0132-apply-final-mission-title-contract-before-first-client.md)의 지역 관리자 조회 응답 유지 범위
 
 ## 맥락
 

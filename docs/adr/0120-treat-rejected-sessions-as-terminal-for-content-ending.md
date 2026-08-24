@@ -1,4 +1,4 @@
-# ADR-0061: REJECTED 회차를 콘텐츠 종료 판정에서 종결로 처리
+# ADR-0120: REJECTED 회차를 콘텐츠 종료 판정에서 종결로 처리
 
 - 상태: 채택됨
 - 기록 유형: 신규
@@ -7,7 +7,7 @@
 - 관련 요구사항: [FR-03·FR-04 공통 콘텐츠·회차 상태 정책](../p0/content-catalog.md#fr-03fr-04-공통-콘텐츠회차-상태-정책), [회차 반려](../api/p0/content-catalog/reject-session.md#1-개요), [모든 회차 종결 콘텐츠 자동 종료](../api/p0/content-catalog/end-completed-contents.md#처리-규칙)
 - 관련 단계: 단계 0. 정책·설계 확정, 단계 1. MVP 구현·검증
 - 관련 이슈: 없음
-- 대체 대상: [ADR-0059](0059-automatically-end-content-after-all-sessions-terminate.md#결정)의 자동·수동 종료 대상 회차 상태와 검증 범위, [ADR-0060](0060-serialize-content-ending-and-session-creation-with-content-lock.md#결정-동인과-불변-조건)의 `REJECTED` 회차 종료 방해 조건. 조정 스케줄러와 공통 `content` 행 잠금 결정은 유지한다.
+- 대체 대상: [ADR-0118](0118-automatically-end-content-after-all-sessions-terminate.md#결정)의 자동·수동 종료 대상 회차 상태와 검증 범위, [ADR-0119](0119-serialize-content-ending-and-session-creation-with-content-lock.md#결정-동인과-불변-조건)의 `REJECTED` 회차 종료 방해 조건. 조정 스케줄러와 공통 `content` 행 잠금 결정은 유지한다.
 
 ## 맥락
 
