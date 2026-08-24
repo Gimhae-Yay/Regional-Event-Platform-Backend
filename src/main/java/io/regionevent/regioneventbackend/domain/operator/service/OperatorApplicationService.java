@@ -39,17 +39,8 @@ public class OperatorApplicationService {
         ));
     }
 
-    public boolean hasPendingApplication(AppUser user) {
-        return operatorApplicationRepository.existsByApplicantAndStatus(user, OperatorApplicationStatus.PENDING);
-    }
-
-    public boolean hasRejectedApplication(AppUser user) {
-        return operatorApplicationRepository.existsByApplicantAndStatus(user, OperatorApplicationStatus.REJECTED);
-    }
-
-    public Optional<OperatorApplication> findLatestApplication(AppUser applicant) {
-        return operatorApplicationRepository
-            .findFirstByApplicantOrderByCreatedAtDescOperatorApplicationIdDesc(applicant);
+    public Optional<OperatorApplication> findLatestApplication(AppUser user) {
+        return operatorApplicationRepository.findFirstByApplicantOrderByCreatedAtDescOperatorApplicationIdDesc(user);
     }
 
     public List<OperatorApplication> findPendingApplications(Long regionId) {
