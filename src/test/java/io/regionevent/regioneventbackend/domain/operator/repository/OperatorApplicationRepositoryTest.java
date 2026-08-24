@@ -3,6 +3,9 @@ package io.regionevent.regioneventbackend.domain.operator.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.sql.Timestamp;
+import java.time.Instant;
+
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceUnitUtil;
 
@@ -272,6 +275,65 @@ class OperatorApplicationRepositoryTest {
         assertThat(foundApplication.getBusinessInformation()).isNull();
     }
 
+    @Test
+    void 신청자별_최신_신청을_createdAt_내림차순으로_조회한다() {
+        AppUser applicant = saveUser("latest-created-at-applicant@example.com");
+        AppUser inspector = saveUser("latest-created-at-inspector@example.com");
+        Region region = saveRegion();
+        OperatorApplication newerApplication = saveApplication(
+            applicant,
+            region,
+            OperatorApplicationStatus.REJECTED,
+            inspector
+        );
+        OperatorApplication olderApplication = saveApplication(
+            applicant,
+            region,
+            OperatorApplicationStatus.CANCELLED,
+            null
+        );
+        updateCreatedAt(newerApplication, Instant.parse("2026-01-02T00:00:00Z"));
+        updateCreatedAt(olderApplication, Instant.parse("2026-01-01T00:00:00Z"));
+        entityManager.clear();
+
+        OperatorApplication latestApplication = operatorApplicationRepository
+            .findFirstByApplicantOrderByCreatedAtDescOperatorApplicationIdDesc(applicant)
+            .orElseThrow();
+
+        assertThat(latestApplication.getOperatorApplicationId())
+            .isEqualTo(newerApplication.getOperatorApplicationId());
+    }
+
+    @Test
+    void 신청자별_최신_신청은_createdAt이_같으면_더_큰_ID로_조회한다() {
+        AppUser applicant = saveUser("latest-id-applicant@example.com");
+        AppUser inspector = saveUser("latest-id-inspector@example.com");
+        Region region = saveRegion();
+        OperatorApplication smallerIdApplication = saveApplication(
+            applicant,
+            region,
+            OperatorApplicationStatus.REJECTED,
+            inspector
+        );
+        OperatorApplication largerIdApplication = saveApplication(
+            applicant,
+            region,
+            OperatorApplicationStatus.CANCELLED,
+            null
+        );
+        Instant sameCreatedAt = Instant.parse("2026-01-01T00:00:00Z");
+        updateCreatedAt(smallerIdApplication, sameCreatedAt);
+        updateCreatedAt(largerIdApplication, sameCreatedAt);
+        entityManager.clear();
+
+        OperatorApplication latestApplication = operatorApplicationRepository
+            .findFirstByApplicantOrderByCreatedAtDescOperatorApplicationIdDesc(applicant)
+            .orElseThrow();
+
+        assertThat(latestApplication.getOperatorApplicationId())
+            .isEqualTo(largerIdApplication.getOperatorApplicationId());
+    }
+
     private AppUser saveUser(String loginIdentifier) {
         return appUserRepository.saveAndFlush(
             new AppUser(loginIdentifier, "hashed-password", "홍길동", "010-1234-5678", AppUserStatus.ACTIVE)
@@ -280,5 +342,29 @@ class OperatorApplicationRepositoryTest {
 
     private Region saveRegion() {
         return regionRepository.saveAndFlush(new Region("GIMHAE", "김해시", true));
+    }
+
+    private OperatorApplication saveApplication(
+        AppUser applicant,
+        Region region,
+        OperatorApplicationStatus status,
+        AppUser inspector
+    ) {
+        return operatorApplicationRepository.saveAndFlush(new OperatorApplication(
+            applicant,
+            region,
+            "사업자 정보",
+            status,
+            inspector,
+            status == OperatorApplicationStatus.REJECTED ? "반려 사유" : null
+        ));
+    }
+
+    private void updateCreatedAt(OperatorApplication application, Instant createdAt) {
+        jdbcTemplate.update(
+            "UPDATE operator_application SET created_at = ? WHERE operator_application_id = ?",
+            Timestamp.from(createdAt),
+            application.getOperatorApplicationId()
+        );
     }
 }
