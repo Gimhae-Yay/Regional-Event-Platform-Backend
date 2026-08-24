@@ -18,7 +18,9 @@ import io.regionevent.regioneventbackend.domain.user.entity.AppUser;
 
 public interface OperatorApplicationRepository extends JpaRepository<OperatorApplication, Long> {
 
-    boolean existsByApplicantAndStatus(AppUser applicant, OperatorApplicationStatus status);
+    Optional<OperatorApplication> findFirstByApplicantOrderByCreatedAtDescOperatorApplicationIdDesc(
+        AppUser applicant
+    );
 
     @EntityGraph(attributePaths = {"requestedRegion", "applicant"})
     List<OperatorApplication> findByRequestedRegionRegionIdAndStatusOrderByCreatedAtAscOperatorApplicationIdAsc(
