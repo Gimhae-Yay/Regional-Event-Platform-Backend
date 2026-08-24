@@ -6,7 +6,7 @@
 
 ## 1. 기준과 범위
 
-이 초안은 다음 프로젝트 문서를 기준으로 한다.
+이 문서는 다음 프로젝트 문서를 기준으로 한다.
 
 - `docs/erd.md`의 P0 기준 테이블과 개인정보 경계
 - `docs/p1/stampbook.md`, `docs/p1/regional-mission.md`, `docs/p1/coupon.md`
